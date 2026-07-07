@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: darsly-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: darsly
+      POSTGRES_PASSWORD: darsly_dev_password
+      POSTGRES_DB: darsly
+    ports:
+      - "5434:5432"
+    volumes:
+      - darsly_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U darsly -d darsly"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-compatible object storage for video/attachments (dev).
+  # Production swaps this for real S3/Spaces/R2 via the same StorageProvider interface.
+  minio:
+    image: minio/minio:latest
+    container_name: darsly-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: darsly
+      MINIO_ROOT_PASSWORD: darsly_dev_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - darsly_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  darsly_pgdata:
+  darsly_minio:

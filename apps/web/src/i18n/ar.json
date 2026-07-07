@@ -1,0 +1,36 @@
+{
+  "brand": "درسلي",
+  "brandTagline": "مرحباً بك في رحلتك التعليمية",
+  "login": {
+    "title": "تسجيل الدخول",
+    "phoneLabel": "رقم الموبايل",
+    "phonePlaceholder": "01X XXXX XXXX",
+    "otpHint": "سنرسل لك رمز تحقق مكون من 4 أرقام.",
+    "continue": "متابعة",
+    "otpTitle": "أدخل رمز التحقق",
+    "otpSentTo": "أرسلنا رمزاً إلى {{phone}}",
+    "namePlaceholder": "الاسم الكامل",
+    "nameHint": "أهلاً بك! أخبرنا باسمك لإنشاء حسابك.",
+    "verify": "تحقق",
+    "back": "رجوع",
+    "teacherLogin": "دخول المعلمين والإدارة",
+    "emailLabel": "البريد الإلكتروني",
+    "passwordLabel": "كلمة المرور",
+    "studentLogin": "دخول الطلاب",
+    "errorGeneric": "حدث خطأ، حاول مرة أخرى"
+  },
+  "dashboard": {
+    "welcome": "مرحباً بك يا {{name}}",
+    "role": {
+      "STUDENT": "طالب علم",
+      "TEACHER": "معلم",
+      "SUPER_ADMIN": "مدير المنصة"
+    },
+    "phase1Note": "تم تجهيز الأساس: قاعدة البيانات، المصادقة، والصلاحيات. الشاشات الكاملة قادمة في المراحل التالية.",
+    "logout": "تسجيل الخروج"
+  },
+  "common": {
+    "loading": "جارِ التحميل…",
+    "language": "English"
+  }
+}

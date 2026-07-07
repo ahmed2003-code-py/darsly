@@ -1,0 +1,36 @@
+{
+  "brand": "Darsly",
+  "brandTagline": "Welcome to your learning journey",
+  "login": {
+    "title": "Sign in",
+    "phoneLabel": "Mobile number",
+    "phonePlaceholder": "01X XXXX XXXX",
+    "otpHint": "We'll send you a 4-digit verification code.",
+    "continue": "Continue",
+    "otpTitle": "Enter verification code",
+    "otpSentTo": "We sent a code to {{phone}}",
+    "namePlaceholder": "Full name",
+    "nameHint": "Welcome! Tell us your name to create your account.",
+    "verify": "Verify",
+    "back": "Back",
+    "teacherLogin": "Teacher & admin sign-in",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "studentLogin": "Student sign-in",
+    "errorGeneric": "Something went wrong, please try again"
+  },
+  "dashboard": {
+    "welcome": "Welcome, {{name}}",
+    "role": {
+      "STUDENT": "Student",
+      "TEACHER": "Teacher",
+      "SUPER_ADMIN": "Platform Admin"
+    },
+    "phase1Note": "Foundation ready: database, authentication, and RBAC. Full screens arrive in the next phases.",
+    "logout": "Sign out"
+  },
+  "common": {
+    "loading": "Loading…",
+    "language": "العربية"
+  }
+}

@@ -1,0 +1,866 @@
+// Darsly — full data model (ERD).
+// Multi-tenancy: a "tenant" is a TeacherProfile. Every teacher-owned row carries
+// tenantId and every query in the API is scoped through TenantGuard + Prisma filters.
+// Money: all amounts are integer piasters (1 EGP = 100 piasters) to avoid float drift.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Identity & Auth ───────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  TEACHER
+  STUDENT
+}
+
+model User {
+  id           String    @id @default(cuid())
+  role         Role
+  // Egyptian E.164, e.g. +2010xxxxxxxx. Unique login handle for students.
+  phone        String?   @unique
+  email        String?   @unique
+  passwordHash String?
+  fullName     String
+  avatarUrl    String?
+  locale       String    @default("ar")
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  teacherProfile TeacherProfile?
+  studentProfile StudentProfile?
+  sessions       DeviceSession[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]      @relation("actor")
+  sentMessages   ChatMessage[]
+}
+
+model OtpCode {
+  id         String    @id @default(cuid())
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, expiresAt])
+}
+
+// One row per logged-in device. Refresh tokens are bound to a session so we can
+// enforce MAX concurrent devices and kill exactly one device on kick/revoke.
+model DeviceSession {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String
+  deviceName       String?
+  deviceFingerprint String?
+  ip               String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  lastSeenAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  revokedReason    String?
+
+  playbackSessions PlaybackSession[]
+
+  @@index([userId, revokedAt])
+}
+
+// ─────────────────────────── Tenants & Profiles ────────────────────────────
+
+enum TeacherStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model TeacherProfile {
+  id     String @id @default(cuid()) // == tenantId everywhere
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  slug          String        @unique
+  bio           String        @default("")
+  subjectId     String?
+  subject       Subject?      @relation(fields: [subjectId], references: [id])
+  introVideoUrl String?
+  status        TeacherStatus @default(PENDING)
+  verifiedAt    DateTime?
+  // Platform cut, percent 0–100; set per-teacher by super admin.
+  commissionPercent Int       @default(20)
+  autoApproveEnrollments Boolean @default(false)
+  // Teacher-Security defaults applied to their students
+  maxConcurrentSessions  Int     @default(2)
+  settings      Json          @default("{}")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  grades         TeacherGrade[]
+  courses        Course[]
+  coupons        Coupon[]
+  payoutMethods  PayoutMethodSaved[]
+  payoutRequests PayoutRequest[]
+  securityEvents SecurityEvent[]
+  announcements  Announcement[]
+  liveSessions   LiveSession[]
+  reviews        Review[]
+  chatThreads    ChatThread[]
+}
+
+model StudentProfile {
+  id      String  @id @default(cuid())
+  userId  String  @unique
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gradeId String?
+  grade   GradeLevel? @relation(fields: [gradeId], references: [id])
+
+  // Motivation / streaks
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastActivityDate DateTime?
+  weeklyGoalLessons Int      @default(5)
+
+  interests     StudentInterest[]
+  enrollments   Enrollment[]
+  progress      LessonProgress[]
+  notes         VideoNote[]
+  bookmarks     VideoBookmark[]
+  quizAttempts  QuizAttempt[]
+  submissions   AssignmentSubmission[]
+  reviews       Review[]
+  certificates  Certificate[]
+  payments      Payment[]
+  playbackSessions PlaybackSession[]
+  securityEvents   SecurityEvent[]
+  chatThreads      ChatThread[]
+}
+
+// ─────────────────────────── Catalog taxonomy ──────────────────────────────
+
+model Subject {
+  id        String   @id @default(cuid())
+  nameAr    String
+  nameEn    String
+  icon      String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+
+  teachers TeacherProfile[]
+  courses  Course[]
+  interests StudentInterest[]
+}
+
+model GradeLevel {
+  id        String  @id @default(cuid())
+  nameAr    String
+  nameEn    String
+  // e.g. "secondary-3" (الصف الثالث الثانوي)
+  code      String  @unique
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  students StudentProfile[]
+  courses  Course[]
+  teachers TeacherGrade[]
+}
+
+model TeacherGrade {
+  tenantId String
+  gradeId  String
+  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grade    GradeLevel     @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, gradeId])
+}
+
+model StudentInterest {
+  studentId String
+  subjectId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, subjectId])
+}
+
+// ─────────────────────────── Courses & Content ─────────────────────────────
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CoursePricingModel {
+  ONE_TIME
+  MONTHLY_SUBSCRIPTION
+  BUNDLE
+}
+
+model Course {
+  id       String         @id @default(cuid())
+  tenantId String
+  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title        String
+  description  String   @default("")
+  thumbnailUrl String?
+  subjectId    String?
+  subject      Subject? @relation(fields: [subjectId], references: [id])
+  gradeId      String?
+  grade        GradeLevel? @relation(fields: [gradeId], references: [id])
+
+  status       CourseStatus       @default(DRAFT)
+  pricingModel CoursePricingModel @default(ONE_TIME)
+  // piasters; for MONTHLY_SUBSCRIPTION this is the monthly price
+  priceCents   Int                @default(0)
+  currency     String             @default("EGP")
+
+  // Access rules (Teacher-Security suite B)
+  requiresEnrollmentApproval Boolean @default(true)
+  // lesson access expires N days after unlock; null = never
+  accessWindowDays Int?
+  // max plays per lesson per student; null = unlimited
+  defaultViewsCap  Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  units       CourseUnit[]
+  enrollments Enrollment[]
+  coupons     Coupon[]
+  reviews     Review[]
+  certificates Certificate[]
+  payments    Payment[]
+  bundleParents BundleItem[] @relation("bundleChild")
+  bundleItems   BundleItem[] @relation("bundleParent")
+
+  @@index([tenantId, status])
+  @@index([subjectId, gradeId, status])
+}
+
+// A BUNDLE-priced course contains other courses.
+model BundleItem {
+  bundleId String
+  courseId String
+  bundle   Course @relation("bundleParent", fields: [bundleId], references: [id], onDelete: Cascade)
+  course   Course @relation("bundleChild", fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([bundleId, courseId])
+}
+
+model CourseUnit {
+  id        String @id @default(cuid())
+  courseId  String
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  sortOrder Int    @default(0)
+
+  lessons Lesson[]
+
+  @@index([courseId, sortOrder])
+}
+
+enum LessonType {
+  VIDEO
+  QUIZ
+  ASSIGNMENT
+}
+
+model Lesson {
+  id        String     @id @default(cuid())
+  unitId    String
+  unit      CourseUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  title     String
+  type      LessonType @default(VIDEO)
+  sortOrder Int        @default(0)
+
+  videoAssetId String?     @unique
+  videoAsset   VideoAsset? @relation(fields: [videoAssetId], references: [id])
+  durationSec  Int         @default(0)
+
+  isFreePreview Boolean @default(false)
+  // Content drip: unlock at a fixed date, or N days after enrollment (first match wins)
+  dripUnlockAt        DateTime?
+  dripAfterEnrollDays Int?
+  // Per-lesson overrides of course access rules
+  viewsCap         Int?
+  accessWindowDays Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments Attachment[]
+  progress    LessonProgress[]
+  notes       VideoNote[]
+  bookmarks   VideoBookmark[]
+  quiz        Quiz?
+  assignment  Assignment?
+  playbackSessions PlaybackSession[]
+
+  @@index([unitId, sortOrder])
+}
+
+enum VideoAssetStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+// A processed video: original is transcoded to AES-128 encrypted HLS renditions.
+// Raw MP4 storage keys are NEVER exposed through the API.
+model VideoAsset {
+  id             String           @id @default(cuid())
+  tenantId       String
+  originalKey    String // storage key of the uploaded source (private)
+  hlsMasterKey   String? // storage key of the encrypted HLS master playlist
+  encryptionKeyId String? // points at HlsEncryptionKey
+  status         VideoAssetStatus @default(UPLOADING)
+  durationSec    Int              @default(0)
+  sizeBytes      BigInt           @default(0)
+  renditions     Json             @default("[]") // [{height, bandwidth, playlistKey}]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  lesson Lesson?
+}
+
+// AES-128 keys for HLS segments; rotated per HLS_KEY_ROTATION_SECONDS.
+// Keys are only ever served to an authorized, watermarked playback session.
+model HlsEncryptionKey {
+  id        String   @id @default(cuid())
+  keyHex    String
+  createdAt DateTime @default(now())
+  rotatedAt DateTime?
+}
+
+model Attachment {
+  id           String  @id @default(cuid())
+  lessonId     String
+  lesson       Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  fileName     String
+  storageKey   String
+  mimeType     String
+  sizeBytes    Int     @default(0)
+  downloadable Boolean @default(true)
+}
+
+// ─────────────────────────── Enrollment & Progress ─────────────────────────
+
+enum EnrollmentStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  REJECTED
+  EXPIRED
+  REVOKED
+}
+
+model Enrollment {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  tenantId  String // denormalized for tenant-scoped queries
+
+  status     EnrollmentStatus @default(PENDING_APPROVAL)
+  approvedAt DateTime?
+  // subscription/window end; null = lifetime
+  expiresAt  DateTime?
+  revokedReason String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  payments Payment[]
+
+  @@unique([studentId, courseId])
+  @@index([tenantId, status])
+}
+
+model LessonProgress {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId  String
+  lesson    Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  lastPositionSec Int       @default(0)
+  watchedPct      Int       @default(0)
+  viewCount       Int       @default(0)
+  completedAt     DateTime?
+  // when this student's lesson access window opened (for accessWindowDays)
+  firstUnlockedAt DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([studentId, lessonId])
+}
+
+model VideoNote {
+  id           String         @id @default(cuid())
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId     String
+  lesson       Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  timestampSec Int
+  body         String
+  createdAt    DateTime       @default(now())
+
+  @@index([studentId, lessonId])
+}
+
+model VideoBookmark {
+  id           String         @id @default(cuid())
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId     String
+  lesson       Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  timestampSec Int
+  label        String         @default("")
+  createdAt    DateTime       @default(now())
+
+  @@index([studentId, lessonId])
+}
+
+// ─────────────────────────── Security suite ────────────────────────────────
+
+// One row per player open. watermarkId is the forensic key: it is burned into
+// the roving overlay and steganographic token; leak-trace resolves it back here.
+model PlaybackSession {
+  id              String         @id @default(cuid())
+  watermarkId     String         @unique // e.g. DRS-89421-A8X9
+  studentId       String
+  student         StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonId        String
+  lesson          Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  tenantId        String
+  deviceSessionId String?
+  deviceSession   DeviceSession? @relation(fields: [deviceSessionId], references: [id])
+
+  ip        String?
+  userAgent String?
+  country   String?
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  // compacted playback telemetry: [{t, type: play|pause|seek|hb, pos}]
+  events    Json      @default("[]")
+
+  @@index([tenantId, startedAt])
+  @@index([studentId, lessonId])
+}
+
+enum SecurityEventType {
+  MULTI_IP_PLAYBACK
+  SESSION_LIMIT_KICK
+  DEVTOOLS_DETECTED
+  RAPID_SEEK_ANOMALY
+  VIEW_CAP_EXCEEDED
+  LEAK_TRACED
+  MANUAL_FLAG
+}
+
+enum SecurityEventSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model SecurityEvent {
+  id        String                @id @default(cuid())
+  type      SecurityEventType
+  severity  SecurityEventSeverity @default(WARNING)
+  tenantId  String?
+  tenant    TeacherProfile?       @relation(fields: [tenantId], references: [id])
+  studentId String?
+  student   StudentProfile?       @relation(fields: [studentId], references: [id])
+  meta      Json                  @default("{}")
+  createdAt DateTime              @default(now())
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  @@index([tenantId, resolvedAt, createdAt])
+}
+
+// ─────────────────────────── Payments & Ledger ─────────────────────────────
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id           String         @id @default(cuid())
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id])
+  courseId     String
+  course       Course         @relation(fields: [courseId], references: [id])
+  enrollmentId String?
+  enrollment   Enrollment?    @relation(fields: [enrollmentId], references: [id])
+  tenantId     String
+
+  amountCents Int
+  currency    String        @default("EGP")
+  status      PaymentStatus @default(PENDING)
+  gateway     String        @default("mock") // mock | paymob | fawry | stripe | manual_cash
+  gatewayRef  String?
+  couponId    String?
+  coupon      Coupon?       @relation(fields: [couponId], references: [id])
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+
+  ledgerTransaction LedgerTransaction?
+  invoice           Invoice?
+
+  @@index([tenantId, status, createdAt])
+}
+
+// Double-entry ledger: every financial fact is a balanced transaction.
+// Entries are immutable — corrections are new ADJUSTMENT transactions.
+model LedgerTransaction {
+  id          String   @id @default(cuid())
+  description String
+  paymentId   String?  @unique
+  payment     Payment? @relation(fields: [paymentId], references: [id])
+  payoutId    String?  @unique
+  payout      PayoutRequest? @relation(fields: [payoutId], references: [id])
+  createdAt   DateTime @default(now())
+
+  entries LedgerEntry[]
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+// Account naming convention:
+//   platform:cash            — money held by the platform
+//   platform:commission      — platform earnings
+//   teacher:<tenantId>:balance — a teacher's withdrawable balance
+model LedgerEntry {
+  id            String            @id @default(cuid())
+  transactionId String
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id])
+  account       String
+  direction     LedgerDirection
+  amountCents   Int // always positive; direction carries the sign
+  tenantId      String?
+  createdAt     DateTime          @default(now())
+
+  @@index([account])
+  @@index([tenantId])
+}
+
+model Coupon {
+  id       String         @id @default(cuid())
+  tenantId String
+  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  courseId String?
+  course   Course?        @relation(fields: [courseId], references: [id])
+
+  code        String
+  percentOff  Int? // 1–100
+  amountOffCents Int?
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  payments Payment[]
+
+  @@unique([tenantId, code])
+}
+
+enum PayoutMethod {
+  BANK_TRANSFER
+  VODAFONE_CASH
+  INSTAPAY
+}
+
+model PayoutMethodSaved {
+  id       String         @id @default(cuid())
+  tenantId String
+  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  method   PayoutMethod
+  // masked display + full details, e.g. {iban, bankName} or {walletPhone}
+  details  Json
+  isDefault Boolean       @default(false)
+  createdAt DateTime      @default(now())
+}
+
+enum PayoutStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+}
+
+model PayoutRequest {
+  id       String         @id @default(cuid())
+  tenantId String
+  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  amountCents Int
+  currency    String       @default("EGP")
+  method      PayoutMethod
+  destination Json // snapshot of the payout method details at request time
+  status      PayoutStatus @default(REQUESTED)
+  adminNote   String?
+  processedBy String?
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  ledgerTransaction LedgerTransaction?
+
+  @@index([status, createdAt])
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+  paymentId String   @unique
+  payment   Payment  @relation(fields: [paymentId], references: [id])
+  serial    String   @unique // e.g. DRS-INV-2026-000042
+  pdfKey    String? // storage key of the rendered RTL PDF
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────── Assessment ────────────────────────────────────
+
+model Quiz {
+  id           String  @id @default(cuid())
+  lessonId     String  @unique
+  lesson       Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  passingScore Int     @default(50) // percent
+  timeLimitSec Int?
+  shuffleQuestions Boolean @default(false)
+
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  SHORT_ANSWER // manually graded
+}
+
+model QuizQuestion {
+  id          String       @id @default(cuid())
+  quizId      String
+  quiz        Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  type        QuestionType @default(MCQ)
+  prompt      String
+  options     Json         @default("[]") // [{id, text}]
+  correctOptionId String?
+  explanation String       @default("")
+  points      Int          @default(1)
+  sortOrder   Int          @default(0)
+}
+
+model QuizAttempt {
+  id        String         @id @default(cuid())
+  quizId    String
+  quiz      Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  answers    Json      @default("{}") // {questionId: optionId|text}
+  scorePct   Int?
+  passed     Boolean?
+  needsManualGrading Boolean @default(false)
+  gradedAt   DateTime?
+  gradedBy   String?
+  startedAt  DateTime  @default(now())
+  submittedAt DateTime?
+
+  @@index([quizId, studentId])
+}
+
+model Assignment {
+  id       String @id @default(cuid())
+  lessonId String @unique
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  prompt   String
+  dueAt    DateTime?
+  maxScore Int    @default(100)
+
+  submissions AssignmentSubmission[]
+}
+
+model AssignmentSubmission {
+  id           String         @id @default(cuid())
+  assignmentId String
+  assignment   Assignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  body       String   @default("")
+  fileKey    String?
+  score      Int?
+  feedback   String?
+  gradedAt   DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([assignmentId, studentId])
+}
+
+// ─────────────────────────── Social & Comms ────────────────────────────────
+
+model Review {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tenantId  String
+  teacher   TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  courseId  String?
+  course    Course?        @relation(fields: [courseId], references: [id])
+
+  rating    Int // 1–5
+  comment   String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, tenantId, courseId])
+  @@index([tenantId])
+}
+
+enum ChatThreadType {
+  DM // direct student↔teacher chat
+  QA // Q&A, optionally pinned to a lesson timestamp
+}
+
+model ChatThread {
+  id        String         @id @default(cuid())
+  type      ChatThreadType @default(DM)
+  tenantId  String
+  teacher   TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // Q&A pinned to a moment in a video
+  lessonId       String?
+  videoTimestampSec Int?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  messages ChatMessage[]
+
+  @@index([tenantId, updatedAt])
+  @@index([studentId, updatedAt])
+}
+
+model ChatMessage {
+  id       String     @id @default(cuid())
+  threadId String
+  thread   ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId String
+  sender   User       @relation(fields: [senderId], references: [id])
+  body     String
+  readAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+enum AnnouncementScope {
+  PLATFORM // super admin broadcast to everyone
+  TENANT   // teacher broadcast to their students
+}
+
+model Announcement {
+  id       String            @id @default(cuid())
+  scope    AnnouncementScope
+  tenantId String?
+  teacher  TeacherProfile?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title    String
+  body     String
+  createdBy String
+  createdAt DateTime         @default(now())
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  ENROLLMENT_APPROVED
+  NEW_LESSON
+  CHAT_MESSAGE
+  QUIZ_GRADED
+  PAYOUT_STATUS
+  SECURITY_ALERT
+  LIVE_SESSION_REMINDER
+  SUBSCRIPTION_RENEWAL
+}
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   NotificationType
+  title  String
+  body   String           @default("")
+  meta   Json             @default("{}")
+  readAt DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+model LiveSession {
+  id       String         @id @default(cuid())
+  tenantId String
+  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  courseId String?
+  title    String
+  startsAt DateTime
+  joinUrl  String?
+  createdAt DateTime      @default(now())
+
+  @@index([tenantId, startsAt])
+}
+
+model Certificate {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  serial    String         @unique // e.g. DRS-CERT-2026-000123
+  pdfKey    String?
+  issuedAt  DateTime       @default(now())
+
+  @@unique([studentId, courseId])
+}
+
+// ─────────────────────────── Platform ops ──────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actor       User?    @relation("actor", fields: [actorUserId], references: [id])
+  action      String // e.g. teacher.approve, payout.complete, enrollment.revoke
+  entity      String
+  entityId    String?
+  meta        Json     @default("{}")
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([entity, entityId])
+}
+
+// Global key-value platform settings editable by super admin.
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

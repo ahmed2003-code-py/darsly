@@ -27,7 +27,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = Number(process.env.API_PORT ?? 4000);
+  // PORT is injected by PaaS hosts (Railway/Heroku); API_PORT is the local dev var.
+  const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Darsly API listening on http://localhost:${port} — docs at /api/docs`);

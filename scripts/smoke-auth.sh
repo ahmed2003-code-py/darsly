@@ -42,8 +42,11 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/catalog/subjects -H "
 check "student POST subject → 403" "403" "$CODE"
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/catalog/subjects -H "Authorization: Bearer $TEACHER_AT" -H 'Content-Type: application/json' -d '{"nameAr":"تجربة","nameEn":"Test"}')
 check "teacher POST subject → 403" "403" "$CODE"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/catalog/subjects -H "Authorization: Bearer $ADMIN_AT" -H 'Content-Type: application/json' -d '{"nameAr":"مادة تجريبية","nameEn":"SmokeTest Subject"}')
-check "admin POST subject → 201" "201" "$CODE"
+R=$(curl -s -X POST $API/catalog/subjects -H "Authorization: Bearer $ADMIN_AT" -H 'Content-Type: application/json' -d '{"nameAr":"مادة تجريبية","nameEn":"SmokeTest Subject","isActive":false}')
+SUBJ_ID=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("id",""))')
+check "admin POST subject → created" "yes" "$([ -n "$SUBJ_ID" ] && echo yes || echo no)"
+# Deactivate immediately so smoke rows never pollute the public catalog.
+curl -s -o /dev/null -X DELETE $API/catalog/subjects/$SUBJ_ID -H "Authorization: Bearer $ADMIN_AT"
 CODE=$(curl -s -o /dev/null -w '%{http_code}' $API/auth/me)
 check "no token → 401" "401" "$CODE"
 

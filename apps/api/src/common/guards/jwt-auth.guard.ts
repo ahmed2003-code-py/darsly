@@ -27,10 +27,24 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) return true;
-
     const request = context.switchToHttp().getRequest();
     const token = this.extractToken(request);
+
+    // Public routes still get a best-effort user attach so responses can be
+    // viewer-aware (e.g. enrollment state on a public course page).
+    if (isPublic) {
+      if (token) {
+        try {
+          request.user = await this.jwtService.verifyAsync<JwtPayload>(token, {
+            secret: process.env.JWT_ACCESS_SECRET,
+          });
+        } catch {
+          /* anonymous */
+        }
+      }
+      return true;
+    }
+
     if (!token) throw new UnauthorizedException('Missing access token');
 
     let payload: JwtPayload;

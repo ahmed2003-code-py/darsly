@@ -94,6 +94,8 @@ model TeacherProfile {
   subjectId     String?
   subject       Subject?      @relation(fields: [subjectId], references: [id])
   introVideoUrl String?
+  // Language of instruction ("ar" | "en") — a discovery filter.
+  language      String        @default("ar")
   status        TeacherStatus @default(PENDING)
   verifiedAt    DateTime?
   // Platform cut, percent 0–100; set per-teacher by super admin.

@@ -7,8 +7,12 @@ import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { CoursesModule } from './courses/courses.module';
+import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
+import { TeachersModule } from './teachers/teachers.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -18,6 +22,10 @@ import { PrismaModule } from './prisma/prisma.module';
     AuditModule,
     AuthModule,
     CatalogModule,
+    TeachersModule,
+    CoursesModule,
+    UploadsModule,
+    EnrollmentsModule,
   ],
   controllers: [HealthController],
   providers: [

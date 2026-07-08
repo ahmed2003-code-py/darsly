@@ -14,7 +14,7 @@ darsly/
 │   └── web/            React + TS + Vite + Tailwind (RTL-aware) — students, teachers, admin
 ├── packages/
 │   └── shared-types/   Enums & API contracts shared by api and web
-├── scripts/            smoke-auth.sh — end-to-end auth/RBAC verification
+├── scripts/            smoke-auth.sh + smoke-phase2.sh — end-to-end API verification
 ├── docker-compose.yml  postgres (5434) + minio (9000/9001, S3-compatible dev storage)
 └── .env.example
 ```
@@ -34,7 +34,9 @@ npm run dev:web                   # http://localhost:5173
 Verify the auth/RBAC layer end-to-end at any time:
 
 ```bash
-bash scripts/smoke-auth.sh        # 18 checks against the running API
+bash scripts/smoke-auth.sh        # 18 checks: auth, RBAC, session control
+bash scripts/smoke-phase2.sh      # 37 checks: discovery, course CRUD, tenant
+                                  # isolation, uploads, coupons, enrollments
 ```
 
 ### Seeded dev accounts
@@ -44,7 +46,11 @@ bash scripts/smoke-auth.sh        # 18 checks against the running API
 | Super admin | `admin@darsly.app` | `Admin@12345` |
 | Teacher (math, 20% commission) | `khaled@darsly.app` | `Teacher@12345` |
 | Teacher (chem, 15%, auto-approve) | `noura@darsly.app` | `Teacher@12345` |
+| Teacher (english, `language=en`) | `david@darsly.app` | `Teacher@12345` |
+| Teacher (PENDING — hidden from discovery) | `pending@darsly.app` | `Teacher@12345` |
 | Students ×5 | `+201011111111` … `+201055555555` | OTP — dev universal code `0000` |
+
+Seeded coupons: `WELCOME20` (khaled, 20% off) · `CHEM50` (noura, 50 EGP off the chem course).
 
 `OTP_DEV_MODE=true` logs OTP codes to the API console instead of sending SMS and
 accepts `0000` universally. **Never enable in production.**
@@ -108,8 +114,8 @@ the exact student and session.
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Scaffolding, full DB schema, auth (OTP + password), RBAC, sessions, seed, web shell | ✅ done & verified |
-| 2 | Teacher/course/lesson CRUD, student enrollment, discovery | ⏳ next |
-| 3 | Secure video pipeline (ffmpeg→AES-HLS), watermarked hardened player, session/device control | |
+| 2 | Teacher/course/lesson CRUD (units, drip, free preview, pricing, coupons, uploads), student enrollment lifecycle (quote→request→approve/reject/revoke, auto-approve, subscriptions, bundles), discovery + public profiles, all React screens | ✅ done & verified |
+| 3 | Secure video pipeline (ffmpeg→AES-HLS), watermarked hardened player, session/device control | ⏳ next |
 | 4 | Chat (Socket.io), notifications, progress tracking, student comfort | |
 | 5 | Payments ledger, payouts, admin dashboards, teacher security tab | |
 | 6 | Quizzes, reviews, certificates, tests, polish | |
@@ -117,7 +123,28 @@ the exact student and session.
 ## API docs
 
 Swagger UI at `http://localhost:4000/api/docs` (OpenAPI 3), grouped by tag
-(`auth`, `catalog`, `health`; grows each phase).
+(`auth`, `catalog`, `teachers`, `courses`, `enrollments`, `coupons`, `uploads`,
+`health`; grows each phase).
+
+### Phase 2 surface (summary)
+
+- **Public**: `GET /teachers` (search + subject/grade/price/rating/language
+  filters, sort, pagination), `GET /teachers/:slug` (profile + courses +
+  reviews), `GET /courses/:id` (viewer-aware curriculum: free-preview always
+  open, drip/enrollment lock state per lesson), `POST /enrollments/quote`
+  (price + coupon validation).
+- **Teacher** (`TEACHER` role, tenant-scoped — cross-tenant ids 404):
+  course/unit/lesson CRUD + reorder, publish guard (needs ≥1 lesson), bundle
+  composition, drip scheduling (fixed date or N days after enroll), coupons
+  CRUD, enrollment approve/reject/revoke, video/attachment uploads
+  (`storage/` on disk until the Phase 3 HLS pipeline), `PATCH /teacher/profile`.
+- **Student**: `POST /enrollments` (auto-approve honors course/teacher policy;
+  monthly subscriptions get a 30-day window; bundle activation unlocks child
+  courses), `GET /enrollments/mine`, attachment downloads gated by enrollment.
+- **Web**: role-routed React screens — discovery, teacher profile, course
+  page with coupon quote + enroll, my-courses (student); dashboard, course
+  list, curriculum builder with drip/preview/upload progress, approval queue,
+  coupons (teacher). RTL-first, tokens from the design system.
 
 ## Dev notes
 

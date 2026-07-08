@@ -297,6 +297,134 @@ async function main() {
     },
   });
 
+  // ── Phase 2: discovery/enrollment fixtures ────────────────────────────
+
+  // Intro videos + thumbnails so the public profiles/cards aren't bare.
+  await prisma.teacherProfile.update({
+    where: { id: khaled.id },
+    data: { introVideoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', language: 'ar' },
+  });
+  await prisma.teacherProfile.update({
+    where: { id: noura.id },
+    data: { introVideoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', language: 'ar' },
+  });
+  await prisma.course.updateMany({
+    where: { tenantId: { in: [khaled.id, noura.id] }, thumbnailUrl: null },
+    data: { thumbnailUrl: 'https://picsum.photos/seed/darsly-course/640/360' },
+  });
+
+  // English-language teacher (exercises the language filter) …
+  const davidUser = await prisma.user.upsert({
+    where: { email: 'david@darsly.app' },
+    update: { passwordHash: teacherPassword },
+    create: {
+      role: 'TEACHER',
+      email: 'david@darsly.app',
+      phone: '+201000000004',
+      passwordHash: teacherPassword,
+      fullName: 'Mr. David Smith',
+      locale: 'en',
+    },
+  });
+  const david = await prisma.teacherProfile.upsert({
+    where: { userId: davidUser.id },
+    update: { status: 'APPROVED', language: 'en' },
+    create: {
+      userId: davidUser.id,
+      slug: 'david-smith',
+      bio: 'IELTS & TOEFL preparation. Native-level English instruction for secondary students.',
+      subjectId: subjects['English'].id,
+      language: 'en',
+      status: 'APPROVED',
+      verifiedAt: new Date(),
+      commissionPercent: 20,
+      grades: { create: [{ gradeId: grades['sec-3'].id }] },
+    },
+  });
+  await ensureCourse({
+    tenantId: david.id,
+    title: 'IELTS Intensive — Band 7+',
+    description: 'Complete IELTS preparation: listening, reading, writing and speaking.',
+    subjectId: subjects['English'].id,
+    gradeId: grades['sec-3'].id,
+    priceCents: 60000,
+    units: [
+      {
+        title: 'Listening & Reading',
+        lessons: [
+          { title: 'IELTS Listening: strategies', durationSec: 2400, isFreePreview: true },
+          { title: 'Academic Reading: skimming & scanning', durationSec: 2100 },
+        ],
+      },
+    ],
+  });
+
+  // …and a PENDING teacher who must NOT appear in discovery.
+  const pendingUser = await prisma.user.upsert({
+    where: { email: 'pending@darsly.app' },
+    update: { passwordHash: teacherPassword },
+    create: {
+      role: 'TEACHER',
+      email: 'pending@darsly.app',
+      phone: '+201000000005',
+      passwordHash: teacherPassword,
+      fullName: 'أ. محمد قيد المراجعة',
+    },
+  });
+  await prisma.teacherProfile.upsert({
+    where: { userId: pendingUser.id },
+    update: {},
+    create: {
+      userId: pendingUser.id,
+      slug: 'pending-teacher',
+      bio: 'حساب معلم بانتظار موافقة الإدارة.',
+      subjectId: subjects['Physics'].id,
+      status: 'PENDING',
+    },
+  });
+
+  // Coupons
+  await prisma.coupon.upsert({
+    where: { tenantId_code: { tenantId: khaled.id, code: 'WELCOME20' } },
+    update: {},
+    create: { tenantId: khaled.id, code: 'WELCOME20', percentOff: 20, maxUses: 100 },
+  });
+  await prisma.coupon.upsert({
+    where: { tenantId_code: { tenantId: noura.id, code: 'CHEM50' } },
+    update: {},
+    create: {
+      tenantId: noura.id,
+      code: 'CHEM50',
+      amountOffCents: 5000,
+      courseId: chemCourse.id,
+      maxUses: 50,
+    },
+  });
+
+  // Reviews so rating filters/sorting have data.
+  const reviewDefs = [
+    { student: 0, tenantId: khaled.id, courseId: algebraCourse.id, rating: 5, comment: 'شرح ممتاز ومبسط، أنصح به بشدة.' },
+    { student: 2, tenantId: khaled.id, courseId: null, rating: 4, comment: 'أسلوب رائع في توصيل المعلومة.' },
+    { student: 1, tenantId: noura.id, courseId: chemCourse.id, rating: 5, comment: 'أفضل مدرسة كيمياء، المراجعات النهائية ممتازة.' },
+    { student: 3, tenantId: noura.id, courseId: null, rating: 4, comment: 'شرح جيد جداً.' },
+  ];
+  for (const def of reviewDefs) {
+    const existing = await prisma.review.findFirst({
+      where: { studentId: students[def.student].id, tenantId: def.tenantId, courseId: def.courseId },
+    });
+    if (!existing) {
+      await prisma.review.create({
+        data: {
+          studentId: students[def.student].id,
+          tenantId: def.tenantId,
+          courseId: def.courseId,
+          rating: def.rating,
+          comment: def.comment,
+        },
+      });
+    }
+  }
+
   // ── Platform settings ─────────────────────────────────────────────────
   await prisma.platformSetting.upsert({
     where: { key: 'commission.defaultPercent' },
@@ -315,8 +443,12 @@ Seed complete ✅
  Super admin : admin@darsly.app  / Admin@12345
  Teacher 1   : khaled@darsly.app / Teacher@12345  (math, 20% commission)
  Teacher 2   : noura@darsly.app  / Teacher@12345  (chem, 15%, auto-approve)
+ Teacher 3   : david@darsly.app  / Teacher@12345  (english, language=en)
+ Teacher 4   : pending@darsly.app (PENDING — hidden from discovery)
  Students    : +201011111111 … +201055555555 (OTP dev code: 0000)
- Courses     : 3 published (7 units / 11 lessons), 2 active enrollments
+ Courses     : 4 published, 2 active enrollments
+ Coupons     : WELCOME20 (khaled, 20%), CHEM50 (noura, 50 EGP off chem)
+ Reviews     : 4 (khaled avg 4.5, noura avg 4.5)
 ──────────────────────────────────────────────`);
 }
 

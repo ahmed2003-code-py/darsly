@@ -3,6 +3,8 @@
 set -u
 API=http://localhost:4000/api/v1
 pass=0; fail=0
+# Fresh phone per run so the signup checks stay idempotent across re-runs.
+SIGNUP_PHONE="0108$(shuf -i 1000000-9999999 -n1)"
 check() { # name expected actual
   if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi
 }
@@ -18,9 +20,9 @@ ME_ROLE=$(curl -s $API/auth/me -H "Authorization: Bearer $STUDENT_AT" | python3 
 check "GET /auth/me returns STUDENT" "STUDENT" "$ME_ROLE"
 
 echo "── 2. New student signup requires name"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01099999999","code":"0000"}')
+CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"'"$SIGNUP_PHONE"'","code":"0000"}')
 check "signup without fullName → 400" "400" "$CODE"
-R=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01099999999","code":"0000","fullName":"طالب تجريبي"}')
+R=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"'"$SIGNUP_PHONE"'","code":"0000","fullName":"طالب تجريبي"}')
 NEW=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("isNewUser"))')
 check "signup with fullName creates user" "True" "$NEW"
 

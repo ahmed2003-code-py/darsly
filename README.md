@@ -120,6 +120,25 @@ the exact student and session.
 | 5 | Payments ledger, payouts, admin dashboards, teacher security tab | |
 | 6 | Quizzes, reviews, certificates, tests, polish | |
 
+## Deployment (Railway — single service + Postgres)
+
+The site deploys as **one service**: the api build also builds the web app,
+and the API serves `apps/web/dist` at `/` (SPA fallback; API stays under
+`/api`). Web calls are same-origin in production — no CORS / `VITE_API_URL`.
+
+- Service build command: `npm run build --workspace=@darsly/api`
+- Service start command: `npm run start --workspace=@darsly/api`
+  (runs `prisma migrate deploy` before boot)
+- Required variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}`,
+  `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL`,
+  `JWT_REFRESH_TTL`, `OTP_*`, `MAX_CONCURRENT_SESSIONS_DEFAULT`,
+  `ALLOWED_ORIGINS` (the public domain)
+- Seed once from a dev machine:
+  `DATABASE_URL=<DATABASE_PUBLIC_URL> npm run db:seed --workspace=@darsly/api`
+- ⚠ `OTP_DEV_MODE=true` accepts the universal code `0000` — demo only.
+- ⚠ Uploaded files live on the service's ephemeral disk until the Phase 3
+  S3/MinIO pipeline; they do not survive redeploys.
+
 ## API docs
 
 Swagger UI at `http://localhost:4000/api/docs` (OpenAPI 3), grouped by tag

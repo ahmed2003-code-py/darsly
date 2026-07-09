@@ -85,9 +85,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-surface via-surface-container-low to-secondary-container/20 px-4">
-      <h1 className="mb-2 text-5xl font-extrabold text-primary">{t('brand')}</h1>
-      <p className="mb-10 text-on-surface-variant">{t('brandTagline')}</p>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-surface via-surface-container-low to-secondary-container/20 px-4 py-10">
+      <div className="mb-8 flex flex-col items-center gap-3">
+        <div className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-primary-container to-primary text-on-primary shadow-[0_10px_30px_rgba(66,46,199,0.35)]">
+          <span className="material-symbols-outlined text-4xl">school</span>
+        </div>
+        <h1 className="font-heading text-5xl font-extrabold leading-[1.35] text-primary">{t('brand')}</h1>
+        <p className="-mt-1 text-on-surface-variant">{t('brandTagline')}</p>
+      </div>
 
       <div className="w-full max-w-md rounded-xl bg-surface-container-lowest p-8 shadow-modal">
         {step === 'phone' && (

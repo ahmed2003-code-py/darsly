@@ -308,10 +308,17 @@ async function main() {
     where: { id: noura.id },
     data: { introVideoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', language: 'ar' },
   });
-  await prisma.course.updateMany({
-    where: { tenantId: { in: [khaled.id, noura.id] }, thumbnailUrl: null },
-    data: { thumbnailUrl: 'https://picsum.photos/seed/darsly-course/640/360' },
+  // Distinct thumbnail per course so the catalog doesn't look duplicated.
+  const allCourses = await prisma.course.findMany({
+    where: { tenantId: { in: [khaled.id, noura.id] } },
+    select: { id: true },
   });
+  for (const c of allCourses) {
+    await prisma.course.update({
+      where: { id: c.id },
+      data: { thumbnailUrl: `https://picsum.photos/seed/darsly-${c.id.slice(-6)}/640/360` },
+    });
+  }
 
   // English-language teacher (exercises the language filter) …
   const davidUser = await prisma.user.upsert({

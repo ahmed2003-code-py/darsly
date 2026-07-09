@@ -5,42 +5,95 @@
 @layer base {
   html {
     @apply bg-background text-on-background;
+    scroll-behavior: smooth;
   }
   body {
     @apply font-body antialiased;
+    /* Warm off-white ground with a faint indigo wash for depth (design: layered off-whites) */
+    background-image: radial-gradient(1200px 600px at 100% -10%, #eef0ff 0%, transparent 55%),
+      radial-gradient(1000px 500px at -10% 110%, #e9fbf7 0%, transparent 50%);
+    background-attachment: fixed;
   }
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  h1, h2, h3, h4, h5, h6 {
     @apply font-heading;
+    text-wrap: balance;
   }
+  ::selection {
+    background: #d8d2ff;
+    color: #140067;
+  }
+  /* Slim, on-brand scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c8c4d7 transparent;
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb { background: #c8c4d7; border-radius: 999px; }
+  *::-webkit-scrollbar-thumb:hover { background: #a9a4c4; }
 }
 
 @layer components {
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
   .btn-primary {
-    @apply rounded-lg bg-primary-container px-6 py-3 font-heading font-bold text-on-primary transition hover:bg-primary hover:shadow-modal focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-4 disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-6 py-3 font-heading font-bold text-on-primary shadow-[0_6px_16px_rgba(66,46,199,0.20)] transition-all duration-200
+      hover:-translate-y-0.5 hover:bg-primary hover:shadow-[0_10px_28px_rgba(66,46,199,0.32)]
+      active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface
+      disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-secondary {
-    @apply rounded-lg bg-accent px-6 py-3 font-heading font-bold text-on-secondary-fixed transition hover:brightness-95;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3 font-heading font-bold text-on-secondary-fixed shadow-[0_6px_16px_rgba(45,212,191,0.25)] transition-all duration-200
+      hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_10px_28px_rgba(45,212,191,0.35)]
+      active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-ghost {
-    @apply rounded-lg border border-primary-container px-6 py-3 font-heading font-bold text-primary transition hover:bg-surface-container-low;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-6 py-3 font-heading font-bold text-primary transition-all duration-200
+      hover:border-primary-container hover:bg-primary-fixed/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50;
   }
+
+  /* ── Surfaces ────────────────────────────────────────────────────────── */
   .card {
-    @apply rounded-xl bg-surface-container-lowest p-6 shadow-card;
+    @apply rounded-xl border border-white/60 bg-surface-container-lowest p-6 shadow-card;
   }
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-1 hover:shadow-modal;
+  }
+  /* Glassmorphic bar (design: backdrop blur 12px + ~70% white) */
+  .glass {
+    @apply border-b border-white/50 bg-surface/70 backdrop-blur-xl;
+  }
+
+  /* ── Inputs ──────────────────────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 text-on-surface placeholder:text-outline focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary;
+    @apply w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 text-on-surface placeholder:text-outline transition
+      focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold;
+  }
+
+  /* ── Loading skeleton ────────────────────────────────────────────────── */
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-surface-container-high;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+    transform: translateX(-100%);
+    animation: darsly-shimmer 1.4s infinite;
   }
 }
 
+@keyframes darsly-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  html { scroll-behavior: auto; }
+}
+
 .material-symbols-outlined {
-  font-variation-settings:
-    'FILL' 1,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  line-height: 1;
 }

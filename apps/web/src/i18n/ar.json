@@ -37,9 +37,20 @@
     "myStudents": "طلابي",
     "coupons": "كوبونات الخصم"
   },
+  "layout": {
+    "teacherConsole": "لوحة تحكم المعلم",
+    "studentSpace": "مساحة الطالب"
+  },
+  "topbar": {
+    "searchPlaceholder": "ابحث عن أستاذ، مادة، أو مهارة...",
+    "notifications": "الإشعارات",
+    "markAllRead": "تحديد الكل كمقروء",
+    "noNotifications": "لا توجد إشعارات بعد"
+  },
   "discovery": {
     "title": "استكشف الأساتذة",
     "subtitle": "تعلم من أفضل الخبراء المعتمدين في مختلف المجالات.",
+    "resultsFor": "نتائج البحث عن: «{{q}}»",
     "searchPlaceholder": "ابحث عن أستاذ، مادة، أو مهارة...",
     "filters": "التصفية",
     "clearAll": "مسح الكل",

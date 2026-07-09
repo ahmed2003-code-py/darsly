@@ -37,9 +37,20 @@
     "myStudents": "My students",
     "coupons": "Coupons"
   },
+  "layout": {
+    "teacherConsole": "Teacher console",
+    "studentSpace": "Student space"
+  },
+  "topbar": {
+    "searchPlaceholder": "Search for a teacher, subject, or skill...",
+    "notifications": "Notifications",
+    "markAllRead": "Mark all read",
+    "noNotifications": "No notifications yet"
+  },
   "discovery": {
     "title": "Discover Teachers",
     "subtitle": "Learn from the best certified experts across subjects.",
+    "resultsFor": "Search results for: \"{{q}}\"",
     "searchPlaceholder": "Search for a teacher, subject, or skill...",
     "filters": "Filters",
     "clearAll": "Clear all",

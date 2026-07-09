@@ -43,6 +43,57 @@ export function Spinner() {
   );
 }
 
+/** Shimmering placeholder block. */
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`skeleton ${className}`} />;
+}
+
+/** A grid of card skeletons for list screens while data loads. */
+export function CardGridSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="card space-y-4">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-14 w-14 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </div>
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-4/5" />
+          <div className="flex items-center justify-between pt-2">
+            <Skeleton className="h-8 w-24" />
+            <Skeleton className="h-9 w-24 rounded-lg" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Page header block used across screens for a consistent title/subtitle rhythm. */
+export function PageHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">{title}</h1>
+        {subtitle && <p className="mt-2 text-on-surface-variant">{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
 export function EmptyState({ icon, title, hint }: { icon: string; title: string; hint?: string }) {
   return (
     <div className="card flex flex-col items-center gap-2 py-16 text-center">

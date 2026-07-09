@@ -1,10 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
-import { setLanguage } from '../i18n';
-import { api } from '../lib/api';
 import { useAuthStore } from '../stores/auth';
+import TopBar from './TopBar';
 
 interface NavItem {
   to: string;
@@ -14,89 +13,105 @@ interface NavItem {
 }
 
 const STUDENT_NAV: NavItem[] = [
-  { to: '/', icon: 'space_dashboard', labelKey: 'nav.discover', end: true },
+  { to: '/', icon: 'travel_explore', labelKey: 'nav.discover', end: true },
   { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
 ];
 
 const TEACHER_NAV: NavItem[] = [
   { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
-  { to: '/teacher/courses', icon: 'menu_book', labelKey: 'nav.courseBuilder' },
-  { to: '/teacher/students', icon: 'school', labelKey: 'nav.myStudents' },
+  { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
+  { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
   { to: '/teacher/coupons', icon: 'sell', labelKey: 'nav.coupons' },
 ];
 
 /**
- * App shell per the Stitch design: sidebar hugging the inline-start edge
- * (right in RTL), brand block on top, active item in a primary-tinted pill,
- * logout pinned to the bottom.
+ * App shell: fixed sidebar on the inline-start edge (right in RTL) with a brand
+ * block + nav, a sticky glassmorphic TopBar, and the routed page. Collapses to
+ * an off-canvas drawer under lg.
  */
 export default function Layout({ children }: { children: ReactNode }) {
-  const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
-  const { user, clear } = useAuthStore();
+  const { t } = useTranslation();
+  const { user } = useAuthStore();
+  const [drawer, setDrawer] = useState(false);
   const nav = user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
+  const roleLabel = user?.role === Role.TEACHER ? t('layout.teacherConsole') : t('layout.studentSpace');
 
-  async function logout() {
-    try {
-      await api.post('/auth/logout');
-    } finally {
-      clear();
-      navigate('/login');
-    }
-  }
+  const sidebar = (
+    <div className="flex h-full flex-col">
+      {/* Brand block */}
+      <div className="flex flex-col items-center gap-2 px-6 py-7">
+        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary-container to-primary text-on-primary shadow-[0_8px_20px_rgba(66,46,199,0.30)]">
+          <span className="material-symbols-outlined text-3xl">school</span>
+        </div>
+        <h1 className="font-heading text-2xl font-extrabold text-primary">{t('brand')}</h1>
+        <p className="text-xs text-on-surface-variant">{roleLabel}</p>
+      </div>
+
+      <nav className="flex-1 space-y-1.5 px-4">
+        {nav.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            onClick={() => setDrawer(false)}
+            className={({ isActive }) =>
+              `group flex items-center gap-3 rounded-xl px-4 py-3 font-heading text-sm font-bold transition-all ${
+                isActive
+                  ? 'bg-primary-fixed text-primary shadow-[0_2px_10px_rgba(66,46,199,0.12)]'
+                  : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span className={`material-symbols-outlined ${isActive ? 'text-primary' : ''}`}>
+                  {item.icon}
+                </span>
+                {t(item.labelKey)}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Account card at the foot */}
+      <div className="p-4">
+        <div className="flex items-center gap-3 rounded-xl bg-surface-container-low p-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading font-bold text-primary">
+            {user?.fullName?.trim()?.charAt(0) ?? '؟'}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold">{user?.fullName}</p>
+            <p className="truncate text-xs text-on-surface-variant">
+              {user?.role ? t(`dashboard.role.${user.role}`) : ''}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-e border-outline-variant/40 bg-surface-container-lowest">
-        <div className="flex flex-col items-center gap-2 px-6 py-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-fixed">
-            <span className="material-symbols-outlined text-3xl text-primary">school</span>
-          </div>
-          <h1 className="font-heading text-2xl font-extrabold text-primary">{t('brand')}</h1>
-          <p className="text-xs text-on-surface-variant">
-            {user?.role ? t(`dashboard.role.${user.role}`) : ''} · {user?.fullName}
-          </p>
-        </div>
-
-        <nav className="flex-1 space-y-1 px-4">
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-4 py-3 font-heading font-bold transition ${
-                  isActive
-                    ? 'bg-primary-fixed text-primary'
-                    : 'text-on-surface-variant hover:bg-surface-container-low'
-                }`
-              }
-            >
-              <span className="material-symbols-outlined">{item.icon}</span>
-              {t(item.labelKey)}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="space-y-2 border-t border-outline-variant/40 p-4">
-          <button
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container-low"
-            onClick={() => setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
-          >
-            <span className="material-symbols-outlined">translate</span>
-            {t('common.language')}
-          </button>
-          <button
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-2 font-bold text-error hover:bg-error-container/40"
-            onClick={logout}
-          >
-            <span className="material-symbols-outlined">logout</span>
-            {t('dashboard.logout')}
-          </button>
-        </div>
+    <div className="flex min-h-screen">
+      {/* Desktop sidebar */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-e border-outline-variant/40 bg-surface-container-lowest/80 backdrop-blur-sm lg:block">
+        {sidebar}
       </aside>
 
-      <main className="min-w-0 flex-1">{children}</main>
+      {/* Mobile drawer */}
+      {drawer && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-on-surface/40" onClick={() => setDrawer(false)} />
+          <aside className="absolute inset-y-0 end-0 w-64 border-s border-outline-variant/40 bg-surface-container-lowest shadow-modal">
+            {sidebar}
+          </aside>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar onToggleSidebar={() => setDrawer(true)} />
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
     </div>
   );
 }

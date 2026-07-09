@@ -114,6 +114,23 @@
     "students": "{{count}} students",
     "notFound": "Course not found"
   },
+  "player": {
+    "protected": "Protected content",
+    "courseContent": "Course content",
+    "notesTab": "Lesson notes",
+    "attachmentsTab": "Attachments ({{count}})",
+    "notePlaceholder": "Add your own note at this timestamp...",
+    "saveNote": "Save note",
+    "noNotes": "No notes yet",
+    "download": "Download",
+    "noAttachments": "No attachments for this lesson",
+    "nextLesson": "Next lesson",
+    "pausedObscured": "Playback paused — return to this window to resume.",
+    "watermarkNote": "This content is watermarked with your details and traced per session. Unauthorized sharing is traceable.",
+    "startError": "Couldn't start this lesson. Check your enrollment and access.",
+    "streamError": "Video streaming error, try refreshing the page.",
+    "unsupported": "Your browser can't play this protected content."
+  },
   "myCourses": {
     "title": "My courses",
     "subtitle": "All the courses you enrolled in",

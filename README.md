@@ -37,7 +37,12 @@ Verify the auth/RBAC layer end-to-end at any time:
 bash scripts/smoke-auth.sh        # 18 checks: auth, RBAC, session control
 bash scripts/smoke-phase2.sh      # 37 checks: discovery, course CRUD, tenant
                                   # isolation, uploads, coupons, enrollments
+bash scripts/smoke-phase3.sh      # 21 checks: encrypted-HLS transcode, signed
+                                  # delivery, gated key, access control, anomaly
+                                  # (needs ffmpeg + a sample video; see the script)
 ```
+
+`ffmpeg` and `ffprobe` must be on PATH for the video pipeline (`apt-get install ffmpeg`).
 
 ### Seeded dev accounts
 
@@ -90,24 +95,38 @@ pointed at the screen defeats every technical measure. Darsly's goal is layered
 **deterrence + forensic traceability**: make leaking hard, risky, and traceable to
 the exact student and session.
 
-**Real barriers (enforced server-side):**
-- Encrypted HLS (AES-128) only; raw MP4 keys are never exposed by the API (Phase 3).
-- Per-user, short-lived signed URLs; per-session encryption keys, rotated.
-- Device binding + concurrent-session cap (**live now** — 3rd login kicks the oldest
-  device and its tokens die immediately, verified by `scripts/smoke-auth.sh`).
-- Refresh-token rotation with reuse detection (**live now**).
-- Per-lesson view caps and time-window access; enrollment revocation (schema ready).
-- Playback forensics: every play is logged (who/when/IP/device/watch pattern) with
-  anomaly detection for concurrent multi-IP playback and scripted access (Phase 3).
+**Real barriers (enforced server-side, all live):**
+- Encrypted HLS only: uploads are transcoded (ffmpeg) to AES-128 HLS; the raw MP4
+  source is deleted after packaging and is never served — the API only ever hands
+  out encrypted segments + playlists.
+- Per-user, short-lived HMAC-signed URLs (`SIGNED_URL_TTL_SECONDS`) scoped to one
+  asset + session; the AES key is served ONLY to a live, watermarked session by a
+  dedicated key endpoint, never bundled into the media. Keys rotate
+  (`HLS_KEY_ROTATION_SECONDS`). Optional Referer/domain lock (`ALLOWED_ORIGINS`).
+- **Honest scope:** AES-128 clear-key gates the *stream* with real server-side
+  access control; it is NOT hardware DRM (no Widevine/PlayReady/FairPlay robustness
+  or HDCP). The `IDrmProvider` adapter has those vendor providers stubbed so a
+  licensed multi-DRM service (Gumlet/Bunny/VdoCipher) drops in without refactoring.
+- Device binding + concurrent-session cap (3rd login kicks the oldest device and its
+  tokens — and its playback keys — die immediately; `scripts/smoke-auth.sh`).
+- Refresh-token rotation with reuse detection.
+- Per-lesson view caps + time-window access (lesson expires N days after first
+  unlock) + drip unlock; enrollment revocation kills playback mid-session.
+- Playback forensics: every session logs who/when/IP/device/watch pattern with
+  anomaly detection for concurrent multi-IP playback and scripted rapid-seek
+  (→ `SecurityEvent` + teacher/student notification). Storage is pluggable
+  (`STORAGE_DRIVER=local|s3`) behind one interface.
 
-**Deterrents (client-side, best-effort — documented as such):**
-- Roving forensic watermark burned into the player overlay: student name + phone +
-  watermark ID + live timestamp. A leaked clip's watermark ID resolves back to the
-  exact student + session via the teacher's Leak-Trace tool (Phase 3).
-- DevTools detection, tab-blur pause + blur overlay, right-click/save/PiP blocking.
-  These raise the effort bar; they do not stop a determined attacker.
-- `IDrmProvider` adapter (EME/Widevine/PlayReady/FairPlay stubs) so a real multi-DRM
-  provider (VdoCipher/Gumlet/Bunny) can be plugged in without refactoring (Phase 3).
+**Deterrents (client-side, best-effort — documented as such, NOT protection):**
+- Roving forensic watermark burned into the player overlay: student name + masked
+  phone + watermark ID (`DRS-…`) + live timestamp, repositioned every few seconds so
+  it can't be cropped out. A leaked clip's watermark ID resolves back to the exact
+  student + session (Leak-Trace, Phase 5 admin UI). A steganographic session token
+  is also issued for invisible tracing.
+- DevTools-open detection → pause + blur + server report; tab-blur/visibility pause +
+  blur overlay; right-click/select/drag/save-shortcut/PiP blocking. These raise the
+  effort bar; **fully preventing screen capture on the web is impossible** — a second
+  camera defeats every measure. The goal is deterrence + traceability, not a guarantee.
 
 ## Build phases
 
@@ -115,8 +134,8 @@ the exact student and session.
 |---|---|---|
 | 1 | Scaffolding, full DB schema, auth (OTP + password), RBAC, sessions, seed, web shell | ✅ done & verified |
 | 2 | Teacher/course/lesson CRUD (units, drip, free preview, pricing, coupons, uploads), student enrollment lifecycle (quote→request→approve/reject/revoke, auto-approve, subscriptions, bundles), discovery + public profiles, all React screens | ✅ done & verified |
-| 3 | Secure video pipeline (ffmpeg→AES-HLS), watermarked hardened player, session/device control | ⏳ next |
-| 4 | Chat (Socket.io), notifications, progress tracking, student comfort | |
+| 3 | Encrypted-HLS pipeline (ffmpeg→AES-128), signed expiring URLs + per-session gated keys, DRM adapter (native + Widevine/PlayReady/FairPlay stubs), storage abstraction (local/S3), device + views-cap + time-window access control, multi-IP/rapid-seek anomaly flags, roving forensic watermark + hardened React player | ✅ done & verified |
+| 4 | Chat (Socket.io), notifications, progress tracking, student comfort | ⏳ next |
 | 5 | Payments ledger, payouts, admin dashboards, teacher security tab | |
 | 6 | Quizzes, reviews, certificates, tests, polish | |
 

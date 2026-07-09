@@ -140,6 +140,38 @@ export interface WatermarkPayload {
   issuedAt: string; // ISO timestamp
 }
 
+/** DRM schemes; AES_128_CLEARKEY is the native default, others are vendor stubs. */
+export enum DrmScheme {
+  AES_128_CLEARKEY = 'AES_128_CLEARKEY',
+  WIDEVINE = 'WIDEVINE',
+  PLAYREADY = 'PLAYREADY',
+  FAIRPLAY = 'FAIRPLAY',
+}
+
+export enum VideoAssetStatus {
+  UPLOADING = 'UPLOADING',
+  PROCESSING = 'PROCESSING',
+  READY = 'READY',
+  FAILED = 'FAILED',
+}
+
+/** Response from POST /playback/sessions — everything the player needs. */
+export interface PlaybackTicket {
+  playbackSessionId: string;
+  preview: boolean;
+  scheme: DrmScheme;
+  /** signed URL of the HLS master playlist */
+  masterUrl: string;
+  /** signed URL of the AES key (native scheme) */
+  keyUrl?: string;
+  /** EME license server (hardware DRM schemes) */
+  licenseServerUrl?: string;
+  durationSec: number;
+  watermark: WatermarkPayload;
+  /** invisible/steganographic leak-trace token */
+  stegToken: string;
+}
+
 // ── Notifications ──────────────────────────────────────────────────────────
 
 export enum NotificationType {

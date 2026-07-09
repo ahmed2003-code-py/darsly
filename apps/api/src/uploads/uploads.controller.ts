@@ -17,10 +17,13 @@ import { Response } from 'express';
 import * as fs from 'fs';
 import { diskStorage } from 'multer';
 import * as path from 'path';
+import * as os from 'os';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageProvider } from '../storage/storage.provider';
+import { VideoProcessingService } from '../video/video-processing.service';
 
 const STORAGE_ROOT = path.resolve(process.env.STORAGE_LOCAL_PATH ?? './storage');
 
@@ -43,11 +46,11 @@ const ATTACHMENT_MIME =
   /^(application\/pdf|image\/(png|jpe?g|webp)|application\/(zip|msword|vnd\.openxmlformats-officedocument\..+)|text\/plain)$/;
 
 /**
- * Phase-2 upload pipeline: files land on local disk (STORAGE_LOCAL_PATH).
- * Videos create a VideoAsset that Phase 3 will transcode to encrypted HLS —
- * until then assets go straight to READY and are never served raw to students.
- * Attachments are streamed back only to the owner teacher, enrolled students,
- * or anyone for free-preview lessons.
+ * Upload pipeline. Videos are staged, stored as a private source object, then
+ * transcoded to AES-128 encrypted HLS by VideoProcessingService (raw source is
+ * deleted once packaging succeeds and is never served). Attachments are
+ * streamed back only to the owner teacher, enrolled students, or anyone for
+ * free-preview lessons.
  */
 @ApiTags('uploads')
 @Controller()
@@ -55,6 +58,8 @@ export class UploadsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly storage: StorageProvider,
+    private readonly videoProcessing: VideoProcessingService,
   ) {}
 
   @Post('uploads/videos')
@@ -70,7 +75,8 @@ export class UploadsController {
   @ApiOperation({ summary: '[teacher] Upload a lesson video (multipart field: file)' })
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: storageFor('videos'),
+      // Stage to the OS temp dir; the handler moves it into private storage.
+      storage: diskStorage({ destination: os.tmpdir() }),
       limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB
       fileFilter: (_req, file, cb) =>
         VIDEO_MIME.test(file.mimetype)
@@ -80,15 +86,28 @@ export class UploadsController {
   )
   async uploadVideo(@CurrentUser() user: JwtPayload, @UploadedFile() file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('file is required');
+
+    // Create the asset first (UPLOADING) so we can key the source object by id,
+    // then move the staged upload into private storage under source/<id>.
+    const ext = path.extname(file.originalname).toLowerCase().slice(0, 10) || '.mp4';
     const asset = await this.prisma.videoAsset.create({
       data: {
         tenantId: user.tenantId!,
-        originalKey: path.relative(STORAGE_ROOT, file.path),
+        originalKey: '', // set below
         sizeBytes: BigInt(file.size),
-        // Phase 3 flips this to PROCESSING and runs the ffmpeg→AES-HLS pipeline.
-        status: 'READY',
+        status: 'UPLOADING',
       },
     });
+    const sourceKey = `source/${asset.id}${ext}`;
+    await this.storage.put(sourceKey, fs.createReadStream(file.path), {
+      contentType: file.mimetype,
+    });
+    fs.unlink(file.path, () => undefined);
+    await this.prisma.videoAsset.update({
+      where: { id: asset.id },
+      data: { originalKey: sourceKey },
+    });
+
     await this.audit.log({
       actorUserId: user.sub,
       action: 'video.upload',
@@ -96,12 +115,28 @@ export class UploadsController {
       entityId: asset.id,
       meta: { sizeBytes: file.size, mimeType: file.mimetype },
     });
+
+    // Transcode to encrypted HLS off the request thread.
+    this.videoProcessing.enqueue(asset.id);
     return {
       id: asset.id,
-      status: asset.status,
+      status: 'PROCESSING',
       sizeBytes: file.size,
       fileName: file.originalname,
     };
+  }
+
+  @Get('uploads/videos/:id/status')
+  @Roles(Role.TEACHER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[teacher] Poll transcode status of a video asset' })
+  async videoStatus(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    const asset = await this.prisma.videoAsset.findFirst({
+      where: { id, tenantId: user.tenantId },
+      select: { id: true, status: true, durationSec: true, renditions: true },
+    });
+    if (!asset) throw new NotFoundException('Video asset not found');
+    return asset;
   }
 
   @Post('uploads/lessons/:lessonId/attachments')

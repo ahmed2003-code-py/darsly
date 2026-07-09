@@ -138,33 +138,48 @@ export default function CourseDetailPage() {
                   </button>
                   {open && (
                     <ul className="border-t border-outline-variant/40">
-                      {u.lessons.map((l: any) => (
-                        <li key={l.id} className={`flex items-center gap-4 px-6 py-4 ${l.locked ? 'opacity-60' : ''}`}>
-                          <span
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                              l.locked ? 'bg-surface-container-high text-outline' : 'bg-secondary-container text-on-secondary-container'
-                            }`}
-                          >
-                            <span className="material-symbols-outlined">
-                              {l.locked ? 'lock' : LESSON_ICON[l.type] ?? 'play_circle'}
+                      {u.lessons.map((l: any) => {
+                        const Row = (
+                          <>
+                            <span
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                                l.locked ? 'bg-surface-container-high text-outline' : 'bg-secondary-container text-on-secondary-container'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined">
+                                {l.locked ? 'lock' : LESSON_ICON[l.type] ?? 'play_circle'}
+                              </span>
                             </span>
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-bold">{l.title}</p>
-                            <p className="flex flex-wrap items-center gap-3 text-xs text-outline">
-                              {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
-                              {l.locked && l.dripUnlockAt && <span>{t('course.unlocksOn', { date: dateShort(l.dripUnlockAt) })}</span>}
-                              {l.locked && !l.dripUnlockAt && l.dripAfterEnrollDays != null && (
-                                <span>{t('course.unlocksAfterDays', { count: l.dripAfterEnrollDays })}</span>
-                              )}
-                              {l.attachments?.length > 0 && (
-                                <span>{t('course.attachmentsCount', { count: l.attachments.length })}</span>
-                              )}
-                            </p>
-                          </div>
-                          {l.isFreePreview && <Badge tone="teal">{t('course.freePreview')}</Badge>}
-                        </li>
-                      ))}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-bold">{l.title}</p>
+                              <p className="flex flex-wrap items-center gap-3 text-xs text-outline">
+                                {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
+                                {l.locked && l.dripUnlockAt && <span>{t('course.unlocksOn', { date: dateShort(l.dripUnlockAt) })}</span>}
+                                {l.locked && !l.dripUnlockAt && l.dripAfterEnrollDays != null && (
+                                  <span>{t('course.unlocksAfterDays', { count: l.dripAfterEnrollDays })}</span>
+                                )}
+                                {l.attachments?.length > 0 && (
+                                  <span>{t('course.attachmentsCount', { count: l.attachments.length })}</span>
+                                )}
+                              </p>
+                            </div>
+                            {l.isFreePreview && <Badge tone="teal">{t('course.freePreview')}</Badge>}
+                            {!l.locked && <span className="material-symbols-outlined text-primary">play_circle</span>}
+                          </>
+                        );
+                        return l.locked ? (
+                          <li key={l.id} className="flex items-center gap-4 px-6 py-4 opacity-60">{Row}</li>
+                        ) : (
+                          <li key={l.id}>
+                            <Link
+                              to={`/learn/${course.id}/${l.id}`}
+                              className="flex items-center gap-4 px-6 py-4 transition hover:bg-surface-container-low"
+                            >
+                              {Row}
+                            </Link>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>

@@ -19,9 +19,12 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Darsly API')
     .setDescription(
-      'Arabic-first EdTech marketplace API. Multi-tenant: teacher-owned resources are scoped by tenantId.',
+      'Arabic-first EdTech marketplace API. Multi-tenant: teacher-owned resources are scoped by tenantId. ' +
+        'Phase 3 adds encrypted-HLS video: uploads are transcoded to AES-128 HLS, delivered through ' +
+        'short-lived signed URLs with a per-session gated key, forensic watermarking, and playback ' +
+        'session/anomaly control (tag: playback).',
     )
-    .setVersion('0.1.0')
+    .setVersion('0.3.0')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

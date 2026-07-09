@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import CourseDetailPage from './pages/student/CourseDetailPage';
 import DiscoveryPage from './pages/student/DiscoveryPage';
 import MyCoursesPage from './pages/student/MyCoursesPage';
+import SecureVideoPlayerPage from './pages/student/SecureVideoPlayerPage';
 import TeacherProfilePage from './pages/student/TeacherProfilePage';
 import CourseBuilderPage from './pages/teacher/CourseBuilderPage';
 import TeacherCoursesPage from './pages/teacher/TeacherCoursesPage';
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/" element={<HomeRedirect />} />
       <Route path="/t/:slug" element={<RequireAuth><TeacherProfilePage /></RequireAuth>} />
       <Route path="/course/:id" element={<RequireAuth><CourseDetailPage /></RequireAuth>} />
+      <Route path="/learn/:courseId/:lessonId" element={<RequireAuth><SecureVideoPlayerPage /></RequireAuth>} />
       <Route path="/my-courses" element={<RequireAuth role={Role.STUDENT}><MyCoursesPage /></RequireAuth>} />
 
       {/* Teacher studio */}

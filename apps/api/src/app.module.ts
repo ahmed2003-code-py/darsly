@@ -13,7 +13,9 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { CoursesModule } from './courses/courses.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { HealthController } from './health/health.controller';
+import { PlaybackModule } from './playback/playback.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { StorageModule } from './storage/storage.module';
 import { TeachersModule } from './teachers/teachers.module';
 import { UploadsModule } from './uploads/uploads.module';
 
@@ -34,8 +36,10 @@ const webDist = join(__dirname, '..', '..', 'web', 'dist');
     CatalogModule,
     TeachersModule,
     CoursesModule,
+    StorageModule,
     UploadsModule,
     EnrollmentsModule,
+    PlaybackModule,
   ],
   controllers: [HealthController],
   providers: [

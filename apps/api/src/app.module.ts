@@ -1,6 +1,9 @@
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
@@ -14,9 +17,16 @@ import { PrismaModule } from './prisma/prisma.module';
 import { TeachersModule } from './teachers/teachers.module';
 import { UploadsModule } from './uploads/uploads.module';
 
+// Single-service deploys: when the web app has been built into apps/web/dist,
+// the API serves it too (SPA fallback included). API routes stay under /api.
+const webDist = join(__dirname, '..', '..', 'web', 'dist');
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env', '../../.env'] }),
+    ...(existsSync(webDist)
+      ? [ServeStaticModule.forRoot({ rootPath: webDist, exclude: ['/api/(.*)'] })]
+      : []),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
     AuditModule,

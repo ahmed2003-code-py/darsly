@@ -1,8 +1,12 @@
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth';
 
+// Production build is served by the API itself -> same-origin relative calls.
+// Local dev (vite on :5173) talks to the API on :4000 unless VITE_API_URL says otherwise.
+const apiOrigin = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:4000' : '');
+
 export const api = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL ?? 'http://localhost:4000'}/api/v1`,
+  baseURL: `${apiOrigin}/api/v1`,
 });
 
 api.interceptors.request.use((config) => {

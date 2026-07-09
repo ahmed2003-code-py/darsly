@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && nest build && npm --prefix ../.. run build --workspace=@darsly/web",
     "dev": "nest start --watch",
     "start": "prisma migrate deploy && node dist/main.js",
     "db:migrate": "prisma migrate dev",
@@ -24,6 +24,7 @@
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/platform-express": "^10.4.1",
     "@nestjs/platform-socket.io": "^10.4.1",
+    "@nestjs/serve-static": "^4.0.2",
     "@nestjs/swagger": "^7.4.0",
     "@nestjs/throttler": "^6.2.1",
     "@nestjs/websockets": "^10.4.1",

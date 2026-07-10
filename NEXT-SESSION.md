@@ -1,80 +1,36 @@
-# اللي فاضل لبكرة — تحسين الفرونت (الجزء 2) + مهام معلّقة
+# حالة المشروع — نقطة البداية للمرة الجاية
 
-آخر كوميت: `0d6b238` (Frontend polish part 1) — مدفوع على `main`.
+آخر كوميت: `8031f73` (Frontend polish part 2) — مدفوع على `main`.
 
-## ✅ اللي خلص (الجزء 1)
-- شريط علوي زجاجي (TopBar): بحث في النص + جرس إشعارات حقيقي + قائمة المستخدم + تبديل اللغة.
-- API الإشعارات (`GET /notifications`, `PATCH /notifications/:id/read`, `read-all`).
-- Layout جديد: بلوك براند بتدرّج، nav بحبة نشطة، كارت حساب تحت، دروار للموبايل.
-- primitives في `index.css`: أزرار برفعة hover، `.card-hover`، `.glass`، skeletons، سكرول بار.
-- `ui.tsx`: `Skeleton`, `CardGridSkeleton`, `PageHeader`.
-- Discovery: بحث من الـ TopBar (`?q`)، skeletons، كروت معلمين معاد تصميمها.
-- Login: اتصلح تداخل البراند مع السطر، شعار بتدرّج.
-- Seed: صورة مميزة لكل دورة.
+## ✅ اللي خلص
+- **Phase 1**: auth (OTP+password، JWT rotation، device sessions)، RBAC، seed.
+- **Phase 2**: كتالوج، دورات CRUD، وحدات/دروس، التحاق (quote→approve/reject/revoke)، كوبونات، اكتشاف + ملف معلم عام. شاشات React كاملة.
+- **Phase 3**: فيديو مشفّر (ffmpeg→AES-128 HLS)، روابط موقّعة + مفتاح مُبوّب بالجلسة، DRM adapter (native + stubs)، تخزين مجرّد (local/s3)، تحكم جلسات/أجهزة، كشف multi-IP/rapid-seek، مشغّل بعلامة مائية متحركة + تقسية. متحقق منه (15 unit + 21 smoke + متصفح حقيقي فكّ التشفير).
+- **تحسين الفرونت (جزء 1+2)**: شريط علوي زجاجي (بحث + جرس إشعارات حقيقي + قائمة مستخدم)، Layout جديد بسايدبار محسّن، primitives (أزرار/skeletons/glass)، إشعارات API، وكل الشاشات اتظبطت على `PageHeader` + skeletons. تنظيف بيانات الـ smoke + سكريبتات تنظّف بعد نفسها.
 
-## 🔜 المطلوب بكرة (بالترتيب)
+## 🔜 المهام الكبيرة المتبقية (محتاجة موافقتك للبدء)
 
-### 1. تنظيف بيانات الـ smoke (كان اتعمله reject — نفّذه الأول)
-سكريبتات الاختبار سابت دورات "تجريبية للاختبار" وطلاب "طالب الاختبار" بتلوّث لوحة المعلم.
-شغّل ده (أو الأفضل: نظّف السكريبتات إنها تمسح بعد نفسها):
-```bash
-docker exec darsly-postgres psql -U darsly -d darsly -c "
-DELETE FROM \"Payment\" p USING \"Course\" c WHERE p.\"courseId\"=c.id AND (c.title LIKE '%تجريبية%' OR c.title LIKE '%drip-switch%');
-DELETE FROM \"Enrollment\" e USING \"Course\" c WHERE e.\"courseId\"=c.id AND (c.title LIKE '%تجريبية%' OR c.title LIKE '%drip-switch%');
-DELETE FROM \"Lesson\" l USING \"CourseUnit\" u, \"Course\" c WHERE l.\"unitId\"=u.id AND u.\"courseId\"=c.id AND (c.title LIKE '%تجريبية%' OR c.title LIKE '%drip-switch%');
-DELETE FROM \"CourseUnit\" u USING \"Course\" c WHERE u.\"courseId\"=c.id AND (c.title LIKE '%تجريبية%' OR c.title LIKE '%drip-switch%');
-DELETE FROM \"Coupon\" WHERE code LIKE 'SMOKE%';
-DELETE FROM \"Course\" WHERE title LIKE '%تجريبية%' OR title LIKE '%drip-switch%';
-DELETE FROM \"User\" WHERE \"fullName\" LIKE '%طالب الاختبار%' OR \"fullName\"='طالب تجريبي';"
-```
-ثم `npm run db:seed --workspace=@darsly/api` عشان الصور المميزة تتطبق.
-**تحسين دائم:** خلّي `scripts/smoke-phase2.sh` و`smoke-phase3.sh` يمسحوا الدورة/الكوبون اللي أنشأوهم في النهاية.
+### أ. فيديو الإنتاج على Railway (مش شغّال لايف لسه)
+النشر بيقلع سليم بس معالجة الفيديو محتاجة:
+1. **ffmpeg في صورة البناء** — Railway Railpack مفيهوش ffmpeg. الحل: Dockerfile أو إضافة الحزمة.
+2. **تخزين S3** — قرص Railway مؤقت؛ ملفات HLS بتضيع مع كل deploy. المُحوّل جاهز، محتاج bucket + مفاتيح + `STORAGE_DRIVER=s3`.
 
-### 2. باقي شاشات الفرونت — استخدم `PageHeader` + skeletons + الـ primitives الجديدة
-الشاشات دي لسه بتستخدم هيدر inline قديم و`Spinner` بدل skeletons:
-- `apps/web/src/pages/student/TeacherProfilePage.tsx` — الهيرو كويس، بس استخدم skeleton بدل Spinner.
-- `apps/web/src/pages/student/CourseDetailPage.tsx` — هيدر → `PageHeader` أسلوب، حسّن كارت الاشتراك.
-- `apps/web/src/pages/teacher/TeacherDashboardPage.tsx` — الهيدر + كروت الإحصائيات (أيقونة يمين، رقم كبير)، شيل زرار "دورة جديدة" العايم وحطه في `PageHeader action`.
-- `apps/web/src/pages/teacher/TeacherCoursesPage.tsx` — `PageHeader`، **واقرأ `?q` من الـ URL** (TopBar بيبعت للمعلم `/teacher/courses?q=`) وفلتر بالعنوان.
-- `apps/web/src/pages/teacher/CourseBuilderPage.tsx` — كبير بس شكله كويس؛ بس وحّد الهيدر.
-- `apps/web/src/pages/teacher/TeacherEnrollmentsPage.tsx` — `PageHeader`؛ الجدول كويس.
-- `apps/web/src/pages/teacher/TeacherCouponsPage.tsx` — `PageHeader`؛ الجدول كويس.
-- `apps/web/src/pages/student/SecureVideoPlayerPage.tsx` — شغّال ومتحقق منه؛ تحسينات بسيطة بس.
+### ب. Phase 4 — الشات والتواصل
+- شات لحظي (Socket.io) طالب↔معلم، Q&A مربوط بلحظة في الفيديو.
+- إشعارات لحظية (فوق الـ API الموجود).
+- تتبّع تقدّم الطالب، streaks، أهداف أسبوعية، لمسات راحة الطالب.
 
-نمط موحّد لكل شاشة:
-```tsx
-import { PageHeader, CardGridSkeleton } from '../../components/ui';
-// ...
-<div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-  <PageHeader title={t('...')} subtitle={t('...')} action={<button className="btn-primary">...</button>} />
-  {isLoading ? <CardGridSkeleton/> : ...}
-</div>
-```
+### ج. باقي المراحل
+- **Phase 5**: دفتر الدفع (ledger)، السحب (payouts)، لوحات الأدمن، تبويب أمان المعلم (Leak-Trace UI).
+- **Phase 6**: اختبارات، تقييمات، شهادات، تلميع نهائي.
 
-### 3. تحقّق بصري (مهم جداً — المستخدم حسّاس لجودة الشكل)
-شغّل السيرفرات ثم لقطات في متصفح حقيقي:
-```bash
-# API: npm run dev --workspace=@darsly/api  |  Web: npm run dev --workspace=@darsly/web
-node /tmp/.../scratchpad/snap.mjs all   # (السكريبت موجود؛ أو أعد كتابته)
-```
-راجع كل شاشة عين بعين مع المرجع في:
-`/home/ahmedeldeeb/Pictures/stitch_hessa_edtech_platform_ui/` (استبدل "Hessa/حصة" بـ "درسلي").
-لاحظ: descenders العربية (حرف ي/ج) بتتقطع مع `leading-none` — استخدم `leading` عادي أو `pb`.
-
-### 4. Build + commit + push
-```bash
-npm run build   # لازم يعدي أخضر
-git add -A && git commit -m "Frontend polish (part 2): remaining screens to reference fidelity"
-git push origin main   # بيعمل auto-deploy على Railway
-```
-
-## 📌 مهام معلّقة أكبر (لما توافق)
-- **فيديو الإنتاج على Railway**: محتاج (أ) ffmpeg في صورة البناء [Dockerfile أو railpack packages]، (ب) تخزين S3 (قرص Railway مؤقت). المُحوّل جاهز — بس bucket + مفاتيح + `STORAGE_DRIVER=s3`.
-- **Phase 4**: الشات (Socket.io)، الإشعارات اللحظية، تتبّع التقدّم، راحة الطالب. (مستني تأكيدك)
-- `OTP_DEV_MODE=true` على الإنتاج — لازم يتقفل قبل أي إطلاق حقيقي.
+## ⚠️ تنبيهات
+- `OTP_DEV_MODE=true` على الإنتاج — أي كود `0000` يدخل. **لازم يتقفل قبل أي إطلاق حقيقي.**
+- شاشة الأدمن لسه مش متعملة (SUPER_ADMIN بيدخل بس مفيش لوحة مخصصة له — بتيجي في Phase 5).
 
 ## معلومات سريعة
 - حسابات: طالب `01011111111` كود `0000` · معلم `khaled@darsly.app`/`Teacher@12345` · أدمن `admin@darsly.app`/`Admin@12345`.
-- API محلي: `:4000` (Swagger `/api/docs`) · Web: `:5173` · Postgres: `5434`.
+- محلي: API `:4000` (Swagger `/api/docs`) · Web `:5173` · Postgres `5434`.
 - لايف: https://darslyapi-production.up.railway.app
-- سمووك: `bash scripts/smoke-auth.sh` (18) · `smoke-phase2.sh` (37) · `smoke-phase3.sh` (21، محتاج ffmpeg + `scratchpad/sample.mp4`).
+- سمووك: `bash scripts/smoke-auth.sh` (18) · `smoke-phase2.sh` (37، بينظّف نفسه) · `smoke-phase3.sh` (21، محتاج ffmpeg + `scratchpad/sample.mp4`).
+- المرجع البصري: `/home/ahmedeldeeb/Pictures/stitch_hessa_edtech_platform_ui/` (استبدل "حصة/Hessa" بـ "درسلي").

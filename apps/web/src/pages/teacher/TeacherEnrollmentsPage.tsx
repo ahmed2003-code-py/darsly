@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
-import { Badge, EmptyState, ErrorNote, Spinner } from '../../components/ui';
+import { Badge, EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
 
 const TABS = ['PENDING_APPROVAL', 'ACTIVE', 'ALL'] as const;
 
@@ -39,9 +39,8 @@ export default function TeacherEnrollmentsPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-8 py-8">
-      <h1 className="font-heading text-4xl font-extrabold">{t('teacher.students.title')}</h1>
-      <p className="mb-6 mt-2 text-on-surface-variant">{t('teacher.students.subtitle')}</p>
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <PageHeader title={t('teacher.students.title')} subtitle={t('teacher.students.subtitle')} />
 
       <div className="mb-6 flex gap-2">
         {TABS.map((tb) => (

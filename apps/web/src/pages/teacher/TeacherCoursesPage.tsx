@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
-import { Badge, EmptyState, ErrorNote, Field, Modal, Spinner } from '../../components/ui';
+import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
 
 interface CourseForm {
   id?: string;
@@ -38,11 +38,16 @@ export default function TeacherCoursesPage() {
   const ar = i18n.language === 'ar';
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CourseForm | null>(null);
+  const [searchParams] = useSearchParams();
+  const q = (searchParams.get('q') ?? '').trim().toLowerCase(); // from the TopBar search
 
-  const { data: courses, isLoading } = useQuery({
+  const { data: allCourses, isLoading } = useQuery({
     queryKey: ['teacher-courses'],
     queryFn: async () => (await api.get('/teacher/courses')).data,
   });
+  const courses = q
+    ? (allCourses ?? []).filter((c: any) => c.title.toLowerCase().includes(q))
+    : allCourses;
   const { data: subjects } = useQuery({
     queryKey: ['subjects'],
     queryFn: async () => (await api.get('/catalog/subjects')).data,
@@ -92,22 +97,22 @@ export default function TeacherCoursesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-container px-8 py-8">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-4xl font-extrabold">{t('teacher.courses.title')}</h1>
-          <p className="mt-2 text-on-surface-variant">{t('teacher.courses.subtitle')}</p>
-        </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => setForm({ ...EMPTY_FORM })}>
-          <span className="material-symbols-outlined">add</span>
-          {t('teacher.newCourse')}
-        </button>
-      </div>
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <PageHeader
+        title={t('teacher.courses.title')}
+        subtitle={q ? t('discovery.resultsFor', { q }) : t('teacher.courses.subtitle')}
+        action={
+          <button className="btn-primary" onClick={() => setForm({ ...EMPTY_FORM })}>
+            <span className="material-symbols-outlined">add</span>
+            {t('teacher.newCourse')}
+          </button>
+        }
+      />
 
       {isLoading ? (
-        <Spinner />
+        <CardGridSkeleton count={6} />
       ) : !courses?.length ? (
-        <EmptyState icon="menu_book" title={t('teacher.courses.empty')} />
+        <EmptyState icon="menu_book" title={q ? t('discovery.noResults') : t('teacher.courses.empty')} />
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {courses.map((c: any) => (

@@ -3,7 +3,7 @@ import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
-import { Badge, EmptyState, ErrorNote, Field, Modal, Spinner } from '../../components/ui';
+import { Badge, EmptyState, ErrorNote, Field, Modal, PageHeader, Spinner } from '../../components/ui';
 
 interface CouponForm {
   code: string;
@@ -67,17 +67,17 @@ export default function TeacherCouponsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-container px-8 py-8">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-4xl font-extrabold">{t('teacher.coupons.title')}</h1>
-          <p className="mt-2 text-on-surface-variant">{t('teacher.coupons.subtitle')}</p>
-        </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => setForm({ ...EMPTY })}>
-          <span className="material-symbols-outlined">add</span>
-          {t('teacher.coupons.new')}
-        </button>
-      </div>
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <PageHeader
+        title={t('teacher.coupons.title')}
+        subtitle={t('teacher.coupons.subtitle')}
+        action={
+          <button className="btn-primary" onClick={() => setForm({ ...EMPTY })}>
+            <span className="material-symbols-outlined">add</span>
+            {t('teacher.coupons.new')}
+          </button>
+        }
+      />
 
       {isLoading ? (
         <Spinner />

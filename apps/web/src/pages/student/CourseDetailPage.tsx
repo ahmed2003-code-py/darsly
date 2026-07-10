@@ -6,7 +6,7 @@ import { Role } from '@darsly/shared-types';
 import { api } from '../../lib/api';
 import { dateShort, duration, egp } from '../../lib/format';
 import { useAuthStore } from '../../stores/auth';
-import { Badge, EmptyState, ErrorNote, Spinner } from '../../components/ui';
+import { Badge, EmptyState, ErrorNote, Skeleton } from '../../components/ui';
 
 const LESSON_ICON: Record<string, string> = {
   VIDEO: 'play_circle',
@@ -47,7 +47,21 @@ export default function CourseDetailPage() {
     },
   });
 
-  if (isLoading) return <Spinner />;
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+        <div className="flex flex-col gap-8 lg:flex-row">
+          <div className="min-w-0 flex-1 space-y-4">
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-8 w-2/3" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+          </div>
+          <Skeleton className="h-96 w-full rounded-xl lg:w-96" />
+        </div>
+      </div>
+    );
+  }
   if (error || !course) return <EmptyState icon="menu_book" title={t('course.notFound')} />;
 
   const total = course.units.reduce(
@@ -79,7 +93,7 @@ export default function CourseDetailPage() {
       (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess));
 
   return (
-    <div className="mx-auto max-w-container px-8 py-8">
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       <div className="flex flex-col gap-8 lg:flex-row">
         {/* Main column */}
         <div className="min-w-0 flex-1">

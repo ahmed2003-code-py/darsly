@@ -123,9 +123,25 @@ D=$(curl -s "$API/courses/$CID" -H "Authorization: Bearer $ST")
 check "revoked student loses access" "False" "$(echo "$D" | jsonget "['viewer']['hasAccess']")"
 
 echo "── 7. Cleanup"
-curl -s -X DELETE $API/teacher/coupons -o /dev/null 2>/dev/null # no-op guard
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE $API/teacher/courses/$CID -H "Authorization: Bearer $KH")
 check "delete smoke course (archives — has enrollments)" "200" "$CODE"
+
+# Hard-delete this run's course graph so archived test courses don't pile up in
+# the teacher's dashboard. Best-effort: only when the dev Postgres is reachable.
+if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q darsly-postgres; then
+  docker exec -i darsly-postgres psql -U darsly -d darsly >/dev/null 2>&1 <<SQL
+DELETE FROM "Payment" WHERE "courseId"='$CID';
+DELETE FROM "LessonProgress" WHERE "lessonId" IN (SELECT l.id FROM "Lesson" l JOIN "CourseUnit" u ON l."unitId"=u.id WHERE u."courseId"='$CID');
+DELETE FROM "PlaybackSession" WHERE "lessonId" IN (SELECT l.id FROM "Lesson" l JOIN "CourseUnit" u ON l."unitId"=u.id WHERE u."courseId"='$CID');
+DELETE FROM "Enrollment" WHERE "courseId"='$CID';
+DELETE FROM "Attachment" WHERE "lessonId" IN (SELECT l.id FROM "Lesson" l JOIN "CourseUnit" u ON l."unitId"=u.id WHERE u."courseId"='$CID');
+DELETE FROM "Lesson" WHERE "unitId" IN (SELECT id FROM "CourseUnit" WHERE "courseId"='$CID');
+DELETE FROM "CourseUnit" WHERE "courseId"='$CID';
+DELETE FROM "Coupon" WHERE "courseId"='$CID' OR ("tenantId" IN (SELECT "tenantId" FROM "Course" WHERE id='$CID') AND code LIKE 'SMOKE%');
+DELETE FROM "Course" WHERE id='$CID';
+SQL
+  echo "  🧹 smoke course hard-deleted (dev DB)"
+fi
 
 echo
 echo "══════════════════════════════════"

@@ -165,7 +165,7 @@ export default function CourseBuilderPage() {
   const totalSec = lessons.reduce((s: number, l: any) => s + (l.durationSec ?? 0), 0);
 
   return (
-    <div className="mx-auto max-w-container px-8 py-8">
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       {/* Header */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>

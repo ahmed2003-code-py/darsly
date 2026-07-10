@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { duration, egp } from '../../lib/format';
-import { Badge, EmptyState, Spinner, Stars } from '../../components/ui';
+import { Badge, EmptyState, Skeleton, Stars } from '../../components/ui';
 
 /** Public teacher profile per the teacher_profile design: hero with intro
  *  video + stats chips, then course cards, then reviews. */
@@ -17,11 +17,23 @@ export default function TeacherProfilePage() {
     queryFn: async () => (await api.get(`/teachers/${slug}`)).data,
   });
 
-  if (isLoading) return <Spinner />;
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+        <Skeleton className="mb-10 h-64 w-full rounded-xl" />
+        <Skeleton className="mb-4 h-8 w-48" />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-72 w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!teacher) return <EmptyState icon="person_off" title={t('discovery.noResults')} />;
 
   return (
-    <div className="mx-auto max-w-container px-8 py-8">
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       {/* Hero */}
       <section className="card mb-10 grid gap-8 bg-gradient-to-bl from-surface-container-low to-surface-container-lowest p-8 lg:grid-cols-2">
         <div>

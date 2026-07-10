@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
-import { Badge, EmptyState, Spinner } from '../../components/ui';
+import { Badge, CardGridSkeleton, EmptyState, PageHeader } from '../../components/ui';
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
   ACTIVE: 'teal',
@@ -21,12 +21,11 @@ export default function MyCoursesPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-8 py-8">
-      <h1 className="font-heading text-4xl font-extrabold">{t('myCourses.title')}</h1>
-      <p className="mb-8 mt-2 text-on-surface-variant">{t('myCourses.subtitle')}</p>
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <PageHeader title={t('myCourses.title')} subtitle={t('myCourses.subtitle')} />
 
       {isLoading ? (
-        <Spinner />
+        <CardGridSkeleton count={3} />
       ) : !data?.length ? (
         <div>
           <EmptyState icon="auto_stories" title={t('myCourses.empty')} hint={t('myCourses.emptyHint')} />

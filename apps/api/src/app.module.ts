@@ -15,6 +15,10 @@ import { CoursesModule } from './courses/courses.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { HealthController } from './health/health.controller';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PaymentsModule } from './payments/payments.module';
+import { PayoutsModule } from './payouts/payouts.module';
+import { AdminModule } from './admin/admin.module';
+import { SecurityModule } from './security/security.module';
 import { PlaybackModule } from './playback/playback.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
@@ -48,6 +52,10 @@ const webDist = join(__dirname, '..', '..', 'web', 'dist');
     ChatModule,
     RealtimeModule,
     ProgressModule,
+    PaymentsModule,
+    PayoutsModule,
+    AdminModule,
+    SecurityModule,
   ],
   controllers: [HealthController],
   providers: [

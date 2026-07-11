@@ -4,6 +4,10 @@ import { Role } from '@darsly/shared-types';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import MessagesPage from './pages/MessagesPage';
+import AdminOverviewPage from './pages/admin/AdminOverviewPage';
+import AdminPayoutsPage from './pages/admin/AdminPayoutsPage';
+import AdminSecurityPage from './pages/admin/AdminSecurityPage';
+import AdminTeachersPage from './pages/admin/AdminTeachersPage';
 import CourseDetailPage from './pages/student/CourseDetailPage';
 import DiscoveryPage from './pages/student/DiscoveryPage';
 import MyCoursesPage from './pages/student/MyCoursesPage';
@@ -15,6 +19,8 @@ import TeacherCoursesPage from './pages/teacher/TeacherCoursesPage';
 import TeacherCouponsPage from './pages/teacher/TeacherCouponsPage';
 import TeacherDashboardPage from './pages/teacher/TeacherDashboardPage';
 import TeacherEnrollmentsPage from './pages/teacher/TeacherEnrollmentsPage';
+import TeacherSecurityPage from './pages/teacher/TeacherSecurityPage';
+import TeacherWalletPage from './pages/teacher/TeacherWalletPage';
 import { useAuthStore } from './stores/auth';
 
 function RequireAuth({ children, role }: { children: ReactNode; role?: Role }) {
@@ -26,10 +32,11 @@ function RequireAuth({ children, role }: { children: ReactNode; role?: Role }) {
   return <Layout>{children}</Layout>;
 }
 
-/** Teachers land on their dashboard; students on their learning home. */
+/** Each role lands on its own home. */
 function HomeRedirect() {
   const user = useAuthStore((s) => s.user);
   if (user?.role === Role.TEACHER) return <Navigate to="/teacher" replace />;
+  if (user?.role === Role.SUPER_ADMIN) return <Navigate to="/admin" replace />;
   return (
     <RequireAuth>
       <StudentDashboardPage />
@@ -56,7 +63,15 @@ export default function App() {
       <Route path="/teacher/courses" element={<RequireAuth role={Role.TEACHER}><TeacherCoursesPage /></RequireAuth>} />
       <Route path="/teacher/courses/:id" element={<RequireAuth role={Role.TEACHER}><CourseBuilderPage /></RequireAuth>} />
       <Route path="/teacher/students" element={<RequireAuth role={Role.TEACHER}><TeacherEnrollmentsPage /></RequireAuth>} />
+      <Route path="/teacher/wallet" element={<RequireAuth role={Role.TEACHER}><TeacherWalletPage /></RequireAuth>} />
+      <Route path="/teacher/security" element={<RequireAuth role={Role.TEACHER}><TeacherSecurityPage /></RequireAuth>} />
       <Route path="/teacher/coupons" element={<RequireAuth role={Role.TEACHER}><TeacherCouponsPage /></RequireAuth>} />
+
+      {/* Admin */}
+      <Route path="/admin" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminOverviewPage /></RequireAuth>} />
+      <Route path="/admin/teachers" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminTeachersPage /></RequireAuth>} />
+      <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />
+      <Route path="/admin/security" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminSecurityPage /></RequireAuth>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

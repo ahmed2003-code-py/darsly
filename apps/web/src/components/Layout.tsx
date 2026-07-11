@@ -25,7 +25,16 @@ const TEACHER_NAV: NavItem[] = [
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
   { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
+  { to: '/teacher/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
+  { to: '/teacher/security', icon: 'shield', labelKey: 'nav.security' },
   { to: '/teacher/coupons', icon: 'sell', labelKey: 'nav.coupons' },
+];
+
+const ADMIN_NAV: NavItem[] = [
+  { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
+  { to: '/admin/teachers', icon: 'verified_user', labelKey: 'nav.adminTeachers' },
+  { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },
+  { to: '/admin/security', icon: 'gpp_maybe', labelKey: 'nav.adminSecurity' },
 ];
 
 /**
@@ -38,8 +47,14 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuthStore();
   const [drawer, setDrawer] = useState(false);
   useRealtime(); // live bell + chat list on every authenticated page
-  const nav = user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
-  const roleLabel = user?.role === Role.TEACHER ? t('layout.teacherConsole') : t('layout.studentSpace');
+  const nav =
+    user?.role === Role.SUPER_ADMIN ? ADMIN_NAV : user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
+  const roleLabel =
+    user?.role === Role.SUPER_ADMIN
+      ? t('layout.adminConsole')
+      : user?.role === Role.TEACHER
+        ? t('layout.teacherConsole')
+        : t('layout.studentSpace');
 
   const sidebar = (
     <div className="flex h-full flex-col">

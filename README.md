@@ -135,8 +135,8 @@ the exact student and session.
 | 1 | Scaffolding, full DB schema, auth (OTP + password), RBAC, sessions, seed, web shell | ✅ done & verified |
 | 2 | Teacher/course/lesson CRUD (units, drip, free preview, pricing, coupons, uploads), student enrollment lifecycle (quote→request→approve/reject/revoke, auto-approve, subscriptions, bundles), discovery + public profiles, all React screens | ✅ done & verified |
 | 3 | Encrypted-HLS pipeline (ffmpeg→AES-128), signed expiring URLs + per-session gated keys, DRM adapter (native + Widevine/PlayReady/FairPlay stubs), storage abstraction (local/S3), device + views-cap + time-window access control, multi-IP/rapid-seek anomaly flags, roving forensic watermark + hardened React player | ✅ done & verified |
-| 4 | Chat (Socket.io), notifications, progress tracking, student comfort | ⏳ next |
-| 5 | Payments ledger, payouts, admin dashboards, teacher security tab | |
+| 4 | Chat (Socket.io), notifications, progress tracking, student comfort | ✅ done & verified |
+| 5 | Double-entry ledger, wallet + invoices, payouts (teacher+admin), admin console (overview/approvals/payouts/security/audit), teacher security tab + Leak-Trace | ✅ done & verified |
 | 6 | Quizzes, reviews, certificates, tests, polish | |
 
 ## Deployment (Railway — single service + Postgres)

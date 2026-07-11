@@ -432,6 +432,83 @@ async function main() {
     }
   }
 
+  // ── Phase 5: paid payments + double-entry ledger + a payout ────────────
+  // Give Khaled real revenue so the wallet + admin financials show numbers.
+  // Balanced entries (Σ debit === Σ credit); commission = 20%.
+  async function ensurePaidPayment(studentId: string, course: { id: string; tenantId: string; priceCents: number }) {
+    const existing = await prisma.payment.findFirst({
+      where: { studentId, courseId: course.id, status: 'PAID' },
+    });
+    if (existing) return existing;
+    const enrollment = await prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId, courseId: course.id } },
+    });
+    const payment = await prisma.payment.create({
+      data: {
+        studentId,
+        courseId: course.id,
+        enrollmentId: enrollment?.id,
+        tenantId: course.tenantId,
+        amountCents: course.priceCents,
+        status: 'PAID',
+        gateway: 'mock',
+        paidAt: new Date(),
+      },
+    });
+    const commission = Math.round((course.priceCents * 20) / 100);
+    const teacherShare = course.priceCents - commission;
+    await prisma.ledgerTransaction.create({
+      data: {
+        description: `enrollment payment ${payment.id}`,
+        paymentId: payment.id,
+        entries: {
+          create: [
+            { account: 'platform:cash', direction: 'DEBIT', amountCents: course.priceCents },
+            { account: 'platform:commission', direction: 'CREDIT', amountCents: commission, tenantId: course.tenantId },
+            { account: `teacher:${course.tenantId}:balance`, direction: 'CREDIT', amountCents: teacherShare, tenantId: course.tenantId },
+          ],
+        },
+      },
+    });
+    const invCount = await prisma.invoice.count();
+    await prisma.invoice.create({
+      data: { paymentId: payment.id, serial: `DRS-INV-${new Date().getFullYear()}-${String(invCount + 1).padStart(6, '0')}` },
+    });
+    return payment;
+  }
+
+  // 3 students pay for Khaled's algebra (450 EGP each) → he nets 360 EGP each.
+  for (const s of students.slice(0, 3)) {
+    await ensurePaidPayment(s.id, { id: algebraCourse.id, tenantId: khaled.id, priceCents: 45000 });
+  }
+  // Noura's chem (400 EGP monthly) — one paid.
+  await ensurePaidPayment(students[1].id, { id: chemCourse.id, tenantId: noura.id, priceCents: 40000 });
+
+  // A saved payout method + one pending request for Khaled.
+  const khaledMethod = await prisma.payoutMethodSaved.findFirst({ where: { tenantId: khaled.id } });
+  if (!khaledMethod) {
+    await prisma.payoutMethodSaved.create({
+      data: {
+        tenantId: khaled.id,
+        method: 'INSTAPAY',
+        details: { handle: 'khaled@instapay', displayName: 'خالد عبدالرحمن' },
+        isDefault: true,
+      },
+    });
+  }
+  const existingPayout = await prisma.payoutRequest.findFirst({ where: { tenantId: khaled.id } });
+  if (!existingPayout) {
+    await prisma.payoutRequest.create({
+      data: {
+        tenantId: khaled.id,
+        amountCents: 60000, // 600 EGP
+        method: 'INSTAPAY',
+        destination: { handle: 'khaled@instapay' },
+        status: 'REQUESTED',
+      },
+    });
+  }
+
   // ── Platform settings ─────────────────────────────────────────────────
   await prisma.platformSetting.upsert({
     where: { key: 'commission.defaultPercent' },

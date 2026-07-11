@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Coupon, Course, Enrollment } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { LedgerService } from '../payments/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface Quote {
@@ -21,6 +22,7 @@ export class EnrollmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly ledger: LedgerService,
   ) {}
 
   private async studentProfileOf(userId: string) {
@@ -115,7 +117,7 @@ export class EnrollmentsService {
         });
 
     if (quote.totalCents > 0 || quote.coupon) {
-      await this.prisma.payment.create({
+      const payment = await this.prisma.payment.create({
         data: {
           studentId: student.id,
           courseId,
@@ -129,6 +131,8 @@ export class EnrollmentsService {
           paidAt: autoApprove ? new Date() : null,
         },
       });
+      // Paid immediately → book the double-entry ledger + invoice.
+      if (autoApprove) await this.ledger.recordPayment(payment.id);
       if (autoApprove && quote.coupon) {
         await this.prisma.coupon.update({
           where: { id: quote.coupon.id },
@@ -279,6 +283,8 @@ export class EnrollmentsService {
         where: { id: payment.id },
         data: { status: 'PAID', paidAt: new Date() },
       });
+      // Approval confirms the payment → book the ledger + invoice.
+      await this.ledger.recordPayment(payment.id);
       if (payment.couponId) {
         await this.prisma.coupon.update({
           where: { id: payment.couponId },

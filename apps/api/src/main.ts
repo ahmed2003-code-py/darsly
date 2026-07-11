@@ -24,7 +24,7 @@ async function bootstrap() {
         'short-lived signed URLs with a per-session gated key, forensic watermarking, and playback ' +
         'session/anomaly control (tag: playback).',
     )
-    .setVersion('0.3.0')
+    .setVersion('0.5.0')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

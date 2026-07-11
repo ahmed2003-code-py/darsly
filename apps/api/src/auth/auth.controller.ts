@@ -6,7 +6,14 @@ import { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
-import { LoginPasswordDto, RefreshTokenDto, RequestOtpDto, VerifyOtpDto } from './dto/auth.dto';
+import {
+  ForgotPasswordDto,
+  LoginDto,
+  RefreshTokenDto,
+  RegisterStudentDto,
+  RegisterTeacherDto,
+  ResetPasswordDto,
+} from './dto/auth.dto';
 import { TokenService } from './token.service';
 
 function deviceContext(req: Request) {
@@ -25,30 +32,48 @@ export class AuthController {
   ) {}
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @Post('otp/request')
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Request a phone OTP (student onboarding/login)' })
-  requestOtp(@Body() dto: RequestOtpDto) {
-    return this.authService.requestOtp(dto);
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('register/student')
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Student self-signup (email + password) — auto-logs in' })
+  registerStudent(@Body() dto: RegisterStudentDto, @Req() req: Request) {
+    return this.authService.registerStudent(dto, deviceContext(req));
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @Post('otp/verify')
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Verify OTP — signs up on first use, returns JWT pair' })
-  verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: Request) {
-    return this.authService.verifyOtp(dto, deviceContext(req));
+  @Throttle({ default: { limit: 5, ttl: 600_000 } })
+  @Post('register/teacher')
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Teacher signup — lands PENDING admin approval' })
+  registerTeacher(@Body() dto: RegisterTeacherDto) {
+    return this.authService.registerTeacher(dto);
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Password login (teacher / super admin)' })
-  login(@Body() dto: LoginPasswordDto, @Req() req: Request) {
-    return this.authService.loginPassword(dto, deviceContext(req));
+  @ApiOperation({ summary: 'Email + password login (students, teachers, admins)' })
+  login(@Body() dto: LoginDto, @Req() req: Request) {
+    return this.authService.login(dto, deviceContext(req));
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 600_000 } })
+  @Post('forgot-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Request a password-reset link (no email enumeration)' })
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @Post('reset-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Reset password with a valid token' })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
   @Public()

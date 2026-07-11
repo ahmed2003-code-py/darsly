@@ -10,7 +10,7 @@ check() { # name expected actual
 jsonget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo "ERR"; }
 # Per-run fixtures so the script is safe to re-run (no unique-constraint residue).
 RUN_CODE="SMOKE$RANDOM"
-RUN_PHONE="0109$(shuf -i 1000000-9999999 -n1)"
+RUN_EMAIL="smoke_$RANDOM@test.com"
 
 echo "── 1. Public discovery"
 R=$(curl -s "$API/teachers")
@@ -34,8 +34,8 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/teachers/pending-teacher")
 check "pending teacher profile → 404" "404" "$CODE"
 
 echo "── 3. Teacher course CRUD + tenant isolation"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"khaled@darsly.app","password":"Teacher@12345"}' | jsonget "['accessToken']")
-NO=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"noura@darsly.app","password":"Teacher@12345"}' | jsonget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jsonget "['accessToken']")
+NO=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"noura@darsly.app","password":"Teacher@12345"}' | jsonget "['accessToken']")
 
 C=$(curl -s -X POST $API/teacher/courses -H "Authorization: Bearer $KH" -H 'Content-Type: application/json' \
   -d '{"title":"دورة تجريبية للاختبار","description":"smoke","priceCents":10000}')
@@ -84,8 +84,7 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/enrollments/quote -H 
 check "invalid coupon → 400" "400" "$CODE"
 
 echo "── 6. Enrollment lifecycle"
-curl -s -X POST $API/auth/otp/request -H 'Content-Type: application/json' -d "{\"phone\":\"$RUN_PHONE\"}" > /dev/null
-ST=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d "{\"phone\":\"$RUN_PHONE\",\"code\":\"0000\",\"fullName\":\"طالب الاختبار\"}" | jsonget "['accessToken']")
+ST=$(curl -s -X POST $API/auth/register/student -H 'Content-Type: application/json' -d "{\"email\":\"$RUN_EMAIL\",\"password\":\"Passw0rd1\",\"fullName\":\"طالب الاختبار\"}" | jsonget "['accessToken']")
 
 E=$(curl -s -X POST $API/enrollments -H "Authorization: Bearer $ST" -H 'Content-Type: application/json' -d "{\"courseId\":\"$CID\",\"couponCode\":\"$RUN_CODE\"}")
 EID=$(echo "$E" | jsonget "['id']")

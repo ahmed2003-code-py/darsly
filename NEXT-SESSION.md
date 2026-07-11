@@ -19,11 +19,18 @@
 - فرونت: `QuizBuilderPage` / `AssignmentBuilderPage` (معلم، مربوطين من CourseBuilder)، `LessonRouter` بيوزّع الدرس حسب نوعه، `QuizTakerPage` (نتيجة + مراجعة إجابات)، `AssignmentPage`، `CertificatesPage` + `CertificateViewPage` (قابلة للطباعة/المشاركة)، `ReviewModal` في صفحة الدورة. nav + i18n (ar/en).
 - تحقق: `smoke-phase6.sh` (20/20)، 8 اختبارات وحدة جديدة (grading + certificate issuance/idempotency)، متصفح حقيقي، والبناء الكامل أخضر.
 
-## ⚠ قبل الإطلاق الحقيقي (متبقّي عام — مش خاص بمرحلة)
-- اقفل `OTP_DEV_MODE` (الكود `0000` للتجارب فقط).
+## 🔐 تحديث الـauth (بعد Phase 6)
+- **الكل بيدخل بإيميل + باسورد** (شيلنا موبايل/OTP نهائياً). argon2 + rate-limit + قفل بعد ١٠ محاولات + forgot/reset (توكن hashed single-use).
+- **الطالب** يسجّل ويدخل فوراً؛ **المعلم** يسجّل → PENDING لحد ما الأدمن يوافق (دخوله مرفوض بـ `ACCOUNT_PENDING_APPROVAL`).
+- شاشات جديدة: Login/Register (توجّل طالب/معلم)/Forgot/Reset بتصميم split-screen محترم.
+- seed مليان داتا للعرض: اختبار+واجب مصحّحين، شهادة لأحمد، ٦ التحاقات (٢ بانتظار موافقة)، محادثات شات، إشعارات، تقدّم+streak.
+- تحقق: `smoke-auth.sh` (24/24)، `smoke-phase6.sh` (20/20)، ٢٧ اختبار وحدة، متصفح حقيقي.
+
+## ⚠ قبل الإطلاق الحقيقي (متبقّي عام)
 - بوابة الدفع لسه mock — تحتاج تكامل حقيقي (Paymob/Fawry).
-- رفع ملفات الواجبات: التسليم حالياً نصّي فقط (لا رفع ملف من الطالب).
-- تلميع/overhaul شامل للواجهة مؤجَّل حسب طلب المستخدم ([[frontend-polish-deferred]]).
+- forgot-password يحتاج SMTP حقيقي (حالياً بيرجّع التوكن في dev فقط عبر `OTP_DEV_MODE`).
+- رفع ملفات الواجبات: التسليم حالياً نصّي فقط.
+- تلميع/overhaul شامل لباقي الواجهة مؤجَّل ([[frontend-polish-deferred]]).
 
 ## ملاحظات مرجعية
 - Postgres على **5434**. حسابات seeded في README.

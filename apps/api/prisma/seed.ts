@@ -242,21 +242,28 @@ async function main() {
     ],
   });
 
-  // ── Students ──────────────────────────────────────────────────────────
+  // ── Students (email + password, like everyone else) ───────────────────
+  const studentPassword = await argon2.hash('Student@12345');
   const studentDefs = [
-    { phone: '+201011111111', fullName: 'أحمد محمود', grade: 'sec-3', interests: ['Mathematics', 'Chemistry'] },
-    { phone: '+201022222222', fullName: 'سارة محمد', grade: 'sec-3', interests: ['Chemistry'] },
-    { phone: '+201033333333', fullName: 'عمر فاروق', grade: 'sec-2', interests: ['Mathematics', 'Physics'] },
-    { phone: '+201044444444', fullName: 'منى حسن', grade: 'sec-3', interests: ['English'] },
-    { phone: '+201055555555', fullName: 'يوسف علي', grade: 'prep-3', interests: ['Programming'] },
+    { email: 'ahmed@student.darsly.app', phone: '+201011111111', fullName: 'أحمد محمود', grade: 'sec-3', interests: ['Mathematics', 'Chemistry'] },
+    { email: 'sara@student.darsly.app', phone: '+201022222222', fullName: 'سارة محمد', grade: 'sec-3', interests: ['Chemistry'] },
+    { email: 'omar@student.darsly.app', phone: '+201033333333', fullName: 'عمر فاروق', grade: 'sec-2', interests: ['Mathematics', 'Physics'] },
+    { email: 'mona@student.darsly.app', phone: '+201044444444', fullName: 'منى حسن', grade: 'sec-3', interests: ['English'] },
+    { email: 'youssef@student.darsly.app', phone: '+201055555555', fullName: 'يوسف علي', grade: 'prep-3', interests: ['Programming'] },
   ];
 
   const students: { id: string; userId: string }[] = [];
   for (const def of studentDefs) {
     const user = await prisma.user.upsert({
-      where: { phone: def.phone },
-      update: {},
-      create: { role: 'STUDENT', phone: def.phone, fullName: def.fullName },
+      where: { email: def.email },
+      update: { passwordHash: studentPassword, phone: def.phone },
+      create: {
+        role: 'STUDENT',
+        email: def.email,
+        phone: def.phone,
+        fullName: def.fullName,
+        passwordHash: studentPassword,
+      },
     });
     const profile = await prisma.studentProfile.upsert({
       where: { userId: user.id },
@@ -509,6 +516,146 @@ async function main() {
     });
   }
 
+  // ── Demo enrichment: populate every screen for a live walkthrough ──────
+  // Idempotent: each block guards on an existing row before creating.
+
+  // More enrollments so the catalog + approval queue + rosters look alive.
+  async function ensureEnrollment(studentIdx: number, courseId: string, tenantId: string,
+    status: 'ACTIVE' | 'PENDING_APPROVAL', expiresAt?: Date) {
+    return prisma.enrollment.upsert({
+      where: { studentId_courseId: { studentId: students[studentIdx].id, courseId } },
+      update: {},
+      create: {
+        studentId: students[studentIdx].id, courseId, tenantId, status,
+        approvedAt: status === 'ACTIVE' ? new Date() : null, expiresAt,
+      },
+    });
+  }
+  await ensureEnrollment(3, algebraCourse.id, khaled.id, 'ACTIVE');
+  await ensureEnrollment(4, algebraCourse.id, khaled.id, 'ACTIVE');
+  await ensureEnrollment(2, algebraCourse.id, khaled.id, 'PENDING_APPROVAL'); // approval queue
+  await ensureEnrollment(3, chemCourse.id, noura.id, 'PENDING_APPROVAL');
+
+  // A quiz + an assignment lesson on Khaled's algebra course.
+  const demoUnit = await prisma.courseUnit.findFirst({
+    where: { courseId: algebraCourse.id, title: 'تقييمات ومراجعات' },
+  }) ?? await prisma.courseUnit.create({
+    data: { courseId: algebraCourse.id, title: 'تقييمات ومراجعات', sortOrder: 90 },
+  });
+
+  const quizLesson = await prisma.lesson.findFirst({
+    where: { unitId: demoUnit.id, type: 'QUIZ' },
+  }) ?? await prisma.lesson.create({
+    data: { unitId: demoUnit.id, title: 'اختبار: أساسيات الجبر', type: 'QUIZ', sortOrder: 0 },
+  });
+  const quiz = await prisma.quiz.upsert({
+    where: { lessonId: quizLesson.id },
+    update: {},
+    create: { lessonId: quizLesson.id, passingScore: 60 },
+  });
+  if ((await prisma.quizQuestion.count({ where: { quizId: quiz.id } })) === 0) {
+    await prisma.quizQuestion.createMany({
+      data: [
+        { quizId: quiz.id, type: 'MCQ', prompt: 'ما ناتج ٥ × ٦؟', options: [{ id: 'a', text: '٣٠' }, { id: 'b', text: '٣٥' }, { id: 'c', text: '٢٥' }], correctOptionId: 'a', explanation: '٥ × ٦ = ٣٠.', points: 2, sortOrder: 0 },
+        { quizId: quiz.id, type: 'TRUE_FALSE', prompt: 'المعادلة الخطية درجتها الأولى.', options: [{ id: 'true', text: 'صح' }, { id: 'false', text: 'خطأ' }], correctOptionId: 'true', points: 1, sortOrder: 1 },
+        { quizId: quiz.id, type: 'SHORT_ANSWER', prompt: 'عرّف المتغيّر في المعادلة.', points: 2, sortOrder: 2 },
+      ],
+    });
+  }
+  // A graded attempt by أحمد so the teacher's grading view has content.
+  if ((await prisma.quizAttempt.count({ where: { quizId: quiz.id, studentId: students[0].id } })) === 0) {
+    const qs = await prisma.quizQuestion.findMany({ where: { quizId: quiz.id }, orderBy: { sortOrder: 'asc' } });
+    await prisma.quizAttempt.create({
+      data: {
+        quizId: quiz.id, studentId: students[0].id,
+        answers: { [qs[0].id]: 'a', [qs[1].id]: 'true', [qs[2].id]: 'المتغيّر رمز يمثّل قيمة مجهولة.' },
+        scorePct: 100, passed: true, needsManualGrading: false, submittedAt: new Date(), gradedAt: new Date(),
+      },
+    });
+  }
+
+  const assignLesson = await prisma.lesson.findFirst({
+    where: { unitId: demoUnit.id, type: 'ASSIGNMENT' },
+  }) ?? await prisma.lesson.create({
+    data: { unitId: demoUnit.id, title: 'واجب: حل تمارين الوحدة', type: 'ASSIGNMENT', sortOrder: 1 },
+  });
+  const assignment = await prisma.assignment.upsert({
+    where: { lessonId: assignLesson.id },
+    update: {},
+    create: { lessonId: assignLesson.id, prompt: 'حل التمارين ١ إلى ١٠ من كتاب الجبر وارفع خطوات الحل.', maxScore: 20 },
+  });
+  if ((await prisma.assignmentSubmission.count({ where: { assignmentId: assignment.id } })) === 0) {
+    await prisma.assignmentSubmission.create({
+      data: { assignmentId: assignment.id, studentId: students[1].id, body: 'تم حل جميع التمارين المطلوبة مع خطوات الحل.', score: 18, feedback: 'حل ممتاز، انتبه لخطوة التبسيط الأخيرة.', gradedAt: new Date() },
+    });
+  }
+
+  // Lesson progress: أحمد completes every algebra lesson → gets a certificate;
+  // عمر has an in-progress lesson so "continue watching" isn't empty.
+  const algebraLessons = await prisma.lesson.findMany({ where: { unit: { courseId: algebraCourse.id } } });
+  for (const l of algebraLessons) {
+    await prisma.lessonProgress.upsert({
+      where: { studentId_lessonId: { studentId: students[0].id, lessonId: l.id } },
+      update: {},
+      create: { studentId: students[0].id, lessonId: l.id, watchedPct: 100, completedAt: new Date(), lastPositionSec: l.durationSec },
+    });
+  }
+  if (algebraLessons[0]) {
+    await prisma.lessonProgress.upsert({
+      where: { studentId_lessonId: { studentId: students[3].id, lessonId: algebraLessons[0].id } },
+      update: {},
+      create: { studentId: students[3].id, lessonId: algebraLessons[0].id, watchedPct: 42, lastPositionSec: Math.round((algebraLessons[0].durationSec || 600) * 0.42) },
+    });
+  }
+  await prisma.studentProfile.update({
+    where: { id: students[0].id },
+    data: { currentStreak: 6, longestStreak: 9, lastActivityDate: new Date(), weeklyGoalLessons: 5 },
+  });
+
+  // Completion certificate for أحمد.
+  if (!(await prisma.certificate.findFirst({ where: { studentId: students[0].id, courseId: algebraCourse.id } }))) {
+    const certCount = await prisma.certificate.count();
+    await prisma.certificate.create({
+      data: { studentId: students[0].id, courseId: algebraCourse.id, serial: `DRS-CERT-${new Date().getFullYear()}-${String(certCount + 1).padStart(6, '0')}` },
+    });
+  }
+
+  // Chat threads so the Messages page has live-looking conversations.
+  async function ensureThread(tenantId: string, teacherUserId: string, studentIdx: number, msgs: [boolean, string][]) {
+    let thread = await prisma.chatThread.findFirst({ where: { tenantId, studentId: students[studentIdx].id, type: 'DM' } });
+    if (!thread) thread = await prisma.chatThread.create({ data: { type: 'DM', tenantId, studentId: students[studentIdx].id } });
+    if ((await prisma.chatMessage.count({ where: { threadId: thread.id } })) === 0) {
+      let t = Date.now() - msgs.length * 3_600_000;
+      for (const [fromTeacher, body] of msgs) {
+        await prisma.chatMessage.create({
+          data: { threadId: thread.id, senderId: fromTeacher ? teacherUserId : students[studentIdx].userId, body, createdAt: new Date(t) },
+        });
+        t += 3_600_000;
+      }
+      await prisma.chatThread.update({ where: { id: thread.id }, data: { updatedAt: new Date() } });
+    }
+  }
+  await ensureThread(khaled.id, khaled.userId, 0, [
+    [false, 'أستاذ خالد، مش فاهم خطوة التبسيط في المثال الثالث.'],
+    [true, 'أهلاً أحمد، ابسط الطرفين بقسمة على ٢ الأول، وبعدها كمل عادي.'],
+    [false, 'تمام وصلت، شكراً جزيلاً!'],
+  ]);
+  await ensureThread(noura.id, noura.userId, 1, [
+    [false, 'دكتورة نورا، هل المراجعة النهائية بتغطي الباب الرابع؟'],
+    [true, 'أيوة يا سارة، بتغطي كل الأبواب مع أهم المسائل.'],
+  ]);
+
+  // Notifications so the bell isn't empty.
+  async function ensureNotif(userId: string, type: string, title: string, body: string) {
+    if (!(await prisma.notification.findFirst({ where: { userId, title } }))) {
+      await prisma.notification.create({ data: { userId, type: type as any, title, body } });
+    }
+  }
+  await ensureNotif(students[0].userId, 'ENROLLMENT_APPROVED', 'تم قبول التحاقك 🎉', 'تم تفعيل اشتراكك في دورة أساسيات الجبر.');
+  await ensureNotif(students[0].userId, 'ANNOUNCEMENT', 'مبروك! حصلت على شهادة 🎓', 'أتممت دورة أساسيات الجبر — شهادتك جاهزة.');
+  await ensureNotif(khaled.userId, 'ANNOUNCEMENT', 'تقييم جديد ⭐', 'حصلت دورة أساسيات الجبر على تقييم 5/5.');
+  await ensureNotif(khaled.userId, 'CHAT_MESSAGE', 'رسالة جديدة من أحمد محمود', 'مش فاهم خطوة التبسيط في المثال الثالث.');
+
   // ── Platform settings ─────────────────────────────────────────────────
   await prisma.platformSetting.upsert({
     where: { key: 'commission.defaultPercent' },
@@ -522,17 +669,17 @@ async function main() {
   });
 
   console.log(`
-Seed complete ✅
+Seed complete ✅  — everyone logs in with EMAIL + PASSWORD
 ──────────────────────────────────────────────
- Super admin : admin@darsly.app  / Admin@12345
- Teacher 1   : khaled@darsly.app / Teacher@12345  (math, 20% commission)
- Teacher 2   : noura@darsly.app  / Teacher@12345  (chem, 15%, auto-approve)
- Teacher 3   : david@darsly.app  / Teacher@12345  (english, language=en)
- Teacher 4   : pending@darsly.app (PENDING — hidden from discovery)
- Students    : +201011111111 … +201055555555 (OTP dev code: 0000)
- Courses     : 4 published, 2 active enrollments
- Coupons     : WELCOME20 (khaled, 20%), CHEM50 (noura, 50 EGP off chem)
- Reviews     : 4 (khaled avg 4.5, noura avg 4.5)
+ Super admin : admin@darsly.app          / Admin@12345
+ Teacher 1   : khaled@darsly.app         / Teacher@12345  (math, 20% commission)
+ Teacher 2   : noura@darsly.app          / Teacher@12345  (chem, 15%, auto-approve)
+ Teacher 3   : david@darsly.app          / Teacher@12345  (english, language=en)
+ Teacher 4   : pending@darsly.app        / Teacher@12345  (PENDING — cannot log in yet)
+ Students    : ahmed@student.darsly.app  / Student@12345  (+ sara/omar/mona/youssef)
+──────────────────────────────────────────────
+ Demo data   : quiz+assignment (graded), certificate for أحمد, 6 enrollments
+               (2 pending approval), chat threads, notifications, progress+streak
 ──────────────────────────────────────────────`);
 }
 

@@ -23,14 +23,18 @@ enum Role {
 model User {
   id           String    @id @default(cuid())
   role         Role
-  // Egyptian E.164, e.g. +2010xxxxxxxx. Unique login handle for students.
+  // Egyptian E.164, e.g. +2010xxxxxxxx. Optional secondary contact.
   phone        String?   @unique
+  // Primary login handle for everyone (students, teachers, admins).
   email        String?   @unique
   passwordHash String?
   fullName     String
   avatarUrl    String?
   locale       String    @default("ar")
   isActive     Boolean   @default(true)
+  // Brute-force defense: consecutive failures soft-lock the account.
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -40,6 +44,20 @@ model User {
   notifications  Notification[]
   auditLogs      AuditLog[]      @relation("actor")
   sentMessages   ChatMessage[]
+  resetTokens    PasswordResetToken[]
+}
+
+// Single-use, hashed password-reset tokens (forgot-password flow).
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
 }
 
 model OtpCode {

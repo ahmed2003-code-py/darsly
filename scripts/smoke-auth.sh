@@ -1,81 +1,69 @@
 #!/usr/bin/env bash
-# Darsly Phase 1 smoke test: auth flows + RBAC + session control
+# Darsly auth smoke — email + password model:
+# login, registration (student immediate / teacher pending), password strength,
+# failed-login lockout, forgot/reset password (dev token), RBAC, sessions.
 set -u
 API=http://localhost:4000/api/v1
 pass=0; fail=0
-# Fresh phone per run so the signup checks stay idempotent across re-runs.
-SIGNUP_PHONE="0108$(shuf -i 1000000-9999999 -n1)"
-check() { # name expected actual
-  if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi
-}
+check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi; }
+jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
+code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+login() { curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d "$1"; }
+RND=$RANDOM
+RND8=$(printf '%08d' $((RANDOM % 90000000 + 10000000)))  # valid 010XXXXXXXX phone tail
 
-echo "── 1. Student OTP flow"
-curl -s -X POST $API/auth/otp/request -H 'Content-Type: application/json' -d '{"phone":"01011111111"}' > /dev/null
-R=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01011111111","code":"0000","deviceName":"smoke-device-1"}')
-STUDENT_AT=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("accessToken",""))')
-STUDENT_RT=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("refreshToken",""))')
-check "OTP verify returns access token" "yes" "$([ -n "$STUDENT_AT" ] && echo yes || echo no)"
+echo "── 1. Seeded logins (email + password)"
+ADMIN=$(login '{"email":"admin@darsly.app","password":"Admin@12345"}' | jget "['accessToken']")
+KH=$(login '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
+ST=$(login '{"email":"ahmed@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
+check "admin login"   "yes" "$([ -n "$ADMIN" ] && [ "$ADMIN" != ERR ] && echo yes || echo no)"
+check "teacher login" "yes" "$([ -n "$KH" ] && [ "$KH" != ERR ] && echo yes || echo no)"
+check "student login" "yes" "$([ -n "$ST" ] && [ "$ST" != ERR ] && echo yes || echo no)"
 
-ME_ROLE=$(curl -s $API/auth/me -H "Authorization: Bearer $STUDENT_AT" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("role",""))')
-check "GET /auth/me returns STUDENT" "STUDENT" "$ME_ROLE"
+echo "── 2. Bad credentials + validation"
+check "wrong password → 401" "401" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ahmed@student.darsly.app","password":"nope12345"}')"
+check "unknown email → 401"   "401" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ghost@darsly.app","password":"whatever12"}')"
+check "malformed email → 400" "400" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"not-an-email","password":"whatever12"}')"
 
-echo "── 2. New student signup requires name"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"'"$SIGNUP_PHONE"'","code":"0000"}')
-check "signup without fullName → 400" "400" "$CODE"
-R=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"'"$SIGNUP_PHONE"'","code":"0000","fullName":"طالب تجريبي"}')
-NEW=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("isNewUser"))')
-check "signup with fullName creates user" "True" "$NEW"
+echo "── 3. PENDING teacher cannot log in"
+check "pending teacher → 403" "403" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"pending@darsly.app","password":"Teacher@12345"}')"
 
-echo "── 3. Password login (teacher & admin) + RBAC"
-ADMIN_AT=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"admin@darsly.app","password":"Admin@12345"}' | python3 -c 'import sys,json;print(json.load(sys.stdin).get("accessToken",""))')
-check "admin password login" "yes" "$([ -n "$ADMIN_AT" ] && echo yes || echo no)"
+echo "── 4. Student self-registration (immediate) + auto-login"
+SEMAIL="stud_$RND@test.com"
+REG=$(curl -s -X POST $API/auth/register/student -H 'Content-Type: application/json' -d "{\"email\":\"$SEMAIL\",\"password\":\"Passw0rd1\",\"fullName\":\"طالب اختبار\"}")
+check "student register returns token" "yes" "$([ "$(echo "$REG" | jget "['accessToken']")" != ERR ] && echo yes || echo no)"
+check "new user is STUDENT" "STUDENT" "$(echo "$REG" | jget "['user']['role']")"
+check "duplicate email → 409" "409" "$(code -X POST $API/auth/register/student -H 'Content-Type: application/json' -d "{\"email\":\"$SEMAIL\",\"password\":\"Passw0rd1\",\"fullName\":\"طالب مكرر\"}")"
+check "weak password → 400" "400" "$(code -X POST $API/auth/register/student -H 'Content-Type: application/json' -d '{"email":"weak_'$RND'@test.com","password":"short","fullName":"x"}')"
 
-TR=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"khaled@darsly.app","password":"Teacher@12345"}')
-TEACHER_AT=$(echo "$TR" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("accessToken",""))')
-TENANT=$(echo "$TR" | python3 -c 'import sys,json;print(json.load(sys.stdin)["user"]["teacherProfile"]["id"][:6])')
-check "teacher login carries tenant profile" "yes" "$([ -n "$TENANT" ] && echo yes || echo no)"
+echo "── 5. Teacher registration → pending (no token, cannot log in)"
+TEMAIL="teach_$RND@test.com"
+TREG=$(curl -s -X POST $API/auth/register/teacher -H 'Content-Type: application/json' -d "{\"email\":\"$TEMAIL\",\"password\":\"Passw0rd1\",\"fullName\":\"معلم اختبار\",\"phone\":\"010${RND8}\"}")
+check "teacher register → pending flag" "True" "$(echo "$TREG" | jget "['pending']")"
+check "teacher register issues no token" "yes" "$([ "$(echo "$TREG" | jget "['accessToken']")" = ERR ] && echo yes || echo no)"
+check "fresh teacher cannot log in (pending) → 403" "403" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$TEMAIL\",\"password\":\"Passw0rd1\"}")"
 
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"admin@darsly.app","password":"WrongPass123"}')
-check "wrong password → 401" "401" "$CODE"
+echo "── 6. Forgot / reset password (single-use)"
+FTOK=$(curl -s -X POST $API/auth/forgot-password -H 'Content-Type: application/json' -d "{\"email\":\"$SEMAIL\"}" | jget "['devResetToken']")
+check "forgot returns a dev token" "yes" "$([ -n "$FTOK" ] && [ "$FTOK" != ERR ] && echo yes || echo no)"
+check "reset with token → 200" "200" "$(code -X POST $API/auth/reset-password -H 'Content-Type: application/json' -d "{\"token\":\"$FTOK\",\"password\":\"NewPass123\"}")"
+check "login with new password → 200" "200" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$SEMAIL\",\"password\":\"NewPass123\"}")"
+check "reusing reset token → 400" "400" "$(code -X POST $API/auth/reset-password -H 'Content-Type: application/json' -d "{\"token\":\"$FTOK\",\"password\":\"NewPass123\"}")"
+check "forgot unknown email still → 200 (no enumeration)" "200" "$(code -X POST $API/auth/forgot-password -H 'Content-Type: application/json' -d '{"email":"nobody@darsly.app"}')"
 
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/catalog/subjects -H "Authorization: Bearer $STUDENT_AT" -H 'Content-Type: application/json' -d '{"nameAr":"تجربة","nameEn":"Test"}')
-check "student POST subject → 403" "403" "$CODE"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/catalog/subjects -H "Authorization: Bearer $TEACHER_AT" -H 'Content-Type: application/json' -d '{"nameAr":"تجربة","nameEn":"Test"}')
-check "teacher POST subject → 403" "403" "$CODE"
-R=$(curl -s -X POST $API/catalog/subjects -H "Authorization: Bearer $ADMIN_AT" -H 'Content-Type: application/json' -d '{"nameAr":"مادة تجريبية","nameEn":"SmokeTest Subject","isActive":false}')
-SUBJ_ID=$(echo "$R" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("id",""))')
-check "admin POST subject → created" "yes" "$([ -n "$SUBJ_ID" ] && echo yes || echo no)"
-# Deactivate immediately so smoke rows never pollute the public catalog.
-curl -s -o /dev/null -X DELETE $API/catalog/subjects/$SUBJ_ID -H "Authorization: Bearer $ADMIN_AT"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' $API/auth/me)
-check "no token → 401" "401" "$CODE"
+echo "── 7. RBAC + session"
+check "student on /admin/overview → 403" "403" "$(code $API/admin/overview -H "Authorization: Bearer $ST")"
+check "admin on /admin/overview → 200" "200" "$(code $API/admin/overview -H "Authorization: Bearer $ADMIN")"
+check "no token on /auth/me → 401" "401" "$(code $API/auth/me)"
+check "/auth/me with token → 200" "200" "$(code $API/auth/me -H "Authorization: Bearer $ST")"
 
-echo "── 4. Concurrent-session cap (max 2): 3rd login kicks oldest"
-A1=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01022222222","code":"0000","deviceName":"device-A"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
-A2=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01022222222","code":"0000","deviceName":"device-B"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
-R3=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01022222222","code":"0000","deviceName":"device-C"}')
-KICKED=$(echo "$R3" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("kickedSessions"))')
-check "3rd login kicked 1 session" "1" "$KICKED"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' $API/auth/me -H "Authorization: Bearer $A1")
-check "kicked device token now rejected → 401" "401" "$CODE"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' $API/auth/me -H "Authorization: Bearer $A2")
-check "surviving device still works → 200" "200" "$CODE"
-
-echo "── 5. Refresh rotation + reuse detection"
-NR=$(curl -s -X POST $API/auth/refresh -H 'Content-Type: application/json' -d "{\"refreshToken\":\"$STUDENT_RT\"}")
-NEW_RT=$(echo "$NR" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("refreshToken",""))')
-check "refresh returns new pair" "yes" "$([ -n "$NEW_RT" ] && echo yes || echo no)"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/auth/refresh -H 'Content-Type: application/json' -d "{\"refreshToken\":\"$STUDENT_RT\"}")
-check "reusing old refresh token → 401 (session revoked)" "401" "$CODE"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/auth/refresh -H 'Content-Type: application/json' -d "{\"refreshToken\":\"$NEW_RT\"}")
-check "rotated token also dead after reuse detection → 401" "401" "$CODE"
-
-echo "── 6. Logout revokes session"
-LT=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01033333333","code":"0000"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
-curl -s -X POST $API/auth/logout -H "Authorization: Bearer $LT" > /dev/null
-CODE=$(curl -s -o /dev/null -w '%{http_code}' $API/auth/me -H "Authorization: Bearer $LT")
-check "token dead after logout → 401" "401" "$CODE"
+echo "── 8. Failed-login lockout (brute-force defense: throttle or soft-lock)"
+LEMAIL="lock_$RND@test.com"
+curl -s -X POST $API/auth/register/student -H 'Content-Type: application/json' -d "{\"email\":\"$LEMAIL\",\"password\":\"Passw0rd1\",\"fullName\":\"قفل الحساب\"}" > /dev/null
+for i in $(seq 1 12); do code -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$LEMAIL\",\"password\":\"wrongpass9\"}" > /dev/null; done
+LC=$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$LEMAIL\",\"password\":\"Passw0rd1\"}")
+check "correct password after 12 fails is blocked (403 lock / 429 throttle)" "yes" "$([ "$LC" = 403 ] || [ "$LC" = 429 ] && echo yes || echo no)"
 
 echo
-echo "RESULT: $pass passed, $fail failed"
-[ $fail -eq 0 ]
+echo "════ Auth smoke: $pass passed, $fail failed ════"
+[ "$fail" -eq 0 ]

@@ -1,32 +1,57 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, Length, Matches, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 // Egyptian mobile numbers: 010/011/012/015 + 8 digits, with optional +20/20/0020 prefix.
 export const EGY_PHONE_REGEX = /^(\+20|0020|20|0)?1[0125][0-9]{8}$/;
 
-export class RequestOtpDto {
-  @ApiProperty({ example: '01012345678', description: 'Egyptian mobile number' })
-  @IsString()
-  @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
-  phone: string;
-}
+// A strong-enough password: ≥8 chars with at least one letter and one digit.
+export const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,128}$/;
+const PASSWORD_MSG = 'Password must be at least 8 characters and include a letter and a number';
 
-export class VerifyOtpDto {
-  @ApiProperty({ example: '01012345678' })
-  @IsString()
-  @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
-  phone: string;
+export class LoginDto {
+  @ApiProperty({ example: 'student1@darsly.app' })
+  @IsEmail({}, { message: 'A valid email is required' })
+  email: string;
 
-  @ApiProperty({ example: '1234', description: '4-digit OTP code' })
+  @ApiProperty({ example: 'Student@12345' })
   @IsString()
-  @Length(4, 6)
-  code: string;
+  @IsNotEmpty()
+  password: string;
 
-  @ApiPropertyOptional({ example: 'أحمد محمود', description: 'Required on first login (signup)' })
+  @ApiPropertyOptional({ example: 'Chrome on Ubuntu' })
   @IsOptional()
   @IsString()
+  deviceName?: string;
+}
+
+export class RegisterStudentDto {
+  @ApiProperty({ example: 'ahmed@example.com' })
+  @IsEmail({}, { message: 'A valid email is required' })
+  email: string;
+
+  @ApiProperty({ example: 'أحمد محمود' })
+  @IsString()
   @MinLength(2)
-  fullName?: string;
+  @MaxLength(120)
+  fullName: string;
+
+  @ApiProperty({ example: 'Passw0rd!' })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_MSG })
+  password: string;
+
+  @ApiPropertyOptional({ example: '01012345678' })
+  @IsOptional()
+  @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
+  phone?: string;
 
   @ApiPropertyOptional({ example: 'Chrome on Android' })
   @IsOptional()
@@ -34,21 +59,47 @@ export class VerifyOtpDto {
   deviceName?: string;
 }
 
-export class LoginPasswordDto {
-  @ApiProperty({ example: 'admin@darsly.app', description: 'Email or phone' })
-  @IsString()
-  @IsNotEmpty()
-  emailOrPhone: string;
+export class RegisterTeacherDto {
+  @ApiProperty({ example: 'teacher@example.com' })
+  @IsEmail({}, { message: 'A valid email is required' })
+  email: string;
 
-  @ApiProperty({ example: 'Admin@12345' })
+  @ApiProperty({ example: 'أ. خالد حسن' })
   @IsString()
-  @MinLength(8)
+  @MinLength(2)
+  @MaxLength(120)
+  fullName: string;
+
+  @ApiProperty({ example: 'Passw0rd!' })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_MSG })
   password: string;
 
-  @ApiPropertyOptional({ example: 'Chrome on Ubuntu' })
+  @ApiProperty({ example: '01012345678' })
+  @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
+  phone: string;
+
+  @ApiPropertyOptional({ example: 'مدرس رياضيات بخبرة 10 سنوات' })
   @IsOptional()
   @IsString()
-  deviceName?: string;
+  @MaxLength(600)
+  bio?: string;
+}
+
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'ahmed@example.com' })
+  @IsEmail({}, { message: 'A valid email is required' })
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+
+  @ApiProperty({ example: 'Passw0rd!' })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_MSG })
+  password: string;
 }
 
 export class RefreshTokenDto {

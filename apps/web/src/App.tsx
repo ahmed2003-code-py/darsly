@@ -3,6 +3,9 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import MessagesPage from './pages/MessagesPage';
 import CertificateViewPage from './pages/CertificateViewPage';
 import AdminOverviewPage from './pages/admin/AdminOverviewPage';
@@ -52,6 +55,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Student / public browsing */}
       <Route path="/" element={<HomeRedirect />} />

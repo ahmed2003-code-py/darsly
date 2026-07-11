@@ -54,13 +54,20 @@ bash scripts/smoke-phase6.sh      # 20 checks: quiz author→take→auto+manual 
 | Teacher (math, 20% commission) | `khaled@darsly.app` | `Teacher@12345` |
 | Teacher (chem, 15%, auto-approve) | `noura@darsly.app` | `Teacher@12345` |
 | Teacher (english, `language=en`) | `david@darsly.app` | `Teacher@12345` |
-| Teacher (PENDING — hidden from discovery) | `pending@darsly.app` | `Teacher@12345` |
-| Students ×5 | `+201011111111` … `+201055555555` | OTP — dev universal code `0000` |
+| Teacher (PENDING — cannot log in until approved) | `pending@darsly.app` | `Teacher@12345` |
+| Students ×5 | `ahmed@student.darsly.app` … (`sara`/`omar`/`mona`/`youssef`) | `Student@12345` |
+
+**Everyone logs in with email + password.** Students self-register and are active
+immediately; teachers register and land `PENDING` until a super admin approves them
+(a pending teacher's login is rejected with `ACCOUNT_PENDING_APPROVAL`). Passwords are
+argon2-hashed; login is rate-limited and soft-locks after repeated failures; a
+hashed, single-use forgot/reset-password flow is included.
 
 Seeded coupons: `WELCOME20` (khaled, 20% off) · `CHEM50` (noura, 50 EGP off the chem course).
 
-`OTP_DEV_MODE=true` logs OTP codes to the API console instead of sending SMS and
-accepts `0000` universally. **Never enable in production.**
+Without SMTP configured, `OTP_DEV_MODE=true` makes `POST /api/v1/auth/forgot-password`
+return the reset token in its response so the flow is testable in dev. **Never enable
+in production.**
 
 ## Architecture decisions
 
@@ -134,7 +141,7 @@ the exact student and session.
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Scaffolding, full DB schema, auth (OTP + password), RBAC, sessions, seed, web shell | ✅ done & verified |
+| 1 | Scaffolding, full DB schema, email+password auth (self-signup, teacher approval, lockout, forgot/reset), RBAC, sessions, seed, web shell | ✅ done & verified |
 | 2 | Teacher/course/lesson CRUD (units, drip, free preview, pricing, coupons, uploads), student enrollment lifecycle (quote→request→approve/reject/revoke, auto-approve, subscriptions, bundles), discovery + public profiles, all React screens | ✅ done & verified |
 | 3 | Encrypted-HLS pipeline (ffmpeg→AES-128), signed expiring URLs + per-session gated keys, DRM adapter (native + Widevine/PlayReady/FairPlay stubs), storage abstraction (local/S3), device + views-cap + time-window access control, multi-IP/rapid-seek anomaly flags, roving forensic watermark + hardened React player | ✅ done & verified |
 | 4 | Chat (Socket.io), notifications, progress tracking, student comfort | ✅ done & verified |

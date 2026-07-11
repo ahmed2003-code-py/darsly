@@ -10,7 +10,7 @@ check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
 
 echo "── 1. Teacher uploads a video → transcodes to encrypted HLS"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
 UP=$(curl -s -X POST $API/uploads/videos -H "Authorization: Bearer $KH" -F "file=@$SAMPLE;type=video/mp4")
 AID=$(echo "$UP" | jget "['id']")
 check "upload accepted, status PROCESSING" "PROCESSING" "$(echo "$UP" | jget "['status']")"
@@ -43,8 +43,7 @@ curl -s -X PATCH $API/teacher/lessons/$LESSON -H "Authorization: Bearer $KH" -H 
 check "video attached to lesson" "yes" "$([ -n "$LESSON" ] && echo yes || echo no)"
 
 echo "── 3. Student starts a protected playback session"
-curl -s -X POST $API/auth/otp/request -H 'Content-Type: application/json' -d '{"phone":"01011111111"}' > /dev/null
-ST=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01011111111","code":"0000","deviceName":"p3-smoke"}' | jget "['accessToken']")
+ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ahmed@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
 TICKET=$(curl -s -X POST $API/playback/sessions -H "Authorization: Bearer $ST" -H 'Content-Type: application/json' -d "{\"lessonId\":\"$LESSON\"}")
 PSID=$(echo "$TICKET" | jget "['playbackSessionId']")
 MASTER=$(echo "$TICKET" | jget "['masterUrl']")
@@ -98,8 +97,7 @@ for u in d["units"]:
   else: continue
   break')
 # yousef (student 5) is not enrolled in algebra
-curl -s -X POST $API/auth/otp/request -H 'Content-Type: application/json' -d '{"phone":"01055555555"}' > /dev/null
-YS=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01055555555","code":"0000"}' | jget "['accessToken']")
+YS=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"youssef@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
 BLOCK=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/playback/sessions -H "Authorization: Bearer $YS" -H 'Content-Type: application/json' -d "{\"lessonId\":\"$PAID\"}")
 check "non-enrolled student blocked on paid lesson → 403" "403" "$BLOCK"
 

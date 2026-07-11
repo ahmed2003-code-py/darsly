@@ -9,19 +9,19 @@ check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
 
 echo "── 1. Logins"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
 check "teacher login" "yes" "$([ -n "$KH" ] && [ "$KH" != ERR ] && echo yes || echo no)"
 
 # Find Khaled's algebra course + a student with an ACTIVE enrollment in it.
 COURSE=$(curl -s $API/teacher/courses -H "Authorization: Bearer $KH" | python3 -c 'import sys,json;print([x for x in json.load(sys.stdin) if "الجبر" in x["title"]][0]["id"])')
 check "found algebra course" "yes" "$([ -n "$COURSE" ] && [ "$COURSE" != ERR ] && echo yes || echo no)"
 
-ST=""; SPHONE=""
-for p in 01011111111 01022222222 01033333333 01044444444 01055555555; do
-  curl -s -X POST $API/auth/otp/request -H 'Content-Type: application/json' -d "{\"phone\":\"$p\"}" > /dev/null
-  TOK=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d "{\"phone\":\"$p\",\"code\":\"0000\"}" | jget "['accessToken']")
+ST=""
+for em in ahmed@student.darsly.app sara@student.darsly.app omar@student.darsly.app mona@student.darsly.app youssef@student.darsly.app; do
+  TOK=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$em\",\"password\":\"Student@12345\"}" | jget "['accessToken']")
+  [ -z "$TOK" ] || [ "$TOK" = ERR ] && continue
   HAS=$(curl -s $API/enrollments/mine -H "Authorization: Bearer $TOK" | python3 -c "import sys,json;d=json.load(sys.stdin);print('yes' if any(e['course']['id']=='$COURSE' and e['status']=='ACTIVE' for e in d) else 'no')" 2>/dev/null)
-  if [ "$HAS" = yes ]; then ST=$TOK; SPHONE=$p; break; fi
+  if [ "$HAS" = yes ]; then ST=$TOK; break; fi
 done
 check "found active student for the course" "yes" "$([ -n "$ST" ] && echo yes || echo no)"
 

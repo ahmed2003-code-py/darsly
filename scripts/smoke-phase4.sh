@@ -9,13 +9,11 @@ check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
 
 echo "── 1. Logins"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"emailOrPhone":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
 # ahmed (student[0]) is enrolled in khaled's algebra course
-curl -s -X POST $API/auth/otp/request -H 'Content-Type: application/json' -d '{"phone":"01011111111"}' >/dev/null
-ST=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01011111111","code":"0000"}' | jget "['accessToken']")
+ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ahmed@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
 # yousef (student[4]) is NOT enrolled with khaled
-curl -s -X POST $API/auth/otp/request -H 'Content-Type: application/json' -d '{"phone":"01055555555"}' >/dev/null
-YS=$(curl -s -X POST $API/auth/otp/verify -H 'Content-Type: application/json' -d '{"phone":"01055555555","code":"0000"}' | jget "['accessToken']")
+YS=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"youssef@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
 KH_TENANT=$(curl -s $API/teacher/profile -H "Authorization: Bearer $KH" | jget "['id']")
 check "teacher tenant resolved" "yes" "$([ -n "$KH_TENANT" ] && echo yes || echo no)"
 

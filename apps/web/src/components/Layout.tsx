@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
+import { useRealtime } from '../lib/useRealtime';
 import { useAuthStore } from '../stores/auth';
 import TopBar from './TopBar';
 
@@ -13,14 +14,17 @@ interface NavItem {
 }
 
 const STUDENT_NAV: NavItem[] = [
-  { to: '/', icon: 'travel_explore', labelKey: 'nav.discover', end: true },
+  { to: '/', icon: 'space_dashboard', labelKey: 'nav.home', end: true },
+  { to: '/discover', icon: 'travel_explore', labelKey: 'nav.discover' },
   { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
+  { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
 ];
 
 const TEACHER_NAV: NavItem[] = [
   { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
+  { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
   { to: '/teacher/coupons', icon: 'sell', labelKey: 'nav.coupons' },
 ];
 
@@ -33,6 +37,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const [drawer, setDrawer] = useState(false);
+  useRealtime(); // live bell + chat list on every authenticated page
   const nav = user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
   const roleLabel = user?.role === Role.TEACHER ? t('layout.teacherConsole') : t('layout.studentSpace');
 

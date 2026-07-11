@@ -41,7 +41,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
 
   function submitSearch(e: FormEvent) {
     e.preventDefault();
-    navigate(user?.role === Role.TEACHER ? `/teacher/courses?q=${encodeURIComponent(q)}` : `/?q=${encodeURIComponent(q)}`);
+    navigate(user?.role === Role.TEACHER ? `/teacher/courses?q=${encodeURIComponent(q)}` : `/discover?q=${encodeURIComponent(q)}`);
   }
 
   async function markAllRead() {

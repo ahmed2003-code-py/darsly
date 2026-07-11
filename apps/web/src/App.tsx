@@ -3,10 +3,12 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
+import MessagesPage from './pages/MessagesPage';
 import CourseDetailPage from './pages/student/CourseDetailPage';
 import DiscoveryPage from './pages/student/DiscoveryPage';
 import MyCoursesPage from './pages/student/MyCoursesPage';
 import SecureVideoPlayerPage from './pages/student/SecureVideoPlayerPage';
+import StudentDashboardPage from './pages/student/StudentDashboardPage';
 import TeacherProfilePage from './pages/student/TeacherProfilePage';
 import CourseBuilderPage from './pages/teacher/CourseBuilderPage';
 import TeacherCoursesPage from './pages/teacher/TeacherCoursesPage';
@@ -24,13 +26,13 @@ function RequireAuth({ children, role }: { children: ReactNode; role?: Role }) {
   return <Layout>{children}</Layout>;
 }
 
-/** Teachers land on their dashboard; students (and admin, until Phase 5) on discovery. */
+/** Teachers land on their dashboard; students on their learning home. */
 function HomeRedirect() {
   const user = useAuthStore((s) => s.user);
   if (user?.role === Role.TEACHER) return <Navigate to="/teacher" replace />;
   return (
     <RequireAuth>
-      <DiscoveryPage />
+      <StudentDashboardPage />
     </RequireAuth>
   );
 }
@@ -42,10 +44,12 @@ export default function App() {
 
       {/* Student / public browsing */}
       <Route path="/" element={<HomeRedirect />} />
+      <Route path="/discover" element={<RequireAuth><DiscoveryPage /></RequireAuth>} />
       <Route path="/t/:slug" element={<RequireAuth><TeacherProfilePage /></RequireAuth>} />
       <Route path="/course/:id" element={<RequireAuth><CourseDetailPage /></RequireAuth>} />
       <Route path="/learn/:courseId/:lessonId" element={<RequireAuth><SecureVideoPlayerPage /></RequireAuth>} />
       <Route path="/my-courses" element={<RequireAuth role={Role.STUDENT}><MyCoursesPage /></RequireAuth>} />
+      <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
 
       {/* Teacher studio */}
       <Route path="/teacher" element={<RequireAuth role={Role.TEACHER}><TeacherDashboardPage /></RequireAuth>} />

@@ -172,6 +172,92 @@ export interface PlaybackTicket {
   stegToken: string;
 }
 
+// ── Chat & realtime ────────────────────────────────────────────────────────
+
+export enum ChatThreadType {
+  DM = 'DM',
+  QA = 'QA',
+}
+
+export interface ChatMessageDto {
+  id: string;
+  threadId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: Role;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+  mine?: boolean;
+}
+
+export interface ChatThreadDto {
+  id: string;
+  type: ChatThreadType;
+  tenantId: string;
+  studentId: string;
+  /** the other party's display name (student sees teacher, teacher sees student) */
+  counterpartName: string;
+  counterpartAvatarUrl: string | null;
+  lessonId: string | null;
+  lessonTitle?: string | null;
+  videoTimestampSec: number | null;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unread: number;
+  updatedAt: string;
+}
+
+/** Socket.io event names (server↔client), kept in one place to avoid typos. */
+export const RealtimeEvents = {
+  // client → server
+  JOIN_THREAD: 'chat:join',
+  LEAVE_THREAD: 'chat:leave',
+  SEND_MESSAGE: 'chat:send',
+  TYPING: 'chat:typing',
+  MARK_READ: 'chat:read',
+  // server → client
+  MESSAGE: 'chat:message',
+  THREAD_UPDATED: 'chat:thread',
+  TYPING_ECHO: 'chat:typing',
+  NOTIFICATION: 'notification:new',
+  UNREAD_COUNT: 'notification:unread',
+} as const;
+
+export interface SendMessagePayload {
+  threadId?: string;
+  /** when starting a new thread, the teacher tenant to message */
+  tenantId?: string;
+  body: string;
+  /** Q&A pinned to a lesson moment */
+  lessonId?: string;
+  videoTimestampSec?: number;
+}
+
+// ── Progress & student comfort ───────────────────────────────────────────────
+
+export interface ContinueWatchingItem {
+  lessonId: string;
+  lessonTitle: string;
+  courseId: string;
+  courseTitle: string;
+  thumbnailUrl: string | null;
+  teacherName: string;
+  watchedPct: number;
+  lastPositionSec: number;
+  durationSec: number;
+}
+
+export interface StudentProgressSummary {
+  currentStreak: number;
+  longestStreak: number;
+  weeklyGoalLessons: number;
+  lessonsCompletedThisWeek: number;
+  weeklyGoalPct: number;
+  totalLessonsCompleted: number;
+  activeCourses: number;
+}
+
 // ── Notifications ──────────────────────────────────────────────────────────
 
 export enum NotificationType {

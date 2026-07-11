@@ -3,12 +3,13 @@ import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { PlaybackTicket } from '@darsly/shared-types';
+import { PlaybackTicket, Role } from '@darsly/shared-types';
 import RovingWatermark from '../../components/RovingWatermark';
 import { Badge, Spinner } from '../../components/ui';
 import { api, apiOrigin } from '../../lib/api';
 import { duration } from '../../lib/format';
 import { useObscureAndDevtools, useNoCopyGuards } from '../../lib/player-hardening';
+import { useAuthStore } from '../../stores/auth';
 
 type Tab = 'notes' | 'attachments' | 'qa';
 
@@ -17,6 +18,7 @@ export default function SecureVideoPlayerPage() {
   const { courseId, lessonId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -172,6 +174,19 @@ export default function SecureVideoPlayerPage() {
     }
   }
 
+  /** Start (or continue) a Q&A thread with the teacher, pinned to this moment. */
+  async function askTeacher() {
+    const q = window.prompt(t('player.askPrompt'));
+    if (!q?.trim() || !course?.teacher?.id) return;
+    const { data } = await api.post('/chat/messages', {
+      tenantId: course.teacher.id,
+      lessonId,
+      videoTimestampSec: Math.floor(videoRef.current?.currentTime ?? 0),
+      body: q.trim(),
+    });
+    navigate(`/messages?t=${data.threadId}`);
+  }
+
   if (isLoading) return <Spinner />;
 
   return (
@@ -185,10 +200,18 @@ export default function SecureVideoPlayerPage() {
           </Link>
           <h1 className="font-heading text-2xl font-extrabold">{current?.title}</h1>
         </div>
-        <Badge tone="teal">
-          <span className="material-symbols-outlined text-sm">lock</span>
-          {t('player.protected')}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {user?.role === Role.STUDENT && course?.teacher && (
+            <button className="btn-ghost px-4 py-2 text-sm" onClick={askTeacher}>
+              <span className="material-symbols-outlined text-base">live_help</span>
+              {t('player.askTeacher')}
+            </button>
+          )}
+          <Badge tone="teal">
+            <span className="material-symbols-outlined text-sm">lock</span>
+            {t('player.protected')}
+          </Badge>
+        </div>
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row-reverse">

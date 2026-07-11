@@ -8,7 +8,9 @@ import {
 import { JwtPayload, Role, WatermarkPayload } from '@darsly/shared-types';
 import { randomBytes, randomUUID } from 'crypto';
 import { DRM_PROVIDER, IDrmProvider } from '../video/drm/drm.provider';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProgressService } from '../progress/progress.service';
 
 export interface DeviceCtx {
   ip?: string;
@@ -20,6 +22,8 @@ export class PlaybackService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(DRM_PROVIDER) private readonly drm: IDrmProvider,
+    private readonly progress: ProgressService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** DRS-89421-A8X9 — human-readable, shown in the overlay & used by leak-trace. */
@@ -303,6 +307,9 @@ export class PlaybackService {
         },
       });
     }
+
+    // Learning activity rolls the daily streak (same-day is a no-op).
+    await this.progress.touchActivity(session.studentId);
     return { ok: true };
   }
 
@@ -373,14 +380,12 @@ export class PlaybackService {
         select: { userId: true },
       });
       if (teacher) {
-        await this.prisma.notification.create({
-          data: {
-            userId: teacher.userId,
-            type: 'SECURITY_ALERT',
-            title: 'تنبيه أمني في محتواك',
-            body: `رُصد نشاط مشبوه (${type}) لأحد الطلاب.`,
-            meta: (data.meta ?? {}) as any,
-          },
+        await this.notifications.create({
+          userId: teacher.userId,
+          type: 'SECURITY_ALERT',
+          title: 'تنبيه أمني في محتواك',
+          body: `رُصد نشاط مشبوه (${type}) لأحد الطلاب.`,
+          meta: data.meta ?? {},
         });
       }
     }
@@ -392,8 +397,11 @@ export class PlaybackService {
       select: { userId: true },
     });
     if (student) {
-      await this.prisma.notification.create({
-        data: { userId: student.userId, type: 'SECURITY_ALERT', title, body: bodyText },
+      await this.notifications.create({
+        userId: student.userId,
+        type: 'SECURITY_ALERT',
+        title,
+        body: bodyText,
       });
     }
   }

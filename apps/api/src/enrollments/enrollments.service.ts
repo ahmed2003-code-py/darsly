@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Coupon, Course, Enrollment } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface Quote {
@@ -17,7 +18,10 @@ export interface Quote {
 
 @Injectable()
 export class EnrollmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async studentProfileOf(userId: string) {
     const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
@@ -135,10 +139,10 @@ export class EnrollmentsService {
 
     if (autoApprove) await this.activateBundleChildren(course, enrollment);
 
-    // Notify the other side.
+    // Notify the other side (live via the bell).
     const studentUser = await this.prisma.user.findUnique({ where: { id: userId } });
-    await this.prisma.notification.create({
-      data: autoApprove
+    await this.notifications.create(
+      autoApprove
         ? {
             userId,
             type: 'ENROLLMENT_APPROVED',
@@ -153,7 +157,7 @@ export class EnrollmentsService {
             body: `طلب ${studentUser?.fullName ?? 'طالب'} الالتحاق بدورة «${course.title}»`,
             meta: { courseId, enrollmentId: enrollment.id },
           },
-    });
+    );
 
     return { ...enrollment, quote };
   }
@@ -283,14 +287,12 @@ export class EnrollmentsService {
       }
     }
     await this.activateBundleChildren(enrollment.course, updated);
-    await this.prisma.notification.create({
-      data: {
-        userId: enrollment.student.user.id,
-        type: 'ENROLLMENT_APPROVED',
-        title: 'تمت الموافقة على التحاقك',
-        body: `وافق المعلم على التحاقك بدورة «${enrollment.course.title}»`,
-        meta: { courseId: enrollment.courseId },
-      },
+    await this.notifications.create({
+      userId: enrollment.student.user.id,
+      type: 'ENROLLMENT_APPROVED',
+      title: 'تمت الموافقة على التحاقك',
+      body: `وافق المعلم على التحاقك بدورة «${enrollment.course.title}»`,
+      meta: { courseId: enrollment.courseId },
     });
     return updated;
   }
@@ -308,14 +310,12 @@ export class EnrollmentsService {
       where: { enrollmentId: id, status: 'PENDING' },
       data: { status: 'FAILED' },
     });
-    await this.prisma.notification.create({
-      data: {
-        userId: enrollment.student.user.id,
-        type: 'ANNOUNCEMENT',
-        title: 'تم رفض طلب الالتحاق',
-        body: `عذراً، رُفض طلب التحاقك بدورة «${enrollment.course.title}»${reason ? ` — ${reason}` : ''}`,
-        meta: { courseId: enrollment.courseId },
-      },
+    await this.notifications.create({
+      userId: enrollment.student.user.id,
+      type: 'ANNOUNCEMENT',
+      title: 'تم رفض طلب الالتحاق',
+      body: `عذراً، رُفض طلب التحاقك بدورة «${enrollment.course.title}»${reason ? ` — ${reason}` : ''}`,
+      meta: { courseId: enrollment.courseId },
     });
     return updated;
   }
@@ -329,14 +329,12 @@ export class EnrollmentsService {
       where: { id },
       data: { status: 'REVOKED', revokedReason: reason ?? null },
     });
-    await this.prisma.notification.create({
-      data: {
-        userId: enrollment.student.user.id,
-        type: 'SECURITY_ALERT',
-        title: 'تم إيقاف وصولك للدورة',
-        body: `أوقف المعلم وصولك لدورة «${enrollment.course.title}»${reason ? ` — ${reason}` : ''}`,
-        meta: { courseId: enrollment.courseId },
-      },
+    await this.notifications.create({
+      userId: enrollment.student.user.id,
+      type: 'SECURITY_ALERT',
+      title: 'تم إيقاف وصولك للدورة',
+      body: `أوقف المعلم وصولك لدورة «${enrollment.course.title}»${reason ? ` — ${reason}` : ''}`,
+      meta: { courseId: enrollment.courseId },
     });
     return updated;
   }

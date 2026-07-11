@@ -30,12 +30,35 @@
     "logout": "تسجيل الخروج"
   },
   "nav": {
+    "home": "الرئيسية",
     "discover": "استكشاف المعلمين",
     "myCourses": "دوراتي",
+    "messages": "الرسائل",
     "dashboard": "الرئيسية",
     "courseBuilder": "بناء الدورات",
     "myStudents": "طلابي",
     "coupons": "كوبونات الخصم"
+  },
+  "dashboardStudent": {
+    "greeting": "مرحباً بك يا {{name}}",
+    "subtitle": "لقد أنجزت عملاً رائعاً! استمر في التعلم.",
+    "continueWatching": "متابعة المشاهدة",
+    "viewAll": "عرض الكل",
+    "noContinue": "لا توجد دروس قيد المشاهدة",
+    "browse": "استكشف الأساتذة وابدأ التعلم",
+    "resume": "متابعة",
+    "weeklyProgress": "التقدم الأسبوعي",
+    "weeklyGoal": "الهدف الأسبوعي",
+    "lessonsThisWeek": "دروس هذا الأسبوع",
+    "streak": "{{count}} يوم متتالي",
+    "streakLabel": "أيام التتابع",
+    "longest": "أطول تتابع: {{count}}",
+    "completed": "دروس مكتملة",
+    "activeCourses": "دورات نشطة",
+    "goalReached": "أحسنت! حققت هدفك الأسبوعي 🎉",
+    "editGoal": "تعديل الهدف",
+    "goalPrompt": "كم درساً تريد إكماله أسبوعياً؟",
+    "quickDiscover": "استكشف معلمين جدد"
   },
   "layout": {
     "teacherConsole": "لوحة تحكم المعلم",
@@ -46,6 +69,20 @@
     "notifications": "الإشعارات",
     "markAllRead": "تحديد الكل كمقروء",
     "noNotifications": "لا توجد إشعارات بعد"
+  },
+  "messages": {
+    "title": "الرسائل",
+    "subtitle": "محادثاتك مع المعلمين والطلاب",
+    "empty": "لا توجد محادثات بعد",
+    "emptyHint": "ابدأ محادثة من صفحة المعلم أو من داخل الدرس",
+    "selectThread": "اختر محادثة لعرضها",
+    "typePlaceholder": "اكتب رسالتك...",
+    "send": "إرسال",
+    "typing": "يكتب الآن...",
+    "qaBadge": "سؤال عن درس",
+    "atTimestamp": "عند الدقيقة {{time}}",
+    "today": "اليوم",
+    "you": "أنت"
   },
   "discovery": {
     "title": "استكشف الأساتذة",
@@ -140,7 +177,9 @@
     "watermarkNote": "هذا المحتوى يحمل علامة مائية تحتوي على بياناتك وتُتتبَّع لكل جلسة. المشاركة غير المصرّح بها قابلة للتتبع.",
     "startError": "تعذّر بدء تشغيل الدرس. تأكد من اشتراكك وصلاحية وصولك.",
     "streamError": "حدث خطأ في بث الفيديو، حاول تحديث الصفحة.",
-    "unsupported": "متصفحك لا يدعم تشغيل هذا المحتوى المحمي."
+    "unsupported": "متصفحك لا يدعم تشغيل هذا المحتوى المحمي.",
+    "askTeacher": "اسأل المعلم",
+    "askPrompt": "اكتب سؤالك للمعلم عند هذه اللحظة:"
   },
   "myCourses": {
     "title": "دوراتي",
@@ -195,7 +234,11 @@
         "save": "حفظ",
         "create": "إنشاء الدورة"
       },
-      "status": { "DRAFT": "مسودة", "PUBLISHED": "منشورة", "ARCHIVED": "مؤرشفة" }
+      "status": {
+        "DRAFT": "مسودة",
+        "PUBLISHED": "منشورة",
+        "ARCHIVED": "مؤرشفة"
+      }
     },
     "builder": {
       "title": "منهج الدورة",
@@ -238,7 +281,11 @@
     "students": {
       "title": "طلابي",
       "subtitle": "طلبات الالتحاق واشتراكات الطلاب",
-      "tabs": { "PENDING_APPROVAL": "بانتظار الموافقة", "ACTIVE": "النشطون", "ALL": "الكل" },
+      "tabs": {
+        "PENDING_APPROVAL": "بانتظار الموافقة",
+        "ACTIVE": "النشطون",
+        "ALL": "الكل"
+      },
       "approve": "موافقة",
       "reject": "رفض",
       "revoke": "إيقاف الوصول",

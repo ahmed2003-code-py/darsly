@@ -30,12 +30,35 @@
     "logout": "Sign out"
   },
   "nav": {
+    "home": "Home",
     "discover": "Discover teachers",
     "myCourses": "My courses",
+    "messages": "Messages",
     "dashboard": "Dashboard",
     "courseBuilder": "Course builder",
     "myStudents": "My students",
     "coupons": "Coupons"
+  },
+  "dashboardStudent": {
+    "greeting": "Welcome back, {{name}}",
+    "subtitle": "You're doing great! Keep learning.",
+    "continueWatching": "Continue watching",
+    "viewAll": "View all",
+    "noContinue": "No lessons in progress",
+    "browse": "Discover teachers and start learning",
+    "resume": "Resume",
+    "weeklyProgress": "Weekly progress",
+    "weeklyGoal": "Weekly goal",
+    "lessonsThisWeek": "lessons this week",
+    "streak": "{{count}}-day streak",
+    "streakLabel": "Day streak",
+    "longest": "Longest: {{count}}",
+    "completed": "Lessons completed",
+    "activeCourses": "Active courses",
+    "goalReached": "Well done! Weekly goal reached 🎉",
+    "editGoal": "Edit goal",
+    "goalPrompt": "How many lessons per week?",
+    "quickDiscover": "Discover new teachers"
   },
   "layout": {
     "teacherConsole": "Teacher console",
@@ -46,6 +69,20 @@
     "notifications": "Notifications",
     "markAllRead": "Mark all read",
     "noNotifications": "No notifications yet"
+  },
+  "messages": {
+    "title": "Messages",
+    "subtitle": "Your conversations with teachers and students",
+    "empty": "No conversations yet",
+    "emptyHint": "Start a chat from a teacher's page or inside a lesson",
+    "selectThread": "Select a conversation to view",
+    "typePlaceholder": "Type your message...",
+    "send": "Send",
+    "typing": "typing...",
+    "qaBadge": "Lesson question",
+    "atTimestamp": "at {{time}}",
+    "today": "Today",
+    "you": "You"
   },
   "discovery": {
     "title": "Discover Teachers",
@@ -140,7 +177,9 @@
     "watermarkNote": "This content is watermarked with your details and traced per session. Unauthorized sharing is traceable.",
     "startError": "Couldn't start this lesson. Check your enrollment and access.",
     "streamError": "Video streaming error, try refreshing the page.",
-    "unsupported": "Your browser can't play this protected content."
+    "unsupported": "Your browser can't play this protected content.",
+    "askTeacher": "Ask the teacher",
+    "askPrompt": "Ask the teacher about this moment:"
   },
   "myCourses": {
     "title": "My courses",
@@ -195,7 +234,11 @@
         "save": "Save",
         "create": "Create course"
       },
-      "status": { "DRAFT": "Draft", "PUBLISHED": "Published", "ARCHIVED": "Archived" }
+      "status": {
+        "DRAFT": "Draft",
+        "PUBLISHED": "Published",
+        "ARCHIVED": "Archived"
+      }
     },
     "builder": {
       "title": "Course curriculum",
@@ -238,7 +281,11 @@
     "students": {
       "title": "My students",
       "subtitle": "Enrollment requests and student subscriptions",
-      "tabs": { "PENDING_APPROVAL": "Pending approval", "ACTIVE": "Active", "ALL": "All" },
+      "tabs": {
+        "PENDING_APPROVAL": "Pending approval",
+        "ACTIVE": "Active",
+        "ALL": "All"
+      },
       "approve": "Approve",
       "reject": "Reject",
       "revoke": "Revoke access",

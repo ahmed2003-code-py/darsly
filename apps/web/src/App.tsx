@@ -4,6 +4,7 @@ import { Role } from '@darsly/shared-types';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import MessagesPage from './pages/MessagesPage';
+import CertificateViewPage from './pages/CertificateViewPage';
 import AdminOverviewPage from './pages/admin/AdminOverviewPage';
 import AdminPayoutsPage from './pages/admin/AdminPayoutsPage';
 import AdminSecurityPage from './pages/admin/AdminSecurityPage';
@@ -11,10 +12,13 @@ import AdminTeachersPage from './pages/admin/AdminTeachersPage';
 import CourseDetailPage from './pages/student/CourseDetailPage';
 import DiscoveryPage from './pages/student/DiscoveryPage';
 import MyCoursesPage from './pages/student/MyCoursesPage';
-import SecureVideoPlayerPage from './pages/student/SecureVideoPlayerPage';
+import CertificatesPage from './pages/student/CertificatesPage';
+import LessonRouter from './pages/student/LessonRouter';
 import StudentDashboardPage from './pages/student/StudentDashboardPage';
 import TeacherProfilePage from './pages/student/TeacherProfilePage';
+import AssignmentBuilderPage from './pages/teacher/AssignmentBuilderPage';
 import CourseBuilderPage from './pages/teacher/CourseBuilderPage';
+import QuizBuilderPage from './pages/teacher/QuizBuilderPage';
 import TeacherCoursesPage from './pages/teacher/TeacherCoursesPage';
 import TeacherCouponsPage from './pages/teacher/TeacherCouponsPage';
 import TeacherDashboardPage from './pages/teacher/TeacherDashboardPage';
@@ -54,14 +58,18 @@ export default function App() {
       <Route path="/discover" element={<RequireAuth><DiscoveryPage /></RequireAuth>} />
       <Route path="/t/:slug" element={<RequireAuth><TeacherProfilePage /></RequireAuth>} />
       <Route path="/course/:id" element={<RequireAuth><CourseDetailPage /></RequireAuth>} />
-      <Route path="/learn/:courseId/:lessonId" element={<RequireAuth><SecureVideoPlayerPage /></RequireAuth>} />
+      <Route path="/learn/:courseId/:lessonId" element={<RequireAuth><LessonRouter /></RequireAuth>} />
       <Route path="/my-courses" element={<RequireAuth role={Role.STUDENT}><MyCoursesPage /></RequireAuth>} />
+      <Route path="/my-certificates" element={<RequireAuth role={Role.STUDENT}><CertificatesPage /></RequireAuth>} />
+      <Route path="/certificate/:serial" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
 
       {/* Teacher studio */}
       <Route path="/teacher" element={<RequireAuth role={Role.TEACHER}><TeacherDashboardPage /></RequireAuth>} />
       <Route path="/teacher/courses" element={<RequireAuth role={Role.TEACHER}><TeacherCoursesPage /></RequireAuth>} />
       <Route path="/teacher/courses/:id" element={<RequireAuth role={Role.TEACHER}><CourseBuilderPage /></RequireAuth>} />
+      <Route path="/teacher/lessons/:lessonId/quiz" element={<RequireAuth role={Role.TEACHER}><QuizBuilderPage /></RequireAuth>} />
+      <Route path="/teacher/lessons/:lessonId/assignment" element={<RequireAuth role={Role.TEACHER}><AssignmentBuilderPage /></RequireAuth>} />
       <Route path="/teacher/students" element={<RequireAuth role={Role.TEACHER}><TeacherEnrollmentsPage /></RequireAuth>} />
       <Route path="/teacher/wallet" element={<RequireAuth role={Role.TEACHER}><TeacherWalletPage /></RequireAuth>} />
       <Route path="/teacher/security" element={<RequireAuth role={Role.TEACHER}><TeacherSecurityPage /></RequireAuth>} />

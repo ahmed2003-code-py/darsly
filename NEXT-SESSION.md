@@ -1,28 +1,30 @@
 # حالة المشروع — نقطة البداية للمرة الجاية
 
-آخر كوميت على `main`: `9cf3c34` (Phase 4) — **مدفوع ومنشور لايف على Railway ✓**.
+**كل المراحل 1 → 6 خلصت، متحقق منها، ومدفوعة لايف على Railway ✓**
 
 ## ✅ اللي خلص واتنشر لايف
 - **Phase 1**: auth (OTP+password، JWT rotation، device sessions)، RBAC، seed.
 - **Phase 2**: كتالوج، دورات CRUD، التحاق، كوبونات، اكتشاف + ملف معلم. كل الشاشات.
-- **Phase 3**: فيديو مشفّر (ffmpeg→AES-128 HLS)، روابط موقّعة + مفتاح مُبوّب، DRM adapter، تخزين مجرّد، تحكم جلسات، كشف multi-IP/rapid-seek، مشغّل بعلامة مائية. **شغّال على الإنتاج** (Dockerfile+ffmpeg، قرص دائم `/data`).
-- **تحسين الفرونت (جزء 1+2)**: شريط علوي زجاجي، سايدبار، primitives، skeletons، إشعارات.
-- **Phase 4**: 
-  - شات لحظي (Socket.io gateway بـ JWT، غرف user/thread، typing).
-  - إشعارات لحظية مركزية (`NotificationsService.create` بيكتب + يبعت socket).
-  - progress: continue-watching، ملخص أسبوعي، streaks (بتتحدّث من الـ heartbeat).
-  - فرونت: لوحة الطالب (متابعة المشاهدة + حلقة التقدم + streak)، صفحة الرسائل (قائمة محادثات + محادثة لحظية + typing)، سؤال المعلم من المشغّل (Q&A مربوط باللحظة)، nav محدّث.
-  - متحقق: `smoke-phase4.sh` (13/13)، اختبار socket لحظي، ومتصفح حقيقي (رسالة وصلت لحظياً + جرس مباشر).
+- **Phase 3**: فيديو مشفّر (ffmpeg→AES-128 HLS)، روابط موقّعة + مفتاح مُبوّب، DRM adapter، تخزين مجرّد، تحكم جلسات، كشف multi-IP/rapid-seek، مشغّل بعلامة مائية. شغّال على الإنتاج.
+- **Phase 4**: شات لحظي (Socket.io)، إشعارات مركزية، تتبّع تقدّم (continue-watching + streaks).
+- **Phase 5**: دفتر double-entry، محفظة + فواتير، سحب (معلم+أدمن)، لوحة أدمن، تبويب أمان + Leak-Trace.
+- **Phase 6**: اختبارات (اختيار من متعدد/صح-خطأ/مقالي، تصحيح تلقائي + يدوي)، واجبات (تسليم + تصحيح)، تقييمات دورات، شهادات إتمام (سيريال DRS-CERT + تحقق عام + صفحة قابلة للطباعة).
 
-## ✅ Phase 5 — تم ومتحقق (كوميت e5baf6f، بيتنشر لايف)
+## Phase 6 — التفاصيل التقنية
+- باك إند: `assessments` module (@Global، بيصدّر CertificatesService) + `reviews` module.
+  - `QuizzesService`: تأليف المعلم (upsert quiz + set questions bulk)، تأدية الطالب (إجابات مخفية)، تصحيح تلقائي للـ MCQ/TF فوراً، والمقالي يروح `needsManualGrading`، والمعلم يعتمد الدرجة النهائية → إشعار `QUIZ_GRADED`.
+  - `AssignmentsService`: upsert واجب، تسليم الطالب (نص)، تصحيح المعلم (درجة/ملاحظات، حارس الحد الأقصى).
+  - `CertificatesService`: يُصدر شهادة أول ما يكمل الطالب **كل** دروس الدورة (idempotent، سيريال متسلسل)، مربوط بالـ playback heartbeat + نجاح الاختبار/تسليم الواجب. تحقق عام `/certificates/verify/:serial`.
+  - `LessonAccessService`: بوابة مشتركة (enrollment + drip) بتحاكي قواعد المشغّل.
+- فرونت: `QuizBuilderPage` / `AssignmentBuilderPage` (معلم، مربوطين من CourseBuilder)، `LessonRouter` بيوزّع الدرس حسب نوعه، `QuizTakerPage` (نتيجة + مراجعة إجابات)، `AssignmentPage`، `CertificatesPage` + `CertificateViewPage` (قابلة للطباعة/المشاركة)، `ReviewModal` في صفحة الدورة. nav + i18n (ar/en).
+- تحقق: `smoke-phase6.sh` (20/20)، 8 اختبارات وحدة جديدة (grading + certificate issuance/idempotency)، متصفح حقيقي، والبناء الكامل أخضر.
 
-## 🎯 التالي: Phase 6 — اختبارات/تقييمات/شهادات + تلميع نهائي
-الاسكيمـا جاهزة (Quiz, QuizQuestion, QuizAttempt, Assignment, AssignmentSubmission, Review, Certificate).
-1. الاختبارات: بناء للمعلم + تأدية الطالب + تصحيح تلقائي/يدوي + درجة نجاح، مربوطة بدرس QUIZ.
-2. الواجبات: رفع حل + تصحيح بدرجة/ملاحظات.
-3. التقييمات: endpoint كتابة تقييم + شاشة (القراءة موجودة).
-4. الشهادات: توليد عند إكمال الدورة (سيريال DRS-CERT + صفحة/PDF).
-5. تلميع نهائي لكل الشاشات (حالات فارغة/تحميل، responsive، اتساق).
-6. smoke-phase6 + تحقق متصفح + build + commit + push.
+## ⚠ قبل الإطلاق الحقيقي (متبقّي عام — مش خاص بمرحلة)
+- اقفل `OTP_DEV_MODE` (الكود `0000` للتجارب فقط).
+- بوابة الدفع لسه mock — تحتاج تكامل حقيقي (Paymob/Fawry).
+- رفع ملفات الواجبات: التسليم حالياً نصّي فقط (لا رفع ملف من الطالب).
+- تلميع/overhaul شامل للواجهة مؤجَّل حسب طلب المستخدم ([[frontend-polish-deferred]]).
 
-## ملاحظات مرجعية سابقة
+## ملاحظات مرجعية
+- Postgres على **5434**. حسابات seeded في README.
+- Railway: single-service، auto-deploy على push للـ main.

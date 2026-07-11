@@ -43,7 +43,8 @@
     "adminOverview": "النظرة العامة",
     "adminTeachers": "اعتماد المعلمين",
     "adminPayouts": "طلبات السحب",
-    "adminSecurity": "الأمان والنزاهة"
+    "adminSecurity": "الأمان والنزاهة",
+    "certificates": "شهاداتي"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -340,7 +341,10 @@
     "back": "رجوع",
     "next": "التالي",
     "prev": "السابق",
-    "free": "مجاني"
+    "free": "مجاني",
+    "saving": "جارٍ الحفظ…",
+    "saved": "تم الحفظ ✓",
+    "backHome": "العودة للرئيسية"
   },
   "wallet": {
     "title": "المحفظة",
@@ -442,5 +446,90 @@
       "LEAK_TRACED": "تم تتبّع تسريب",
       "MANUAL_FLAG": "إبلاغ يدوي"
     }
+  },
+  "assess": {
+    "builder": {
+      "section": "الاختبارات والواجبات",
+      "editQuiz": "اختبار",
+      "editAssignment": "واجب",
+      "backCourses": "رجوع إلى دوراتي",
+      "quizTitle": "بناء الاختبار",
+      "quizSubtitle": "أضف الأسئلة وحدّد درجة النجاح، ثم صحّح الإجابات المقالية.",
+      "assignTitle": "بناء الواجب",
+      "assignSubtitle": "اكتب المطلوب، حدّد الدرجة النهائية، وصحّح تسليمات الطلاب."
+    },
+    "q": {
+      "mcq": "اختيار من متعدد",
+      "trueFalse": "صح أو خطأ",
+      "short": "إجابة مقالية",
+      "promptPlaceholder": "نص السؤال…",
+      "optionPlaceholder": "نص الخيار",
+      "addOption": "إضافة خيار",
+      "pickCorrect": "اختر الإجابة الصحيحة من الدائرة.",
+      "manualNote": "إجابة مقالية — تُصحَّح يدوياً بعد التسليم.",
+      "points": "الدرجة",
+      "pointsN": "{{n}} درجة",
+      "passingScore": "درجة النجاح (%)",
+      "saveQuiz": "حفظ الاختبار",
+      "attempts": "المحاولات",
+      "noAttempts": "لا توجد محاولات بعد.",
+      "needsGrading": "بانتظار التصحيح",
+      "gradeNow": "صحّح الآن",
+      "gradeGeneric": "اعتمد النتيجة.",
+      "awardPoints": "من {{max}}",
+      "finalize": "اعتماد النتيجة"
+    },
+    "assign": {
+      "prompt": "المطلوب",
+      "promptPlaceholder": "اكتب تفاصيل الواجب المطلوب من الطالب…",
+      "maxScore": "الدرجة القصوى",
+      "dueAt": "آخر موعد",
+      "save": "حفظ الواجب",
+      "submissions": "التسليمات",
+      "noSubmissions": "لا توجد تسليمات بعد.",
+      "ungraded": "غير مُصحَّح",
+      "score": "الدرجة",
+      "feedback": "ملاحظات (اختياري)",
+      "grade": "تصحيح",
+      "attachment": "مرفق"
+    },
+    "take": {
+      "backCourse": "رجوع للدورة",
+      "quizTitle": "اختبار",
+      "passNeeded": "درجة النجاح {{pct}}%",
+      "pendingManual": "تم استلام إجابتك",
+      "pendingManualHint": "يحتوي الاختبار على أسئلة مقالية سيصححها المعلم قريباً.",
+      "passed": "ناجح 🎉",
+      "failed": "لم تجتز الاختبار",
+      "lastAttempt": "آخر محاولة",
+      "yourAnswer": "إجابتك",
+      "explanation": "التوضيح",
+      "submit": "تسليم الإجابات",
+      "assignTitle": "واجب",
+      "grade": "الدرجة",
+      "answerPlaceholder": "اكتب حلّك هنا…",
+      "resubmit": "إعادة التسليم",
+      "submitAssign": "تسليم الواجب",
+      "lockedGraded": "تم تصحيح الواجب — لا يمكن إعادة التسليم.",
+      "submitted": "تم التسليم ✓"
+    }
+  },
+  "cert": {
+    "myTitle": "شهاداتي",
+    "mySubtitle": "الشهادات التي حصلت عليها بإتمام دوراتك.",
+    "empty": "لا توجد شهادات بعد",
+    "emptyHint": "أكمل كل دروس دورة لتحصل على شهادة إتمام.",
+    "notFound": "الشهادة غير موجودة",
+    "print": "طباعة",
+    "certificateOf": "شهادة إتمام",
+    "hasCompleted": "نشهد بأن الطالب أتمّ بنجاح دورة",
+    "instructor": "المعلم",
+    "verifyNote": "يمكن التحقق من صحة هذه الشهادة عبر رقمها التسلسلي."
+  },
+  "review": {
+    "title": "قيّم الدورة",
+    "commentPlaceholder": "شاركنا رأيك في الدورة (اختياري)…",
+    "submit": "إرسال التقييم",
+    "write": "قيّم الدورة"
   }
 }

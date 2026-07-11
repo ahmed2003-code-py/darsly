@@ -19,6 +19,8 @@ import { PaymentsModule } from './payments/payments.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { AdminModule } from './admin/admin.module';
 import { SecurityModule } from './security/security.module';
+import { AssessmentsModule } from './assessments/assessments.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { PlaybackModule } from './playback/playback.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
@@ -56,6 +58,8 @@ const webDist = join(__dirname, '..', '..', 'web', 'dist');
     PayoutsModule,
     AdminModule,
     SecurityModule,
+    AssessmentsModule,
+    ReviewsModule,
   ],
   controllers: [HealthController],
   providers: [

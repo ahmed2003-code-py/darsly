@@ -40,6 +40,8 @@ bash scripts/smoke-phase2.sh      # 37 checks: discovery, course CRUD, tenant
 bash scripts/smoke-phase3.sh      # 21 checks: encrypted-HLS transcode, signed
                                   # delivery, gated key, access control, anomaly
                                   # (needs ffmpeg + a sample video; see the script)
+bash scripts/smoke-phase6.sh      # 20 checks: quiz author→take→auto+manual grade,
+                                  # assignment submit→grade, reviews, certificates
 ```
 
 `ffmpeg` and `ffprobe` must be on PATH for the video pipeline (`apt-get install ffmpeg`).
@@ -137,7 +139,7 @@ the exact student and session.
 | 3 | Encrypted-HLS pipeline (ffmpeg→AES-128), signed expiring URLs + per-session gated keys, DRM adapter (native + Widevine/PlayReady/FairPlay stubs), storage abstraction (local/S3), device + views-cap + time-window access control, multi-IP/rapid-seek anomaly flags, roving forensic watermark + hardened React player | ✅ done & verified |
 | 4 | Chat (Socket.io), notifications, progress tracking, student comfort | ✅ done & verified |
 | 5 | Double-entry ledger, wallet + invoices, payouts (teacher+admin), admin console (overview/approvals/payouts/security/audit), teacher security tab + Leak-Trace | ✅ done & verified |
-| 6 | Quizzes, reviews, certificates, tests, polish | |
+| 6 | Quizzes (MCQ/true-false/short-answer, auto + manual grading), assignments (submit + grade), course reviews, completion certificates (serial + public verify + printable view) | ✅ done & verified |
 
 ## Deployment (Railway — single service + Postgres)
 

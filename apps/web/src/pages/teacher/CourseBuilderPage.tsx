@@ -255,7 +255,7 @@ export default function CourseBuilderPage() {
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
                         <span className="material-symbols-outlined text-xl">
-                          {l.videoAsset ? 'play_circle' : 'draft'}
+                          {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'draft'}
                         </span>
                       </span>
                       <div className="min-w-0 flex-1">
@@ -404,6 +404,24 @@ export default function CourseBuilderPage() {
                 </button>
               </div>
               <p className="mb-4 text-xs text-outline">{t('teacher.builder.freePreviewHint')}</p>
+
+              {/* Assessment (quiz / assignment authoring) */}
+              <p className="mb-2 flex items-center gap-1 text-sm font-bold">
+                <span className="material-symbols-outlined text-base">quiz</span>
+                {t('assess.builder.section')}
+              </p>
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <Link to={`/teacher/lessons/${selected.id}/quiz`}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary">
+                  <span className="material-symbols-outlined text-base">quiz</span>
+                  {t('assess.builder.editQuiz')}
+                </Link>
+                <Link to={`/teacher/lessons/${selected.id}/assignment`}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary">
+                  <span className="material-symbols-outlined text-base">assignment</span>
+                  {t('assess.builder.editAssignment')}
+                </Link>
+              </div>
 
               {/* Video */}
               <p className="mb-2 flex items-center gap-1 text-sm font-bold">

@@ -8,6 +8,7 @@ import {
 import { JwtPayload, Role, WatermarkPayload } from '@darsly/shared-types';
 import { randomBytes, randomUUID } from 'crypto';
 import { DRM_PROVIDER, IDrmProvider } from '../video/drm/drm.provider';
+import { CertificatesService } from '../assessments/certificates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProgressService } from '../progress/progress.service';
@@ -24,6 +25,7 @@ export class PlaybackService {
     @Inject(DRM_PROVIDER) private readonly drm: IDrmProvider,
     private readonly progress: ProgressService,
     private readonly notifications: NotificationsService,
+    private readonly certificates: CertificatesService,
   ) {}
 
   /** DRS-89421-A8X9 — human-readable, shown in the overlay & used by leak-trace. */
@@ -298,14 +300,19 @@ export class PlaybackService {
 
     // Persist watch progress.
     if (body.watchedPct != null) {
+      const justCompleted = body.watchedPct >= 90;
       await this.prisma.lessonProgress.updateMany({
         where: { studentId: session.studentId, lessonId: session.lessonId },
         data: {
           lastPositionSec: Math.round(body.positionSec),
           watchedPct: Math.max(0, Math.min(100, Math.round(body.watchedPct))),
-          ...(body.watchedPct >= 90 ? { completedAt: new Date() } : {}),
+          ...(justCompleted ? { completedAt: new Date() } : {}),
         },
       });
+      // Finishing a lesson may complete the whole course → issue a certificate.
+      if (justCompleted) {
+        await this.certificates.checkByLesson(session.studentId, session.lessonId);
+      }
     }
 
     // Learning activity rolls the daily streak (same-day is a no-op).

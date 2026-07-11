@@ -43,7 +43,8 @@
     "adminOverview": "Overview",
     "adminTeachers": "Teacher approvals",
     "adminPayouts": "Payouts",
-    "adminSecurity": "Security"
+    "adminSecurity": "Security",
+    "certificates": "Certificates"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -340,7 +341,10 @@
     "back": "Back",
     "next": "Next",
     "prev": "Previous",
-    "free": "Free"
+    "free": "Free",
+    "saving": "Saving…",
+    "saved": "Saved ✓",
+    "backHome": "Back home"
   },
   "wallet": {
     "title": "Wallet",
@@ -442,5 +446,90 @@
       "LEAK_TRACED": "Leak traced",
       "MANUAL_FLAG": "Manual flag"
     }
+  },
+  "assess": {
+    "builder": {
+      "section": "Quizzes & assignments",
+      "editQuiz": "Quiz",
+      "editAssignment": "Assignment",
+      "backCourses": "Back to my courses",
+      "quizTitle": "Quiz builder",
+      "quizSubtitle": "Add questions and set the pass mark, then grade written answers.",
+      "assignTitle": "Assignment builder",
+      "assignSubtitle": "Write the brief, set the max score, and grade student submissions."
+    },
+    "q": {
+      "mcq": "Multiple choice",
+      "trueFalse": "True / false",
+      "short": "Written answer",
+      "promptPlaceholder": "Question text…",
+      "optionPlaceholder": "Option text",
+      "addOption": "Add option",
+      "pickCorrect": "Select the correct answer with the radio.",
+      "manualNote": "Written answer — graded manually after submission.",
+      "points": "Points",
+      "pointsN": "{{n}} pts",
+      "passingScore": "Passing score (%)",
+      "saveQuiz": "Save quiz",
+      "attempts": "Attempts",
+      "noAttempts": "No attempts yet.",
+      "needsGrading": "Needs grading",
+      "gradeNow": "Grade now",
+      "gradeGeneric": "Confirm the result.",
+      "awardPoints": "of {{max}}",
+      "finalize": "Finalize score"
+    },
+    "assign": {
+      "prompt": "Brief",
+      "promptPlaceholder": "Describe what the student must submit…",
+      "maxScore": "Max score",
+      "dueAt": "Due date",
+      "save": "Save assignment",
+      "submissions": "Submissions",
+      "noSubmissions": "No submissions yet.",
+      "ungraded": "Ungraded",
+      "score": "Score",
+      "feedback": "Feedback (optional)",
+      "grade": "Grade",
+      "attachment": "Attachment"
+    },
+    "take": {
+      "backCourse": "Back to course",
+      "quizTitle": "Quiz",
+      "passNeeded": "Pass mark {{pct}}%",
+      "pendingManual": "Answer received",
+      "pendingManualHint": "This quiz has written questions your teacher will grade soon.",
+      "passed": "Passed 🎉",
+      "failed": "Not passed",
+      "lastAttempt": "Last attempt",
+      "yourAnswer": "Your answer",
+      "explanation": "Explanation",
+      "submit": "Submit answers",
+      "assignTitle": "Assignment",
+      "grade": "Grade",
+      "answerPlaceholder": "Write your answer here…",
+      "resubmit": "Resubmit",
+      "submitAssign": "Submit assignment",
+      "lockedGraded": "This assignment is graded — resubmission is closed.",
+      "submitted": "Submitted ✓"
+    }
+  },
+  "cert": {
+    "myTitle": "My certificates",
+    "mySubtitle": "Certificates you earned by completing courses.",
+    "empty": "No certificates yet",
+    "emptyHint": "Complete every lesson in a course to earn a certificate.",
+    "notFound": "Certificate not found",
+    "print": "Print",
+    "certificateOf": "Certificate of completion",
+    "hasCompleted": "This certifies that the student has successfully completed",
+    "instructor": "Instructor",
+    "verifyNote": "This certificate can be verified by its serial number."
+  },
+  "review": {
+    "title": "Rate this course",
+    "commentPlaceholder": "Share your thoughts (optional)…",
+    "submit": "Submit review",
+    "write": "Write a review"
   }
 }

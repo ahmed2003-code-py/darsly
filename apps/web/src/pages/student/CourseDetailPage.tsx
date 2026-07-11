@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import { dateShort, duration, egp } from '../../lib/format';
 import { useAuthStore } from '../../stores/auth';
 import { Badge, EmptyState, ErrorNote, Skeleton } from '../../components/ui';
+import ReviewModal from '../../components/ReviewModal';
 
 const LESSON_ICON: Record<string, string> = {
   VIDEO: 'play_circle',
@@ -24,6 +25,7 @@ export default function CourseDetailPage() {
   const [coupon, setCoupon] = useState('');
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
   const [flash, setFlash] = useState('');
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const { data: course, isLoading, error } = useQuery({
     queryKey: ['course', id],
@@ -125,10 +127,20 @@ export default function CourseDetailPage() {
               {course.avgRating != null && (
                 <span className="flex items-center gap-1 font-bold text-accent">
                   ★ {course.avgRating}
+                  <span className="font-normal text-outline">({course.reviewsCount})</span>
                 </span>
+              )}
+              {course.viewer.hasAccess && course.viewer.enrollmentStatus === 'ACTIVE' && user?.role === Role.STUDENT && (
+                <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => setReviewOpen(true)}>
+                  <span className="material-symbols-outlined text-base">rate_review</span>
+                  {t('review.write')}
+                </button>
               )}
             </div>
           </div>
+          {course.id && (
+            <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} courseId={course.id} />
+          )}
 
           {/* Curriculum */}
           <h2 className="mb-4 font-heading text-2xl font-extrabold">{t('course.curriculum')}</h2>

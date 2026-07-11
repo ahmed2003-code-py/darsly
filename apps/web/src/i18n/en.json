@@ -187,7 +187,17 @@
     "streamError": "Video streaming error, try refreshing the page.",
     "unsupported": "Your browser can't play this protected content.",
     "askTeacher": "Ask the teacher",
-    "askPrompt": "Ask the teacher about this moment:"
+    "askPrompt": "Ask the teacher about this moment:",
+    "resumedFrom": "Resumed from {{time}}",
+    "normal": "Normal",
+    "auto": "Auto",
+    "shortcuts": "Keyboard shortcuts",
+    "kPlay": "Play / pause",
+    "kSeek": "Seek ±10s",
+    "kVolume": "Volume up/down",
+    "kMute": "Mute",
+    "kFullscreen": "Fullscreen",
+    "kSpeed": "Slower / faster"
   },
   "myCourses": {
     "title": "My courses",

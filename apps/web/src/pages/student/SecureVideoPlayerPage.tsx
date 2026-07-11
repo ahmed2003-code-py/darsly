@@ -31,6 +31,26 @@ export default function SecureVideoPlayerPage() {
   const [tab, setTab] = useState<Tab>('notes');
   const [noteBody, setNoteBody] = useState('');
 
+  // ── Advanced player controls ──────────────────────────────────────────────
+  const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const [rate, setRate] = useState<number>(() => Number(localStorage.getItem('darsly-rate')) || 1);
+  const [levels, setLevels] = useState<{ height: number; bitrate: number }[]>([]);
+  const [quality, setQuality] = useState<number>(-1); // -1 = auto
+  const [menu, setMenu] = useState<'speed' | 'quality' | 'keys' | null>(null);
+  const [resumedAt, setResumedAt] = useState<number>(0);
+
+  function applyRate(r: number) {
+    setRate(r);
+    localStorage.setItem('darsly-rate', String(r));
+    if (videoRef.current) videoRef.current.playbackRate = r;
+    setMenu(null);
+  }
+  function applyQuality(level: number) {
+    setQuality(level);
+    if (hlsRef.current) hlsRef.current.currentLevel = level;
+    setMenu(null);
+  }
+
   // ── Course curriculum (sidebar) + current lesson meta ────────────────────
   const { data: course, isLoading } = useQuery({
     queryKey: ['course', courseId],
@@ -126,6 +146,35 @@ export default function SecureVideoPlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket]);
 
+  // Keyboard shortcuts (ignored while typing in the notes box / inputs).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      const v = videoRef.current;
+      if (!v) return;
+      const rates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+      switch (e.key) {
+        case ' ':
+        case 'k':
+          e.preventDefault();
+          v.paused ? v.play().catch(() => {}) : v.pause();
+          break;
+        case 'ArrowRight': e.preventDefault(); v.currentTime = Math.min(v.duration || 1e9, v.currentTime + 10); break;
+        case 'ArrowLeft': e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 10); break;
+        case 'ArrowUp': e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); break;
+        case 'ArrowDown': e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); break;
+        case 'm': v.muted = !v.muted; break;
+        case 'f': if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); break;
+        case '>': case '.': { const i = rates.indexOf(v.playbackRate); applyRate(rates[Math.min(rates.length - 1, i + 1)] ?? v.playbackRate); break; }
+        case '<': case ',': { const i = rates.indexOf(v.playbackRate); applyRate(rates[Math.max(0, i - 1)] ?? v.playbackRate); break; }
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function attachHls(masterUrl: string) {
     const video = videoRef.current;
     if (!video) return;
@@ -138,6 +187,13 @@ export default function SecureVideoPlayerPage() {
       });
       hls.loadSource(masterUrl);
       hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Expose the rendition ladder for the quality menu (highest first).
+        const ls = [...hls.levels]
+          .map((l) => ({ height: l.height, bitrate: l.bitrate }))
+          .sort((a, b) => b.height - a.height);
+        setLevels(ls);
+      });
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) setError(t('player.streamError'));
       });
@@ -280,12 +336,80 @@ export default function SecureVideoPlayerPage() {
                   controlsList="nodownload noplaybackrate noremoteplayback"
                   disablePictureInPicture
                   onContextMenu={(e) => e.preventDefault()}
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget;
+                    v.playbackRate = rate;
+                    const r = ticket?.resumeAtSec ?? 0;
+                    if (r > 5 && v.duration && r < v.duration - 5) {
+                      v.currentTime = r;
+                      setResumedAt(r);
+                      window.setTimeout(() => setResumedAt(0), 6000);
+                    }
+                  }}
                   onPlay={() => heartbeat('play')}
                   onPause={() => heartbeat('pause')}
                   onSeeked={() => heartbeat('seek')}
                   onTimeUpdate={() => heartbeat('hb')}
                 />
                 <RovingWatermark payload={ticket.watermark} />
+
+                {/* Resume toast */}
+                {resumedAt > 0 && (
+                  <div className="absolute bottom-16 start-4 z-20 flex items-center gap-2 rounded-xl bg-black/80 px-3 py-2 text-sm text-white backdrop-blur">
+                    <span className="material-symbols-outlined text-base text-accent">history</span>
+                    {t('player.resumedFrom', { time: formatClock(resumedAt) })}
+                  </div>
+                )}
+
+                {/* Advanced controls toolbar (speed / quality / shortcuts) */}
+                <div className="absolute end-3 top-3 z-20 flex items-center gap-2" dir="ltr">
+                  <PlayerMenu
+                    icon="speed"
+                    label={`${rate}×`}
+                    open={menu === 'speed'}
+                    onToggle={() => setMenu(menu === 'speed' ? null : 'speed')}
+                    items={RATES.map((r) => ({ key: String(r), label: r === 1 ? t('player.normal') : `${r}×`, active: r === rate, onClick: () => applyRate(r) }))}
+                  />
+                  {levels.length > 1 && (
+                    <PlayerMenu
+                      icon="hd"
+                      label={quality === -1 ? t('player.auto') : `${levels.find((_, i) => i === quality)?.height ?? ''}p`}
+                      open={menu === 'quality'}
+                      onToggle={() => setMenu(menu === 'quality' ? null : 'quality')}
+                      items={[
+                        { key: 'auto', label: t('player.auto'), active: quality === -1, onClick: () => applyQuality(-1) },
+                        ...levels.map((l, i) => ({ key: String(i), label: `${l.height}p`, active: quality === i, onClick: () => applyQuality(i) })),
+                      ]}
+                    />
+                  )}
+                  <button
+                    className="grid h-9 w-9 place-items-center rounded-lg bg-black/50 text-white/90 backdrop-blur transition hover:bg-black/70"
+                    title={t('player.shortcuts')}
+                    onClick={() => setMenu(menu === 'keys' ? null : 'keys')}
+                  >
+                    <span className="material-symbols-outlined text-lg">keyboard</span>
+                  </button>
+                  {menu === 'keys' && (
+                    <div className="absolute end-0 top-11 w-56 rounded-xl bg-black/85 p-3 text-xs text-white/90 backdrop-blur">
+                      <p className="mb-2 font-bold text-white">{t('player.shortcuts')}</p>
+                      <ul className="space-y-1">
+                        {[
+                          ['Space / K', t('player.kPlay')],
+                          ['← / →', t('player.kSeek')],
+                          ['↑ / ↓', t('player.kVolume')],
+                          ['M', t('player.kMute')],
+                          ['F', t('player.kFullscreen')],
+                          ['< / >', t('player.kSpeed')],
+                        ].map(([k, d]) => (
+                          <li key={k} className="flex items-center justify-between gap-3">
+                            <span className="text-white/70">{d}</span>
+                            <kbd className="rounded bg-white/15 px-1.5 py-0.5 font-mono">{k}</kbd>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
                 {/* Pause + blur overlay on tab blur / devtools */}
                 {obscured && (
                   <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/90 backdrop-blur-xl">
@@ -410,4 +534,41 @@ function formatClock(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** A compact overlay menu button (speed / quality) for the hardened player. */
+function PlayerMenu({
+  icon, label, open, onToggle, items,
+}: {
+  icon: string;
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  items: { key: string; label: string; active: boolean; onClick: () => void }[];
+}) {
+  return (
+    <div className="relative">
+      <button
+        className="flex h-9 items-center gap-1 rounded-lg bg-black/50 px-2.5 text-sm font-bold text-white/90 backdrop-blur transition hover:bg-black/70"
+        onClick={onToggle}
+      >
+        <span className="material-symbols-outlined text-lg">{icon}</span>
+        {label}
+      </button>
+      {open && (
+        <div className="absolute end-0 top-11 min-w-[7rem] overflow-hidden rounded-xl bg-black/85 py-1 text-sm text-white/90 backdrop-blur">
+          {items.map((it) => (
+            <button
+              key={it.key}
+              className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-start transition hover:bg-white/10 ${it.active ? 'text-accent' : ''}`}
+              onClick={it.onClick}
+            >
+              {it.label}
+              {it.active && <span className="material-symbols-outlined text-base">check</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

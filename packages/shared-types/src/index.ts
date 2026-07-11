@@ -173,6 +173,8 @@ export interface PlaybackTicket {
   /** EME license server (hardware DRM schemes) */
   licenseServerUrl?: string;
   durationSec: number;
+  /** seconds to resume from (last watched position); 0 = start from the top */
+  resumeAtSec?: number;
   watermark: WatermarkPayload;
   /** invisible/steganographic leak-trace token */
   stegToken: string;

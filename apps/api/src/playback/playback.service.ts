@@ -178,6 +178,15 @@ export class PlaybackService {
     }
 
     // Student: count the view / open the access window.
+    const priorProgress = await this.prisma.lessonProgress.findUnique({
+      where: { studentId_lessonId: { studentId: student.id, lessonId } },
+      select: { lastPositionSec: true, watchedPct: true },
+    });
+    // Offer a resume point only if partway through (not near the end).
+    const resumeAtSec =
+      priorProgress && priorProgress.watchedPct < 95 && priorProgress.lastPositionSec > 5
+        ? priorProgress.lastPositionSec
+        : 0;
     await this.prisma.lessonProgress.upsert({
       where: { studentId_lessonId: { studentId: student.id, lessonId } },
       update: { viewCount: { increment: 1 } },
@@ -222,6 +231,7 @@ export class PlaybackService {
       keyUrl: creds.keyUrl,
       licenseServerUrl: creds.licenseServerUrl,
       durationSec: lesson.videoAsset!.durationSec,
+      resumeAtSec,
       watermark,
       // Steganographic token: embedded invisibly by the player where feasible;
       // resolves back to this exact session via leak-trace.

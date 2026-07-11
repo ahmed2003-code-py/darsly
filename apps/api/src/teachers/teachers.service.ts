@@ -132,11 +132,14 @@ export class TeachersService {
         subject: true,
         grades: { include: { grade: true } },
         courses: {
-          where: { status: 'PUBLISHED' },
+          where: { status: 'PUBLISHED', deletedAt: null },
           include: {
             subject: true,
             grade: true,
-            units: { include: { lessons: { select: { durationSec: true, isFreePreview: true } } } },
+            units: {
+              where: { deletedAt: null },
+              include: { lessons: { where: { deletedAt: null }, select: { durationSec: true, isFreePreview: true } } },
+            },
             _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
           },
           orderBy: { createdAt: 'desc' },

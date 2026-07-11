@@ -254,6 +254,8 @@ model Course {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  // Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   units       CourseUnit[]
   enrollments Enrollment[]
@@ -288,6 +290,8 @@ model CourseUnit {
   lessons Lesson[]
 
   @@index([courseId, sortOrder])
+  // Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 }
 
 enum LessonType {
@@ -318,6 +322,8 @@ model Lesson {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  // Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   attachments Attachment[]
   progress    LessonProgress[]
@@ -373,6 +379,8 @@ model Attachment {
   mimeType     String
   sizeBytes    Int     @default(0)
   downloadable Boolean @default(true)
+  // Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 }
 
 // ─────────────────────────── Enrollment & Progress ─────────────────────────
@@ -434,6 +442,8 @@ model VideoNote {
   timestampSec Int
   body         String
   createdAt    DateTime       @default(now())
+  // Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   @@index([studentId, lessonId])
 }
@@ -597,6 +607,8 @@ model Coupon {
   expiresAt   DateTime?
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
+  // Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   payments Payment[]
 
@@ -618,6 +630,8 @@ model PayoutMethodSaved {
   details  Json
   isDefault Boolean       @default(false)
   createdAt DateTime      @default(now())
+  // Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 }
 
 enum PayoutStatus {

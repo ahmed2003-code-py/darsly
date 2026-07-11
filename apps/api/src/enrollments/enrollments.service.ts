@@ -32,8 +32,9 @@ export class EnrollmentsService {
   }
 
   private async resolveCoupon(course: Course, code: string): Promise<Coupon> {
-    const coupon = await this.prisma.coupon.findUnique({
-      where: { tenantId_code: { tenantId: course.tenantId, code: code.trim().toUpperCase() } },
+    // findFirst (not findUnique) so the soft-delete filter applies.
+    const coupon = await this.prisma.coupon.findFirst({
+      where: { tenantId: course.tenantId, code: code.trim().toUpperCase(), deletedAt: null },
     });
     if (!coupon || !coupon.isActive) throw new BadRequestException('Invalid coupon');
     if (coupon.expiresAt && coupon.expiresAt < new Date()) {
@@ -205,7 +206,7 @@ export class EnrollmentsService {
             subject: true,
             grade: true,
             teacher: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
-            units: { select: { _count: { select: { lessons: true } } } },
+            units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
           },
         },
       },

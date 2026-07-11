@@ -51,7 +51,7 @@ export class CoursesService {
       include: {
         subject: true,
         grade: true,
-        units: { select: { _count: { select: { lessons: true } } } },
+        units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
         _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -65,12 +65,14 @@ export class CoursesService {
         subject: true,
         grade: true,
         units: {
+          where: { deletedAt: null },
           orderBy: { sortOrder: 'asc' },
           include: {
             lessons: {
+              where: { deletedAt: null },
               orderBy: { sortOrder: 'asc' },
               include: {
-                attachments: true,
+                attachments: { where: { deletedAt: null } },
                 videoAsset: { select: { id: true, status: true, durationSec: true, sizeBytes: true } },
               },
             },
@@ -290,11 +292,15 @@ export class CoursesService {
           include: { user: { select: { fullName: true, avatarUrl: true } } },
         },
         units: {
+          where: { deletedAt: null },
           orderBy: { sortOrder: 'asc' },
           include: {
             lessons: {
+              where: { deletedAt: null },
               orderBy: { sortOrder: 'asc' },
-              include: { attachments: { select: { id: true, fileName: true, sizeBytes: true } } },
+              include: {
+                attachments: { where: { deletedAt: null }, select: { id: true, fileName: true, sizeBytes: true } },
+              },
             },
           },
         },

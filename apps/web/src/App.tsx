@@ -1,34 +1,38 @@
-import { ReactNode } from 'react';
+import { lazy, ReactNode, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import Layout from './components/Layout';
+import { Spinner } from './components/ui';
 import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import MessagesPage from './pages/MessagesPage';
-import CertificateViewPage from './pages/CertificateViewPage';
-import AdminOverviewPage from './pages/admin/AdminOverviewPage';
-import AdminPayoutsPage from './pages/admin/AdminPayoutsPage';
-import AdminSecurityPage from './pages/admin/AdminSecurityPage';
-import AdminTeachersPage from './pages/admin/AdminTeachersPage';
-import CourseDetailPage from './pages/student/CourseDetailPage';
-import DiscoveryPage from './pages/student/DiscoveryPage';
-import MyCoursesPage from './pages/student/MyCoursesPage';
-import CertificatesPage from './pages/student/CertificatesPage';
-import LessonRouter from './pages/student/LessonRouter';
-import StudentDashboardPage from './pages/student/StudentDashboardPage';
-import TeacherProfilePage from './pages/student/TeacherProfilePage';
-import AssignmentBuilderPage from './pages/teacher/AssignmentBuilderPage';
-import CourseBuilderPage from './pages/teacher/CourseBuilderPage';
-import QuizBuilderPage from './pages/teacher/QuizBuilderPage';
-import TeacherCoursesPage from './pages/teacher/TeacherCoursesPage';
-import TeacherCouponsPage from './pages/teacher/TeacherCouponsPage';
-import TeacherDashboardPage from './pages/teacher/TeacherDashboardPage';
-import TeacherEnrollmentsPage from './pages/teacher/TeacherEnrollmentsPage';
-import TeacherSecurityPage from './pages/teacher/TeacherSecurityPage';
-import TeacherWalletPage from './pages/teacher/TeacherWalletPage';
 import { useAuthStore } from './stores/auth';
+
+// Route-level code splitting: each screen is its own chunk, so the initial
+// load only ships the shell + login. Keeps the app fast as it scales.
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const MessagesPage = lazy(() => import('./pages/MessagesPage'));
+const CertificateViewPage = lazy(() => import('./pages/CertificateViewPage'));
+const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage'));
+const AdminPayoutsPage = lazy(() => import('./pages/admin/AdminPayoutsPage'));
+const AdminSecurityPage = lazy(() => import('./pages/admin/AdminSecurityPage'));
+const AdminTeachersPage = lazy(() => import('./pages/admin/AdminTeachersPage'));
+const CourseDetailPage = lazy(() => import('./pages/student/CourseDetailPage'));
+const DiscoveryPage = lazy(() => import('./pages/student/DiscoveryPage'));
+const MyCoursesPage = lazy(() => import('./pages/student/MyCoursesPage'));
+const CertificatesPage = lazy(() => import('./pages/student/CertificatesPage'));
+const LessonRouter = lazy(() => import('./pages/student/LessonRouter'));
+const StudentDashboardPage = lazy(() => import('./pages/student/StudentDashboardPage'));
+const TeacherProfilePage = lazy(() => import('./pages/student/TeacherProfilePage'));
+const AssignmentBuilderPage = lazy(() => import('./pages/teacher/AssignmentBuilderPage'));
+const CourseBuilderPage = lazy(() => import('./pages/teacher/CourseBuilderPage'));
+const QuizBuilderPage = lazy(() => import('./pages/teacher/QuizBuilderPage'));
+const TeacherCoursesPage = lazy(() => import('./pages/teacher/TeacherCoursesPage'));
+const TeacherCouponsPage = lazy(() => import('./pages/teacher/TeacherCouponsPage'));
+const TeacherDashboardPage = lazy(() => import('./pages/teacher/TeacherDashboardPage'));
+const TeacherEnrollmentsPage = lazy(() => import('./pages/teacher/TeacherEnrollmentsPage'));
+const TeacherSecurityPage = lazy(() => import('./pages/teacher/TeacherSecurityPage'));
+const TeacherWalletPage = lazy(() => import('./pages/teacher/TeacherWalletPage'));
 
 function RequireAuth({ children, role }: { children: ReactNode; role?: Role }) {
   const { accessToken, user } = useAuthStore();
@@ -53,6 +57,7 @@ function HomeRedirect() {
 
 export default function App() {
   return (
+    <Suspense fallback={<div className="grid min-h-screen place-items-center"><Spinner /></div>}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -89,5 +94,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }

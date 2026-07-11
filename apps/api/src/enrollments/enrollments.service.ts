@@ -211,26 +211,52 @@ export class EnrollmentsService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return enrollments.map((e) => ({
-      id: e.id,
-      status: e.status,
-      approvedAt: e.approvedAt,
-      expiresAt: e.expiresAt,
-      createdAt: e.createdAt,
-      course: {
-        id: e.course.id,
-        title: e.course.title,
-        thumbnailUrl: e.course.thumbnailUrl,
-        subject: e.course.subject,
-        grade: e.course.grade,
-        pricingModel: e.course.pricingModel,
-        priceCents: e.course.priceCents,
-        lessonsCount: e.course.units.reduce((s, u) => s + u._count.lessons, 0),
-        teacherName: e.course.teacher.user.fullName,
-        teacherSlug: e.course.teacher.slug,
-        teacherAvatarUrl: e.course.teacher.user.avatarUrl,
-      },
-    }));
+
+    // Progress + earned certificates per course, for the card UI.
+    const [completedRows, certs] = await Promise.all([
+      this.prisma.lessonProgress.findMany({
+        where: { studentId: student.id, completedAt: { not: null } },
+        select: { lesson: { select: { unit: { select: { courseId: true } } } } },
+      }),
+      this.prisma.certificate.findMany({
+        where: { studentId: student.id },
+        select: { courseId: true, serial: true },
+      }),
+    ]);
+    const completedByCourse = new Map<string, number>();
+    for (const r of completedRows) {
+      const cid = r.lesson.unit.courseId;
+      completedByCourse.set(cid, (completedByCourse.get(cid) ?? 0) + 1);
+    }
+    const certByCourse = new Map(certs.map((c) => [c.courseId, c.serial]));
+
+    return enrollments.map((e) => {
+      const lessonsCount = e.course.units.reduce((s, u) => s + u._count.lessons, 0);
+      const completedLessons = Math.min(lessonsCount, completedByCourse.get(e.course.id) ?? 0);
+      return {
+        id: e.id,
+        status: e.status,
+        approvedAt: e.approvedAt,
+        expiresAt: e.expiresAt,
+        createdAt: e.createdAt,
+        completedLessons,
+        progressPct: lessonsCount ? Math.round((completedLessons / lessonsCount) * 100) : 0,
+        certificateSerial: certByCourse.get(e.course.id) ?? null,
+        course: {
+          id: e.course.id,
+          title: e.course.title,
+          thumbnailUrl: e.course.thumbnailUrl,
+          subject: e.course.subject,
+          grade: e.course.grade,
+          pricingModel: e.course.pricingModel,
+          priceCents: e.course.priceCents,
+          lessonsCount,
+          teacherName: e.course.teacher.user.fullName,
+          teacherSlug: e.course.teacher.slug,
+          teacherAvatarUrl: e.course.teacher.user.avatarUrl,
+        },
+      };
+    });
   }
 
   // ── Teacher side ─────────────────────────────────────────────────────────

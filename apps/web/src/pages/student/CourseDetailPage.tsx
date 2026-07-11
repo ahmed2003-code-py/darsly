@@ -190,7 +190,11 @@ export default function CourseDetailPage() {
                               </p>
                             </div>
                             {l.isFreePreview && <Badge tone="teal">{t('course.freePreview')}</Badge>}
-                            {!l.locked && <span className="material-symbols-outlined text-primary">play_circle</span>}
+                            {!l.locked && (
+                              <span className="material-symbols-outlined text-primary">
+                                {l.type === 'QUIZ' ? 'chevron_left' : l.type === 'ASSIGNMENT' ? 'chevron_left' : 'play_circle'}
+                              </span>
+                            )}
                           </>
                         );
                         return l.locked ? (

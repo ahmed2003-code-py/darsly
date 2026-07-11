@@ -202,7 +202,9 @@
       "REJECTED": "مرفوض",
       "EXPIRED": "منتهي",
       "REVOKED": "موقوف"
-    }
+    },
+    "progress": "التقدّم",
+    "viewCertificate": "عرض الشهادة"
   },
   "teacher": {
     "overviewTitle": "لوحة القيادة",

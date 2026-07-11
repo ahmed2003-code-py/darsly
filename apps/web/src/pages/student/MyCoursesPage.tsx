@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
-import { Badge, CardGridSkeleton, EmptyState, PageHeader } from '../../components/ui';
+import { Badge, CardGridSkeleton, EmptyState, PageHeader, ProgressBar } from '../../components/ui';
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
   ACTIVE: 'teal',
@@ -15,6 +15,7 @@ const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
 
 export default function MyCoursesPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { data, isLoading } = useQuery({
     queryKey: ['my-enrollments'],
     queryFn: async () => (await api.get('/enrollments/mine')).data,
@@ -48,6 +49,19 @@ export default function MyCoursesPage() {
               <div className="flex flex-1 flex-col p-5">
                 <h3 className="mb-1 font-heading text-lg font-bold">{e.course.title}</h3>
                 <p className="mb-3 text-sm text-primary">{e.course.teacherName}</p>
+
+                {e.status === 'ACTIVE' && e.course.lessonsCount > 0 && (
+                  <div className="mb-3">
+                    <div className="mb-1 flex items-center justify-between text-xs text-outline">
+                      <span>{t('myCourses.progress')}</span>
+                      <span className="font-bold text-on-surface-variant">
+                        {e.completedLessons}/{e.course.lessonsCount} · {e.progressPct}%
+                      </span>
+                    </div>
+                    <ProgressBar pct={e.progressPct} tone={e.progressPct >= 100 ? 'accent' : 'primary'} />
+                  </div>
+                )}
+
                 <div className="mt-auto flex items-center justify-between text-xs text-outline">
                   <span>{t('course.lessonsCount', { count: e.course.lessonsCount })}</span>
                   {e.expiresAt ? (
@@ -56,6 +70,16 @@ export default function MyCoursesPage() {
                     <span>{egp(e.course.priceCents)}</span>
                   )}
                 </div>
+
+                {e.certificateSerial && (
+                  <span
+                    className="mt-3 flex items-center justify-center gap-1 rounded-lg border border-primary-container/60 bg-primary-fixed/40 py-2 text-sm font-bold text-primary"
+                    onClick={(ev) => { ev.preventDefault(); navigate(`/certificate/${e.certificateSerial}`); }}
+                  >
+                    <span className="material-symbols-outlined text-base">workspace_premium</span>
+                    {t('myCourses.viewCertificate')}
+                  </span>
+                )}
               </div>
             </Link>
           ))}

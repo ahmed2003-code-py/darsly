@@ -202,7 +202,9 @@
       "REJECTED": "Rejected",
       "EXPIRED": "Expired",
       "REVOKED": "Revoked"
-    }
+    },
+    "progress": "Progress",
+    "viewCertificate": "View certificate"
   },
   "teacher": {
     "overviewTitle": "Dashboard",

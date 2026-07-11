@@ -19,6 +19,16 @@
 - فرونت: `QuizBuilderPage` / `AssignmentBuilderPage` (معلم، مربوطين من CourseBuilder)، `LessonRouter` بيوزّع الدرس حسب نوعه، `QuizTakerPage` (نتيجة + مراجعة إجابات)، `AssignmentPage`، `CertificatesPage` + `CertificateViewPage` (قابلة للطباعة/المشاركة)، `ReviewModal` في صفحة الدورة. nav + i18n (ar/en).
 - تحقق: `smoke-phase6.sh` (20/20)، 8 اختبارات وحدة جديدة (grading + certificate issuance/idempotency)، متصفح حقيقي، والبناء الكامل أخضر.
 
+## 🚀 دفعة التطوير الكبيرة (بعد الـauth)
+كل ده متحقّق منه ومبووش على `main`:
+- **سوفت-ديليت مركزي**: middleware في `PrismaService` بيحوّل الحذف لـ`deletedAt` ويخفي المحذوف من القراءات (Course/Unit/Lesson/Attachment/VideoNote/Coupon/PayoutMethod/LiveSession). فلاتر nested مضافة في شجرة المحتوى.
+- **سكيلابيليتي**: route-level code-splitting (الحِمل الأولي 1078→416 KB)، وتحميل مشغّل الفيديو (hls.js) فقط لدروس الفيديو.
+- **UI premium foundation**: ظلال متعدّدة الطبقات + سلّم زوايا + أزرار/كروت/إنبوتس مطوّرة (في `tailwind.config.ts` + `index.css`). **لسه: تعميم على كل شاشة بالتفصيل.**
+- **فيديو متقدم**: سرعات، اختيار جودة (من HLS levels)، استئناف من آخر نقطة (`resumeAtSec` في التذكرة)، واختصارات كيبورد. الحماية والووترمارك زي ما هي.
+- **جلسات لايف + حجز**: `LiveSession`(+description/duration/capacity/soft-delete) و`LiveBooking`. module `live` (معلم يجدول+يشوف الحاضرين؛ طالب يحجز/يلغي/ينضم بحدود enrollment+capacity+نافذة زمنية). شاشتان + nav + i18n.
+- **تحليلات المعلم**: module `analytics` → `GET /teacher/analytics` (إيرادات من الـledger، إكمال، نجاح اختبارات، تقييم، اتجاهات ٦ شهور، أعلى الدروس). صفحة برسوم SVG بدون مكتبة.
+- **أدوات الطالب**: `SavedCourse` (wishlist) + شارات إنجازات محسوبة (`GET /me/badges`). SaveHeart + صفحة المحفوظة + شريط الشارات في الداشبورد.
+
 ## 🔐 تحديث الـauth (بعد Phase 6)
 - **الكل بيدخل بإيميل + باسورد** (شيلنا موبايل/OTP نهائياً). argon2 + rate-limit + قفل بعد ١٠ محاولات + forgot/reset (توكن hashed single-use).
 - **الطالب** يسجّل ويدخل فوراً؛ **المعلم** يسجّل → PENDING لحد ما الأدمن يوافق (دخوله مرفوض بـ `ACCOUNT_PENDING_APPROVAL`).

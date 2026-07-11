@@ -19,20 +19,23 @@ export default function TeacherDashboardPage() {
     queryKey: ['teacher-enrollments', 'ALL'],
     queryFn: async () => (await api.get('/teacher/enrollments')).data,
   });
+  // Revenue is ledger-authoritative (same source as the wallet), not a naive
+  // sum of enrollment payments — so the dashboard matches /teacher/wallet.
+  const { data: wallet } = useQuery({
+    queryKey: ['teacher-wallet'],
+    queryFn: async () => (await api.get('/teacher/wallet')).data,
+  });
 
   const published = courses?.filter((c: any) => c.status === 'PUBLISHED').length ?? 0;
   const active = enrollments?.filter((e: any) => e.status === 'ACTIVE').length ?? 0;
   const pending = enrollments?.filter((e: any) => e.status === 'PENDING_APPROVAL').length ?? 0;
-  const revenue =
-    enrollments
-      ?.filter((e: any) => e.status === 'ACTIVE' && e.payments?.[0]?.amountCents)
-      .reduce((sum: number, e: any) => sum + e.payments[0].amountCents, 0) ?? 0;
+  const revenue = wallet?.grossCents ?? 0;
 
   const stats = [
     { icon: 'menu_book', label: t('teacher.statCourses'), value: published, to: '/teacher/courses', tint: 'from-primary-fixed to-primary-fixed-dim text-primary' },
     { icon: 'groups', label: t('teacher.statStudents'), value: active, to: '/teacher/students', tint: 'from-secondary-container to-secondary-fixed-dim text-on-secondary-container' },
     { icon: 'pending_actions', label: t('teacher.statPending'), value: pending, to: '/teacher/students', tint: 'from-amber-100 to-amber-200 text-amber-700' },
-    { icon: 'payments', label: t('teacher.statRevenue'), value: egp(revenue), to: '/teacher/students', tint: 'from-primary-fixed to-secondary-container text-primary' },
+    { icon: 'payments', label: t('teacher.statRevenue'), value: egp(revenue), to: '/teacher/wallet', tint: 'from-primary-fixed to-secondary-container text-primary' },
   ];
 
   return (

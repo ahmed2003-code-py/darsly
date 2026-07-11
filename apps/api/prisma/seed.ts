@@ -535,6 +535,10 @@ async function main() {
   await ensureEnrollment(4, algebraCourse.id, khaled.id, 'ACTIVE');
   await ensureEnrollment(2, algebraCourse.id, khaled.id, 'PENDING_APPROVAL'); // approval queue
   await ensureEnrollment(3, chemCourse.id, noura.id, 'PENDING_APPROVAL');
+  // Paid sales for the two extra active students so the ledger/wallet/dashboard
+  // revenue reflects real, consistent numbers.
+  await ensurePaidPayment(students[3].id, { id: algebraCourse.id, tenantId: khaled.id, priceCents: 45000 });
+  await ensurePaidPayment(students[4].id, { id: algebraCourse.id, tenantId: khaled.id, priceCents: 45000 });
 
   // A quiz + an assignment lesson on Khaled's algebra course.
   const demoUnit = await prisma.courseUnit.findFirst({

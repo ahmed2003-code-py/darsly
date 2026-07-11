@@ -66,13 +66,20 @@ export default {
         DEFAULT: '0.5rem',
         md: '0.75rem',
         lg: '1rem', // buttons & inputs
-        xl: '1.5rem', // cards
+        xl: '1.25rem',
+        '2xl': '1.5rem', // cards
+        '3xl': '2rem', // hero / feature panels
       },
       boxShadow: {
-        // Level 1: cards — 4% indigo tint, 20px blur, 4px Y
-        card: '0 4px 20px rgba(66, 46, 199, 0.04)',
-        // Level 2: modals/popovers — 12% indigo tint, 40px blur, 10px Y
-        modal: '0 10px 40px rgba(66, 46, 199, 0.12)',
+        // Layered elevation (tight ambient + soft diffuse, indigo-tinted) for
+        // real depth instead of a single flat blur.
+        card: '0 1px 2px rgba(20, 0, 103, 0.04), 0 4px 12px rgba(66, 46, 199, 0.05)',
+        elevated: '0 2px 6px rgba(20, 0, 103, 0.06), 0 14px 34px rgba(66, 46, 199, 0.12)',
+        modal: '0 4px 10px rgba(20, 0, 103, 0.08), 0 28px 70px rgba(66, 46, 199, 0.20)',
+        // Focus/CTA glow.
+        glow: '0 8px 24px rgba(66, 46, 199, 0.28)',
+        // 1px hairline ring that reads crisper than a border on light surfaces.
+        hairline: '0 0 0 1px rgba(20, 0, 103, 0.06)',
       },
       maxWidth: {
         container: '1280px',

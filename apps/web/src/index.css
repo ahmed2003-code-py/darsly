@@ -35,9 +35,9 @@
 @layer components {
   /* ── Buttons ─────────────────────────────────────────────────────────── */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container px-6 py-3 font-heading font-bold text-on-primary shadow-[0_6px_16px_rgba(66,46,199,0.20)] transition-all duration-200
-      hover:-translate-y-0.5 hover:bg-primary hover:shadow-[0_10px_28px_rgba(66,46,199,0.32)]
-      active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-primary-container to-primary px-6 py-3 font-heading font-bold text-on-primary shadow-[0_6px_16px_rgba(66,46,199,0.22)] transition-all duration-200
+      hover:-translate-y-0.5 hover:shadow-glow
+      active:translate-y-0 active:shadow-[0_3px_10px_rgba(66,46,199,0.20)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface
       disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-secondary {
@@ -52,10 +52,14 @@
 
   /* ── Surfaces ────────────────────────────────────────────────────────── */
   .card {
-    @apply rounded-xl border border-white/60 bg-surface-container-lowest p-6 shadow-card;
+    @apply rounded-2xl border border-white/70 bg-surface-container-lowest p-6 shadow-card;
   }
   .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-1 hover:shadow-modal;
+    @apply cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:border-primary-container/50 hover:shadow-elevated;
+  }
+  /* Subtle top-lit sheen for hero/feature surfaces. */
+  .card-feature {
+    @apply relative overflow-hidden rounded-3xl border border-white/70 bg-surface-container-lowest shadow-elevated;
   }
   /* Glassmorphic bar (design: backdrop blur 12px + ~70% white) */
   .glass {
@@ -64,8 +68,8 @@
 
   /* ── Inputs ──────────────────────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-4 py-3 text-on-surface placeholder:text-outline transition
-      focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60;
+    @apply w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 text-on-surface placeholder:text-outline/70 transition-all duration-150
+      hover:border-outline focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15;
   }
   .pill {
     @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold;

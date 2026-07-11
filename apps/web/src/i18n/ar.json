@@ -299,7 +299,8 @@
       "publishChanges": "نشر التغييرات",
       "published": "الدورة منشورة",
       "draft": "مسودة — غير مرئية للطلاب",
-      "pricing": "التسعير"
+      "pricing": "التسعير",
+      "changeCover": "تغيير صورة الغلاف"
     },
     "students": {
       "title": "طلابي",
@@ -678,5 +679,14 @@
     "title": "إنجازاتك",
     "earnedOf": "{{earned}} من {{total}}",
     "unlocked": "تم الفتح ✓"
+  },
+  "profile": {
+    "title": "ملفي الشخصي",
+    "subtitle": "صورتك وبياناتك.",
+    "changePhoto": "تغيير الصورة",
+    "removePhoto": "إزالة الصورة",
+    "fullName": "الاسم الكامل",
+    "email": "البريد الإلكتروني",
+    "phone": "رقم الموبايل"
   }
 }

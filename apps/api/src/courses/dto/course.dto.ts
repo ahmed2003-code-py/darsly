@@ -10,6 +10,7 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -17,7 +18,8 @@ import {
 export class CreateCourseDto {
   @IsString() @MinLength(3) title: string;
   @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() thumbnailUrl?: string;
+  // URL or a client-resized base64 data URL (~600 KB cap).
+  @IsOptional() @IsString() @MaxLength(900_000) thumbnailUrl?: string;
   @IsOptional() @IsString() subjectId?: string;
   @IsOptional() @IsString() gradeId?: string;
   @IsOptional() @IsEnum(CoursePricingModel) pricingModel?: CoursePricingModel;

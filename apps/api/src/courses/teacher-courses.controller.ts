@@ -1,9 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { IsString } from 'class-validator';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { validateImageDataUrl } from '../common/image.util';
 import { CoursesService } from './courses.service';
 import {
   CreateCourseDto,
@@ -14,6 +16,10 @@ import {
   UpdateLessonDto,
   UpsertUnitDto,
 } from './dto/course.dto';
+
+class SetThumbnailDto {
+  @IsString() dataUrl: string;
+}
 
 /**
  * Teacher content-management API. Every route requires the TEACHER role and
@@ -85,6 +91,17 @@ export class TeacherCoursesController {
       entityId: id,
     });
     return result;
+  }
+
+  @Patch('courses/:id/thumbnail')
+  @ApiOperation({ summary: '[teacher] Set course thumbnail (client-resized base64 image)' })
+  async setThumbnail(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: SetThumbnailDto,
+  ) {
+    validateImageDataUrl(dto.dataUrl, 600 * 1024); // ~600 KB after decode
+    return this.courses.update(user.tenantId!, id, { thumbnailUrl: dto.dataUrl });
   }
 
   @Patch('courses/:id/bundle')

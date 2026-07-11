@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
 import { Badge, ErrorNote, Field, ProgressBar, Spinner } from '../../components/ui';
 
@@ -34,10 +35,19 @@ export default function CourseBuilderPage() {
 
   const videoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const thumbInput = useRef<HTMLInputElement>(null);
 
   const { data: course, isLoading } = useQuery({
     queryKey: ['teacher-course', id],
     queryFn: async () => (await api.get(`/teacher/courses/${id}`)).data,
+  });
+
+  const thumbUpload = useMutation({
+    mutationFn: async (file: File) => {
+      const dataUrl = await imageToDataUrl(file, { maxW: 960, maxH: 540, quality: 0.78 });
+      return (await api.patch(`/teacher/courses/${id}/thumbnail`, { dataUrl })).data;
+    },
+    onSuccess: () => invalidate(),
   });
 
   const invalidate = () => {
@@ -191,6 +201,30 @@ export default function CourseBuilderPage() {
         </div>
       </div>
       <ErrorNote error={publish.error} />
+
+      {/* Course cover / thumbnail */}
+      <div className="mb-6 overflow-hidden rounded-2xl border border-outline-variant/50">
+        <div className="relative h-44 bg-surface-container-high sm:h-56">
+          {course.thumbnailUrl ? (
+            <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-outline">
+              <span className="material-symbols-outlined text-5xl">image</span>
+            </div>
+          )}
+          <input ref={thumbInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+            onChange={(e) => e.target.files?.[0] && thumbUpload.mutate(e.target.files[0])} />
+          <button
+            className="absolute end-3 bottom-3 flex items-center gap-1.5 rounded-xl bg-surface-container-lowest/90 px-3 py-2 text-sm font-bold text-primary shadow-card backdrop-blur transition hover:bg-surface-container-lowest"
+            disabled={thumbUpload.isPending}
+            onClick={() => thumbInput.current?.click()}
+          >
+            <span className="material-symbols-outlined text-base">{thumbUpload.isPending ? 'hourglass' : 'photo_camera'}</span>
+            {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.changeCover')}
+          </button>
+        </div>
+      </div>
+      <ErrorNote error={thumbUpload.error} />
 
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Curriculum tree */}

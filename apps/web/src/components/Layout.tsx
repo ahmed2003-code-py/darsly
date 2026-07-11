@@ -99,11 +99,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         ))}
       </nav>
 
-      {/* Account card at the foot */}
+      {/* Account card at the foot → profile */}
       <div className="p-4">
-        <div className="flex items-center gap-3 rounded-xl bg-surface-container-low p-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading font-bold text-primary">
-            {user?.fullName?.trim()?.charAt(0) ?? '؟'}
+        <NavLink to="/profile" className="flex items-center gap-3 rounded-xl bg-surface-container-low p-3 transition hover:bg-surface-container">
+          <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-primary">
+            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName?.trim()?.charAt(0) ?? '؟')}
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold">{user?.fullName}</p>
@@ -111,7 +111,8 @@ export default function Layout({ children }: { children: ReactNode }) {
               {user?.role ? t(`dashboard.role.${user.role}`) : ''}
             </p>
           </div>
-        </div>
+          <span className="material-symbols-outlined ms-auto text-lg text-outline">chevron_left</span>
+        </NavLink>
       </div>
     </div>
   );

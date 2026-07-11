@@ -13,6 +13,7 @@ const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const MessagesPage = lazy(() => import('./pages/MessagesPage'));
 const CertificateViewPage = lazy(() => import('./pages/CertificateViewPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage'));
 const AdminPayoutsPage = lazy(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazy(() => import('./pages/admin/AdminSecurityPage'));
@@ -80,6 +81,7 @@ export default function App() {
       <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
       <Route path="/certificate/:serial" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
+      <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
 
       {/* Teacher studio */}
       <Route path="/teacher" element={<RequireAuth role={Role.TEACHER}><TeacherDashboardPage /></RequireAuth>} />

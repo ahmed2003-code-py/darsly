@@ -656,6 +656,7 @@ async function main() {
     }
   }
   await ensureNotif(students[0].userId, 'ENROLLMENT_APPROVED', 'تم قبول التحاقك 🎉', 'تم تفعيل اشتراكك في دورة أساسيات الجبر.');
+  await ensureNotif(students[0].userId, 'QUIZ_GRADED', 'تم تصحيح اختبارك — ناجح ✅', '«اختبار: أساسيات الجبر»: نتيجتك 100% — مبروك!');
   await ensureNotif(students[0].userId, 'ANNOUNCEMENT', 'مبروك! حصلت على شهادة 🎓', 'أتممت دورة أساسيات الجبر — شهادتك جاهزة.');
   await ensureNotif(khaled.userId, 'ANNOUNCEMENT', 'تقييم جديد ⭐', 'حصلت دورة أساسيات الجبر على تقييم 5/5.');
   await ensureNotif(khaled.userId, 'CHAT_MESSAGE', 'رسالة جديدة من أحمد محمود', 'مش فاهم خطوة التبسيط في المثال الثالث.');

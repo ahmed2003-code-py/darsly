@@ -18,6 +18,10 @@ export default function StudentDashboardPage() {
     queryKey: ['progress-summary'],
     queryFn: async () => (await api.get('/progress/summary')).data,
   });
+  const { data: badges } = useQuery<any[]>({
+    queryKey: ['my-badges'],
+    queryFn: async () => (await api.get('/me/badges')).data,
+  });
   const { data: watching, isLoading } = useQuery<ContinueWatchingItem[]>({
     queryKey: ['continue-watching'],
     queryFn: async () => (await api.get('/progress/continue-watching')).data,
@@ -54,6 +58,36 @@ export default function StudentDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Achievement badges */}
+      {badges && badges.length > 0 && (
+        <div className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-heading text-xl font-extrabold">{t('badges.title')}</h2>
+            <span className="text-sm text-outline">{t('badges.earnedOf', { earned: badges.filter((b) => b.earned).length, total: badges.length })}</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {badges.map((b) => (
+              <div
+                key={b.key}
+                title={b.desc}
+                className={`flex min-w-[8.5rem] flex-col items-center gap-1.5 rounded-2xl border p-4 text-center transition ${
+                  b.earned ? 'border-primary-container/50 bg-primary-fixed/40 shadow-card' : 'border-outline-variant/50 bg-surface-container-low opacity-70'
+                }`}
+              >
+                <span className={`grid h-12 w-12 place-items-center rounded-full ${b.earned ? 'bg-gradient-to-br from-primary-container to-primary text-on-primary' : 'bg-surface-container-high text-outline'}`}>
+                  <span className="material-symbols-outlined" style={b.earned ? { fontVariationSettings: "'FILL' 1" } : undefined}>{b.earned ? b.icon : 'lock'}</span>
+                </span>
+                <span className="text-sm font-bold">{b.title}</span>
+                {!b.earned && b.goal > 1 && (
+                  <span className="font-mono text-xs text-outline">{b.progress}/{b.goal}</span>
+                )}
+                {b.earned && <span className="text-[10px] font-bold text-secondary">{t('badges.unlocked')}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Continue watching */}

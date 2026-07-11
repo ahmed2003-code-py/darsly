@@ -22,6 +22,7 @@ const DiscoveryPage = lazy(() => import('./pages/student/DiscoveryPage'));
 const MyCoursesPage = lazy(() => import('./pages/student/MyCoursesPage'));
 const CertificatesPage = lazy(() => import('./pages/student/CertificatesPage'));
 const LiveSessionsPage = lazy(() => import('./pages/student/LiveSessionsPage'));
+const SavedCoursesPage = lazy(() => import('./pages/student/SavedCoursesPage'));
 const LessonRouter = lazy(() => import('./pages/student/LessonRouter'));
 const StudentDashboardPage = lazy(() => import('./pages/student/StudentDashboardPage'));
 const TeacherProfilePage = lazy(() => import('./pages/student/TeacherProfilePage'));
@@ -76,6 +77,7 @@ export default function App() {
       <Route path="/my-courses" element={<RequireAuth role={Role.STUDENT}><MyCoursesPage /></RequireAuth>} />
       <Route path="/my-certificates" element={<RequireAuth role={Role.STUDENT}><CertificatesPage /></RequireAuth>} />
       <Route path="/live" element={<RequireAuth role={Role.STUDENT}><LiveSessionsPage /></RequireAuth>} />
+      <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
       <Route path="/certificate/:serial" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
 

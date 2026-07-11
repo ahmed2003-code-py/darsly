@@ -164,6 +164,20 @@ model StudentProfile {
   securityEvents   SecurityEvent[]
   chatThreads      ChatThread[]
   liveBookings     LiveBooking[]
+  savedCourses     SavedCourse[]
+}
+
+// A student's saved / wishlisted course.
+model SavedCourse {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([studentId, courseId])
+  @@index([studentId])
 }
 
 // ─────────────────────────── Catalog taxonomy ──────────────────────────────
@@ -266,6 +280,7 @@ model Course {
   payments    Payment[]
   bundleParents BundleItem[] @relation("bundleChild")
   bundleItems   BundleItem[] @relation("bundleParent")
+  savedBy       SavedCourse[]
 
   @@index([tenantId, status])
   @@index([subjectId, gradeId, status])

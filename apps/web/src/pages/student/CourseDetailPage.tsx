@@ -8,6 +8,7 @@ import { dateShort, duration, egp } from '../../lib/format';
 import { useAuthStore } from '../../stores/auth';
 import { Badge, EmptyState, ErrorNote, Skeleton } from '../../components/ui';
 import ReviewModal from '../../components/ReviewModal';
+import SaveHeart from '../../components/SaveHeart';
 
 const LESSON_ICON: Record<string, string> = {
   VIDEO: 'play_circle',
@@ -137,6 +138,9 @@ export default function CourseDetailPage() {
                 </button>
               )}
             </div>
+            {user?.role === Role.STUDENT && (
+              <div className="mt-4"><SaveHeart courseId={course.id} /></div>
+            )}
           </div>
           {course.id && (
             <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} courseId={course.id} />

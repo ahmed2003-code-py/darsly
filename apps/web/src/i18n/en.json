@@ -46,7 +46,8 @@
     "adminSecurity": "Security",
     "certificates": "Certificates",
     "live": "Live sessions",
-    "analytics": "Analytics"
+    "analytics": "Analytics",
+    "saved": "Saved"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -662,5 +663,20 @@
     "rating": "Average rating",
     "totalEnrollments": "Total enrollments",
     "pending": "Pending approval"
+  },
+  "saved": {
+    "title": "Saved courses",
+    "subtitle": "Courses you saved for later.",
+    "empty": "No saved courses",
+    "emptyHint": "Save courses you like to find them easily.",
+    "save": "Save",
+    "saved": "Saved",
+    "add": "Add to saved",
+    "remove": "Remove from saved"
+  },
+  "badges": {
+    "title": "Your achievements",
+    "earnedOf": "{{earned}} of {{total}}",
+    "unlocked": "Unlocked ✓"
   }
 }

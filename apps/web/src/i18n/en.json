@@ -45,7 +45,8 @@
     "adminPayouts": "Payouts",
     "adminSecurity": "Security",
     "certificates": "Certificates",
-    "live": "Live sessions"
+    "live": "Live sessions",
+    "analytics": "Analytics"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -644,5 +645,22 @@
     "fCapacityHint": "Leave empty = unlimited",
     "fJoinUrl": "Join URL",
     "publish": "Publish session"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "A look at your performance and growth.",
+    "gross": "Total sales",
+    "activeStudents": "Active students",
+    "completion": "Completion rate",
+    "quizPass": "Quiz pass rate",
+    "revenueTrend": "Revenue trend",
+    "enrollmentsTrend": "New enrollments",
+    "last6Months": "Last 6 months",
+    "topLessons": "Most-watched lessons",
+    "noData": "No data yet",
+    "views": "{{count}} views",
+    "rating": "Average rating",
+    "totalEnrollments": "Total enrollments",
+    "pending": "Pending approval"
   }
 }

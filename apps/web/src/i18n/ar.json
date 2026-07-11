@@ -45,7 +45,8 @@
     "adminPayouts": "طلبات السحب",
     "adminSecurity": "الأمان والنزاهة",
     "certificates": "شهاداتي",
-    "live": "الجلسات المباشرة"
+    "live": "الجلسات المباشرة",
+    "analytics": "التحليلات"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -644,5 +645,22 @@
     "fCapacityHint": "اتركها فارغة = غير محدودة",
     "fJoinUrl": "رابط الانضمام",
     "publish": "نشر الجلسة"
+  },
+  "analytics": {
+    "title": "التحليلات",
+    "subtitle": "نظرة على أدائك ونموّك.",
+    "gross": "إجمالي المبيعات",
+    "activeStudents": "طلاب نشطون",
+    "completion": "نسبة الإكمال",
+    "quizPass": "نجاح الاختبارات",
+    "revenueTrend": "اتجاه الإيرادات",
+    "enrollmentsTrend": "الالتحاقات الجديدة",
+    "last6Months": "آخر ٦ شهور",
+    "topLessons": "أكثر الدروس مشاهدة",
+    "noData": "لا توجد بيانات بعد",
+    "views": "{{count}} مشاهدة",
+    "rating": "متوسط التقييم",
+    "totalEnrollments": "إجمالي الالتحاقات",
+    "pending": "بانتظار الموافقة"
   }
 }

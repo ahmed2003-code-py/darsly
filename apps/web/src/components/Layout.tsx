@@ -26,6 +26,7 @@ const TEACHER_NAV: NavItem[] = [
   { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
+  { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
   { to: '/teacher/live', icon: 'sensors', labelKey: 'nav.live' },
   { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
   { to: '/teacher/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },

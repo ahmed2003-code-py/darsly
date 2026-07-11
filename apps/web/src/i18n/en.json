@@ -44,7 +44,8 @@
     "adminTeachers": "Teacher approvals",
     "adminPayouts": "Payouts",
     "adminSecurity": "Security",
-    "certificates": "Certificates"
+    "certificates": "Certificates",
+    "live": "Live sessions"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -605,5 +606,43 @@
       "rateLimited": "Too many attempts. Please try again shortly.",
       "generic": "Something went wrong, please try again."
     }
+  },
+  "live": {
+    "title": "Live sessions",
+    "subtitle": "Book your seat in live classes with your teachers.",
+    "empty": "No upcoming sessions",
+    "emptyHint": "Live sessions from your teachers will appear here.",
+    "booked": "Booked",
+    "book": "Book a seat",
+    "cancel": "Cancel",
+    "full": "Full",
+    "join": "Join now",
+    "joinOpensSoon": "Opens 15 min before",
+    "minutes": "{{count}} min",
+    "seatsLeft": "{{count}} seats left",
+    "liveNow": "Live now",
+    "inDays": "in {{count}}d",
+    "inHours": "in {{count}}h",
+    "inMinutes": "in {{count}}m",
+    "teacherTitle": "Live sessions",
+    "teacherSubtitle": "Schedule your live classes and track bookings.",
+    "schedule": "New session",
+    "teacherEmpty": "No sessions",
+    "teacherEmptyHint": "Create your first live session.",
+    "upcoming": "Upcoming",
+    "ended": "Ended",
+    "bookedCount": "{{count}} booked",
+    "cancelConfirm": "Cancel this session?",
+    "attendees": "Attendees",
+    "noAttendees": "No bookings yet.",
+    "fTitle": "Session title",
+    "fTitlePh": "e.g. Final revision — Unit 1",
+    "fDescription": "Description",
+    "fStartsAt": "Starts at",
+    "fDuration": "Duration (min)",
+    "fCapacity": "Capacity",
+    "fCapacityHint": "Leave empty = unlimited",
+    "fJoinUrl": "Join URL",
+    "publish": "Publish session"
   }
 }

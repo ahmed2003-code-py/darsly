@@ -21,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
 import { SecurityModule } from './security/security.module';
 import { AssessmentsModule } from './assessments/assessments.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { LiveModule } from './live/live.module';
 import { PlaybackModule } from './playback/playback.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProgressModule } from './progress/progress.module';
@@ -60,6 +61,7 @@ const webDist = join(__dirname, '..', '..', 'web', 'dist');
     SecurityModule,
     AssessmentsModule,
     ReviewsModule,
+    LiveModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -661,6 +661,24 @@ async function main() {
   await ensureNotif(khaled.userId, 'ANNOUNCEMENT', 'تقييم جديد ⭐', 'حصلت دورة أساسيات الجبر على تقييم 5/5.');
   await ensureNotif(khaled.userId, 'CHAT_MESSAGE', 'رسالة جديدة من أحمد محمود', 'مش فاهم خطوة التبسيط في المثال الثالث.');
 
+  // A live session two days out, with أحمد already booked in.
+  let live = await prisma.liveSession.findFirst({ where: { tenantId: khaled.id, title: 'مراجعة مباشرة: المعادلات التربيعية' } });
+  if (!live) {
+    live = await prisma.liveSession.create({
+      data: {
+        tenantId: khaled.id,
+        courseId: algebraCourse.id,
+        title: 'مراجعة مباشرة: المعادلات التربيعية',
+        description: 'حل مسائل مباشر وإجابة على أسئلتكم قبل الامتحان.',
+        startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
+        durationMin: 90,
+        capacity: 50,
+        joinUrl: 'https://meet.google.com/darsly-demo',
+      },
+    });
+    await prisma.liveBooking.create({ data: { sessionId: live.id, studentId: students[0].id } });
+  }
+
   // ── Platform settings ─────────────────────────────────────────────────
   await prisma.platformSetting.upsert({
     where: { key: 'commission.defaultPercent' },

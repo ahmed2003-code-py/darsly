@@ -44,7 +44,8 @@
     "adminTeachers": "اعتماد المعلمين",
     "adminPayouts": "طلبات السحب",
     "adminSecurity": "الأمان والنزاهة",
-    "certificates": "شهاداتي"
+    "certificates": "شهاداتي",
+    "live": "الجلسات المباشرة"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -605,5 +606,43 @@
       "rateLimited": "محاولات كثيرة. برجاء المحاولة بعد قليل.",
       "generic": "حدث خطأ، حاول مرة أخرى."
     }
+  },
+  "live": {
+    "title": "الجلسات المباشرة",
+    "subtitle": "احجز مقعدك في الحصص المباشرة مع معلميك.",
+    "empty": "لا توجد جلسات قادمة",
+    "emptyHint": "هتظهر هنا الجلسات المباشرة من المعلمين المشترك معهم.",
+    "booked": "محجوز",
+    "book": "احجز مقعدك",
+    "cancel": "إلغاء الحجز",
+    "full": "مكتمل",
+    "join": "انضم الآن",
+    "joinOpensSoon": "يفتح الانضمام قبلها بـ١٥ د",
+    "minutes": "{{count}} دقيقة",
+    "seatsLeft": "باقي {{count}} مقعد",
+    "liveNow": "مباشر الآن",
+    "inDays": "بعد {{count}} يوم",
+    "inHours": "بعد {{count}} ساعة",
+    "inMinutes": "بعد {{count}} دقيقة",
+    "teacherTitle": "الجلسات المباشرة",
+    "teacherSubtitle": "جدوِل حصصك المباشرة وتابع الحجوزات.",
+    "schedule": "جلسة جديدة",
+    "teacherEmpty": "لا توجد جلسات",
+    "teacherEmptyHint": "أنشئ أول جلسة مباشرة لطلابك.",
+    "upcoming": "قادمة",
+    "ended": "انتهت",
+    "bookedCount": "{{count}} حاجز",
+    "cancelConfirm": "إلغاء هذه الجلسة؟",
+    "attendees": "الحاضرون",
+    "noAttendees": "لا حجوزات بعد.",
+    "fTitle": "عنوان الجلسة",
+    "fTitlePh": "مثال: مراجعة نهائية على الباب الأول",
+    "fDescription": "الوصف",
+    "fStartsAt": "الموعد",
+    "fDuration": "المدة (دقيقة)",
+    "fCapacity": "السعة",
+    "fCapacityHint": "اتركها فارغة = غير محدودة",
+    "fJoinUrl": "رابط الانضمام",
+    "publish": "نشر الجلسة"
   }
 }

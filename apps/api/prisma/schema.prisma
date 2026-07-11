@@ -163,6 +163,7 @@ model StudentProfile {
   playbackSessions PlaybackSession[]
   securityEvents   SecurityEvent[]
   chatThreads      ChatThread[]
+  liveBookings     LiveBooking[]
 }
 
 // ─────────────────────────── Catalog taxonomy ──────────────────────────────
@@ -850,16 +851,37 @@ model Notification {
 }
 
 model LiveSession {
-  id       String         @id @default(cuid())
-  tenantId String
-  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  courseId String?
-  title    String
-  startsAt DateTime
-  joinUrl  String?
-  createdAt DateTime      @default(now())
+  id          String         @id @default(cuid())
+  tenantId    String
+  teacher     TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  courseId    String?
+  title       String
+  description String         @default("")
+  startsAt    DateTime
+  durationMin Int            @default(60)
+  // null = unlimited seats
+  capacity    Int?
+  joinUrl     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  deletedAt   DateTime?
+
+  bookings LiveBooking[]
 
   @@index([tenantId, startsAt])
+}
+
+// A student's seat reservation for a live session.
+model LiveBooking {
+  id        String         @id @default(cuid())
+  sessionId String
+  session   LiveSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
 }
 
 model Certificate {

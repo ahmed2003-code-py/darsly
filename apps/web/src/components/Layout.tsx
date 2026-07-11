@@ -17,6 +17,7 @@ const STUDENT_NAV: NavItem[] = [
   { to: '/', icon: 'space_dashboard', labelKey: 'nav.home', end: true },
   { to: '/discover', icon: 'travel_explore', labelKey: 'nav.discover' },
   { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
+  { to: '/live', icon: 'sensors', labelKey: 'nav.live' },
   { to: '/my-certificates', icon: 'workspace_premium', labelKey: 'nav.certificates' },
   { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
 ];
@@ -25,6 +26,7 @@ const TEACHER_NAV: NavItem[] = [
   { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
+  { to: '/teacher/live', icon: 'sensors', labelKey: 'nav.live' },
   { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
   { to: '/teacher/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
   { to: '/teacher/security', icon: 'shield', labelKey: 'nav.security' },

@@ -10,6 +10,7 @@ const SOFT_DELETE_MODELS = new Set([
   'VideoNote',
   'Coupon',
   'PayoutMethodSaved',
+  'LiveSession',
 ]);
 
 const READ_ACTIONS = new Set([

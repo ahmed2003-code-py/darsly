@@ -46,13 +46,20 @@ export class LedgerService {
     if (!payment || payment.status !== 'PAID' || payment.amountCents <= 0) return;
     if (payment.ledgerTransaction) return; // already recorded
 
-    const teacher = await db.teacherProfile.findUnique({
-      where: { id: payment.tenantId },
-      select: { commissionPercent: true },
-    });
-    const commissionPct = teacher?.commissionPercent ?? 20;
-    const commission = Math.round((payment.amountCents * commissionPct) / 100);
-    const teacherShare = payment.amountCents - commission;
+    // Additive-fee model: amountCents (paid) = platform fee + academy net. The
+    // fee/net are frozen on the Payment at submit time; fall back to the legacy
+    // commission split for old rows that predate the fee columns.
+    let fee = payment.feeCents ?? null;
+    let net = payment.netCents ?? null;
+    if (fee == null || net == null) {
+      const teacher = await db.teacherProfile.findUnique({
+        where: { id: payment.tenantId },
+        select: { commissionPercent: true },
+      });
+      const commissionPct = teacher?.commissionPercent ?? 20;
+      fee = Math.round((payment.amountCents * commissionPct) / 100);
+      net = payment.amountCents - fee;
+    }
 
     await db.ledgerTransaction.create({
       data: {
@@ -60,9 +67,12 @@ export class LedgerService {
         paymentId,
         entries: {
           create: [
+            // platform:cash holds the full amount the student paid.
             { account: 'platform:cash', direction: 'DEBIT', amountCents: payment.amountCents },
-            { account: 'platform:commission', direction: 'CREDIT', amountCents: commission, tenantId: payment.tenantId },
-            { account: this.teacherAccount(payment.tenantId), direction: 'CREDIT', amountCents: teacherShare, tenantId: payment.tenantId },
+            // platform earnings (the service fee) — account name kept for continuity.
+            { account: 'platform:commission', direction: 'CREDIT', amountCents: fee, tenantId: payment.tenantId },
+            // the academy's withdrawable earning.
+            { account: this.teacherAccount(payment.tenantId), direction: 'CREDIT', amountCents: net, tenantId: payment.tenantId },
           ],
         },
       },

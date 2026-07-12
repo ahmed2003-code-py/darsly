@@ -672,7 +672,12 @@ model Payment {
   enrollment   Enrollment?    @relation(fields: [enrollmentId], references: [id])
   tenantId     String
 
+  // amountCents is the TOTAL the student paid. In the additive-fee model that is
+  // netCents (academy earning) + feeCents (platform service fee). Nullable for
+  // legacy rows recorded under the old commission model.
   amountCents Int
+  feeCents    Int?          // platform service fee portion of amountCents
+  netCents    Int?          // academy's earning portion of amountCents
   currency    String        @default("EGP")
   status      PaymentStatus @default(PENDING)
   gateway     String        @default("manual") // manual proof-based; paymob/fawry/stripe later

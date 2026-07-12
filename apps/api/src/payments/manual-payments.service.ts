@@ -9,6 +9,7 @@ import { Role } from '@darsly/shared-types';
 import { validateImageDataUrl } from '../common/image.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { computeServiceFee } from './fee.util';
 import { LedgerService } from './ledger.service';
 
 const PROOF_MAX_BYTES = 1_200 * 1024; // ~1.2 MB screenshot
@@ -55,7 +56,7 @@ export class ManualPaymentsService {
     });
     if (pending) throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
 
-    const { totalCents, couponId } = await this.quote(course, dto.couponCode);
+    const { netCents, feeCents, totalCents, couponId } = await this.quote(course, dto.couponCode);
 
     // Enrolment sits PENDING_APPROVAL (= awaiting payment verification).
     const enr = enrollment
@@ -74,6 +75,8 @@ export class ManualPaymentsService {
         enrollmentId: enr.id,
         tenantId: course.tenantId,
         amountCents: totalCents,
+        feeCents,
+        netCents,
         currency: course.currency,
         gateway: 'manual',
         method: dto.method as any,
@@ -285,7 +288,20 @@ export class ManualPaymentsService {
         couponId = coupon.id;
       }
     }
-    return { totalCents: Math.max(0, course.priceCents - discount), couponId };
+    // Additive platform service fee: student pays net + fee (never a deduction
+    // from the academy). tenantId === academyId (identity-preserving).
+    const netCents = Math.max(0, course.priceCents - discount);
+    let feeCents = 0;
+    if (netCents > 0) {
+      const academy = await this.prisma.academy.findUnique({
+        where: { id: course.tenantId },
+        select: { feeType: true, feeValue: true },
+      });
+      feeCents = academy
+        ? computeServiceFee(academy.feeType, academy.feeValue, netCents)
+        : computeServiceFee('PERCENT', 20, netCents);
+    }
+    return { netCents, feeCents, totalCents: netCents + feeCents, couponId };
   }
 
   private async notifyStudent(studentId: string, type: string, title: string, body: string) {

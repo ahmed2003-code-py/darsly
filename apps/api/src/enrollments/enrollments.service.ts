@@ -6,12 +6,18 @@ import {
 } from '@nestjs/common';
 import { Coupon, Course, Enrollment } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { computeServiceFee } from '../payments/fee.util';
 import { LedgerService } from '../payments/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface Quote {
   basePriceCents: number;
   discountCents: number;
+  /** what the academy earns (price − discount) */
+  netCents: number;
+  /** platform service fee the student pays on top */
+  feeCents: number;
+  /** what the student pays = netCents + feeCents */
   totalCents: number;
   currency: string;
   coupon: { id: string; code: string } | null;
@@ -64,13 +70,29 @@ export class EnrollmentsService {
         ? Math.round((course.priceCents * coupon.percentOff) / 100)
         : Math.min(coupon.amountOffCents ?? 0, course.priceCents);
     }
+    const net = Math.max(0, course.priceCents - discount);
+    const fee = await this.serviceFee(course.tenantId, net);
     return {
       basePriceCents: course.priceCents,
       discountCents: discount,
-      totalCents: Math.max(0, course.priceCents - discount),
+      netCents: net,
+      feeCents: fee,
+      totalCents: net + fee,
       currency: course.currency,
       coupon: coupon ? { id: coupon.id, code: coupon.code } : null,
     };
+  }
+
+  /** Platform service fee for an academy on a given net price (additive model). */
+  async serviceFee(academyId: string, netCents: number): Promise<number> {
+    if (netCents <= 0) return 0;
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { feeType: true, feeValue: true },
+    });
+    // Fall back to the legacy 20% platform cut if the academy row is missing.
+    if (!academy) return computeServiceFee('PERCENT', 20, netCents);
+    return computeServiceFee(academy.feeType, academy.feeValue, netCents);
   }
 
   /**

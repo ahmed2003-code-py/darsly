@@ -23,7 +23,7 @@ export default function CertificatesPage() {
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((c: any) => (
             <Link key={c.id} to={`/certificate/${c.serial}`}
-              className="card group relative overflow-hidden border-2 border-primary-container/60 bg-gradient-to-bl from-primary-fixed/50 to-surface-container-lowest transition hover:shadow-modal">
+              className="card group relative overflow-hidden border-2 border-primary-container/60 bg-primary-fixed/40 transition hover:shadow-modal">
               <span className="material-symbols-outlined mb-2 text-4xl text-primary">workspace_premium</span>
               <h3 className="mb-1 font-heading text-lg font-extrabold">{c.course.title}</h3>
               <p className="text-sm text-on-surface-variant">{c.course.teacher.user.fullName}</p>

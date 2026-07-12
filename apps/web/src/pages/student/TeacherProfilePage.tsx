@@ -35,7 +35,7 @@ export default function TeacherProfilePage() {
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       {/* Hero */}
-      <section className="card mb-10 grid gap-8 bg-gradient-to-bl from-surface-container-low to-surface-container-lowest p-8 lg:grid-cols-2">
+      <section className="card mb-10 grid gap-8 bg-surface-container-low p-8 lg:grid-cols-2">
         <div>
           <div className="mb-3 flex items-center gap-3">
             <h1 className="font-heading text-4xl font-extrabold">{teacher.fullName}</h1>

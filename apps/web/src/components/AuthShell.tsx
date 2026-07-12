@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { setLanguage } from '../i18n';
@@ -79,7 +79,7 @@ export default function AuthShell({
           </button>
         </div>
 
-        <motion.div
+        <m.div
           className="mx-auto w-full max-w-sm"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -99,7 +99,7 @@ export default function AuthShell({
           <div className="mt-8">{children}</div>
 
           {footer && <div className="mt-6 text-center text-sm text-on-surface-variant">{footer}</div>}
-        </motion.div>
+        </m.div>
       </main>
     </div>
   );

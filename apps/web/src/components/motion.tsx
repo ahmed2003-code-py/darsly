@@ -1,4 +1,4 @@
-import { HTMLMotionProps, motion, useReducedMotion, Variants } from 'framer-motion';
+import { HTMLMotionProps, m, useReducedMotion, Variants } from 'framer-motion';
 import { ReactNode } from 'react';
 
 /**
@@ -21,10 +21,10 @@ export function Reveal({
   delay?: number;
   y?: number;
   className?: string;
-  as?: keyof typeof motion;
+  as?: keyof typeof m;
 }) {
   const reduce = useReducedMotion();
-  const Comp = motion[as] as typeof motion.div;
+  const Comp = (m as any)[as] as typeof m.div;
   return (
     <Comp
       className={className}
@@ -54,7 +54,7 @@ export function Stagger({
     show: { transition: { staggerChildren: reduce ? 0 : gap } },
   };
   return (
-    <motion.div
+    <m.div
       className={className}
       variants={container}
       initial={reduce ? false : 'hidden'}
@@ -62,7 +62,7 @@ export function Stagger({
       viewport={{ once: true, margin: '-40px' }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -77,9 +77,9 @@ export function StaggerItem({
   ...rest
 }: { children: ReactNode; className?: string } & HTMLMotionProps<'div'>) {
   return (
-    <motion.div className={className} variants={itemVariants} {...rest}>
+    <m.div className={className} variants={itemVariants} {...rest}>
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 

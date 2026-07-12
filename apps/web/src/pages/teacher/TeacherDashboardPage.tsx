@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
 import { useAuthStore } from '../../stores/auth';
 import { Badge, PageHeader, Skeleton } from '../../components/ui';
+import { Stagger, StaggerItem } from '../../components/motion';
 
 /** Teacher home per teacher_dashboard design: stat cards + latest enrollments. */
 export default function TeacherDashboardPage() {
@@ -32,10 +33,10 @@ export default function TeacherDashboardPage() {
   const revenue = wallet?.grossCents ?? 0;
 
   const stats = [
-    { icon: 'menu_book', label: t('teacher.statCourses'), value: published, to: '/teacher/courses', tint: 'from-primary-fixed to-primary-fixed-dim text-primary' },
-    { icon: 'groups', label: t('teacher.statStudents'), value: active, to: '/teacher/students', tint: 'from-secondary-container to-secondary-fixed-dim text-on-secondary-container' },
-    { icon: 'pending_actions', label: t('teacher.statPending'), value: pending, to: '/teacher/students', tint: 'from-amber-100 to-amber-200 text-amber-700' },
-    { icon: 'payments', label: t('teacher.statRevenue'), value: egp(revenue), to: '/teacher/wallet', tint: 'from-primary-fixed to-secondary-container text-primary' },
+    { icon: 'menu_book', label: t('teacher.statCourses'), value: published, to: '/teacher/courses', tint: 'bg-primary-fixed text-primary' },
+    { icon: 'groups', label: t('teacher.statStudents'), value: active, to: '/teacher/students', tint: 'bg-primary-fixed text-primary' },
+    { icon: 'pending_actions', label: t('teacher.statPending'), value: pending, to: '/teacher/students', tint: 'bg-amber-50 text-amber-700' },
+    { icon: 'payments', label: t('teacher.statRevenue'), value: egp(revenue), to: '/teacher/wallet', tint: 'bg-primary-fixed text-primary' },
   ];
 
   return (
@@ -51,19 +52,21 @@ export default function TeacherDashboardPage() {
         }
       />
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Stagger className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
-          <Link key={s.label} to={s.to} className="card card-hover flex items-center gap-4 p-5">
-            <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${s.tint}`}>
-              <span className="material-symbols-outlined text-3xl">{s.icon}</span>
-            </span>
-            <div className="min-w-0">
-              <p className="font-heading text-2xl font-extrabold tabular-nums">{s.value}</p>
-              <p className="truncate text-sm text-on-surface-variant">{s.label}</p>
-            </div>
-          </Link>
+          <StaggerItem key={s.label} className="h-full">
+            <Link to={s.to} className="card card-hover flex h-full items-center gap-4 p-5">
+              <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${s.tint}`}>
+                <span className="material-symbols-outlined text-[26px]">{s.icon}</span>
+              </span>
+              <div className="min-w-0">
+                <p className="font-heading text-2xl font-bold tabular-nums tracking-tight">{s.value}</p>
+                <p className="truncate text-sm text-on-surface-variant">{s.label}</p>
+              </div>
+            </Link>
+          </StaggerItem>
         ))}
-      </div>
+      </Stagger>
 
       <div className="card">
         <div className="mb-4 flex items-center justify-between">

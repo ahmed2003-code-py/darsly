@@ -23,8 +23,9 @@ export default function AdminOverviewPage() {
   }
 
   const money = [
-    { label: t('admin.gross'), value: egp(data.grossCents), icon: 'trending_up', tint: 'from-primary-container to-primary text-on-primary' },
-    { label: t('admin.commission'), value: egp(data.commissionCents), icon: 'account_balance', tint: 'from-secondary-container to-secondary-fixed-dim text-on-secondary-container' },
+    // The single filled accent moment on the page — the headline number.
+    { label: t('admin.gross'), value: egp(data.grossCents), icon: 'trending_up', card: 'bg-primary text-on-primary border-transparent', iconBg: 'bg-white/15' },
+    { label: t('admin.commission'), value: egp(data.commissionCents), icon: 'account_balance', card: 'bg-surface-container-lowest text-on-surface', iconBg: 'bg-primary-fixed text-primary' },
   ];
   const counts = [
     { label: t('admin.students'), value: data.students, icon: 'school', to: undefined },
@@ -41,13 +42,13 @@ export default function AdminOverviewPage() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         {money.map((m) => (
-          <div key={m.label} className={`card flex items-center gap-4 bg-gradient-to-br ${m.tint}`}>
-            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-white/25">
+          <div key={m.label} className={`card flex items-center gap-4 ${m.card}`}>
+            <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-xl ${m.iconBg}`}>
               <span className="material-symbols-outlined text-3xl">{m.icon}</span>
             </span>
             <div>
-              <p className="text-sm opacity-90">{m.label}</p>
-              <p className="font-heading text-3xl font-extrabold">{m.value}</p>
+              <p className="text-sm opacity-80">{m.label}</p>
+              <p className="font-heading text-3xl font-bold tracking-tight tabular-nums">{m.value}</p>
             </div>
           </div>
         ))}

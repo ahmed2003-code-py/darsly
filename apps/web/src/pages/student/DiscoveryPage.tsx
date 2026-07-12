@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { CardGridSkeleton, EmptyState, PageHeader, Stars } from '../../components/ui';
+import { Stagger, StaggerItem } from '../../components/motion';
 
 interface Filters {
   subjectId: string;
@@ -194,15 +195,16 @@ export default function DiscoveryPage() {
             <EmptyState icon="search_off" title={t('discovery.noResults')} hint={t('discovery.noResultsHint')} />
           ) : (
             <>
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              <Stagger className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 {data.items.map((tc: any) => (
-                  <article key={tc.id} className="card card-hover flex flex-col p-5">
+                  <StaggerItem key={tc.id} className="h-full">
+                  <article className="card card-hover flex h-full flex-col p-5">
                     {/* Avatar on the inline-start (right in RTL), text flows left — per design */}
                     <div className="mb-3 flex items-start gap-3">
                       {tc.avatarUrl ? (
-                        <img src={tc.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover ring-2 ring-primary-fixed" />
+                        <img src={tc.avatarUrl} alt="" loading="lazy" className="h-16 w-16 rounded-full object-cover ring-1 ring-outline-variant" />
                       ) : (
-                        <div className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary-fixed to-secondary-container font-heading text-2xl font-bold text-primary">
+                        <div className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading text-2xl font-bold text-primary">
                           {tc.fullName?.trim()?.charAt(0)}
                         </div>
                       )}
@@ -210,7 +212,7 @@ export default function DiscoveryPage() {
                         <div className="flex items-center gap-1.5">
                           <h3 className="truncate font-heading text-lg font-bold">{tc.fullName}</h3>
                           {tc.verified && (
-                            <span className="material-symbols-outlined text-lg text-secondary" title={t('discovery.verified')}>
+                            <span className="material-symbols-outlined text-lg text-primary" title={t('discovery.verified')}>
                               verified
                             </span>
                           )}
@@ -249,18 +251,19 @@ export default function DiscoveryPage() {
                       </Link>
                     </div>
                   </article>
+                  </StaggerItem>
                 ))}
-              </div>
+              </Stagger>
 
               {totalPages > 1 && (
                 <div className="mt-8 flex items-center justify-center gap-2">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                     <button
                       key={p}
-                      className={`h-10 w-10 rounded-full font-bold transition ${
+                      className={`h-10 w-10 rounded-full font-semibold transition-colors ${
                         p === page
-                          ? 'bg-primary text-on-primary shadow-[0_4px_12px_rgba(66,46,199,0.3)]'
-                          : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+                          ? 'bg-primary text-on-primary'
+                          : 'border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
                       }`}
                       onClick={() => setPage(p)}
                     >

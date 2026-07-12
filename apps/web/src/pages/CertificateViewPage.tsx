@@ -44,7 +44,7 @@ export default function CertificateViewPage() {
 
         {/* The certificate itself */}
         <div className="relative overflow-hidden rounded-3xl border-4 border-primary/30 bg-surface-container-lowest p-10 text-center shadow-modal sm:p-16"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(66,46,199,0.15)' }}>
+          style={{ boxShadow: 'inset 0 0 0 2px rgba(74,50,201,0.15)' }}>
           <div className="pointer-events-none absolute -end-16 -top-16 h-48 w-48 rounded-full bg-primary-fixed/40" />
           <div className="pointer-events-none absolute -bottom-16 -start-16 h-48 w-48 rounded-full bg-secondary-container/40" />
 

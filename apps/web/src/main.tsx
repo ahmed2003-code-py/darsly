@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { domAnimation, LazyMotion } from 'framer-motion';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -13,9 +14,13 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      {/* Lean Framer Motion: only the DOM-animation feature set is bundled (strict
+          forbids the heavy `motion.*` API — we use `m.*` everywhere). */}
+      <LazyMotion features={domAnimation} strict>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </LazyMotion>
     </QueryClientProvider>
   </StrictMode>,
 );

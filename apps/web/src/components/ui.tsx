@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { ReactNode } from 'react';
 import { Reveal } from './motion';
 
@@ -135,14 +135,14 @@ export function Modal({
 }) {
   if (!open) return null;
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 p-4 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.18 }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <motion.div
+      <m.div
         className={`max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-outline-variant bg-surface-container-lowest p-6 shadow-modal ${wide ? 'max-w-3xl' : 'max-w-lg'}`}
         initial={{ opacity: 0, y: 14, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -159,8 +159,8 @@ export function Modal({
           </button>
         </div>
         {children}
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 

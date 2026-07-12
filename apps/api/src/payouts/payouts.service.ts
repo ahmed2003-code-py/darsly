@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PayoutMethod, PayoutStatus } from '@darsly/shared-types';
 import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -53,28 +54,43 @@ export class PayoutsService {
     if (amountCents < min) {
       throw new BadRequestException(`Minimum payout is ${min / 100} EGP`);
     }
-    const balance = await this.ledger.teacherBalance(tenantId);
-    if (amountCents > balance) {
-      throw new BadRequestException('Amount exceeds your withdrawable balance');
-    }
-    // Block a second pending request that would overdraw the balance.
-    const pending = await this.prisma.payoutRequest.aggregate({
-      where: { tenantId, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } },
-      _sum: { amountCents: true },
-    });
-    if ((pending._sum.amountCents ?? 0) + amountCents > balance) {
-      throw new BadRequestException('You already have pending payouts covering this balance');
-    }
 
-    return this.prisma.payoutRequest.create({
-      data: {
-        tenantId,
-        amountCents,
-        method: method.method,
-        destination: method.details as any,
-        status: 'REQUESTED',
-      },
-    });
+    // Serializable: the balance/pending read and the insert must be one unit, or
+    // two concurrent requests could each see the full balance and both pass,
+    // overdrawing the teacher's balance (double-withdrawal). Postgres aborts one
+    // of two conflicting serializable txns → surfaced as a retryable conflict.
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const balance = await this.ledger.teacherBalance(tenantId, tx);
+          if (amountCents > balance) {
+            throw new BadRequestException('Amount exceeds your withdrawable balance');
+          }
+          const pending = await tx.payoutRequest.aggregate({
+            where: { tenantId, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } },
+            _sum: { amountCents: true },
+          });
+          if ((pending._sum.amountCents ?? 0) + amountCents > balance) {
+            throw new BadRequestException('You already have pending payouts covering this balance');
+          }
+          return tx.payoutRequest.create({
+            data: {
+              tenantId,
+              amountCents,
+              method: method.method,
+              destination: method.details as any,
+              status: 'REQUESTED',
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
+        throw new ConflictException('A concurrent payout request was in progress — please try again');
+      }
+      throw e;
+    }
   }
 
   teacherList(tenantId: string) {
@@ -106,13 +122,33 @@ export class PayoutsService {
       throw new BadRequestException('Payout is already finalized');
     }
 
-    const updated = await this.prisma.payoutRequest.update({
-      where: { id },
-      data: { status, adminNote: note, processedBy: adminUserId, processedAt: new Date() },
-    });
+    let updated;
+    if (status === 'COMPLETED') {
+      // Re-validate the balance at completion (it may have dropped since the
+      // request) and book the debit atomically with the status change.
+      updated = await this.prisma.$transaction(
+        async (tx) => {
+          const balance = await this.ledger.teacherBalance(payout.tenantId, tx);
+          if (payout.amountCents > balance) {
+            throw new BadRequestException('Teacher balance no longer covers this payout');
+          }
+          const u = await tx.payoutRequest.update({
+            where: { id },
+            data: { status, adminNote: note, processedBy: adminUserId, processedAt: new Date() },
+          });
+          await this.ledger.recordPayout(id, tx);
+          return u;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } else {
+      updated = await this.prisma.payoutRequest.update({
+        where: { id },
+        data: { status, adminNote: note, processedBy: adminUserId, processedAt: new Date() },
+      });
+    }
 
     if (status === 'COMPLETED') {
-      await this.ledger.recordPayout(id);
       await this.notifications.create({
         userId: payout.teacher.userId,
         type: 'PAYOUT_STATUS',

@@ -5,19 +5,23 @@
 
 */
 -- CreateEnum
-CREATE TYPE "PaymentMethod" AS ENUM ('INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER');
+DO $$ BEGIN
+  CREATE TYPE "PaymentMethod" AS ENUM ('INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 -- AlterEnum
-ALTER TYPE "PaymentStatus" ADD VALUE 'REJECTED';
+ALTER TYPE "PaymentStatus" ADD VALUE IF NOT EXISTS 'REJECTED';
 
 -- AlterTable
 ALTER TABLE "Payment" ADD COLUMN     "method" "PaymentMethod",
 ADD COLUMN     "proofImageUrl" TEXT,
 ADD COLUMN     "reference" TEXT,
 ADD COLUMN     "rejectedReason" TEXT,
-ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL,
+-- Backfill existing rows via a default, then drop it to match the @updatedAt schema.
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN     "verifiedById" TEXT,
 ALTER COLUMN "gateway" SET DEFAULT 'manual';
+ALTER TABLE "Payment" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- CreateTable
 CREATE TABLE "PlatformPaymentAccount" (

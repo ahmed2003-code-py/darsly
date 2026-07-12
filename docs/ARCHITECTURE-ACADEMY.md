@@ -15,6 +15,28 @@ The single most important technical decision below is that today's implicit tena
 
 ---
 
+## ✅ Implementation Status (shipped to `main`)
+
+Delivered incrementally, each phase additive/non-breaking, runtime-verified, and deployed:
+
+| Phase | Delivered | Verified |
+|---|---|---|
+| **1** | `Academy` / `AcademyMembership` / `AcademyDomain` tables + enums; identity-preserving auto-backfill (SQL migration) | Academy.id ⇔ TeacherProfile.id; one home/user; idempotent |
+| **2** | `AcademyContext`, `AcademyMembershipGuard`, `PermissionGuard`, capability catalog; `/me/academies`, `/academies/:slug`, `.../me`, `.../console` | owner full access · student 403 · cross-academy 404 · admin bypass |
+| **3** | Academy-first catalog (`/academies/:slug/courses`, `/manage/courses`); JWT-tenant fallback resolver | non-owner **TEACHER staff** manages content (multi-teacher) |
+| **4** | `AcademyProvider` + branded storefront at **`/a/:slug`** (logo/cover/color/courses) | builds, branded, isolated |
+| **5** | Management API: `/academies/:slug/settings` (branding) + `/members` (staff invite/role/remove, owner-protected) | owner edits · student 403 · owner delete 403 |
+| **6** | **Additive platform service fee** — `Payment.feeCents/netCents`, `fee.util`, quotes, ledger split | 450 EGP @20% → student 540 · academy 450 · platform 90 · ledger balanced |
+| **7** | Academy **Console** (branding editor + team) + transparent fee breakdown in payment modal | builds; consumes verified APIs |
+
+**Remaining (optional hardening, not blockers):** Postgres RLS as the isolation floor;
+converting the legacy `/teacher/*` routes to membership guards (they work today via
+`tenantId == academyId`); ledger account-string rename (numbers already correct);
+subdomain/custom-domain DNS+TLS wiring (registry + resolver exist); owner transfer &
+invitations to unregistered users. See §§20, 22, 24.
+
+---
+
 ## 1) Business Vision
 
 Darsly stops being a Udemy-style marketplace where students shop across teachers.

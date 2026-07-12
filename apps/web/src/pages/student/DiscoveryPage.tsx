@@ -246,9 +246,18 @@ export default function DiscoveryPage() {
                         <p className="text-xs text-outline">{t('discovery.startingFrom')}</p>
                         <p className="font-heading text-2xl font-extrabold">{egp(tc.minPriceCents)}</p>
                       </div>
-                      <Link to={`/t/${tc.slug}`} className="btn-primary px-5 py-2.5 text-sm">
-                        {t('discovery.viewProfile')}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/a/${tc.slug}`}
+                          title="صفحة الأكاديمية"
+                          className="grid h-10 w-10 place-items-center rounded-xl border border-outline-variant text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">storefront</span>
+                        </Link>
+                        <Link to={`/t/${tc.slug}`} className="btn-primary px-5 py-2.5 text-sm">
+                          {t('discovery.viewProfile')}
+                        </Link>
+                      </div>
                     </div>
                   </article>
                   </StaggerItem>

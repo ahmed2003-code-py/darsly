@@ -12,6 +12,7 @@ import { useAuthStore } from './stores/auth';
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const AcademyStorefrontPage = lazy(() => import('./pages/academy/AcademyStorefrontPage'));
 const MessagesPage = lazy(() => import('./pages/MessagesPage'));
 const CertificateViewPage = lazy(() => import('./pages/CertificateViewPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
@@ -70,6 +71,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      {/* Public academy storefront (academy-branded, standalone shell) */}
+      <Route path="/a/:slug" element={<AcademyStorefrontPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 

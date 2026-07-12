@@ -1,9 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AcademyRole } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
+import { validateImageDataUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcademyContext } from './academy-context';
+import { AddMemberDto, UpdateAcademyDto, UpdateMemberDto } from './dto';
 import { Capability, permissionsFor, ROLE_PERMISSIONS } from './permissions';
+
+const LOGO_MAX_BYTES = 600 * 1024;
+const COVER_MAX_BYTES = 1_600 * 1024;
 
 @Injectable()
 export class AcademyService {
@@ -135,6 +140,113 @@ export class AcademyService {
       select: this.courseCardSelect(),
     });
     return rows.map((c) => this.mapCard(c));
+  }
+
+  // ── Academy settings (owner: academy.manage) ──────────────────────────────
+
+  private assertImage(url: string | undefined, maxBytes: number) {
+    if (url && url.startsWith('data:')) validateImageDataUrl(url, maxBytes);
+  }
+
+  /** Full academy settings for the console editor. */
+  async getManaged(academyId: string) {
+    return this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: {
+        id: true, slug: true, name: true, tagline: true, status: true,
+        logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true,
+        language: true, currency: true, requiresEnrollmentApproval: true,
+        maxConcurrentSessions: true, feeType: true, feeValue: true,
+      },
+    });
+  }
+
+  async updateSettings(academyId: string, dto: UpdateAcademyDto) {
+    this.assertImage(dto.logoUrl, LOGO_MAX_BYTES);
+    this.assertImage(dto.coverUrl, COVER_MAX_BYTES);
+    return this.prisma.academy.update({
+      where: { id: academyId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.tagline !== undefined ? { tagline: dto.tagline } : {}),
+        ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl || null } : {}),
+        ...(dto.coverUrl !== undefined ? { coverUrl: dto.coverUrl || null } : {}),
+        ...(dto.colorPrimary !== undefined ? { colorPrimary: dto.colorPrimary } : {}),
+        ...(dto.colorAccent !== undefined ? { colorAccent: dto.colorAccent } : {}),
+        ...(dto.language !== undefined ? { language: dto.language } : {}),
+        ...(dto.requiresEnrollmentApproval !== undefined ? { requiresEnrollmentApproval: dto.requiresEnrollmentApproval } : {}),
+        ...(dto.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: dto.maxConcurrentSessions } : {}),
+      },
+      select: { id: true, slug: true, name: true, colorPrimary: true },
+    });
+  }
+
+  // ── Members (owner: member.manage) ────────────────────────────────────────
+
+  private async ownerUserId(academyId: string): Promise<string> {
+    const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { ownerUserId: true } });
+    if (!a) throw new NotFoundException('Academy not found');
+    return a.ownerUserId;
+  }
+
+  async listMembers(academyId: string) {
+    const rows = await this.prisma.academyMembership.findMany({
+      where: { academyId },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      include: { user: { select: { fullName: true, email: true, avatarUrl: true } } },
+    });
+    return rows.map((m) => ({
+      id: m.id, userId: m.userId, role: m.role, status: m.status, isHome: m.isHome,
+      fullName: m.user.fullName, email: m.user.email, avatarUrl: m.user.avatarUrl,
+      joinedAt: m.joinedAt,
+    }));
+  }
+
+  /** Add an existing user as staff (TEACHER/ASSISTANT). Owner role is never granted here. */
+  async addMember(academyId: string, dto: AddMemberDto) {
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (!user) {
+      throw new BadRequestException({ message: 'No user with this email — they must register first', code: 'USER_NOT_FOUND' });
+    }
+    const existing = await this.prisma.academyMembership.findUnique({
+      where: { userId_academyId: { userId: user.id, academyId } },
+    });
+    if (existing && existing.role === 'OWNER') {
+      throw new BadRequestException('This user is the academy owner');
+    }
+    return this.prisma.academyMembership.upsert({
+      where: { userId_academyId: { userId: user.id, academyId } },
+      update: { role: dto.role as AcademyRole, status: 'ACTIVE' },
+      create: { userId: user.id, academyId, role: dto.role as AcademyRole, status: 'ACTIVE', joinedAt: new Date() },
+    });
+  }
+
+  private async assertManageableMember(academyId: string, membershipId: string) {
+    const m = await this.prisma.academyMembership.findFirst({ where: { id: membershipId, academyId } });
+    if (!m) throw new NotFoundException('Member not found');
+    if (m.role === 'OWNER' || m.userId === (await this.ownerUserId(academyId))) {
+      throw new ForbiddenException('The academy owner cannot be changed here');
+    }
+    return m;
+  }
+
+  async updateMember(academyId: string, membershipId: string, dto: UpdateMemberDto) {
+    await this.assertManageableMember(academyId, membershipId);
+    return this.prisma.academyMembership.update({
+      where: { id: membershipId },
+      data: {
+        ...(dto.role ? { role: dto.role as AcademyRole } : {}),
+        ...(dto.status ? { status: dto.status } : {}),
+      },
+      select: { id: true, role: true, status: true },
+    });
+  }
+
+  async removeMember(academyId: string, membershipId: string) {
+    await this.assertManageableMember(academyId, membershipId);
+    await this.prisma.academyMembership.update({ where: { id: membershipId }, data: { status: 'LEFT' } });
+    return { id: membershipId, removed: true };
   }
 
   /**

@@ -24,8 +24,9 @@ export class ReviewsService {
     if (dto.rating < 1 || dto.rating > 5) throw new BadRequestException('Rating must be 1–5');
     const student = await this.studentOf(userId);
 
-    const course = await this.prisma.course.findUnique({
-      where: { id: dto.courseId },
+    // findFirst so the soft-delete filter applies — can't review a deleted course.
+    const course = await this.prisma.course.findFirst({
+      where: { id: dto.courseId, deletedAt: null },
       select: { id: true, tenantId: true, title: true },
     });
     if (!course) throw new NotFoundException('Course not found');

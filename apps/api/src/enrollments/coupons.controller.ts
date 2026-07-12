@@ -79,22 +79,32 @@ export class CouponsController {
       if (!course) throw new NotFoundException('Course not found');
     }
     const code = dto.code.trim().toUpperCase();
-    const exists = await this.prisma.coupon.findUnique({
+    // findUnique deliberately bypasses the soft-delete filter, so it also finds
+    // a soft-deleted coupon. The (tenantId, code) unique constraint still
+    // reserves the code for the dead row, so we must resurrect it rather than
+    // create (which would hit P2002); a still-live coupon is a real conflict.
+    const existing = await this.prisma.coupon.findUnique({
       where: { tenantId_code: { tenantId: user.tenantId!, code } },
     });
-    if (exists) throw new BadRequestException('Coupon code already exists');
+    if (existing && !existing.deletedAt) {
+      throw new BadRequestException('Coupon code already exists');
+    }
+    const fields = {
+      percentOff: dto.percentOff ?? null,
+      amountOffCents: dto.amountOffCents ?? null,
+      courseId: dto.courseId ?? null,
+      maxUses: dto.maxUses ?? null,
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+    };
 
-    const coupon = await this.prisma.coupon.create({
-      data: {
-        tenantId: user.tenantId!,
-        code,
-        percentOff: dto.percentOff,
-        amountOffCents: dto.amountOffCents,
-        courseId: dto.courseId,
-        maxUses: dto.maxUses,
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
-      },
-    });
+    const coupon = existing
+      ? await this.prisma.coupon.update({
+          where: { id: existing.id },
+          data: { ...fields, isActive: true, usedCount: 0, deletedAt: null },
+        })
+      : await this.prisma.coupon.create({
+          data: { tenantId: user.tenantId!, code, ...fields },
+        });
     await this.audit.log({
       actorUserId: user.sub,
       action: 'coupon.create',

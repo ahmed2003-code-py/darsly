@@ -51,14 +51,19 @@ export class PlaybackService {
    * time-window (accessWindowDays), and views cap.
    */
   private async resolveAccess(userId: string, role: Role, lessonId: string) {
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: lessonId },
+    // findFirst (not findUnique) so the soft-delete middleware filters the
+    // lesson; the nested unit/course are checked explicitly (nested includes
+    // are not auto-filtered) — a "deleted" lesson/unit/course must not play.
+    const lesson = await this.prisma.lesson.findFirst({
+      where: { id: lessonId, deletedAt: null },
       include: {
         videoAsset: true,
         unit: { include: { course: true } },
       },
     });
-    if (!lesson) throw new NotFoundException('Lesson not found');
+    if (!lesson || lesson.unit.deletedAt || lesson.unit.course.deletedAt) {
+      throw new NotFoundException('Lesson not found');
+    }
     const course = lesson.unit.course;
 
     // Decide ACCESS first — never leak video state to an unauthorized viewer.
@@ -361,14 +366,26 @@ export class PlaybackService {
   private async assertOwnSession(user: JwtPayload, sessionId: string) {
     const session = await this.prisma.playbackSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new NotFoundException('Playback session not found');
+    // Super admin may touch any session; everyone else is scoped.
+    if (user.role === Role.SUPER_ADMIN) return session;
     // A student may only touch their own sessions.
     if (user.role === Role.STUDENT) {
       const student = await this.prisma.studentProfile.findUnique({ where: { userId: user.sub } });
       if (!student || student.id !== session.studentId) {
         throw new ForbiddenException('Not your playback session');
       }
+      return session;
     }
-    return session;
+    // A teacher may only touch sessions inside their own tenant (never
+    // cross-tenant). Teacher preview never creates a DB session, so this only
+    // guards against tampering with another tenant's student sessions.
+    if (user.role === Role.TEACHER) {
+      if (session.tenantId !== user.tenantId) {
+        throw new ForbiddenException('Not your playback session');
+      }
+      return session;
+    }
+    throw new ForbiddenException('Not your playback session');
   }
 
   private async flag(

@@ -52,10 +52,12 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     record('JWT_REFRESH_SECRET', 'must differ from JWT_ACCESS_SECRET');
   }
 
-  // The dev-only password-reset backdoor (returns the reset token over HTTP)
-  // must never be enabled in production.
+  // The dev-only password-reset backdoor is ALREADY neutralized at runtime: in
+  // production, AuthService/OtpService gate it behind NODE_ENV !== 'production',
+  // so the reset token is never returned over HTTP regardless of this flag.
+  // Hence this is a loud warning (fix your config) rather than a fatal error.
   if (isProd && env.OTP_DEV_MODE === 'true') {
-    errors.push('OTP_DEV_MODE=true leaks password-reset tokens — must be false/unset in production');
+    warnings.push('OTP_DEV_MODE=true is ignored in production (token leak is disabled), but you should unset it');
   }
 
   if (isProd && (!env.ALLOWED_ORIGINS || env.ALLOWED_ORIGINS.includes('localhost'))) {

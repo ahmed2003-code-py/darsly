@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -13,10 +14,38 @@ export class CertificatesService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  private async nextSerial(): Promise<string> {
+  private serialFor(offset: number): string {
     const year = new Date().getFullYear();
-    const n = await this.prisma.certificate.count();
-    return `DRS-CERT-${year}-${String(n + 1).padStart(6, '0')}`;
+    return `DRS-CERT-${year}-${String(offset).padStart(6, '0')}`;
+  }
+
+  /**
+   * Create the certificate, retrying on a serial collision — deriving the serial
+   * from count() can race two concurrent completions onto the same serial (the
+   * serial is @unique, so the loser would otherwise 500).
+   */
+  private async createWithSerial(studentId: string, courseId: string) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const n = await this.prisma.certificate.count();
+      try {
+        return await this.prisma.certificate.create({
+          data: { studentId, courseId, serial: this.serialFor(n + 1 + attempt) },
+          include: { course: { select: { title: true } } },
+        });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          // Either the (studentId,courseId) unique (already issued) or the serial.
+          const existing = await this.prisma.certificate.findUnique({
+            where: { studentId_courseId: { studentId, courseId } },
+            include: { course: { select: { title: true } } },
+          });
+          if (existing) return existing;
+          if (attempt < 5) continue; // serial collision — recompute and retry
+        }
+        throw e;
+      }
+    }
+    throw new Error(`certificate serial retries exhausted for ${studentId}/${courseId}`);
   }
 
   /** Completion = every lesson in the course has a completed LessonProgress. */
@@ -37,10 +66,7 @@ export class CertificatesService {
     });
     if (existing) return existing;
 
-    const cert = await this.prisma.certificate.create({
-      data: { studentId, courseId, serial: await this.nextSerial() },
-      include: { course: { select: { title: true } } },
-    });
+    const cert = await this.createWithSerial(studentId, courseId);
 
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },

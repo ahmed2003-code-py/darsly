@@ -16,6 +16,7 @@ export class UpsertQuizDto {
   @IsOptional() @IsInt() @Min(0) @Max(100) passingScore?: number;
   @IsOptional() @IsInt() @Min(0) timeLimitSec?: number | null;
   @IsOptional() @IsBoolean() shuffleQuestions?: boolean;
+  @IsOptional() @IsInt() @Min(1) @Max(50) maxAttempts?: number | null;
 }
 
 export class QuizOptionDto {

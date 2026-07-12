@@ -67,3 +67,9 @@ export function useMyAcademies() {
     queryFn: async () => (await api.get('/me/academies')).data,
   });
 }
+
+/** The academy the current user OWNS (for the console). */
+export function useOwnedAcademy() {
+  const q = useMyAcademies();
+  return { ...q, academy: q.data?.find((a) => a.role === 'OWNER') };
+}

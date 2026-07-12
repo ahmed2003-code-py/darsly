@@ -39,6 +39,7 @@ const QuizBuilderPage = lazy(() => import('./pages/teacher/QuizBuilderPage'));
 const TeacherCoursesPage = lazy(() => import('./pages/teacher/TeacherCoursesPage'));
 const TeacherCouponsPage = lazy(() => import('./pages/teacher/TeacherCouponsPage'));
 const TeacherDashboardPage = lazy(() => import('./pages/teacher/TeacherDashboardPage'));
+const AcademyConsolePage = lazy(() => import('./pages/academy/AcademyConsolePage'));
 const TeacherEnrollmentsPage = lazy(() => import('./pages/teacher/TeacherEnrollmentsPage'));
 const TeacherSecurityPage = lazy(() => import('./pages/teacher/TeacherSecurityPage'));
 const TeacherWalletPage = lazy(() => import('./pages/teacher/TeacherWalletPage'));
@@ -92,6 +93,7 @@ export default function App() {
 
       {/* Teacher studio */}
       <Route path="/teacher" element={<RequireAuth role={Role.TEACHER}><TeacherDashboardPage /></RequireAuth>} />
+      <Route path="/academy/settings" element={<RequireAuth role={Role.TEACHER}><AcademyConsolePage /></RequireAuth>} />
       <Route path="/teacher/courses" element={<RequireAuth role={Role.TEACHER}><TeacherCoursesPage /></RequireAuth>} />
       <Route path="/teacher/courses/:id" element={<RequireAuth role={Role.TEACHER}><CourseBuilderPage /></RequireAuth>} />
       <Route path="/teacher/lessons/:lessonId/quiz" element={<RequireAuth role={Role.TEACHER}><QuizBuilderPage /></RequireAuth>} />

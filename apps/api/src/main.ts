@@ -2,8 +2,12 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { validateConfig } from './common/config.validation';
 
 async function bootstrap() {
+  // Fail fast on forgeable secrets / dev backdoors before anything binds a port.
+  validateConfig();
+
   const app = await NestFactory.create(AppModule);
 
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')

@@ -38,11 +38,14 @@ function unb64url(s: string): Buffer {
 @Injectable()
 export class SignedUrlService {
   private get secret(): string {
-    return (
-      process.env.VIDEO_SIGNING_SECRET ??
-      process.env.JWT_ACCESS_SECRET ??
-      'dev-insecure-video-secret'
-    );
+    // Dedicated secret, falling back to the (boot-validated) JWT access secret.
+    // No hardcoded fallback: a missing secret must fail, not sign with a public
+    // string. validateConfig() guarantees at least one of these is strong in prod.
+    const s = process.env.VIDEO_SIGNING_SECRET ?? process.env.JWT_ACCESS_SECRET;
+    if (!s) {
+      throw new Error('VIDEO_SIGNING_SECRET (or JWT_ACCESS_SECRET) must be set to sign playback tokens');
+    }
+    return s;
   }
 
   private get ttl(): number {

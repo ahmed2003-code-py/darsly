@@ -22,10 +22,17 @@ import {
 const MAX_FAILED_LOGINS = 10;
 const LOCK_MINUTES = 15;
 const RESET_TTL_MINUTES = 30;
-const DEV_MODE = process.env.OTP_DEV_MODE === 'true';
+// The reset-token-over-HTTP backdoor is dev-only. Belt-and-suspenders with the
+// boot-time config check that refuses to start with OTP_DEV_MODE=true in prod.
+const DEV_MODE =
+  process.env.OTP_DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
 
 @Injectable()
 export class AuthService {
+  // A valid argon2 hash to verify against when an account is absent, so login
+  // latency doesn't reveal whether an email exists (constant-time login).
+  private readonly dummyHash = argon2.hash('constant-time-dummy-password');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokenService: TokenService,
@@ -102,8 +109,10 @@ export class AuthService {
       });
     }
 
-    const ok = !!user?.passwordHash && (await argon2.verify(user.passwordHash, dto.password));
-    if (!user || !ok) {
+    // Always run a verify (against a dummy hash when the user/hash is absent) so
+    // login latency is the same for existing and non-existing emails.
+    const ok = await argon2.verify(user?.passwordHash ?? (await this.dummyHash), dto.password);
+    if (!user || !user.passwordHash || !ok) {
       if (user?.isActive) await this.recordFailedLogin(user.id, user.failedLogins);
       throw new UnauthorizedException('Invalid email or password');
     }

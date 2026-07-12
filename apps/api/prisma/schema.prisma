@@ -756,6 +756,7 @@ model Quiz {
   passingScore Int     @default(50) // percent
   timeLimitSec Int?
   shuffleQuestions Boolean @default(false)
+  maxAttempts  Int?    // null = unlimited; caps how many times a student may submit
 
   questions QuizQuestion[]
   attempts  QuizAttempt[]

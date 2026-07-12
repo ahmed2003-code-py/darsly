@@ -23,11 +23,16 @@ export class LessonAccessService {
 
   /** Student can reach this lesson's assessment (active enrollment + drip). */
   async requireStudentAccess(userId: string, lessonId: string) {
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: lessonId },
+    // findFirst (not findUnique) so the soft-delete middleware filters the
+    // lesson; the nested unit/course are checked explicitly (nested includes
+    // are not auto-filtered) so a "deleted" lesson/unit/course is unreachable.
+    const lesson = await this.prisma.lesson.findFirst({
+      where: { id: lessonId, deletedAt: null },
       include: { unit: { include: { course: true } } },
     });
-    if (!lesson) throw new NotFoundException('Lesson not found');
+    if (!lesson || lesson.unit.deletedAt || lesson.unit.course.deletedAt) {
+      throw new NotFoundException('Lesson not found');
+    }
     const course = lesson.unit.course;
     const studentId = await this.studentIdOf(userId);
 

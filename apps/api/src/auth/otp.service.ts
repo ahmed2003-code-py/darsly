@@ -22,7 +22,9 @@ export class OtpService {
     return Number(process.env.OTP_MAX_ATTEMPTS ?? 5);
   }
   private get devMode() {
-    return (process.env.OTP_DEV_MODE ?? 'true') === 'true';
+    // Default OFF, and never on in production — the "0000" universal code and
+    // logged OTPs must never be reachable on a real deploy.
+    return process.env.OTP_DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
   }
 
   async request(phone: string): Promise<{ expiresInSeconds: number }> {

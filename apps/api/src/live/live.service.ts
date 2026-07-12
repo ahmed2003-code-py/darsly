@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -118,11 +119,39 @@ export class LiveService {
     });
     if (already) return { ok: true, alreadyBooked: true };
 
-    if (session.capacity != null && session._count.bookings >= session.capacity) {
-      throw new BadRequestException({ message: 'Session is full', code: 'SESSION_FULL' });
+    // Capacity must be enforced atomically — a plain count-then-insert lets two
+    // concurrent bookings both pass the check and overbook. Serializable makes
+    // Postgres abort one of two conflicting count+insert pairs; we retry, and by
+    // then the count reflects the other booking so capacity holds.
+    const capacity = session.capacity;
+    let inserted = false;
+    for (let attempt = 0; attempt < 4 && !inserted; attempt++) {
+      try {
+        await this.prisma.$transaction(
+          async (tx) => {
+            if (capacity != null) {
+              const count = await tx.liveBooking.count({ where: { sessionId } });
+              if (count >= capacity) {
+                throw new BadRequestException({ message: 'Session is full', code: 'SESSION_FULL' });
+              }
+            }
+            await tx.liveBooking.create({ data: { sessionId, studentId: student.id } });
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+        inserted = true;
+      } catch (e) {
+        // A unique-violation means this student already booked in a race → done.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          return { ok: true, alreadyBooked: true };
+        }
+        // Serialization conflict → retry; on the last attempt, surface as busy.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034' && attempt < 3) {
+          continue;
+        }
+        throw e;
+      }
     }
-
-    await this.prisma.liveBooking.create({ data: { sessionId, studentId: student.id } });
 
     // Notify the teacher.
     const teacher = await this.prisma.teacherProfile.findUnique({
@@ -200,9 +229,18 @@ export class LiveService {
     return s;
   }
 
+  /** ACTIVE and not lapsed — a monthly subscription whose window has passed
+   * stays status=ACTIVE but must no longer grant entitlements. */
+  private activeEnrollmentWhere() {
+    return {
+      status: 'ACTIVE' as const,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    };
+  }
+
   private async enrolledTenantIds(studentId: string): Promise<string[]> {
     const rows = await this.prisma.enrollment.findMany({
-      where: { studentId, status: 'ACTIVE' },
+      where: { studentId, ...this.activeEnrollmentWhere() },
       select: { tenantId: true },
       distinct: ['tenantId'],
     });
@@ -211,7 +249,7 @@ export class LiveService {
 
   private async assertEnrolledWith(studentId: string, tenantId: string) {
     const active = await this.prisma.enrollment.findFirst({
-      where: { studentId, tenantId, status: 'ACTIVE' },
+      where: { studentId, tenantId, ...this.activeEnrollmentWhere() },
       select: { id: true },
     });
     if (!active) throw new ForbiddenException('You must be enrolled with this teacher to book');

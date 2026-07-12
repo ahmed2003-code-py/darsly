@@ -33,11 +33,13 @@ export class QuizzesService {
         passingScore: dto.passingScore ?? 50,
         timeLimitSec: dto.timeLimitSec ?? null,
         shuffleQuestions: dto.shuffleQuestions ?? false,
+        maxAttempts: dto.maxAttempts ?? null,
       },
       update: {
         ...(dto.passingScore != null ? { passingScore: dto.passingScore } : {}),
         ...(dto.timeLimitSec !== undefined ? { timeLimitSec: dto.timeLimitSec } : {}),
         ...(dto.shuffleQuestions != null ? { shuffleQuestions: dto.shuffleQuestions } : {}),
+        ...(dto.maxAttempts !== undefined ? { maxAttempts: dto.maxAttempts } : {}),
       },
       include: { questions: { orderBy: { sortOrder: 'asc' } } },
     });
@@ -132,15 +134,21 @@ export class QuizzesService {
     });
     if (!quiz) throw new NotFoundException('This lesson has no quiz');
 
-    const lastAttempt = await this.prisma.quizAttempt.findFirst({
-      where: { quizId: quiz.id, studentId },
-      orderBy: { startedAt: 'desc' },
-    });
+    const [lastAttempt, attemptsUsed] = await Promise.all([
+      this.prisma.quizAttempt.findFirst({
+        where: { quizId: quiz.id, studentId },
+        orderBy: { startedAt: 'desc' },
+      }),
+      this.prisma.quizAttempt.count({ where: { quizId: quiz.id, studentId } }),
+    ]);
 
     return {
       id: quiz.id,
       passingScore: quiz.passingScore,
       timeLimitSec: quiz.timeLimitSec,
+      maxAttempts: quiz.maxAttempts,
+      attemptsUsed,
+      attemptsRemaining: quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptsUsed) : null,
       questions: quiz.questions.map((q) => ({
         id: q.id,
         type: q.type,
@@ -168,6 +176,19 @@ export class QuizzesService {
     });
     if (!quiz) throw new NotFoundException('This lesson has no quiz');
     if (!quiz.questions.length) throw new BadRequestException('Quiz has no questions yet');
+
+    // Anti-gaming: you can't keep resubmitting to harvest the answer key. Once
+    // you pass, or your attempts are used up, submission is closed.
+    const [priorCount, passedBefore] = await Promise.all([
+      this.prisma.quizAttempt.count({ where: { quizId: quiz.id, studentId } }),
+      this.prisma.quizAttempt.findFirst({ where: { quizId: quiz.id, studentId, passed: true }, select: { id: true } }),
+    ]);
+    if (passedBefore) {
+      throw new BadRequestException({ message: 'You have already passed this quiz', code: 'ALREADY_PASSED' });
+    }
+    if (quiz.maxAttempts != null && priorCount >= quiz.maxAttempts) {
+      throw new BadRequestException({ message: 'No attempts remaining for this quiz', code: 'NO_ATTEMPTS_LEFT' });
+    }
 
     let earned = 0;
     let total = 0;
@@ -200,25 +221,36 @@ export class QuizzesService {
 
     if (passed) await this.markLessonComplete(studentId, lessonId);
 
-    // Reveal correct answers + explanations only after submitting.
+    // Only reveal the answer key once the student has passed or exhausted their
+    // attempts — otherwise a failed attempt would hand out every correct answer
+    // to be replayed on the next submission.
+    const attemptNumber = priorCount + 1;
+    const attemptsExhausted = quiz.maxAttempts != null && attemptNumber >= quiz.maxAttempts;
+    const reveal = passed === true || attemptsExhausted;
+    const attemptsRemaining = quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptNumber) : null;
+
     return {
       attemptId: attempt.id,
       scorePct,
       passed,
       needsManualGrading: needsManual,
       passingScore: quiz.passingScore,
-      review: quiz.questions.map((q) => ({
-        id: q.id,
-        prompt: q.prompt,
-        type: q.type,
-        correctOptionId: q.correctOptionId,
-        explanation: q.explanation,
-        yourAnswer: dto.answers[q.id] ?? null,
-        correct:
-          q.type === 'SHORT_ANSWER'
-            ? null
-            : dto.answers[q.id] != null && dto.answers[q.id] === q.correctOptionId,
-      })),
+      revealed: reveal,
+      attemptsRemaining,
+      review: reveal
+        ? quiz.questions.map((q) => ({
+            id: q.id,
+            prompt: q.prompt,
+            type: q.type,
+            correctOptionId: q.correctOptionId,
+            explanation: q.explanation,
+            yourAnswer: dto.answers[q.id] ?? null,
+            correct:
+              q.type === 'SHORT_ANSWER'
+                ? null
+                : dto.answers[q.id] != null && dto.answers[q.id] === q.correctOptionId,
+          }))
+        : [],
     };
   }
 

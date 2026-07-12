@@ -115,6 +115,8 @@ export class ManualPaymentsService {
     auto: boolean,
   ) {
     if (payment.status !== 'PENDING') {
+      // Fast path; the authoritative guard is the conditional update below.
+      if (auto) return { ok: true, alreadyHandled: true };
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
     const course = await this.prisma.course.findUnique({
@@ -125,22 +127,37 @@ export class ManualPaymentsService {
       ? new Date(Date.now() + 30 * 86_400_000)
       : null;
 
-    await this.prisma.$transaction([
-      this.prisma.payment.update({
-        where: { id: payment.id },
+    // Atomic: the status flip, the enrollment activation, the ledger credit, and
+    // the coupon increment all commit together (no "PAID but never credited"
+    // window). The conditional updateMany guards against a double-verify race
+    // (teacher + auto-matcher, or two verifiers) — exactly one caller proceeds.
+    const handled = await this.prisma.$transaction(async (tx) => {
+      const flip = await tx.payment.updateMany({
+        where: { id: payment.id, status: 'PENDING' },
         data: { status: 'PAID', paidAt: new Date(), verifiedById: verifierId },
-      }),
-      ...(payment.enrollmentId
-        ? [this.prisma.enrollment.update({
-            where: { id: payment.enrollmentId },
-            data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt },
-          })]
-        : []),
-    ]);
-    await this.ledger.recordPayment(payment.id);
-    if (payment.couponId) {
-      await this.prisma.coupon.update({ where: { id: payment.couponId }, data: { usedCount: { increment: 1 } } });
+      });
+      if (flip.count === 0) return false; // another caller already handled it
+
+      if (payment.enrollmentId) {
+        await tx.enrollment.update({
+          where: { id: payment.enrollmentId },
+          data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt },
+        });
+      }
+      await this.ledger.recordPayment(payment.id, tx);
+      if (payment.couponId) {
+        await tx.coupon.update({ where: { id: payment.couponId }, data: { usedCount: { increment: 1 } } });
+      }
+      return true;
+    });
+
+    if (!handled) {
+      if (auto) return { ok: true, alreadyHandled: true };
+      throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
+
+    // Non-critical follow-ups (a failure here never un-credits the teacher).
+    await this.ledger.ensureInvoice(payment.id);
     await this.notifyStudent(payment.studentId, 'ENROLLMENT_APPROVED',
       auto ? 'تم تأكيد دفعتك تلقائياً ✅' : 'تم تأكيد دفعتك ✅',
       `تم تفعيل اشتراكك في «${course?.title ?? 'الدورة'}». مذاكرة سعيدة!`);
@@ -152,9 +169,23 @@ export class ManualPaymentsService {
     if (payment.status !== 'PENDING') {
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
-    await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: 'REJECTED', rejectedReason: reason?.trim() || null, verifiedById: user.sub },
+    // Move the payment AND its pending enrollment out of the review state together,
+    // so a rejected payment can never leave a PENDING_APPROVAL enrollment that a
+    // stray "approve" action could later activate for free.
+    await this.prisma.$transaction(async (tx) => {
+      const flip = await tx.payment.updateMany({
+        where: { id: paymentId, status: 'PENDING' },
+        data: { status: 'REJECTED', rejectedReason: reason?.trim() || null, verifiedById: user.sub },
+      });
+      if (flip.count === 0) {
+        throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
+      }
+      if (payment.enrollmentId) {
+        await tx.enrollment.updateMany({
+          where: { id: payment.enrollmentId, status: 'PENDING_APPROVAL' },
+          data: { status: 'REJECTED', revokedReason: reason?.trim() || 'payment rejected' },
+        });
+      }
     });
     await this.notifyStudent(payment.studentId, 'ANNOUNCEMENT', 'لم يتم تأكيد الدفعة ❌',
       reason?.trim() ? `السبب: ${reason.trim()}. يمكنك إعادة رفع إثبات صحيح.` : 'يرجى إعادة رفع إثبات دفع صحيح.');

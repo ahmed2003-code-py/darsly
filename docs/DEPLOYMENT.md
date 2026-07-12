@@ -48,8 +48,10 @@ npm run dev:web                          # http://localhost:5173
 | المتغيّر | الوصف |
 |---|---|
 | ⭐ `DATABASE_URL` | على Railway: `${{Postgres.DATABASE_URL}}` |
-| ⭐ `JWT_ACCESS_SECRET` | سر عشوائي طويل (≥32 حرف) |
-| ⭐ `JWT_REFRESH_SECRET` | سر عشوائي طويل مختلف |
+| ⭐ `NODE_ENV` | لازم `production` — يفعّل الفحص الصارم للأسرار عند الإقلاع (سكربت الإقلاع بيضبطه تلقائياً) |
+| ⭐ `JWT_ACCESS_SECRET` | سر عشوائي طويل (≥32 حرف). **الإقلاع بيفشل في الإنتاج لو ناقص/قيمة افتراضية/قصير** |
+| ⭐ `JWT_REFRESH_SECRET` | سر عشوائي طويل مختلف (لازم يختلف عن الـaccess) |
+| `VIDEO_SIGNING_SECRET` | سر توقيع روابط الفيديو. لو فاضي بيرجع لـ`JWT_ACCESS_SECRET` (مفيش fallback غير آمن بعد الآن) |
 | `JWT_ACCESS_TTL` | مثال `900s` (١٥ دقيقة) |
 | `JWT_REFRESH_TTL` | مثال `30d` |
 | ⭐ `ALLOWED_ORIGINS` | الدومين العام، مثال `https://darsly.up.railway.app` |
@@ -167,7 +169,8 @@ DATABASE_URL="<PUBLIC_URL>" npm run db:seed --workspace=@darsly/api
 
 - [ ] `JWT_ACCESS_SECRET` و`JWT_REFRESH_SECRET` أسرار قوية وفريدة.
 - [ ] `PAYMENT_LISTENER_KEY` سر قوي (مش الافتراضي).
-- [ ] `OTP_DEV_MODE` = `false` أو مشيل.
+- [ ] `NODE_ENV=production` (الفحص الصارم للأسرار بيعتمد عليه — سكربت الإقلاع بيضبطه).
+- [ ] `OTP_DEV_MODE` = `false` أو مشيل (لو `true` في الإنتاج **الإقلاع بيفشل عمداً** — كان بيسرّب توكن إعادة تعيين كلمة السر).
 - [ ] `ALLOWED_ORIGINS` = الدومين العام الصحيح.
 - [ ] Volume دائم على `/data` و`STORAGE_LOCAL_PATH=/data/storage`.
 - [ ] مشكلة الـP3009 اتحلّت (قسم 4) والـdeploy أخضر.

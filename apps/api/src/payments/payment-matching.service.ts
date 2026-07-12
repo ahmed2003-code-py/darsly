@@ -15,13 +15,20 @@ export interface PaymentEventDto {
 const WINDOW_BEFORE_MS = 72 * 3600_000;
 const WINDOW_AFTER_MS = 30 * 60_000;
 
+// How close two events' timestamps must be to be treated as the same transfer
+// re-delivered (for reference-less dedup).
+const DEDUP_TIME_MS = 5 * 60_000;
+
 function normRef(r?: string | null): string {
   return (r ?? '').replace(/[^0-9a-z]/gi, '').toLowerCase();
 }
-function refSimilar(a: string, b: string): boolean {
-  if (!a || !b) return false;
-  if (a === b) return true;
-  return a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a));
+/**
+ * Exact normalized-reference equality. Auto-verification must never rely on
+ * fuzzy/substring matching — "1234" and "12345" are DIFFERENT transfers, and
+ * treating them as the same either drops a real payment or credits the wrong one.
+ */
+function refExact(a: string, b: string): boolean {
+  return !!a && !!b && a === b;
 }
 
 @Injectable()
@@ -40,15 +47,29 @@ export class PaymentMatchingService {
     const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
     const ref = normRef(dto.reference);
 
-    // De-dupe: the same reference already produced a matched event.
-    if (ref) {
-      const recentMatched = await this.prisma.paymentEvent.findMany({
-        where: { status: 'MATCHED', reference: { not: null } },
-        select: { reference: true }, orderBy: { createdAt: 'desc' }, take: 200,
-      });
-      if (recentMatched.some((e) => refSimilar(normRef(e.reference), ref))) {
-        return this.record(dto, occurredAt, 'DUPLICATE', null, 'reference already processed');
+    // De-dupe against transfers we already auto-credited. Works even without a
+    // reference (a re-delivered notification): same provider+amount plus EITHER
+    // an identical reference, an identical raw message, or the same device at
+    // (nearly) the same instant is the same transfer replayed.
+    const recentMatched = await this.prisma.paymentEvent.findMany({
+      where: { status: 'MATCHED', provider: dto.provider as any, amountCents: dto.amountCents },
+      select: { reference: true, rawMessage: true, deviceId: true, occurredAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    const isDuplicate = recentMatched.some((e) => {
+      if (ref && refExact(normRef(e.reference), ref)) return true;
+      if (dto.rawMessage && e.rawMessage && e.rawMessage === dto.rawMessage) return true;
+      if (
+        dto.deviceId && e.deviceId && e.deviceId === dto.deviceId &&
+        Math.abs(e.occurredAt.getTime() - occurredAt.getTime()) < DEDUP_TIME_MS
+      ) {
+        return true;
       }
+      return false;
+    });
+    if (isDuplicate) {
+      return this.record(dto, occurredAt, 'DUPLICATE', null, 'transfer already processed');
     }
 
     const candidates = await this.prisma.payment.findMany({
@@ -71,7 +92,7 @@ export class PaymentMatchingService {
       status = 'UNMATCHED';
       note = 'no pending payment with this amount/method in the time window';
     } else if (ref) {
-      const refMatches = candidates.filter((c) => refSimilar(normRef(c.reference), ref));
+      const refMatches = candidates.filter((c) => refExact(normRef(c.reference), ref));
       if (refMatches.length === 1) { chosen = refMatches[0]; status = 'MATCHED'; }
       else if (refMatches.length > 1) { status = 'AMBIGUOUS'; note = 'multiple payments share this reference'; }
       else if (candidates.length === 1) { chosen = candidates[0]; status = 'MATCHED'; note = 'matched by amount+time (reference differed)'; }

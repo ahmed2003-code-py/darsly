@@ -8,12 +8,22 @@ export function imageToDataUrl(
   opts: { maxW: number; maxH: number; quality?: number; square?: boolean } = { maxW: 800, maxH: 800 },
 ): Promise<string> {
   const { maxW, maxH, quality = 0.82, square = false } = opts;
+  // Reject very large source files before decoding — decoding a 100 MP phone
+  // photo into an <img> spikes memory and can freeze/crash low-end mobiles.
+  const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
+  const MAX_SOURCE_PIXELS = 40_000_000; // ~40 MP
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) return reject(new Error('not an image'));
+    if (file.size > MAX_SOURCE_BYTES) {
+      return reject(new Error('الصورة كبيرة جداً (الحد الأقصى 25 ميجابايت)'));
+    }
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
+      if (img.width * img.height > MAX_SOURCE_PIXELS) {
+        return reject(new Error('أبعاد الصورة كبيرة جداً — استخدم صورة أصغر'));
+      }
       let sx = 0, sy = 0, sw = img.width, sh = img.height;
       let dw = img.width, dh = img.height;
 

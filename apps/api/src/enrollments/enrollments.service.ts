@@ -254,28 +254,41 @@ export class EnrollmentsService {
     if (enrollment.status !== 'PENDING_APPROVAL') {
       throw new BadRequestException('Only pending enrollments can be approved');
     }
-    const updated = await this.prisma.enrollment.update({
-      where: { id },
-      data: {
-        status: 'ACTIVE',
-        approvedAt: new Date(),
-        expiresAt: this.expiryFor(enrollment.course),
-      },
-    });
-    for (const payment of enrollment.payments) {
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'PAID', paidAt: new Date() },
+    // A paid course can only be activated by confirming a real payment — never
+    // by a bare "approve" click. Payments are normally verified from the
+    // payments queue; this endpoint is a safety-belted equivalent.
+    if (enrollment.course.priceCents > 0 && enrollment.payments.length === 0) {
+      throw new BadRequestException({
+        message: 'No pending payment to confirm — verify the payment from the payments queue',
+        code: 'NO_PENDING_PAYMENT',
       });
-      // Approval confirms the payment → book the ledger + invoice.
-      await this.ledger.recordPayment(payment.id);
-      if (payment.couponId) {
-        await this.prisma.coupon.update({
-          where: { id: payment.couponId },
-          data: { usedCount: { increment: 1 } },
-        });
-      }
     }
+    const expiresAt = this.expiryFor(enrollment.course);
+
+    // Atomic: activation + payment confirmation + ledger credit + coupon use.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const flip = await tx.enrollment.updateMany({
+        where: { id, status: 'PENDING_APPROVAL' },
+        data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt },
+      });
+      if (flip.count === 0) return null; // another caller handled it
+
+      for (const payment of enrollment.payments) {
+        const pf = await tx.payment.updateMany({
+          where: { id: payment.id, status: 'PENDING' },
+          data: { status: 'PAID', paidAt: new Date() },
+        });
+        if (pf.count === 0) continue;
+        await this.ledger.recordPayment(payment.id, tx);
+        if (payment.couponId) {
+          await tx.coupon.update({ where: { id: payment.couponId }, data: { usedCount: { increment: 1 } } });
+        }
+      }
+      return tx.enrollment.findUnique({ where: { id } });
+    });
+    if (!updated) throw new BadRequestException('Only pending enrollments can be approved');
+
+    for (const payment of enrollment.payments) await this.ledger.ensureInvoice(payment.id);
     await this.activateBundleChildren(enrollment.course, updated);
     await this.notifications.create({
       userId: enrollment.student.user.id,

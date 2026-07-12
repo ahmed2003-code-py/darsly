@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
 import { Badge, EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
@@ -33,7 +34,7 @@ export default function TeacherEnrollmentsPage() {
   });
 
   const act = useMutation({
-    mutationFn: async ({ id, action }: { id: string; action: 'approve' | 'reject' | 'revoke' }) =>
+    mutationFn: async ({ id, action }: { id: string; action: 'revoke' }) =>
       (await api.patch(`/teacher/enrollments/${id}/${action}`, {})).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-enrollments'] }),
   });
@@ -93,22 +94,14 @@ export default function TeacherEnrollmentsPage() {
                   <td className="px-6 py-4">
                     <div className="flex gap-2">
                       {e.status === 'PENDING_APPROVAL' && (
-                        <>
-                          <button
-                            className="btn-secondary px-3 py-1.5 text-xs"
-                            disabled={act.isPending}
-                            onClick={() => act.mutate({ id: e.id, action: 'approve' })}
-                          >
-                            {t('teacher.students.approve')}
-                          </button>
-                          <button
-                            className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
-                            disabled={act.isPending}
-                            onClick={() => act.mutate({ id: e.id, action: 'reject' })}
-                          >
-                            {t('teacher.students.reject')}
-                          </button>
-                        </>
+                        // Activation happens by verifying the payment, never by a
+                        // bare approve — send the teacher to the payments queue.
+                        <Link
+                          to="/teacher/payments"
+                          className="btn-secondary px-3 py-1.5 text-xs"
+                        >
+                          {t('teacher.students.reviewPayment', 'مراجعة الدفعة')}
+                        </Link>
                       )}
                       {e.status === 'ACTIVE' && (
                         <button

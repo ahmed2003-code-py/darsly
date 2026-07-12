@@ -1,6 +1,7 @@
 import { lazy, ReactNode, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { Spinner } from './components/ui';
 import LoginPage from './pages/LoginPage';
@@ -64,6 +65,7 @@ function HomeRedirect() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<div className="grid min-h-screen place-items-center"><Spinner /></div>}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -109,5 +111,6 @@ export default function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }

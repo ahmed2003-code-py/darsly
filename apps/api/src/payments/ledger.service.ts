@@ -1,5 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+/**
+ * Accepts either the base client or an interactive-transaction client, so
+ * callers can book the ledger atomically with the payment/enrollment status
+ * change (no "PAID but never credited" window).
+ */
+type Db = PrismaService | Prisma.TransactionClient;
 
 /**
  * Double-entry ledger. Every financial fact is a balanced LedgerTransaction:
@@ -25,17 +33,20 @@ export class LedgerService {
 
   /**
    * Record a paid enrollment: cash in, split into platform commission and the
-   * teacher's balance. Idempotent per payment (skips if a transaction exists).
+   * teacher's balance. Idempotent per payment (the LedgerTransaction.paymentId
+   * unique constraint is the ultimate guard against double-credit). Pass the
+   * transaction client to book it atomically with the status flip.
+   * Invoice generation is deliberately NOT done here — see ensureInvoice.
    */
-  async recordPayment(paymentId: string): Promise<void> {
-    const payment = await this.prisma.payment.findUnique({
+  async recordPayment(paymentId: string, db: Db = this.prisma): Promise<void> {
+    const payment = await db.payment.findUnique({
       where: { id: paymentId },
       include: { ledgerTransaction: true },
     });
     if (!payment || payment.status !== 'PAID' || payment.amountCents <= 0) return;
     if (payment.ledgerTransaction) return; // already recorded
 
-    const teacher = await this.prisma.teacherProfile.findUnique({
+    const teacher = await db.teacherProfile.findUnique({
       where: { id: payment.tenantId },
       select: { commissionPercent: true },
     });
@@ -43,7 +54,7 @@ export class LedgerService {
     const commission = Math.round((payment.amountCents * commissionPct) / 100);
     const teacherShare = payment.amountCents - commission;
 
-    await this.prisma.ledgerTransaction.create({
+    await db.ledgerTransaction.create({
       data: {
         description: `enrollment payment ${paymentId}`,
         paymentId,
@@ -56,18 +67,17 @@ export class LedgerService {
         },
       },
     });
-    await this.ensureInvoice(paymentId);
   }
 
   /** Money leaves the teacher's balance back to platform cash on payout completion. */
-  async recordPayout(payoutId: string): Promise<void> {
-    const payout = await this.prisma.payoutRequest.findUnique({
+  async recordPayout(payoutId: string, db: Db = this.prisma): Promise<void> {
+    const payout = await db.payoutRequest.findUnique({
       where: { id: payoutId },
       include: { ledgerTransaction: true },
     });
     if (!payout || payout.ledgerTransaction) return;
 
-    await this.prisma.ledgerTransaction.create({
+    await db.ledgerTransaction.create({
       data: {
         description: `payout ${payoutId}`,
         payoutId,
@@ -82,11 +92,11 @@ export class LedgerService {
   }
 
   /** Withdrawable balance for a teacher (credits − debits on their balance account). */
-  async teacherBalance(tenantId: string): Promise<number> {
+  async teacherBalance(tenantId: string, db: Db = this.prisma): Promise<number> {
     const account = this.teacherAccount(tenantId);
     const [credits, debits] = await Promise.all([
-      this.prisma.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
-      this.prisma.ledgerEntry.aggregate({ where: { account, direction: 'DEBIT' }, _sum: { amountCents: true } }),
+      db.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
+      db.ledgerEntry.aggregate({ where: { account, direction: 'DEBIT' }, _sum: { amountCents: true } }),
     ]);
     return (credits._sum.amountCents ?? 0) - (debits._sum.amountCents ?? 0);
   }
@@ -115,13 +125,30 @@ export class LedgerService {
     };
   }
 
-  /** DRS-INV-YYYY-NNNNNN invoice on first paid record. */
-  private async ensureInvoice(paymentId: string) {
-    const existing = await this.prisma.invoice.findUnique({ where: { paymentId } });
-    if (existing) return existing;
-    const year = new Date().getFullYear();
-    const count = await this.prisma.invoice.count();
-    const serial = `DRS-INV-${year}-${String(count + 1).padStart(6, '0')}`;
-    return this.prisma.invoice.create({ data: { paymentId, serial } });
+  /**
+   * DRS-INV-YYYY-NNNNNN invoice on first paid record. Idempotent per payment.
+   * Deriving the serial from count() can race two concurrent payments onto the
+   * same serial, so we retry on a unique-constraint conflict (on either the
+   * paymentId or the serial) — safe to run outside the money-critical
+   * transaction because a failure here never un-credits a teacher.
+   */
+  async ensureInvoice(paymentId: string) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const existing = await this.prisma.invoice.findUnique({ where: { paymentId } });
+      if (existing) return existing;
+      const year = new Date().getFullYear();
+      const count = await this.prisma.invoice.count();
+      const serial = `DRS-INV-${year}-${String(count + 1 + attempt).padStart(6, '0')}`;
+      try {
+        return await this.prisma.invoice.create({ data: { paymentId, serial } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt < 5) {
+          continue; // serial or paymentId collided — recompute and retry
+        }
+        this.logger.error(`ensureInvoice failed for ${paymentId}: ${String(e)}`);
+        throw e;
+      }
+    }
+    throw new Error(`ensureInvoice: exhausted serial retries for ${paymentId}`);
   }
 }

@@ -50,13 +50,25 @@ export class NotesController {
     @Param('lessonId') lessonId: string,
     @Body() dto: CreateNoteDto,
   ) {
+    const studentId = await this.studentId(user.sub);
+    // Only allow notes on a lesson the student can actually access (avoids
+    // writing junk note rows against arbitrary/unenrolled lessons).
+    const lesson = await this.prisma.lesson.findFirst({
+      where: { id: lessonId, deletedAt: null },
+      include: { unit: { include: { course: { select: { id: true, deletedAt: true } } } } },
+    });
+    if (!lesson || lesson.unit.deletedAt || lesson.unit.course.deletedAt) {
+      throw new NotFoundException('Lesson not found');
+    }
+    if (!lesson.isFreePreview) {
+      const enr = await this.prisma.enrollment.findUnique({
+        where: { studentId_courseId: { studentId, courseId: lesson.unit.course.id } },
+      });
+      const active = enr?.status === 'ACTIVE' && (!enr.expiresAt || enr.expiresAt > new Date());
+      if (!active) throw new ForbiddenException('Not enrolled in this course');
+    }
     return this.prisma.videoNote.create({
-      data: {
-        lessonId,
-        studentId: await this.studentId(user.sub),
-        timestampSec: dto.timestampSec,
-        body: dto.body,
-      },
+      data: { lessonId, studentId, timestampSec: dto.timestampSec, body: dto.body },
     });
   }
 

@@ -30,6 +30,8 @@ const TeacherProfilePage = lazy(() => import('./pages/student/TeacherProfilePage
 const AssignmentBuilderPage = lazy(() => import('./pages/teacher/AssignmentBuilderPage'));
 const CourseBuilderPage = lazy(() => import('./pages/teacher/CourseBuilderPage'));
 const TeacherLivePage = lazy(() => import('./pages/teacher/TeacherLivePage'));
+const TeacherPaymentsPage = lazy(() => import('./pages/teacher/TeacherPaymentsPage'));
+const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'));
 const TeacherAnalyticsPage = lazy(() => import('./pages/teacher/TeacherAnalyticsPage'));
 const QuizBuilderPage = lazy(() => import('./pages/teacher/QuizBuilderPage'));
 const TeacherCoursesPage = lazy(() => import('./pages/teacher/TeacherCoursesPage'));
@@ -90,6 +92,7 @@ export default function App() {
       <Route path="/teacher/lessons/:lessonId/quiz" element={<RequireAuth role={Role.TEACHER}><QuizBuilderPage /></RequireAuth>} />
       <Route path="/teacher/lessons/:lessonId/assignment" element={<RequireAuth role={Role.TEACHER}><AssignmentBuilderPage /></RequireAuth>} />
       <Route path="/teacher/students" element={<RequireAuth role={Role.TEACHER}><TeacherEnrollmentsPage /></RequireAuth>} />
+      <Route path="/teacher/payments" element={<RequireAuth role={Role.TEACHER}><TeacherPaymentsPage /></RequireAuth>} />
       <Route path="/teacher/live" element={<RequireAuth role={Role.TEACHER}><TeacherLivePage /></RequireAuth>} />
       <Route path="/teacher/analytics" element={<RequireAuth role={Role.TEACHER}><TeacherAnalyticsPage /></RequireAuth>} />
       <Route path="/teacher/wallet" element={<RequireAuth role={Role.TEACHER}><TeacherWalletPage /></RequireAuth>} />
@@ -100,6 +103,7 @@ export default function App() {
       <Route path="/admin" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminOverviewPage /></RequireAuth>} />
       <Route path="/admin/teachers" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminTeachersPage /></RequireAuth>} />
       <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />
+      <Route path="/admin/payments" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPaymentsPage /></RequireAuth>} />
       <Route path="/admin/security" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminSecurityPage /></RequireAuth>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

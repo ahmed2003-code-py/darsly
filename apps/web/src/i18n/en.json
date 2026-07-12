@@ -47,7 +47,9 @@
     "certificates": "Certificates",
     "live": "Live sessions",
     "analytics": "Analytics",
-    "saved": "Saved"
+    "saved": "Saved",
+    "verifyPayments": "Verify payments",
+    "adminPayments": "Payments"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -171,7 +173,9 @@
     "requestSent": "Enrollment request sent successfully",
     "enrolledNow": "Your enrollment is now active!",
     "students": "{{count}} students",
-    "notFound": "Course not found"
+    "notFound": "Course not found",
+    "payAndEnroll": "Pay & enrol",
+    "payHint": "Pay and upload proof; the teacher verifies it and activates your access."
   },
   "player": {
     "protected": "Protected content",
@@ -688,5 +692,56 @@
     "fullName": "Full name",
     "email": "Email",
     "phone": "Phone"
+  },
+  "pay": {
+    "title": "Complete payment",
+    "transferTo": "Transfer to",
+    "amountDue": "Amount due",
+    "afterTransfer": "After transferring",
+    "method": "Payment method",
+    "pickMethod": "Pick a method",
+    "reference": "Transaction / sender no.",
+    "referenceHint": "Optional — helps matching",
+    "proof": "Proof (screenshot)",
+    "uploadProof": "Upload the receipt",
+    "proofPicked": "Image selected",
+    "submit": "Submit for review",
+    "submittedTitle": "Payment submitted ✅",
+    "submittedBody": "Your payment is under review; access activates once confirmed.",
+    "noAccounts": "No receiving accounts available right now."
+  },
+  "tpay": {
+    "title": "Verify payments",
+    "subtitle": "Review proofs and confirm to activate students’ access.",
+    "empty": "No payments",
+    "emptyHint": "Your students’ payments awaiting review appear here.",
+    "verify": "Confirm",
+    "reject": "Reject",
+    "proof": "Payment proof",
+    "rejectTitle": "Rejection reason",
+    "reasonPlaceholder": "e.g. receipt unclear or amount mismatched",
+    "confirmReject": "Confirm rejection",
+    "status": {
+      "PENDING": "Pending",
+      "PAID": "Confirmed",
+      "REJECTED": "Rejected"
+    }
+  },
+  "apay": {
+    "title": "Payments & receiving accounts",
+    "subtitle": "Review any payment and manage platform receiving accounts.",
+    "pending": "Payments awaiting review",
+    "noPending": "No pending payments.",
+    "accounts": "Receiving accounts",
+    "add": "Add",
+    "addTitle": "Add receiving account",
+    "label": "Display name",
+    "handle": "Number/handle",
+    "instructions": "Instructions (optional)",
+    "active": "Active",
+    "inactive": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "delConfirm": "Delete this account?"
   }
 }

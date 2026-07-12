@@ -9,6 +9,7 @@ import { useAuthStore } from '../../stores/auth';
 import { Badge, EmptyState, ErrorNote, Skeleton } from '../../components/ui';
 import ReviewModal from '../../components/ReviewModal';
 import SaveHeart from '../../components/SaveHeart';
+import PaymentModal from '../../components/PaymentModal';
 
 const LESSON_ICON: Record<string, string> = {
   VIDEO: 'play_circle',
@@ -27,6 +28,7 @@ export default function CourseDetailPage() {
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
   const [flash, setFlash] = useState('');
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
 
   const { data: course, isLoading, error } = useQuery({
     queryKey: ['course', id],
@@ -143,7 +145,11 @@ export default function CourseDetailPage() {
             )}
           </div>
           {course.id && (
-            <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} courseId={course.id} />
+            <>
+              <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} courseId={course.id} />
+              <PaymentModal open={payOpen} onClose={() => setPayOpen(false)} courseId={course.id}
+                amountCents={priced?.totalCents ?? course.priceCents} couponCode={priced?.coupon?.code} />
+            </>
           )}
 
           {/* Curriculum */}
@@ -280,16 +286,20 @@ export default function CourseDetailPage() {
                       </button>
                     </div>
                   )}
-                  <button className="btn-primary w-full" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
-                    {['EXPIRED'].includes(enrollmentStatus ?? '') || (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess)
-                      ? t('course.renew')
-                      : t('course.enroll')}
+                  <button
+                    className="btn-primary w-full"
+                    disabled={enroll.isPending}
+                    onClick={() => (course.priceCents > 0 ? setPayOpen(true) : enroll.mutate())}
+                  >
+                    {course.priceCents > 0
+                      ? t('course.payAndEnroll')
+                      : ['EXPIRED'].includes(enrollmentStatus ?? '') || (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess)
+                        ? t('course.renew')
+                        : t('course.enroll')}
                   </button>
                   <p className="mt-3 flex items-center justify-center gap-1 text-center text-xs text-outline">
-                    <span className="material-symbols-outlined text-sm">
-                      {course.requiresEnrollmentApproval ? 'approval' : 'bolt'}
-                    </span>
-                    {course.requiresEnrollmentApproval ? t('course.requiresApprovalHint') : t('course.autoApproveHint')}
+                    <span className="material-symbols-outlined text-sm">{course.priceCents > 0 ? 'verified_user' : 'bolt'}</span>
+                    {course.priceCents > 0 ? t('course.payHint') : t('course.autoApproveHint')}
                   </p>
                 </>
               )}

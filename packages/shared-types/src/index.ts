@@ -99,8 +99,16 @@ export enum LedgerEntryType {
 export enum PaymentStatus {
   PENDING = 'PENDING',
   PAID = 'PAID',
+  REJECTED = 'REJECTED',
   FAILED = 'FAILED',
   REFUNDED = 'REFUNDED',
+}
+
+export enum PaymentMethod {
+  INSTAPAY = 'INSTAPAY',
+  VODAFONE_CASH = 'VODAFONE_CASH',
+  BANK_TRANSFER = 'BANK_TRANSFER',
+  OTHER = 'OTHER',
 }
 
 export enum PayoutMethod {

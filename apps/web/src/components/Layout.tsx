@@ -27,6 +27,7 @@ const TEACHER_NAV: NavItem[] = [
   { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
+  { to: '/teacher/payments', icon: 'receipt_long', labelKey: 'nav.verifyPayments' },
   { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
   { to: '/teacher/live', icon: 'sensors', labelKey: 'nav.live' },
   { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
@@ -38,6 +39,7 @@ const TEACHER_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
   { to: '/admin/teachers', icon: 'verified_user', labelKey: 'nav.adminTeachers' },
+  { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },
   { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },
   { to: '/admin/security', icon: 'gpp_maybe', labelKey: 'nav.adminSecurity' },
 ];

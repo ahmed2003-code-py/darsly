@@ -679,6 +679,43 @@ async function main() {
     await prisma.liveBooking.create({ data: { sessionId: live.id, studentId: students[0].id } });
   }
 
+  // ── Manual payment: receiving accounts + a pending proof to verify ─────
+  const payAccounts = [
+    { method: 'INSTAPAY' as const, label: 'إنستاباي درسلي', handle: 'darsly@instapay', instructions: 'حوّل المبلغ ثم ارفع صورة الإيصال.', sortOrder: 0 },
+    { method: 'VODAFONE_CASH' as const, label: 'فودافون كاش', handle: '01000000000', instructions: 'حوّل على الرقم ثم ارفع سكرين شوت للتحويل.', sortOrder: 1 },
+    { method: 'BANK_TRANSFER' as const, label: 'تحويل بنكي', handle: 'EG12 0002 0001 0000 0012 3456 789', instructions: 'حوّل على الآيبان وارفع إيصال البنك.', sortOrder: 2 },
+  ];
+  for (const a of payAccounts) {
+    if (!(await prisma.platformPaymentAccount.findFirst({ where: { handle: a.handle } }))) {
+      await prisma.platformPaymentAccount.create({ data: a });
+    }
+  }
+
+  // A demo pending payment (عمر) with a receipt screenshot → Khaled's queue.
+  const receiptSvg = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='420'>
+    <rect width='320' height='420' fill='#eef0ff'/>
+    <rect x='24' y='24' width='272' height='372' rx='16' fill='white' stroke='#d8d2ff'/>
+    <text x='160' y='84' font-size='22' font-weight='bold' text-anchor='middle' fill='#422EC7' font-family='Arial'>InstaPay</text>
+    <circle cx='160' cy='140' r='26' fill='#2DD4BF'/><text x='160' y='149' font-size='28' text-anchor='middle' fill='white'>✓</text>
+    <text x='160' y='210' font-size='15' text-anchor='middle' fill='#333' font-family='Arial'>تم التحويل بنجاح</text>
+    <text x='160' y='256' font-size='30' font-weight='bold' text-anchor='middle' fill='#111' font-family='Arial'>450.00 EGP</text>
+    <text x='160' y='306' font-size='12' text-anchor='middle' fill='#888' font-family='Arial'>TXN-DEMO-8842</text>
+    <text x='160' y='334' font-size='12' text-anchor='middle' fill='#888' font-family='Arial'>to darsly@instapay</text>
+  </svg>`;
+  const demoProof = 'data:image/svg+xml,' + encodeURIComponent(receiptSvg);
+  if (!(await prisma.payment.findFirst({ where: { studentId: students[2].id, courseId: algebraCourse.id, status: 'PENDING' } }))) {
+    const enr = await prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId: students[2].id, courseId: algebraCourse.id } },
+    });
+    await prisma.payment.create({
+      data: {
+        studentId: students[2].id, courseId: algebraCourse.id, enrollmentId: enr?.id, tenantId: khaled.id,
+        amountCents: 45000, gateway: 'manual', method: 'INSTAPAY', proofImageUrl: demoProof,
+        reference: 'TXN-DEMO-8842', status: 'PENDING',
+      },
+    });
+  }
+
   // ── Platform settings ─────────────────────────────────────────────────
   await prisma.platformSetting.upsert({
     where: { key: 'commission.defaultPercent' },

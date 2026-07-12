@@ -539,10 +539,19 @@ model SecurityEvent {
 // ─────────────────────────── Payments & Ledger ─────────────────────────────
 
 enum PaymentStatus {
-  PENDING
-  PAID
+  PENDING   // submitted with proof, awaiting manual verification
+  PAID      // verified
+  REJECTED  // proof rejected by teacher/admin
   FAILED
   REFUNDED
+}
+
+// How the student transferred the money (manual, proof-based flow).
+enum PaymentMethod {
+  INSTAPAY
+  VODAFONE_CASH
+  BANK_TRANSFER
+  OTHER
 }
 
 model Payment {
@@ -558,17 +567,41 @@ model Payment {
   amountCents Int
   currency    String        @default("EGP")
   status      PaymentStatus @default(PENDING)
-  gateway     String        @default("mock") // mock | paymob | fawry | stripe | manual_cash
+  gateway     String        @default("manual") // manual proof-based; paymob/fawry/stripe later
+
+  // Manual proof-of-payment flow
+  method         PaymentMethod?
+  proofImageUrl  String?      // client-resized screenshot (data URL)
+  reference      String?      // transaction/reference id or sender number
+  rejectedReason String?
+  verifiedById   String?      // user id of the teacher/admin who verified
+
   gatewayRef  String?
   couponId    String?
   coupon      Coupon?       @relation(fields: [couponId], references: [id])
   paidAt      DateTime?
   createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   ledgerTransaction LedgerTransaction?
   invoice           Invoice?
 
   @@index([tenantId, status, createdAt])
+  @@index([studentId, status])
+}
+
+// Admin-configured accounts students transfer money to. Money is central to the
+// platform; each teacher's share is tracked in the ledger and withdrawn via payouts.
+model PlatformPaymentAccount {
+  id           String        @id @default(cuid())
+  method       PaymentMethod
+  label        String        // e.g. "إنستاباي درسلي"
+  handle       String        // phone / IPA / IBAN
+  instructions String        @default("")
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 // Double-entry ledger: every financial fact is a balanced transaction.

@@ -74,10 +74,9 @@ export class EnrollmentsService {
   }
 
   /**
-   * Student requests enrollment. Activation is immediate when the course
-   * doesn't require approval (or the teacher enabled auto-approve); otherwise
-   * the request goes to the teacher's approval queue. Payment stays a mock
-   * PENDING/PAID record until the real gateway lands in Phase 5.
+   * Enrol in a course. Free courses activate immediately. Paid courses go
+   * through the manual proof-of-payment flow (POST /payments): this endpoint
+   * returns PAYMENT_REQUIRED with the quote so the client opens the pay screen.
    */
   async enroll(userId: string, courseId: string, couponCode?: string) {
     const student = await this.studentProfileOf(userId);
@@ -90,25 +89,22 @@ export class EnrollmentsService {
     const existing = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId: student.id, courseId } },
     });
-    if (existing) {
-      const stillActive =
-        existing.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date());
-      if (stillActive) throw new ConflictException('Already enrolled in this course');
-      if (existing.status === 'PENDING_APPROVAL') {
-        throw new ConflictException('Enrollment request already pending approval');
-      }
+    if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
+      throw new ConflictException('Already enrolled in this course');
     }
 
     const quote = await this.quote(courseId, couponCode);
-    const autoApprove =
-      !course.requiresEnrollmentApproval ||
-      course.teacher.autoApproveEnrollments ||
-      quote.totalCents === 0;
 
+    // Paid → must pay first (manual proof + verification).
+    if (quote.totalCents > 0) {
+      throw new BadRequestException({ message: 'Payment required', code: 'PAYMENT_REQUIRED', quote });
+    }
+
+    // Free course → activate right away.
     const data = {
-      status: autoApprove ? ('ACTIVE' as const) : ('PENDING_APPROVAL' as const),
-      approvedAt: autoApprove ? new Date() : null,
-      expiresAt: autoApprove ? this.expiryFor(course) : null,
+      status: 'ACTIVE' as const,
+      approvedAt: new Date(),
+      expiresAt: this.expiryFor(course),
       revokedReason: null,
     };
     const enrollment = existing
@@ -117,53 +113,14 @@ export class EnrollmentsService {
           data: { studentId: student.id, courseId, tenantId: course.tenantId, ...data },
         });
 
-    if (quote.totalCents > 0 || quote.coupon) {
-      const payment = await this.prisma.payment.create({
-        data: {
-          studentId: student.id,
-          courseId,
-          enrollmentId: enrollment.id,
-          tenantId: course.tenantId,
-          amountCents: quote.totalCents,
-          currency: quote.currency,
-          gateway: 'mock',
-          couponId: quote.coupon?.id,
-          status: autoApprove ? 'PAID' : 'PENDING',
-          paidAt: autoApprove ? new Date() : null,
-        },
-      });
-      // Paid immediately → book the double-entry ledger + invoice.
-      if (autoApprove) await this.ledger.recordPayment(payment.id);
-      if (autoApprove && quote.coupon) {
-        await this.prisma.coupon.update({
-          where: { id: quote.coupon.id },
-          data: { usedCount: { increment: 1 } },
-        });
-      }
-    }
-
-    if (autoApprove) await this.activateBundleChildren(course, enrollment);
-
-    // Notify the other side (live via the bell).
-    const studentUser = await this.prisma.user.findUnique({ where: { id: userId } });
-    await this.notifications.create(
-      autoApprove
-        ? {
-            userId,
-            type: 'ENROLLMENT_APPROVED',
-            title: 'تم تفعيل اشتراكك',
-            body: `أصبح بإمكانك الآن الوصول إلى «${course.title}»`,
-            meta: { courseId },
-          }
-        : {
-            userId: course.teacher.user.id,
-            type: 'ANNOUNCEMENT',
-            title: 'طلب التحاق جديد',
-            body: `طلب ${studentUser?.fullName ?? 'طالب'} الالتحاق بدورة «${course.title}»`,
-            meta: { courseId, enrollmentId: enrollment.id },
-          },
-    );
-
+    await this.activateBundleChildren(course, enrollment);
+    await this.notifications.create({
+      userId,
+      type: 'ENROLLMENT_APPROVED',
+      title: 'تم تفعيل اشتراكك',
+      body: `أصبح بإمكانك الآن الوصول إلى «${course.title}»`,
+      meta: { courseId },
+    });
     return { ...enrollment, quote };
   }
 

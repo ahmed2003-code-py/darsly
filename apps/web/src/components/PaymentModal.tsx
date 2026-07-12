@@ -28,6 +28,15 @@ export default function PaymentModal({
     enabled: open,
   });
 
+  // Transparent breakdown: course price + platform service fee = total the
+  // student pays. Fetched here so the amount is always authoritative.
+  const { data: quote } = useQuery({
+    queryKey: ['enroll-quote', courseId, couponCode],
+    queryFn: async () => (await api.post('/enrollments/quote', { courseId, couponCode })).data,
+    enabled: open,
+  });
+  const total = quote?.totalCents ?? amountCents;
+
   const submit = useMutation({
     mutationFn: async () =>
       (await api.post('/payments', { courseId, method, proofImageUrl: proof, reference: reference.trim() || undefined, couponCode })).data,
@@ -60,9 +69,25 @@ export default function PaymentModal({
             <p className="mb-2 flex items-center gap-2 font-heading font-bold">
               <span className="material-symbols-outlined text-primary">north_east</span>{t('pay.transferTo')}
             </p>
-            <div className="mb-3 rounded-xl bg-primary-fixed/40 p-3 text-center">
-              <p className="text-xs text-outline">{t('pay.amountDue')}</p>
-              <p className="font-heading text-2xl font-extrabold text-primary">{egp(amountCents)}</p>
+            <div className="mb-3 rounded-xl bg-primary-fixed/40 p-3">
+              {quote && (
+                <div className="mb-2 space-y-1 border-b border-outline-variant pb-2 text-sm">
+                  <div className="flex justify-between text-on-surface-variant">
+                    <span>{t('pay.coursePrice', 'سعر الكورس')}</span>
+                    <span className="tabular-nums">{egp(quote.netCents ?? quote.basePriceCents)}</span>
+                  </div>
+                  {quote.feeCents > 0 && (
+                    <div className="flex justify-between text-on-surface-variant">
+                      <span>{t('pay.serviceFee', 'رسوم خدمة المنصّة')}</span>
+                      <span className="tabular-nums">{egp(quote.feeCents)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-outline">{t('pay.amountDue')}</span>
+                <span className="font-heading text-2xl font-bold tracking-tight text-primary tabular-nums">{egp(total)}</span>
+              </div>
             </div>
             <div className="space-y-2">
               {(accounts ?? []).map((a: any) => (

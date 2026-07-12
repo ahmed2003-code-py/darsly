@@ -49,7 +49,8 @@
     "analytics": "Analytics",
     "saved": "Saved",
     "verifyPayments": "Verify payments",
-    "adminPayments": "Payments"
+    "adminPayments": "Payments",
+    "academy": "Academy"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",

@@ -1,10 +1,11 @@
-import { Controller, Get, NotFoundException, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AcademyService } from './academy.service';
 import { AcademyContext, CurrentAcademy, RequirePermission } from './academy-context';
+import { AddMemberDto, UpdateAcademyDto, UpdateMemberDto } from './dto';
 import { AcademyMembershipGuard } from './guards/academy-membership.guard';
 import { PermissionGuard } from './guards/permission.guard';
 import { CAPABILITIES } from './permissions';
@@ -76,5 +77,57 @@ export class AcademyController {
   @ApiOperation({ summary: '[academy] All courses incl. drafts (requires course.write)' })
   manageCourses(@CurrentAcademy() ctx: AcademyContext) {
     return this.academy.manageCourses(ctx.academyId);
+  }
+
+  // ── Settings (owner: academy.manage) ──────────────────────────────────────
+
+  @Get('academies/:slug/settings')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('academy.manage')
+  @ApiOperation({ summary: '[academy] Full settings for the console editor' })
+  settings(@CurrentAcademy() ctx: AcademyContext) {
+    return this.academy.getManaged(ctx.academyId);
+  }
+
+  @Patch('academies/:slug/settings')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('academy.manage')
+  @ApiOperation({ summary: '[academy] Update branding & settings' })
+  updateSettings(@CurrentAcademy() ctx: AcademyContext, @Body() dto: UpdateAcademyDto) {
+    return this.academy.updateSettings(ctx.academyId, dto);
+  }
+
+  // ── Members (owner: member.manage) ────────────────────────────────────────
+
+  @Get('academies/:slug/members')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('member.manage')
+  @ApiOperation({ summary: '[academy] List members' })
+  members(@CurrentAcademy() ctx: AcademyContext) {
+    return this.academy.listMembers(ctx.academyId);
+  }
+
+  @Post('academies/:slug/members')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('member.manage')
+  @ApiOperation({ summary: '[academy] Add an existing user as staff (teacher/assistant)' })
+  addMember(@CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMemberDto) {
+    return this.academy.addMember(ctx.academyId, dto);
+  }
+
+  @Patch('academies/:slug/members/:membershipId')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('member.manage')
+  @ApiOperation({ summary: '[academy] Change a member role/status' })
+  updateMember(@CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string, @Body() dto: UpdateMemberDto) {
+    return this.academy.updateMember(ctx.academyId, id, dto);
+  }
+
+  @Delete('academies/:slug/members/:membershipId')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('member.manage')
+  @ApiOperation({ summary: '[academy] Remove a member' })
+  removeMember(@CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string) {
+    return this.academy.removeMember(ctx.academyId, id);
   }
 }

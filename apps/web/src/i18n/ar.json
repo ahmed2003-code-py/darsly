@@ -49,7 +49,8 @@
     "analytics": "التحليلات",
     "saved": "المحفوظة",
     "verifyPayments": "مراجعة الدفعات",
-    "adminPayments": "الدفعات"
+    "adminPayments": "الدفعات",
+    "academy": "الأكاديمية"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",

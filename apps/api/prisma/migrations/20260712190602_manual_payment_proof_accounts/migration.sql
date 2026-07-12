@@ -12,19 +12,19 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 -- AlterEnum
 ALTER TYPE "PaymentStatus" ADD VALUE IF NOT EXISTS 'REJECTED';
 
--- AlterTable
-ALTER TABLE "Payment" ADD COLUMN     "method" "PaymentMethod",
-ADD COLUMN     "proofImageUrl" TEXT,
-ADD COLUMN     "reference" TEXT,
-ADD COLUMN     "rejectedReason" TEXT,
+-- AlterTable (idempotent: safe to re-run after a partial/failed apply).
 -- Backfill existing rows via a default, then drop it to match the @updatedAt schema.
-ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN     "verifiedById" TEXT,
-ALTER COLUMN "gateway" SET DEFAULT 'manual';
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "method" "PaymentMethod";
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "proofImageUrl" TEXT;
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "reference" TEXT;
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "rejectedReason" TEXT;
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "verifiedById" TEXT;
+ALTER TABLE "Payment" ALTER COLUMN "gateway" SET DEFAULT 'manual';
 ALTER TABLE "Payment" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- CreateTable
-CREATE TABLE "PlatformPaymentAccount" (
+CREATE TABLE IF NOT EXISTS "PlatformPaymentAccount" (
     "id" TEXT NOT NULL,
     "method" "PaymentMethod" NOT NULL,
     "label" TEXT NOT NULL,
@@ -39,4 +39,4 @@ CREATE TABLE "PlatformPaymentAccount" (
 );
 
 -- CreateIndex
-CREATE INDEX "Payment_studentId_status_idx" ON "Payment"("studentId", "status");
+CREATE INDEX IF NOT EXISTS "Payment_studentId_status_idx" ON "Payment"("studentId", "status");

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "prisma generate && nest build && npm --prefix ../.. run build --workspace=@darsly/web",
     "dev": "nest start --watch",
-    "start": "prisma migrate deploy && node dist/main.js",
+    "start": "sh scripts/start.sh",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "ts-node --transpile-only prisma/seed.ts",

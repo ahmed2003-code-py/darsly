@@ -93,8 +93,14 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 `P3009 … migration 20260712190602_manual_payment_proof_accounts … failed`.
 
 **السبب:** الـmigration كانت بتضيف `Payment.updatedAt NOT NULL` من غير default على
-جدول فيه صفوف. **اتصلحت في الكود** (بقت idempotent + backfill). فاضل تفكّ القفل على
-قاعدة الإنتاج مرّة واحدة:
+جدول فيه صفوف. **اتصلحت في الكود** (بقت idempotent + backfill).
+
+> ✅ **إصلاح تلقائي:** أمر الإقلاع بقى `sh scripts/start.sh` اللي بيعمل
+> `migrate deploy`، ولو فشل بـP3009 بيفكّ القفل تلقائياً (`resolve --rolled-back`)
+> ويعيد المحاولة. يعني **مجرّد Redeploy على Railway كفاية** — مش محتاج أوامر يدوي.
+> الخطوات اليدوية تحت للطوارئ فقط.
+
+لو حبيت تعملها يدوي (اختياري):
 
 > `<PUBLIC_URL>` = رابط Postgres العام من Railway (Variables → `DATABASE_PUBLIC_URL`).
 

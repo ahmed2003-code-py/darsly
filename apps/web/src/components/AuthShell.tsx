@@ -22,49 +22,55 @@ export default function AuthShell({
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* Brand panel — flat indigo, same-hue depth only, editorial */}
+      {/* Brand panel — flat indigo, layered same-hue depth, editorial */}
       <aside className="relative hidden overflow-hidden bg-primary text-on-primary lg:flex lg:flex-col lg:justify-between lg:p-14">
         <div className="pointer-events-none absolute inset-0">
-          {/* dot grid texture */}
-          <span className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.10)_1px,transparent_0)] [background-size:24px_24px]" />
-          {/* one low-contrast, same-hue vignette (no rainbow gradient) */}
-          <span className="absolute -bottom-40 -start-24 h-[28rem] w-[28rem] rounded-full bg-accent-900/50 blur-3xl" />
-          {/* hairline column rule for structure */}
+          {/* fine dot grid */}
+          <span className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.08)_1px,transparent_0)] [background-size:26px_26px]" />
+          {/* concentric ring motif (same-hue, low contrast) */}
+          <span className="absolute -end-40 -top-40 h-[34rem] w-[34rem] rounded-full border border-white/10" />
+          <span className="absolute -end-28 -top-28 h-[26rem] w-[26rem] rounded-full border border-white/10" />
+          <span className="absolute -bottom-48 -start-32 h-[32rem] w-[32rem] rounded-full bg-accent-900/40 blur-3xl" />
+          {/* oversized brand watermark */}
+          <span className="material-symbols-outlined absolute -bottom-10 end-6 text-[13rem] leading-none text-white/[0.06]">school</span>
           <span className="absolute inset-y-0 end-0 w-px bg-white/10" />
         </div>
 
         <div className="relative flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/10">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]">
             <span className="material-symbols-outlined text-2xl">school</span>
           </span>
           <div className="leading-none">
-            <p className="font-heading text-xl font-bold tracking-tight">{t('brand')}</p>
+            <p className="font-heading text-2xl font-bold tracking-tight">{t('brand')}</p>
             <p className="mt-1 text-xs text-on-primary/70">{t('brandTagline')}</p>
           </div>
         </div>
 
         <div className="relative max-w-md">
+          <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-on-primary/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
+            منصّة الأكاديميات التعليمية
+          </span>
           <h2 className="display text-on-primary">{t('auth.brandHeadline')}</h2>
           <p className="mt-4 text-on-primary/75">{t('auth.brandSub')}</p>
-          <ul className="mt-10 space-y-3">
+          <ul className="mt-9 space-y-2.5">
             {[
               ['play_lesson', 'auth.featureVideo'],
               ['workspace_premium', 'auth.featureCert'],
               ['shield_lock', 'auth.featureSecure'],
             ].map(([icon, key]) => (
-              <li key={key} className="flex items-center gap-3 border-t border-white/10 pt-3 first:border-0 first:pt-0">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/5">
-                  <span className="material-symbols-outlined text-lg">{icon}</span>
+              <li key={key} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-on-primary">
+                  <span className="material-symbols-outlined text-xl">{icon}</span>
                 </span>
-                <span className="text-sm text-on-primary/90">{t(key)}</span>
+                <span className="text-sm font-medium text-on-primary/90">{t(key)}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="relative flex items-center gap-2 text-xs text-on-primary/60">
-          <span className="material-symbols-outlined text-base">encrypted</span>
-          {t('auth.secureNote')}
+        <div className="relative flex items-center gap-4 text-xs text-on-primary/60">
+          <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-base">encrypted</span>{t('auth.secureNote')}</span>
         </div>
       </aside>
 

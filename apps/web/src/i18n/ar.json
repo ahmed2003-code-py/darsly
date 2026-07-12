@@ -742,6 +742,14 @@
     "inactive": "موقوف",
     "enable": "تفعيل",
     "disable": "إيقاف",
-    "delConfirm": "حذف هذا الحساب؟"
+    "delConfirm": "حذف هذا الحساب؟",
+    "events": "أحداث التحقق التلقائي",
+    "noEvents": "لا توجد أحداث بعد.",
+    "eventStatus": {
+      "MATCHED": "تمّت المطابقة",
+      "UNMATCHED": "بدون مطابقة",
+      "AMBIGUOUS": "غير محدّد",
+      "DUPLICATE": "مكرّر"
+    }
   }
 }

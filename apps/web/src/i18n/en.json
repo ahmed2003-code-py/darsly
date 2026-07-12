@@ -742,6 +742,14 @@
     "inactive": "Disabled",
     "enable": "Enable",
     "disable": "Disable",
-    "delConfirm": "Delete this account?"
+    "delConfirm": "Delete this account?",
+    "events": "Auto-verification events",
+    "noEvents": "No events yet.",
+    "eventStatus": {
+      "MATCHED": "Matched",
+      "UNMATCHED": "Unmatched",
+      "AMBIGUOUS": "Ambiguous",
+      "DUPLICATE": "Duplicate"
+    }
   }
 }

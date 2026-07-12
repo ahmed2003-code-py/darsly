@@ -99,10 +99,24 @@ export class ManualPaymentsService {
 
   async verify(user: { sub: string; role: string; tenantId?: string }, paymentId: string) {
     const payment = await this.authorizePayment(user, paymentId);
+    return this.applyVerification(payment, user.sub, false);
+  }
+
+  /** Auto-verification by the notification-listener matching engine. */
+  async systemVerify(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    return this.applyVerification(payment, 'system', true);
+  }
+
+  private async applyVerification(
+    payment: { id: string; status: string; courseId: string; enrollmentId: string | null; studentId: string; couponId: string | null },
+    verifierId: string,
+    auto: boolean,
+  ) {
     if (payment.status !== 'PENDING') {
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
-
     const course = await this.prisma.course.findUnique({
       where: { id: payment.courseId },
       select: { pricingModel: true, title: true },
@@ -113,8 +127,8 @@ export class ManualPaymentsService {
 
     await this.prisma.$transaction([
       this.prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: 'PAID', paidAt: new Date(), verifiedById: user.sub },
+        where: { id: payment.id },
+        data: { status: 'PAID', paidAt: new Date(), verifiedById: verifierId },
       }),
       ...(payment.enrollmentId
         ? [this.prisma.enrollment.update({
@@ -123,12 +137,12 @@ export class ManualPaymentsService {
           })]
         : []),
     ]);
-    // Book the balanced ledger transaction + invoice (idempotent).
-    await this.ledger.recordPayment(paymentId);
+    await this.ledger.recordPayment(payment.id);
     if (payment.couponId) {
       await this.prisma.coupon.update({ where: { id: payment.couponId }, data: { usedCount: { increment: 1 } } });
     }
-    await this.notifyStudent(payment.studentId, 'ENROLLMENT_APPROVED', 'تم تأكيد دفعتك ✅',
+    await this.notifyStudent(payment.studentId, 'ENROLLMENT_APPROVED',
+      auto ? 'تم تأكيد دفعتك تلقائياً ✅' : 'تم تأكيد دفعتك ✅',
       `تم تفعيل اشتراكك في «${course?.title ?? 'الدورة'}». مذاكرة سعيدة!`);
     return { ok: true };
   }

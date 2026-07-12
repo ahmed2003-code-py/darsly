@@ -590,6 +590,33 @@ model Payment {
   @@index([studentId, status])
 }
 
+enum PaymentEventStatus {
+  MATCHED    // auto-matched a pending payment and verified it
+  UNMATCHED  // no candidate — needs manual review
+  AMBIGUOUS  // several candidates — needs manual disambiguation
+  DUPLICATE  // a prior event already handled this transfer
+}
+
+// A raw incoming-transfer event reported by the Android notification listener
+// running on the receiving wallet's phone. The backend matches it to a pending
+// payment (amount + reference + time window) and auto-verifies.
+model PaymentEvent {
+  id             String             @id @default(cuid())
+  provider       PaymentMethod
+  amountCents    Int
+  reference      String?
+  occurredAt     DateTime
+  rawMessage     String             @default("")
+  deviceId       String?
+  status         PaymentEventStatus @default(UNMATCHED)
+  matchedPaymentId String?
+  note           String?            // why unmatched/ambiguous, or manual-match actor
+  createdAt      DateTime           @default(now())
+
+  @@index([status, createdAt])
+  @@index([provider, amountCents, occurredAt])
+}
+
 // Admin-configured accounts students transfer money to. Money is central to the
 // platform; each teacher's share is tracked in the ledger and withdrawn via payouts.
 model PlatformPaymentAccount {

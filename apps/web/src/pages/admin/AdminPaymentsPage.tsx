@@ -8,6 +8,14 @@ import { Badge, ErrorNote, Field, Modal, PageHeader, Skeleton } from '../../comp
 const METHOD_LABEL: Record<string, string> = {
   INSTAPAY: 'إنستاباي', VODAFONE_CASH: 'فودافون كاش', BANK_TRANSFER: 'تحويل بنكي', OTHER: 'أخرى',
 };
+const EVENT_TONE: Record<string, string> = {
+  MATCHED: 'bg-secondary-container text-on-secondary-container',
+  UNMATCHED: 'bg-amber-100 text-amber-700', AMBIGUOUS: 'bg-amber-100 text-amber-700',
+  DUPLICATE: 'bg-surface-container-high text-outline',
+};
+const EVENT_ICON: Record<string, string> = {
+  MATCHED: 'check_circle', UNMATCHED: 'help', AMBIGUOUS: 'call_split', DUPLICATE: 'content_copy',
+};
 
 export default function AdminPaymentsPage() {
   const { t } = useTranslation();
@@ -23,6 +31,11 @@ export default function AdminPaymentsPage() {
   const { data: accounts } = useQuery({
     queryKey: ['admin-accounts'],
     queryFn: async () => (await api.get('/admin/payment-accounts')).data,
+  });
+  const { data: events } = useQuery({
+    queryKey: ['admin-payment-events'],
+    queryFn: async () => (await api.get('/admin/payment-events')).data,
+    refetchInterval: 20_000,
   });
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['admin-payments'] }); };
@@ -80,6 +93,36 @@ export default function AdminPaymentsPage() {
             </div>
           )}
           <ErrorNote error={verify.error} />
+
+          {/* Auto-verification events from the notification listener */}
+          <h2 className="mb-3 mt-8 flex items-center gap-2 font-heading text-xl font-extrabold">
+            <span className="material-symbols-outlined text-primary">bolt</span>{t('apay.events')}
+          </h2>
+          <div className="card p-0">
+            {!events?.length ? (
+              <p className="py-8 text-center text-sm text-outline">{t('apay.noEvents')}</p>
+            ) : (
+              <ul className="divide-y divide-outline-variant/40">
+                {events.slice(0, 20).map((e: any) => (
+                  <li key={e.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${EVENT_TONE[e.status] ?? 'bg-surface-container-high text-outline'}`}>
+                      <span className="material-symbols-outlined text-base">{EVENT_ICON[e.status] ?? 'bolt'}</span>
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">
+                        <span className="font-bold">{egp(e.amountCents)}</span> · {METHOD_LABEL[e.provider] ?? e.provider}
+                        {e.reference && <span className="text-outline" dir="ltr"> · #{e.reference}</span>}
+                      </p>
+                      {e.note && <p className="truncate text-xs text-outline">{e.note}</p>}
+                    </div>
+                    <Badge tone={e.status === 'MATCHED' ? 'teal' : e.status === 'UNMATCHED' || e.status === 'AMBIGUOUS' ? 'warn' : 'neutral'}>
+                      {t(`apay.eventStatus.${e.status}`)}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* Receiving accounts */}

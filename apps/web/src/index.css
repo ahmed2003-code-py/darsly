@@ -6,83 +6,118 @@
   html {
     @apply bg-background text-on-background;
     scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply font-body antialiased;
-    /* Warm off-white ground with a faint indigo wash for depth (design: layered off-whites) */
-    background-image: radial-gradient(1200px 600px at 100% -10%, #eef0ff 0%, transparent 55%),
-      radial-gradient(1000px 500px at -10% 110%, #e9fbf7 0%, transparent 50%);
-    background-attachment: fixed;
+    /* Flat warm paper — no gradient washes. Depth comes from hairlines. */
+    background-color: theme('colors.background');
+  }
+  /* Subtle film grain to kill the flat "digital" surface. Fixed, non-blocking. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  #root {
+    position: relative;
+    z-index: 1;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
     text-wrap: balance;
   }
-  ::selection {
-    background: #d8d2ff;
-    color: #140067;
+  p, li, span, input, textarea, button, a {
+    line-height: 1.6;
   }
-  /* Slim, on-brand scrollbars */
+  ::selection {
+    background: theme('colors.accent.200');
+    color: theme('colors.accent.900');
+  }
+  :focus-visible {
+    outline: none;
+  }
+  /* Slim neutral scrollbars. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #c8c4d7 transparent;
+    scrollbar-color: rgba(24, 24, 34, 0.18) transparent;
   }
   *::-webkit-scrollbar { width: 8px; height: 8px; }
-  *::-webkit-scrollbar-thumb { background: #c8c4d7; border-radius: 999px; }
-  *::-webkit-scrollbar-thumb:hover { background: #a9a4c4; }
+  *::-webkit-scrollbar-thumb { background: rgba(24, 24, 34, 0.16); border-radius: 999px; }
+  *::-webkit-scrollbar-thumb:hover { background: rgba(24, 24, 34, 0.28); }
 }
 
 @layer components {
-  /* ── Buttons ─────────────────────────────────────────────────────────── */
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-primary-container to-primary px-6 py-3 font-heading font-bold text-on-primary shadow-[0_6px_16px_rgba(66,46,199,0.22)] transition-all duration-200
-      hover:-translate-y-0.5 hover:shadow-glow
-      active:translate-y-0 active:shadow-[0_3px_10px_rgba(66,46,199,0.20)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface
-      disabled:pointer-events-none disabled:opacity-50;
-  }
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3 font-heading font-bold text-on-secondary-fixed shadow-[0_6px_16px_rgba(45,212,191,0.25)] transition-all duration-200
-      hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_10px_28px_rgba(45,212,191,0.35)]
-      active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
-  }
-  .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-6 py-3 font-heading font-bold text-primary transition-all duration-200
-      hover:border-primary-container hover:bg-primary-fixed/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50;
+  /* Fluid, confident display heading. */
+  .display {
+    font-family: theme('fontFamily.heading');
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem);
   }
 
-  /* ── Surfaces ────────────────────────────────────────────────────────── */
+  /* ── Buttons — flat single accent, hairline structure ─────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-on-primary transition-[background-color,transform,box-shadow] duration-200 ease-premium
+      hover:bg-accent-700 hover:shadow-glow
+      active:scale-[0.98]
+      focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface
+      disabled:pointer-events-none disabled:opacity-50;
+  }
+  /* Secondary is a neutral, not a second accent. */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-outline-variant bg-surface-container-lowest px-5 py-2.5 font-heading text-sm font-semibold text-on-surface transition-[background-color,border-color,transform] duration-200 ease-premium
+      hover:border-transparent hover:bg-surface-container-low
+      active:scale-[0.98]
+      focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface
+      disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 font-heading text-sm font-semibold text-primary transition-colors duration-200 ease-premium
+      hover:bg-primary-fixed
+      focus-visible:ring-2 focus-visible:ring-accent-600 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* ── Surfaces — 1px hairline, no ambient shadow ──────────────────────── */
   .card {
-    @apply rounded-2xl border border-white/70 bg-surface-container-lowest p-6 shadow-card;
+    @apply rounded-xl border border-outline-variant bg-surface-container-lowest p-6;
   }
   .card-hover {
-    @apply cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:border-primary-container/50 hover:shadow-elevated;
+    @apply cursor-pointer transition-[transform,border-color,box-shadow] duration-200 ease-premium
+      hover:-translate-y-0.5 hover:border-accent-300 hover:shadow-elevated;
   }
-  /* Subtle top-lit sheen for hero/feature surfaces. */
   .card-feature {
-    @apply relative overflow-hidden rounded-3xl border border-white/70 bg-surface-container-lowest shadow-elevated;
+    @apply relative overflow-hidden rounded-3xl border border-outline-variant bg-surface-container-lowest;
   }
-  /* Glassmorphic bar (design: backdrop blur 12px + ~70% white) */
+  /* Sticky bar — paper blur + a single bottom hairline. */
   .glass {
-    @apply border-b border-white/50 bg-surface/70 backdrop-blur-xl;
+    @apply border-b border-outline-variant bg-surface/80 backdrop-blur-xl;
   }
 
   /* ── Inputs ──────────────────────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 text-on-surface placeholder:text-outline/70 transition-all duration-150
-      hover:border-outline focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15;
+    @apply w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2.5 text-on-surface placeholder:text-outline/70 transition-[border-color,box-shadow] duration-150 ease-premium
+      hover:border-outline/60 focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/10;
   }
   .pill {
-    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold;
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
   }
 
   /* ── Loading skeleton ────────────────────────────────────────────────── */
   .skeleton {
-    @apply relative overflow-hidden rounded-lg bg-surface-container-high;
+    @apply relative overflow-hidden rounded-xl bg-surface-container-high;
   }
   .skeleton::after {
     content: '';
     @apply absolute inset-0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
     transform: translateX(-100%);
     animation: darsly-shimmer 1.4s infinite;
   }
@@ -93,8 +128,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
-  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .material-symbols-outlined {

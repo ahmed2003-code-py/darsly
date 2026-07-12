@@ -15,7 +15,7 @@ function BarChart({ data, format }: { data: { label: string; value: number }[]; 
           <div key={i} className="group flex flex-1 flex-col items-center gap-2">
             <div className="relative flex w-full flex-1 items-end">
               <div
-                className="w-full rounded-t-lg bg-gradient-to-t from-primary-container to-primary transition-all duration-500 group-hover:opacity-90"
+                className="w-full rounded-t-lg bg-primary transition-all duration-500 group-hover:opacity-90"
                 style={{ height: `${Math.max(2, h)}%` }}
               />
               <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold text-on-surface-variant opacity-0 transition group-hover:opacity-100">

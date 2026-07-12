@@ -65,16 +65,18 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   const sidebar = (
     <div className="flex h-full flex-col">
-      {/* Brand block */}
-      <div className="flex flex-col items-center gap-2 px-6 py-7">
-        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary-container to-primary text-on-primary shadow-[0_8px_20px_rgba(66,46,199,0.30)]">
-          <span className="material-symbols-outlined text-3xl">school</span>
+      {/* Brand block — flat accent tile, editorial wordmark, start-aligned */}
+      <div className="flex items-center gap-3 px-5 py-6">
+        <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-on-primary">
+          <span className="material-symbols-outlined text-2xl">school</span>
         </div>
-        <h1 className="font-heading text-2xl font-extrabold text-primary">{t('brand')}</h1>
-        <p className="text-xs text-on-surface-variant">{roleLabel}</p>
+        <div className="min-w-0">
+          <h1 className="font-heading text-xl font-bold tracking-tight text-on-surface">{t('brand')}</h1>
+          <p className="text-xs text-on-surface-variant">{roleLabel}</p>
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-1.5 px-4">
+      <nav className="flex-1 space-y-0.5 px-3">
         {nav.map((item) => (
           <NavLink
             key={item.to}
@@ -82,16 +84,19 @@ export default function Layout({ children }: { children: ReactNode }) {
             end={item.end}
             onClick={() => setDrawer(false)}
             className={({ isActive }) =>
-              `group flex items-center gap-3 rounded-xl px-4 py-3 font-heading text-sm font-bold transition-all ${
+              `group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 font-heading text-sm font-semibold transition-colors duration-200 ease-premium ${
                 isActive
-                  ? 'bg-primary-fixed text-primary shadow-[0_2px_10px_rgba(66,46,199,0.12)]'
+                  ? 'bg-primary-fixed text-primary'
                   : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
               }`
             }
           >
             {({ isActive }) => (
               <>
-                <span className={`material-symbols-outlined ${isActive ? 'text-primary' : ''}`}>
+                {isActive && (
+                  <span className="absolute inset-y-1.5 start-0 w-1 rounded-full bg-primary" aria-hidden />
+                )}
+                <span className={`material-symbols-outlined text-[20px] ${isActive ? 'text-primary' : 'text-outline group-hover:text-on-surface'}`}>
                   {item.icon}
                 </span>
                 {t(item.labelKey)}

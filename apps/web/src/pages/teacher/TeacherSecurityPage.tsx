@@ -88,7 +88,7 @@ export default function TeacherSecurityPage() {
 
         {/* Leak-Trace + sessions */}
         <section className="space-y-6">
-          <div className="card bg-gradient-to-bl from-primary-fixed/60 to-surface-container-lowest">
+          <div className="card bg-primary-fixed/40">
             <h2 className="mb-2 flex items-center gap-2 font-heading text-xl font-extrabold">
               <span className="material-symbols-outlined text-primary">fingerprint</span>
               {t('security.leakTraceTitle')}

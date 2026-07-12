@@ -77,7 +77,7 @@ export default function TeacherWalletPage() {
 
       {/* Balance + earnings tiles */}
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="card bg-gradient-to-br from-primary-container to-primary text-on-primary">
+        <div className="card bg-primary text-on-primary">
           <p className="text-sm opacity-90">{t('wallet.balance')}</p>
           <p className="font-heading text-3xl font-extrabold">{egp(wallet.balanceCents)}</p>
           <p className="mt-1 text-xs opacity-80">{t('wallet.minPayout', { amount: `${minEgp} ج.م` })}</p>

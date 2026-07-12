@@ -79,10 +79,10 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
           </button>
         )}
 
-        {/* Centered search */}
-        <form onSubmit={submitSearch} className="mx-auto w-full max-w-xl">
-          <div className="flex items-center gap-2 rounded-full border border-outline-variant/70 bg-surface-container-lowest px-4 py-2.5 shadow-sm transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/40">
-            <span className="material-symbols-outlined text-outline">search</span>
+        {/* Search — start-aligned, not centered */}
+        <form onSubmit={submitSearch} className="me-auto w-full max-w-md">
+          <div className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2 transition-[border-color,box-shadow] duration-150 ease-premium focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
+            <span className="material-symbols-outlined text-[20px] text-outline">search</span>
             <input
               className="w-full bg-transparent text-sm outline-none placeholder:text-outline"
               placeholder={t('topbar.searchPlaceholder')}

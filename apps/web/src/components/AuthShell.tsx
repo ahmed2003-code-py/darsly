@@ -1,3 +1,4 @@
+import { m } from 'framer-motion';
 import { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { setLanguage } from '../i18n';
@@ -21,36 +22,39 @@ export default function AuthShell({
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* Brand panel */}
-      <aside className="relative hidden overflow-hidden bg-primary text-on-primary lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div className="pointer-events-none absolute inset-0 opacity-90">
-          <span className="absolute -start-24 -top-24 h-80 w-80 rounded-full bg-secondary/30 blur-3xl" />
-          <span className="absolute -end-16 bottom-0 h-96 w-96 rounded-full bg-primary-container/40 blur-3xl" />
-          <span className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.12)_1px,transparent_0)] [background-size:22px_22px] opacity-40" />
+      {/* Brand panel — flat indigo, same-hue depth only, editorial */}
+      <aside className="relative hidden overflow-hidden bg-primary text-on-primary lg:flex lg:flex-col lg:justify-between lg:p-14">
+        <div className="pointer-events-none absolute inset-0">
+          {/* dot grid texture */}
+          <span className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.10)_1px,transparent_0)] [background-size:24px_24px]" />
+          {/* one low-contrast, same-hue vignette (no rainbow gradient) */}
+          <span className="absolute -bottom-40 -start-24 h-[28rem] w-[28rem] rounded-full bg-accent-900/50 blur-3xl" />
+          {/* hairline column rule for structure */}
+          <span className="absolute inset-y-0 end-0 w-px bg-white/10" />
         </div>
 
         <div className="relative flex items-center gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-on-primary/15 backdrop-blur">
-            <span className="material-symbols-outlined text-3xl">school</span>
+          <span className="grid h-11 w-11 place-items-center rounded-xl border border-white/15 bg-white/10">
+            <span className="material-symbols-outlined text-2xl">school</span>
           </span>
           <div className="leading-none">
-            <p className="font-heading text-2xl font-extrabold">{t('brand')}</p>
+            <p className="font-heading text-xl font-bold tracking-tight">{t('brand')}</p>
             <p className="mt-1 text-xs text-on-primary/70">{t('brandTagline')}</p>
           </div>
         </div>
 
         <div className="relative max-w-md">
-          <h2 className="font-heading text-4xl font-extrabold leading-tight">{t('auth.brandHeadline')}</h2>
-          <p className="mt-4 text-on-primary/80">{t('auth.brandSub')}</p>
-          <ul className="mt-8 space-y-4">
+          <h2 className="display text-on-primary">{t('auth.brandHeadline')}</h2>
+          <p className="mt-4 text-on-primary/75">{t('auth.brandSub')}</p>
+          <ul className="mt-10 space-y-3">
             {[
               ['play_lesson', 'auth.featureVideo'],
               ['workspace_premium', 'auth.featureCert'],
               ['shield_lock', 'auth.featureSecure'],
             ].map(([icon, key]) => (
-              <li key={key} className="flex items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-on-primary/15">
-                  <span className="material-symbols-outlined text-xl">{icon}</span>
+              <li key={key} className="flex items-center gap-3 border-t border-white/10 pt-3 first:border-0 first:pt-0">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/15 bg-white/5">
+                  <span className="material-symbols-outlined text-lg">{icon}</span>
                 </span>
                 <span className="text-sm text-on-primary/90">{t(key)}</span>
               </li>
@@ -58,7 +62,7 @@ export default function AuthShell({
           </ul>
         </div>
 
-        <div className="relative flex items-center gap-2 text-xs text-on-primary/70">
+        <div className="relative flex items-center gap-2 text-xs text-on-primary/60">
           <span className="material-symbols-outlined text-base">encrypted</span>
           {t('auth.secureNote')}
         </div>
@@ -68,29 +72,34 @@ export default function AuthShell({
       <main className="relative flex flex-col justify-center bg-surface px-6 py-10 sm:px-12">
         <div className="absolute end-6 top-6 flex items-center gap-2">
           <button
-            className="rounded-lg border border-outline-variant/60 px-3 py-1.5 text-xs font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+            className="rounded-full border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:border-transparent hover:bg-surface-container-low hover:text-primary"
             onClick={() => setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
           >
             {i18n.language === 'ar' ? 'EN' : 'ع'}
           </button>
         </div>
 
-        <div className="mx-auto w-full max-w-sm">
+        <m.div
+          className="mx-auto w-full max-w-sm"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        >
           {/* Mobile brand */}
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-on-primary">
               <span className="material-symbols-outlined">school</span>
             </span>
-            <span className="font-heading text-xl font-extrabold text-primary">{t('brand')}</span>
+            <span className="font-heading text-xl font-bold tracking-tight text-on-surface">{t('brand')}</span>
           </div>
 
-          <h1 className="font-heading text-3xl font-extrabold">{title}</h1>
+          <h1 className="display text-on-surface">{title}</h1>
           {subtitle && <p className="mt-2 text-on-surface-variant">{subtitle}</p>}
 
           <div className="mt-8">{children}</div>
 
           {footer && <div className="mt-6 text-center text-sm text-on-surface-variant">{footer}</div>}
-        </div>
+        </m.div>
       </main>
     </div>
   );
@@ -115,11 +124,11 @@ export function AuthField({
 }) {
   return (
     <label className="mb-4 block">
-      <span className="mb-1.5 block text-sm font-bold text-on-surface-variant">{label}</span>
-      <span className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30">
-        <span className="material-symbols-outlined ps-3 text-outline">{icon}</span>
+      <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{label}</span>
+      <span className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest transition-[border-color,box-shadow] duration-150 ease-premium focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
+        <span className="material-symbols-outlined ps-3 text-[20px] text-outline">{icon}</span>
         <input
-          className="w-full bg-transparent px-3 py-3 outline-none placeholder:text-outline"
+          className="w-full bg-transparent px-3 py-2.5 outline-none placeholder:text-outline/70"
           type={type}
           dir={dir}
           value={value}

@@ -1,88 +1,125 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Darsly design tokens — extracted verbatim from the authoritative design
- * reference (hessa_design_system/DESIGN.md, rebranded to Darsly).
- * Identity: deep indigo (wisdom/stability) + fresh teal (progress/success)
- * on layered off-white surfaces. RTL-first.
+ * Darsly design tokens — hand-tuned "ink & paper" system.
+ *
+ * ONE accent (iris indigo #4A32C9, from the brand), a warm neutral scale
+ * (paper #F7F7F4 / ink #1B1B22 — never pure #000/#fff), a single 12px radius,
+ * and hairline 1px borders instead of soft shadows. The legacy Material-style
+ * token *names* are kept but re-pointed to this system, so every screen inherits
+ * the new look without per-page edits. RTL-first.
  */
+const accent = {
+  50: '#EFEDFB',
+  100: '#DED9F6',
+  200: '#BFB6EE',
+  300: '#9C8FE2',
+  400: '#7863D4',
+  500: '#5A44CB',
+  600: '#4A32C9', // primary action
+  700: '#3C289F',
+  800: '#2E1F79',
+  900: '#221759',
+};
+
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        primary: '#422ec7',
+        accent, // full scale available as accent-50..900
+
+        primary: accent[600],
         'on-primary': '#ffffff',
-        'primary-container': '#5b4ce0',
-        'on-primary-container': '#e3deff',
-        'inverse-primary': '#c5c0ff',
-        'primary-fixed': '#e3dfff',
-        'primary-fixed-dim': '#c5c0ff',
-        'on-primary-fixed': '#140067',
-        'on-primary-fixed-variant': '#3c26c2',
-        secondary: '#006b5f',
+        'primary-container': accent[500],
+        'on-primary-container': '#ffffff',
+        'inverse-primary': accent[300],
+        // Tinted chip/active-state background + its readable ink.
+        'primary-fixed': '#EBE8FA',
+        'primary-fixed-dim': '#D7D1F4',
+        'on-primary-fixed': accent[900],
+        'on-primary-fixed-variant': accent[700],
+
+        // Secondary is NOT a second accent — it's a neutral role.
+        secondary: '#3F3E47',
         'on-secondary': '#ffffff',
-        'secondary-container': '#62fae3',
-        'on-secondary-container': '#007165',
-        'secondary-fixed': '#62fae3',
-        'secondary-fixed-dim': '#3cddc7',
-        'on-secondary-fixed': '#00201c',
-        'on-secondary-fixed-variant': '#005047',
-        accent: '#2dd4bf', // fresh teal CTA/progress accent
-        tertiary: '#4a4d4f',
+        'secondary-container': '#EBE8FA',
+        'on-secondary-container': accent[700],
+        'secondary-fixed': '#EBE8FA',
+        'secondary-fixed-dim': '#D7D1F4',
+        'on-secondary-fixed': accent[900],
+        'on-secondary-fixed-variant': accent[700],
+
+        tertiary: '#4A4A52',
         'on-tertiary': '#ffffff',
-        'tertiary-container': '#626567',
-        'on-tertiary-container': '#e0e2e4',
-        error: '#ba1a1a',
+        'tertiary-container': '#E7E6E0',
+        'on-tertiary-container': '#3F3E47',
+
+        error: '#BB3B2E',
         'on-error': '#ffffff',
-        'error-container': '#ffdad6',
-        'on-error-container': '#93000a',
-        surface: '#f9f9ff',
-        'surface-dim': '#cfdaf2',
-        'surface-bright': '#f9f9ff',
-        'surface-container-lowest': '#ffffff',
-        'surface-container-low': '#f0f3ff',
-        'surface-container': '#e7eeff',
-        'surface-container-high': '#dee8ff',
-        'surface-container-highest': '#d8e3fb',
-        'surface-variant': '#d8e3fb',
-        'surface-tint': '#5545da',
-        'on-surface': '#111c2d',
-        'on-surface-variant': '#474555',
-        'inverse-surface': '#263143',
-        'inverse-on-surface': '#ecf1ff',
-        outline: '#787586',
-        'outline-variant': '#c8c4d7',
-        background: '#f9f9ff',
-        'on-background': '#111c2d',
+        'error-container': '#F6E1DE',
+        'on-error-container': '#7A241C',
+
+        // Warm ink & paper surfaces.
+        surface: '#F7F7F4',
+        'surface-dim': '#ECEBE6',
+        'surface-bright': '#FDFDFB',
+        'surface-container-lowest': '#FDFDFB',
+        'surface-container-low': '#F2F1EC',
+        'surface-container': '#ECEBE6',
+        'surface-container-high': '#E6E5DE',
+        'surface-container-highest': '#DFDED6',
+        'surface-variant': '#ECEBE6',
+        'surface-tint': accent[600],
+        'on-surface': '#1B1B22',
+        'on-surface-variant': '#57565F',
+        'inverse-surface': '#26262E',
+        'inverse-on-surface': '#F4F3EF',
+
+        // Muted ink for icons/labels; hairline for 1px borders.
+        outline: '#87868F',
+        'outline-variant': 'rgba(24, 24, 34, 0.10)',
+        hairline: 'rgba(24, 24, 34, 0.08)',
+
+        background: '#F7F7F4',
+        'on-background': '#1B1B22',
       },
       fontFamily: {
-        // Arabic-first: Cairo for headings, Tajawal for body (per design doc)
-        heading: ['Cairo', 'Plus Jakarta Sans', 'sans-serif'],
-        body: ['Tajawal', 'IBM Plex Sans Arabic', 'sans-serif'],
+        // Distinctive Arabic-native pairing (not Tajawal/Inter defaults).
+        heading: ['Rubik', 'system-ui', 'sans-serif'],
+        body: ['"IBM Plex Sans Arabic"', 'system-ui', 'sans-serif'],
+      },
+      letterSpacing: {
+        tightest: '-0.03em',
       },
       borderRadius: {
-        sm: '0.25rem',
-        DEFAULT: '0.5rem',
-        md: '0.75rem',
-        lg: '1rem', // buttons & inputs
-        xl: '1.25rem',
-        '2xl': '1.5rem', // cards
-        '3xl': '2rem', // hero / feature panels
+        // ONE radius across the app; rounded-full is the only sanctioned
+        // exception (pills / avatars).
+        none: '0',
+        sm: '12px',
+        DEFAULT: '12px',
+        md: '12px',
+        lg: '12px',
+        xl: '12px',
+        '2xl': '12px',
+        '3xl': '16px', // large hero/feature panels only
+        full: '9999px',
       },
       boxShadow: {
-        // Layered elevation (tight ambient + soft diffuse, indigo-tinted) for
-        // real depth instead of a single flat blur.
-        card: '0 1px 2px rgba(20, 0, 103, 0.04), 0 4px 12px rgba(66, 46, 199, 0.05)',
-        elevated: '0 2px 6px rgba(20, 0, 103, 0.06), 0 14px 34px rgba(66, 46, 199, 0.12)',
-        modal: '0 4px 10px rgba(20, 0, 103, 0.08), 0 28px 70px rgba(66, 46, 199, 0.20)',
-        // Focus/CTA glow.
-        glow: '0 8px 24px rgba(66, 46, 199, 0.28)',
-        // 1px hairline ring that reads crisper than a border on light surfaces.
-        hairline: '0 0 0 1px rgba(20, 0, 103, 0.06)',
+        // Default separation is a 1px hairline, not a shadow.
+        card: '0 0 0 1px rgba(24, 24, 34, 0.06)',
+        // The only two "real" shadows — reserved for popovers/modals & hover lift.
+        elevated: '0 8px 24px -12px rgba(24, 24, 34, 0.18)',
+        modal: '0 24px 60px -24px rgba(24, 24, 34, 0.30)',
+        glow: '0 8px 22px -10px rgba(74, 50, 201, 0.45)',
+        hairline: '0 0 0 1px rgba(24, 24, 34, 0.08)',
       },
       maxWidth: {
-        container: '1280px',
+        container: '1200px',
+      },
+      transitionTimingFunction: {
+        // easeOutExpo-ish — the single motion curve used everywhere.
+        premium: 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
     },
   },

@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { duration } from '../../lib/format';
 import { useAuthStore } from '../../stores/auth';
 import { ProgressBar, Skeleton } from '../../components/ui';
+import { Reveal, Stagger, StaggerItem } from '../../components/motion';
 
 /** Student home per the student_dashboard design: welcome + continue-watching
  *  rail + weekly progress ring + streak. */
@@ -43,21 +44,21 @@ export default function StudentDashboardPage() {
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-      {/* Welcome banner */}
-      <div className="card mb-8 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-bl from-primary-fixed/70 to-surface-container-lowest">
+      {/* Welcome banner — flat, editorial, start-accented */}
+      <Reveal className="mb-8 flex flex-wrap items-center justify-between gap-4 border-s-2 border-primary ps-5">
         <div>
-          <h1 className="font-heading text-3xl font-extrabold text-primary">
+          <h1 className="display text-on-surface">
             {t('dashboardStudent.greeting', { name: user?.fullName?.split(' ')[0] ?? '' })}
           </h1>
           <p className="mt-1 text-on-surface-variant">{t('dashboardStudent.subtitle')}</p>
         </div>
         {summary && (
-          <div className="flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 font-bold text-amber-800">
-            <span className="material-symbols-outlined">local_fire_department</span>
+          <div className="flex items-center gap-2 rounded-full border border-amber-600/15 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
+            <span className="material-symbols-outlined text-[20px]">local_fire_department</span>
             {t('dashboardStudent.streak', { count: summary.currentStreak })}
           </div>
         )}
-      </div>
+      </Reveal>
 
       {/* Achievement badges */}
       {badges && badges.length > 0 && (
@@ -71,18 +72,18 @@ export default function StudentDashboardPage() {
               <div
                 key={b.key}
                 title={b.desc}
-                className={`flex min-w-[8.5rem] flex-col items-center gap-1.5 rounded-2xl border p-4 text-center transition ${
-                  b.earned ? 'border-primary-container/50 bg-primary-fixed/40 shadow-card' : 'border-outline-variant/50 bg-surface-container-low opacity-70'
+                className={`flex min-w-[8.5rem] flex-col items-center gap-1.5 rounded-xl border p-4 text-center transition ${
+                  b.earned ? 'border-accent-300 bg-primary-fixed/50' : 'border-outline-variant bg-surface-container-low opacity-70'
                 }`}
               >
-                <span className={`grid h-12 w-12 place-items-center rounded-full ${b.earned ? 'bg-gradient-to-br from-primary-container to-primary text-on-primary' : 'bg-surface-container-high text-outline'}`}>
+                <span className={`grid h-12 w-12 place-items-center rounded-full ${b.earned ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-outline'}`}>
                   <span className="material-symbols-outlined" style={b.earned ? { fontVariationSettings: "'FILL' 1" } : undefined}>{b.earned ? b.icon : 'lock'}</span>
                 </span>
-                <span className="text-sm font-bold">{b.title}</span>
+                <span className="text-sm font-semibold">{b.title}</span>
                 {!b.earned && b.goal > 1 && (
                   <span className="font-mono text-xs text-outline">{b.progress}/{b.goal}</span>
                 )}
-                {b.earned && <span className="text-[10px] font-bold text-secondary">{t('badges.unlocked')}</span>}
+                {b.earned && <span className="text-[10px] font-bold uppercase tracking-wide text-primary">{t('badges.unlocked')}</span>}
               </div>
             ))}
           </div>
@@ -111,12 +112,12 @@ export default function StudentDashboardPage() {
               <Link to="/discover" className="btn-primary mt-2">{t('dashboardStudent.browse')}</Link>
             </div>
           ) : (
-            <div className="grid gap-5 sm:grid-cols-2">
+            <Stagger className="grid gap-5 sm:grid-cols-2">
               {watching.map((w) => (
+                <StaggerItem key={w.lessonId}>
                 <Link
-                  key={w.lessonId}
                   to={`/learn/${w.courseId}/${w.lessonId}`}
-                  className="card card-hover flex flex-col overflow-hidden p-0"
+                  className="card card-hover flex h-full flex-col overflow-hidden p-0"
                 >
                   <div className="relative h-36 bg-surface-container-high">
                     {w.thumbnailUrl && <img src={w.thumbnailUrl} alt="" className="h-full w-full object-cover" />}
@@ -141,8 +142,9 @@ export default function StudentDashboardPage() {
                     </div>
                   </div>
                 </Link>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           )}
         </section>
 
@@ -153,7 +155,7 @@ export default function StudentDashboardPage() {
               {t('dashboardStudent.weeklyProgress')}
             </h2>
             <div className="mx-auto grid h-40 w-40 place-items-center rounded-full"
-              style={{ background: `conic-gradient(#422ec7 ${ringDeg}deg, #e7eeff ${ringDeg}deg)` }}>
+              style={{ background: `conic-gradient(#4A32C9 ${ringDeg}deg, #E6E5DE ${ringDeg}deg)` }}>
               <div className="grid h-32 w-32 place-items-center rounded-full bg-surface-container-lowest text-center">
                 <div>
                   <p className="font-heading text-3xl font-extrabold text-primary">{pct}%</p>

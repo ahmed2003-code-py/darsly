@@ -9,6 +9,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "ts-node --transpile-only prisma/seed.ts",
+    "db:backfill-academies": "ts-node --transpile-only scripts/backfill-academies.ts",
     "db:studio": "prisma studio",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand"

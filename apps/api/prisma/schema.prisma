@@ -45,6 +45,114 @@ model User {
   auditLogs      AuditLog[]      @relation("actor")
   sentMessages   ChatMessage[]
   resetTokens    PasswordResetToken[]
+
+  // Academy workspace model (v2). A user's authority lives on memberships, not
+  // on the global role. Additive — existing tenantId relations are untouched.
+  ownedAcademies     Academy[]           @relation("academyOwner")
+  academyMemberships AcademyMembership[]
+}
+
+// ─────────────────────────── Academy (Workspace) ───────────────────────────
+// The Academy is the first-class tenant/aggregate root (SaaS workspace model).
+// Migration is identity-preserving: each Academy.id == the old TeacherProfile.id,
+// so every existing tenantId value is already a valid academyId (no FK moves).
+
+enum AcademyStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum AcademyRole {
+  OWNER
+  TEACHER
+  ASSISTANT
+  STUDENT
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  LEFT
+}
+
+// Additive platform service fee (never a deduction from the teacher).
+enum FeeType {
+  PERCENT
+  FIXED
+}
+
+model Academy {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  name        String
+  status      AcademyStatus @default(ACTIVE)
+  ownerUserId String
+  owner       User          @relation("academyOwner", fields: [ownerUserId], references: [id])
+
+  // Branding (inline for now; normalizable later without a domain change).
+  logoUrl      String?
+  coverUrl     String?
+  colorPrimary String  @default("#4A32C9")
+  colorAccent  String  @default("#4A32C9")
+  tagline      String  @default("")
+
+  // Settings (moved off TeacherProfile at migration time).
+  language                   String  @default("ar")
+  currency                   String  @default("EGP")
+  maxConcurrentSessions      Int     @default(2)
+  requiresEnrollmentApproval Boolean @default(true)
+
+  // Revenue: additive platform service fee the STUDENT pays on top of the price.
+  feeType  FeeType @default(PERCENT)
+  feeValue Int     @default(20) // percent when PERCENT, fixed piasters when FIXED
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  memberships AcademyMembership[]
+  domains     AcademyDomain[]
+
+  @@index([status])
+}
+
+// Custom / subdomain hosts that resolve to this academy (verified only).
+model AcademyDomain {
+  id         String    @id @default(cuid())
+  academyId  String
+  academy    Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  hostname   String    @unique
+  verifiedAt DateTime?
+  isPrimary  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([academyId])
+}
+
+// A (User, Academy, Role) relationship. All in-academy authority is per-membership.
+model AcademyMembership {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academyId   String
+  academy     Academy          @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  role        AcademyRole
+  status      MembershipStatus @default(ACTIVE)
+  // A student's single primary academy; one true per user (enforced in code + backfill).
+  isHome      Boolean          @default(false)
+  // Optional named-capability overrides layered on top of the role defaults.
+  permissions Json             @default("[]")
+  invitedBy   String?
+  joinedAt    DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([userId, academyId])
+  @@index([academyId, role, status])
+  @@index([userId, isHome])
 }
 
 // Single-use, hashed password-reset tokens (forgot-password flow).

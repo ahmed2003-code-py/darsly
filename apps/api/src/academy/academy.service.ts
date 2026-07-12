@@ -85,7 +85,56 @@ export class AcademyService {
       const bySlug = await this.prisma.academy.findFirst({ where: { slug, deletedAt: null }, select: { id: true } });
       if (bySlug) return bySlug.id;
     }
+    // 3) fallback: the teacher's own academy from the JWT tenantId (== academyId
+    //    by construction). Lets console routes with no slug resolve the owner's
+    //    academy without any client change. Only used when nothing above matched.
+    const jwtTenant = req.user?.tenantId;
+    if (typeof jwtTenant === 'string' && jwtTenant) {
+      const exists = await this.prisma.academy.findFirst({ where: { id: jwtTenant, deletedAt: null }, select: { id: true } });
+      if (exists) return exists.id;
+    }
     return null;
+  }
+
+  // ── Academy-scoped course catalog (reads only) ────────────────────────────
+  // Note: the column is still named `tenantId`; its value already equals the
+  // academyId (Phase-1 identity-preserving migration), so we query by it directly.
+
+  private mapCard(c: any) {
+    const lessonsCount = (c.units ?? []).reduce((s: number, u: any) => s + u._count.lessons, 0);
+    const { units, teacher, ...rest } = c;
+    return { ...rest, lessonsCount, teacherName: teacher?.user?.fullName ?? null };
+  }
+
+  private courseCardSelect() {
+    return {
+      id: true, title: true, description: true, thumbnailUrl: true,
+      priceCents: true, currency: true, pricingModel: true, status: true, createdAt: true,
+      subject: { select: { nameAr: true, nameEn: true } },
+      grade: { select: { nameAr: true, nameEn: true } },
+      teacher: { select: { user: { select: { fullName: true } } } },
+      units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
+    };
+  }
+
+  /** Public storefront: an academy's PUBLISHED courses. */
+  async publicCourses(academyId: string) {
+    const rows = await this.prisma.course.findMany({
+      where: { tenantId: academyId, status: 'PUBLISHED', deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: this.courseCardSelect(),
+    });
+    return rows.map((c) => this.mapCard(c));
+  }
+
+  /** Console: all of the academy's courses (incl. DRAFT/ARCHIVED). Permission-gated. */
+  async manageCourses(academyId: string) {
+    const rows = await this.prisma.course.findMany({
+      where: { tenantId: academyId, deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
+      select: this.courseCardSelect(),
+    });
+    return rows.map((c) => this.mapCard(c));
   }
 
   /**

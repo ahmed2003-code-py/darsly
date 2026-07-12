@@ -57,4 +57,24 @@ export class AcademyController {
   console(@CurrentAcademy() ctx: AcademyContext) {
     return { academyId: ctx.academyId, role: ctx.role, ok: true };
   }
+
+  /** Public storefront: an academy's published courses (academy-first catalog). */
+  @Public()
+  @Get('academies/:slug/courses')
+  @ApiOperation({ summary: '[public] Published courses of an academy' })
+  async publicCourses(@Param('slug') slug: string) {
+    const a = await this.academy.getPublicBySlug(slug);
+    if (!a) throw new NotFoundException('Academy not found');
+    return this.academy.publicCourses(a.id);
+  }
+
+  /** Console: all courses incl. drafts. Any staff member with course.write —
+   *  proves multi-teacher/assistant management, not just the owner. */
+  @Get('academies/:slug/manage/courses')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('course.write')
+  @ApiOperation({ summary: '[academy] All courses incl. drafts (requires course.write)' })
+  manageCourses(@CurrentAcademy() ctx: AcademyContext) {
+    return this.academy.manageCourses(ctx.academyId);
+  }
 }

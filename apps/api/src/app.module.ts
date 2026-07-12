@@ -32,6 +32,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { StorageModule } from './storage/storage.module';
 import { TeachersModule } from './teachers/teachers.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { AcademyModule } from './academy/academy.module';
 
 // Single-service deploys: when the web app has been built into apps/web/dist,
 // the API serves it too (SPA fallback included). API routes stay under /api.
@@ -68,6 +69,7 @@ const webDist = join(__dirname, '..', '..', 'web', 'dist');
     AnalyticsModule,
     StudentExtrasModule,
     ProfileModule,
+    AcademyModule,
   ],
   controllers: [HealthController],
   providers: [

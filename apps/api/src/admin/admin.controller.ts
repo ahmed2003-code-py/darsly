@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Logger, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, PayoutStatus, Role, TeacherStatus } from '@darsly/shared-types';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { seedDatabase } from '../common/demo-seed';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PayoutsService } from '../payouts/payouts.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { AdminService } from './admin.service';
 
 class TeacherStatusDto {
@@ -13,6 +15,9 @@ class TeacherStatusDto {
 class ProcessPayoutDto {
   @IsEnum(PayoutStatus) status: PayoutStatus;
   @IsOptional() @IsString() note?: string;
+}
+class ReseedDto {
+  @IsString() confirm: string;
 }
 
 /** Platform administration — SUPER_ADMIN only. */
@@ -24,7 +29,26 @@ export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly payouts: PayoutsService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * DANGER: wipes ALL data and regenerates the demo dataset. SUPER_ADMIN only,
+   * requires an explicit confirm phrase. Runs in the background (fire-and-forget)
+   * so the large dataset doesn't time out the request.
+   */
+  @Post('reseed')
+  @ApiOperation({ summary: '[admin] Wipe all data and reseed the demo dataset' })
+  reseed(@Body() dto: ReseedDto) {
+    if (dto?.confirm !== 'WIPE-AND-RESEED') {
+      throw new BadRequestException('Send { "confirm": "WIPE-AND-RESEED" } to proceed');
+    }
+    const logger = new Logger('Reseed');
+    seedDatabase(this.prisma, (m) => logger.log(m))
+      .then((s) => logger.log('reseed complete ' + JSON.stringify(s)))
+      .catch((e) => logger.error('reseed failed: ' + String(e)));
+    return { started: true, note: 'Wiping + reseeding in the background. Log in with Darsly@123 in ~1 min.' };
+  }
 
   @Get('overview')
   @ApiOperation({ summary: '[admin] Platform overview: users, courses, revenue, commission' })

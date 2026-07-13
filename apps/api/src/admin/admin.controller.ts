@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Logger, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Logger, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, PayoutStatus, Role, TeacherStatus } from '@darsly/shared-types';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
@@ -40,6 +40,10 @@ export class AdminController {
   @Post('reseed')
   @ApiOperation({ summary: '[admin] Wipe all data and reseed the demo dataset' })
   reseed(@Body() dto: ReseedDto) {
+    // Disabled by default — a destructive wipe must be explicitly enabled via env.
+    if (process.env.ALLOW_RESEED !== 'true') {
+      throw new ForbiddenException('Reseed is disabled. Set ALLOW_RESEED=true to enable.');
+    }
     if (dto?.confirm !== 'WIPE-AND-RESEED') {
       throw new BadRequestException('Send { "confirm": "WIPE-AND-RESEED" } to proceed');
     }

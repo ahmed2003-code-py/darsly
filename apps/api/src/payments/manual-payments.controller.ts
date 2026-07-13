@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
+import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -63,27 +65,25 @@ export class ManualPaymentsController {
   // ── Teacher verification ────────────────────────────────────────────────────
 
   @Get('teacher/payments')
-  @ApiBearerAuth()
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Payments to verify for my courses' })
-  teacherQueue(@CurrentUser() u: JwtPayload, @Query('status') status?: string) {
-    return this.payments.teacherQueue(u.tenantId!, status ?? 'PENDING');
+  @AcademyStaff('payment.verify')
+  @ApiOperation({ summary: '[academy] Payments to verify for this academy' })
+  teacherQueue(@CurrentAcademy() ctx: AcademyContext, @Query('status') status?: string) {
+    return this.payments.teacherQueue(ctx.academyId, status ?? 'PENDING');
   }
 
   @Post('teacher/payments/:id/verify')
-  @ApiBearerAuth()
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Confirm a payment → activates enrollment' })
-  teacherVerify(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.payments.verify(u, id);
+  @AcademyStaff('payment.verify')
+  @ApiOperation({ summary: '[academy] Confirm a payment → activates enrollment' })
+  teacherVerify(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    // Authorize by the RESOLVED academy (owner or staff with payment.verify).
+    return this.payments.verify({ sub: u.sub, role: Role.TEACHER, tenantId: ctx.academyId }, id);
   }
 
   @Post('teacher/payments/:id/reject')
-  @ApiBearerAuth()
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Reject a payment proof' })
-  teacherReject(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: RejectDto) {
-    return this.payments.reject(u, id, dto.reason);
+  @AcademyStaff('payment.verify')
+  @ApiOperation({ summary: '[academy] Reject a payment proof' })
+  teacherReject(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: RejectDto) {
+    return this.payments.reject({ sub: u.sub, role: Role.TEACHER, tenantId: ctx.academyId }, id, dto.reason);
   }
 
   // ── Admin oversight ─────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@ import {
   MinLength,
 } from 'class-validator';
 import { JwtPayload, Role } from '@darsly/shared-types';
+import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { LiveService } from './live.service';
@@ -43,38 +45,38 @@ export class LiveController {
   // ── Teacher ──────────────────────────────────────────────────────────────
 
   @Get('teacher/live')
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] My live sessions with booking counts' })
-  listMine(@CurrentUser() u: JwtPayload) {
-    return this.live.listForTeacher(u.tenantId!);
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Live sessions with booking counts' })
+  listMine(@CurrentAcademy() ctx: AcademyContext) {
+    return this.live.listForTeacher(ctx.academyId);
   }
 
   @Post('teacher/live')
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Schedule a live session (notifies students)' })
-  create(@CurrentUser() u: JwtPayload, @Body() dto: CreateLiveDto) {
-    return this.live.create(u.tenantId!, dto);
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Schedule a live session (notifies students)' })
+  create(@CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateLiveDto) {
+    return this.live.create(ctx.academyId, dto);
   }
 
   @Patch('teacher/live/:id')
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Update a live session' })
-  update(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: UpdateLiveDto) {
-    return this.live.update(u.tenantId!, id, dto);
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Update a live session' })
+  update(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: UpdateLiveDto) {
+    return this.live.update(ctx.academyId, id, dto);
   }
 
   @Delete('teacher/live/:id')
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Cancel (soft-delete) a live session' })
-  remove(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.live.remove(u.tenantId!, id);
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Cancel (soft-delete) a live session' })
+  remove(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.remove(ctx.academyId, id);
   }
 
   @Get('teacher/live/:id/bookings')
-  @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Students booked for a session' })
-  bookings(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.live.bookingsFor(u.tenantId!, id);
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Students booked for a session' })
+  bookings(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.bookingsFor(ctx.academyId, id);
   }
 
   // ── Student ──────────────────────────────────────────────────────────────

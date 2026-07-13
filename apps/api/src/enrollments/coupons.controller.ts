@@ -21,9 +21,10 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateCouponDto {
@@ -44,8 +45,7 @@ class UpdateCouponDto {
 }
 
 @ApiTags('coupons')
-@ApiBearerAuth()
-@Roles(Role.TEACHER)
+@AcademyStaff('course.write')
 @Controller('teacher/coupons')
 export class CouponsController {
   constructor(
@@ -55,9 +55,9 @@ export class CouponsController {
 
   @Get()
   @ApiOperation({ summary: '[teacher] List my coupons with usage' })
-  list(@CurrentUser() user: JwtPayload) {
+  list(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext) {
     return this.prisma.coupon.findMany({
-      where: { tenantId: user.tenantId },
+      where: { tenantId: ctx.academyId },
       include: { course: { select: { id: true, title: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -65,7 +65,7 @@ export class CouponsController {
 
   @Post()
   @ApiOperation({ summary: '[teacher] Create coupon (percent or fixed amount off)' })
-  async create(@CurrentUser() user: JwtPayload, @Body() dto: CreateCouponDto) {
+  async create(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateCouponDto) {
     if (!dto.percentOff && !dto.amountOffCents) {
       throw new BadRequestException('Provide percentOff or amountOffCents');
     }
@@ -74,7 +74,7 @@ export class CouponsController {
     }
     if (dto.courseId) {
       const course = await this.prisma.course.findFirst({
-        where: { id: dto.courseId, tenantId: user.tenantId },
+        where: { id: dto.courseId, tenantId: ctx.academyId },
       });
       if (!course) throw new NotFoundException('Course not found');
     }
@@ -84,7 +84,7 @@ export class CouponsController {
     // reserves the code for the dead row, so we must resurrect it rather than
     // create (which would hit P2002); a still-live coupon is a real conflict.
     const existing = await this.prisma.coupon.findUnique({
-      where: { tenantId_code: { tenantId: user.tenantId!, code } },
+      where: { tenantId_code: { tenantId: ctx.academyId, code } },
     });
     if (existing && !existing.deletedAt) {
       throw new BadRequestException('Coupon code already exists');
@@ -103,7 +103,7 @@ export class CouponsController {
           data: { ...fields, isActive: true, usedCount: 0, deletedAt: null },
         })
       : await this.prisma.coupon.create({
-          data: { tenantId: user.tenantId!, code, ...fields },
+          data: { tenantId: ctx.academyId, code, ...fields },
         });
     await this.audit.log({
       actorUserId: user.sub,
@@ -118,12 +118,12 @@ export class CouponsController {
   @Patch(':id')
   @ApiOperation({ summary: '[teacher] Update coupon (limits, expiry, active)' })
   async update(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: UpdateCouponDto,
   ) {
     const coupon = await this.prisma.coupon.findFirst({
-      where: { id, tenantId: user.tenantId },
+      where: { id, tenantId: ctx.academyId },
     });
     if (!coupon) throw new NotFoundException('Coupon not found');
     return this.prisma.coupon.update({
@@ -137,9 +137,9 @@ export class CouponsController {
 
   @Delete(':id')
   @ApiOperation({ summary: '[teacher] Delete coupon (deactivates if it was ever used)' })
-  async remove(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+  async remove(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
     const coupon = await this.prisma.coupon.findFirst({
-      where: { id, tenantId: user.tenantId },
+      where: { id, tenantId: ctx.academyId },
     });
     if (!coupon) throw new NotFoundException('Coupon not found');
     if (coupon.usedCount > 0) {

@@ -1,26 +1,25 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Module } from '@nestjs/common';
-import { JwtPayload, Role } from '@darsly/shared-types';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
+import { Controller, Get, Module } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyModule } from '../academy/academy.module';
+import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AnalyticsService } from './analytics.service';
 
 @ApiTags('analytics')
-@ApiBearerAuth()
-@Roles(Role.TEACHER)
+@AcademyStaff('analytics.read')
 @Controller('teacher/analytics')
 class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Get()
-  @ApiOperation({ summary: '[teacher] Teaching KPIs + revenue/enrollment trends' })
-  overview(@CurrentUser() u: JwtPayload) {
-    return this.analytics.teacherOverview(u.tenantId!);
+  @ApiOperation({ summary: '[academy] Teaching KPIs + revenue/enrollment trends' })
+  overview(@CurrentAcademy() ctx: AcademyContext) {
+    return this.analytics.teacherOverview(ctx.academyId);
   }
 }
 
 @Module({
+  imports: [AcademyModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
 })

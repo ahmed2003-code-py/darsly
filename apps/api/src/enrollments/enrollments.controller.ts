@@ -2,6 +2,8 @@ import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nes
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EnrollmentStatus, JwtPayload, Role } from '@darsly/shared-types';
 import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -68,19 +70,17 @@ export class EnrollmentsController {
   // ── Teacher approval queue ───────────────────────────────────────────────
 
   @Get('teacher/enrollments')
-  @Roles(Role.TEACHER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: '[teacher] List enrollments in my tenant (filter by status)' })
-  teacherList(@CurrentUser() user: JwtPayload, @Query() query: TeacherEnrollmentsQuery) {
-    return this.enrollments.teacherList(user.tenantId!, query.status);
+  @AcademyStaff('student.manage')
+  @ApiOperation({ summary: '[academy] List enrollments (filter by status)' })
+  teacherList(@CurrentAcademy() ctx: AcademyContext, @Query() query: TeacherEnrollmentsQuery) {
+    return this.enrollments.teacherList(ctx.academyId, query.status);
   }
 
   @Patch('teacher/enrollments/:id/approve')
-  @Roles(Role.TEACHER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: '[teacher] Approve a pending enrollment' })
-  async approve(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
-    const enrollment = await this.enrollments.approve(user.tenantId!, id);
+  @AcademyStaff('student.manage')
+  @ApiOperation({ summary: '[academy] Approve a pending enrollment' })
+  async approve(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    const enrollment = await this.enrollments.approve(ctx.academyId, id);
     await this.audit.log({
       actorUserId: user.sub,
       action: 'enrollment.approve',
@@ -91,15 +91,15 @@ export class EnrollmentsController {
   }
 
   @Patch('teacher/enrollments/:id/reject')
-  @Roles(Role.TEACHER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: '[teacher] Reject a pending enrollment' })
+  @AcademyStaff('student.manage')
+  @ApiOperation({ summary: '[academy] Reject a pending enrollment' })
   async reject(
     @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: ModerateDto,
   ) {
-    const enrollment = await this.enrollments.reject(user.tenantId!, id, dto.reason);
+    const enrollment = await this.enrollments.reject(ctx.academyId, id, dto.reason);
     await this.audit.log({
       actorUserId: user.sub,
       action: 'enrollment.reject',
@@ -111,15 +111,15 @@ export class EnrollmentsController {
   }
 
   @Patch('teacher/enrollments/:id/revoke')
-  @Roles(Role.TEACHER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: '[teacher] Revoke an active enrollment (kill access)' })
+  @AcademyStaff('student.manage')
+  @ApiOperation({ summary: '[academy] Revoke an active enrollment (kill access)' })
   async revoke(
     @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: ModerateDto,
   ) {
-    const enrollment = await this.enrollments.revoke(user.tenantId!, id, dto.reason);
+    const enrollment = await this.enrollments.revoke(ctx.academyId, id, dto.reason);
     await this.audit.log({
       actorUserId: user.sub,
       action: 'enrollment.revoke',

@@ -1,8 +1,9 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtPayload, Role } from '@darsly/shared-types';
+import { JwtPayload } from '@darsly/shared-types';
+import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -11,18 +12,17 @@ import { PrismaService } from '../prisma/prisma.service';
  * clip's watermark ID back to the exact student + session.
  */
 @ApiTags('security')
-@ApiBearerAuth()
-@Roles(Role.TEACHER)
+@AcademyStaff('academy.manage')
 @Controller('teacher/security')
 export class SecurityController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get('events')
   @ApiOperation({ summary: '[teacher] Security events in my tenant' })
-  events(@CurrentUser() user: JwtPayload, @Query('resolved') resolved?: string) {
+  events(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Query('resolved') resolved?: string) {
     return this.prisma.securityEvent.findMany({
       where: {
-        tenantId: user.tenantId,
+        tenantId: ctx.academyId,
         ...(resolved === undefined ? {} : { resolvedAt: resolved === 'true' ? { not: null } : null }),
       },
       orderBy: { createdAt: 'desc' },
@@ -33,9 +33,9 @@ export class SecurityController {
 
   @Get('sessions')
   @ApiOperation({ summary: '[teacher] Recent playback sessions in my tenant' })
-  sessions(@CurrentUser() user: JwtPayload) {
+  sessions(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext) {
     return this.prisma.playbackSession.findMany({
-      where: { tenantId: user.tenantId },
+      where: { tenantId: ctx.academyId },
       orderBy: { startedAt: 'desc' },
       take: 40,
       include: {
@@ -52,9 +52,9 @@ export class SecurityController {
    */
   @Get('trace/:watermarkId')
   @ApiOperation({ summary: '[teacher] Resolve a watermark ID to its student + session' })
-  async trace(@CurrentUser() user: JwtPayload, @Param('watermarkId') watermarkId: string) {
+  async trace(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('watermarkId') watermarkId: string) {
     const session = await this.prisma.playbackSession.findFirst({
-      where: { watermarkId: watermarkId.trim().toUpperCase(), tenantId: user.tenantId },
+      where: { watermarkId: watermarkId.trim().toUpperCase(), tenantId: ctx.academyId },
       include: {
         student: { include: { user: { select: { fullName: true, phone: true, email: true } } } },
         lesson: { select: { title: true, unit: { select: { course: { select: { title: true } } } } } },
@@ -67,7 +67,7 @@ export class SecurityController {
       data: {
         type: 'LEAK_TRACED',
         severity: 'CRITICAL',
-        tenantId: user.tenantId,
+        tenantId: ctx.academyId,
         studentId: session.studentId,
         meta: { watermarkId, tracedBy: user.sub, playbackSessionId: session.id },
       },

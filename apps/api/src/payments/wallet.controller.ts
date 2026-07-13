@@ -1,15 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtPayload, Role } from '@darsly/shared-types';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from './ledger.service';
 
-/** Teacher wallet: withdrawable balance, lifetime earnings, recent revenue. */
+/** Academy wallet: withdrawable balance, lifetime earnings, recent revenue. */
 @ApiTags('wallet')
-@ApiBearerAuth()
-@Roles(Role.TEACHER)
+@AcademyStaff('wallet.read')
 @Controller('teacher/wallet')
 export class WalletController {
   constructor(
@@ -19,8 +18,8 @@ export class WalletController {
 
   @Get()
   @ApiOperation({ summary: '[teacher] Wallet: balance, earnings, recent payments + payouts' })
-  async wallet(@CurrentUser() user: JwtPayload) {
-    const tenantId = user.tenantId!;
+  async wallet(@CurrentAcademy() ctx: AcademyContext) {
+    const tenantId = ctx.academyId;
     const [balanceCents, earnings, payments, payouts, minSetting] = await Promise.all([
       this.ledger.teacherBalance(tenantId),
       this.ledger.teacherEarnings(tenantId),

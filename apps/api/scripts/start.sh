@@ -22,5 +22,14 @@ else
   fi
 fi
 
+# One-shot demo seed: set RUN_SEED_ON_BOOT=true in the host env to wipe + reseed
+# the demo dataset on the next deploy, then REMOVE the var (otherwise every deploy
+# re-wipes). Failure here never blocks the boot.
+if [ "${RUN_SEED_ON_BOOT:-}" = "true" ]; then
+  echo "⚠ RUN_SEED_ON_BOOT=true — seeding demo data (this WIPES existing data!)"
+  npm run db:seed || echo "⚠ seed failed — continuing to boot anyway"
+  echo "  → done. Remove RUN_SEED_ON_BOOT from the env so future deploys don't re-wipe."
+fi
+
 echo "→ starting API"
 exec node dist/main.js

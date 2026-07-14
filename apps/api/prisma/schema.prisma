@@ -693,6 +693,11 @@ model Payment {
   couponId    String?
   coupon      Coupon?       @relation(fields: [couponId], references: [id])
   paidAt      DateTime?
+  // Separation of duties: a manual self-verification (teacher/owner) sets status
+  // PAID + paidAt (student gets access) but leaves settledAt null — the earning is
+  // NOT credited to the withdrawable ledger yet. An independent settlement (admin,
+  // or a matched real payment-event) sets settledAt and books the ledger credit.
+  settledAt   DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -724,6 +729,11 @@ model PaymentEvent {
   status         PaymentEventStatus @default(UNMATCHED)
   matchedPaymentId String?
   note           String?            // why unmatched/ambiguous, or manual-match actor
+  // Stable transfer identity (provider + normalized reference + amount). A replayed
+  // notification collides on this unique key and is rejected as a DUPLICATE rather
+  // than matching a second, unrelated payment. Null when no reference was supplied —
+  // in which case the event is NEVER auto-verified (manual review only).
+  dedupeKey      String?            @unique
   createdAt      DateTime           @default(now())
 
   @@index([status, createdAt])
@@ -1079,7 +1089,11 @@ model Certificate {
   student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   courseId  String
   course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  serial    String         @unique // e.g. DRS-CERT-2026-000123
+  serial    String         @unique // e.g. DRS-CERT-2026-000123 — human-readable, for display
+  // Unguessable public-verification token. The public verify endpoint looks up by
+  // this token instead of the sequential serial, so certificates can no longer be
+  // enumerated. Nullable only to allow a zero-downtime backfill of existing rows.
+  verifyToken String?      @unique
   pdfKey    String?
   issuedAt  DateTime       @default(now())
 

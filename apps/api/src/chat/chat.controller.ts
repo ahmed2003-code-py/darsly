@@ -1,14 +1,14 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
-import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { ChatService } from './chat.service';
+import { ChatService, CHAT_MESSAGE_MAX_LEN } from './chat.service';
 
 class SendMessageDto {
   @IsOptional() @IsString() threadId?: string;
   @IsOptional() @IsString() tenantId?: string;
-  @IsString() @MinLength(1) body: string;
+  @IsString() @MinLength(1) @MaxLength(CHAT_MESSAGE_MAX_LEN) body: string;
   @IsOptional() @IsString() lessonId?: string;
   @IsOptional() @IsInt() @Min(0) videoTimestampSec?: number;
 }

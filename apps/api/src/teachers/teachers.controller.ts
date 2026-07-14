@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -12,6 +13,7 @@ import {
   IsString,
   IsUrl,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { AuditService } from '../audit/audit.service';
@@ -36,11 +38,11 @@ class DiscoverTeachersDto implements DiscoverTeachersQuery {
 }
 
 class UpdateMyTeacherProfileDto {
-  @IsOptional() @IsString() bio?: string;
-  @IsOptional() @IsUrl({ require_tld: false }) introVideoUrl?: string;
+  @IsOptional() @IsString() @MaxLength(2_000) bio?: string;
+  @IsOptional() @IsUrl({ require_tld: false }) @MaxLength(500) introVideoUrl?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptional() @IsString() subjectId?: string;
-  @IsOptional() @IsArray() @ArrayUnique() @IsString({ each: true }) gradeIds?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @ArrayUnique() @IsString({ each: true }) gradeIds?: string[];
   @IsOptional() @IsBoolean() autoApproveEnrollments?: boolean;
 }
 

@@ -20,9 +20,15 @@ export class WalletController {
   @ApiOperation({ summary: '[teacher] Wallet: balance, earnings, recent payments + payouts' })
   async wallet(@CurrentAcademy() ctx: AcademyContext) {
     const tenantId = ctx.academyId;
-    const [balanceCents, earnings, payments, payouts, minSetting] = await Promise.all([
+    const [balanceCents, earnings, pendingSettlement, payments, payouts, minSetting] = await Promise.all([
       this.ledger.teacherBalance(tenantId),
       this.ledger.teacherEarnings(tenantId),
+      // Verified-but-not-yet-settled earnings: activated for the student, but held
+      // (not withdrawable) until a trusted payment-event or an admin settles them.
+      this.prisma.payment.aggregate({
+        where: { tenantId, status: 'PAID', settledAt: null },
+        _sum: { netCents: true },
+      }),
       this.prisma.payment.findMany({
         where: { tenantId, status: 'PAID' },
         orderBy: { paidAt: 'desc' },
@@ -44,6 +50,7 @@ export class WalletController {
     return {
       balanceCents,
       ...earnings,
+      pendingSettlementCents: pendingSettlement._sum.netCents ?? 0,
       payoutMinimumCents: Number((minSetting?.value as number) ?? 50000),
       recentPayments: payments.map((p) => ({
         id: p.id,

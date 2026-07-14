@@ -11,6 +11,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
 
+/** Max stored chat message length — shared by the REST DTO and the socket path. */
+export const CHAT_MESSAGE_MAX_LEN = 4000;
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -171,8 +174,14 @@ export class ChatService {
   }
 
   async sendMessage(user: JwtPayload, payload: SendMessagePayload) {
-    const body = payload.body.trim();
+    const body = payload.body?.trim() ?? '';
     if (!body) throw new BadRequestException('Empty message');
+    // Authoritative length cap for BOTH transports (REST DTO + the socket gateway,
+    // which the global HTTP ValidationPipe doesn't cover). Prevents multi-MB
+    // messages being persisted verbatim (storage amplification / oversized pushes).
+    if (body.length > CHAT_MESSAGE_MAX_LEN) {
+      throw new BadRequestException({ message: 'Message too long', code: 'MESSAGE_TOO_LONG' });
+    }
     const thread = await this.resolveThread(user, payload);
 
     const message = await this.prisma.chatMessage.create({

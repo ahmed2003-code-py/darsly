@@ -200,7 +200,7 @@ export class EnrollmentsService {
       }),
       this.prisma.certificate.findMany({
         where: { studentId: student.id },
-        select: { courseId: true, serial: true },
+        select: { courseId: true, serial: true, verifyToken: true },
       }),
     ]);
     const completedByCourse = new Map<string, number>();
@@ -208,7 +208,7 @@ export class EnrollmentsService {
       const cid = r.lesson.unit.courseId;
       completedByCourse.set(cid, (completedByCourse.get(cid) ?? 0) + 1);
     }
-    const certByCourse = new Map(certs.map((c) => [c.courseId, c.serial]));
+    const certByCourse = new Map(certs.map((c) => [c.courseId, { serial: c.serial, verifyToken: c.verifyToken }]));
 
     return enrollments.map((e) => {
       const lessonsCount = e.course.units.reduce((s, u) => s + u._count.lessons, 0);
@@ -221,7 +221,8 @@ export class EnrollmentsService {
         createdAt: e.createdAt,
         completedLessons,
         progressPct: lessonsCount ? Math.round((completedLessons / lessonsCount) * 100) : 0,
-        certificateSerial: certByCourse.get(e.course.id) ?? null,
+        certificateSerial: certByCourse.get(e.course.id)?.serial ?? null,
+        certificateToken: certByCourse.get(e.course.id)?.verifyToken ?? null,
         course: {
           id: e.course.id,
           title: e.course.title,
@@ -287,7 +288,12 @@ export class EnrollmentsService {
     }
     const expiresAt = this.expiryFor(enrollment.course);
 
-    // Atomic: activation + payment confirmation + ledger credit + coupon use.
+    // Atomic: activation + payment confirmation. This is a teacher/owner
+    // self-action (@AcademyStaff('student.manage')), so — like a manual verify —
+    // the payment is marked PAID (student activated) but left pending settlement:
+    // the withdrawable ledger credit is deferred to an independent settlement (a
+    // trusted payment-event or an admin). The coupon slot was reserved at submit,
+    // so it is NOT incremented here.
     const updated = await this.prisma.$transaction(async (tx) => {
       const flip = await tx.enrollment.updateMany({
         where: { id, status: 'PENDING_APPROVAL' },
@@ -296,15 +302,10 @@ export class EnrollmentsService {
       if (flip.count === 0) return null; // another caller handled it
 
       for (const payment of enrollment.payments) {
-        const pf = await tx.payment.updateMany({
+        await tx.payment.updateMany({
           where: { id: payment.id, status: 'PENDING' },
           data: { status: 'PAID', paidAt: new Date() },
         });
-        if (pf.count === 0) continue;
-        await this.ledger.recordPayment(payment.id, tx);
-        if (payment.couponId) {
-          await tx.coupon.update({ where: { id: payment.couponId }, data: { usedCount: { increment: 1 } } });
-        }
       }
       return tx.enrollment.findUnique({ where: { id } });
     });
@@ -327,13 +328,26 @@ export class EnrollmentsService {
     if (enrollment.status !== 'PENDING_APPROVAL') {
       throw new BadRequestException('Only pending enrollments can be rejected');
     }
-    const updated = await this.prisma.enrollment.update({
-      where: { id },
-      data: { status: 'REJECTED', revokedReason: reason ?? null },
-    });
-    await this.prisma.payment.updateMany({
-      where: { enrollmentId: id, status: 'PENDING' },
-      data: { status: 'FAILED' },
+    // Fail the pending payments AND release each coupon slot they reserved at
+    // submit time (a rejected enrollment must not permanently consume a use).
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const enr = await tx.enrollment.update({
+        where: { id },
+        data: { status: 'REJECTED', revokedReason: reason ?? null },
+      });
+      await tx.payment.updateMany({
+        where: { enrollmentId: id, status: 'PENDING' },
+        data: { status: 'FAILED' },
+      });
+      for (const p of enrollment.payments) {
+        if (p.couponId) {
+          await tx.coupon.updateMany({
+            where: { id: p.couponId, usedCount: { gt: 0 } },
+            data: { usedCount: { decrement: 1 } },
+          });
+        }
+      }
+      return enr;
     });
     await this.notifications.create({
       userId: enrollment.student.user.id,

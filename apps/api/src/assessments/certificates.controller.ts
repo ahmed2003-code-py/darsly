@@ -19,11 +19,11 @@ export class CertificatesController {
     return this.certificates.listMine(u.sub);
   }
 
-  @Get('verify/:serial')
+  @Get('verify/:token')
   @Public()
-  @ApiOperation({ summary: '[public] Verify a certificate by serial' })
-  verify(@Param('serial') serial: string) {
-    return this.certificates.verify(serial);
+  @ApiOperation({ summary: '[public] Verify a certificate by its unguessable token' })
+  verify(@Param('token') token: string) {
+    return this.certificates.verify(token);
   }
 
   @Get('mine/:serial')

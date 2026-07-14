@@ -112,6 +112,14 @@ export class ManualPaymentsController {
     return this.payments.reject(u, id, dto.reason);
   }
 
+  @Post('admin/payments/:id/settle')
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Settle a self-verified payment → credits withdrawable balance' })
+  adminSettle(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.payments.settle(id, u.sub);
+  }
+
   // ── Admin: manage receiving accounts ────────────────────────────────────────
 
   @Get('admin/payment-accounts')

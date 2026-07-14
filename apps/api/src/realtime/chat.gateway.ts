@@ -47,6 +47,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
         (client.handshake.headers.authorization ?? '').replace('Bearer ', '');
       const payload = await this.jwt.verifyAsync<JwtPayload>(token, {
         secret: process.env.JWT_ACCESS_SECRET,
+        algorithms: ['HS256'],
       });
       client.data.user = payload;
       client.join(`user:${payload.sub}`);

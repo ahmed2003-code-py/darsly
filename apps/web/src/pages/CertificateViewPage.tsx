@@ -11,11 +11,11 @@ import { dateShort } from '../lib/format';
  */
 export default function CertificateViewPage() {
   const { t } = useTranslation();
-  const { serial } = useParams();
+  const { token } = useParams();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['certificate', serial],
-    queryFn: async () => (await api.get(`/certificates/verify/${serial}`)).data,
+    queryKey: ['certificate', token],
+    queryFn: async () => (await api.get(`/certificates/verify/${token}`)).data,
     retry: false,
   });
 

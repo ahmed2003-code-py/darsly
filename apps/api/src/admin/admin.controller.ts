@@ -39,7 +39,7 @@ export class AdminController {
    */
   @Post('reseed')
   @ApiOperation({ summary: '[admin] Wipe all data and reseed the demo dataset' })
-  reseed(@Body() dto: ReseedDto) {
+  reseed(@CurrentUser() user: JwtPayload, @Body() dto: ReseedDto) {
     // Disabled by default — a destructive wipe must be explicitly enabled via env.
     if (process.env.ALLOW_RESEED !== 'true') {
       throw new ForbiddenException('Reseed is disabled. Set ALLOW_RESEED=true to enable.');
@@ -48,6 +48,10 @@ export class AdminController {
       throw new BadRequestException('Send { "confirm": "WIPE-AND-RESEED" } to proceed');
     }
     const logger = new Logger('Reseed');
+    // Forensic trail: the wipe truncates the AuditLog table itself, so the durable
+    // record of WHO triggered a destructive wipe is this logger line (captured by
+    // the host's log drain), not a DB row.
+    logger.warn(`DESTRUCTIVE reseed triggered by user ${user.sub} (role ${user.role})`);
     seedDatabase(this.prisma, (m) => logger.log(m))
       .then((s) => logger.log('reseed complete ' + JSON.stringify(s)))
       .catch((e) => logger.error('reseed failed: ' + String(e)));

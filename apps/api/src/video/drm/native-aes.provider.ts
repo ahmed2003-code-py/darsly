@@ -34,7 +34,11 @@ export class NativeAesDrmProvider implements IDrmProvider {
   ) {}
 
   async package(input: PackageInput): Promise<PackageResult> {
-    const key = await this.keys.currentOrRotate();
+    // Per-asset key isolation: mint a fresh AES-128 key for THIS asset rather than
+    // reusing a shared rotating key. A leak of one asset's key can no longer
+    // decrypt any other asset's segments (defence in depth on top of the per-asset
+    // token pinning at the key endpoint).
+    const key = await this.keys.createKey();
     const out = await this.transcoder.packageHls(input.sourcePath, key.keyBytes, KEY_URI_PLACEHOLDER);
 
     // Upload every produced file under hls/<assetId>/, preserving structure.

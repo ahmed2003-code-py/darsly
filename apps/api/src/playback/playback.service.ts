@@ -313,14 +313,30 @@ export class PlaybackService {
       data: { events: events.slice(-500) },
     });
 
-    // Persist watch progress.
+    // Persist watch progress. The client-reported watchedPct is NEVER trusted for
+    // completion: a forged "100% one second in" would otherwise mint a certificate
+    // with zero viewing. We cap it by what the wall-clock elapsed since the session
+    // opened makes physically possible (allowing up to ~2x playback + a startup
+    // grace), so completion can only be reached after genuinely spending the time.
     if (body.watchedPct != null) {
-      const justCompleted = body.watchedPct >= 90;
+      const lesson = await this.prisma.lesson.findUnique({
+        where: { id: session.lessonId },
+        select: { durationSec: true },
+      });
+      const durationSec = lesson?.durationSec ?? 0;
+      const elapsedSec = Math.max(0, (Date.now() - session.startedAt.getTime()) / 1000);
+      // Max content-seconds a viewer could plausibly have watched by now.
+      const maxPlausibleSec = elapsedSec * 2 + 15;
+      const clientPct = Math.max(0, Math.min(100, Math.round(body.watchedPct)));
+      const capPct =
+        durationSec > 0 ? Math.min(100, Math.floor((maxPlausibleSec / durationSec) * 100)) : 0;
+      const effectivePct = Math.min(clientPct, capPct);
+      const justCompleted = durationSec > 0 && effectivePct >= 90;
       await this.prisma.lessonProgress.updateMany({
         where: { studentId: session.studentId, lessonId: session.lessonId },
         data: {
           lastPositionSec: Math.round(body.positionSec),
-          watchedPct: Math.max(0, Math.min(100, Math.round(body.watchedPct))),
+          watchedPct: effectivePct,
           ...(justCompleted ? { completedAt: new Date() } : {}),
         },
       });

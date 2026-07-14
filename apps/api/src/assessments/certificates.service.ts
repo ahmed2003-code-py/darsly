@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -19,6 +20,11 @@ export class CertificatesService {
     return `DRS-CERT-${year}-${String(offset).padStart(6, '0')}`;
   }
 
+  /** Unguessable public-verification token (128 bits, URL-safe). */
+  private newVerifyToken(): string {
+    return randomBytes(16).toString('base64url');
+  }
+
   /**
    * Create the certificate, retrying on a serial collision — deriving the serial
    * from count() can race two concurrent completions onto the same serial (the
@@ -29,7 +35,7 @@ export class CertificatesService {
       const n = await this.prisma.certificate.count();
       try {
         return await this.prisma.certificate.create({
-          data: { studentId, courseId, serial: this.serialFor(n + 1 + attempt) },
+          data: { studentId, courseId, serial: this.serialFor(n + 1 + attempt), verifyToken: this.newVerifyToken() },
           include: { course: { select: { title: true } } },
         });
       } catch (e) {
@@ -111,10 +117,14 @@ export class CertificatesService {
     });
   }
 
-  /** Public verification by serial — proves a certificate is genuine. */
-  async verify(serial: string) {
+  /**
+   * Public verification by an unguessable token — proves a certificate is genuine
+   * without exposing the enumerable sequential serial. The serial is still
+   * returned (for display) but is no longer the lookup key on the public path.
+   */
+  async verify(token: string) {
     const cert = await this.prisma.certificate.findUnique({
-      where: { serial },
+      where: { verifyToken: token },
       include: {
         student: { select: { user: { select: { fullName: true } } } },
         course: {

@@ -126,7 +126,7 @@ export async function seedDatabase(prisma: Db, log: (m: string) => void = () => 
           const fee = Math.round((c.priceCents * 20) / 100);
           const net = c.priceCents;
           const total = net + fee;
-          const payment = await prisma.payment.create({ data: { studentId: st.id, courseId: c.id, enrollmentId: enr.id, tenantId: academy.id, amountCents: total, feeCents: fee, netCents: net, status: 'PAID', gateway: 'manual', method: pick(['INSTAPAY', 'VODAFONE_CASH']) as any, paidAt: new Date() } });
+          const payment = await prisma.payment.create({ data: { studentId: st.id, courseId: c.id, enrollmentId: enr.id, tenantId: academy.id, amountCents: total, feeCents: fee, netCents: net, status: 'PAID', gateway: 'manual', method: pick(['INSTAPAY', 'VODAFONE_CASH']) as any, paidAt: new Date(), settledAt: new Date() } });
           await prisma.ledgerTransaction.create({
             data: { description: `enrollment payment ${payment.id}`, paymentId: payment.id, entries: { create: [
               { account: 'platform:cash', direction: 'DEBIT', amountCents: total },

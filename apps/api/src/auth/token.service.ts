@@ -70,6 +70,7 @@ export class TokenService {
     try {
       payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET,
+        algorithms: ['HS256'],
       });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
@@ -87,10 +88,31 @@ export class TokenService {
       throw new UnauthorizedException('Refresh token reuse detected — session revoked');
     }
 
+    // Re-read role / tenant / teacher status from the DB (not the old token) so a
+    // role downgrade or a teacher suspension takes effect on the very next refresh
+    // instead of persisting for the whole refresh-token lifetime.
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { role: true, isActive: true, teacherProfile: { select: { id: true, status: true } } },
+    });
+    if (!dbUser || !dbUser.isActive) {
+      await this.revokeSession(session.id, 'ACCOUNT_DISABLED');
+      throw new UnauthorizedException('Account disabled');
+    }
+    const role = dbUser.role as Role;
+    if (role === Role.TEACHER) {
+      const st = dbUser.teacherProfile?.status;
+      if (st === 'PENDING' || st === 'SUSPENDED' || st === 'REJECTED') {
+        await this.revokeSession(session.id, `TEACHER_${st}`);
+        throw new UnauthorizedException(`Teacher account is ${String(st).toLowerCase()}`);
+      }
+    }
+    const tenantId = role === Role.TEACHER ? dbUser.teacherProfile?.id : undefined;
+
     const tokens = await this.signPair({
       sub: payload.sub,
-      role: payload.role,
-      tenantId: payload.tenantId,
+      role,
+      tenantId,
       sessionId: session.id,
     });
     await this.prisma.deviceSession.update({

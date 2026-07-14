@@ -31,11 +31,18 @@ export class ReviewsService {
     });
     if (!course) throw new NotFoundException('Course not found');
 
+    // Allowlist (not denylist): only a currently-ACTIVE, non-lapsed enrollment may
+    // review. A REVOKED / REJECTED / EXPIRED / PENDING_APPROVAL enrollment cannot —
+    // this closes the retaliation/manipulation vector where a refunded or removed
+    // student kept posting and editing reviews.
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
     });
-    if (!enrollment || enrollment.status === 'PENDING_APPROVAL' || enrollment.status === 'REJECTED') {
-      throw new ForbiddenException('You can only review a course you are enrolled in');
+    const active =
+      enrollment?.status === 'ACTIVE' &&
+      (!enrollment.expiresAt || enrollment.expiresAt > new Date());
+    if (!active) {
+      throw new ForbiddenException('You can only review a course you are actively enrolled in');
     }
 
     const prior = await this.prisma.review.findUnique({

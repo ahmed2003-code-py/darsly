@@ -71,10 +71,10 @@ export default function MyCoursesPage() {
                   )}
                 </div>
 
-                {e.certificateSerial && (
+                {e.certificateToken && (
                   <span
                     className="mt-3 flex items-center justify-center gap-1 rounded-lg border border-primary-container/60 bg-primary-fixed/40 py-2 text-sm font-bold text-primary"
-                    onClick={(ev) => { ev.preventDefault(); navigate(`/certificate/${e.certificateSerial}`); }}
+                    onClick={(ev) => { ev.preventDefault(); navigate(`/certificate/${e.certificateToken}`); }}
                   >
                     <span className="material-symbols-outlined text-base">workspace_premium</span>
                     {t('myCourses.viewCertificate')}

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { JwtPayload, Role } from '@darsly/shared-types';
+import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateCourseDto,
@@ -10,6 +11,11 @@ import {
   UpdateLessonDto,
   UpsertUnitDto,
 } from './dto/course.dto';
+
+// Decoded-bytes cap for a thumbnail data-URL. Sized just above the DTO's
+// 900_000-char limit (~675 KB decoded) so validation never rejects a payload the
+// controller already accepted; the point here is type/protocol safety, not size.
+const THUMBNAIL_MAX_BYTES = 700 * 1024;
 
 @Injectable()
 export class CoursesService {
@@ -90,6 +96,7 @@ export class CoursesService {
   }
 
   create(tenantId: string, dto: CreateCourseDto) {
+    if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
     return this.prisma.course.create({
       data: { ...dto, tenantId },
       include: { subject: true, grade: true },
@@ -98,6 +105,7 @@ export class CoursesService {
 
   async update(tenantId: string, courseId: string, dto: UpdateCourseDto) {
     await this.assertCourse(tenantId, courseId);
+    if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
 
     if (dto.status === 'PUBLISHED') {
       const lessons = await this.prisma.lesson.count({

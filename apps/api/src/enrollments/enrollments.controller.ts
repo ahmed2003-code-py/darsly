@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { EnrollmentStatus, JwtPayload, Role } from '@darsly/shared-types';
 import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
@@ -36,6 +37,9 @@ export class EnrollmentsController {
   // ── Student ──────────────────────────────────────────────────────────────
 
   @Public()
+  // Tighter than the global limit: this public endpoint reveals whether a coupon
+  // code is valid, so throttle it harder to blunt brute-force code enumeration.
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('enrollments/quote')
   @HttpCode(200)
   @ApiOperation({ summary: 'Price a course, optionally applying a coupon code' })

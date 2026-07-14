@@ -29,3 +29,33 @@ export function validateImageDataUrl(dataUrl: string, maxBytes: number): { mime:
   if (bytes > maxBytes) throw new BadRequestException({ message: 'Image too large', code: 'IMAGE_TOO_LARGE' });
   return { mime, bytes };
 }
+
+/**
+ * Validate a thumbnail reference, which may be EITHER a base64 image data-URL OR
+ * an external http(s) image URL. Rejects everything else — `javascript:` URIs,
+ * `data:text/html` and other non-image data-URLs, and any other protocol — so a
+ * stored thumbnail can never become a script/content-injection sink on the public
+ * course page. Applied at the service layer so every write path is covered, not
+ * just the dedicated thumbnail endpoint.
+ */
+export function validateThumbnailUrl(value: string, maxBytes: number): void {
+  if (!value || typeof value !== 'string') {
+    throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
+  }
+  const trimmed = value.trim();
+  if (trimmed.startsWith('data:')) {
+    // Data-URL → must be an allowed image type within the size cap.
+    validateImageDataUrl(trimmed, maxBytes);
+    return;
+  }
+  // Otherwise it must be a well-formed http(s) URL.
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new BadRequestException({ message: 'Invalid image URL', code: 'IMAGE_URL_INVALID' });
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new BadRequestException({ message: 'Unsupported image URL', code: 'IMAGE_URL_PROTOCOL' });
+  }
+}

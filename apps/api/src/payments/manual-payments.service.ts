@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
 import { validateImageDataUrl } from '../common/image.util';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -56,36 +57,43 @@ export class ManualPaymentsService {
     });
     if (pending) throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
 
-    const { netCents, feeCents, totalCents, couponId } = await this.quote(course, dto.couponCode);
+    const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
 
-    // Enrolment sits PENDING_APPROVAL (= awaiting payment verification).
-    const enr = enrollment
-      ? await this.prisma.enrollment.update({
-          where: { id: enrollment.id },
-          data: { status: 'PENDING_APPROVAL', approvedAt: null, revokedReason: null },
-        })
-      : await this.prisma.enrollment.create({
-          data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, status: 'PENDING_APPROVAL' },
-        });
+    // Atomic: reserve the coupon slot (FIX: no longer at verify time — that let
+    // many submits share a maxUses:1 coupon), upsert the PENDING_APPROVAL
+    // enrolment, and create the PENDING payment together. Any failure (incl. the
+    // coupon being exhausted by a concurrent submit) rolls the whole thing back.
+    const payment = await this.prisma.$transaction(async (tx) => {
+      if (couponId) await this.reserveCoupon(tx, couponId, couponMaxUses);
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        studentId: student.id,
-        courseId: course.id,
-        enrollmentId: enr.id,
-        tenantId: course.tenantId,
-        amountCents: totalCents,
-        feeCents,
-        netCents,
-        currency: course.currency,
-        gateway: 'manual',
-        method: dto.method as any,
-        proofImageUrl: dto.proofImageUrl,
-        reference: dto.reference?.trim() || null,
-        couponId,
-        status: 'PENDING',
-      },
-      select: { id: true, status: true, amountCents: true, createdAt: true },
+      const enr = enrollment
+        ? await tx.enrollment.update({
+            where: { id: enrollment.id },
+            data: { status: 'PENDING_APPROVAL', approvedAt: null, revokedReason: null },
+          })
+        : await tx.enrollment.create({
+            data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, status: 'PENDING_APPROVAL' },
+          });
+
+      return tx.payment.create({
+        data: {
+          studentId: student.id,
+          courseId: course.id,
+          enrollmentId: enr.id,
+          tenantId: course.tenantId,
+          amountCents: totalCents,
+          feeCents,
+          netCents,
+          currency: course.currency,
+          gateway: 'manual',
+          method: dto.method as any,
+          proofImageUrl: dto.proofImageUrl,
+          reference: dto.reference?.trim() || null,
+          couponId,
+          status: 'PENDING',
+        },
+        select: { id: true, status: true, amountCents: true, createdAt: true },
+      });
     });
 
     await this.notifications.create({
@@ -102,20 +110,27 @@ export class ManualPaymentsService {
 
   async verify(user: { sub: string; role: string; tenantId?: string }, paymentId: string) {
     const payment = await this.authorizePayment(user, paymentId);
-    return this.applyVerification(payment, user.sub, false);
+    // Separation of duties: an admin is an independent party, so their verify
+    // settles the earning immediately. A teacher/owner verifying their OWN
+    // academy's payment activates the enrolment but leaves the earning pending
+    // settlement (not withdrawable) until a trusted payment-event or admin settles it.
+    const settle = user.role === Role.SUPER_ADMIN;
+    return this.applyVerification(payment, user.sub, false, settle);
   }
 
-  /** Auto-verification by the notification-listener matching engine. */
+  /** Auto-verification by the notification-listener matching engine. A matched
+   *  real transfer is trusted, so it verifies AND settles the earning. */
   async systemVerify(paymentId: string) {
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('Payment not found');
-    return this.applyVerification(payment, 'system', true);
+    return this.applyVerification(payment, 'system', true, true);
   }
 
   private async applyVerification(
     payment: { id: string; status: string; courseId: string; enrollmentId: string | null; studentId: string; couponId: string | null },
     verifierId: string,
     auto: boolean,
+    settle: boolean,
   ) {
     if (payment.status !== 'PENDING') {
       // Fast path; the authoritative guard is the conditional update below.
@@ -130,14 +145,21 @@ export class ManualPaymentsService {
       ? new Date(Date.now() + 30 * 86_400_000)
       : null;
 
-    // Atomic: the status flip, the enrollment activation, the ledger credit, and
-    // the coupon increment all commit together (no "PAID but never credited"
-    // window). The conditional updateMany guards against a double-verify race
-    // (teacher + auto-matcher, or two verifiers) — exactly one caller proceeds.
+    // Atomic: the status flip and the enrollment activation commit together (no
+    // "PAID but student not activated" window). The conditional updateMany guards
+    // against a double-verify race (teacher + auto-matcher, or two verifiers) —
+    // exactly one caller proceeds. The ledger credit only happens when `settle` is
+    // true (trusted event / admin); a self-verify defers it to settlement. The
+    // coupon slot was already reserved at submit time, so it is NOT touched here.
     const handled = await this.prisma.$transaction(async (tx) => {
       const flip = await tx.payment.updateMany({
         where: { id: payment.id, status: 'PENDING' },
-        data: { status: 'PAID', paidAt: new Date(), verifiedById: verifierId },
+        data: {
+          status: 'PAID',
+          paidAt: new Date(),
+          verifiedById: verifierId,
+          ...(settle ? { settledAt: new Date() } : {}),
+        },
       });
       if (flip.count === 0) return false; // another caller already handled it
 
@@ -147,10 +169,7 @@ export class ManualPaymentsService {
           data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt },
         });
       }
-      await this.ledger.recordPayment(payment.id, tx);
-      if (payment.couponId) {
-        await tx.coupon.update({ where: { id: payment.couponId }, data: { usedCount: { increment: 1 } } });
-      }
+      if (settle) await this.ledger.recordPayment(payment.id, tx);
       return true;
     });
 
@@ -165,6 +184,33 @@ export class ManualPaymentsService {
       auto ? 'تم تأكيد دفعتك تلقائياً ✅' : 'تم تأكيد دفعتك ✅',
       `تم تفعيل اشتراكك في «${course?.title ?? 'الدورة'}». مذاكرة سعيدة!`);
     return { ok: true };
+  }
+
+  /**
+   * Independent settlement of an already-verified (PAID) payment: books the
+   * withdrawable ledger credit. Called by an admin, or by the matching engine when
+   * a trusted real transfer reconciles a payment a teacher had self-verified.
+   * Idempotent — the settledAt guard + the ledger's paymentId-unique transaction
+   * mean a double-settle credits nothing twice.
+   */
+  async settle(paymentId: string, actorId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status !== 'PAID') {
+      throw new BadRequestException({ message: 'Only a verified payment can be settled', code: 'NOT_PAID' });
+    }
+    if (payment.settledAt) return { ok: true, alreadySettled: true };
+
+    await this.prisma.$transaction(async (tx) => {
+      const flip = await tx.payment.updateMany({
+        where: { id: paymentId, status: 'PAID', settledAt: null },
+        data: { settledAt: new Date() },
+      });
+      if (flip.count === 0) return; // already settled by a concurrent caller
+      await this.ledger.recordPayment(paymentId, tx);
+    });
+    await this.ledger.ensureInvoice(paymentId);
+    return { ok: true, settledBy: actorId };
   }
 
   async reject(user: { sub: string; role: string; tenantId?: string }, paymentId: string, reason?: string) {
@@ -183,6 +229,9 @@ export class ManualPaymentsService {
       if (flip.count === 0) {
         throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
       }
+      // Release the coupon slot reserved at submit time so a rejected payment
+      // never permanently consumes a use.
+      await this.releaseCoupon(tx, payment.couponId);
       if (payment.enrollmentId) {
         await tx.enrollment.updateMany({
           where: { id: payment.enrollmentId, status: 'PENDING_APPROVAL' },
@@ -275,6 +324,7 @@ export class ManualPaymentsService {
   private async quote(course: { id: string; priceCents: number; tenantId: string }, couponCode?: string) {
     let discount = 0;
     let couponId: string | null = null;
+    let couponMaxUses: number | null = null;
     if (couponCode) {
       const coupon = await this.prisma.coupon.findFirst({
         where: { tenantId: course.tenantId, code: couponCode.trim().toUpperCase(), isActive: true, deletedAt: null },
@@ -286,6 +336,7 @@ export class ManualPaymentsService {
           ? Math.round((course.priceCents * coupon.percentOff) / 100)
           : Math.min(coupon.amountOffCents ?? 0, course.priceCents);
         couponId = coupon.id;
+        couponMaxUses = coupon.maxUses;
       }
     }
     // Additive platform service fee: student pays net + fee (never a deduction
@@ -301,7 +352,37 @@ export class ManualPaymentsService {
         ? computeServiceFee(academy.feeType, academy.feeValue, netCents)
         : computeServiceFee('PERCENT', 20, netCents);
     }
-    return { netCents, feeCents, totalCents: netCents + feeCents, couponId };
+    return { netCents, feeCents, totalCents: netCents + feeCents, couponId, couponMaxUses };
+  }
+
+  /**
+   * Atomically reserve one coupon slot inside the caller's transaction. For a
+   * capped coupon the conditional updateMany (usedCount < maxUses) is the race
+   * guard: two concurrent submits can never both pass a maxUses:1 coupon — the DB
+   * serializes the increments and the loser's update matches zero rows. Throws
+   * COUPON_LIMIT_REACHED so the whole submit transaction rolls back.
+   */
+  private async reserveCoupon(tx: Prisma.TransactionClient, couponId: string, maxUses: number | null) {
+    if (maxUses == null) {
+      await tx.coupon.update({ where: { id: couponId }, data: { usedCount: { increment: 1 } } });
+      return;
+    }
+    const reserved = await tx.coupon.updateMany({
+      where: { id: couponId, usedCount: { lt: maxUses } },
+      data: { usedCount: { increment: 1 } },
+    });
+    if (reserved.count === 0) {
+      throw new ConflictException({ message: 'Coupon usage limit reached', code: 'COUPON_LIMIT_REACHED' });
+    }
+  }
+
+  /** Release a previously reserved coupon slot (floored at 0). */
+  private async releaseCoupon(tx: Prisma.TransactionClient, couponId: string | null) {
+    if (!couponId) return;
+    await tx.coupon.updateMany({
+      where: { id: couponId, usedCount: { gt: 0 } },
+      data: { usedCount: { decrement: 1 } },
+    });
   }
 
   private async notifyStudent(studentId: string, type: string, title: string, body: string) {

@@ -87,7 +87,7 @@ export default function App() {
       <Route path="/my-certificates" element={<RequireAuth role={Role.STUDENT}><CertificatesPage /></RequireAuth>} />
       <Route path="/live" element={<RequireAuth role={Role.STUDENT}><LiveSessionsPage /></RequireAuth>} />
       <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
-      <Route path="/certificate/:serial" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
+      <Route path="/certificate/:token" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
 

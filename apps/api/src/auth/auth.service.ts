@@ -190,6 +190,14 @@ export class AuthService {
         where: { id: row.id },
         data: { usedAt: new Date() },
       }),
+      // Revoke every active device session so a compromised session (the reason a
+      // user resets) is evicted immediately — its access token fails the guard's
+      // revocation check and its refresh token can no longer rotate. Forces a
+      // fresh login on all devices with the new password.
+      this.prisma.deviceSession.updateMany({
+        where: { userId: row.userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'PASSWORD_RESET' },
+      }),
     ]);
     return { ok: true };
   }

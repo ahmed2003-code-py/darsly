@@ -10,14 +10,14 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
-import { IsInt, IsString, Min, MinLength } from 'class-validator';
+import { IsInt, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateNoteDto {
   @IsInt() @Min(0) timestampSec: number;
-  @IsString() @MinLength(1) body: string;
+  @IsString() @MinLength(1) @MaxLength(5_000) body: string;
 }
 
 /** Student's private, timestamped notes on a lesson (right rail of the player). */

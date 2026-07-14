@@ -8,6 +8,7 @@ import {
 import { Role, TeacherStatus } from '@darsly/shared-types';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'crypto';
+import { provisionTeacherAcademy } from '../academy/provision';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeviceContext, TokenService } from './token.service';
 import {
@@ -78,15 +79,37 @@ export class AuthService {
     await this.assertPhoneFree(phone);
 
     const slug = await this.uniqueSlug(dto.email, dto.fullName);
-    await this.prisma.user.create({
-      data: {
-        role: Role.TEACHER,
-        email,
-        phone,
-        fullName: dto.fullName.trim(),
-        passwordHash: await argon2.hash(dto.password),
-        teacherProfile: { create: { slug, bio: dto.bio ?? '', status: TeacherStatus.PENDING } },
-      },
+    const fullName = dto.fullName.trim();
+    // Create the teacher AND provision their own Academy + OWNER membership in one
+    // transaction. Without the academy, every @AcademyStaff console route (courses,
+    // lessons, quizzes, wallet…) 404s — the teacher can't build anything.
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          role: Role.TEACHER,
+          email,
+          phone,
+          fullName,
+          passwordHash: await argon2.hash(dto.password),
+          teacherProfile: { create: { slug, bio: dto.bio ?? '', status: TeacherStatus.PENDING } },
+        },
+        include: { teacherProfile: true },
+      });
+      const tp = user.teacherProfile!;
+      await provisionTeacherAcademy(
+        tx,
+        {
+          id: tp.id,
+          slug: tp.slug,
+          userId: user.id,
+          status: tp.status,
+          language: tp.language,
+          maxConcurrentSessions: tp.maxConcurrentSessions,
+          autoApproveEnrollments: tp.autoApproveEnrollments,
+          commissionPercent: tp.commissionPercent,
+        },
+        fullName,
+      );
     });
     return { pending: true };
   }

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TeacherStatus } from '@darsly/shared-types';
+import { ACADEMY_STATUS_FOR, provisionTeacherAcademy } from '../academy/provision';
 import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -52,13 +53,35 @@ export class AdminService {
   async setTeacherStatus(id: string, status: TeacherStatus, adminUserId: string) {
     const teacher = await this.prisma.teacherProfile.findUnique({
       where: { id },
-      include: { user: { select: { id: true } } },
+      include: { user: { select: { id: true, fullName: true } } },
     });
     if (!teacher) throw new NotFoundException('Teacher not found');
 
     const updated = await this.prisma.teacherProfile.update({
       where: { id },
       data: { status, verifiedAt: status === 'APPROVED' ? new Date() : teacher.verifiedAt },
+    });
+
+    // Make sure the teacher's Academy + OWNER membership exist (heals accounts
+    // created before academy auto-provisioning), then mirror the new status onto
+    // the academy so the storefront reflects approval/suspension.
+    await provisionTeacherAcademy(
+      this.prisma,
+      {
+        id: updated.id,
+        slug: updated.slug,
+        userId: teacher.user.id,
+        status,
+        language: updated.language,
+        maxConcurrentSessions: updated.maxConcurrentSessions,
+        autoApproveEnrollments: updated.autoApproveEnrollments,
+        commissionPercent: updated.commissionPercent,
+      },
+      teacher.user.fullName,
+    );
+    await this.prisma.academy.update({
+      where: { id: updated.id },
+      data: { status: ACADEMY_STATUS_FOR[status] ?? 'PENDING' },
     });
     const messages: Record<string, [string, string]> = {
       APPROVED: ['تم اعتماد حسابك', 'تهانينا! تم اعتماد حسابك كمعلم ويمكنك الآن نشر دوراتك.'],

@@ -34,6 +34,7 @@ const CourseBuilderPage = lazy(() => import('./pages/teacher/CourseBuilderPage')
 const TeacherLivePage = lazy(() => import('./pages/teacher/TeacherLivePage'));
 const TeacherPaymentsPage = lazy(() => import('./pages/teacher/TeacherPaymentsPage'));
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'));
+const AdminAcademyStudioPage = lazy(() => import('./pages/admin/AdminAcademyStudioPage'));
 const TeacherAnalyticsPage = lazy(() => import('./pages/teacher/TeacherAnalyticsPage'));
 const QuizBuilderPage = lazy(() => import('./pages/teacher/QuizBuilderPage'));
 const TeacherCoursesPage = lazy(() => import('./pages/teacher/TeacherCoursesPage'));
@@ -114,6 +115,7 @@ export default function App() {
       <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />
       <Route path="/admin/payments" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPaymentsPage /></RequireAuth>} />
       <Route path="/admin/security" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminSecurityPage /></RequireAuth>} />
+      <Route path="/admin/academy-studio" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademyStudioPage /></RequireAuth>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

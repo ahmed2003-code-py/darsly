@@ -34,6 +34,7 @@ export default function AdminOverviewPage() {
     { label: t('admin.courses'), value: data.coursesPublished, icon: 'menu_book' },
     { label: t('admin.activeEnrollments'), value: data.activeEnrollments, icon: 'workspace_premium' },
     { label: t('admin.pendingPayouts'), value: data.pendingPayouts, icon: 'payments', to: '/admin/payouts', highlight: data.pendingPayouts > 0 },
+    { label: 'استوديو الأكاديميات', value: 'مراجعة', icon: 'rate_review', to: '/admin/academy-studio' },
   ];
 
   return (

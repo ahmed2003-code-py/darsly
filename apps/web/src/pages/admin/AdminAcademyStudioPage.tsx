@@ -78,26 +78,57 @@ function ModerationQueue() {
     <div className="space-y-3">
       <ErrorNote error={moderate.error} />
       {q.data.map((it) => (
-        <div key={it.academyId} className="card flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-heading font-bold">{it.academyName}</p>
-            <p className="text-sm text-on-surface-variant">/{it.slug} • نسخة {it.version} • أُرسلت {dateShort(it.submittedAt)}</p>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn-primary" disabled={moderate.isPending}
-              onClick={() => moderate.mutate({ academyId: it.academyId, decision: 'approve' })}>
-              <span className="material-symbols-outlined text-[20px]">check</span>موافقة ونشر
-            </button>
-            <button className="btn-secondary" disabled={moderate.isPending}
-              onClick={() => {
-                const reason = prompt('سبب الرفض (اختياري):') ?? undefined;
-                moderate.mutate({ academyId: it.academyId, decision: 'reject', reason });
-              }}>
-              <span className="material-symbols-outlined text-[20px]">close</span>رفض
-            </button>
-          </div>
-        </div>
+        <QueueRow key={it.academyId} it={it} pending={moderate.isPending}
+          onApprove={() => moderate.mutate({ academyId: it.academyId, decision: 'approve' })}
+          onReject={() => {
+            const reason = prompt('سبب الرفض (اختياري):') ?? undefined;
+            moderate.mutate({ academyId: it.academyId, decision: 'reject', reason });
+          }} />
       ))}
+    </div>
+  );
+}
+
+function QueueRow({ it, pending, onApprove, onReject }: {
+  it: QueueItem; pending: boolean; onApprove: () => void; onReject: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const preview = useQuery<string>({
+    queryKey: ['admin-site-preview', it.academyId],
+    queryFn: async () => (await api.get(`/admin/academy-studio/sites/${it.academyId}/preview`, { responseType: 'text' })).data,
+    enabled: open,
+    retry: false,
+  });
+  return (
+    <div className="card">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-heading font-bold">{it.academyName}</p>
+          <p className="text-sm text-on-surface-variant">/{it.slug} • نسخة {it.version} • أُرسلت {dateShort(it.submittedAt)}</p>
+        </div>
+        <div className="flex gap-2">
+          <button className="btn-secondary" onClick={() => setOpen((o) => !o)}>
+            <span className="material-symbols-outlined text-[20px]">{open ? 'visibility_off' : 'visibility'}</span>
+            {open ? 'إخفاء' : 'معاينة'}
+          </button>
+          <button className="btn-primary" disabled={pending} onClick={onApprove}>
+            <span className="material-symbols-outlined text-[20px]">check</span>موافقة ونشر
+          </button>
+          <button className="btn-secondary" disabled={pending} onClick={onReject}>
+            <span className="material-symbols-outlined text-[20px]">close</span>رفض
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div className="mt-4">
+          {preview.isLoading ? <Spinner /> : preview.isError ? (
+            <p className="text-sm text-error">تعذّر تحميل المعاينة.</p>
+          ) : (
+            <iframe title={`معاينة ${it.slug}`} srcDoc={preview.data}
+              className="w-full rounded-xl border border-outline-variant bg-white" style={{ height: '70vh' }} />
+          )}
+        </div>
+      )}
     </div>
   );
 }

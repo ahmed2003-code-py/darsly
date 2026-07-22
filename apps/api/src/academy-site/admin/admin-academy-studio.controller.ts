@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, NotFoundException, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -31,6 +31,13 @@ export class AdminAcademyStudioController {
     const site = await this.admin.getSite(academyId);
     if (!site) throw new NotFoundException('Site not found');
     return site;
+  }
+
+  @Get('sites/:academyId/preview')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @ApiOperation({ summary: '[admin] Compiled HTML preview of an academy site' })
+  preview(@Param('academyId') academyId: string) {
+    return this.site.previewHtml(academyId);
   }
 
   @Post('sites/:academyId/moderate')

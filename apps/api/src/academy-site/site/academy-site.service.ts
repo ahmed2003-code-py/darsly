@@ -7,6 +7,7 @@ import {
 import { AcademySite, AcademySiteSnapshot } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AcademySiteConfig } from '../academy-site.config';
 import { SiteRenderService } from '../renderer/site-render.service';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
 
@@ -30,6 +31,7 @@ export class AcademySiteService {
     private readonly prisma: PrismaService,
     private readonly render: SiteRenderService,
     private readonly audit: AuditService,
+    private readonly config: AcademySiteConfig,
   ) {}
 
   async getOrCreate(academyId: string): Promise<AcademySite> {
@@ -157,7 +159,7 @@ export class AcademySiteService {
     }
     await this.assertPublishable(academyId, parsed.data!);
 
-    if (!site.moderationApproved) {
+    if (this.config.moderationEnabled && !site.moderationApproved) {
       const updated = await this.prisma.academySite.update({
         where: { id: site.id },
         data: { status: 'PENDING_MODERATION', moderationReason: null },

@@ -26,4 +26,7 @@ export class AcademySiteConfig {
   // A replica sets WORKER_ENABLED=false to opt out of processing jobs.
   readonly workerEnabled = (process.env.WORKER_ENABLED ?? 'true') === 'true';
   readonly workerConcurrency = Math.max(1, num(process.env.WORKER_CONCURRENCY, 3));
+  // When off (default), publishing goes live immediately (admin keeps takedown).
+  // Turn on to require admin approval before a first publish goes public.
+  readonly moderationEnabled = process.env.ACADEMY_SITE_MODERATION === 'true';
 }

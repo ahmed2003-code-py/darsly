@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AcademyModule } from '../academy/academy.module';
 import { AcademySiteConfig } from './academy-site.config';
+import { AiFeatureEnabledGuard } from './ai-feature.guard';
+import { AcademyFactsController } from './facts/academy-facts.controller';
+import { AcademyFactsService } from './facts/academy-facts.service';
 import { AiClient } from './ai/ai.client';
 import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
 import { AiJobService } from './jobs/ai-job.service';
@@ -17,18 +20,20 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
  */
 @Module({
   imports: [AcademyModule],
-  controllers: [AcademyMediaController],
+  controllers: [AcademyMediaController, AcademyFactsController],
   providers: [
     AcademySiteConfig,
+    AiFeatureEnabledGuard,
     AiClient,
     AiJobService,
     AiJobWorker,
     AcademyMediaProcessor,
     AcademyMediaService,
     MediaMaintenanceWorker,
+    AcademyFactsService,
     // Handler registry — empty until Slice 5 registers SITE_GENERATE.
     { provide: AI_JOB_HANDLERS, useValue: [] },
   ],
-  exports: [AcademySiteConfig, AiClient, AiJobService, AcademyMediaService],
+  exports: [AcademySiteConfig, AiClient, AiJobService, AcademyMediaService, AcademyFactsService],
 })
 export class AcademySiteModule {}

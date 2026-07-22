@@ -46,7 +46,7 @@ export function compileSite(doc: SiteDocument, ctx: RenderContext): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>${css(doc.theme.primary, doc.theme.accent)}</style>
+<style>${css(doc.theme.primary, doc.theme.accent, doc.theme.style)}</style>
 </head>
 <body>
 <header class="topbar">
@@ -185,9 +185,14 @@ function relLuminance(hex: string): number {
 /** Readable text color on a given background. */
 const onColor = (hex: string) => (relLuminance(hex) > 0.5 ? '#12121c' : '#ffffff');
 
-function css(primary: string, accent: string): string {
+const STYLE_RADIUS: Record<string, string> = {
+  modern: '18px', bold: '12px', elegant: '8px', minimal: '10px', playful: '26px',
+};
+
+function css(primary: string, accent: string, style?: string): string {
   const p = /^#[0-9a-fA-F]{6}$/.test(primary) ? primary : '#4A32C9';
   const a = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : p;
+  const rad = STYLE_RADIUS[style ?? 'modern'] ?? '18px';
   const pDark = darken(p, 0.18);
   const onP = onColor(p);
   const aDark = darken(a, 0.18);
@@ -196,7 +201,7 @@ function css(primary: string, accent: string): string {
   const pr = hexToRgb(p).join(',');
   const ar = hexToRgb(a).join(',');
   return `
-:root{--p:${p};--p-dark:${pDark};--on-p:${onP};--a:${a};--a-dark:${aDark};--soft:${pSoft};--pr:${pr};--ar:${ar};--ink:#14141f;--mut:#5c5c72;--bg:#fff;--line:#ececf3;--rad:18px}
+:root{--p:${p};--p-dark:${pDark};--on-p:${onP};--a:${a};--a-dark:${aDark};--soft:${pSoft};--pr:${pr};--ar:${ar};--ink:#14141f;--mut:#5c5c72;--bg:#fff;--line:#ececf3;--rad:${rad}}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
 body{margin:0;font-family:"Tajawal","Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.7;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 :lang(en){font-family:"Plus Jakarta Sans","Tajawal",system-ui,sans-serif}
@@ -224,19 +229,19 @@ img{max-width:100%;display:block}
 .hero-img{color:#fff;background-size:cover;background-position:center;min-height:82vh}
 .hero-img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,20,.35),rgba(10,10,20,.72))}
 .hero-img .wrap{position:relative;z-index:1}.hero-img h1{max-width:18ch}.hero-img .sub{color:#eef}
-.btn{display:inline-flex;align-items:center;gap:8px;background:var(--p);color:var(--on-p);padding:15px 32px;border-radius:14px;text-decoration:none;font-weight:800;font-size:1.05rem;box-shadow:0 14px 30px -12px rgba(var(--pr),.7);transition:.2s}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--p);color:var(--on-p);padding:15px 32px;border-radius:var(--rad);text-decoration:none;font-weight:800;font-size:1.05rem;box-shadow:0 14px 30px -12px rgba(var(--pr),.7);transition:.2s}
 .btn:hover{background:var(--p-dark);transform:translateY(-2px);box-shadow:0 20px 40px -12px rgba(var(--pr),.8)}
 .btn-ghost{background:rgba(var(--pr),.08);color:var(--p);box-shadow:none}.btn-ghost:hover{background:rgba(var(--pr),.16);color:var(--p)}
 /* About */
 .about-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center}
-.about p{font-size:1.1rem;color:#3d3d52;white-space:pre-line}.about-img{width:100%;border-radius:24px;box-shadow:0 30px 60px -30px rgba(var(--pr),.5)}
+.about p{font-size:1.1rem;color:#3d3d52;white-space:pre-line}.about-img{width:100%;border-radius:calc(var(--rad) + 6px);box-shadow:0 30px 60px -30px rgba(var(--pr),.5)}
 /* Stats */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px}
 .stat{background:var(--soft);border:1px solid rgba(var(--pr),.12);border-radius:var(--rad);padding:28px;text-align:center}
 .stat .v{display:block;font-size:2.6rem;font-weight:900;background:linear-gradient(120deg,var(--p),${heroTo});-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}.stat .l{color:var(--mut);font-weight:600}
 /* FAQ */
 .faq-list{max-width:800px;margin:0 auto}
-.faq-list details{border:1px solid var(--line);border-radius:16px;padding:6px 22px;margin-bottom:14px;background:#fff;transition:.2s}
+.faq-list details{border:1px solid var(--line);border-radius:var(--rad);padding:6px 22px;margin-bottom:14px;background:#fff;transition:.2s}
 .faq-list details[open]{border-color:rgba(var(--pr),.5);box-shadow:0 16px 40px -24px rgba(var(--pr),.5)}
 .faq-list summary{font-weight:800;cursor:pointer;padding:16px 0;list-style:none;position:relative;font-size:1.08rem}
 .faq-list summary::-webkit-details-marker{display:none}
@@ -245,7 +250,7 @@ img{max-width:100%;display:block}
 .faq-list details>div{padding-bottom:18px;color:#3d3d52}
 /* Cards */
 .cards,.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:24px}
-.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:0;overflow:hidden;min-height:120px;transition:.25s cubic-bezier(.2,.7,.2,1)}
+.card{background:#fff;border:1px solid var(--line);border-radius:calc(var(--rad) + 2px);padding:0;overflow:hidden;min-height:120px;transition:.25s cubic-bezier(.2,.7,.2,1)}
 a.card{text-decoration:none;color:inherit}
 a.card:hover{border-color:rgba(var(--pr),.5);box-shadow:0 30px 60px -30px rgba(var(--pr),.6);transform:translateY(-6px)}
 .card img{width:100%;aspect-ratio:16/10;object-fit:cover}.card h3{margin:0;padding:16px 18px 4px;font-size:1.1rem;font-weight:800}.card>div{padding:0 18px 18px;color:var(--p);font-weight:800}

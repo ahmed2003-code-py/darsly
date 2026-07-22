@@ -28,6 +28,7 @@ export class SiteGeneratorService {
   async buildDraft(
     academyId: string,
     vibe?: string,
+    stylePrompt?: string,
   ): Promise<{ doc: SiteDocument; costCents: number }> {
     // ── extract ──
     const [academy, facts] = await Promise.all([
@@ -39,9 +40,9 @@ export class SiteGeneratorService {
       throw new AiJobError('Not enough profile facts to generate a site', 'TERMINAL');
     }
 
-    // ── brand (deterministic) ──
-    const primary = HEX.test(academy.colorPrimary) ? academy.colorPrimary : '#4A32C9';
-    const accent = HEX.test(academy.colorAccent) ? academy.colorAccent : primary;
+    // ── brand fallback (academy settings) ──
+    const academyPrimary = HEX.test(academy.colorPrimary) ? academy.colorPrimary : '#4A32C9';
+    const academyAccent = HEX.test(academy.colorAccent) ? academy.colorAccent : academyPrimary;
     const media = await this.prisma.academyMedia.findMany({
       where: { academyId, status: 'READY', kind: { in: ['LOGO', 'COVER', 'GALLERY'] } },
       orderBy: { createdAt: 'asc' },
@@ -55,7 +56,7 @@ export class SiteGeneratorService {
     // so there is no free-form JSON extraction and no malformed-JSON retries.
     const completion = await this.ai.completeStructured<unknown>({
       system: systemPrompt(),
-      messages: [{ role: 'user', content: userPrompt(facts, academy.name, vibe) }],
+      messages: [{ role: 'user', content: userPrompt(facts, academy.name, vibe, stylePrompt) }],
       // Headroom for GPT-5 reasoning tokens (counted in output) plus the copy.
       maxTokens: 4000,
       schemaName: AI_COPY_SCHEMA_NAME,
@@ -69,8 +70,15 @@ export class SiteGeneratorService {
     }
     const copy: AiCopy = parsed.data!;
 
+    // ── theme: AI colors win when the teacher gave a style brief; otherwise keep
+    // the academy's own brand colors. Always take the AI's style keyword. ──
+    const wantAi = !!stylePrompt?.trim();
+    const primary = (wantAi && HEX.test(copy.theme.primary) && copy.theme.primary) || academyPrimary;
+    const accent = (wantAi && HEX.test(copy.theme.accent) && copy.theme.accent) || academyAccent;
+    const style = copy.theme.style;
+
     // ── assemble (deterministic) ──
-    const doc = this.assemble(copy, { primary, accent, logoId, coverId, galleryIds }, facts.socials);
+    const doc = this.assemble(copy, { primary, accent, style, logoId, coverId, galleryIds }, facts.socials);
     const res = parseSiteDocument(doc);
     if (!res.success) {
       throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
@@ -80,7 +88,7 @@ export class SiteGeneratorService {
 
   private assemble(
     copy: AiCopy,
-    brand: { primary: string; accent: string; logoId?: string; coverId?: string; galleryIds: string[] },
+    brand: { primary: string; accent: string; style?: string; logoId?: string; coverId?: string; galleryIds: string[] },
     socialsJson: unknown,
   ): SiteDocument {
     const bilingual = (ar: string, en: string) => ({ ar, en });
@@ -144,7 +152,12 @@ export class SiteGeneratorService {
 
     return {
       version: 1,
-      theme: { primary: brand.primary, accent: brand.accent, ...(brand.logoId ? { logoMediaId: brand.logoId } : {}) },
+      theme: {
+        primary: brand.primary,
+        accent: brand.accent,
+        ...(brand.logoId ? { logoMediaId: brand.logoId } : {}),
+        ...(brand.style ? { style: brand.style as SiteDocument['theme']['style'] } : {}),
+      },
       seo: { title: copy.seo.metaTitle, description: copy.seo.metaDescription },
       blocks,
     };

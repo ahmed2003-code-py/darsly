@@ -98,10 +98,13 @@ export const siteBlockSchema = z.discriminatedUnion('type', [
   contactBlock,
 ]);
 
+export const SITE_STYLES = ['modern', 'bold', 'elegant', 'minimal', 'playful'] as const;
+
 export const siteThemeSchema = z.object({
   primary: z.string().regex(HEX),
   accent: z.string().regex(HEX),
   logoMediaId: z.string().optional(),
+  style: z.enum(SITE_STYLES).optional(),
 });
 
 export const siteSeoSchema = z.object({

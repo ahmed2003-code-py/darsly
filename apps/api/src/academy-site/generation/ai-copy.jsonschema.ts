@@ -22,8 +22,18 @@ export const AI_COPY_SCHEMA_NAME = 'academy_copy';
 export const aiCopyJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
-  required: ['seo', 'hero', 'about', 'faq', 'cta'],
+  required: ['theme', 'seo', 'hero', 'about', 'faq', 'cta'],
   properties: {
+    theme: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['primary', 'accent', 'style'],
+      properties: {
+        primary: { type: 'string' },
+        accent: { type: 'string' },
+        style: { type: 'string', enum: ['modern', 'bold', 'elegant', 'minimal', 'playful'] },
+      },
+    },
     seo: {
       type: 'object',
       additionalProperties: false,

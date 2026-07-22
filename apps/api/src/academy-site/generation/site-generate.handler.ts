@@ -17,9 +17,13 @@ export class SiteGenerateHandler implements AiJobHandler {
   ) {}
 
   async handle(job: AiJob): Promise<AiJobResult> {
-    const vibe = (job.input as { vibe?: string } | null)?.vibe;
+    const input = job.input as { vibe?: string; stylePrompt?: string } | null;
     await this.jobs.setStage(job.id, 'copy');
-    const { doc, costCents } = await this.generator.buildDraft(job.academyId, vibe);
+    const { doc, costCents } = await this.generator.buildDraft(
+      job.academyId,
+      input?.vibe ?? undefined,
+      input?.stylePrompt ?? undefined,
+    );
     await this.jobs.setStage(job.id, 'assemble');
     const { snapshot } = await this.site.saveDraft(job.academyId, doc, 'generate');
     return { costCents, resultSnapshotId: snapshot.id };

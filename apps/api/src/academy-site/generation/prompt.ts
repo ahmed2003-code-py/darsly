@@ -46,6 +46,7 @@ export function systemPrompt(): string {
     '- FAQ: answer the 3–5 questions a real Egyptian parent/student would actually ask (levels covered, teaching method, exam prep, how to start, support). Answers are concrete and reassuring, 1–3 sentences.',
     '- CTA: an action-oriented headline + a short button verb ("ابدأ الآن" / "Start now", "اشترك" / "Enrol"). No generic "click here".',
     '- SEO: metaTitle ≤ 60 characters — include the subject + stage (and academy/teacher name if it fits) the way someone would search. metaDescription ≤ 155 characters — a compelling, keyword-natural summary that earns the click. Both must read naturally, not keyword-stuffed.',
+    '- DESIGN (theme): choose "primary" and "accent" colors as hex (#RRGGBB) and a "style". If the STYLE BRIEF names colors or a mood, honour it precisely; otherwise pick a tasteful, high-contrast palette that fits the subject and audience. primary is the dominant brand color (buttons, accents); accent complements it. Avoid pure black/white as primary and avoid low-contrast pairs. style ∈ modern | bold | elegant | minimal | playful — pick the one that matches the brief/subject.',
     '',
     'ARABIC QUALITY: Modern Standard Arabic that feels natural and warm to an Egyptian audience — clear, fluent, and human. Do NOT translate literally from English or produce stiff, robotic phrasing. Keep sentences short. No diacritics. Numerals as digits.',
     'ENGLISH QUALITY: Native, benefit-driven marketing English — not a word-for-word translation of the Arabic. The two languages should carry the same meaning and tone, each idiomatic in its own right.',
@@ -55,8 +56,16 @@ export function systemPrompt(): string {
 }
 
 /** User message: the tone brief + the requested shape + the untrusted facts. */
-export function userPrompt(facts: AcademyProfileFacts, academyName: string, vibe?: string): string {
+export function userPrompt(
+  facts: AcademyProfileFacts,
+  academyName: string,
+  vibe?: string,
+  stylePrompt?: string,
+): string {
   const v = (vibe && VIBES[vibe]) || VIBES.trusted;
+  const styleBrief = stylePrompt?.trim()
+    ? stylePrompt.trim().slice(0, 600)
+    : '(none given — choose a palette and style that fit the subject and audience)';
   const factsBlock = JSON.stringify(
     {
       academyName,
@@ -72,10 +81,12 @@ export function userPrompt(facts: AcademyProfileFacts, academyName: string, vibe
   );
   return [
     `BRAND TONE: ${v.tone}. ${v.guidance}`,
+    `STYLE BRIEF (design/colors the teacher asked for): ${styleBrief}`,
     '',
     'Write the landing-page copy for this academy. Infer the target audience from the subjects and stages. Ground every claim in the FACTS below; where numbers are absent, sell the approach and benefits, not invented figures.',
     '',
     'Produce a JSON object with this shape (every text field is {"ar": "...", "en": "..."}):',
+    '  theme: { primary, accent, style }      // hex colors + style, per the STYLE BRIEF',
     '  seo:   { metaTitle, metaDescription }  // search-optimised, within the length limits',
     '  hero:  { headline, subheadline, ctaLabel }',
     '  about: { heading, body }              // body = 2 short paragraphs',

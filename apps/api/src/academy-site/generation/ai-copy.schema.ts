@@ -6,7 +6,15 @@ import { localizedText } from '../schema/site-document';
  * Document: the model only writes prose; the pipeline assembles blocks, wires
  * media and live-data blocks, and applies the brand deterministically.
  */
+export const STYLES = ['modern', 'bold', 'elegant', 'minimal', 'playful'] as const;
+
 export const aiCopySchema = z.object({
+  // Design direction chosen by the model from the teacher's style brief.
+  theme: z.object({
+    primary: z.string(),
+    accent: z.string(),
+    style: z.enum(STYLES),
+  }),
   seo: z.object({
     metaTitle: localizedText(70),
     metaDescription: localizedText(160),

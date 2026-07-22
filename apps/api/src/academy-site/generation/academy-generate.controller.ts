@@ -49,7 +49,10 @@ export class AcademyGenerateController {
   @Throttle({ default: { limit: 5, ttl: 3_600_000 } })
   @ApiOperation({ summary: '[staff] Queue AI site generation for this academy' })
   async generate(@CurrentAcademy() ctx: AcademyContext, @Body() dto: GenerateSiteDto) {
-    const job = await this.jobs.enqueue(ctx.academyId, 'SITE_GENERATE', { vibe: dto.vibe ?? null });
+    const job = await this.jobs.enqueue(ctx.academyId, 'SITE_GENERATE', {
+      vibe: dto.vibe ?? null,
+      stylePrompt: dto.stylePrompt ?? null,
+    });
     return jobView(job);
   }
 

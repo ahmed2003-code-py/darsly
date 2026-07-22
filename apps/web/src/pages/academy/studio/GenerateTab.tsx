@@ -28,6 +28,7 @@ const STAGE_LABEL: Record<string, string> = {
 export default function GenerateTab({ onDone }: { onDone?: () => void }) {
   const qc = useQueryClient();
   const [vibe, setVibe] = useState<(typeof VIBES)[number]['key']>('trusted');
+  const [stylePrompt, setStylePrompt] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
 
   const job = useQuery<Job>({
@@ -50,7 +51,8 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
   }, [status, qc]);
 
   const generate = useMutation({
-    mutationFn: async () => (await api.post('/academy/site/generate', { vibe })).data as Job,
+    mutationFn: async () =>
+      (await api.post('/academy/site/generate', { vibe, stylePrompt: stylePrompt.trim() || undefined })).data as Job,
     onSuccess: (j) => setJobId(j.id),
     onError: (e: AxiosError) => {
       // 409 = a job is already running; attach to it via the overview's lastJob.
@@ -128,6 +130,22 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
           </button>
         ))}
       </div>
+
+      <label className="mb-5 block">
+        <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+          صف الشكل والألوان اللي عايزها (اختياري)
+        </span>
+        <textarea
+          className="input min-h-[80px]"
+          value={stylePrompt}
+          maxLength={600}
+          onChange={(e) => setStylePrompt(e.target.value)}
+          placeholder="مثال: تصميم عصري جريء بألوان كحلي وذهبي، إحساس فخم واحترافي…"
+        />
+        <span className="mt-1 block text-xs text-outline">
+          سيختار الذكاء الاصطناعي الألوان والستايل بناءً على وصفك. اتركه فارغًا ليستخدم ألوان أكاديميتك.
+        </span>
+      </label>
 
       {failed && (
         <div className="mb-4 rounded-xl border border-error/30 bg-error-container/30 p-3 text-sm text-error">

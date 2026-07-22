@@ -8,6 +8,7 @@ import { Badge, PageHeader, Spinner } from '../../components/ui';
 import FactsForm from './studio/FactsForm';
 import MediaManager from './studio/MediaManager';
 import GenerateTab from './studio/GenerateTab';
+import EditorTab from './studio/EditorTab';
 import PreviewTab from './studio/PreviewTab';
 import PublishTab from './studio/PublishTab';
 import type { SiteOverview, SiteStatus } from './studio/types';
@@ -29,6 +30,7 @@ const TABS = [
   { key: 'facts', label: 'البيانات', icon: 'badge' },
   { key: 'media', label: 'الصور', icon: 'image' },
   { key: 'generate', label: 'التوليد', icon: 'auto_awesome' },
+  { key: 'editor', label: 'المحرّر', icon: 'edit' },
   { key: 'preview', label: 'المعاينة', icon: 'visibility' },
   { key: 'publish', label: 'النشر', icon: 'publish' },
 ] as const;
@@ -119,7 +121,8 @@ export default function AcademyStudioPage() {
 
       {tab === 'facts' && <FactsForm />}
       {tab === 'media' && <MediaManager />}
-      {tab === 'generate' && <GenerateTab onDone={() => setTab('preview')} />}
+      {tab === 'generate' && <GenerateTab onDone={() => setTab('editor')} />}
+      {tab === 'editor' && <EditorTab onSaved={() => undefined} />}
       {tab === 'preview' && <PreviewTab />}
       {tab === 'publish' && <PublishTab slug={academy.slug} />}
     </div>

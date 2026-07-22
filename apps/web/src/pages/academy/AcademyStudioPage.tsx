@@ -7,6 +7,7 @@ import { useOwnedAcademy } from '../../lib/academy';
 import { Badge, PageHeader, Spinner } from '../../components/ui';
 import FactsForm from './studio/FactsForm';
 import MediaManager from './studio/MediaManager';
+import GenerateTab from './studio/GenerateTab';
 import type { SiteOverview, SiteStatus } from './studio/types';
 
 const STATUS_LABEL: Record<SiteStatus, string> = {
@@ -25,6 +26,7 @@ const STATUS_TONE: Record<SiteStatus, 'primary' | 'teal' | 'warn' | 'error' | 'n
 const TABS = [
   { key: 'facts', label: 'البيانات', icon: 'badge' },
   { key: 'media', label: 'الصور', icon: 'image' },
+  { key: 'generate', label: 'التوليد', icon: 'auto_awesome' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -113,6 +115,7 @@ export default function AcademyStudioPage() {
 
       {tab === 'facts' && <FactsForm />}
       {tab === 'media' && <MediaManager />}
+      {tab === 'generate' && <GenerateTab />}
     </div>
   );
 }

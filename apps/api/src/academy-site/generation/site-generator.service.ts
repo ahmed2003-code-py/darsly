@@ -5,7 +5,8 @@ import { AiClient } from '../ai/ai.client';
 import { AiJobError } from '../ai/ai-job.error';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
 import { AiCopy, parseAiCopy } from './ai-copy.schema';
-import { extractJson, systemPrompt, userPrompt } from './prompt';
+import { AI_COPY_SCHEMA_NAME, aiCopyJsonSchema } from './ai-copy.jsonschema';
+import { systemPrompt, userPrompt } from './prompt';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -50,21 +51,23 @@ export class SiteGeneratorService {
     const galleryIds = media.filter((m) => m.kind === 'GALLERY').map((m) => m.id);
 
     // ── copy (AI) ──
-    const completion = await this.ai.complete({
+    // Structured Outputs guarantees the model returns JSON matching the schema,
+    // so there is no free-form JSON extraction and no malformed-JSON retries.
+    const completion = await this.ai.completeStructured<unknown>({
       system: systemPrompt(),
       messages: [{ role: 'user', content: userPrompt(facts, academy.name, vibe) }],
-      maxTokens: 2500,
-      temperature: 0.7,
+      // Headroom for GPT-5 reasoning tokens (counted in output) plus the copy.
+      maxTokens: 4000,
+      schemaName: AI_COPY_SCHEMA_NAME,
+      schema: aiCopyJsonSchema,
     });
-    let copy: AiCopy;
-    try {
-      const parsed = parseAiCopy(extractJson(completion.text));
-      if (parsed.error) throw new Error(parsed.error);
-      copy = parsed.data!;
-    } catch (e) {
-      // Malformed model output is retryable (a re-roll often fixes it).
-      throw new AiJobError(`AI output invalid: ${(e as Error).message}`, 'RETRYABLE');
+    // Defense-in-depth: the shape is guaranteed; this enforces the length caps
+    // (not encoded in the strict schema) and narrows the type.
+    const parsed = parseAiCopy(completion.data);
+    if (parsed.error) {
+      throw new AiJobError(`AI output failed validation: ${parsed.error}`, 'RETRYABLE');
     }
+    const copy: AiCopy = parsed.data!;
 
     // ── assemble (deterministic) ──
     const doc = this.assemble(copy, { primary, accent, logoId, coverId, galleryIds }, facts.socials);

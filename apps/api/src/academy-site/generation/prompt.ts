@@ -54,14 +54,3 @@ export function userPrompt(facts: AcademyProfileFacts, academyName: string, vibe
     '--- END FACTS ---',
   ].join('\n');
 }
-
-/** Best-effort extraction of a JSON object from a model reply. */
-export function extractJson(text: string): unknown {
-  const trimmed = text.trim();
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('no JSON object found in model output');
-  }
-  return JSON.parse(trimmed.slice(start, end + 1));
-}

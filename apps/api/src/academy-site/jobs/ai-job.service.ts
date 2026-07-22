@@ -37,6 +37,11 @@ export class AiJobService {
     return this.prisma.aiJob.create({ data: { academyId, type, input, status: 'QUEUED' } });
   }
 
+  /** Fetch a job scoped to an academy (status polling); null if not theirs. */
+  getForAcademy(academyId: string, jobId: string): Promise<AiJob | null> {
+    return this.prisma.aiJob.findFirst({ where: { id: jobId, academyId } });
+  }
+
   hasActiveJob(academyId: string): Promise<boolean> {
     return this.prisma.aiJob
       .count({ where: { academyId, status: { in: ['QUEUED', 'RUNNING'] } } })

@@ -4,6 +4,10 @@ import { AcademySiteConfig } from './academy-site.config';
 import { AiFeatureEnabledGuard } from './ai-feature.guard';
 import { AcademyFactsController } from './facts/academy-facts.controller';
 import { AcademyFactsService } from './facts/academy-facts.service';
+import { AcademyGenerateController } from './generation/academy-generate.controller';
+import { SiteGenerateHandler } from './generation/site-generate.handler';
+import { SiteGeneratorService } from './generation/site-generator.service';
+import { AcademySiteService } from './site/academy-site.service';
 import { AiClient } from './ai/ai.client';
 import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
 import { AiJobService } from './jobs/ai-job.service';
@@ -20,7 +24,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
  */
 @Module({
   imports: [AcademyModule],
-  controllers: [AcademyMediaController, AcademyFactsController],
+  controllers: [AcademyMediaController, AcademyFactsController, AcademyGenerateController],
   providers: [
     AcademySiteConfig,
     AiFeatureEnabledGuard,
@@ -31,9 +35,23 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     AcademyMediaService,
     MediaMaintenanceWorker,
     AcademyFactsService,
-    // Handler registry — empty until Slice 5 registers SITE_GENERATE.
-    { provide: AI_JOB_HANDLERS, useValue: [] },
+    AcademySiteService,
+    SiteGeneratorService,
+    SiteGenerateHandler,
+    // Job handler registry: the worker dispatches each AiJobType to its handler.
+    {
+      provide: AI_JOB_HANDLERS,
+      useFactory: (siteGenerate: SiteGenerateHandler) => [siteGenerate],
+      inject: [SiteGenerateHandler],
+    },
   ],
-  exports: [AcademySiteConfig, AiClient, AiJobService, AcademyMediaService, AcademyFactsService],
+  exports: [
+    AcademySiteConfig,
+    AiClient,
+    AiJobService,
+    AcademyMediaService,
+    AcademyFactsService,
+    AcademySiteService,
+  ],
 })
 export class AcademySiteModule {}

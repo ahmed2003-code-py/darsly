@@ -135,6 +135,22 @@ export class AiJobService {
     });
   }
 
+  /** Admin: re-queue a FAILED job for another attempt (fresh attempt counter). */
+  async rerunFailed(jobId: string): Promise<AiJob> {
+    const job = await this.prisma.aiJob.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+    if (job.status !== 'FAILED') {
+      throw new ConflictException(`Only FAILED jobs can be rerun (this one is ${job.status})`);
+    }
+    if (await this.hasActiveJob(job.academyId)) {
+      throw new ConflictException('This academy already has an active job');
+    }
+    return this.prisma.aiJob.update({
+      where: { id: jobId },
+      data: { status: 'QUEUED', attempts: 0, error: null, errorClass: null, leaseExpiresAt: null },
+    });
+  }
+
   /** Cancel a queued job. A job that is already RUNNING cannot be cleanly
    *  cancelled mid-call. */
   async cancel(academyId: string, jobId: string): Promise<AiJob> {

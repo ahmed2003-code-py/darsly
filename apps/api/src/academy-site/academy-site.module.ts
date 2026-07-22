@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AcademyModule } from '../academy/academy.module';
 import { AcademySiteConfig } from './academy-site.config';
+import { AdminAcademyStudioController } from './admin/admin-academy-studio.controller';
+import { AdminAcademyStudioService } from './admin/admin-academy-studio.service';
 import { AiFeatureEnabledGuard } from './ai-feature.guard';
 import { AcademyFactsController } from './facts/academy-facts.controller';
 import { AcademyFactsService } from './facts/academy-facts.service';
@@ -34,6 +36,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     AcademyGenerateController,
     AcademySiteController,
     PublicSiteController,
+    AdminAcademyStudioController,
   ],
   providers: [
     AcademySiteConfig,
@@ -50,6 +53,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     PublicSiteService,
     SiteGeneratorService,
     SiteGenerateHandler,
+    AdminAcademyStudioService,
     // Job handler registry: the worker dispatches each AiJobType to its handler.
     {
       provide: AI_JOB_HANDLERS,

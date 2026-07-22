@@ -29,27 +29,33 @@ export function compileSite(doc: SiteDocument, ctx: RenderContext): string {
   const lang = ctx.defaultLang;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const body = doc.blocks.map((b) => renderBlock(b, ctx)).join('\n');
-  const title = escapeHtml(ctx.academyName);
+  const brand = escapeHtml(ctx.academyName);
+  // SEO title/description come from the document when generated; fall back to the
+  // academy name. Meta tags are rendered in the default language for crawlers.
+  const seoTitle = doc.seo?.title?.[lang]?.trim();
+  const seoDesc = doc.seo?.description?.[lang]?.trim();
+  const title = escapeHtml(seoTitle || ctx.academyName);
+  const descMeta = seoDesc ? `\n<meta name="description" content="${escapeAttr(seoDesc)}">` : '';
 
   return `<!doctype html>
 <html lang="${lang}" dir="${dir}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
+<title>${title}</title>${descMeta}
 <style>${css(doc.theme.primary, doc.theme.accent)}</style>
 </head>
 <body>
 <header class="topbar">
   <div class="wrap">
-    <span class="brand">${logo(doc.theme.logoMediaId, ctx)}<span>${title}</span></span>
+    <span class="brand">${logo(doc.theme.logoMediaId, ctx)}<span>${brand}</span></span>
     <button id="langToggle" class="lang-toggle" type="button" aria-label="Language"></button>
   </div>
 </header>
 <main>
 ${body}
 </main>
-<footer class="site-footer"><div class="wrap">© ${title}</div></footer>
+<footer class="site-footer"><div class="wrap">© ${brand}</div></footer>
 <script>${clientJs(ctx.slug, lang)}</script>
 </body>
 </html>`;

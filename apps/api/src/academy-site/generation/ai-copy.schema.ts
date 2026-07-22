@@ -7,6 +7,10 @@ import { localizedText } from '../schema/site-document';
  * media and live-data blocks, and applies the brand deterministically.
  */
 export const aiCopySchema = z.object({
+  seo: z.object({
+    metaTitle: localizedText(70),
+    metaDescription: localizedText(160),
+  }),
   hero: z.object({
     headline: localizedText(160),
     subheadline: localizedText(400),

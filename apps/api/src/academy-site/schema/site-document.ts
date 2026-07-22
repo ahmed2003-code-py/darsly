@@ -104,14 +104,22 @@ export const siteThemeSchema = z.object({
   logoMediaId: z.string().optional(),
 });
 
+export const siteSeoSchema = z.object({
+  title: localizedText(70),
+  description: localizedText(160),
+});
+
 export const siteDocumentSchema = z.object({
   version: z.literal(1),
   theme: siteThemeSchema,
+  // Optional so documents generated before SEO existed still validate.
+  seo: siteSeoSchema.optional(),
   blocks: z.array(siteBlockSchema).min(1).max(24),
 });
 
 export type SiteBlock = z.infer<typeof siteBlockSchema>;
 export type SiteTheme = z.infer<typeof siteThemeSchema>;
+export type SiteSeo = z.infer<typeof siteSeoSchema>;
 export type SiteDocument = z.infer<typeof siteDocumentSchema>;
 export type BlockType = SiteBlock['type'];
 

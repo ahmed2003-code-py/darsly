@@ -22,8 +22,14 @@ export const AI_COPY_SCHEMA_NAME = 'academy_copy';
 export const aiCopyJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
-  required: ['hero', 'about', 'faq', 'cta'],
+  required: ['seo', 'hero', 'about', 'faq', 'cta'],
   properties: {
+    seo: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['metaTitle', 'metaDescription'],
+      properties: { metaTitle: localizedText, metaDescription: localizedText },
+    },
     hero: {
       type: 'object',
       additionalProperties: false,

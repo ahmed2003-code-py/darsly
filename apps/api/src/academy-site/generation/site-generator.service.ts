@@ -145,6 +145,7 @@ export class SiteGeneratorService {
     return {
       version: 1,
       theme: { primary: brand.primary, accent: brand.accent, ...(brand.logoId ? { logoMediaId: brand.logoId } : {}) },
+      seo: { title: copy.seo.metaTitle, description: copy.seo.metaDescription },
       blocks,
     };
   }

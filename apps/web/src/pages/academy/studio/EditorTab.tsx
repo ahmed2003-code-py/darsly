@@ -20,8 +20,10 @@ interface Block {
 interface SiteDoc {
   version: number;
   theme: Record<string, unknown>;
+  seo?: { title: LT; description: LT };
   blocks: Block[];
 }
+const EMPTY_LT: LT = { ar: '', en: '' };
 interface DraftResp {
   doc: SiteDoc | null;
   version: number;
@@ -103,6 +105,11 @@ export default function EditorTab({ onSaved }: { onSaved?: () => void }) {
   if (isError) return <div className="card"><ErrorNote error={error} /></div>;
   if (!doc) return <Spinner />;
 
+  const patchSeo = (field: 'title' | 'description', v: LT) => {
+    const next = structuredClone(doc);
+    next.seo = { title: EMPTY_LT, description: EMPTY_LT, ...(next.seo ?? {}), [field]: v };
+    setDoc(next);
+  };
   const patchBlock = (i: number, patch: Partial<Block>) => {
     const next = structuredClone(doc);
     next.blocks[i] = { ...next.blocks[i], ...patch };
@@ -129,6 +136,15 @@ export default function EditorTab({ onSaved }: { onSaved?: () => void }) {
         </div>
       </div>
       <ErrorNote error={save.error} />
+
+      <div className="card">
+        <div className="mb-4 flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary">travel_explore</span>
+          <h3 className="font-heading font-bold">تحسين محركات البحث (SEO)</h3>
+        </div>
+        <LocalizedInput label="عنوان الصفحة (Meta Title)" value={doc.seo?.title ?? EMPTY_LT} onChange={(v) => patchSeo('title', v)} />
+        <LocalizedInput label="وصف الصفحة (Meta Description)" value={doc.seo?.description ?? EMPTY_LT} multiline onChange={(v) => patchSeo('description', v)} />
+      </div>
 
       {doc.blocks.map((b, i) => (
         <div key={b.id} className="card">

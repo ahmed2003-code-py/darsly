@@ -26,7 +26,6 @@ const STUDENT_NAV: NavItem[] = [
 const TEACHER_NAV: NavItem[] = [
   { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
   { to: '/academy/studio', icon: 'auto_awesome', labelKey: 'nav.studio' },
-  { to: '/academy/settings', icon: 'storefront', labelKey: 'nav.academy' },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
   { to: '/teacher/payments', icon: 'receipt_long', labelKey: 'nav.verifyPayments' },

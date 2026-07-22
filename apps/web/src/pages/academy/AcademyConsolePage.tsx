@@ -52,7 +52,7 @@ export default function AcademyConsolePage() {
 }
 
 // ── Branding & settings ─────────────────────────────────────────────────────
-function BrandingTab({ slug }: { slug: string }) {
+export function BrandingTab({ slug }: { slug: string }) {
   const qc = useQueryClient();
   const logoRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
@@ -159,7 +159,7 @@ function BrandingTab({ slug }: { slug: string }) {
 // ── Members ─────────────────────────────────────────────────────────────────
 const ROLE_LABEL: Record<string, string> = { OWNER: 'المالك', TEACHER: 'مدرّس', ASSISTANT: 'مساعد', STUDENT: 'طالب' };
 
-function MembersTab({ slug }: { slug: string }) {
+export function MembersTab({ slug }: { slug: string }) {
   const qc = useQueryClient();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('TEACHER');

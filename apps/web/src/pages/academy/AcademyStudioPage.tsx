@@ -12,6 +12,7 @@ import EditorTab from './studio/EditorTab';
 import PreviewTab from './studio/PreviewTab';
 import PublishTab from './studio/PublishTab';
 import OnboardingWizard from './studio/OnboardingWizard';
+import { BrandingTab, MembersTab } from './AcademyConsolePage';
 import type { SiteOverview, SiteStatus } from './studio/types';
 
 const STATUS_LABEL: Record<SiteStatus, string> = {
@@ -28,12 +29,14 @@ const STATUS_TONE: Record<SiteStatus, 'primary' | 'teal' | 'warn' | 'error' | 'n
 };
 
 const TABS = [
+  { key: 'settings', label: 'الهوية', icon: 'storefront' },
   { key: 'facts', label: 'البيانات', icon: 'badge' },
   { key: 'media', label: 'الصور', icon: 'image' },
   { key: 'generate', label: 'التوليد', icon: 'auto_awesome' },
   { key: 'editor', label: 'المحرّر', icon: 'edit' },
   { key: 'preview', label: 'المعاينة', icon: 'visibility' },
   { key: 'publish', label: 'النشر', icon: 'publish' },
+  { key: 'team', label: 'الفريق', icon: 'group' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -137,6 +140,8 @@ export default function AcademyStudioPage() {
             </button>
           </div>
 
+          {tab === 'settings' && <BrandingTab slug={academy.slug} />}
+          {tab === 'team' && <MembersTab slug={academy.slug} />}
           {tab === 'facts' && <FactsForm />}
           {tab === 'media' && <MediaManager />}
           {tab === 'generate' && <GenerateTab onDone={() => setTab('editor')} />}

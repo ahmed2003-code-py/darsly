@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AcademyContext, CurrentAcademy } from '../../academy/academy-context';
 import { AcademyStaff } from '../../academy/academy-staff.decorator';
@@ -17,6 +17,21 @@ export class AcademySiteController {
   @ApiOperation({ summary: '[staff] Studio overview: status, draft, publish state, last job' })
   overview(@CurrentAcademy() ctx: AcademyContext) {
     return this.site.overview(ctx.academyId);
+  }
+
+  @Get('draft')
+  @AcademyStaff('academy.manage')
+  @ApiOperation({ summary: '[staff] Load the current draft document (editor)' })
+  getDraft(@CurrentAcademy() ctx: AcademyContext) {
+    return this.site.getDraft(ctx.academyId);
+  }
+
+  @Put('draft')
+  @AcademyStaff('academy.manage')
+  @ApiOperation({ summary: '[staff] Save an edited draft document (editor)' })
+  // Raw Site Document — validated with zod in the service, not class-validator.
+  saveDraft(@CurrentAcademy() ctx: AcademyContext, @Body() body: unknown) {
+    return this.site.saveEditedDraft(ctx.academyId, body, ctx.userId);
   }
 
   @Post('publish')

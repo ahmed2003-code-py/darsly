@@ -80,6 +80,34 @@ export class AcademySiteService {
     return { site: updated, snapshot };
   }
 
+  /** The current working draft, for the editor to load. */
+  async getDraft(academyId: string) {
+    const site = await this.getByAcademy(academyId);
+    return { doc: site?.draftDoc ?? null, version: site?.version ?? 0, status: site?.status ?? 'DRAFT' };
+  }
+
+  /** Save an edited full document from the editor (zod-validated; media must
+   *  belong to this academy). */
+  async saveEditedDraft(academyId: string, raw: unknown, actorUserId: string) {
+    const parsed = parseSiteDocument(raw);
+    if (!parsed.success) {
+      throw new BadRequestException({ message: 'Invalid document', errors: parsed.errors });
+    }
+    await this.assertMediaOwnership(academyId, parsed.data!);
+    const { site, snapshot } = await this.saveDraft(academyId, parsed.data!, 'manual-save');
+    await this.log(actorUserId, 'site.draft.save', site.id, { version: site.version });
+    return { version: site.version, snapshotId: snapshot.id, status: site.status };
+  }
+
+  private async assertMediaOwnership(academyId: string, doc: SiteDocument): Promise<void> {
+    const ids = collectMediaIds(doc);
+    if (!ids.length) return;
+    const owned = await this.prisma.academyMedia.count({ where: { academyId, id: { in: ids } } });
+    if (owned !== ids.length) {
+      throw new BadRequestException('Document references media that does not belong to this academy');
+    }
+  }
+
   listSnapshots(academyId: string) {
     return this.prisma.academySiteSnapshot.findMany({
       where: { site: { academyId } },

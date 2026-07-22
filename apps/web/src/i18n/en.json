@@ -50,7 +50,9 @@
     "saved": "Saved",
     "verifyPayments": "Verify payments",
     "adminPayments": "Payments",
-    "academy": "Academy"
+    "academy": "Academy",
+    "studio": "Academy Studio",
+    "adminStudio": "Academy Studio"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",

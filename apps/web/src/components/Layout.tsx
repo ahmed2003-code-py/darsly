@@ -25,6 +25,7 @@ const STUDENT_NAV: NavItem[] = [
 
 const TEACHER_NAV: NavItem[] = [
   { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
+  { to: '/academy/studio', icon: 'auto_awesome', labelKey: 'nav.studio' },
   { to: '/academy/settings', icon: 'storefront', labelKey: 'nav.academy' },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
@@ -40,6 +41,7 @@ const TEACHER_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
   { to: '/admin/teachers', icon: 'verified_user', labelKey: 'nav.adminTeachers' },
+  { to: '/admin/academy-studio', icon: 'auto_awesome', labelKey: 'nav.adminStudio' },
   { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },
   { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },
   { to: '/admin/security', icon: 'gpp_maybe', labelKey: 'nav.adminSecurity' },

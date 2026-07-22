@@ -50,7 +50,9 @@
     "saved": "المحفوظة",
     "verifyPayments": "مراجعة الدفعات",
     "adminPayments": "الدفعات",
-    "academy": "الأكاديمية"
+    "academy": "الأكاديمية",
+    "studio": "استوديو الأكاديمية",
+    "adminStudio": "استوديو الأكاديميات"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",

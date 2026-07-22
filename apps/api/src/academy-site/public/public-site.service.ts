@@ -27,6 +27,17 @@ export class PublicSiteService {
     return { academyId: academy.id, version: site.version, html: site.publishedHtml };
   }
 
+  /** Whether this academy has a live AI-generated site (cheap status check). */
+  async isPublished(slug: string): Promise<boolean> {
+    const academy = await this.academyBySlug(slug);
+    if (!academy) return false;
+    const site = await this.prisma.academySite.findUnique({
+      where: { academyId: academy.id },
+      select: { status: true, publishedHtml: true },
+    });
+    return site?.status === 'PUBLISHED' && !!site.publishedHtml;
+  }
+
   async courses(slug: string, limit: number) {
     const academy = await this.academyBySlug(slug);
     if (!academy) return [];

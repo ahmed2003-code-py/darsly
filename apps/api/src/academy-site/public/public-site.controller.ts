@@ -34,6 +34,12 @@ export class PublicSiteController {
     res.type('html').send(published.html);
   }
 
+  @Get('a/:slug/site-status')
+  @ApiOperation({ summary: 'Public: whether the academy has a live AI site' })
+  async siteStatus(@Param('slug') slug: string) {
+    return { published: await this.site.isPublished(slug) };
+  }
+
   @Get('a/:slug/courses')
   @ApiOperation({ summary: 'Public: published courses for the academy (hydration)' })
   courses(@Param('slug') slug: string, @Query('limit') limit?: string) {

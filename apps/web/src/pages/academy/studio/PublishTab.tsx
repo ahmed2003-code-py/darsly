@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api';
 import { dateShort } from '../../../lib/format';
@@ -125,40 +126,82 @@ export default function PublishTab({ slug }: { slug: string }) {
         ) : !snapshots.data?.length ? (
           <p className="text-sm text-on-surface-variant">لا توجد نسخ محفوظة بعد.</p>
         ) : (
-          <ul className="divide-y divide-outline-variant">
-            {snapshots.data.map((s) => (
-              <li key={s.id} className="flex items-center justify-between gap-3 py-3">
-                <div>
-                  <p className="font-semibold">نسخة {s.version}</p>
-                  <p className="text-sm text-on-surface-variant">
-                    {REASON_LABEL[s.reason ?? ''] ?? s.reason ?? '—'} • {dateShort(s.createdAt)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    className="btn-secondary"
-                    disabled={rollback.isPending}
-                    onClick={() => {
-                      if (confirm(`استرجاع النسخة ${s.version}؟ سيحل محتواها محل المسودة الحالية.`)) rollback.mutate(s.id);
-                    }}
-                  >
-                    <span className="material-symbols-outlined text-[18px]">history</span>
-                    استرجاع
-                  </button>
-                  <button
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-error transition hover:bg-error-container/40"
-                    aria-label="حذف"
-                    disabled={removeSnap.isPending}
-                    onClick={() => { if (confirm(`حذف النسخة ${s.version} من السجل؟`)) removeSnap.mutate(s.id); }}
-                  >
-                    <span className="material-symbols-outlined text-[20px]">delete</span>
-                  </button>
-                </div>
-              </li>
+          <div className="divide-y divide-outline-variant">
+            {snapshots.data.map((s, idx) => (
+              <SnapshotRow
+                key={s.id}
+                s={s}
+                isCurrent={idx === 0}
+                rolling={rollback.isPending}
+                deleting={removeSnap.isPending}
+                onRollback={() => {
+                  if (confirm(`استرجاع النسخة ${s.version}؟ سيحل محتواها محل المسودة الحالية.`)) rollback.mutate(s.id);
+                }}
+                onDelete={() => { if (confirm(`حذف النسخة ${s.version} من السجل؟`)) removeSnap.mutate(s.id); }}
+              />
             ))}
-          </ul>
+          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function SnapshotRow({ s, isCurrent, rolling, deleting, onRollback, onDelete }: {
+  s: Snapshot; isCurrent: boolean; rolling: boolean; deleting: boolean; onRollback: () => void; onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const preview = useQuery<string>({
+    queryKey: ['snap-preview', s.id],
+    queryFn: async () => (await api.get(`/academy/site/snapshots/${s.id}/preview`, { responseType: 'text' })).data,
+    enabled: open,
+    retry: false,
+  });
+  return (
+    <div className="py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold">
+            نسخة {s.version}
+            {isCurrent && <span className="ms-2 text-xs font-bold text-teal-600">(الحالية)</span>}
+          </p>
+          <p className="text-sm text-on-surface-variant">
+            {REASON_LABEL[s.reason ?? ''] ?? s.reason ?? '—'} • {dateShort(s.createdAt)}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button className="btn-secondary" onClick={() => setOpen((o) => !o)}>
+            <span className="material-symbols-outlined text-[18px]">{open ? 'visibility_off' : 'visibility'}</span>
+            {open ? 'إخفاء' : 'معاينة'}
+          </button>
+          {!isCurrent && (
+            <button className="btn-secondary" disabled={rolling} onClick={onRollback}>
+              <span className="material-symbols-outlined text-[18px]">history</span>
+              استرجاع
+            </button>
+          )}
+          {!isCurrent && (
+            <button
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-error transition hover:bg-error-container/40"
+              aria-label="حذف" disabled={deleting} onClick={onDelete}
+            >
+              <span className="material-symbols-outlined text-[20px]">delete</span>
+            </button>
+          )}
+        </div>
+      </div>
+      {open && (
+        <div className="mt-3">
+          {preview.isLoading ? (
+            <Spinner />
+          ) : preview.isError ? (
+            <p className="text-sm text-error">تعذّر تحميل المعاينة.</p>
+          ) : (
+            <iframe title={`نسخة ${s.version}`} srcDoc={preview.data}
+              className="w-full rounded-xl border border-outline-variant bg-white" style={{ height: '60vh' }} />
+          )}
+        </div>
+      )}
     </div>
   );
 }

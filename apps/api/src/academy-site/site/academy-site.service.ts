@@ -78,6 +78,25 @@ export class AcademySiteService {
     });
   }
 
+  /** Compile a specific version (snapshot) to HTML for preview. */
+  async previewSnapshotHtml(academyId: string, snapshotId: string): Promise<string> {
+    const site = await this.getByAcademy(academyId);
+    if (!site) throw new NotFoundException('Site not found');
+    const snap = await this.prisma.academySiteSnapshot.findFirst({
+      where: { id: snapshotId, siteId: site.id },
+    });
+    if (!snap) throw new NotFoundException('Snapshot not found');
+    const parsed = parseSiteDocument(snap.doc);
+    if (!parsed.success) throw new BadRequestException('Snapshot document is no longer valid');
+    const academy = await this.prisma.academy.findUnique({ where: { id: academyId } });
+    if (!academy) throw new NotFoundException('Academy not found');
+    return this.render.compile(academyId, parsed.data!, {
+      academyName: academy.name,
+      slug: academy.slug,
+      defaultLang: academy.language === 'en' ? 'en' : 'ar',
+    });
+  }
+
   // ── Draft persistence ───────────────────────────────────────────────────────
 
   async saveDraft(

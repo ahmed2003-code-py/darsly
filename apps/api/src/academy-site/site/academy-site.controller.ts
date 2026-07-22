@@ -70,6 +70,14 @@ export class AcademySiteController {
     return this.site.rollback(ctx.academyId, dto.snapshotId, ctx.userId);
   }
 
+  @Get('snapshots/:id/preview')
+  @AcademyStaff('academy.manage')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @ApiOperation({ summary: '[staff] Compiled HTML preview of a specific version' })
+  previewSnapshot(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.site.previewSnapshotHtml(ctx.academyId, id);
+  }
+
   @Delete('snapshots/:id')
   @AcademyStaff('academy.manage')
   @ApiOperation({ summary: '[staff] Delete a version from history' })

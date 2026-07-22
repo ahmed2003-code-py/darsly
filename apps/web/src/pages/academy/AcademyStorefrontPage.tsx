@@ -1,13 +1,35 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import AcademyProvider, { useAcademy } from '../../components/AcademyProvider';
 import { Reveal, Stagger, StaggerItem } from '../../components/motion';
 import { EmptyState, Spinner } from '../../components/ui';
+import { api, apiOrigin } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { AcademyCourseCard, useAcademyCourses } from '../../lib/academy';
 
-/** Public, academy-branded landing at /a/:slug. Standalone shell (no app chrome). */
+/** Public, academy-branded landing at /a/:slug. When the academy has published
+ *  an AI-generated site, that page is shown (full-viewport); otherwise the
+ *  built-in storefront is the fallback. */
 export default function AcademyStorefrontPage() {
   const { slug = '' } = useParams();
+  const site = useQuery<{ published: boolean }>({
+    queryKey: ['pub-site-status', slug],
+    queryFn: async () => (await api.get(`/a/${slug}/site-status`)).data,
+    retry: false,
+  });
+
+  if (site.isLoading) {
+    return <div className="grid min-h-screen place-items-center"><Spinner /></div>;
+  }
+  if (site.data?.published) {
+    return (
+      <iframe
+        title={slug}
+        src={`${apiOrigin()}/api/v1/a/${encodeURIComponent(slug)}`}
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', border: 0 }}
+      />
+    );
+  }
   return (
     <AcademyProvider slug={slug}>
       <Storefront slug={slug} />

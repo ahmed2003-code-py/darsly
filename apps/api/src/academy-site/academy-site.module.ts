@@ -7,6 +7,7 @@ import { AcademyFactsService } from './facts/academy-facts.service';
 import { AcademyGenerateController } from './generation/academy-generate.controller';
 import { SiteGenerateHandler } from './generation/site-generate.handler';
 import { SiteGeneratorService } from './generation/site-generator.service';
+import { SiteRenderService } from './renderer/site-render.service';
 import { AcademySiteService } from './site/academy-site.service';
 import { AiClient } from './ai/ai.client';
 import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
@@ -36,6 +37,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     MediaMaintenanceWorker,
     AcademyFactsService,
     AcademySiteService,
+    SiteRenderService,
     SiteGeneratorService,
     SiteGenerateHandler,
     // Job handler registry: the worker dispatches each AiJobType to its handler.
@@ -52,6 +54,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     AcademyMediaService,
     AcademyFactsService,
     AcademySiteService,
+    SiteRenderService,
   ],
 })
 export class AcademySiteModule {}

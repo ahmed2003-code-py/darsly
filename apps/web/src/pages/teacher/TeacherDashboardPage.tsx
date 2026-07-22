@@ -45,10 +45,16 @@ export default function TeacherDashboardPage() {
         title={t('teacher.overviewTitle')}
         subtitle={`${t('dashboard.welcome', { name: user?.fullName })} — ${t('teacher.overviewSubtitle')}`}
         action={
-          <Link to="/teacher/courses" className="btn-primary">
-            <span className="material-symbols-outlined">add</span>
-            {t('teacher.newCourse')}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/academy/studio" className="btn-secondary">
+              <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+              استوديو الأكاديمية
+            </Link>
+            <Link to="/teacher/courses" className="btn-primary">
+              <span className="material-symbols-outlined">add</span>
+              {t('teacher.newCourse')}
+            </Link>
+          </div>
         }
       />
 

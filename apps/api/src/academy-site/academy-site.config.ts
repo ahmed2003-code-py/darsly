@@ -15,8 +15,9 @@ function num(v: string | undefined, fallback: number): number {
 @Injectable()
 export class AcademySiteConfig {
   readonly enabled = process.env.AI_ACADEMY_ENABLED === 'true';
-  readonly apiKey = process.env.ANTHROPIC_API_KEY ?? '';
-  readonly model = process.env.AI_MODEL ?? 'claude-sonnet-5';
+  // Backend-only OpenAI credential, read exclusively from the environment.
+  readonly apiKey = process.env.OPENAI_API_KEY ?? '';
+  readonly model = process.env.AI_MODEL ?? 'gpt-5';
   // Prices are in cents per million tokens.
   readonly priceInPerMToken = num(process.env.AI_PRICE_IN_PER_MTOKEN, 300);
   readonly priceOutPerMToken = num(process.env.AI_PRICE_OUT_PER_MTOKEN, 1500);

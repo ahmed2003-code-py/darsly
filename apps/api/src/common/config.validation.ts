@@ -79,11 +79,11 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     if ((env.STORAGE_DRIVER ?? 'local') !== 's3') {
       errors.push('AI_ACADEMY_ENABLED=true requires STORAGE_DRIVER=s3 in production (local disk is ephemeral; media would be lost on redeploy)');
     }
-    if (!env.ANTHROPIC_API_KEY) {
-      errors.push('AI_ACADEMY_ENABLED=true requires ANTHROPIC_API_KEY');
+    if (!env.OPENAI_API_KEY) {
+      errors.push('AI_ACADEMY_ENABLED=true requires OPENAI_API_KEY');
     }
     if (!env.AI_MODEL) {
-      errors.push('AI_ACADEMY_ENABLED=true requires AI_MODEL (e.g. claude-sonnet-5)');
+      errors.push('AI_ACADEMY_ENABLED=true requires AI_MODEL (e.g. gpt-5)');
     }
     if (!env.AI_MONTHLY_BUDGET_CENTS) {
       warnings.push('AI_MONTHLY_BUDGET_CENTS unset — AI generation spend is uncapped');

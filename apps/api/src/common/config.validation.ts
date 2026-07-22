@@ -68,6 +68,28 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     warnings.push('PAYMENT_LISTENER_KEY unset — automatic payment verification endpoint will reject all events');
   }
 
+  // ── Academy Studio (AI site) ──────────────────────────────────────────────
+  // The feature is a kill-switch (AI_ACADEMY_ENABLED). All of the strict checks
+  // below only apply when it is ON, so a prod deploy with the flag OFF (the
+  // default during rollout) is never blocked by AI/S3 config it doesn't use yet.
+  const aiEnabled = env.AI_ACADEMY_ENABLED === 'true';
+  if (aiEnabled && isProd) {
+    // Media MUST live on durable object storage — the prod filesystem is
+    // ephemeral, so local-disk media would vanish on every redeploy.
+    if ((env.STORAGE_DRIVER ?? 'local') !== 's3') {
+      errors.push('AI_ACADEMY_ENABLED=true requires STORAGE_DRIVER=s3 in production (local disk is ephemeral; media would be lost on redeploy)');
+    }
+    if (!env.ANTHROPIC_API_KEY) {
+      errors.push('AI_ACADEMY_ENABLED=true requires ANTHROPIC_API_KEY');
+    }
+    if (!env.AI_MODEL) {
+      errors.push('AI_ACADEMY_ENABLED=true requires AI_MODEL (e.g. claude-sonnet-5)');
+    }
+    if (!env.AI_MONTHLY_BUDGET_CENTS) {
+      warnings.push('AI_MONTHLY_BUDGET_CENTS unset — AI generation spend is uncapped');
+    }
+  }
+
   for (const w of warnings) {
     // eslint-disable-next-line no-console
     console.warn(`⚠ config: ${w}`);

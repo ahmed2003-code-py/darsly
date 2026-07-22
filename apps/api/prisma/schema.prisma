@@ -42,7 +42,7 @@ model User {
   studentProfile StudentProfile?
   sessions       DeviceSession[]
   notifications  Notification[]
-  auditLogs      AuditLog[]      @relation("actor")
+  auditLogs      AuditLog[]           @relation("actor")
   sentMessages   ChatMessage[]
   resetTokens    PasswordResetToken[]
 
@@ -116,6 +116,13 @@ model Academy {
   memberships AcademyMembership[]
   domains     AcademyDomain[]
 
+  // Academy Studio (AI site) — Phase 1. All additive.
+  siteFacts AcademyProfileFacts?
+  site      AcademySite?
+  media     AcademyMedia[]
+  aiJobs    AiJob[]
+  claims    AcademyClaim[]
+
   @@index([status])
 }
 
@@ -183,18 +190,18 @@ model OtpCode {
 // One row per logged-in device. Refresh tokens are bound to a session so we can
 // enforce MAX concurrent devices and kill exactly one device on kick/revoke.
 model DeviceSession {
-  id               String    @id @default(cuid())
-  userId           String
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  refreshTokenHash String
-  deviceName       String?
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash  String
+  deviceName        String?
   deviceFingerprint String?
-  ip               String?
-  userAgent        String?
-  createdAt        DateTime  @default(now())
-  lastSeenAt       DateTime  @default(now())
-  revokedAt        DateTime?
-  revokedReason    String?
+  ip                String?
+  userAgent         String?
+  createdAt         DateTime  @default(now())
+  lastSeenAt        DateTime  @default(now())
+  revokedAt         DateTime?
+  revokedReason     String?
 
   playbackSessions PlaybackSession[]
 
@@ -215,23 +222,23 @@ model TeacherProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  slug          String        @unique
-  bio           String        @default("")
-  subjectId     String?
-  subject       Subject?      @relation(fields: [subjectId], references: [id])
-  introVideoUrl String?
+  slug                   String        @unique
+  bio                    String        @default("")
+  subjectId              String?
+  subject                Subject?      @relation(fields: [subjectId], references: [id])
+  introVideoUrl          String?
   // Language of instruction ("ar" | "en") — a discovery filter.
-  language      String        @default("ar")
-  status        TeacherStatus @default(PENDING)
-  verifiedAt    DateTime?
+  language               String        @default("ar")
+  status                 TeacherStatus @default(PENDING)
+  verifiedAt             DateTime?
   // Platform cut, percent 0–100; set per-teacher by super admin.
-  commissionPercent Int       @default(20)
-  autoApproveEnrollments Boolean @default(false)
+  commissionPercent      Int           @default(20)
+  autoApproveEnrollments Boolean       @default(false)
   // Teacher-Security defaults applied to their students
-  maxConcurrentSessions  Int     @default(2)
-  settings      Json          @default("{}")
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  maxConcurrentSessions  Int           @default(2)
+  settings               Json          @default("{}")
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
   grades         TeacherGrade[]
   courses        Course[]
@@ -246,28 +253,28 @@ model TeacherProfile {
 }
 
 model StudentProfile {
-  id      String  @id @default(cuid())
-  userId  String  @unique
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id      String      @id @default(cuid())
+  userId  String      @unique
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   gradeId String?
   grade   GradeLevel? @relation(fields: [gradeId], references: [id])
 
   // Motivation / streaks
-  currentStreak    Int       @default(0)
-  longestStreak    Int       @default(0)
-  lastActivityDate DateTime?
-  weeklyGoalLessons Int      @default(5)
+  currentStreak     Int       @default(0)
+  longestStreak     Int       @default(0)
+  lastActivityDate  DateTime?
+  weeklyGoalLessons Int       @default(5)
 
-  interests     StudentInterest[]
-  enrollments   Enrollment[]
-  progress      LessonProgress[]
-  notes         VideoNote[]
-  bookmarks     VideoBookmark[]
-  quizAttempts  QuizAttempt[]
-  submissions   AssignmentSubmission[]
-  reviews       Review[]
-  certificates  Certificate[]
-  payments      Payment[]
+  interests        StudentInterest[]
+  enrollments      Enrollment[]
+  progress         LessonProgress[]
+  notes            VideoNote[]
+  bookmarks        VideoBookmark[]
+  quizAttempts     QuizAttempt[]
+  submissions      AssignmentSubmission[]
+  reviews          Review[]
+  certificates     Certificate[]
+  payments         Payment[]
   playbackSessions PlaybackSession[]
   securityEvents   SecurityEvent[]
   chatThreads      ChatThread[]
@@ -291,15 +298,15 @@ model SavedCourse {
 // ─────────────────────────── Catalog taxonomy ──────────────────────────────
 
 model Subject {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   nameAr    String
   nameEn    String
   icon      String?
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
 
-  teachers TeacherProfile[]
-  courses  Course[]
+  teachers  TeacherProfile[]
+  courses   Course[]
   interests StudentInterest[]
 }
 
@@ -355,10 +362,10 @@ model Course {
   teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   title        String
-  description  String   @default("")
+  description  String      @default("")
   thumbnailUrl String?
   subjectId    String?
-  subject      Subject? @relation(fields: [subjectId], references: [id])
+  subject      Subject?    @relation(fields: [subjectId], references: [id])
   gradeId      String?
   grade        GradeLevel? @relation(fields: [gradeId], references: [id])
 
@@ -371,23 +378,23 @@ model Course {
   // Access rules (Teacher-Security suite B)
   requiresEnrollmentApproval Boolean @default(true)
   // lesson access expires N days after unlock; null = never
-  accessWindowDays Int?
+  accessWindowDays           Int?
   // max plays per lesson per student; null = unlimited
-  defaultViewsCap  Int?
+  defaultViewsCap            Int?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   // Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 
-  units       CourseUnit[]
-  enrollments Enrollment[]
-  coupons     Coupon[]
-  reviews     Review[]
-  certificates Certificate[]
-  payments    Payment[]
-  bundleParents BundleItem[] @relation("bundleChild")
-  bundleItems   BundleItem[] @relation("bundleParent")
+  units         CourseUnit[]
+  enrollments   Enrollment[]
+  coupons       Coupon[]
+  reviews       Review[]
+  certificates  Certificate[]
+  payments      Payment[]
+  bundleParents BundleItem[]  @relation("bundleChild")
+  bundleItems   BundleItem[]  @relation("bundleParent")
   savedBy       SavedCourse[]
 
   @@index([tenantId, status])
@@ -411,11 +418,11 @@ model CourseUnit {
   title     String
   sortOrder Int    @default(0)
 
-  lessons Lesson[]
-
-  @@index([courseId, sortOrder])
+  lessons   Lesson[]
   // Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
+
+  @@index([courseId, sortOrder])
 }
 
 enum LessonType {
@@ -436,25 +443,25 @@ model Lesson {
   videoAsset   VideoAsset? @relation(fields: [videoAssetId], references: [id])
   durationSec  Int         @default(0)
 
-  isFreePreview Boolean @default(false)
+  isFreePreview       Boolean   @default(false)
   // Content drip: unlock at a fixed date, or N days after enrollment (first match wins)
   dripUnlockAt        DateTime?
   dripAfterEnrollDays Int?
   // Per-lesson overrides of course access rules
-  viewsCap         Int?
-  accessWindowDays Int?
+  viewsCap            Int?
+  accessWindowDays    Int?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   // Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 
-  attachments Attachment[]
-  progress    LessonProgress[]
-  notes       VideoNote[]
-  bookmarks   VideoBookmark[]
-  quiz        Quiz?
-  assignment  Assignment?
+  attachments      Attachment[]
+  progress         LessonProgress[]
+  notes            VideoNote[]
+  bookmarks        VideoBookmark[]
+  quiz             Quiz?
+  assignment       Assignment?
   playbackSessions PlaybackSession[]
 
   @@index([unitId, sortOrder])
@@ -470,17 +477,17 @@ enum VideoAssetStatus {
 // A processed video: original is transcoded to AES-128 encrypted HLS renditions.
 // Raw MP4 storage keys are NEVER exposed through the API.
 model VideoAsset {
-  id             String           @id @default(cuid())
-  tenantId       String
-  originalKey    String // storage key of the uploaded source (private)
-  hlsMasterKey   String? // storage key of the encrypted HLS master playlist
+  id              String           @id @default(cuid())
+  tenantId        String
+  originalKey     String // storage key of the uploaded source (private)
+  hlsMasterKey    String? // storage key of the encrypted HLS master playlist
   encryptionKeyId String? // points at HlsEncryptionKey
-  status         VideoAssetStatus @default(UPLOADING)
-  durationSec    Int              @default(0)
-  sizeBytes      BigInt           @default(0)
-  renditions     Json             @default("[]") // [{height, bandwidth, playlistKey}]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  status          VideoAssetStatus @default(UPLOADING)
+  durationSec     Int              @default(0)
+  sizeBytes       BigInt           @default(0)
+  renditions      Json             @default("[]") // [{height, bandwidth, playlistKey}]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   lesson Lesson?
 }
@@ -488,23 +495,23 @@ model VideoAsset {
 // AES-128 keys for HLS segments; rotated per HLS_KEY_ROTATION_SECONDS.
 // Keys are only ever served to an authorized, watermarked playback session.
 model HlsEncryptionKey {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   keyHex    String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   rotatedAt DateTime?
 }
 
 model Attachment {
-  id           String  @id @default(cuid())
+  id           String    @id @default(cuid())
   lessonId     String
-  lesson       Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lesson       Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   fileName     String
   storageKey   String
   mimeType     String
-  sizeBytes    Int     @default(0)
-  downloadable Boolean @default(true)
+  sizeBytes    Int       @default(0)
+  downloadable Boolean   @default(true)
   // Soft delete: rows with deletedAt set are hidden from all reads.
-  deletedAt DateTime?
+  deletedAt    DateTime?
 }
 
 // ─────────────────────────── Enrollment & Progress ─────────────────────────
@@ -525,13 +532,13 @@ model Enrollment {
   course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   tenantId  String // denormalized for tenant-scoped queries
 
-  status     EnrollmentStatus @default(PENDING_APPROVAL)
-  approvedAt DateTime?
+  status        EnrollmentStatus @default(PENDING_APPROVAL)
+  approvedAt    DateTime?
   // subscription/window end; null = lifetime
-  expiresAt  DateTime?
+  expiresAt     DateTime?
   revokedReason String?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   payments Payment[]
 
@@ -567,7 +574,7 @@ model VideoNote {
   body         String
   createdAt    DateTime       @default(now())
   // Soft delete: rows with deletedAt set are hidden from all reads.
-  deletedAt DateTime?
+  deletedAt    DateTime?
 
   @@index([studentId, lessonId])
 }
@@ -629,15 +636,15 @@ enum SecurityEventSeverity {
 }
 
 model SecurityEvent {
-  id        String                @id @default(cuid())
-  type      SecurityEventType
-  severity  SecurityEventSeverity @default(WARNING)
-  tenantId  String?
-  tenant    TeacherProfile?       @relation(fields: [tenantId], references: [id])
-  studentId String?
-  student   StudentProfile?       @relation(fields: [studentId], references: [id])
-  meta      Json                  @default("{}")
-  createdAt DateTime              @default(now())
+  id         String                @id @default(cuid())
+  type       SecurityEventType
+  severity   SecurityEventSeverity @default(WARNING)
+  tenantId   String?
+  tenant     TeacherProfile?       @relation(fields: [tenantId], references: [id])
+  studentId  String?
+  student    StudentProfile?       @relation(fields: [studentId], references: [id])
+  meta       Json                  @default("{}")
+  createdAt  DateTime              @default(now())
   resolvedAt DateTime?
   resolvedBy String?
 
@@ -647,9 +654,9 @@ model SecurityEvent {
 // ─────────────────────────── Payments & Ledger ─────────────────────────────
 
 enum PaymentStatus {
-  PENDING   // submitted with proof, awaiting manual verification
-  PAID      // verified
-  REJECTED  // proof rejected by teacher/admin
+  PENDING // submitted with proof, awaiting manual verification
+  PAID // verified
+  REJECTED // proof rejected by teacher/admin
   FAILED
   REFUNDED
 }
@@ -676,30 +683,30 @@ model Payment {
   // netCents (academy earning) + feeCents (platform service fee). Nullable for
   // legacy rows recorded under the old commission model.
   amountCents Int
-  feeCents    Int?          // platform service fee portion of amountCents
-  netCents    Int?          // academy's earning portion of amountCents
+  feeCents    Int? // platform service fee portion of amountCents
+  netCents    Int? // academy's earning portion of amountCents
   currency    String        @default("EGP")
   status      PaymentStatus @default(PENDING)
   gateway     String        @default("manual") // manual proof-based; paymob/fawry/stripe later
 
   // Manual proof-of-payment flow
   method         PaymentMethod?
-  proofImageUrl  String?      // client-resized screenshot (data URL)
-  reference      String?      // transaction/reference id or sender number
+  proofImageUrl  String? // client-resized screenshot (data URL)
+  reference      String? // transaction/reference id or sender number
   rejectedReason String?
-  verifiedById   String?      // user id of the teacher/admin who verified
+  verifiedById   String? // user id of the teacher/admin who verified
 
-  gatewayRef  String?
-  couponId    String?
-  coupon      Coupon?       @relation(fields: [couponId], references: [id])
-  paidAt      DateTime?
+  gatewayRef String?
+  couponId   String?
+  coupon     Coupon?   @relation(fields: [couponId], references: [id])
+  paidAt     DateTime?
   // Separation of duties: a manual self-verification (teacher/owner) sets status
   // PAID + paidAt (student gets access) but leaves settledAt null — the earning is
   // NOT credited to the withdrawable ledger yet. An independent settlement (admin,
   // or a matched real payment-event) sets settledAt and books the ledger credit.
-  settledAt   DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  settledAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   ledgerTransaction LedgerTransaction?
   invoice           Invoice?
@@ -709,32 +716,32 @@ model Payment {
 }
 
 enum PaymentEventStatus {
-  MATCHED    // auto-matched a pending payment and verified it
-  UNMATCHED  // no candidate — needs manual review
-  AMBIGUOUS  // several candidates — needs manual disambiguation
-  DUPLICATE  // a prior event already handled this transfer
+  MATCHED // auto-matched a pending payment and verified it
+  UNMATCHED // no candidate — needs manual review
+  AMBIGUOUS // several candidates — needs manual disambiguation
+  DUPLICATE // a prior event already handled this transfer
 }
 
 // A raw incoming-transfer event reported by the Android notification listener
 // running on the receiving wallet's phone. The backend matches it to a pending
 // payment (amount + reference + time window) and auto-verifies.
 model PaymentEvent {
-  id             String             @id @default(cuid())
-  provider       PaymentMethod
-  amountCents    Int
-  reference      String?
-  occurredAt     DateTime
-  rawMessage     String             @default("")
-  deviceId       String?
-  status         PaymentEventStatus @default(UNMATCHED)
+  id               String             @id @default(cuid())
+  provider         PaymentMethod
+  amountCents      Int
+  reference        String?
+  occurredAt       DateTime
+  rawMessage       String             @default("")
+  deviceId         String?
+  status           PaymentEventStatus @default(UNMATCHED)
   matchedPaymentId String?
-  note           String?            // why unmatched/ambiguous, or manual-match actor
+  note             String? // why unmatched/ambiguous, or manual-match actor
   // Stable transfer identity (provider + normalized reference + amount). A replayed
   // notification collides on this unique key and is rejected as a DUPLICATE rather
   // than matching a second, unrelated payment. Null when no reference was supplied —
   // in which case the event is NEVER auto-verified (manual review only).
-  dedupeKey      String?            @unique
-  createdAt      DateTime           @default(now())
+  dedupeKey        String?            @unique
+  createdAt        DateTime           @default(now())
 
   @@index([status, createdAt])
   @@index([provider, amountCents, occurredAt])
@@ -745,8 +752,8 @@ model PaymentEvent {
 model PlatformPaymentAccount {
   id           String        @id @default(cuid())
   method       PaymentMethod
-  label        String        // e.g. "إنستاباي درسلي"
-  handle       String        // phone / IPA / IBAN
+  label        String // e.g. "إنستاباي درسلي"
+  handle       String // phone / IPA / IBAN
   instructions String        @default("")
   isActive     Boolean       @default(true)
   sortOrder    Int           @default(0)
@@ -757,13 +764,13 @@ model PlatformPaymentAccount {
 // Double-entry ledger: every financial fact is a balanced transaction.
 // Entries are immutable — corrections are new ADJUSTMENT transactions.
 model LedgerTransaction {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   description String
-  paymentId   String?  @unique
-  payment     Payment? @relation(fields: [paymentId], references: [id])
-  payoutId    String?  @unique
+  paymentId   String?        @unique
+  payment     Payment?       @relation(fields: [paymentId], references: [id])
+  payoutId    String?        @unique
   payout      PayoutRequest? @relation(fields: [payoutId], references: [id])
-  createdAt   DateTime @default(now())
+  createdAt   DateTime       @default(now())
 
   entries LedgerEntry[]
 }
@@ -798,16 +805,16 @@ model Coupon {
   courseId String?
   course   Course?        @relation(fields: [courseId], references: [id])
 
-  code        String
-  percentOff  Int? // 1–100
+  code           String
+  percentOff     Int? // 1–100
   amountOffCents Int?
-  maxUses     Int?
-  usedCount   Int       @default(0)
-  expiresAt   DateTime?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  maxUses        Int?
+  usedCount      Int       @default(0)
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
   // Soft delete: rows with deletedAt set are hidden from all reads.
-  deletedAt DateTime?
+  deletedAt      DateTime?
 
   payments Payment[]
 
@@ -821,14 +828,14 @@ enum PayoutMethod {
 }
 
 model PayoutMethodSaved {
-  id       String         @id @default(cuid())
-  tenantId String
-  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  method   PayoutMethod
+  id        String         @id @default(cuid())
+  tenantId  String
+  teacher   TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  method    PayoutMethod
   // masked display + full details, e.g. {iban, bankName} or {walletPhone}
-  details  Json
-  isDefault Boolean       @default(false)
-  createdAt DateTime      @default(now())
+  details   Json
+  isDefault Boolean        @default(false)
+  createdAt DateTime       @default(now())
   // Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 }
@@ -873,13 +880,13 @@ model Invoice {
 // ─────────────────────────── Assessment ────────────────────────────────────
 
 model Quiz {
-  id           String  @id @default(cuid())
-  lessonId     String  @unique
-  lesson       Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  passingScore Int     @default(50) // percent
-  timeLimitSec Int?
+  id               String  @id @default(cuid())
+  lessonId         String  @unique
+  lesson           Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  passingScore     Int     @default(50) // percent
+  timeLimitSec     Int?
   shuffleQuestions Boolean @default(false)
-  maxAttempts  Int?    // null = unlimited; caps how many times a student may submit
+  maxAttempts      Int? // null = unlimited; caps how many times a student may submit
 
   questions QuizQuestion[]
   attempts  QuizAttempt[]
@@ -892,16 +899,16 @@ enum QuestionType {
 }
 
 model QuizQuestion {
-  id          String       @id @default(cuid())
-  quizId      String
-  quiz        Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  type        QuestionType @default(MCQ)
-  prompt      String
-  options     Json         @default("[]") // [{id, text}]
+  id              String       @id @default(cuid())
+  quizId          String
+  quiz            Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  type            QuestionType @default(MCQ)
+  prompt          String
+  options         Json         @default("[]") // [{id, text}]
   correctOptionId String?
-  explanation String       @default("")
-  points      Int          @default(1)
-  sortOrder   Int          @default(0)
+  explanation     String       @default("")
+  points          Int          @default(1)
+  sortOrder       Int          @default(0)
 }
 
 model QuizAttempt {
@@ -911,25 +918,25 @@ model QuizAttempt {
   studentId String
   student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  answers    Json      @default("{}") // {questionId: optionId|text}
-  scorePct   Int?
-  passed     Boolean?
-  needsManualGrading Boolean @default(false)
-  gradedAt   DateTime?
-  gradedBy   String?
-  startedAt  DateTime  @default(now())
-  submittedAt DateTime?
+  answers            Json      @default("{}") // {questionId: optionId|text}
+  scorePct           Int?
+  passed             Boolean?
+  needsManualGrading Boolean   @default(false)
+  gradedAt           DateTime?
+  gradedBy           String?
+  startedAt          DateTime  @default(now())
+  submittedAt        DateTime?
 
   @@index([quizId, studentId])
 }
 
 model Assignment {
-  id       String @id @default(cuid())
-  lessonId String @unique
-  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  id       String    @id @default(cuid())
+  lessonId String    @unique
+  lesson   Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   prompt   String
   dueAt    DateTime?
-  maxScore Int    @default(100)
+  maxScore Int       @default(100)
 
   submissions AssignmentSubmission[]
 }
@@ -941,12 +948,12 @@ model AssignmentSubmission {
   studentId    String
   student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  body       String   @default("")
-  fileKey    String?
-  score      Int?
-  feedback   String?
-  gradedAt   DateTime?
-  createdAt  DateTime @default(now())
+  body      String    @default("")
+  fileKey   String?
+  score     Int?
+  feedback  String?
+  gradedAt  DateTime?
+  createdAt DateTime  @default(now())
 
   @@unique([assignmentId, studentId])
 }
@@ -976,17 +983,17 @@ enum ChatThreadType {
 }
 
 model ChatThread {
-  id        String         @id @default(cuid())
-  type      ChatThreadType @default(DM)
-  tenantId  String
-  teacher   TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  studentId String
-  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id                String         @id @default(cuid())
+  type              ChatThreadType @default(DM)
+  tenantId          String
+  teacher           TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studentId         String
+  student           StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   // Q&A pinned to a moment in a video
-  lessonId       String?
+  lessonId          String?
   videoTimestampSec Int?
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   messages ChatMessage[]
 
@@ -995,32 +1002,32 @@ model ChatThread {
 }
 
 model ChatMessage {
-  id       String     @id @default(cuid())
-  threadId String
-  thread   ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  senderId String
-  sender   User       @relation(fields: [senderId], references: [id])
-  body     String
-  readAt   DateTime?
-  createdAt DateTime  @default(now())
+  id        String     @id @default(cuid())
+  threadId  String
+  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User       @relation(fields: [senderId], references: [id])
+  body      String
+  readAt    DateTime?
+  createdAt DateTime   @default(now())
 
   @@index([threadId, createdAt])
 }
 
 enum AnnouncementScope {
   PLATFORM // super admin broadcast to everyone
-  TENANT   // teacher broadcast to their students
+  TENANT // teacher broadcast to their students
 }
 
 model Announcement {
-  id       String            @id @default(cuid())
-  scope    AnnouncementScope
-  tenantId String?
-  teacher  TeacherProfile?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  title    String
-  body     String
+  id        String            @id @default(cuid())
+  scope     AnnouncementScope
+  tenantId  String?
+  teacher   TeacherProfile?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
   createdBy String
-  createdAt DateTime         @default(now())
+  createdAt DateTime          @default(now())
 }
 
 enum NotificationType {
@@ -1036,15 +1043,15 @@ enum NotificationType {
 }
 
 model Notification {
-  id     String           @id @default(cuid())
-  userId String
-  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type   NotificationType
-  title  String
-  body   String           @default("")
-  meta   Json             @default("{}")
-  readAt DateTime?
-  createdAt DateTime      @default(now())
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String           @default("")
+  meta      Json             @default("{}")
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
 
   @@index([userId, readAt, createdAt])
 }
@@ -1084,18 +1091,18 @@ model LiveBooking {
 }
 
 model Certificate {
-  id        String         @id @default(cuid())
-  studentId String
-  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  courseId  String
-  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  serial    String         @unique // e.g. DRS-CERT-2026-000123 — human-readable, for display
+  id          String         @id @default(cuid())
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  serial      String         @unique // e.g. DRS-CERT-2026-000123 — human-readable, for display
   // Unguessable public-verification token. The public verify endpoint looks up by
   // this token instead of the sequential serial, so certificates can no longer be
   // enumerated. Nullable only to allow a zero-downtime backfill of existing rows.
-  verifyToken String?      @unique
-  pdfKey    String?
-  issuedAt  DateTime       @default(now())
+  verifyToken String?        @unique
+  pdfKey      String?
+  issuedAt    DateTime       @default(now())
 
   @@unique([studentId, courseId])
 }
@@ -1122,4 +1129,166 @@ model PlatformSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────── Academy Studio (AI Site) ──────────────────────
+// Phase 1: AI-generated academy landing pages. Every model/column here is
+// additive and nullable so the migration is safe to apply on non-empty prod
+// tables (no backfill, no NOT NULL without default). Gated by AI_ACADEMY_ENABLED.
+
+enum AiJobType {
+  SITE_GENERATE
+}
+
+enum AiJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum AcademySiteStatus {
+  DRAFT
+  PENDING_MODERATION
+  PUBLISHED
+  REJECTED
+}
+
+enum AcademyMediaKind {
+  LOGO
+  COVER
+  GALLERY
+  PROMO
+  AVATAR
+}
+
+enum AcademyMediaStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  REJECTED
+}
+
+enum AcademyClaimState {
+  UNVERIFIED
+  ADMIN_VERIFIED
+  REJECTED
+}
+
+// Structured, editable "facts" the AI generates copy from (kept separate from
+// the rendered presentation so facts vs. wording never drift).
+model AcademyProfileFacts {
+  id           String   @id @default(cuid())
+  academyId    String   @unique
+  academy      Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  fullName     String?
+  bio          String?
+  subjects     Json     @default("[]")
+  stages       Json     @default("[]")
+  achievements Json     @default("[]")
+  socials      Json     @default("[]")
+  rawIntake    String? // freeform onboarding text the teacher pasted
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// One landing site per academy. draftDoc is the working Site Document; on
+// approval it is compiled to publishedHtml. `version` doubles as the ETag.
+model AcademySite {
+  id                 String            @id @default(cuid())
+  academyId          String            @unique
+  academy            Academy           @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  status             AcademySiteStatus @default(DRAFT)
+  version            Int               @default(0)
+  draftDoc           Json? // working Site Document
+  publishedDoc       Json? // last approved Site Document
+  publishedHtml      String? // compiled HTML served at /a/:slug (Postgres text)
+  moderationApproved Boolean           @default(false)
+  moderatedById      String?
+  moderationReason   String?
+  publishedAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  snapshots AcademySiteSnapshot[]
+
+  @@index([status])
+}
+
+// Immutable version history for rollback. GC keeps the last N + the published one.
+model AcademySiteSnapshot {
+  id        String      @id @default(cuid())
+  siteId    String
+  site      AcademySite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  version   Int
+  doc       Json
+  reason    String? // generate | manual-save | pre-publish | pre-rollback
+  createdAt DateTime    @default(now())
+
+  @@index([siteId, createdAt])
+}
+
+// Uploaded/processed media (logos, covers, gallery, promo video, avatars).
+model AcademyMedia {
+  id           String             @id @default(cuid())
+  academyId    String
+  academy      Academy            @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  kind         AcademyMediaKind
+  status       AcademyMediaStatus @default(UPLOADING)
+  storageKey   String? // key inside StorageProvider
+  url          String? // public URL once READY
+  mimeType     String?
+  bytes        Int?
+  width        Int?
+  height       Int?
+  blurhash     String?
+  contentHash  String? // dedupe identical uploads
+  rejectReason String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([academyId, kind])
+  @@index([academyId, status])
+  @@index([contentHash])
+}
+
+// DB-backed job queue (no Redis). Claimed with FOR UPDATE SKIP LOCKED; a
+// crashed RUNNING job is re-claimable once leaseExpiresAt passes.
+model AiJob {
+  id               String      @id @default(cuid())
+  academyId        String
+  academy          Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  type             AiJobType
+  status           AiJobStatus @default(QUEUED)
+  input            Json        @default("{}")
+  stage            String? // extract | brand | copy | assemble
+  attempts         Int         @default(0)
+  leaseExpiresAt   DateTime?
+  errorClass       String? // RETRYABLE | TERMINAL
+  error            String?
+  costCents        Int         @default(0)
+  resultSnapshotId String? // loose ref to AcademySiteSnapshot
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([status, createdAt])
+  @@index([academyId, createdAt])
+}
+
+// High-stakes claims (student counts, ratings, awards) that must be admin-verified
+// before they can appear on a published page.
+model AcademyClaim {
+  id              String            @id @default(cuid())
+  academyId       String
+  academy         Academy           @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  kind            String // student_count | rating | award | ...
+  value           String
+  state           AcademyClaimState @default(UNVERIFIED)
+  evidenceMediaId String? // loose ref to AcademyMedia
+  reviewedById    String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([academyId, state])
 }

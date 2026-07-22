@@ -60,6 +60,22 @@ export class AcademySiteService {
     };
   }
 
+  /** Compile the current draft (or published fallback) to HTML for owner preview. */
+  async previewHtml(academyId: string): Promise<string> {
+    const site = await this.getByAcademy(academyId);
+    const doc = site?.draftDoc ?? site?.publishedDoc;
+    if (!doc) throw new BadRequestException('لا توجد صفحة للمعاينة بعد — قم بالتوليد أولاً');
+    const parsed = parseSiteDocument(doc);
+    if (!parsed.success) throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
+    const academy = await this.prisma.academy.findUnique({ where: { id: academyId } });
+    if (!academy) throw new NotFoundException('Academy not found');
+    return this.render.compile(academyId, parsed.data!, {
+      academyName: academy.name,
+      slug: academy.slug,
+      defaultLang: academy.language === 'en' ? 'en' : 'ar',
+    });
+  }
+
   // ── Draft persistence ───────────────────────────────────────────────────────
 
   async saveDraft(

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AcademyContext, CurrentAcademy } from '../../academy/academy-context';
 import { AcademyStaff } from '../../academy/academy-staff.decorator';
@@ -24,6 +24,14 @@ export class AcademySiteController {
   @ApiOperation({ summary: '[staff] Load the current draft document (editor)' })
   getDraft(@CurrentAcademy() ctx: AcademyContext) {
     return this.site.getDraft(ctx.academyId);
+  }
+
+  @Get('preview')
+  @AcademyStaff('academy.manage')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @ApiOperation({ summary: '[staff] Compiled HTML of the current draft (owner preview)' })
+  preview(@CurrentAcademy() ctx: AcademyContext) {
+    return this.site.previewHtml(ctx.academyId);
   }
 
   @Put('draft')

@@ -8,6 +8,7 @@ import { AcademyGenerateController } from './generation/academy-generate.control
 import { SiteGenerateHandler } from './generation/site-generate.handler';
 import { SiteGeneratorService } from './generation/site-generator.service';
 import { SiteRenderService } from './renderer/site-render.service';
+import { AcademySiteController } from './site/academy-site.controller';
 import { AcademySiteService } from './site/academy-site.service';
 import { AiClient } from './ai/ai.client';
 import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
@@ -25,7 +26,12 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
  */
 @Module({
   imports: [AcademyModule],
-  controllers: [AcademyMediaController, AcademyFactsController, AcademyGenerateController],
+  controllers: [
+    AcademyMediaController,
+    AcademyFactsController,
+    AcademyGenerateController,
+    AcademySiteController,
+  ],
   providers: [
     AcademySiteConfig,
     AiFeatureEnabledGuard,

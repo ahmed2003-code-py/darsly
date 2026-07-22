@@ -134,6 +134,19 @@ export class AcademySiteService {
     });
   }
 
+  /** Delete a single version from the history. */
+  async deleteSnapshot(academyId: string, snapshotId: string, actorUserId: string) {
+    const site = await this.getByAcademy(academyId);
+    if (!site) throw new NotFoundException('Site not found');
+    const snap = await this.prisma.academySiteSnapshot.findFirst({
+      where: { id: snapshotId, siteId: site.id },
+    });
+    if (!snap) throw new NotFoundException('Snapshot not found');
+    await this.prisma.academySiteSnapshot.delete({ where: { id: snapshotId } });
+    await this.log(actorUserId, 'site.snapshot.delete', site.id, { snapshotId, version: snap.version });
+    return { id: snapshotId, deleted: true };
+  }
+
   async rollback(academyId: string, snapshotId: string, actorUserId: string): Promise<AcademySite> {
     const site = await this.getOrCreate(academyId);
     const snap = await this.prisma.academySiteSnapshot.findFirst({

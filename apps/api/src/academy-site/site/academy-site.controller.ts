@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AcademyContext, CurrentAcademy } from '../../academy/academy-context';
 import { AcademyStaff } from '../../academy/academy-staff.decorator';
@@ -68,5 +68,12 @@ export class AcademySiteController {
   @ApiOperation({ summary: '[staff] Restore the draft from a snapshot' })
   rollback(@CurrentAcademy() ctx: AcademyContext, @Body() dto: RollbackDto) {
     return this.site.rollback(ctx.academyId, dto.snapshotId, ctx.userId);
+  }
+
+  @Delete('snapshots/:id')
+  @AcademyStaff('academy.manage')
+  @ApiOperation({ summary: '[staff] Delete a version from history' })
+  deleteSnapshot(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.site.deleteSnapshot(ctx.academyId, id, ctx.userId);
   }
 }

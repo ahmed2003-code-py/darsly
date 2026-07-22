@@ -68,6 +68,10 @@ export default function PublishTab({ slug }: { slug: string }) {
     mutationFn: async (snapshotId: string) => (await api.post('/academy/site/rollback', { snapshotId })).data,
     onSuccess: refresh,
   });
+  const removeSnap = useMutation({
+    mutationFn: async (snapshotId: string) => (await api.delete(`/academy/site/snapshots/${snapshotId}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-snapshots'] }),
+  });
 
   if (overview.isLoading) return <Spinner />;
   const ov = overview.data;
@@ -115,7 +119,7 @@ export default function PublishTab({ slug }: { slug: string }) {
 
       <div className="card">
         <h3 className="mb-3 font-heading font-bold">سجل النسخ</h3>
-        <ErrorNote error={rollback.error} />
+        <ErrorNote error={rollback.error || removeSnap.error} />
         {snapshots.isLoading ? (
           <Spinner />
         ) : !snapshots.data?.length ? (
@@ -130,16 +134,26 @@ export default function PublishTab({ slug }: { slug: string }) {
                     {REASON_LABEL[s.reason ?? ''] ?? s.reason ?? '—'} • {dateShort(s.createdAt)}
                   </p>
                 </div>
-                <button
-                  className="btn-secondary"
-                  disabled={rollback.isPending}
-                  onClick={() => {
-                    if (confirm(`استرجاع النسخة ${s.version}؟ سيحل محتواها محل المسودة الحالية.`)) rollback.mutate(s.id);
-                  }}
-                >
-                  <span className="material-symbols-outlined text-[18px]">history</span>
-                  استرجاع
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="btn-secondary"
+                    disabled={rollback.isPending}
+                    onClick={() => {
+                      if (confirm(`استرجاع النسخة ${s.version}؟ سيحل محتواها محل المسودة الحالية.`)) rollback.mutate(s.id);
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">history</span>
+                    استرجاع
+                  </button>
+                  <button
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-error transition hover:bg-error-container/40"
+                    aria-label="حذف"
+                    disabled={removeSnap.isPending}
+                    onClick={() => { if (confirm(`حذف النسخة ${s.version} من السجل؟`)) removeSnap.mutate(s.id); }}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

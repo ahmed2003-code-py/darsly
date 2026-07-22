@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { api } from '../../lib/api';
@@ -11,6 +11,7 @@ import GenerateTab from './studio/GenerateTab';
 import EditorTab from './studio/EditorTab';
 import PreviewTab from './studio/PreviewTab';
 import PublishTab from './studio/PublishTab';
+import OnboardingWizard from './studio/OnboardingWizard';
 import type { SiteOverview, SiteStatus } from './studio/types';
 
 const STATUS_LABEL: Record<SiteStatus, string> = {
@@ -43,12 +44,18 @@ function isFeatureDisabled(err: unknown): boolean {
 export default function AcademyStudioPage() {
   const { academy, isLoading } = useOwnedAcademy();
   const [tab, setTab] = useState<TabKey>('facts');
+  // null until overview loads; then default to the guided wizard for first-timers.
+  const [mode, setMode] = useState<'wizard' | 'tabs' | null>(null);
 
   const overview = useQuery<SiteOverview>({
     queryKey: ['studio-overview'],
     queryFn: async () => (await api.get('/academy/site')).data,
     retry: false,
   });
+
+  useEffect(() => {
+    if (mode === null && overview.data) setMode(overview.data.hasDraft ? 'tabs' : 'wizard');
+  }, [overview.data, mode]);
 
   if (isLoading) return <div className="mx-auto max-w-container px-6 py-8"><Spinner /></div>;
   if (!academy) {
@@ -102,29 +109,42 @@ export default function AcademyStudioPage() {
         </div>
       )}
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {TABS.map((tb) => (
-          <button
-            key={tb.key}
-            onClick={() => setTab(tb.key)}
-            className={`flex items-center gap-2 rounded-full px-5 py-2 font-heading text-sm font-semibold transition-colors ${
-              tab === tb.key
-                ? 'bg-primary text-on-primary'
-                : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px]">{tb.icon}</span>
-            {tb.label}
-          </button>
-        ))}
-      </div>
+      {mode === 'wizard' ? (
+        <OnboardingWizard slug={academy.slug} onExit={() => setMode('tabs')} />
+      ) : (
+        <>
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            {TABS.map((tb) => (
+              <button
+                key={tb.key}
+                onClick={() => setTab(tb.key)}
+                className={`flex items-center gap-2 rounded-full px-5 py-2 font-heading text-sm font-semibold transition-colors ${
+                  tab === tb.key
+                    ? 'bg-primary text-on-primary'
+                    : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[20px]">{tb.icon}</span>
+                {tb.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setMode('wizard')}
+              className="ms-auto flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold text-primary hover:bg-surface-container-low"
+            >
+              <span className="material-symbols-outlined text-[20px]">assistant_direction</span>
+              التهيئة الموجّهة
+            </button>
+          </div>
 
-      {tab === 'facts' && <FactsForm />}
-      {tab === 'media' && <MediaManager />}
-      {tab === 'generate' && <GenerateTab onDone={() => setTab('editor')} />}
-      {tab === 'editor' && <EditorTab onSaved={() => undefined} />}
-      {tab === 'preview' && <PreviewTab />}
-      {tab === 'publish' && <PublishTab slug={academy.slug} />}
+          {tab === 'facts' && <FactsForm />}
+          {tab === 'media' && <MediaManager />}
+          {tab === 'generate' && <GenerateTab onDone={() => setTab('editor')} />}
+          {tab === 'editor' && <EditorTab onSaved={() => undefined} />}
+          {tab === 'preview' && <PreviewTab />}
+          {tab === 'publish' && <PublishTab slug={academy.slug} />}
+        </>
+      )}
     </div>
   );
 }

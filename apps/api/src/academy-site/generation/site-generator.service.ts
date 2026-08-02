@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AiClient } from '../ai/ai.client';
 import { AiJobError } from '../ai/ai-job.error';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
+import { cleanList } from '../text.util';
 import { AiCopy, parseAiCopy } from './ai-copy.schema';
 import { AI_COPY_SCHEMA_NAME, aiCopyJsonSchema } from './ai-copy.jsonschema';
 import { systemPrompt, userPrompt } from './prompt';
@@ -125,7 +126,9 @@ export class SiteGeneratorService {
       heading: copy.about.heading,
       body: copy.about.body,
     });
-    const subjects = (brand.subjects ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    // Strip Markdown noise / de-duplicate raw fact lists before they hit visible
+    // sections (Phase 2 will replace these with AI-curated copy).
+    const subjects = cleanList(brand.subjects, { min: 2, maxLen: 60, cap: 20 });
     if (subjects.length) {
       blocks.push({
         type: 'toolkit',
@@ -134,7 +137,7 @@ export class SiteGeneratorService {
         items: subjects,
       });
     }
-    const achievements = (brand.achievements ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 12);
+    const achievements = cleanList(brand.achievements, { min: 2, maxLen: 240, cap: 12 });
     if (achievements.length) {
       blocks.push({
         type: 'credentials',

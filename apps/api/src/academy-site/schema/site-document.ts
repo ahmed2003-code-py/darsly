@@ -13,9 +13,15 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 export const localizedText = (max: number) =>
   z.object({ ar: z.string().max(max), en: z.string().max(max) });
 
+// Site Document v2: the layout variant chosen by the Site Brain for this block
+// (resolved against the Variant Registry). Optional so pre-v2 documents — which
+// render with each section's default variant — still validate.
+const variant = z.string().max(40).optional();
+
 const heroBlock = z.object({
   type: z.literal('hero'),
   id: z.string(),
+  variant,
   headline: localizedText(160),
   subheadline: localizedText(400),
   ctaLabel: localizedText(60),
@@ -25,6 +31,7 @@ const heroBlock = z.object({
 const aboutBlock = z.object({
   type: z.literal('about'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   body: localizedText(2000),
   mediaId: z.string().optional(),
@@ -33,6 +40,7 @@ const aboutBlock = z.object({
 const statsBlock = z.object({
   type: z.literal('stats'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   items: z
     .array(z.object({ label: localizedText(60), value: z.string().max(40) }))
@@ -42,6 +50,7 @@ const statsBlock = z.object({
 const faqBlock = z.object({
   type: z.literal('faq'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   items: z.array(z.object({ q: localizedText(200), a: localizedText(800) })).max(8),
 });
@@ -49,6 +58,7 @@ const faqBlock = z.object({
 const ctaBlock = z.object({
   type: z.literal('cta'),
   id: z.string(),
+  variant,
   headline: localizedText(160),
   buttonLabel: localizedText(60),
 });
@@ -57,6 +67,7 @@ const ctaBlock = z.object({
 const toolkitBlock = z.object({
   type: z.literal('toolkit'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   items: z.array(z.string().max(60)).max(20),
 });
@@ -65,6 +76,7 @@ const toolkitBlock = z.object({
 const credentialsBlock = z.object({
   type: z.literal('credentials'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   items: z.array(z.string().max(240)).max(12),
 });
@@ -73,6 +85,7 @@ const credentialsBlock = z.object({
 const coursesBlock = z.object({
   type: z.literal('courses'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   mode: z.literal('auto'),
   limit: z.number().int().min(1).max(24),
@@ -81,6 +94,7 @@ const coursesBlock = z.object({
 const reviewsBlock = z.object({
   type: z.literal('reviews'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   mode: z.literal('auto'),
   limit: z.number().int().min(1).max(24),
@@ -89,6 +103,7 @@ const reviewsBlock = z.object({
 const galleryBlock = z.object({
   type: z.literal('gallery'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   mediaIds: z.array(z.string()).max(12),
 });
@@ -96,6 +111,7 @@ const galleryBlock = z.object({
 const contactBlock = z.object({
   type: z.literal('contact'),
   id: z.string(),
+  variant,
   heading: localizedText(120),
   socials: z
     .array(z.object({ platform: z.string().max(30), url: z.string().url().max(300) }))

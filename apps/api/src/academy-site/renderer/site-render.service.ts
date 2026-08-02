@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SiteBrainService } from '../pipeline/site-brain.service';
 import { SiteDocument } from '../schema/site-document';
-import { RenderMedia, compileSite } from './site-compiler';
+import { compileSite } from './site-compiler';
+import { RenderMedia } from './types';
 
 @Injectable()
 export class SiteRenderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly brain: SiteBrainService,
+  ) {}
 
   /** Compile a document to HTML, resolving this academy's READY media. */
   async compile(
@@ -20,6 +25,8 @@ export class SiteRenderService {
     const map = new Map<string, RenderMedia>(
       media.map((m) => [m.id, { url: m.url ?? '', blurhash: m.blurhash, width: m.width, height: m.height }]),
     );
-    return compileSite(doc, { ...ctx, media: (id) => map.get(id) });
+    // Site Brain resolves the authoritative RenderPlan; the renderer is pure.
+    const plan = this.brain.plan(doc);
+    return compileSite(plan, { ...ctx, media: (id) => map.get(id) });
   }
 }

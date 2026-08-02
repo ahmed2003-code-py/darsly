@@ -1,49 +1,32 @@
-import { SiteBlock, SiteDocument } from '../schema/site-document';
-import { escapeAttr, escapeHtml, safeUrl } from './html.util';
+import { RenderPlan } from '../pipeline/contracts';
+import { darken, hexToRgb, mix, onColor } from './color.util';
+import { escapeAttr, escapeHtml } from './html.util';
+import { logo } from './shared';
+import { RenderContext } from './types';
+import { getVariantRenderer } from './variants';
 
-export interface RenderMedia {
-  url: string;
-  blurhash?: string | null;
-  width?: number | null;
-  height?: number | null;
-}
-
-export interface RenderContext {
-  academyName: string;
-  slug: string;
-  defaultLang: 'ar' | 'en';
-  /** Resolve a media id to its public URL + metadata (READY media only). */
-  media: (id: string) => RenderMedia | undefined;
-}
-
-type LT = { ar: string; en: string };
-
-// Short section eyebrow labels, numbered in the editorial layout.
-const SECTION_LABEL: Record<string, LT> = {
-  about: { ar: 'نبذة', en: 'About' },
-  toolkit: { ar: 'المنهج', en: 'Toolkit' },
-  credentials: { ar: 'السجل', en: 'Track record' },
-  courses: { ar: 'الدورات', en: 'Courses' },
-  reviews: { ar: 'الآراء', en: 'Reviews' },
-  faq: { ar: 'الأسئلة', en: 'FAQ' },
-  gallery: { ar: 'المعرض', en: 'Gallery' },
-  stats: { ar: 'أرقام', en: 'By the numbers' },
-};
+// Re-exported for callers that imported these from the compiler historically.
+export type { RenderContext, RenderMedia } from './types';
 
 /**
- * Pure, deterministic compiler: Site Document → a single self-contained HTML
- * document. A strong editorial design with numbered sections, four distinct
- * visual presets (theme.preset) and tasteful motion. Live blocks (courses/
- * reviews) hydrate at view time so cached HTML never serves a stale list.
+ * Pure, deterministic compiler: a Site Brain RenderPlan → a single
+ * self-contained HTML document. It makes NO layout decisions — every section is
+ * rendered by the variant the plan names, looked up in the Variant Registry.
+ * A strong editorial design with numbered sections, four distinct visual presets
+ * (theme.preset) and tasteful motion. Live blocks (courses/reviews) hydrate at
+ * view time so cached HTML never serves a stale list.
  */
-export function compileSite(doc: SiteDocument, ctx: RenderContext): string {
-  const lang = doc.theme?.defaultLang ?? ctx.defaultLang;
+export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
+  const { theme, seo } = plan;
+  const lang = theme?.defaultLang ?? ctx.defaultLang;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
-  const preset = doc.theme?.preset ?? 'warm';
-  const body = doc.blocks.map((b) => renderBlock(b, ctx)).join('\n');
+  const preset = theme?.preset ?? 'warm';
+  const body = plan.blocks
+    .map((pb) => getVariantRenderer(pb.block.type, pb.variant)?.(pb.block, ctx) ?? '')
+    .join('\n');
   const brand = escapeHtml(ctx.academyName);
-  const seoTitle = doc.seo?.title?.[lang]?.trim();
-  const seoDesc = doc.seo?.description?.[lang]?.trim();
+  const seoTitle = seo?.title?.[lang]?.trim();
+  const seoDesc = seo?.description?.[lang]?.trim();
   const title = escapeHtml(seoTitle || ctx.academyName);
   const descMeta = seoDesc ? `\n<meta name="description" content="${escapeAttr(seoDesc)}">` : '';
 
@@ -56,12 +39,12 @@ export function compileSite(doc: SiteDocument, ctx: RenderContext): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Plus+Jakarta+Sans:wght@400;700;800&family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
-<style>${css(doc.theme.primary, doc.theme.accent, doc.theme.style)}</style>
+<style>${css(theme.primary, theme.accent, theme.style)}</style>
 </head>
 <body>
 <header class="topbar">
   <div class="wrap">
-    <span class="brand">${logo(doc.theme.logoMediaId, ctx)}<span>${brand}</span></span>
+    <span class="brand">${logo(theme.logoMediaId, ctx)}<span>${brand}</span></span>
     <button id="langToggle" class="lang-toggle" type="button" aria-label="Language"></button>
   </div>
 </header>
@@ -73,145 +56,6 @@ ${body}
 </body>
 </html>`;
 }
-
-function i18n(lt: LT): string {
-  const ar = escapeAttr(lt?.ar ?? '');
-  const en = escapeAttr(lt?.en ?? '');
-  return `<span class="i18n" data-ar="${ar}" data-en="${en}">${escapeHtml(lt?.ar ?? '')}</span>`;
-}
-
-/** Numbered eyebrow + big heading for an editorial section. */
-function head(type: string, heading: LT): string {
-  const label = SECTION_LABEL[type];
-  const eyebrow = label ? `<p class="eyebrow">${i18n(label)}</p>` : '';
-  return `${eyebrow}<h2>${i18n(heading)}</h2>`;
-}
-
-function logo(id: string | undefined, ctx: RenderContext): string {
-  if (!id) return '';
-  const m = ctx.media(id);
-  const url = safeUrl(m?.url);
-  if (!url) return '';
-  return `<img class="logo" src="${escapeAttr(url)}" alt="" width="40" height="40">`;
-}
-
-function renderBlock(block: SiteBlock, ctx: RenderContext): string {
-  switch (block.type) {
-    case 'hero': {
-      const cover = block.mediaId ? ctx.media(block.mediaId) : undefined;
-      const bg = cover && safeUrl(cover.url)
-        ? ` style="background-image:url('${escapeAttr(safeUrl(cover.url))}')"`
-        : '';
-      return `<section class="block hero${bg ? ' hero-img' : ''}"${bg}><div class="wrap">
-        <h1>${i18n(block.headline)}</h1>
-        <p class="sub">${i18n(block.subheadline)}</p>
-        <div class="hero-actions"><a class="btn" href="#courses-${block.id}">${i18n(block.ctaLabel)}</a></div>
-      </div></section>`;
-    }
-    case 'about': {
-      const img = block.mediaId ? ctx.media(block.mediaId) : undefined;
-      const imgHtml = img && safeUrl(img.url)
-        ? `<img class="about-img" src="${escapeAttr(safeUrl(img.url))}" alt="" loading="lazy">`
-        : '';
-      return `<section class="block numbered about"><div class="wrap about-grid">
-        <div>${head('about', block.heading)}<p>${i18n(block.body)}</p></div>${imgHtml}
-      </div></section>`;
-    }
-    case 'toolkit': {
-      const tags = block.items.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join('');
-      if (!tags) return '';
-      return `<section class="block numbered toolkit"><div class="wrap">
-        ${head('toolkit', block.heading)}<div class="tags">${tags}</div>
-      </div></section>`;
-    }
-    case 'credentials': {
-      const items = block.items.map((s) => `<li><span>${escapeHtml(s)}</span></li>`).join('');
-      if (!items) return '';
-      return `<section class="block numbered credentials"><div class="wrap">
-        ${head('credentials', block.heading)}<ol class="record">${items}</ol>
-      </div></section>`;
-    }
-    case 'stats':
-      return `<section class="block numbered stats"><div class="wrap">
-        ${head('stats', block.heading)}
-        <div class="stat-grid">${block.items
-          .map((s) => `<div class="stat"><span class="v">${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`)
-          .join('')}</div>
-      </div></section>`;
-    case 'faq':
-      return `<section class="block numbered faq"><div class="wrap">
-        ${head('faq', block.heading)}
-        <div class="faq-list">${block.items
-          .map((f) => `<details><summary>${i18n(f.q)}</summary><div>${i18n(f.a)}</div></details>`)
-          .join('')}</div>
-      </div></section>`;
-    case 'cta':
-      return `<section class="block cta"><div class="wrap">
-        <h2>${i18n(block.headline)}</h2>
-        <a class="btn" href="#top">${i18n(block.buttonLabel)}</a>
-      </div></section>`;
-    case 'courses':
-      return `<section id="courses-${block.id}" class="block numbered courses" data-hydrate="courses" data-limit="${block.limit}"><div class="wrap">
-        ${head('courses', block.heading)}
-        <div class="cards" data-slot>${skeleton(3)}</div>
-      </div></section>`;
-    case 'reviews':
-      return `<section class="block numbered reviews" data-hydrate="reviews" data-limit="${block.limit}"><div class="wrap">
-        ${head('reviews', block.heading)}
-        <div class="cards" data-slot>${skeleton(3)}</div>
-      </div></section>`;
-    case 'gallery': {
-      const imgs = block.mediaIds
-        .map((id) => ctx.media(id))
-        .filter((m): m is RenderMedia => !!m && !!safeUrl(m.url))
-        .map((m) => `<img src="${escapeAttr(safeUrl(m.url))}" alt="" loading="lazy">`)
-        .join('');
-      if (!imgs) return '';
-      return `<section class="block numbered gallery"><div class="wrap">
-        ${head('gallery', block.heading)}<div class="gallery-grid">${imgs}</div>
-      </div></section>`;
-    }
-    case 'contact': {
-      const links = block.socials
-        .filter((s) => safeUrl(s.url))
-        .map(
-          (s) =>
-            `<a class="social" href="${escapeAttr(safeUrl(s.url))}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(s.platform)}</a>`,
-        )
-        .join('');
-      return `<section class="block contact"><div class="wrap">
-        <h2>${i18n(block.heading)}</h2><div class="socials">${links}</div>
-      </div></section>`;
-    }
-  }
-}
-
-function skeleton(n: number): string {
-  return Array.from({ length: n }, () => '<div class="card skeleton"></div>').join('');
-}
-
-// ── Deterministic color system (derive a cohesive palette from the brand) ────
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace('#', '');
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-}
-function rgbToHex(rgb: number[]): string {
-  return '#' + rgb.map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0')).join('');
-}
-function mix(hex: string, target: string, w: number): string {
-  const a = hexToRgb(hex);
-  const b = hexToRgb(target);
-  return rgbToHex(a.map((c, i) => c + (b[i] - c) * w));
-}
-const darken = (hex: string, amt: number) => mix(hex, '#000000', amt);
-function relLuminance(hex: string): number {
-  const a = hexToRgb(hex).map((v) => {
-    const s = v / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  });
-  return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
-}
-const onColor = (hex: string) => (relLuminance(hex) > 0.5 ? '#12121c' : '#ffffff');
 
 const STYLE_RADIUS: Record<string, string> = {
   modern: '18px', bold: '12px', elegant: '10px', minimal: '10px', playful: '26px',

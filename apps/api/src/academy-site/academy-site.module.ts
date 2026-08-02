@@ -9,6 +9,8 @@ import { AcademyFactsService } from './facts/academy-facts.service';
 import { AcademyGenerateController } from './generation/academy-generate.controller';
 import { SiteGenerateHandler } from './generation/site-generate.handler';
 import { SiteGeneratorService } from './generation/site-generator.service';
+import { DesignRulesService } from './pipeline/design-rules.service';
+import { SiteBrainService } from './pipeline/site-brain.service';
 import { PublicSiteController } from './public/public-site.controller';
 import { PublicSiteService } from './public/public-site.service';
 import { SiteRenderService } from './renderer/site-render.service';
@@ -49,6 +51,8 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     MediaMaintenanceWorker,
     AcademyFactsService,
     AcademySiteService,
+    DesignRulesService,
+    SiteBrainService,
     SiteRenderService,
     PublicSiteService,
     SiteGeneratorService,

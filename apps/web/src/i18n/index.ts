@@ -11,11 +11,19 @@ i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
 });
 
-export function setLanguage(lang: 'ar' | 'en') {
-  localStorage.setItem('darsly-lang', lang);
-  i18n.changeLanguage(lang);
+/** Keep <html lang/dir> in sync with the active language. */
+function syncDocumentDir(lang: string) {
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+}
+// Apply immediately on load (fixes the sidebar staying on the RTL side when the
+// stored language is English) and on every subsequent change.
+syncDocumentDir(i18n.language);
+i18n.on('languageChanged', syncDocumentDir);
+
+export function setLanguage(lang: 'ar' | 'en') {
+  localStorage.setItem('darsly-lang', lang);
+  i18n.changeLanguage(lang); // languageChanged listener updates lang/dir
 }
 
 export default i18n;

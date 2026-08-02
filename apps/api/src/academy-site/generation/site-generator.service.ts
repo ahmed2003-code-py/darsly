@@ -29,6 +29,7 @@ export class SiteGeneratorService {
     academyId: string,
     vibe?: string,
     stylePrompt?: string,
+    lang?: 'ar' | 'en',
   ): Promise<{ doc: SiteDocument; costCents: number }> {
     // ── extract ──
     const [academy, facts] = await Promise.all([
@@ -78,7 +79,7 @@ export class SiteGeneratorService {
     const style = copy.theme.style;
 
     // ── assemble (deterministic) ──
-    const doc = this.assemble(copy, { primary, accent, style, logoId, coverId, galleryIds }, facts.socials);
+    const doc = this.assemble(copy, { primary, accent, style, defaultLang: lang, logoId, coverId, galleryIds }, facts.socials);
     const res = parseSiteDocument(doc);
     if (!res.success) {
       throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
@@ -88,7 +89,7 @@ export class SiteGeneratorService {
 
   private assemble(
     copy: AiCopy,
-    brand: { primary: string; accent: string; style?: string; logoId?: string; coverId?: string; galleryIds: string[] },
+    brand: { primary: string; accent: string; style?: string; defaultLang?: 'ar' | 'en'; logoId?: string; coverId?: string; galleryIds: string[] },
     socialsJson: unknown,
   ): SiteDocument {
     const bilingual = (ar: string, en: string) => ({ ar, en });
@@ -157,6 +158,7 @@ export class SiteGeneratorService {
         accent: brand.accent,
         ...(brand.logoId ? { logoMediaId: brand.logoId } : {}),
         ...(brand.style ? { style: brand.style as SiteDocument['theme']['style'] } : {}),
+        ...(brand.defaultLang ? { defaultLang: brand.defaultLang } : {}),
       },
       seo: { title: copy.seo.metaTitle, description: copy.seo.metaDescription },
       blocks,

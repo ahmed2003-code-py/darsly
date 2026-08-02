@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { ErrorNote, Field, Spinner } from '../../../components/ui';
 import type { Facts, Social } from './types';
 
 export default function FactsForm() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data, isLoading, isError, error } = useQuery<Facts>({
     queryKey: ['studio-facts'],
@@ -53,40 +55,37 @@ export default function FactsForm() {
 
   return (
     <form className="card" onSubmit={(e) => { e.preventDefault(); save.mutate(form); }}>
-      <h2 className="mb-1 font-heading text-xl font-bold">بيانات الأكاديمية</h2>
-      <p className="mb-5 text-sm text-on-surface-variant">
-        هذه هي المادة الخام التي يكتب منها الذكاء الاصطناعي محتوى صفحتك. كلما كانت أدق، كانت الصفحة أفضل.
-      </p>
+      <h2 className="mb-1 font-heading text-xl font-bold">{t('studio.facts.title')}</h2>
+      <p className="mb-5 text-sm text-on-surface-variant">{t('studio.facts.hint')}</p>
 
-      <Field label="اسم المدرّس / الأكاديمية">
+      <Field label={t('studio.facts.fullName')}>
         <input className="input" value={form.fullName ?? ''} maxLength={120}
-          onChange={(e) => set({ fullName: e.target.value })} placeholder="مثال: أ. خالد عبدالرحمن" />
+          onChange={(e) => set({ fullName: e.target.value })} placeholder={t('studio.facts.fullNamePh')} />
       </Field>
 
-      <Field label="نبذة تعريفية" hint="خبرتك، أسلوبك، ما يميّزك — بضع جُمل.">
+      <Field label={t('studio.facts.bio')} hint={t('studio.facts.bioHint')}>
         <textarea className="input min-h-[120px]" value={form.bio ?? ''} maxLength={2000}
-          onChange={(e) => set({ bio: e.target.value })} placeholder="مدرّس رياضيات للثانوية العامة بخبرة 12 عامًا…" />
+          onChange={(e) => set({ bio: e.target.value })} placeholder={t('studio.facts.bioPh')} />
       </Field>
 
-      <Field label="المواد" hint="افصل بينها بفاصلة.">
+      <Field label={t('studio.facts.subjects')} hint={t('studio.facts.csvHint')}>
         <input className="input" value={csv(form.subjects)}
-          onChange={(e) => set({ subjects: parseCsv(e.target.value) })} placeholder="الجبر، التفاضل، الهندسة" />
+          onChange={(e) => set({ subjects: parseCsv(e.target.value) })} placeholder={t('studio.facts.subjectsPh')} />
       </Field>
 
-      <Field label="المراحل الدراسية" hint="افصل بينها بفاصلة.">
+      <Field label={t('studio.facts.stages')} hint={t('studio.facts.csvHint')}>
         <input className="input" value={csv(form.stages)}
-          onChange={(e) => set({ stages: parseCsv(e.target.value) })} placeholder="الصف الثالث الثانوي" />
+          onChange={(e) => set({ stages: parseCsv(e.target.value) })} placeholder={t('studio.facts.stagesPh')} />
       </Field>
 
-      <Field label="الإنجازات" hint="افصل بينها بفاصلة أو سطر جديد.">
+      <Field label={t('studio.facts.achievements')} hint={t('studio.facts.achHint')}>
         <textarea className="input" value={form.achievements.join('\n')}
-          onChange={(e) => set({ achievements: parseCsv(e.target.value) })}
-          placeholder={'أكثر من 3000 طالب\nنسبة نجاح 95%'} />
+          onChange={(e) => set({ achievements: parseCsv(e.target.value) })} placeholder={t('studio.facts.achPh')} />
       </Field>
 
       <SocialsEditor value={form.socials} onChange={(socials) => set({ socials })} />
 
-      <Field label="أي تفاصيل إضافية (اختياري)" hint="الصق أي نص حر يساعد الذكاء الاصطناعي.">
+      <Field label={t('studio.facts.extra')} hint={t('studio.facts.extraHint')}>
         <textarea className="input min-h-[100px]" value={form.rawIntake ?? ''} maxLength={20000}
           onChange={(e) => set({ rawIntake: e.target.value })} />
       </Field>
@@ -94,12 +93,12 @@ export default function FactsForm() {
       <ErrorNote error={save.error} />
       <div className="mt-4 flex items-center gap-3">
         <button type="submit" className="btn-primary" disabled={save.isPending}>
-          {save.isPending ? 'جارٍ الحفظ…' : 'حفظ البيانات'}
+          {save.isPending ? t('studio.facts.saving') : t('studio.facts.save')}
         </button>
         {saved && (
           <span className="flex items-center gap-1 text-sm font-bold text-teal-600">
             <span className="material-symbols-outlined text-[18px]">check_circle</span>
-            تم الحفظ
+            {t('studio.facts.saved')}
           </span>
         )}
       </div>
@@ -108,20 +107,21 @@ export default function FactsForm() {
 }
 
 function SocialsEditor({ value, onChange }: { value: Social[]; onChange: (v: Social[]) => void }) {
+  const { t } = useTranslation();
   const update = (i: number, patch: Partial<Social>) =>
     onChange(value.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
   return (
-    <Field label="روابط التواصل">
+    <Field label={t('studio.facts.socials')}>
       <div className="space-y-2">
         {value.map((s, i) => (
           <div key={i} className="flex gap-2">
             <input className="input w-40" value={s.platform} maxLength={30}
-              onChange={(e) => update(i, { platform: e.target.value })} placeholder="youtube" />
+              onChange={(e) => update(i, { platform: e.target.value })} placeholder={t('studio.facts.platformPh')} />
             <input className="input flex-1" value={s.url}
-              onChange={(e) => update(i, { url: e.target.value })} placeholder="https://youtube.com/@..." />
+              onChange={(e) => update(i, { url: e.target.value })} placeholder={t('studio.facts.urlPh')} />
             <button type="button"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-error transition hover:bg-error-container/40"
-              aria-label="حذف" onClick={() => onChange(value.filter((_, idx) => idx !== i))}>
+              aria-label={t('studio.publish.delete')} onClick={() => onChange(value.filter((_, idx) => idx !== i))}>
               <span className="material-symbols-outlined text-[20px]">delete</span>
             </button>
           </div>
@@ -129,7 +129,7 @@ function SocialsEditor({ value, onChange }: { value: Social[]; onChange: (v: Soc
         {value.length < 10 && (
           <button type="button" className="text-sm font-bold text-primary hover:underline"
             onClick={() => onChange([...value, { platform: '', url: '' }])}>
-            + إضافة رابط
+            {t('studio.facts.addSocial')}
           </button>
         )}
       </div>

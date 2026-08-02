@@ -14,4 +14,9 @@ export class GenerateSiteDto {
   @IsString()
   @MaxLength(600)
   stylePrompt?: string;
+
+  @ApiPropertyOptional({ enum: ['ar', 'en'], description: 'Default language of the generated page.' })
+  @IsOptional()
+  @IsIn(['ar', 'en'])
+  lang?: 'ar' | 'en';
 }

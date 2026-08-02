@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { dateShort } from '../../lib/format';
 import { Badge, ErrorNote, PageHeader, Spinner } from '../../components/ui';
@@ -26,16 +27,17 @@ interface Usage {
 }
 
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
-const TABS = [
-  { key: 'queue', label: 'قائمة المراجعة', icon: 'rate_review' },
-  { key: 'usage', label: 'استهلاك الذكاء الاصطناعي', icon: 'monitoring' },
-] as const;
 
 export default function AdminAcademyStudioPage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'queue' | 'usage'>('queue');
+  const TABS = [
+    { key: 'queue', label: t('adminStudio.tabQueue'), icon: 'rate_review' },
+    { key: 'usage', label: t('adminStudio.tabUsage'), icon: 'monitoring' },
+  ] as const;
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-      <PageHeader title="استوديو الأكاديميات" subtitle="مراجعة الصفحات المُولّدة ومتابعة استهلاك الذكاء الاصطناعي." />
+      <PageHeader title={t('adminStudio.title')} subtitle={t('adminStudio.subtitle')} />
       <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((tb) => (
           <button key={tb.key} onClick={() => setTab(tb.key)}
@@ -53,6 +55,7 @@ export default function AdminAcademyStudioPage() {
 }
 
 function ModerationQueue() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const q = useQuery<QueueItem[]>({
     queryKey: ['admin-moderation-queue'],
@@ -70,7 +73,7 @@ function ModerationQueue() {
     return (
       <div className="card grid place-items-center py-16 text-center">
         <span className="material-symbols-outlined text-4xl text-teal-500">task_alt</span>
-        <p className="mt-2 font-bold">لا توجد صفحات بانتظار المراجعة</p>
+        <p className="mt-2 font-bold">{t('adminStudio.emptyQueue')}</p>
       </div>
     );
   }
@@ -81,7 +84,7 @@ function ModerationQueue() {
         <QueueRow key={it.academyId} it={it} pending={moderate.isPending}
           onApprove={() => moderate.mutate({ academyId: it.academyId, decision: 'approve' })}
           onReject={() => {
-            const reason = prompt('سبب الرفض (اختياري):') ?? undefined;
+            const reason = prompt(t('adminStudio.rejectPrompt')) ?? undefined;
             moderate.mutate({ academyId: it.academyId, decision: 'reject', reason });
           }} />
       ))}
@@ -92,6 +95,7 @@ function ModerationQueue() {
 function QueueRow({ it, pending, onApprove, onReject }: {
   it: QueueItem; pending: boolean; onApprove: () => void; onReject: () => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const preview = useQuery<string>({
     queryKey: ['admin-site-preview', it.academyId],
@@ -104,27 +108,27 @@ function QueueRow({ it, pending, onApprove, onReject }: {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-heading font-bold">{it.academyName}</p>
-          <p className="text-sm text-on-surface-variant">/{it.slug} • نسخة {it.version} • أُرسلت {dateShort(it.submittedAt)}</p>
+          <p className="text-sm text-on-surface-variant">/{it.slug} • {t('adminStudio.version', { n: it.version })} • {t('adminStudio.sentAt', { date: dateShort(it.submittedAt) })}</p>
         </div>
         <div className="flex gap-2">
           <button className="btn-secondary" onClick={() => setOpen((o) => !o)}>
             <span className="material-symbols-outlined text-[20px]">{open ? 'visibility_off' : 'visibility'}</span>
-            {open ? 'إخفاء' : 'معاينة'}
+            {open ? t('adminStudio.hide') : t('adminStudio.preview')}
           </button>
           <button className="btn-primary" disabled={pending} onClick={onApprove}>
-            <span className="material-symbols-outlined text-[20px]">check</span>موافقة ونشر
+            <span className="material-symbols-outlined text-[20px]">check</span>{t('adminStudio.approve')}
           </button>
           <button className="btn-secondary" disabled={pending} onClick={onReject}>
-            <span className="material-symbols-outlined text-[20px]">close</span>رفض
+            <span className="material-symbols-outlined text-[20px]">close</span>{t('adminStudio.reject')}
           </button>
         </div>
       </div>
       {open && (
         <div className="mt-4">
           {preview.isLoading ? <Spinner /> : preview.isError ? (
-            <p className="text-sm text-error">تعذّر تحميل المعاينة.</p>
+            <p className="text-sm text-error">{t('adminStudio.loadError')}</p>
           ) : (
-            <iframe title={`معاينة ${it.slug}`} srcDoc={preview.data}
+            <iframe title={it.slug} srcDoc={preview.data}
               className="w-full rounded-xl border border-outline-variant bg-white" style={{ height: '70vh' }} />
           )}
         </div>
@@ -134,6 +138,7 @@ function QueueRow({ it, pending, onApprove, onReject }: {
 }
 
 function UsageDashboard() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const q = useQuery<Usage>({
     queryKey: ['admin-ai-usage'],
@@ -154,7 +159,7 @@ function UsageDashboard() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-sm text-on-surface-variant">الإنفاق هذا الشهر ({u.month})</p>
+          <p className="text-sm text-on-surface-variant">{t('adminStudio.spend', { month: u.month })}</p>
           <p className="font-heading text-3xl font-bold tabular-nums">{usd(u.spentCents)}</p>
           {u.budgetCents > 0 && (
             <>
@@ -162,17 +167,17 @@ function UsageDashboard() {
                 <div className={`h-full ${pct >= 90 ? 'bg-error' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
               </div>
               <p className="mt-1 text-xs text-on-surface-variant">
-                من ميزانية {usd(u.budgetCents)} • متبقٍّ {usd(u.budgetRemainingCents ?? 0)}
+                {t('adminStudio.ofBudget', { budget: usd(u.budgetCents), rem: usd(u.budgetRemainingCents ?? 0) })}
               </p>
             </>
           )}
         </div>
         <div className="card">
-          <p className="text-sm text-on-surface-variant">فشل آخر 24 ساعة</p>
+          <p className="text-sm text-on-surface-variant">{t('adminStudio.failed24')}</p>
           <p className={`font-heading text-3xl font-bold tabular-nums ${u.failedLast24h ? 'text-error' : ''}`}>{u.failedLast24h}</p>
         </div>
         <div className="card">
-          <p className="mb-2 text-sm text-on-surface-variant">حالة المهام</p>
+          <p className="mb-2 text-sm text-on-surface-variant">{t('adminStudio.byStatus')}</p>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(u.byStatus).map(([s, n]) => (
               <Badge key={s} tone={s === 'FAILED' ? 'error' : s === 'SUCCEEDED' ? 'teal' : 'neutral'}>{s}: {n}</Badge>
@@ -182,16 +187,16 @@ function UsageDashboard() {
       </div>
 
       <div className="card">
-        <h3 className="mb-3 font-heading font-bold">أحدث المهام</h3>
+        <h3 className="mb-3 font-heading font-bold">{t('adminStudio.recent')}</h3>
         <ErrorNote error={rerun.error} />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-start text-on-surface-variant">
-                <th className="p-2 text-start">التاريخ</th>
-                <th className="p-2 text-start">الحالة</th>
-                <th className="p-2 text-start">المحاولات</th>
-                <th className="p-2 text-start">التكلفة</th>
+                <th className="p-2 text-start">{t('adminStudio.date')}</th>
+                <th className="p-2 text-start">{t('adminStudio.statusH')}</th>
+                <th className="p-2 text-start">{t('adminStudio.attempts')}</th>
+                <th className="p-2 text-start">{t('adminStudio.cost')}</th>
                 <th className="p-2 text-start"></th>
               </tr>
             </thead>
@@ -208,7 +213,7 @@ function UsageDashboard() {
                   <td className="p-2">
                     {j.status === 'FAILED' && (
                       <button className="text-sm font-bold text-primary hover:underline" disabled={rerun.isPending}
-                        onClick={() => rerun.mutate(j.id)}>إعادة تشغيل</button>
+                        onClick={() => rerun.mutate(j.id)}>{t('adminStudio.rerun')}</button>
                     )}
                   </td>
                 </tr>

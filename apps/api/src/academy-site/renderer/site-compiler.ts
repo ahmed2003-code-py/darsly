@@ -26,7 +26,9 @@ type LT = { ar: string; en: string };
  * serves a stale course list.
  */
 export function compileSite(doc: SiteDocument, ctx: RenderContext): string {
-  const lang = ctx.defaultLang;
+  // The document's own default language (chosen at generation time) wins over
+  // the academy default, so generating in English mode opens the page in English.
+  const lang = doc.theme?.defaultLang ?? ctx.defaultLang;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const body = doc.blocks.map((b) => renderBlock(b, ctx)).join('\n');
   const brand = escapeHtml(ctx.academyName);

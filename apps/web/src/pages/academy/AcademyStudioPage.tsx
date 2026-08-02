@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { api } from '../../lib/api';
@@ -15,12 +16,6 @@ import OnboardingWizard from './studio/OnboardingWizard';
 import { BrandingTab, MembersTab } from './AcademyConsolePage';
 import type { SiteOverview, SiteStatus } from './studio/types';
 
-const STATUS_LABEL: Record<SiteStatus, string> = {
-  DRAFT: 'مسودة',
-  PENDING_MODERATION: 'قيد المراجعة',
-  PUBLISHED: 'منشورة',
-  REJECTED: 'مرفوضة',
-};
 const STATUS_TONE: Record<SiteStatus, 'primary' | 'teal' | 'warn' | 'error' | 'neutral'> = {
   DRAFT: 'neutral',
   PENDING_MODERATION: 'warn',
@@ -28,15 +23,15 @@ const STATUS_TONE: Record<SiteStatus, 'primary' | 'teal' | 'warn' | 'error' | 'n
   REJECTED: 'error',
 };
 
+// Important, ordered tabs: the build flow + a combined settings tab.
 const TABS = [
-  { key: 'settings', label: 'الهوية', icon: 'storefront' },
-  { key: 'facts', label: 'البيانات', icon: 'badge' },
-  { key: 'media', label: 'الصور', icon: 'image' },
-  { key: 'generate', label: 'التوليد', icon: 'auto_awesome' },
-  { key: 'editor', label: 'المحرّر', icon: 'edit' },
-  { key: 'preview', label: 'المعاينة', icon: 'visibility' },
-  { key: 'publish', label: 'النشر', icon: 'publish' },
-  { key: 'team', label: 'الفريق', icon: 'group' },
+  { key: 'facts', icon: 'badge' },
+  { key: 'media', icon: 'image' },
+  { key: 'generate', icon: 'auto_awesome' },
+  { key: 'editor', icon: 'edit' },
+  { key: 'preview', icon: 'visibility' },
+  { key: 'publish', icon: 'publish' },
+  { key: 'settings', icon: 'storefront' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -45,9 +40,10 @@ function isFeatureDisabled(err: unknown): boolean {
 }
 
 export default function AcademyStudioPage() {
+  const { t } = useTranslation();
   const { academy, isLoading } = useOwnedAcademy();
   const [tab, setTab] = useState<TabKey>('facts');
-  // null until overview loads; then default to the guided wizard for first-timers.
+  const [settingsSub, setSettingsSub] = useState<'branding' | 'team'>('branding');
   const [mode, setMode] = useState<'wizard' | 'tabs' | null>(null);
 
   const overview = useQuery<SiteOverview>({
@@ -64,20 +60,17 @@ export default function AcademyStudioPage() {
   if (!academy) {
     return (
       <div className="mx-auto max-w-container px-6 py-8">
-        <PageHeader title="استوديو الأكاديمية" subtitle="لا توجد أكاديمية مملوكة لحسابك بعد." />
+        <PageHeader title={t('studio.title')} subtitle={t('studio.noAcademy')} />
       </div>
     );
   }
   if (overview.isError && isFeatureDisabled(overview.error)) {
     return (
       <div className="mx-auto max-w-container px-6 py-8">
-        <PageHeader title="استوديو الأكاديمية" subtitle="توليد صفحة أكاديميتك بالذكاء الاصطناعي." />
+        <PageHeader title={t('studio.title')} subtitle={t('studio.subtitle')} />
         <div className="card border border-amber-200 bg-amber-50 text-amber-900">
-          <p className="font-bold">الميزة غير مُفعّلة بعد</p>
-          <p className="mt-1 text-sm">
-            استوديو الأكاديمية متوقّف حاليًا. لتفعيله، اضبط <code className="rounded bg-amber-100 px-1">AI_ACADEMY_ENABLED=true</code>{' '}
-            و <code className="rounded bg-amber-100 px-1">OPENAI_API_KEY</code> في بيئة الخادم.
-          </p>
+          <p className="font-bold">{t('studio.disabledTitle')}</p>
+          <p className="mt-1 text-sm">{t('studio.disabledHint')}</p>
         </div>
       </div>
     );
@@ -87,13 +80,13 @@ export default function AcademyStudioPage() {
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       <PageHeader
-        title="استوديو الأكاديمية"
-        subtitle="اكتب بياناتك، ودع الذكاء الاصطناعي يبني صفحة أكاديميتك."
+        title={t('studio.title')}
+        subtitle={t('studio.subtitle')}
         action={
           ov?.status === 'PUBLISHED' ? (
             <Link to={`/a/${academy.slug}`} target="_blank" className="btn-secondary">
               <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-              عرض الصفحة المنشورة
+              {t('studio.viewPublished')}
             </Link>
           ) : undefined
         }
@@ -102,12 +95,12 @@ export default function AcademyStudioPage() {
       {ov && (
         <div className="card mb-6 flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-on-surface-variant">حالة الصفحة:</span>
-            <Badge tone={STATUS_TONE[ov.status]}>{STATUS_LABEL[ov.status]}</Badge>
+            <span className="text-sm text-on-surface-variant">{t('studio.pageStatus')}</span>
+            <Badge tone={STATUS_TONE[ov.status]}>{t(`studio.status.${ov.status}`)}</Badge>
           </div>
-          {ov.hasDraft && <span className="text-sm text-on-surface-variant">• يوجد مسودة (نسخة {ov.version})</span>}
+          {ov.hasDraft && <span className="text-sm text-on-surface-variant">• {t('studio.draftV', { v: ov.version })}</span>}
           {ov.status === 'REJECTED' && ov.moderationReason && (
-            <span className="text-sm text-error">• سبب الرفض: {ov.moderationReason}</span>
+            <span className="text-sm text-error">• {t('studio.rejectedReason', { reason: ov.moderationReason })}</span>
           )}
         </div>
       )}
@@ -128,7 +121,7 @@ export default function AcademyStudioPage() {
                 }`}
               >
                 <span className="material-symbols-outlined text-[20px]">{tb.icon}</span>
-                {tb.label}
+                {t(`studio.tabs.${tb.key}`)}
               </button>
             ))}
             <button
@@ -136,18 +129,34 @@ export default function AcademyStudioPage() {
               className="ms-auto flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold text-primary hover:bg-surface-container-low"
             >
               <span className="material-symbols-outlined text-[20px]">assistant_direction</span>
-              التهيئة الموجّهة
+              {t('studio.guided')}
             </button>
           </div>
 
-          {tab === 'settings' && <BrandingTab slug={academy.slug} />}
-          {tab === 'team' && <MembersTab slug={academy.slug} />}
           {tab === 'facts' && <FactsForm />}
           {tab === 'media' && <MediaManager />}
           {tab === 'generate' && <GenerateTab onDone={() => setTab('editor')} />}
-          {tab === 'editor' && <EditorTab onSaved={() => undefined} />}
+          {tab === 'editor' && <EditorTab />}
           {tab === 'preview' && <PreviewTab />}
           {tab === 'publish' && <PublishTab slug={academy.slug} />}
+          {tab === 'settings' && (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                {(['branding', 'team'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSettingsSub(s)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                      settingsSub === s ? 'bg-primary text-on-primary' : 'border border-outline-variant text-on-surface-variant'
+                    }`}
+                  >
+                    {s === 'branding' ? t('studio.tabs.settings') : t('studio.tabs.team')}
+                  </button>
+                ))}
+              </div>
+              {settingsSub === 'branding' ? <BrandingTab slug={academy.slug} /> : <MembersTab slug={academy.slug} />}
+            </div>
+          )}
         </>
       )}
     </div>

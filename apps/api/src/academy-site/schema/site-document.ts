@@ -105,6 +105,8 @@ export const siteThemeSchema = z.object({
   accent: z.string().regex(HEX),
   logoMediaId: z.string().optional(),
   style: z.enum(SITE_STYLES).optional(),
+  // Default language the compiled page opens in (visitor can still toggle).
+  defaultLang: z.enum(['ar', 'en']).optional(),
 });
 
 export const siteSeoSchema = z.object({

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import FactsForm from './FactsForm';
 import MediaManager from './MediaManager';
 import GenerateTab from './GenerateTab';
@@ -6,14 +7,15 @@ import PreviewTab from './PreviewTab';
 import PublishTab from './PublishTab';
 
 const STEPS = [
-  { key: 'facts', label: 'البيانات', icon: 'badge', hint: 'عرّفنا بأكاديميتك.' },
-  { key: 'media', label: 'الصور', icon: 'image', hint: 'ارفع شعارك وغلافك (اختياري).' },
-  { key: 'generate', label: 'التوليد', icon: 'auto_awesome', hint: 'دع الذكاء الاصطناعي يكتب صفحتك.' },
-  { key: 'preview', label: 'المعاينة', icon: 'visibility', hint: 'راجِع النتيجة.' },
-  { key: 'publish', label: 'النشر', icon: 'publish', hint: 'انشر صفحتك.' },
+  { key: 'facts', icon: 'badge' },
+  { key: 'media', icon: 'image' },
+  { key: 'generate', icon: 'auto_awesome' },
+  { key: 'preview', icon: 'visibility' },
+  { key: 'publish', icon: 'publish' },
 ] as const;
 
 export default function OnboardingWizard({ slug, onExit }: { slug: string; onExit: () => void }) {
+  const { t } = useTranslation();
   const [i, setI] = useState(0);
   const step = STEPS[i];
   const next = () => setI((x) => Math.min(STEPS.length - 1, x + 1));
@@ -31,17 +33,18 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
                 : idx === i ? 'border-primary text-primary'
                 : 'border-outline-variant text-on-surface-variant'
               }`}>
-                {idx < i ? <span className="material-symbols-outlined text-[20px]">check</span>
-                  : <span className="material-symbols-outlined text-[20px]">{s.icon}</span>}
+                <span className="material-symbols-outlined text-[20px]">{idx < i ? 'check' : s.icon}</span>
               </div>
-              <span className={`mt-1 text-xs font-semibold ${idx === i ? 'text-primary' : 'text-on-surface-variant'}`}>{s.label}</span>
+              <span className={`mt-1 text-xs font-semibold ${idx === i ? 'text-primary' : 'text-on-surface-variant'}`}>
+                {t(`studio.wizard.steps.${s.key}`)}
+              </span>
             </div>
             {idx < STEPS.length - 1 && <div className={`mx-2 h-0.5 flex-1 ${idx < i ? 'bg-primary' : 'bg-outline-variant'}`} />}
           </div>
         ))}
       </div>
 
-      <p className="mb-4 text-center text-on-surface-variant">{step.hint}</p>
+      <p className="mb-4 text-center text-on-surface-variant">{t(`studio.wizard.steps.${step.key}H`)}</p>
 
       <div className="mb-4">
         {step.key === 'facts' && <FactsForm />}
@@ -54,17 +57,17 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
       <div className="flex items-center justify-between">
         <button className="btn-secondary" onClick={i === 0 ? onExit : back}>
           <span className="material-symbols-outlined text-[20px]">{i === 0 ? 'close' : 'arrow_forward'}</span>
-          {i === 0 ? 'تخطّي' : 'السابق'}
+          {i === 0 ? t('studio.wizard.skip') : t('studio.wizard.prev')}
         </button>
         {i < STEPS.length - 1 ? (
           <button className="btn-primary" onClick={next}>
-            التالي
+            {t('studio.wizard.next')}
             <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           </button>
         ) : (
           <button className="btn-primary" onClick={onExit}>
             <span className="material-symbols-outlined text-[20px]">done_all</span>
-            إنهاء
+            {t('studio.wizard.finish')}
           </button>
         )}
       </div>

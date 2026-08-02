@@ -52,6 +52,7 @@ export class AcademyGenerateController {
     const job = await this.jobs.enqueue(ctx.academyId, 'SITE_GENERATE', {
       vibe: dto.vibe ?? null,
       stylePrompt: dto.stylePrompt ?? null,
+      lang: dto.lang ?? null,
     });
     return jobView(job);
   }

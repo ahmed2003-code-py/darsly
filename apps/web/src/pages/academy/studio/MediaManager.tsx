@@ -8,7 +8,7 @@ import type { Media, MediaKind } from './types';
 const ACCEPT = 'image/png,image/jpeg,image/webp';
 const mediaSrc = (m: Media) => (m.url ? `${apiOrigin()}${m.url}` : '');
 
-export default function MediaManager() {
+export default function MediaManager({ onNext }: { onNext?: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const list = useQuery<Media[]>({
@@ -54,6 +54,12 @@ export default function MediaManager() {
         onUpload={(f) => doUpload('COVER', f)} onRemove={(id) => remove.mutate(id)} busy={upload.isPending} />
       <GallerySlot items={byKind('GALLERY')}
         onUpload={(f) => doUpload('GALLERY', f)} onRemove={(id) => remove.mutate(id)} busy={upload.isPending} />
+
+      {onNext && (
+        <div className="flex justify-end">
+          <button className="btn-primary" onClick={onNext}>{t('studio.continue')}</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { AxiosError } from 'axios';
 import { api } from '../../../lib/api';
 import { Spinner } from '../../../components/ui';
 
-export default function PreviewTab() {
+export default function PreviewTab({ onNext }: { onNext?: () => void }) {
   const { t } = useTranslation();
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const { data: html, isLoading, isError, error, refetch, isFetching } = useQuery<string>({
@@ -35,6 +35,9 @@ export default function PreviewTab() {
             <span className="material-symbols-outlined text-[18px]">refresh</span>
             {t('studio.preview.refresh')}
           </button>
+          {onNext && !noDraft && !isError && (
+            <button className="btn-primary" onClick={onNext}>{t('studio.continue')}</button>
+          )}
         </div>
       </div>
 

@@ -53,7 +53,7 @@ function LocalizedInput({ label, value, multiline, onChange }: {
   );
 }
 
-export default function EditorTab() {
+export default function EditorTab({ onNext }: { onNext?: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data, isLoading, isError, error } = useQuery<{ doc: SiteDoc | null }>({
@@ -115,9 +115,10 @@ export default function EditorTab() {
         </div>
         <div className="flex items-center gap-3">
           {saved && <span className="flex items-center gap-1 text-sm font-bold text-teal-600"><span className="material-symbols-outlined text-[18px]">check_circle</span>{t('studio.editor.saved')}</span>}
-          <button className="btn-primary" onClick={() => save.mutate(doc)} disabled={save.isPending}>
+          <button className="btn-secondary" onClick={() => save.mutate(doc)} disabled={save.isPending}>
             {save.isPending ? t('studio.editor.saving') : t('studio.editor.save')}
           </button>
+          {onNext && <button className="btn-primary" onClick={onNext}>{t('studio.continue')}</button>}
         </div>
       </div>
       <ErrorNote error={save.error} />

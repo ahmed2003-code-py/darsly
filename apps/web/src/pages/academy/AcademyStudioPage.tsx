@@ -35,6 +35,9 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
+// Ordered build flow: each step advances to the next.
+const FLOW: TabKey[] = ['facts', 'media', 'generate', 'editor', 'preview', 'publish'];
+
 function isFeatureDisabled(err: unknown): boolean {
   return (err as AxiosError)?.response?.status === 404;
 }
@@ -55,6 +58,11 @@ export default function AcademyStudioPage() {
   useEffect(() => {
     if (mode === null && overview.data) setMode(overview.data.hasDraft ? 'tabs' : 'wizard');
   }, [overview.data, mode]);
+
+  const goNext = (cur: TabKey) => {
+    const i = FLOW.indexOf(cur);
+    if (i >= 0 && i < FLOW.length - 1) setTab(FLOW[i + 1]);
+  };
 
   if (isLoading) return <div className="mx-auto max-w-container px-6 py-8"><Spinner /></div>;
   if (!academy) {
@@ -133,11 +141,11 @@ export default function AcademyStudioPage() {
             </button>
           </div>
 
-          {tab === 'facts' && <FactsForm />}
-          {tab === 'media' && <MediaManager />}
-          {tab === 'generate' && <GenerateTab onDone={() => setTab('editor')} />}
-          {tab === 'editor' && <EditorTab />}
-          {tab === 'preview' && <PreviewTab />}
+          {tab === 'facts' && <FactsForm onSaved={() => goNext('facts')} />}
+          {tab === 'media' && <MediaManager onNext={() => goNext('media')} />}
+          {tab === 'generate' && <GenerateTab onDone={() => goNext('generate')} />}
+          {tab === 'editor' && <EditorTab onNext={() => goNext('editor')} />}
+          {tab === 'preview' && <PreviewTab onNext={() => goNext('preview')} />}
           {tab === 'publish' && <PublishTab slug={academy.slug} />}
           {tab === 'settings' && (
             <div className="space-y-4">

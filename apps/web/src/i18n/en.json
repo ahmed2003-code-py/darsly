@@ -950,7 +950,8 @@
         "publish": "Publish",
         "publishH": "Publish your page."
       }
-    }
+    },
+    "continue": "Continue"
   },
   "adminStudio": {
     "title": "Academy Studios",

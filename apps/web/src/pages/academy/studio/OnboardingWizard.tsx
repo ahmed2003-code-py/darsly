@@ -47,7 +47,7 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
       <p className="mb-4 text-center text-on-surface-variant">{t(`studio.wizard.steps.${step.key}H`)}</p>
 
       <div className="mb-4">
-        {step.key === 'facts' && <FactsForm />}
+        {step.key === 'facts' && <FactsForm onSaved={next} />}
         {step.key === 'media' && <MediaManager />}
         {step.key === 'generate' && <GenerateTab onDone={next} />}
         {step.key === 'preview' && <PreviewTab />}

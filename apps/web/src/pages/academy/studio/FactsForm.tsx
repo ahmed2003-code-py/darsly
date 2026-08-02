@@ -5,7 +5,7 @@ import { api } from '../../../lib/api';
 import { ErrorNote, Field, Spinner } from '../../../components/ui';
 import type { Facts, Social } from './types';
 
-export default function FactsForm() {
+export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data, isLoading, isError, error } = useQuery<Facts>({
@@ -44,6 +44,8 @@ export default function FactsForm() {
       setSaved(true);
       qc.invalidateQueries({ queryKey: ['studio-facts'] });
       setTimeout(() => setSaved(false), 2500);
+      // Advance to the next step in the guided flow.
+      if (onSaved) setTimeout(onSaved, 500);
     },
   });
 

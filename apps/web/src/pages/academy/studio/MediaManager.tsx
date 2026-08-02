@@ -28,6 +28,19 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-media'] }),
   });
+  // Multi-file upload (gallery): one request per file, sequential so the
+  // per-kind cap is enforced correctly; a single refresh at the end.
+  const uploadMany = useMutation({
+    mutationFn: async ({ kind, files }: { kind: MediaKind; files: File[] }) => {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('kind', kind);
+        fd.append('file', file);
+        await api.post('/academy/media', fd);
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-media'] }),
+  });
   const remove = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/academy/media/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-media'] }),
@@ -39,6 +52,12 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
   const media = list.data ?? [];
   const byKind = (k: MediaKind) => media.filter((m) => m.kind === k);
   const doUpload = (kind: MediaKind, file?: File) => file && upload.mutate({ kind, file });
+  const galleryCount = byKind('GALLERY').length;
+  const doUploadGallery = (files: File[]) => {
+    const room = Math.max(0, 12 - galleryCount);
+    const pick = files.slice(0, room);
+    if (pick.length) uploadMany.mutate({ kind: 'GALLERY', files: pick });
+  };
 
   return (
     <div className="space-y-6">
@@ -53,7 +72,7 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
       <SingleSlot title={t('studio.media.cover')} item={byKind('COVER')[0]}
         onUpload={(f) => doUpload('COVER', f)} onRemove={(id) => remove.mutate(id)} busy={upload.isPending} />
       <GallerySlot items={byKind('GALLERY')}
-        onUpload={(f) => doUpload('GALLERY', f)} onRemove={(id) => remove.mutate(id)} busy={upload.isPending} />
+        onUpload={doUploadGallery} onRemove={(id) => remove.mutate(id)} busy={upload.isPending || uploadMany.isPending} />
 
       {onNext && (
         <div className="flex justify-end">
@@ -89,7 +108,9 @@ function Thumb({ item, onRemove }: { item: Media; onRemove: (id: string) => void
   );
 }
 
-function UploadButton({ label, onFile, busy }: { label: string; onFile: (f?: File) => void; busy: boolean }) {
+function UploadButton({ label, onFiles, busy, multiple }: {
+  label: string; onFiles: (files: File[]) => void; busy: boolean; multiple?: boolean;
+}) {
   const { t } = useTranslation();
   const ref = useRef<HTMLInputElement>(null);
   return (
@@ -98,8 +119,8 @@ function UploadButton({ label, onFile, busy }: { label: string; onFile: (f?: Fil
         <span className="material-symbols-outlined text-[20px]">upload</span>
         {busy ? t('studio.media.uploading') : label}
       </button>
-      <input ref={ref} type="file" accept={ACCEPT} className="hidden"
-        onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ''; }} />
+      <input ref={ref} type="file" accept={ACCEPT} multiple={multiple} className="hidden"
+        onChange={(e) => { onFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
     </>
   );
 }
@@ -112,7 +133,8 @@ function SingleSlot({ title, item, onUpload, onRemove, busy }: {
     <div className="card">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-heading font-bold">{title}</h3>
-        <UploadButton label={item ? t('studio.media.replace') : t('studio.media.upload')} onFile={onUpload} busy={busy} />
+        <UploadButton label={item ? t('studio.media.replace') : t('studio.media.upload')}
+          onFiles={(f) => onUpload(f[0])} busy={busy} />
       </div>
       {item ? (
         <div className="max-w-xs"><Thumb item={item} onRemove={onRemove} /></div>
@@ -124,14 +146,14 @@ function SingleSlot({ title, item, onUpload, onRemove, busy }: {
 }
 
 function GallerySlot({ items, onUpload, onRemove, busy }: {
-  items: Media[]; onUpload: (f?: File) => void; onRemove: (id: string) => void; busy: boolean;
+  items: Media[]; onUpload: (files: File[]) => void; onRemove: (id: string) => void; busy: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <div className="card">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-heading font-bold">{t('studio.media.gallery')} <span className="text-sm font-normal text-on-surface-variant">({items.length}/12)</span></h3>
-        {items.length < 12 && <UploadButton label={t('studio.media.add')} onFile={onUpload} busy={busy} />}
+        {items.length < 12 && <UploadButton label={t('studio.media.add')} onFiles={onUpload} busy={busy} multiple />}
       </div>
       {items.length === 0 ? (
         <p className="text-sm text-on-surface-variant">{t('studio.media.empty')}</p>

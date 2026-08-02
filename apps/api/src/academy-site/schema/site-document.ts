@@ -53,6 +53,22 @@ const ctaBlock = z.object({
   buttonLabel: localizedText(60),
 });
 
+// Skills / subjects shown as tags (from the teacher's facts).
+const toolkitBlock = z.object({
+  type: z.literal('toolkit'),
+  id: z.string(),
+  heading: localizedText(120),
+  items: z.array(z.string().max(60)).max(20),
+});
+
+// Achievements / credentials shown as an editorial "track record" list.
+const credentialsBlock = z.object({
+  type: z.literal('credentials'),
+  id: z.string(),
+  heading: localizedText(120),
+  items: z.array(z.string().max(240)).max(12),
+});
+
 // Live data blocks: config only, resolved at render.
 const coursesBlock = z.object({
   type: z.literal('courses'),
@@ -90,6 +106,8 @@ export const siteBlockSchema = z.discriminatedUnion('type', [
   heroBlock,
   aboutBlock,
   statsBlock,
+  toolkitBlock,
+  credentialsBlock,
   faqBlock,
   ctaBlock,
   coursesBlock,
@@ -99,12 +117,15 @@ export const siteBlockSchema = z.discriminatedUnion('type', [
 ]);
 
 export const SITE_STYLES = ['modern', 'bold', 'elegant', 'minimal', 'playful'] as const;
+// Design preset (from the chosen vibe) — drives a distinct visual identity.
+export const SITE_PRESETS = ['warm', 'academic', 'premium', 'energetic'] as const;
 
 export const siteThemeSchema = z.object({
   primary: z.string().regex(HEX),
   accent: z.string().regex(HEX),
   logoMediaId: z.string().optional(),
   style: z.enum(SITE_STYLES).optional(),
+  preset: z.enum(SITE_PRESETS).optional(),
   // Default language the compiled page opens in (visitor can still toggle).
   defaultLang: z.enum(['ar', 'en']).optional(),
 });

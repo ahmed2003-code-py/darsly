@@ -77,9 +77,21 @@ export class SiteGeneratorService {
     const primary = (wantAi && HEX.test(copy.theme.primary) && copy.theme.primary) || academyPrimary;
     const accent = (wantAi && HEX.test(copy.theme.accent) && copy.theme.accent) || academyAccent;
     const style = copy.theme.style;
+    // Map the chosen vibe to a visual preset (each has a distinct identity).
+    const PRESET: Record<string, string> = { trusted: 'warm', academic: 'academic', premium: 'premium', energetic: 'energetic' };
+    const preset = PRESET[vibe ?? 'trusted'] ?? 'warm';
+    const asStrings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
     // ── assemble (deterministic) ──
-    const doc = this.assemble(copy, { primary, accent, style, defaultLang: lang, logoId, coverId, galleryIds }, facts.socials);
+    const doc = this.assemble(
+      copy,
+      {
+        primary, accent, style, preset, defaultLang: lang, logoId, coverId, galleryIds,
+        subjects: asStrings(facts.subjects),
+        achievements: asStrings(facts.achievements),
+      },
+      facts.socials,
+    );
     const res = parseSiteDocument(doc);
     if (!res.success) {
       throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
@@ -89,7 +101,11 @@ export class SiteGeneratorService {
 
   private assemble(
     copy: AiCopy,
-    brand: { primary: string; accent: string; style?: string; defaultLang?: 'ar' | 'en'; logoId?: string; coverId?: string; galleryIds: string[] },
+    brand: {
+      primary: string; accent: string; style?: string; preset?: string;
+      defaultLang?: 'ar' | 'en'; logoId?: string; coverId?: string; galleryIds: string[];
+      subjects?: string[]; achievements?: string[];
+    },
     socialsJson: unknown,
   ): SiteDocument {
     const bilingual = (ar: string, en: string) => ({ ar, en });
@@ -109,6 +125,24 @@ export class SiteGeneratorService {
       heading: copy.about.heading,
       body: copy.about.body,
     });
+    const subjects = (brand.subjects ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    if (subjects.length) {
+      blocks.push({
+        type: 'toolkit',
+        id: randomUUID(),
+        heading: bilingual('ما ستتعلمه', 'What you’ll learn'),
+        items: subjects,
+      });
+    }
+    const achievements = (brand.achievements ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 12);
+    if (achievements.length) {
+      blocks.push({
+        type: 'credentials',
+        id: randomUUID(),
+        heading: bilingual('لماذا تثق بنا', 'Track record'),
+        items: achievements,
+      });
+    }
     blocks.push({
       type: 'courses',
       id: randomUUID(),
@@ -158,6 +192,7 @@ export class SiteGeneratorService {
         accent: brand.accent,
         ...(brand.logoId ? { logoMediaId: brand.logoId } : {}),
         ...(brand.style ? { style: brand.style as SiteDocument['theme']['style'] } : {}),
+        ...(brand.preset ? { preset: brand.preset as SiteDocument['theme']['preset'] } : {}),
         ...(brand.defaultLang ? { defaultLang: brand.defaultLang } : {}),
       },
       seo: { title: copy.seo.metaTitle, description: copy.seo.metaDescription },

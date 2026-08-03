@@ -131,8 +131,9 @@ export class SiteGeneratorService {
       },
       facts.socials,
     );
-    // Site Brain selects the best layout variant per section (AI proposed the
-    // DNA + archetype; the Brain scores registered variants and decides).
+    doc.theme.archetype = plan.archetype;
+    // Site Brain: order sections by archetype, then select each section's variant.
+    this.brain.arrange(doc, plan.archetype);
     this.brain.assignVariants(doc, {
       dna: tokens.dna,
       archetype: plan.archetype,

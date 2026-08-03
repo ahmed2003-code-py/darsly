@@ -153,6 +153,9 @@ export const siteThemeSchema = z.object({
   headingFont: z.enum(SITE_HEADING_FONTS).optional(),
   // The Design DNA key that produced this theme (for evolution / diagnostics).
   dna: z.string().max(40).optional(),
+  // The teacher archetype the strategist inferred (drives section order; kept
+  // for evolution / re-arrangement on edit).
+  archetype: z.string().max(40).optional(),
   // Default language the compiled page opens in (visitor can still toggle).
   defaultLang: z.enum(['ar', 'en']).optional(),
 });

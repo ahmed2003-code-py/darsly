@@ -148,6 +148,34 @@ main{counter-reset:sec}
 .record{list-style:none;margin:0;padding:0;counter-reset:rec;max-width:900px}
 .record li{counter-increment:rec;display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:baseline;padding:24px 0;border-top:1px solid var(--line);font-size:1.18rem;font-weight:600;color:var(--ink)}
 .record li::before{content:counter(rec,decimal-leading-zero);font-family:"Fraunces",Georgia,serif;font-size:1.5rem;font-weight:700;color:var(--acc);opacity:.9}
+/* ── Section variants (Phase 3) — declared after the base rules so they win ── */
+/* Hero: split (copy + media) */
+.hero-split{min-height:auto;padding:96px 0;text-align:start}
+.hero-split .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.hero-split .hero-copy{display:flex;flex-direction:column;align-items:flex-start;animation:rise .8s cubic-bezier(.2,.7,.2,1) both}
+.hero-split h1{margin-top:0;max-width:15ch}
+.hero-split .sub{margin:0;max-width:48ch}
+.hero-split .hero-actions{justify-content:flex-start}
+.hero-shot{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:calc(var(--rad) + 10px);box-shadow:0 50px 90px -50px rgba(var(--pr),.7)}
+.hero-panel{width:100%;aspect-ratio:4/3;border-radius:calc(var(--rad) + 10px);border:1px solid var(--line);background:
+  radial-gradient(70% 70% at 20% 20%,rgba(var(--pr),.55),transparent 60%),
+  radial-gradient(60% 60% at 90% 85%,rgba(var(--ar),.5),transparent 60%),var(--surface)}
+/* Hero: editorial statement */
+.hero-editorial{text-align:start;min-height:80vh}
+.hero-editorial .wrap{align-items:flex-start}
+.hero-editorial h1{font-size:clamp(3rem,8.5vw,6rem);max-width:14ch;letter-spacing:-.04em}
+.hero-editorial .sub{margin-inline-start:0;max-width:54ch}
+.hero-editorial .hero-actions{justify-content:flex-start}
+/* About: centered statement */
+.about-statement .wrap{max-width:880px;text-align:center}
+.about-statement .eyebrow{justify-content:center}
+.about-statement .lead{font-size:clamp(1.3rem,2.6vw,1.85rem);line-height:1.5;font-weight:500;color:var(--ink);white-space:pre-line;margin:0}
+/* Credentials: card grid */
+.cred-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;counter-reset:crd}
+.cred-card{counter-increment:crd;background:var(--card);border:1px solid var(--line);border-radius:var(--rad);padding:26px 24px 24px;font-size:1.06rem;font-weight:600;color:var(--ink);transition:.25s}
+.cred-card:hover{border-color:color-mix(in srgb,var(--acc) 55%,transparent);transform:translateY(-4px);box-shadow:0 34px 60px -40px rgba(var(--pr),.6)}
+.cred-card::before{content:counter(crd,decimal-leading-zero);display:block;font-family:"Fraunces","Tajawal",Georgia,serif;font-size:1.25rem;font-weight:700;color:var(--acc);opacity:.85;margin-bottom:10px}
+@media(max-width:820px){.hero-split .wrap{grid-template-columns:1fr;gap:32px}.hero-split .hero-media{order:-1}}
 /* Stats */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:20px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--rad);padding:30px;text-align:center}

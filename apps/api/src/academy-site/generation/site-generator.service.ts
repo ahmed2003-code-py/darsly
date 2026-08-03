@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AiClient } from '../ai/ai.client';
 import { AiJobError } from '../ai/ai-job.error';
 import { DesignRulesService } from '../pipeline/design-rules.service';
+import { SiteBrainService } from '../pipeline/site-brain.service';
 import { ListItem, normalizeItems } from '../text.util';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
 import { AiCopy, parseAiCopy } from './ai-copy.schema';
@@ -35,6 +36,7 @@ export class SiteGeneratorService {
     private readonly prisma: PrismaService,
     private readonly ai: AiClient,
     private readonly rules: DesignRulesService,
+    private readonly brain: SiteBrainService,
   ) {}
 
   async buildDraft(
@@ -129,6 +131,19 @@ export class SiteGeneratorService {
       },
       facts.socials,
     );
+    // Site Brain selects the best layout variant per section (AI proposed the
+    // DNA + archetype; the Brain scores registered variants and decides).
+    this.brain.assignVariants(doc, {
+      dna: tokens.dna,
+      archetype: plan.archetype,
+      preset: tokens.preset ?? 'warm',
+      hasHeroImage: !!coverId,
+      hasAboutImage: false,
+      bioLength: signals.bioLength,
+      subjectsCount: signals.subjectsCount,
+      achievementsCount: signals.achievementsCount,
+      galleryCount: signals.galleryCount,
+    });
     const res = parseSiteDocument(doc);
     if (!res.success) {
       throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');

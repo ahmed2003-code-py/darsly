@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SiteDocument } from '../schema/site-document';
-import { resolveVariantId } from '../renderer/variants';
+import { resolveVariantId, selectVariant, VariantSelectionContext } from '../renderer/variants';
 import { RenderPlan } from './contracts';
 import { DesignRulesService } from './design-rules.service';
 
@@ -19,6 +19,17 @@ export class SiteBrainService {
   private readonly logger = new Logger(SiteBrainService.name);
 
   constructor(private readonly rules: DesignRulesService) {}
+
+  /**
+   * Build-time decision: choose the best variant for each block and bake it into
+   * the document. "The AI proposes (DNA + archetype), the Site Brain decides"
+   * the concrete layout by scoring registered variants against the context.
+   */
+  assignVariants(doc: SiteDocument, ctx: VariantSelectionContext): void {
+    for (const block of doc.blocks) {
+      block.variant = selectVariant(block.type, ctx);
+    }
+  }
 
   /** Turn an assembled Site Document into an authoritative RenderPlan. */
   plan(doc: SiteDocument): RenderPlan {

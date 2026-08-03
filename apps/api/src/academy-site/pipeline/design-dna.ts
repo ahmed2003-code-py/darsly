@@ -1,55 +1,59 @@
 import { SITE_PRESETS, SITE_STYLES, SiteTheme } from '../schema/site-document';
 
 /**
- * Design DNA — the curated design directions the AI Planning stage may choose
- * from. The AI never invents layout or CSS; it picks a DNA *key*, and this
- * registry deterministically resolves it into render tokens (preset + style +
- * heading-font treatment). Adding a new DNA is a data change here — the pipeline
- * and prompts read the catalogue, so nothing else changes.
+ * Design DNA — the curated design directions the pipeline chooses from. Each DNA
+ * is a *complete signature look*: preset (surface/mood), style (radius), heading
+ * font, AND its own palette. The AI never invents layout or CSS; it picks (or
+ * the vibe rotation picks) a DNA key, and this registry resolves it into render
+ * tokens + colors deterministically. Adding a DNA is a data change here.
  */
 export type HeadingFont = 'sans' | 'serif' | 'display';
 
 export interface DesignDna {
-  /** Surface/mood family consumed by the renderer CSS. */
   preset: (typeof SITE_PRESETS)[number];
-  /** Corner/визual style (radius family). */
   style: (typeof SITE_STYLES)[number];
-  /** Heading typeface treatment. */
   headingFont: HeadingFont;
+  /** Signature palette used when the teacher gave no explicit color brief. */
+  palette: { primary: string; accent: string };
   /** Human label + when-to-use guidance shown to the Planning model. */
   description: string;
 }
 
 export const DESIGN_DNA = {
   editorial_dark: {
-    preset: 'premium',
-    style: 'elegant',
-    headingFont: 'serif',
-    description: 'Dark, editorial, luxury. Serif headlines, generous space. For established, authoritative teachers who signal prestige.',
+    preset: 'premium', style: 'elegant', headingFont: 'serif',
+    palette: { primary: '#6366F1', accent: '#E3B341' },
+    description: 'Dark, editorial, luxury. Serif headlines, indigo + gold. For established, authoritative teachers who signal prestige.',
+  },
+  royal_night: {
+    preset: 'premium', style: 'bold', headingFont: 'sans',
+    palette: { primary: '#3B82F6', accent: '#A78BFA' },
+    description: 'Dark, confident, modern. Bold sans, blue + violet. A premium tech feel for senior/university teachers.',
   },
   bold_energetic: {
-    preset: 'energetic',
-    style: 'bold',
-    headingFont: 'display',
-    description: 'Dark with vibrant animated gradients and punchy display type. For youth, motivation and exam-prep audiences.',
+    preset: 'energetic', style: 'bold', headingFont: 'display',
+    palette: { primary: '#FB3B6C', accent: '#22D3EE' },
+    description: 'Dark with vibrant animated gradients, pink + cyan display type. For youth, motivation and exam-prep audiences.',
   },
   warm_mentor: {
-    preset: 'warm',
-    style: 'modern',
-    headingFont: 'sans',
-    description: 'Warm cream light theme, friendly and rounded, calm and trustworthy. For school-stage students and the parents who choose for them.',
+    preset: 'warm', style: 'modern', headingFont: 'sans',
+    palette: { primary: '#D2603A', accent: '#0F766E' },
+    description: 'Warm cream light theme, terracotta + teal, friendly and rounded. For school-stage students and the parents who choose for them.',
+  },
+  sunrise_warm: {
+    preset: 'warm', style: 'modern', headingFont: 'display',
+    palette: { primary: '#EA580C', accent: '#F59E0B' },
+    description: 'Bright, upbeat light theme, orange + amber. Energetic but approachable — great for junior stages and clubs.',
   },
   academic_precise: {
-    preset: 'academic',
-    style: 'minimal',
-    headingFont: 'sans',
-    description: 'Crisp white, minimal, high-contrast and precise. For university, STEM and results-focused, rigorous positioning.',
+    preset: 'academic', style: 'minimal', headingFont: 'sans',
+    palette: { primary: '#1D4ED8', accent: '#0EA5E9' },
+    description: 'Crisp white, minimal, high-contrast, blue. For university, STEM and rigorous, results-focused positioning.',
   },
   creative_serif: {
-    preset: 'warm',
-    style: 'elegant',
-    headingFont: 'serif',
-    description: 'Light editorial with an elegant serif — refined yet warm. For languages, humanities and personal-brand teachers.',
+    preset: 'warm', style: 'elegant', headingFont: 'serif',
+    palette: { primary: '#7C3AED', accent: '#DB2777' },
+    description: 'Light editorial with an elegant serif, violet + pink — refined yet warm. For languages, humanities and personal-brand teachers.',
   },
 } as const satisfies Record<string, DesignDna>;
 
@@ -58,6 +62,26 @@ export type DesignDnaKey = keyof typeof DESIGN_DNA;
 export const DESIGN_DNA_KEYS = Object.keys(DESIGN_DNA) as DesignDnaKey[];
 
 export const DEFAULT_DNA: DesignDnaKey = 'warm_mentor';
+
+/**
+ * Each vibe maps to an ordered rotation of DNAs. The generation index (how many
+ * times this academy has generated) walks the list, so: picking a different vibe
+ * gives a different look, and regenerating the SAME vibe rotates to the next —
+ * guaranteed variety, alternating light/dark for drama.
+ */
+export const VIBE_DNA_ROTATION: Record<string, DesignDnaKey[]> = {
+  trusted: ['warm_mentor', 'editorial_dark', 'creative_serif'],
+  academic: ['academic_precise', 'editorial_dark', 'creative_serif'],
+  premium: ['editorial_dark', 'creative_serif', 'royal_night'],
+  energetic: ['bold_energetic', 'sunrise_warm', 'royal_night'],
+};
+
+/** Deterministically pick a DNA for a vibe at a given generation index. */
+export function pickVibeDna(vibe: string | undefined, generationIndex: number): DesignDnaKey {
+  const list = VIBE_DNA_ROTATION[vibe ?? 'trusted'] ?? VIBE_DNA_ROTATION.trusted;
+  const i = ((generationIndex % list.length) + list.length) % list.length;
+  return list[i];
+}
 
 export function isDnaKey(key: string): key is DesignDnaKey {
   return Object.prototype.hasOwnProperty.call(DESIGN_DNA, key);

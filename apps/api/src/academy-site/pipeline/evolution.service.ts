@@ -41,13 +41,16 @@ export class EvolutionService {
     let recentDnas: string[] = [];
     let regenCount = 0;
     if (site) {
-      const snaps = await this.prisma.academySiteSnapshot.findMany({
-        where: { siteId: site.id, reason: 'generate' },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: { doc: true },
-      });
-      regenCount = snaps.length;
+      const [snaps, count] = await Promise.all([
+        this.prisma.academySiteSnapshot.findMany({
+          where: { siteId: site.id, reason: 'generate' },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { doc: true },
+        }),
+        this.prisma.academySiteSnapshot.count({ where: { siteId: site.id, reason: 'generate' } }),
+      ]);
+      regenCount = count;
       recentDnas = snaps.map((s) => themeStr(s.doc, 'dna')).filter((d): d is string => !!d);
     }
     return { publishedDna, publishedArchetype, recentDnas, regenCount };

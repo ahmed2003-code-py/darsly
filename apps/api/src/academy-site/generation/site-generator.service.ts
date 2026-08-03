@@ -5,6 +5,7 @@ import { AiClient } from '../ai/ai.client';
 import { AiJobError } from '../ai/ai-job.error';
 import { DesignRulesService } from '../pipeline/design-rules.service';
 import { EvolutionService } from '../pipeline/evolution.service';
+import { pickVibeDna, resolveDna } from '../pipeline/design-dna';
 import { SiteBrainService } from '../pipeline/site-brain.service';
 import { ListItem, normalizeItems } from '../text.util';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
@@ -58,8 +59,6 @@ export class SiteGeneratorService {
       throw new AiJobError('Not enough profile facts to generate a site', 'TERMINAL');
     }
 
-    const academyPrimary = HEX.test(academy.colorPrimary) ? academy.colorPrimary : '#4A32C9';
-    const academyAccent = HEX.test(academy.colorAccent) ? academy.colorAccent : academyPrimary;
     const media = await this.prisma.academyMedia.findMany({
       where: { academyId, status: 'READY', kind: { in: ['LOGO', 'COVER', 'GALLERY'] } },
       orderBy: { createdAt: 'asc' },
@@ -97,20 +96,24 @@ export class SiteGeneratorService {
     }
     const plan = planParsed.data!;
 
-    // ── EVOLUTION guard ── deterministically enforce a fresh direction on a
-    // no-brief regeneration, even if the model repeated itself.
+    // ── DNA selection ── With a style brief the AI's chosen direction wins.
+    // Otherwise the vibe rotation deterministically walks a per-vibe list by
+    // generation index, so different vibes look different and regenerating the
+    // SAME vibe rotates to a fresh direction — guaranteed variety.
     const wantAi = !!stylePrompt?.trim();
-    const finalDna = this.evolution.normalizeDna(this.evolution.enforceVariety(plan.designDNA, evo, wantAi));
+    const dnaKey = wantAi ? this.evolution.normalizeDna(plan.designDNA) : pickVibeDna(vibe, evo.regenCount);
+    const dna = resolveDna(dnaKey);
 
     // ── RULES ── resolve the DNA into render tokens + validate.
-    const { tokens, verdicts } = this.rules.validatePlan({ ...plan, designDNA: finalDna }, signals);
+    const { tokens, verdicts } = this.rules.validatePlan({ ...plan, designDNA: dnaKey }, signals);
     if (verdicts.length) {
       this.logger.debug(`plan verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`);
     }
-    // Colors: the AI's proposal wins only when the teacher gave a style brief;
-    // otherwise keep the academy's own brand colors.
-    const primary = (wantAi && HEX.test(plan.theme.primary) && plan.theme.primary) || academyPrimary;
-    const accent = (wantAi && HEX.test(plan.theme.accent) && plan.theme.accent) || academyAccent;
+    // Colors: a style brief lets the AI propose colors (falling back to the DNA
+    // signature); otherwise the DNA's signature palette drives, so the colors
+    // change from one design to the next.
+    const primary = wantAi ? (HEX.test(plan.theme.primary) && plan.theme.primary) || dna.palette.primary : dna.palette.primary;
+    const accent = wantAi ? (HEX.test(plan.theme.accent) && plan.theme.accent) || dna.palette.accent : dna.palette.accent;
 
     // ── GENERATE (AI stage 2) ── content only, curated for the fixed design.
     const completion = await this.ai.completeStructured<unknown>({

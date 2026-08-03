@@ -63,3 +63,44 @@ export function cleanList(items: unknown, opts: CleanListOptions = {}): string[]
   }
   return out;
 }
+
+/** A display list item: bilingual (AI-curated) or a plain string (legacy/raw). */
+export type ListItem = string | { ar: string; en: string };
+
+/**
+ * Normalise a mixed list of string / bilingual items for display: clean each,
+ * drop empties/too-short, de-duplicate (case-insensitive, by the Arabic side or
+ * the string), cap — order preserved. Bilingual items pass through as-is once
+ * validated; strings are Markdown-stripped.
+ */
+export function normalizeItems(items: unknown, opts: CleanListOptions = {}): ListItem[] {
+  if (!Array.isArray(items)) return [];
+  const { min = 1, maxLen = Infinity, cap = Infinity } = opts;
+  const clamp = (s: string) => (maxLen === Infinity ? s : s.slice(0, maxLen)).trim();
+  const seen = new Set<string>();
+  const out: ListItem[] = [];
+  for (const raw of items) {
+    let item: ListItem | null = null;
+    let key = '';
+    if (typeof raw === 'string') {
+      const c = clamp(cleanLine(raw));
+      if (c.length >= min) {
+        item = c;
+        key = c.toLowerCase();
+      }
+    } else if (raw && typeof raw === 'object') {
+      const ar = clamp(cleanLine(String((raw as { ar?: unknown }).ar ?? '')));
+      const en = clamp(cleanLine(String((raw as { en?: unknown }).en ?? '')));
+      const ref = ar || en;
+      if (ref.length >= min) {
+        item = { ar, en };
+        key = ref.toLowerCase();
+      }
+    }
+    if (!item || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+    if (out.length >= cap) break;
+  }
+  return out;
+}

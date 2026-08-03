@@ -3,19 +3,29 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiClient } from '../ai/ai.client';
 import { AiJobError } from '../ai/ai-job.error';
+import { DesignRulesService } from '../pipeline/design-rules.service';
+import { ListItem, normalizeItems } from '../text.util';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
-import { cleanList } from '../text.util';
 import { AiCopy, parseAiCopy } from './ai-copy.schema';
 import { AI_COPY_SCHEMA_NAME, aiCopyJsonSchema } from './ai-copy.jsonschema';
+import { ContentSignals, systemPlanPrompt, userPlanPrompt } from './plan-prompt';
+import { PLANNING_SCHEMA_NAME, planningJsonSchema } from './planning.jsonschema';
+import { parseSitePlan } from './planning.schema';
 import { systemPrompt, userPrompt } from './prompt';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+type LT = { ar: string; en: string };
+const hasText = (lt: LT | undefined): boolean => !!(lt && (lt.ar?.trim() || lt.en?.trim()));
+
 /**
- * The staged generation pipeline: extract (load + normalize facts) → brand
- * (deterministic palette from the academy) → copy (one AI call) → assemble
- * (deterministic block layout, validated against the Site Document schema).
- * Only the copy stage calls the model; everything else is deterministic.
+ * The staged generation pipeline:
+ *   extract (load + normalise facts)
+ *   → PLAN     (AI stage 1: brand strategist picks a Design DNA + colors + archetype)
+ *   → RULES    (deterministic: resolve DNA → render tokens, validate)
+ *   → GENERATE (AI stage 2: bilingual copy + curated skill/credential lists)
+ *   → assemble (deterministic block layout, validated against the schema)
+ * Two model calls; everything between them is deterministic.
  */
 @Injectable()
 export class SiteGeneratorService {
@@ -24,6 +34,7 @@ export class SiteGeneratorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiClient,
+    private readonly rules: DesignRulesService,
   ) {}
 
   async buildDraft(
@@ -42,7 +53,6 @@ export class SiteGeneratorService {
       throw new AiJobError('Not enough profile facts to generate a site', 'TERMINAL');
     }
 
-    // ── brand fallback (academy settings) ──
     const academyPrimary = HEX.test(academy.colorPrimary) ? academy.colorPrimary : '#4A32C9';
     const academyAccent = HEX.test(academy.colorAccent) ? academy.colorAccent : academyPrimary;
     const media = await this.prisma.academyMedia.findMany({
@@ -53,43 +63,69 @@ export class SiteGeneratorService {
     const coverId = media.find((m) => m.kind === 'COVER')?.id;
     const galleryIds = media.filter((m) => m.kind === 'GALLERY').map((m) => m.id);
 
-    // ── copy (AI) ──
-    // Structured Outputs guarantees the model returns JSON matching the schema,
-    // so there is no free-form JSON extraction and no malformed-JSON retries.
+    const asStrings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    const rawSubjects = asStrings(facts.subjects);
+    const rawAchievements = asStrings(facts.achievements);
+    const signals: ContentSignals = {
+      hasCover: !!coverId,
+      hasLogo: !!logoId,
+      galleryCount: galleryIds.length,
+      bioLength: (facts.bio ?? '').length,
+      subjectsCount: rawSubjects.length,
+      achievementsCount: rawAchievements.length,
+    };
+
+    // ── PLAN (AI stage 1) ── the strategist proposes a design direction only.
+    const planCompletion = await this.ai.completeStructured<unknown>({
+      system: systemPlanPrompt(),
+      messages: [{ role: 'user', content: userPlanPrompt(facts, academy.name, vibe, stylePrompt, signals) }],
+      maxTokens: 1500, // headroom for GPT-5 reasoning tokens + the small plan
+      schemaName: PLANNING_SCHEMA_NAME,
+      schema: planningJsonSchema,
+    });
+    const planParsed = parseSitePlan(planCompletion.data);
+    if (planParsed.error) {
+      throw new AiJobError(`AI plan failed validation: ${planParsed.error}`, 'RETRYABLE');
+    }
+    const plan = planParsed.data!;
+
+    // ── RULES ── resolve the DNA into render tokens + validate.
+    const { tokens, verdicts } = this.rules.validatePlan(plan, signals);
+    if (verdicts.length) {
+      this.logger.debug(`plan verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`);
+    }
+    // Colors: the AI's proposal wins only when the teacher gave a style brief;
+    // otherwise keep the academy's own brand colors.
+    const wantAi = !!stylePrompt?.trim();
+    const primary = (wantAi && HEX.test(plan.theme.primary) && plan.theme.primary) || academyPrimary;
+    const accent = (wantAi && HEX.test(plan.theme.accent) && plan.theme.accent) || academyAccent;
+
+    // ── GENERATE (AI stage 2) ── content only, curated for the fixed design.
     const completion = await this.ai.completeStructured<unknown>({
       system: systemPrompt(),
-      messages: [{ role: 'user', content: userPrompt(facts, academy.name, vibe, stylePrompt) }],
-      // Headroom for GPT-5 reasoning tokens (counted in output) plus the copy.
+      messages: [{ role: 'user', content: userPrompt(facts, academy.name, vibe, plan.archetype) }],
       maxTokens: 4000,
       schemaName: AI_COPY_SCHEMA_NAME,
       schema: aiCopyJsonSchema,
     });
-    // Defense-in-depth: the shape is guaranteed; this enforces the length caps
-    // (not encoded in the strict schema) and narrows the type.
     const parsed = parseAiCopy(completion.data);
     if (parsed.error) {
       throw new AiJobError(`AI output failed validation: ${parsed.error}`, 'RETRYABLE');
     }
     const copy: AiCopy = parsed.data!;
 
-    // ── theme: AI colors win when the teacher gave a style brief; otherwise keep
-    // the academy's own brand colors. Always take the AI's style keyword. ──
-    const wantAi = !!stylePrompt?.trim();
-    const primary = (wantAi && HEX.test(copy.theme.primary) && copy.theme.primary) || academyPrimary;
-    const accent = (wantAi && HEX.test(copy.theme.accent) && copy.theme.accent) || academyAccent;
-    const style = copy.theme.style;
-    // Map the chosen vibe to a visual preset (each has a distinct identity).
-    const PRESET: Record<string, string> = { trusted: 'warm', academic: 'academic', premium: 'premium', energetic: 'energetic' };
-    const preset = PRESET[vibe ?? 'trusted'] ?? 'warm';
-    const asStrings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    // Curated lists win; fall back to the raw facts (cleaned) if the model
+    // returned nothing usable.
+    const toolkitItems = this.pickItems(copy.highlights, rawSubjects, { min: 2, maxLen: 60, cap: 20 });
+    const credentialItems = this.pickItems(copy.credentials, rawAchievements, { min: 2, maxLen: 240, cap: 12 });
 
     // ── assemble (deterministic) ──
     const doc = this.assemble(
       copy,
       {
-        primary, accent, style, preset, defaultLang: lang, logoId, coverId, galleryIds,
-        subjects: asStrings(facts.subjects),
-        achievements: asStrings(facts.achievements),
+        primary, accent, style: tokens.style, preset: tokens.preset,
+        headingFont: tokens.headingFont, dna: tokens.dna, defaultLang: lang,
+        logoId, coverId, galleryIds, toolkitItems, credentialItems,
       },
       facts.socials,
     );
@@ -97,15 +133,26 @@ export class SiteGeneratorService {
     if (!res.success) {
       throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
     }
-    return { doc: res.data!, costCents: completion.costCents };
+    return { doc: res.data!, costCents: planCompletion.costCents + completion.costCents };
+  }
+
+  /** Prefer the AI-curated bilingual list; fall back to cleaned raw facts. */
+  private pickItems(
+    curated: LT[] | undefined,
+    rawFallback: string[],
+    opts: { min: number; maxLen: number; cap: number },
+  ): ListItem[] {
+    const c = normalizeItems(curated ?? [], opts);
+    return c.length ? c : normalizeItems(rawFallback, opts);
   }
 
   private assemble(
     copy: AiCopy,
     brand: {
       primary: string; accent: string; style?: string; preset?: string;
-      defaultLang?: 'ar' | 'en'; logoId?: string; coverId?: string; galleryIds: string[];
-      subjects?: string[]; achievements?: string[];
+      headingFont?: string; dna?: string; defaultLang?: 'ar' | 'en';
+      logoId?: string; coverId?: string; galleryIds: string[];
+      toolkitItems: ListItem[]; credentialItems: ListItem[];
     },
     socialsJson: unknown,
   ): SiteDocument {
@@ -126,24 +173,20 @@ export class SiteGeneratorService {
       heading: copy.about.heading,
       body: copy.about.body,
     });
-    // Strip Markdown noise / de-duplicate raw fact lists before they hit visible
-    // sections (Phase 2 will replace these with AI-curated copy).
-    const subjects = cleanList(brand.subjects, { min: 2, maxLen: 60, cap: 20 });
-    if (subjects.length) {
+    if (brand.toolkitItems.length) {
       blocks.push({
         type: 'toolkit',
         id: randomUUID(),
-        heading: bilingual('ما ستتعلمه', 'What you’ll learn'),
-        items: subjects,
+        heading: hasText(copy.toolkitHeading) ? copy.toolkitHeading : bilingual('ما ستتعلمه', 'What you’ll learn'),
+        items: brand.toolkitItems,
       });
     }
-    const achievements = cleanList(brand.achievements, { min: 2, maxLen: 240, cap: 12 });
-    if (achievements.length) {
+    if (brand.credentialItems.length) {
       blocks.push({
         type: 'credentials',
         id: randomUUID(),
-        heading: bilingual('لماذا تثق بنا', 'Track record'),
-        items: achievements,
+        heading: hasText(copy.credentialsHeading) ? copy.credentialsHeading : bilingual('لماذا تثق بنا', 'Track record'),
+        items: brand.credentialItems,
       });
     }
     blocks.push({
@@ -196,6 +239,8 @@ export class SiteGeneratorService {
         ...(brand.logoId ? { logoMediaId: brand.logoId } : {}),
         ...(brand.style ? { style: brand.style as SiteDocument['theme']['style'] } : {}),
         ...(brand.preset ? { preset: brand.preset as SiteDocument['theme']['preset'] } : {}),
+        ...(brand.headingFont ? { headingFont: brand.headingFont as SiteDocument['theme']['headingFont'] } : {}),
+        ...(brand.dna ? { dna: brand.dna } : {}),
         ...(brand.defaultLang ? { defaultLang: brand.defaultLang } : {}),
       },
       seo: { title: copy.seo.metaTitle, description: copy.seo.metaDescription },

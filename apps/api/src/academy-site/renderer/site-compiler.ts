@@ -21,6 +21,9 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   const lang = theme?.defaultLang ?? ctx.defaultLang;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const preset = theme?.preset ?? 'warm';
+  // Emit data-font only when the DNA set one, so pre-Phase-2 documents keep their
+  // preset-driven heading font untouched.
+  const fontAttr = theme?.headingFont ? ` data-font="${escapeAttr(theme.headingFont)}"` : '';
   const body = plan.blocks
     .map((pb) => getVariantRenderer(pb.block.type, pb.variant)?.(pb.block, ctx) ?? '')
     .join('\n');
@@ -31,7 +34,7 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   const descMeta = seoDesc ? `\n<meta name="description" content="${escapeAttr(seoDesc)}">` : '';
 
   return `<!doctype html>
-<html lang="${lang}" dir="${dir}" data-preset="${escapeAttr(preset)}">
+<html lang="${lang}" dir="${dir}" data-preset="${escapeAttr(preset)}"${fontAttr}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -117,12 +120,18 @@ main{counter-reset:sec}
 .hero-img::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(8,8,16,.35),rgba(8,8,16,.78))}
 .hero-img h1{color:#fff;max-width:19ch}.hero-img .sub{color:#eef}
 /* Preset-specific hero flourishes */
-[data-preset=premium] h1,[data-preset=premium] .hero h1,[data-preset=premium] .block h2{font-family:"Fraunces",Georgia,serif;font-weight:700;letter-spacing:-.01em}
+[data-preset=premium] h1,[data-preset=premium] .hero h1,[data-preset=premium] .block h2{font-family:"Fraunces","Tajawal",Georgia,serif;font-weight:700;letter-spacing:-.01em}
 [data-preset=energetic] .hero::before{content:"";position:absolute;z-index:-2;inset:-25%;background:conic-gradient(from 0deg,rgba(var(--pr),.55),rgba(var(--ar),.42),rgba(var(--pr),.55));filter:blur(100px);opacity:.55;animation:spin 20s linear infinite}
 @keyframes spin{to{transform:rotate(1turn)}}
 [data-preset=academic] .hero{background:
   linear-gradient(rgba(var(--pr),.05),rgba(var(--pr),.05)),
   var(--bg);border-bottom:1px solid var(--line)}
+/* Heading typeface treatment (Design DNA). Declared after the preset flourishes
+   so it wins at equal specificity. Arabic falls back to Tajawal per-glyph since
+   Fraunces has no Arabic glyphs. */
+[data-font=serif] h1,[data-font=serif] .hero h1,[data-font=serif] .block h2{font-family:"Fraunces","Tajawal",Georgia,serif;font-weight:700;letter-spacing:-.01em}
+[data-font=display] h1,[data-font=display] .hero h1,[data-font=display] .block h2{font-family:"Plus Jakarta Sans","Tajawal",system-ui,sans-serif;font-weight:800;letter-spacing:-.045em}
+[data-font=sans] h1,[data-font=sans] .hero h1,[data-font=sans] .block h2{font-family:"Plus Jakarta Sans","Tajawal",system-ui,sans-serif;letter-spacing:-.03em}
 /* Buttons */
 .btn{display:inline-flex;align-items:center;gap:8px;background:var(--p);color:var(--on-p);padding:16px 34px;border-radius:var(--rad);text-decoration:none;font-weight:800;font-size:1.05rem;box-shadow:0 16px 34px -14px rgba(var(--pr),.75);transition:.2s}
 .btn:hover{background:var(--p-dark);transform:translateY(-2px);box-shadow:0 22px 44px -14px rgba(var(--pr),.85)}

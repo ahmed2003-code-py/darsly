@@ -2,19 +2,13 @@ import { z } from 'zod';
 import { localizedText } from '../schema/site-document';
 
 /**
- * The exact JSON shape the model must return. Kept separate from the Site
- * Document: the model only writes prose; the pipeline assembles blocks, wires
- * media and live-data blocks, and applies the brand deterministically.
+ * The AI Generation output (stage 2): content only. The design direction is
+ * already fixed by the Planning stage, so this schema no longer carries a theme.
+ * The model writes prose AND curates the teacher's raw facts into clean,
+ * bilingual, display-ready lists (skills + one-line credentials) — replacing the
+ * old "dump raw facts" behaviour.
  */
-export const STYLES = ['modern', 'bold', 'elegant', 'minimal', 'playful'] as const;
-
 export const aiCopySchema = z.object({
-  // Design direction chosen by the model from the teacher's style brief.
-  theme: z.object({
-    primary: z.string(),
-    accent: z.string(),
-    style: z.enum(STYLES),
-  }),
   seo: z.object({
     metaTitle: localizedText(70),
     metaDescription: localizedText(160),
@@ -28,6 +22,12 @@ export const aiCopySchema = z.object({
     heading: localizedText(120),
     body: localizedText(2000),
   }),
+  // Curated skills/topics (from the teacher's subjects) — clean noun phrases.
+  toolkitHeading: localizedText(120),
+  highlights: z.array(localizedText(60)).max(12),
+  // Curated achievements as concise, scannable one-liners.
+  credentialsHeading: localizedText(120),
+  credentials: z.array(localizedText(200)).max(10),
   faq: z
     .array(z.object({ q: localizedText(200), a: localizedText(800) }))
     .min(1)

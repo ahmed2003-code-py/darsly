@@ -63,13 +63,18 @@ const ctaBlock = z.object({
   buttonLabel: localizedText(60),
 });
 
+// A display list item: bilingual (AI-curated, toggles with language) or a plain
+// string (legacy documents / raw-fact fallback). The renderer handles both.
+const listItem = (max: number) => z.union([z.string().max(max), localizedText(max)]);
+export type ListItem = string | { ar: string; en: string };
+
 // Skills / subjects shown as tags (from the teacher's facts).
 const toolkitBlock = z.object({
   type: z.literal('toolkit'),
   id: z.string(),
   variant,
   heading: localizedText(120),
-  items: z.array(z.string().max(60)).max(20),
+  items: z.array(listItem(60)).max(20),
 });
 
 // Achievements / credentials shown as an editorial "track record" list.
@@ -78,7 +83,7 @@ const credentialsBlock = z.object({
   id: z.string(),
   variant,
   heading: localizedText(120),
-  items: z.array(z.string().max(240)).max(12),
+  items: z.array(listItem(240)).max(12),
 });
 
 // Live data blocks: config only, resolved at render.
@@ -136,12 +141,18 @@ export const SITE_STYLES = ['modern', 'bold', 'elegant', 'minimal', 'playful'] a
 // Design preset (from the chosen vibe) — drives a distinct visual identity.
 export const SITE_PRESETS = ['warm', 'academic', 'premium', 'energetic'] as const;
 
+export const SITE_HEADING_FONTS = ['sans', 'serif', 'display'] as const;
+
 export const siteThemeSchema = z.object({
   primary: z.string().regex(HEX),
   accent: z.string().regex(HEX),
   logoMediaId: z.string().optional(),
   style: z.enum(SITE_STYLES).optional(),
   preset: z.enum(SITE_PRESETS).optional(),
+  // Heading typeface treatment, chosen by the Design DNA.
+  headingFont: z.enum(SITE_HEADING_FONTS).optional(),
+  // The Design DNA key that produced this theme (for evolution / diagnostics).
+  dna: z.string().max(40).optional(),
   // Default language the compiled page opens in (visitor can still toggle).
   defaultLang: z.enum(['ar', 'en']).optional(),
 });

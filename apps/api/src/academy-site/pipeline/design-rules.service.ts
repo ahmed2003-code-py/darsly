@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { SiteDocument } from '../schema/site-document';
 import { contrastRatio, isHex, onColor } from '../renderer/color.util';
+import { ContentSignals } from '../generation/plan-prompt';
+import { SitePlanAi } from '../generation/planning.schema';
 import { RulesVerdict } from './contracts';
+import { DesignTokenSet, resolveDna } from './design-dna';
 
 /**
  * The Design Rules Engine — deterministic, handcrafted design constraints.
@@ -16,6 +19,46 @@ import { RulesVerdict } from './contracts';
  */
 @Injectable()
 export class DesignRulesService {
+  /**
+   * Validate an AI Planning proposal and resolve it into render tokens.
+   * "The AI proposes, the Rules Engine validates." It resolves the chosen DNA
+   * deterministically and applies handcrafted guards. Content-gating rules that
+   * veto specific *variants* arrive in Phase 3, when there is more than one
+   * variant per section to choose between; `signals` is threaded through now so
+   * those rules have their inputs.
+   */
+  validatePlan(plan: SitePlanAi, signals: ContentSignals): { tokens: DesignTokenSet; verdicts: RulesVerdict[] } {
+    const verdicts: RulesVerdict[] = [];
+    const dna = resolveDna(plan.designDNA);
+    let headingFont = dna.headingFont;
+
+    // Rule: display headings fight a minimal/precise, academic look — downgrade
+    // to a clean sans so the type doesn't overpower the layout.
+    if (headingFont === 'display' && dna.preset === 'academic') {
+      headingFont = 'sans';
+      verdicts.push({
+        code: 'display-font-downgraded',
+        severity: 'warn',
+        message: 'display heading downgraded to sans for a minimal/academic preset',
+        target: 'theme.headingFont',
+      });
+    }
+
+    // Rule: an image-forward direction with no imagery still renders (gradient
+    // heroes), but flag it so Phase 3 can prefer a text-forward hero variant.
+    if (signals.galleryCount === 0 && !signals.hasCover) {
+      verdicts.push({
+        code: 'no-media',
+        severity: 'warn',
+        message: 'no cover or gallery media available',
+        target: 'media',
+      });
+    }
+
+    const tokens: DesignTokenSet = { preset: dna.preset, style: dna.style, headingFont, dna: dna.key };
+    return { tokens, verdicts };
+  }
+
   check(doc: SiteDocument): RulesVerdict[] {
     const verdicts: RulesVerdict[] = [];
     const { primary, accent } = doc.theme;

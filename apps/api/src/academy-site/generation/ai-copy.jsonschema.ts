@@ -1,13 +1,9 @@
 /**
- * Strict JSON Schema for the AI copy, used with OpenAI Structured Outputs so the
- * model is constrained to return exactly this shape (no free-form JSON parsing).
- *
- * It mirrors `aiCopySchema` (zod) structurally. Length caps are intentionally
- * NOT encoded here — they are enforced afterwards by the zod schema
- * (parseAiCopy), keeping this JSON Schema within the guaranteed-supported strict
- * subset (types, required, additionalProperties) so schema registration never
- * fails. Every object sets additionalProperties:false and lists all properties
- * as required, as strict mode requires.
+ * Strict JSON Schema for the AI Generation copy (OpenAI Structured Outputs).
+ * Mirrors `aiCopySchema` structurally. Length caps are enforced afterwards by
+ * the zod schema (parseAiCopy), keeping this within the guaranteed-supported
+ * strict subset. Every object sets additionalProperties:false and lists all
+ * properties as required, as strict mode requires.
  */
 
 const localizedText = {
@@ -22,18 +18,8 @@ export const AI_COPY_SCHEMA_NAME = 'academy_copy';
 export const aiCopyJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
-  required: ['theme', 'seo', 'hero', 'about', 'faq', 'cta'],
+  required: ['seo', 'hero', 'about', 'toolkitHeading', 'highlights', 'credentialsHeading', 'credentials', 'faq', 'cta'],
   properties: {
-    theme: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['primary', 'accent', 'style'],
-      properties: {
-        primary: { type: 'string' },
-        accent: { type: 'string' },
-        style: { type: 'string', enum: ['modern', 'bold', 'elegant', 'minimal', 'playful'] },
-      },
-    },
     seo: {
       type: 'object',
       additionalProperties: false,
@@ -52,6 +38,10 @@ export const aiCopyJsonSchema: Record<string, unknown> = {
       required: ['heading', 'body'],
       properties: { heading: localizedText, body: localizedText },
     },
+    toolkitHeading: localizedText,
+    highlights: { type: 'array', items: localizedText },
+    credentialsHeading: localizedText,
+    credentials: { type: 'array', items: localizedText },
     faq: {
       type: 'array',
       items: {

@@ -1,5 +1,5 @@
 import { SiteBlock } from '../../schema/site-document';
-import { cleanList } from '../../text.util';
+import { ListItem, normalizeItems } from '../../text.util';
 import { escapeAttr, escapeHtml, safeUrl } from '../html.util';
 import { head, i18n, skeleton } from '../shared';
 import { RenderContext, RenderMedia } from '../types';
@@ -14,6 +14,11 @@ import { registerVariant } from './registry';
  * Phase 3 registers additional premium variants alongside these.
  */
 type Of<T extends SiteBlock['type']> = Extract<SiteBlock, { type: T }>;
+
+/** Render one display list item: bilingual span (toggles) or plain string. */
+function itemText(it: ListItem): string {
+  return typeof it === 'string' ? escapeHtml(it) : i18n(it);
+}
 
 registerVariant('hero', 'hero_01', (b, ctx: RenderContext) => {
   const block = b as Of<'hero'>;
@@ -41,8 +46,8 @@ registerVariant('about', 'about_01', (b, ctx: RenderContext) => {
 
 registerVariant('toolkit', 'toolkit_01', (b) => {
   const block = b as Of<'toolkit'>;
-  const items = cleanList(block.items, { min: 2, maxLen: 60, cap: 20 });
-  const tags = items.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join('');
+  const items = normalizeItems(block.items, { min: 2, maxLen: 60, cap: 20 });
+  const tags = items.map((it) => `<span class="tag">${itemText(it)}</span>`).join('');
   if (!tags) return '';
   return `<section class="block numbered toolkit"><div class="wrap">
         ${head('toolkit', block.heading)}<div class="tags">${tags}</div>
@@ -51,8 +56,8 @@ registerVariant('toolkit', 'toolkit_01', (b) => {
 
 registerVariant('credentials', 'credentials_01', (b) => {
   const block = b as Of<'credentials'>;
-  const items = cleanList(block.items, { min: 2, maxLen: 240, cap: 12 });
-  const li = items.map((s) => `<li><span>${escapeHtml(s)}</span></li>`).join('');
+  const items = normalizeItems(block.items, { min: 2, maxLen: 240, cap: 12 });
+  const li = items.map((it) => `<li><span>${itemText(it)}</span></li>`).join('');
   if (!li) return '';
   return `<section class="block numbered credentials"><div class="wrap">
         ${head('credentials', block.heading)}<ol class="record">${li}</ol>

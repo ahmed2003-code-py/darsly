@@ -70,6 +70,13 @@ export class AcademySiteController {
     return this.site.rollback(ctx.academyId, dto.snapshotId, ctx.userId);
   }
 
+  @Post('snapshots/:id/publish')
+  @AcademyStaff('academy.manage')
+  @ApiOperation({ summary: '[staff] Publish a specific version live' })
+  publishSnapshot(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.site.publishSnapshot(ctx.academyId, id, ctx.userId);
+  }
+
   @Get('snapshots/:id/preview')
   @AcademyStaff('academy.manage')
   @Header('Content-Type', 'text/html; charset=utf-8')

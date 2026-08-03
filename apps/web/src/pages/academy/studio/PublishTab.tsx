@@ -21,6 +21,21 @@ const STATUS_TONE: Record<SiteStatus, 'primary' | 'teal' | 'warn' | 'error' | 'n
   REJECTED: 'error',
 };
 
+const STATUS_ICON: Record<SiteStatus, string> = {
+  DRAFT: 'draft',
+  PENDING_MODERATION: 'hourglass_top',
+  PUBLISHED: 'public',
+  REJECTED: 'block',
+};
+
+// Static classes (Tailwind JIT can't see interpolated names).
+const STATUS_CIRCLE: Record<SiteStatus, string> = {
+  DRAFT: 'bg-surface-container-high text-on-surface-variant',
+  PENDING_MODERATION: 'bg-amber-50 text-amber-700',
+  PUBLISHED: 'bg-primary-fixed text-on-primary-fixed-variant',
+  REJECTED: 'bg-error-container text-on-error-container',
+};
+
 export default function PublishTab({ slug }: { slug: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -44,6 +59,10 @@ export default function PublishTab({ slug }: { slug: string }) {
 
   const publish = useMutation({ mutationFn: async () => (await api.post('/academy/site/publish')).data, onSuccess: refresh });
   const unpublish = useMutation({ mutationFn: async () => (await api.post('/academy/site/unpublish')).data, onSuccess: refresh });
+  const publishSnap = useMutation({
+    mutationFn: async (snapshotId: string) => (await api.post(`/academy/site/snapshots/${snapshotId}/publish`)).data,
+    onSuccess: refresh,
+  });
   const rollback = useMutation({
     mutationFn: async (snapshotId: string) => (await api.post('/academy/site/rollback', { snapshotId })).data,
     onSuccess: refresh,
@@ -56,30 +75,57 @@ export default function PublishTab({ slug }: { slug: string }) {
   if (overview.isLoading) return <Spinner />;
   const ov = overview.data;
   const status = ov?.status ?? 'DRAFT';
+  const isPublished = status === 'PUBLISHED';
+  const canPublish = !!ov?.hasDraft;
+  const primaryLabel = isPublished
+    ? t('studio.publish.updateLive')
+    : status === 'PENDING_MODERATION'
+      ? t('studio.publish.resubmit')
+      : t('studio.publish.publishBtn');
 
   return (
     <div className="space-y-6">
+      {/* Status hero */}
       <div className="card">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h2 className="font-heading text-xl font-bold">{t('studio.publish.title')}</h2>
-          <Badge tone={STATUS_TONE[status]}>{t(`studio.status.${status}`)}</Badge>
-          {ov?.hasDraft && <span className="text-sm text-on-surface-variant">{t('studio.publish.draftV', { v: ov.version })}</span>}
+        <div className="flex flex-wrap items-start gap-4">
+          <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${STATUS_CIRCLE[status]}`}>
+            <span className="material-symbols-outlined">{STATUS_ICON[status]}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-3">
+              <h2 className="font-heading text-xl font-bold">{t('studio.publish.title')}</h2>
+              <Badge tone={STATUS_TONE[status]}>{t(`studio.status.${status}`)}</Badge>
+              {ov?.hasDraft && <span className="text-sm text-on-surface-variant">{t('studio.publish.draftV', { v: ov.version })}</span>}
+            </div>
+            <p className="text-sm text-on-surface-variant">{t(`studio.publish.hints.${status}`)}</p>
+
+            {isPublished && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-on-surface-variant">{t('studio.publish.liveAt')}:</span>
+                <Link to={`/a/${slug}`} target="_blank"
+                  className="inline-flex items-center gap-1 rounded-lg bg-surface-container px-2.5 py-1 font-mono text-xs font-semibold text-primary hover:underline">
+                  /a/{slug}<span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                </Link>
+                {ov?.publishedAt && <span className="text-on-surface-variant">· {dateShort(ov.publishedAt)}</span>}
+              </div>
+            )}
+            {isPublished && <p className="mt-2 text-xs text-on-surface-variant">{t('studio.publish.hasNewerDraft')}</p>}
+            {status === 'REJECTED' && ov?.moderationReason && (
+              <p className="mt-3 text-sm text-error">{t('studio.publish.reason', { reason: ov.moderationReason })}</p>
+            )}
+          </div>
         </div>
-        <p className="mb-4 text-sm text-on-surface-variant">{t(`studio.publish.hints.${status}`)}</p>
-        {status === 'REJECTED' && ov?.moderationReason && (
-          <p className="mb-4 text-sm text-error">{t('studio.publish.reason', { reason: ov.moderationReason })}</p>
-        )}
 
         <ErrorNote error={publish.error || unpublish.error} />
 
-        <div className="flex flex-wrap gap-2">
-          {status !== 'PUBLISHED' && (
-            <button className="btn-primary" onClick={() => publish.mutate()} disabled={publish.isPending || !ov?.hasDraft}>
-              <span className="material-symbols-outlined text-[20px]">publish</span>
-              {publish.isPending ? t('studio.publish.publishing') : status === 'PENDING_MODERATION' ? t('studio.publish.resubmit') : t('studio.publish.publishBtn')}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {canPublish && (
+            <button className="btn-primary" onClick={() => publish.mutate()} disabled={publish.isPending}>
+              <span className="material-symbols-outlined text-[20px]">{isPublished ? 'sync' : 'publish'}</span>
+              {publish.isPending ? t('studio.publish.publishing') : primaryLabel}
             </button>
           )}
-          {status === 'PUBLISHED' && (
+          {isPublished && (
             <>
               <Link to={`/a/${slug}`} target="_blank" className="btn-secondary">
                 <span className="material-symbols-outlined text-[20px]">open_in_new</span>
@@ -97,17 +143,21 @@ export default function PublishTab({ slug }: { slug: string }) {
         )}
       </div>
 
+      {/* Version history */}
       <div className="card">
-        <h3 className="mb-3 font-heading font-bold">{t('studio.publish.history')}</h3>
-        <ErrorNote error={rollback.error || removeSnap.error} />
+        <h3 className="mb-1 font-heading font-bold">{t('studio.publish.history')}</h3>
+        <ErrorNote error={rollback.error || removeSnap.error || publishSnap.error} />
         {snapshots.isLoading ? (
           <Spinner />
         ) : !snapshots.data?.length ? (
           <p className="text-sm text-on-surface-variant">{t('studio.publish.noVersions')}</p>
         ) : (
-          <div className="divide-y divide-outline-variant">
+          <div className="mt-2 divide-y divide-outline-variant">
             {snapshots.data.map((s, idx) => (
-              <SnapshotRow key={s.id} s={s} isCurrent={idx === 0} rolling={rollback.isPending} deleting={removeSnap.isPending}
+              <SnapshotRow key={s.id} s={s} isCurrent={idx === 0}
+                rolling={rollback.isPending} deleting={removeSnap.isPending}
+                publishing={publishSnap.isPending && publishSnap.variables === s.id}
+                onPublish={() => { if (confirm(t('studio.publish.confirmPublish', { n: s.version }))) publishSnap.mutate(s.id); }}
                 onRollback={() => { if (confirm(t('studio.publish.confirmRestore', { n: s.version }))) rollback.mutate(s.id); }}
                 onDelete={() => { if (confirm(t('studio.publish.confirmDelete', { n: s.version }))) removeSnap.mutate(s.id); }} />
             ))}
@@ -118,8 +168,9 @@ export default function PublishTab({ slug }: { slug: string }) {
   );
 }
 
-function SnapshotRow({ s, isCurrent, rolling, deleting, onRollback, onDelete }: {
-  s: Snapshot; isCurrent: boolean; rolling: boolean; deleting: boolean; onRollback: () => void; onDelete: () => void;
+function SnapshotRow({ s, isCurrent, rolling, deleting, publishing, onPublish, onRollback, onDelete }: {
+  s: Snapshot; isCurrent: boolean; rolling: boolean; deleting: boolean; publishing: boolean;
+  onPublish: () => void; onRollback: () => void; onDelete: () => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -132,7 +183,7 @@ function SnapshotRow({ s, isCurrent, rolling, deleting, onRollback, onDelete }: 
   const reason = s.reason ? t(`studio.publish.reasons.${s.reason}`, { defaultValue: s.reason }) : '—';
   return (
     <div className="py-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-semibold">
             {t('studio.publish.version', { n: s.version })}
@@ -140,10 +191,14 @@ function SnapshotRow({ s, isCurrent, rolling, deleting, onRollback, onDelete }: 
           </p>
           <p className="text-sm text-on-surface-variant">{reason} • {dateShort(s.createdAt)}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={() => setOpen((o) => !o)}>
             <span className="material-symbols-outlined text-[18px]">{open ? 'visibility_off' : 'visibility'}</span>
             {open ? t('studio.publish.hide') : t('studio.publish.preview')}
+          </button>
+          <button className="btn-primary" disabled={publishing} onClick={onPublish}>
+            <span className="material-symbols-outlined text-[18px]">publish</span>
+            {publishing ? t('studio.publish.publishing') : t('studio.publish.publishThis')}
           </button>
           {!isCurrent && (
             <button className="btn-secondary" disabled={rolling} onClick={onRollback}>

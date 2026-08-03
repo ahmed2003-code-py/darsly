@@ -168,6 +168,26 @@ export class AcademySiteService {
     return { id: snapshotId, deleted: true };
   }
 
+  /**
+   * Publish a specific historical version directly: make it the working draft,
+   * then run the normal publish path (media + quality + moderation aware). Lets
+   * the owner push any version live without a separate restore-then-publish.
+   */
+  async publishSnapshot(academyId: string, snapshotId: string, actorUserId: string): Promise<AcademySite> {
+    const site = await this.getOrCreate(academyId);
+    const snap = await this.prisma.academySiteSnapshot.findFirst({
+      where: { id: snapshotId, siteId: site.id },
+    });
+    if (!snap) throw new NotFoundException('Snapshot not found');
+    const parsed = parseSiteDocument(snap.doc);
+    if (!parsed.success) throw new BadRequestException('Snapshot document is no longer valid');
+    await this.prisma.academySite.update({
+      where: { id: site.id },
+      data: { draftDoc: snap.doc as unknown as object },
+    });
+    return this.publish(academyId, actorUserId);
+  }
+
   async rollback(academyId: string, snapshotId: string, actorUserId: string): Promise<AcademySite> {
     const site = await this.getOrCreate(academyId);
     const snap = await this.prisma.academySiteSnapshot.findFirst({

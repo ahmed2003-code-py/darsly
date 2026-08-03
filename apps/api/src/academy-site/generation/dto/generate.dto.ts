@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export const VIBES = ['academic', 'premium', 'energetic', 'trusted'] as const;
@@ -19,4 +19,11 @@ export class GenerateSiteDto {
   @IsOptional()
   @IsIn(['ar', 'en'])
   lang?: 'ar' | 'en';
+}
+
+export class RegenerateSectionDto {
+  @ApiProperty({ description: 'The id of the block/section to regenerate.' })
+  @IsString()
+  @MaxLength(60)
+  sectionId!: string;
 }

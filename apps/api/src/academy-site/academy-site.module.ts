@@ -11,6 +11,7 @@ import { SiteGenerateHandler } from './generation/site-generate.handler';
 import { SiteGeneratorService } from './generation/site-generator.service';
 import { DesignRulesService } from './pipeline/design-rules.service';
 import { EvolutionService } from './pipeline/evolution.service';
+import { QualityGateService } from './pipeline/quality-gate.service';
 import { SiteBrainService } from './pipeline/site-brain.service';
 import { PublicSiteController } from './public/public-site.controller';
 import { PublicSiteService } from './public/public-site.service';
@@ -55,6 +56,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     DesignRulesService,
     SiteBrainService,
     EvolutionService,
+    QualityGateService,
     SiteRenderService,
     PublicSiteService,
     SiteGeneratorService,

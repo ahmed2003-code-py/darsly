@@ -12,8 +12,9 @@ import { AiCopy, parseAiCopy } from './ai-copy.schema';
 import { AI_COPY_SCHEMA_NAME, aiCopyJsonSchema } from './ai-copy.jsonschema';
 import { ContentSignals, systemPlanPrompt, userPlanPrompt } from './plan-prompt';
 import { PLANNING_SCHEMA_NAME, planningJsonSchema } from './planning.jsonschema';
-import { parseSitePlan } from './planning.schema';
+import { Archetype, parseSitePlan } from './planning.schema';
 import { systemPrompt, userPrompt } from './prompt';
+import { SECTION_SPECS, regenUserPrompt } from './regen';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -159,6 +160,45 @@ export class SiteGeneratorService {
       throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
     }
     return { doc: res.data!, costCents: planCompletion.costCents + completion.costCents };
+  }
+
+  /**
+   * Regenerate a single section's content, keeping the frozen design (DNA,
+   * tokens, variants, order). One small focused AI call; the rest of the
+   * document is untouched.
+   */
+  async regenerateSection(academyId: string, sectionId: string): Promise<{ doc: SiteDocument; costCents: number }> {
+    const [academy, facts, site] = await Promise.all([
+      this.prisma.academy.findUnique({ where: { id: academyId } }),
+      this.prisma.academyProfileFacts.findUnique({ where: { academyId } }),
+      this.prisma.academySite.findUnique({ where: { academyId }, select: { draftDoc: true } }),
+    ]);
+    if (!academy) throw new AiJobError('Academy not found', 'TERMINAL');
+    if (!facts) throw new AiJobError('No profile facts to regenerate from', 'TERMINAL');
+    if (!site?.draftDoc) throw new AiJobError('There is no draft to edit', 'TERMINAL');
+    const parsed = parseSiteDocument(site.draftDoc);
+    if (!parsed.success) throw new AiJobError('Current draft is no longer valid', 'TERMINAL');
+    const doc = parsed.data!;
+    const block = doc.blocks.find((b) => b.id === sectionId);
+    if (!block) throw new AiJobError('Section not found in the current draft', 'TERMINAL');
+    const spec = SECTION_SPECS[block.type];
+    if (!spec) throw new AiJobError('This section cannot be regenerated', 'TERMINAL');
+
+    const archetype = (doc.theme.archetype as Archetype | undefined) ?? 'general';
+    const completion = await this.ai.completeStructured<unknown>({
+      system: systemPrompt(),
+      messages: [{ role: 'user', content: regenUserPrompt(block.type, spec, facts, academy.name, archetype, block) }],
+      maxTokens: 2500,
+      schemaName: spec.schemaName,
+      schema: spec.schema,
+    });
+    spec.apply(block, completion.data);
+
+    const res = parseSiteDocument(doc);
+    if (!res.success) {
+      throw new AiJobError(`Regenerated section invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
+    }
+    return { doc: res.data!, costCents: completion.costCents };
   }
 
   /** Prefer the AI-curated bilingual list; fall back to cleaned raw facts. */

@@ -8,6 +8,7 @@ import { AcademySite, AcademySiteSnapshot } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AcademySiteConfig } from '../academy-site.config';
+import { QualityGateService } from '../pipeline/quality-gate.service';
 import { SiteRenderService } from '../renderer/site-render.service';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
 
@@ -32,6 +33,7 @@ export class AcademySiteService {
     private readonly render: SiteRenderService,
     private readonly audit: AuditService,
     private readonly config: AcademySiteConfig,
+    private readonly quality: QualityGateService,
   ) {}
 
   async getOrCreate(academyId: string): Promise<AcademySite> {
@@ -190,6 +192,7 @@ export class AcademySiteService {
       throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
     }
     await this.assertPublishable(academyId, parsed.data!);
+    this.assertQuality(parsed.data!);
 
     if (this.config.moderationEnabled && !site.moderationApproved) {
       const updated = await this.prisma.academySite.update({
@@ -239,6 +242,7 @@ export class AcademySiteService {
     const parsed = parseSiteDocument(site.draftDoc);
     if (!parsed.success) throw new BadRequestException('Draft is invalid');
     await this.assertPublishable(academyId, parsed.data!);
+    this.assertQuality(parsed.data!);
     const published = await this.compileAndPublish(site.id, academyId, parsed.data!, adminUserId);
     await this.log(adminUserId, 'site.moderate.approve', site.id, { version: published.version });
     return published;
@@ -311,6 +315,17 @@ export class AcademySiteService {
     });
     if (unverified > 0 && documentReferencesClaims(doc)) {
       throw new BadRequestException('Remove or verify unverified claims before publishing');
+    }
+  }
+
+  /** Block publishing a genuinely broken page (deterministic quality gate). */
+  private assertQuality(doc: SiteDocument): void {
+    const errors = this.quality.blockingErrors(doc);
+    if (errors.length) {
+      throw new BadRequestException({
+        message: 'Page did not pass quality checks — fix these before publishing',
+        errors: errors.map((e) => e.message),
+      });
     }
   }
 

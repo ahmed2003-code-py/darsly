@@ -10,6 +10,7 @@ import { AcademyGenerateController } from './generation/academy-generate.control
 import { SiteGenerateHandler } from './generation/site-generate.handler';
 import { SiteGeneratorService } from './generation/site-generator.service';
 import { DesignRulesService } from './pipeline/design-rules.service';
+import { EvolutionService } from './pipeline/evolution.service';
 import { SiteBrainService } from './pipeline/site-brain.service';
 import { PublicSiteController } from './public/public-site.controller';
 import { PublicSiteService } from './public/public-site.service';
@@ -53,6 +54,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     AcademySiteService,
     DesignRulesService,
     SiteBrainService,
+    EvolutionService,
     SiteRenderService,
     PublicSiteService,
     SiteGeneratorService,

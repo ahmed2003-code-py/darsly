@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AiClient } from '../ai/ai.client';
 import { AiJobError } from '../ai/ai-job.error';
 import { DesignRulesService } from '../pipeline/design-rules.service';
+import { EvolutionService } from '../pipeline/evolution.service';
 import { SiteBrainService } from '../pipeline/site-brain.service';
 import { ListItem, normalizeItems } from '../text.util';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
@@ -37,6 +38,7 @@ export class SiteGeneratorService {
     private readonly ai: AiClient,
     private readonly rules: DesignRulesService,
     private readonly brain: SiteBrainService,
+    private readonly evolution: EvolutionService,
   ) {}
 
   async buildDraft(
@@ -77,10 +79,13 @@ export class SiteGeneratorService {
       achievementsCount: rawAchievements.length,
     };
 
+    // ── EVOLUTION ── read history so the plan keeps what worked and avoids repeats.
+    const evo = await this.evolution.context(academyId);
+
     // ── PLAN (AI stage 1) ── the strategist proposes a design direction only.
     const planCompletion = await this.ai.completeStructured<unknown>({
       system: systemPlanPrompt(),
-      messages: [{ role: 'user', content: userPlanPrompt(facts, academy.name, vibe, stylePrompt, signals) }],
+      messages: [{ role: 'user', content: userPlanPrompt(facts, academy.name, vibe, stylePrompt, signals, evo) }],
       maxTokens: 1500, // headroom for GPT-5 reasoning tokens + the small plan
       schemaName: PLANNING_SCHEMA_NAME,
       schema: planningJsonSchema,
@@ -91,14 +96,18 @@ export class SiteGeneratorService {
     }
     const plan = planParsed.data!;
 
+    // ── EVOLUTION guard ── deterministically enforce a fresh direction on a
+    // no-brief regeneration, even if the model repeated itself.
+    const wantAi = !!stylePrompt?.trim();
+    const finalDna = this.evolution.normalizeDna(this.evolution.enforceVariety(plan.designDNA, evo, wantAi));
+
     // ── RULES ── resolve the DNA into render tokens + validate.
-    const { tokens, verdicts } = this.rules.validatePlan(plan, signals);
+    const { tokens, verdicts } = this.rules.validatePlan({ ...plan, designDNA: finalDna }, signals);
     if (verdicts.length) {
       this.logger.debug(`plan verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`);
     }
     // Colors: the AI's proposal wins only when the teacher gave a style brief;
     // otherwise keep the academy's own brand colors.
-    const wantAi = !!stylePrompt?.trim();
     const primary = (wantAi && HEX.test(plan.theme.primary) && plan.theme.primary) || academyPrimary;
     const accent = (wantAi && HEX.test(plan.theme.accent) && plan.theme.accent) || academyAccent;
 

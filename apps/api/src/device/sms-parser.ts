@@ -114,6 +114,69 @@ export function parseAmountCents(body: string): number | null {
  * falling back to a standalone 6+ digit run. Returns null when none is found —
  * and without a reference the backend NEVER auto-verifies (manual review only).
  */
+/**
+ * Is this message money *arriving*, or money *leaving*?
+ *
+ * The listener sits on a phone that both receives and sends. A bank SMS like
+ * "تم تنفيذ تحويل لحظي بمبلغ 15.00 جم **من حسابك**" is an outgoing debit, and
+ * booking it as an incoming payment would credit an enrollment nobody paid for.
+ * Anything that is not clearly incoming is rejected — the cost of missing a
+ * payment (manual review) is far lower than the cost of inventing one.
+ */
+export function isIncomingTransfer(body: string): boolean {
+  if (!body) return false;
+  const outgoing = /(?:من\s*حساب[كك]|من\s*محفظت[كك]|تم\s*خصم|خصم\s*مبلغ|debited|sent\s*to|withdrawn)/i;
+  if (outgoing.test(body)) return false;
+  const incoming =
+    /(?:تم\s*استلام|استلمت|تم\s*إضافة|تم\s*اضافة|أضيف|اضيف|received|credited|deposit)/i;
+  return incoming.test(body);
+}
+
+/**
+ * Every identifier the message could plausibly be matched on, most trustworthy
+ * first.
+ *
+ * A wallet SMS carries the *sender's mobile number* — the thing the student
+ * actually knows and types at checkout. A bank SMS carries a *transaction
+ * reference* the student can read off their own receipt. Both appear, and which
+ * one the student entered is not ours to guess, so the matcher is given all of
+ * them and accepts a hit on any.
+ *
+ * The receiving wallet's own number is excluded: it appears in every message
+ * ("على رقم محفظتك 01002589923") and matching on it would tie every transfer to
+ * whichever student happened to type the platform's number.
+ */
+export function parseIdentities(body: string, receivingNumbers: string[] = []): string[] {
+  if (!body) return [];
+  const excluded = new Set(receivingNumbers.map((n) => n.replace(/[^0-9]/g, '').slice(-10)));
+  const out: string[] = [];
+  const push = (value?: string | null) => {
+    const v = (value ?? '').trim();
+    if (!v) return;
+    const digits = v.replace(/[^0-9]/g, '');
+    if (digits.length >= 10 && excluded.has(digits.slice(-10))) return;
+    if (!out.some((existing) => existing.toLowerCase() === v.toLowerCase())) out.push(v);
+  };
+
+  // The sending wallet's mobile number — "من رقم 01029166461".
+  for (const m of body.matchAll(/(?:^|[^\d])((?:\+?20|0)?1[0125]\d{8})(?![\d])/g)) push(m[1]);
+
+  // A labelled transaction reference — banks send these.
+  const labelled = body.match(
+    /(?:رقم\s*العملية|رقم\s*مرجعي|الرقم\s*المرجعي|reference|ref(?:erence)?\.?|txn|transaction|trx)\s*[:#.\-]?\s*([A-Za-z0-9\-]{4,})/i,
+  );
+  push(labelled?.[1]);
+
+  // Any other long run of digits, as a last resort.
+  for (const m of body.matchAll(/\b(\d{6,})\b/g)) push(m[1]);
+
+  return out;
+}
+
+/**
+ * The single best identifier, for display and for the legacy single-reference
+ * path. Matching itself uses [parseIdentities] and accepts any of them.
+ */
 export function parseReference(body: string): string | null {
   if (!body) return null;
 

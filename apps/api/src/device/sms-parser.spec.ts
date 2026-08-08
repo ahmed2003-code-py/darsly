@@ -2,6 +2,8 @@ import { createHash } from 'crypto';
 import { PaymentMethod } from '@darsly/shared-types';
 import {
   classifySender,
+  isIncomingTransfer,
+  parseIdentities,
   messageHash,
   normalizeSender,
   parseAmountCents,
@@ -141,6 +143,54 @@ describe('parseReference — real wallet SMS carry no transaction id', () => {
 
   it('returns null when the message carries no identity at all', () => {
     expect(parseReference('تم استلام مبلغ 5 جنيه على محفظتك')).toBeNull();
+  });
+});
+
+describe('isIncomingTransfer — money in, not money out', () => {
+  it('accepts real incoming wallet and bank messages', () => {
+    expect(isIncomingTransfer('تم استلام مبلغ 12 جنيه من رقم 01029166461')).toBe(true);
+    expect(isIncomingTransfer('Your account was credited with EGP 5,000')).toBe(true);
+  });
+
+  it('rejects an outgoing debit from the listener phone itself', () => {
+    // Seen in production: the listener sits on a phone that also SENDS money, and
+    // this was being booked as an incoming payment.
+    expect(
+      isIncomingTransfer('يرجى العلم انه تم تنفيذ تحويل لحظي بمبلغ 15.00 جم من حسابك المنتهي بـ ********7717'),
+    ).toBe(false);
+    expect(isIncomingTransfer('تم خصم مبلغ 50 جنيه من محفظتك')).toBe(false);
+    expect(isIncomingTransfer('EGP 100 debited from your account')).toBe(false);
+  });
+
+  it('rejects anything that is not clearly incoming', () => {
+    expect(isIncomingTransfer('رصيدك الحالي 250 جنيه')).toBe(false);
+    expect(isIncomingTransfer('')).toBe(false);
+  });
+});
+
+describe('parseIdentities — the student typed one of these', () => {
+  const walletSms =
+    'تم استلام مبلغ 12 جنيه من رقم 01029166461 المسجل بإسم Abdelrahman على رقم محفظتك 01002589923. رقم العملية 022484917650';
+
+  it('returns the sending mobile AND the transaction reference', () => {
+    const ids = parseIdentities(walletSms, ['01002589923']);
+    expect(ids).toContain('01029166461'); // what the student types at checkout
+    expect(ids).toContain('022484917650'); // what the wallet calls the transfer
+  });
+
+  it('excludes the platform own receiving number', () => {
+    // It appears in every message; matching on it would tie every transfer to
+    // whichever student happened to type the platform's number.
+    expect(parseIdentities(walletSms, ['01002589923'])).not.toContain('01002589923');
+  });
+
+  it('picks up a bank reference with no mobile number in the message', () => {
+    const bank = 'تم إضافة مبلغ 5.00 جم لحسابك برقم مرجعي 83541d9a بتاريخ 08-08-2026';
+    expect(parseIdentities(bank)).toContain('83541d9a');
+  });
+
+  it('is empty when the message carries no identifier', () => {
+    expect(parseIdentities('تم استلام مبلغ 5 جنيه على محفظتك')).toEqual([]);
   });
 });
 

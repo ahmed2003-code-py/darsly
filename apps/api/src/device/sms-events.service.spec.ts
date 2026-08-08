@@ -29,6 +29,8 @@ function makeService(overrides: {
       findUnique: overrides.findUnique ?? jest.fn(),
       update: overrides.update ?? jest.fn().mockResolvedValue({}),
     },
+    // The platform's own receiving handles, excluded from sender identities.
+    platformPaymentAccount: { findMany: jest.fn().mockResolvedValue([]) },
   } as unknown as PrismaService;
   const rules = { listEnabled: jest.fn().mockResolvedValue(RULES) } as unknown as SenderRulesService;
   const matching = { ingest: overrides.ingest ?? jest.fn() } as unknown as PaymentMatchingService;

@@ -144,6 +144,78 @@ check "second transfer is not swallowed as a duplicate" "yes" \
   "$([ "$S3" != 'DUPLICATE' ] && [ "$S3" != ERR ] && echo yes || echo "no ($S3)")"
 echo "     حالة التحويل التاني: $S3"
 
+echo "── 7. الترتيب الحقيقي: الطالب يحوّل الأول، وبعدين يسجّل الدفعة"
+# This is how it actually happens: the money moves, the wallet SMS lands, and only
+# then does the student open the site and fill the form. Matching must work in
+# that direction too, or auto-verification never fires in the real world.
+PHONE2="01$((RANDOM % 3))$(printf '%08d' $((RANDOM % 90000000 + 10000000)))"
+STUDENT2=${STUDENT2:-student$((RANDOM % 10 + 1))@darsly.app}
+ST2=$(post $API/auth/login -d "{\"email\":\"$STUDENT2\",\"password\":\"Darsly@123\"}" | jget "['accessToken']")
+
+# Pick a course this student is not enrolled in yet.
+COURSE2=${COURSE_ID2:-$(curl -s "$API/teachers" | PICK=$RANDOM python3 -c "
+import sys, json, urllib.request, os
+api = os.environ['API']; found = []
+try: d = json.load(sys.stdin)
+except Exception: sys.exit()
+rows = d if isinstance(d, list) else (d.get('items') or d.get('data') or [])
+for t in rows[:6]:
+    slug = t.get('slug')
+    if not slug: continue
+    try:
+        with urllib.request.urlopen(f'{api}/teachers/{slug}', timeout=10) as r: page = json.load(r)
+    except Exception: continue
+    for c in page.get('courses') or []:
+        if c.get('priceCents'): found.append(c['id'])
+if found: print(found[int(os.environ.get('PICK','0')) % len(found)])
+" 2>/dev/null)}
+
+QUOTE=$(post $API/enrollments/quote -H "Authorization: Bearer $ST2" -d "{\"courseId\":\"$COURSE2\"}")
+DUE=$(echo "$QUOTE" | jget "['totalCents']")
+[ "$DUE" = ERR ] && DUE=$(echo "$QUOTE" | jget "['amountCents']")
+check "got the amount due before paying" "yes" "$([ "$DUE" != ERR ] && [ -n "$DUE" ] && echo yes || echo no)"
+
+# 1. The transfer happens and the SMS arrives — no payment record exists yet.
+EGP2=$(python3 -c "print(f'{$DUE/100:.2f}')")
+T2=$(date -u +%s)
+ISO_T2=$(date -u -d "@$T2" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$T2" +%Y-%m-%dT%H:%M:%SZ)
+BODY2="تم استلام مبلغ $EGP2 جنيه من رقم $PHONE2 المسجل بإسم طالب اختبار على رقم محفظتك 01002589923"
+HASH_T2=$(printf 'vf-cash %s %s' "$BODY2" "$T2" | sha256sum | cut -d' ' -f1)
+EARLY=$(post $API/device/sms-events -H "Authorization: Bearer $TOK" \
+  -d "$(BODY="$BODY2" ISO="$ISO_T2" HASH="$HASH_T2" python3 -c "
+import json, os
+print(json.dumps({'sender':'VF-Cash','message':os.environ['BODY'],
+                  'receivedAt':os.environ['ISO'],'messageHash':os.environ['HASH']}, ensure_ascii=False))")")
+check "transfer recorded while nothing matches it yet" "UNMATCHED" "$(echo "$EARLY" | jget "['status']")"
+
+# 2. Only now does the student submit — this must find the waiting transfer.
+SUB2=$(post $API/payments -H "Authorization: Bearer $ST2" \
+  -d "{\"courseId\":\"$COURSE2\",\"method\":\"VODAFONE_CASH\",\"proofImageUrl\":\"data:image/png;base64,iVBORw0KGgo=\",\"reference\":\"$PHONE2\"}")
+check "payment auto-verified on submission" "True" "$(echo "$SUB2" | jget "['autoVerified']")"
+
+E2=$(curl -s $API/enrollments/mine -H "Authorization: Bearer $ST2" | COURSE="$COURSE2" python3 -c "
+import sys, json, os
+rows = json.load(sys.stdin)
+rows = rows if isinstance(rows, list) else (rows.get('items') or rows.get('data') or [])
+for r in rows:
+    if (r.get('courseId') or (r.get('course') or {}).get('id')) == os.environ['COURSE']:
+        print(r.get('status','UNKNOWN')); sys.exit()
+print('NOT_FOUND')" 2>/dev/null || echo ERR)
+check "enrollment ACTIVE without any human step" "ACTIVE" "$E2"
+
+echo "── 8. التحويلات الصادرة ما تتحسبش دفعات واردة"
+T3=$(date -u +%s)
+ISO_T3=$(date -u -d "@$T3" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$T3" +%Y-%m-%dT%H:%M:%SZ)
+OUT_BODY="يرجى العلم انه تم تنفيذ تحويل لحظي بمبلغ 15.00 جم من حسابك المنتهي بـ ********7717 برقم مرجعي 0ebe3ed1"
+HASH_T3=$(printf 'cib %s %s' "$OUT_BODY" "$T3" | sha256sum | cut -d' ' -f1)
+OUT=$(post $API/device/sms-events -H "Authorization: Bearer $TOK" \
+  -d "$(BODY="$OUT_BODY" ISO="$ISO_T3" HASH="$HASH_T3" python3 -c "
+import json, os
+print(json.dumps({'sender':'CIB','message':os.environ['BODY'],
+                  'receivedAt':os.environ['ISO'],'messageHash':os.environ['HASH']}, ensure_ascii=False))")")
+check "outgoing debit not forwarded"  "False"    "$(echo "$OUT" | jget "['forwarded']")"
+check "outgoing debit flagged clearly" "OUTGOING" "$(echo "$OUT" | jget "['status']")"
+
 echo
 echo "── النتيجة: $pass نجح، $fail فشل"
 [ "$fail" -eq 0 ]

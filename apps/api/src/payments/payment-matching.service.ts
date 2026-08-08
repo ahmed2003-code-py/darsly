@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseIdentities } from '../device/sms-parser';
 import { ManualPaymentsService } from './manual-payments.service';
 
 export interface PaymentEventDto {
@@ -22,6 +23,13 @@ export interface PaymentEventDto {
    * supplied it becomes the dedupe identity instead.
    */
   externalId?: string;
+  /**
+   * Every identifier the raw message could be matched on — the sending wallet's
+   * mobile number, a labelled transaction reference, and so on. The student typed
+   * exactly one of them at checkout, and which one is not ours to guess, so a hit
+   * on any counts. Falls back to [reference] when not supplied.
+   */
+  identities?: string[];
 }
 
 // How far back a pending payment may have been created relative to the transfer.
@@ -109,11 +117,17 @@ export class PaymentMatchingService {
     let status: 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS' = 'UNMATCHED';
     let note: string | undefined;
 
+    const identities = (dto.identities?.length ? dto.identities : [dto.reference ?? ''])
+      .map(normRef)
+      .filter(Boolean);
+
     if (candidates.length === 0) {
       status = 'UNMATCHED';
       note = 'no pending/unsettled payment with this amount/method in the time window';
     } else {
-      const refMatches = candidates.filter((c) => refExact(normRef(c.reference), ref));
+      const refMatches = candidates.filter((c) =>
+        identities.some((identity) => refExact(normRef(c.reference), identity)),
+      );
       if (refMatches.length === 1) { chosen = refMatches[0]; status = 'MATCHED'; }
       else if (refMatches.length > 1) { status = 'AMBIGUOUS'; note = 'multiple payments share this reference'; }
       else if (candidates.length === 1) { chosen = candidates[0]; status = 'MATCHED'; note = 'matched by amount+time (reference differed)'; }
@@ -128,6 +142,69 @@ export class PaymentMatchingService {
       else await this.manual.settle(chosen.id, 'system'); // PAID+unsettled → settle
     }
     return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
+  }
+
+  /**
+   * The other direction: a payment was just submitted — is a transfer already
+   * sitting here waiting for it?
+   *
+   * Matching used to look only backwards, from a transfer to an existing payment.
+   * But students transfer *first* and fill the form afterwards, so the SMS almost
+   * always lands before the payment row exists — a few seconds is enough. Every
+   * one of those events was filed UNMATCHED and nothing ever revisited it, which
+   * is why auto-verification looked broken while each half worked perfectly.
+   *
+   * Same evidence, same confidence rules as [ingest]: same provider, same amount,
+   * inside the same window, and exactly one identity match. Ambiguity still goes
+   * to a human.
+   */
+  async reconcilePayment(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { id: true, status: true, method: true, amountCents: true, reference: true, createdAt: true },
+    });
+    if (!payment || payment.status !== 'PENDING') return { status: 'SKIPPED' as const };
+
+    const ref = normRef(payment.reference);
+    // Without an identity the student gave us, amount+time alone cannot tell two
+    // students' identical transfers apart. Same rule as the forward path.
+    if (!ref) return { status: 'NO_REFERENCE' as const };
+
+    const events = await this.prisma.paymentEvent.findMany({
+      where: {
+        status: 'UNMATCHED',
+        matchedPaymentId: null,
+        provider: payment.method as any,
+        amountCents: payment.amountCents,
+        occurredAt: {
+          gte: new Date(payment.createdAt.getTime() - WINDOW_BEFORE_MS),
+          lte: new Date(payment.createdAt.getTime() + WINDOW_AFTER_MS),
+        },
+      },
+      orderBy: { occurredAt: 'desc' },
+      take: 50,
+    });
+
+    const hits = events.filter((event) => {
+      const derived = parseIdentities(event.rawMessage ?? '').map(normRef).filter(Boolean);
+      const identities = derived.length ? derived : [normRef(event.reference)];
+      return identities.some((identity) => refExact(identity, ref));
+    });
+
+    if (hits.length === 0) return { status: 'UNMATCHED' as const };
+    if (hits.length > 1) return { status: 'AMBIGUOUS' as const };
+
+    const event = hits[0];
+    await this.prisma.paymentEvent.update({
+      where: { id: event.id },
+      data: {
+        status: 'MATCHED',
+        matchedPaymentId: payment.id,
+        note: 'reconciled when the payment was submitted (transfer arrived first)',
+      },
+    });
+    await this.manual.systemVerify(payment.id);
+    return { status: 'MATCHED' as const, eventId: event.id };
   }
 
   private async record(

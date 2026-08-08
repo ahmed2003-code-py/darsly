@@ -4,7 +4,13 @@ import { PaymentMethod } from '@darsly/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentMatchingService } from '../payments/payment-matching.service';
 import { SenderRulesService } from './sender-rules.service';
-import { classifySender, parseAmountCents, parseReference } from './sms-parser';
+import {
+  classifySender,
+  isIncomingTransfer,
+  parseAmountCents,
+  parseIdentities,
+  parseReference,
+} from './sms-parser';
 import { DeviceSmsEventDto } from './dto';
 
 export interface SmsEventResult {
@@ -44,7 +50,11 @@ export class SmsEventsService {
     const classification = classifySender(dto.sender, rules);
     const amountCents = parseAmountCents(dto.message);
     const reference = parseReference(dto.message);
-    const willForward = !!classification?.forwardToBackend && amountCents != null;
+    // The listener's phone both receives and sends money. "تم تنفيذ تحويل لحظي
+    // من حسابك" is a debit, and booking it as an incoming payment would credit an
+    // enrollment nobody paid for.
+    const incoming = isIncomingTransfer(dto.message);
+    const willForward = !!classification?.forwardToBackend && amountCents != null && incoming;
 
     // Idempotency layer 1: the device outbox mirror.
     let record;
@@ -61,7 +71,7 @@ export class SmsEventsService {
           provider: (classification?.provider as any) ?? null,
           amountCents: amountCents ?? undefined,
           reference: reference ?? undefined,
-          matchStatus: willForward ? null : 'LOCAL_ONLY',
+          matchStatus: willForward ? null : incoming ? 'LOCAL_ONLY' : 'OUTGOING',
         },
       });
     } catch (e) {
@@ -72,7 +82,10 @@ export class SmsEventsService {
     }
 
     if (!willForward) {
-      return this.result(record.id, false, classification, amountCents, reference, false, 'LOCAL_ONLY');
+      return this.result(
+        record.id, false, classification, amountCents, reference, false,
+        incoming ? 'LOCAL_ONLY' : 'OUTGOING',
+      );
     }
     return this.forward(record.id, device.id, classification!, amountCents!, reference, receivedAt, dto.message);
   }
@@ -110,6 +123,23 @@ export class SmsEventsService {
     };
   }
 
+  /**
+   * The platform's own wallet/account handles. They appear in every incoming
+   * message ("على رقم محفظتك 01002589923"), so they must never be treated as a
+   * sender identity — that would match whichever student happened to type the
+   * platform's number.
+   */
+  private async receivingNumbers(): Promise<string[]> {
+    // Defensive: this is an enrichment, not a precondition. If it fails we simply
+    // do not exclude anything — never let it stop an SMS being processed.
+    try {
+      const accounts = await this.prisma.platformPaymentAccount.findMany({ select: { handle: true } });
+      return accounts.map((account) => account.handle);
+    } catch {
+      return [];
+    }
+  }
+
   private async forward(
     recordId: string,
     deviceId: string,
@@ -128,6 +158,11 @@ export class SmsEventsService {
       provider: classification.provider as any,
       amountCents,
       reference: reference ?? undefined,
+      // Every identifier the message carries — the sending wallet's number, a
+      // labelled transaction reference — because the student typed one of them and
+      // we cannot know which. The platform's own receiving numbers are excluded so
+      // they can never be mistaken for a sender.
+      identities: parseIdentities(rawMessage, await this.receivingNumbers()),
       occurredAt: receivedAt.toISOString(),
       rawMessage,
       deviceId,

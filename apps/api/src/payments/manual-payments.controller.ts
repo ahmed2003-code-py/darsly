@@ -9,6 +9,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ManualPaymentsService } from './manual-payments.service';
 import { PaymentAccountsService, UpsertAccountDto } from './payment-accounts.service';
+import { PaymentMatchingService } from './payment-matching.service';
 
 class SubmitPaymentDto {
   @IsString() courseId: string;
@@ -33,6 +34,7 @@ export class ManualPaymentsController {
   constructor(
     private readonly payments: ManualPaymentsService,
     private readonly accounts: PaymentAccountsService,
+    private readonly matching: PaymentMatchingService,
   ) {}
 
   // ── Receiving accounts ──────────────────────────────────────────────────────
@@ -50,8 +52,16 @@ export class ManualPaymentsController {
   @ApiBearerAuth()
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] Submit a proof of payment for a course' })
-  submit(@CurrentUser() u: JwtPayload, @Body() dto: SubmitPaymentDto) {
-    return this.payments.submit(u.sub, dto);
+  async submit(@CurrentUser() u: JwtPayload, @Body() dto: SubmitPaymentDto) {
+    const payment = await this.payments.submit(u.sub, dto);
+    // Students transfer first and fill the form afterwards, so the wallet SMS has
+    // usually already arrived and is sitting unmatched. Check for it now rather
+    // than leaving a payment waiting on a human for a transfer we already have.
+    // Never let a reconciliation failure fail the submission itself.
+    const reconciled = await this.matching
+      .reconcilePayment(payment.id)
+      .catch(() => ({ status: 'SKIPPED' as const }));
+    return { ...payment, autoVerified: reconciled.status === 'MATCHED' };
   }
 
   @Get('payments/mine')
@@ -62,31 +72,23 @@ export class ManualPaymentsController {
     return this.payments.myPayments(u.sub);
   }
 
-  // ── Teacher verification ────────────────────────────────────────────────────
+  // ── Academy (read-only) ─────────────────────────────────────────────────────
+  //
+  // Verifying a payment is deliberately NOT a teacher capability. Confirming a
+  // transfer moves money: it credits the academy's own balance and books the
+  // platform's fee. Letting the party that gets paid also decide that it was paid
+  // is the wrong control, and it is no longer needed — a real transfer is
+  // confirmed by the listener against the wallet SMS, and anything the matcher
+  // cannot confirm goes to a platform admin.
+  //
+  // Teachers keep full visibility of their queue; they just cannot approve it.
 
   @Get('teacher/payments')
   @AcademyStaff('payment.verify')
-  @ApiOperation({ summary: '[academy] Payments to verify for this academy' })
+  @ApiOperation({ summary: '[academy] Payments for this academy (read-only)' })
   teacherQueue(@CurrentAcademy() ctx: AcademyContext, @Query('status') status?: string) {
     return this.payments.teacherQueue(ctx.academyId, status ?? 'PENDING');
   }
-
-  @Post('teacher/payments/:id/verify')
-  @AcademyStaff('payment.verify')
-  @ApiOperation({ summary: '[academy] Confirm a payment → activates enrollment' })
-  teacherVerify(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    // Authorize by the RESOLVED academy (owner or staff with payment.verify).
-    return this.payments.verify({ sub: u.sub, role: Role.TEACHER, tenantId: ctx.academyId }, id);
-  }
-
-  @Post('teacher/payments/:id/reject')
-  @AcademyStaff('payment.verify')
-  @ApiOperation({ summary: '[academy] Reject a payment proof' })
-  teacherReject(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: RejectDto) {
-    return this.payments.reject({ sub: u.sub, role: Role.TEACHER, tenantId: ctx.academyId }, id, dto.reason);
-  }
-
-  // ── Admin oversight ─────────────────────────────────────────────────────────
 
   @Get('admin/payments')
   @ApiBearerAuth()
@@ -110,6 +112,35 @@ export class ManualPaymentsController {
   @ApiOperation({ summary: '[admin] Reject any payment' })
   adminReject(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: RejectDto) {
     return this.payments.reject(u, id, dto.reason);
+  }
+
+  /**
+   * Re-run matching over everything still pending.
+   *
+   * Reconciliation normally happens the moment a payment is submitted, but a
+   * payment made before that existed — or while the matcher had a bug — is stuck
+   * with its transfer sitting unmatched beside it. This replays the same
+   * evidence-based rules over those pairs; it never verifies anything the matcher
+   * would not have verified on its own.
+   */
+  @Post('admin/payments/reconcile')
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Re-match pending payments against unmatched transfers' })
+  async reconcileAll() {
+    const pending = await this.payments.adminQueue('PENDING');
+    const results = [];
+    for (const payment of pending) {
+      const outcome = await this.matching
+        .reconcilePayment(payment.id)
+        .catch(() => ({ status: 'ERROR' as const }));
+      results.push({ paymentId: payment.id, amountCents: payment.amountCents, status: outcome.status });
+    }
+    return {
+      checked: results.length,
+      matched: results.filter((r) => r.status === 'MATCHED').length,
+      results,
+    };
   }
 
   @Post('admin/payments/:id/settle')

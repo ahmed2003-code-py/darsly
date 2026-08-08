@@ -35,6 +35,9 @@ npm run dev:web                   # http://localhost:5173
 Verify the auth/RBAC layer end-to-end at any time:
 
 ```bash
+bash scripts/smoke-academy-ai.sh  # real AI generations: the model composes a
+                                  # design system, and two runs differ (costs
+                                  # a few cents per run — hits the live model)
 bash scripts/smoke-all.sh         # every suite below, in sequence, with the
                                   # pauses the rate limiter needs — one summary
 bash scripts/smoke-auth.sh        # 23 checks: auth, RBAC, session control

@@ -96,12 +96,19 @@ export class SiteGeneratorService {
     }
     const plan = planParsed.data!;
 
-    // ── DNA selection ── With a style brief the AI's chosen direction wins.
-    // Otherwise the vibe rotation deterministically walks a per-vibe list by
-    // generation index, so different vibes look different and regenerating the
-    // SAME vibe rotates to a fresh direction — guaranteed variety.
-    const wantAi = !!stylePrompt?.trim();
-    const dnaKey = wantAi ? this.evolution.normalizeDna(plan.designDNA) : pickVibeDna(vibe, evo.regenCount);
+    // ── DNA selection ──
+    //
+    // The model's direction now wins whether or not a style brief was written.
+    // It used to be honoured only when the teacher typed one, and otherwise the
+    // generator walked a fixed per-vibe rotation — which is why academies kept
+    // coming out looking the same: the model was doing the work and its answer
+    // was being discarded. A style brief steers the design; it is no longer what
+    // switches the design on.
+    //
+    // The rotation stays as the fallback for a plan whose DNA does not resolve,
+    // so a malformed response still lands on a competent direction.
+    const aiDna = this.evolution.normalizeDna(plan.designDNA);
+    const dnaKey = aiDna || pickVibeDna(vibe, evo.regenCount);
     const dna = resolveDna(dnaKey);
 
     // ── RULES ── resolve the DNA into render tokens + validate.
@@ -109,11 +116,11 @@ export class SiteGeneratorService {
     if (verdicts.length) {
       this.logger.debug(`plan verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`);
     }
-    // Colors: a style brief lets the AI propose colors (falling back to the DNA
-    // signature); otherwise the DNA's signature palette drives, so the colors
-    // change from one design to the next.
-    const primary = wantAi ? (HEX.test(plan.theme.primary) && plan.theme.primary) || dna.palette.primary : dna.palette.primary;
-    const accent = wantAi ? (HEX.test(plan.theme.accent) && plan.theme.accent) || dna.palette.accent : dna.palette.accent;
+    // Colours: the model's, when they are valid hex; the DNA's signature palette
+    // otherwise. Same reasoning as the direction above — a brief refines the
+    // choice rather than granting permission to make one.
+    const primary = (HEX.test(plan.theme.primary) && plan.theme.primary) || dna.palette.primary;
+    const accent = (HEX.test(plan.theme.accent) && plan.theme.accent) || dna.palette.accent;
 
     // ── GENERATE (AI stage 2) ── content only, curated for the fixed design.
     const completion = await this.ai.completeStructured<unknown>({
@@ -149,7 +156,7 @@ export class SiteGeneratorService {
     // older document, or a response that failed validation — the Design DNA's
     // preset still supplies the look, so a bad generation degrades to the
     // previous behaviour rather than to a broken page.
-    if (wantAi && plan.design) doc.theme.design = plan.design;
+    if (plan.design) doc.theme.design = plan.design;
     // Site Brain: order sections by archetype, then select each section's variant.
     this.brain.arrange(doc, plan.archetype);
     this.brain.assignVariants(doc, {

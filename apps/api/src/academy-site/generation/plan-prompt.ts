@@ -40,6 +40,7 @@ export function systemPlanPrompt(): string {
     '',
     'Choose deliberately, not randomly: a programming/university teacher usually suits a precise or editorial direction; a school/exam-prep teacher a warm or energetic one; a languages/humanities teacher a refined editorial one. Let the STYLE BRIEF override these defaults.',
     'Vary genuinely between academies. Two teachers of the same subject should still get visibly different pages — different mood, different geometry, different rhythm. A page that is merely competent has failed; it should look designed.',
+    'Do not hedge. Recolouring while leaving radius, density, headingScale and heroTreatment at their safe middle is not a design decision — it is the same page in a different paint. Commit: if the direction is editorial, take headingScale to dramatic and density to airy; if it is technical, take radius to 0–4 and consider a mono body; if it is for children, go to 22–28 and airy. Every one of those four fields should be a deliberate answer to THIS teacher, and across your outputs they should span their whole range, not cluster on the middle value.',
     'Return ONLY the JSON object defined by the schema.',
   ].join('\n');
 }

@@ -30,7 +30,11 @@ export const planningJsonSchema: Record<string, unknown> = {
     design: {
       type: 'object',
       additionalProperties: false,
-      required: ['background', 'ink', 'surface', 'radius', 'density', 'headingScale', 'heroTreatment'],
+      // OpenAI's structured-output mode requires every key in `properties` to be
+      // listed here — an optional field is rejected outright with a 400, not
+      // silently ignored. Optionality lives in the zod schema instead, which is
+      // what actually guards the response.
+      required: ['background', 'ink', 'surface', 'radius', 'density', 'headingScale', 'heroTreatment', 'bodyFont'],
       properties: {
         background: { type: 'string', description: 'Page background, #RRGGBB. Dark or light — your call.' },
         ink: { type: 'string', description: 'Body text colour, #RRGGBB. Must be legible on the background.' },

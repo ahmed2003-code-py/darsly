@@ -307,12 +307,13 @@ export class SiteGeneratorService {
       heading: bilingual('تواصل معنا', 'Contact'),
       socials,
     });
-    blocks.push({
-      type: 'cta',
-      id: randomUUID(),
-      headline: copy.cta.headline,
-      buttonLabel: copy.cta.buttonLabel,
-    });
+    // No closing CTA band. It was a full-bleed slab of brand colour under the
+    // contact section saying the same thing the hero and the nav already say,
+    // and it read as a banner ad bolted to the end of the page. The call to
+    // action now lives where a visitor is actually deciding: the hero, and the
+    // nav button that follows them down the page. The `cta` block type stays in
+    // the schema and the renderer so documents that already contain one — and
+    // anyone who adds one by hand in the editor — still render.
 
     return {
       version: 1,

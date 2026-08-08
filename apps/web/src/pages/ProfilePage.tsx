@@ -9,14 +9,6 @@ import { setLanguage } from '../i18n';
 import { useAuthStore } from '../stores/auth';
 import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../components/ui';
 
-interface DeviceSession {
-  id: string;
-  deviceName: string | null;
-  ip: string | null;
-  createdAt: string;
-  lastSeenAt: string;
-}
-
 /** A titled block, so the page reads as a set of decisions rather than a form. */
 function Section({
   icon,
@@ -75,12 +67,6 @@ export default function ProfilePage() {
     if (data?.fullName) setName(data.fullName);
   }, [data]);
 
-  // Every device currently holding a session for this account.
-  const { data: sessions } = useQuery<DeviceSession[]>({
-    queryKey: ['my-sessions'],
-    queryFn: async () => (await api.get('/auth/sessions')).data,
-  });
-
   const syncUser = (patch: Record<string, unknown>) => {
     if (user) setUser({ ...user, ...patch } as any);
     qc.invalidateQueries({ queryKey: ['my-profile'] });
@@ -106,11 +92,6 @@ export default function ProfilePage() {
   // hashed single-use reset link, so the button triggers exactly that.
   const resetPassword = useMutation({
     mutationFn: async () => (await api.post('/auth/forgot-password', { email: data?.email })).data,
-  });
-
-  const endSession = useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/auth/sessions/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-sessions'] }),
   });
 
   async function logout() {
@@ -241,7 +222,7 @@ export default function ProfilePage() {
         </Section>
 
         <Section icon="lock" title={t('profile.sectionSecurity')}>
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/40 pb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-semibold">{t('profile.password')}</p>
               <p className="text-sm text-on-surface-variant">{t('profile.passwordHint')}</p>
@@ -255,40 +236,7 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          <p className="mb-1 font-semibold">{t('profile.devices')}</p>
-          <p className="mb-3 text-sm text-on-surface-variant">{t('profile.devicesHint')}</p>
-
-          {!sessions?.length ? (
-            <p className="text-sm text-outline">{t('profile.noDevices')}</p>
-          ) : (
-            <ul className="grid gap-2">
-              {sessions.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low px-3 py-2.5"
-                >
-                  <span className="material-symbols-outlined text-outline">devices</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">
-                      {s.deviceName || t('profile.deviceCurrent')}
-                    </span>
-                    <span className="block text-xs text-outline" dir="ltr">
-                      {s.ip ? `${s.ip} · ` : ''}
-                      {t('profile.deviceLastSeen')}: {dateShort(s.lastSeenAt)}
-                    </span>
-                  </span>
-                  <button
-                    className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error transition hover:bg-error-container/40"
-                    disabled={endSession.isPending}
-                    onClick={() => endSession.mutate(s.id)}
-                  >
-                    {t('profile.deviceEnd')}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <ErrorNote error={endSession.error ?? resetPassword.error} />
+          <ErrorNote error={resetPassword.error} />
         </Section>
 
         <Section icon="logout" title={t('profile.sectionSession')}>

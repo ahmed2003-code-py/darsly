@@ -26,15 +26,32 @@ export class TokenService {
     return Number(process.env.MAX_CONCURRENT_SESSIONS_DEFAULT ?? 2);
   }
 
+  /**
+   * The device cap is a content-protection control: it stops one student sharing
+   * an account so three people can watch the same paid video. It was applied to
+   * every role, which meant a teacher signing in on a laptop, a phone and a second
+   * browser silently lost the first session — and an admin could be logged out of
+   * the console by their own other tab.
+   *
+   * Teachers and admins do not consume protected content; they produce and
+   * administer it. Capping them protects nothing and only locks people out of
+   * their own work, so the cap now applies where the risk actually is.
+   */
+  private capApplies(role: Role): boolean {
+    return role === Role.STUDENT;
+  }
+
   async createSession(
     user: { id: string; role: Role; tenantId?: string },
     device: DeviceContext,
   ): Promise<AuthTokens & { kickedSessions: number }> {
     // Enforce the device cap BEFORE creating the new session.
-    const active = await this.prisma.deviceSession.findMany({
-      where: { userId: user.id, revokedAt: null },
-      orderBy: { lastSeenAt: 'asc' },
-    });
+    const active = this.capApplies(user.role)
+      ? await this.prisma.deviceSession.findMany({
+          where: { userId: user.id, revokedAt: null },
+          orderBy: { lastSeenAt: 'asc' },
+        })
+      : [];
     const overflow = active.length - this.maxSessions + 1;
     let kicked = 0;
     if (overflow > 0) {

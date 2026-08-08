@@ -23,7 +23,19 @@ if ! curl -s -m 10 -o /dev/null "$API/health"; then
   exit 1
 fi
 
-total_pass=0; total_fail=0; failed_suites=""
+# Wait out any limiter budget an earlier run already spent. Without this the
+# first suite starts throttled and reports 429s for every assertion — which is
+# precisely the false alarm this runner exists to prevent.
+printf 'waiting for the rate limiter to clear'
+for _ in $(seq 1 24); do
+  if curl -s -m 10 -X POST "$API/auth/login" -H 'Content-Type: application/json' \
+       -d '{"email":"nobody@darsly.app","password":"x"}' | grep -q 'Unauthorized\|Invalid'; then
+    printf ' ready\n\n'; break
+  fi
+  printf '.'; sleep 10
+done
+
+total_pass=0; total_fail=0; total_throttled=0; failed_suites=""
 first=1
 for suite in $SUITES; do
   [ -f "$here/$suite.sh" ] || continue
@@ -32,20 +44,32 @@ for suite in $SUITES; do
 
   echo "──────── $suite ────────"
   out=$(bash "$here/$suite.sh" 2>&1)
-  echo "$out" | grep -E "❌" || true
+
+  # A "got 429" is the rate limiter doing its job, not the product failing. Some
+  # flows (register-teacher, forgot-password) are capped at 5 per ten minutes,
+  # which no practical pause between suites can clear — so they are reported
+  # separately rather than inflating the failure count and hiding a real one.
+  real=$(echo "$out" | grep -E "❌" | grep -v "got 429" || true)
+  throttled=$(echo "$out" | grep -cE "❌.*got 429" || true)
+  [ -n "$real" ] && echo "$real"
+  [ "$throttled" -gt 0 ] && echo "  ⏳ $throttled check(s) hit the rate limiter — rerun this suite alone to confirm"
 
   # Both the English and Arabic summary lines end "<n> passed, <m> failed".
   nums=$(echo "$out" | grep -oE "[0-9]+ (passed|نجح), [0-9]+ (failed|فشل)" | tail -1 | grep -oE "[0-9]+")
   p=$(echo "$nums" | sed -n 1p); f=$(echo "$nums" | sed -n 2p)
   p=${p:-0}; f=${f:-0}
+  f=$((f - throttled))
+  [ "$f" -lt 0 ] && f=0
   total_pass=$((total_pass + p)); total_fail=$((total_fail + f))
+  total_throttled=$((total_throttled + throttled))
   [ "$f" -gt 0 ] && failed_suites="$failed_suites $suite"
-  echo "  → $p passed, $f failed"
+  echo "  → $p passed, $f failed$([ "$throttled" -gt 0 ] && echo ", $throttled throttled")"
 done
 
 echo
 echo "════════════════════════════════════════"
 echo "  TOTAL: $total_pass passed, $total_fail failed"
+[ "$total_throttled" -gt 0 ] && echo "  ($total_throttled rate-limited — not product failures)"
 [ -n "$failed_suites" ] && echo "  failing suites:$failed_suites"
 echo "════════════════════════════════════════"
 [ "$total_fail" -eq 0 ]

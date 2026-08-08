@@ -263,7 +263,21 @@
         "price": "السعر (ج.م)",
         "requiresApproval": "يتطلب الاشتراك موافقتي",
         "save": "حفظ",
-        "create": "إنشاء الدورة"
+        "create": "إنشاء الدورة",
+        "sectionBasics": "الأساسيات",
+        "sectionClassify": "التصنيف",
+        "sectionPricing": "السعر",
+        "sectionAccess": "الالتحاق",
+        "titleHint": "الاسم اللي الطالب هيشوفه في المعرض",
+        "titleCount": "{{n}}/80",
+        "descriptionHint": "سطرين يوضّحوا الكورس بيغطّي إيه ولمين",
+        "classifyHint": "بيساعد الطلبة يلاقوا الكورس في البحث والتصفية",
+        "priceHint": "اكتب 0 لو الكورس مجاني",
+        "priceMonthlyHint": "المبلغ ده هيتحصّل كل شهر",
+        "priceFree": "مجاني",
+        "perMonthSuffix": "/شهرياً",
+        "requiresApprovalHint": "الالتحاق مايتفعّلش غير بعد تأكيد التحويل. سيبها مفعّلة للكورسات المدفوعة.",
+        "cancel": "إلغاء"
       },
       "status": {
         "DRAFT": "مسودة",

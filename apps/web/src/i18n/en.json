@@ -263,7 +263,21 @@
         "price": "Price (EGP)",
         "requiresApproval": "Enrollment requires my approval",
         "save": "Save",
-        "create": "Create course"
+        "create": "Create course",
+        "sectionBasics": "Basics",
+        "sectionClassify": "Classification",
+        "sectionPricing": "Pricing",
+        "sectionAccess": "Enrollment",
+        "titleHint": "The name students see in the catalogue",
+        "titleCount": "{{n}}/80",
+        "descriptionHint": "A line or two on what the course covers, and who it is for",
+        "classifyHint": "Helps students find this course when searching and filtering",
+        "priceHint": "Enter 0 to make the course free",
+        "priceMonthlyHint": "Charged every month",
+        "priceFree": "Free",
+        "perMonthSuffix": "/month",
+        "requiresApprovalHint": "Enrollment activates only once the transfer is confirmed. Keep this on for paid courses.",
+        "cancel": "Cancel"
       },
       "status": {
         "DRAFT": "Draft",

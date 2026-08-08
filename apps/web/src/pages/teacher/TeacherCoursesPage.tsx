@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
@@ -35,6 +35,13 @@ const STATUS_TONE: Record<string, 'teal' | 'warn' | 'neutral'> = {
   DRAFT: 'warn',
   ARCHIVED: 'neutral',
 };
+
+/** Small caps heading that separates one group of decisions from the next. */
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h4 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-primary">{children}</h4>
+  );
+}
 
 export default function TeacherCoursesPage() {
   const { t, i18n } = useTranslation();
@@ -340,61 +347,164 @@ export default function TeacherCoursesPage() {
         open={!!form}
         title={form?.id ? t('teacher.courses.editTitle') : t('teacher.courses.createTitle')}
         onClose={() => setForm(null)}
+        wide
       >
         {form && (
-          <form onSubmit={submit}>
-            <Field label={t('teacher.courses.form.title')}>
-              <input className="input" required minLength={3} value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            </Field>
-            <Field label={t('teacher.courses.form.description')}>
-              <textarea className="input min-h-24" value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </Field>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label={t('teacher.courses.form.subject')}>
-                <select className="input py-2" value={form.subjectId}
-                  onChange={(e) => setForm({ ...form, subjectId: e.target.value })}>
-                  <option value="">{t('teacher.courses.form.none')}</option>
-                  {(subjects ?? []).map((s: any) => (
-                    <option key={s.id} value={s.id}>{ar ? s.nameAr : s.nameEn}</option>
-                  ))}
-                </select>
+          <form onSubmit={submit} className="grid gap-6">
+            {/* Grouped into what a teacher decides together, rather than one long
+                column of equal-weight inputs. */}
+            <section>
+              <SectionLabel>{t('teacher.courses.form.sectionBasics')}</SectionLabel>
+              <Field
+                label={t('teacher.courses.form.title')}
+                hint={t('teacher.courses.form.titleHint')}
+              >
+                <div className="relative">
+                  <input
+                    className="input pe-16"
+                    required
+                    minLength={3}
+                    maxLength={80}
+                    autoFocus
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 end-3 my-auto h-fit font-mono text-xs text-outline">
+                    {t('teacher.courses.form.titleCount', { n: form.title.length })}
+                  </span>
+                </div>
               </Field>
-              <Field label={t('teacher.courses.form.grade')}>
-                <select className="input py-2" value={form.gradeId}
-                  onChange={(e) => setForm({ ...form, gradeId: e.target.value })}>
-                  <option value="">{t('teacher.courses.form.none')}</option>
-                  {(grades ?? []).map((g: any) => (
-                    <option key={g.id} value={g.id}>{ar ? g.nameAr : g.nameEn}</option>
-                  ))}
-                </select>
+              <Field
+                label={t('teacher.courses.form.description')}
+                hint={t('teacher.courses.form.descriptionHint')}
+              >
+                <textarea
+                  className="input min-h-24"
+                  maxLength={600}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
               </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label={t('teacher.courses.form.pricingModel')}>
-                <select className="input py-2" value={form.pricingModel}
-                  onChange={(e) => setForm({ ...form, pricingModel: e.target.value })}>
-                  <option value="ONE_TIME">{t('teacher.courses.form.oneTime')}</option>
-                  <option value="MONTHLY_SUBSCRIPTION">{t('teacher.courses.form.monthly')}</option>
-                  <option value="BUNDLE">{t('teacher.courses.form.bundle')}</option>
-                </select>
-              </Field>
-              <Field label={t('teacher.courses.form.price')}>
-                <input className="input" inputMode="decimal" value={form.priceEgp}
-                  onChange={(e) => setForm({ ...form, priceEgp: e.target.value.replace(/[^\d.]/g, '') })} />
-              </Field>
-            </div>
-            <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm">
-              <input type="checkbox" className="h-4 w-4 accent-primary"
-                checked={form.requiresEnrollmentApproval}
-                onChange={(e) => setForm({ ...form, requiresEnrollmentApproval: e.target.checked })} />
-              {t('teacher.courses.form.requiresApproval')}
-            </label>
-            <button className="btn-primary w-full" disabled={save.isPending}>
-              {form.id ? t('teacher.courses.form.save') : t('teacher.courses.form.create')}
-            </button>
+            </section>
+
+            <section>
+              <SectionLabel>{t('teacher.courses.form.sectionClassify')}</SectionLabel>
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                <Field label={t('teacher.courses.form.subject')}>
+                  <select
+                    className="input py-2"
+                    value={form.subjectId}
+                    onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+                  >
+                    <option value="">{t('teacher.courses.form.none')}</option>
+                    {(subjects ?? []).map((s: any) => (
+                      <option key={s.id} value={s.id}>{ar ? s.nameAr : s.nameEn}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={t('teacher.courses.form.grade')}>
+                  <select
+                    className="input py-2"
+                    value={form.gradeId}
+                    onChange={(e) => setForm({ ...form, gradeId: e.target.value })}
+                  >
+                    <option value="">{t('teacher.courses.form.none')}</option>
+                    {(grades ?? []).map((g: any) => (
+                      <option key={g.id} value={g.id}>{ar ? g.nameAr : g.nameEn}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <p className="-mt-2 text-xs text-outline">{t('teacher.courses.form.classifyHint')}</p>
+            </section>
+
+            <section>
+              <SectionLabel>{t('teacher.courses.form.sectionPricing')}</SectionLabel>
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                <Field label={t('teacher.courses.form.pricingModel')}>
+                  <select
+                    className="input py-2"
+                    value={form.pricingModel}
+                    onChange={(e) => setForm({ ...form, pricingModel: e.target.value })}
+                  >
+                    <option value="ONE_TIME">{t('teacher.courses.form.oneTime')}</option>
+                    <option value="MONTHLY_SUBSCRIPTION">{t('teacher.courses.form.monthly')}</option>
+                    <option value="BUNDLE">{t('teacher.courses.form.bundle')}</option>
+                  </select>
+                </Field>
+                <Field
+                  label={t('teacher.courses.form.price')}
+                  hint={
+                    form.pricingModel === 'MONTHLY_SUBSCRIPTION'
+                      ? t('teacher.courses.form.priceMonthlyHint')
+                      : t('teacher.courses.form.priceHint')
+                  }
+                >
+                  <div className="relative">
+                    <input
+                      className="input pe-24 font-heading text-lg font-bold"
+                      inputMode="decimal"
+                      placeholder="0"
+                      value={form.priceEgp}
+                      onChange={(e) =>
+                        setForm({ ...form, priceEgp: e.target.value.replace(/[^\d.]/g, '') })
+                      }
+                    />
+                    <span className="pointer-events-none absolute inset-y-0 end-3 my-auto h-fit text-sm font-semibold text-outline">
+                      {Number(form.priceEgp || 0) === 0
+                        ? t('teacher.courses.form.priceFree')
+                        : `${t('common.currencyShort')}${
+                            form.pricingModel === 'MONTHLY_SUBSCRIPTION'
+                              ? t('teacher.courses.form.perMonthSuffix')
+                              : ''
+                          }`}
+                    </span>
+                  </div>
+                </Field>
+              </div>
+            </section>
+
+            <section>
+              <SectionLabel>{t('teacher.courses.form.sectionAccess')}</SectionLabel>
+              {/* A whole tappable card rather than a bare checkbox: this is the
+                  switch that decides whether money must clear before a student
+                  gets in, so it deserves an explanation next to it. */}
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
+                  form.requiresEnrollmentApproval
+                    ? 'border-primary/40 bg-primary-fixed/40'
+                    : 'border-outline-variant bg-surface-container-low hover:border-outline'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-primary"
+                  checked={form.requiresEnrollmentApproval}
+                  onChange={(e) =>
+                    setForm({ ...form, requiresEnrollmentApproval: e.target.checked })
+                  }
+                />
+                <span>
+                  <span className="block text-sm font-semibold">
+                    {t('teacher.courses.form.requiresApproval')}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-on-surface-variant">
+                    {t('teacher.courses.form.requiresApprovalHint')}
+                  </span>
+                </span>
+              </label>
+            </section>
+
             <ErrorNote error={save.error} />
+
+            <div className="flex gap-3 border-t border-outline-variant pt-4">
+              <button type="button" className="btn-ghost flex-1" onClick={() => setForm(null)}>
+                {t('teacher.courses.form.cancel')}
+              </button>
+              <button className="btn-primary flex-[2]" disabled={save.isPending || !form.title.trim()}>
+                {form.id ? t('teacher.courses.form.save') : t('teacher.courses.form.create')}
+              </button>
+            </div>
           </form>
         )}
       </Modal>

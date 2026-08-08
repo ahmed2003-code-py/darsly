@@ -109,9 +109,10 @@ export class EnrollmentsService {
   }
 
   /**
-   * Enrol in a course. Free courses activate immediately. Paid courses go
-   * through the manual proof-of-payment flow (POST /payments): this endpoint
-   * returns PAYMENT_REQUIRED with the quote so the client opens the pay screen.
+   * Enrol in a course. A free course activates immediately unless its teacher
+   * asked for approval, in which case it waits. Paid courses go through the
+   * manual proof-of-payment flow (POST /payments): this endpoint returns
+   * PAYMENT_REQUIRED with the quote so the client opens the pay screen.
    */
   async enroll(userId: string, courseId: string, couponCode?: string) {
     const student = await this.studentProfileOf(userId);
@@ -127,6 +128,13 @@ export class EnrollmentsService {
     if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
       throw new ConflictException('Already enrolled in this course');
     }
+    // A request already waiting on the teacher is also a conflict. Without this a
+    // student could re-submit indefinitely, each attempt silently overwriting the
+    // pending row — so the teacher's queue kept moving and the student had no
+    // signal that their first request had gone through.
+    if (existing?.status === 'PENDING_APPROVAL') {
+      throw new ConflictException('An enrollment request for this course is already pending');
+    }
 
     const quote = await this.quote(courseId, couponCode);
 
@@ -135,18 +143,41 @@ export class EnrollmentsService {
       throw new BadRequestException({ message: 'Payment required', code: 'PAYMENT_REQUIRED', quote });
     }
 
-    // Free course → activate right away.
-    const data = {
-      status: 'ACTIVE' as const,
-      approvedAt: new Date(),
-      expiresAt: this.expiryFor(course),
-      revokedReason: null,
-    };
+    // Free course. Approval still applies if the teacher asked for it: the flag
+    // is named requiresEnrollmentApproval, and a teacher running a private or
+    // invite-only cohort ticks it for exactly this case. Ignoring it because
+    // nothing was paid silently overrode a setting they had chosen.
+    const needsApproval = course.requiresEnrollmentApproval;
+    const data = needsApproval
+      ? {
+          status: 'PENDING_APPROVAL' as const,
+          approvedAt: null,
+          expiresAt: null,
+          revokedReason: null,
+        }
+      : {
+          status: 'ACTIVE' as const,
+          approvedAt: new Date(),
+          expiresAt: this.expiryFor(course),
+          revokedReason: null,
+        };
     const enrollment = existing
       ? await this.prisma.enrollment.update({ where: { id: existing.id }, data })
       : await this.prisma.enrollment.create({
           data: { studentId: student.id, courseId, tenantId: course.tenantId, ...data },
         });
+
+    if (needsApproval) {
+      // Nothing is unlocked yet — tell the student it is waiting, not granted.
+      await this.notifications.create({
+        userId,
+        type: 'ANNOUNCEMENT',
+        title: 'طلبك قيد المراجعة',
+        body: `تم إرسال طلب الالتحاق بـ«${course.title}» للمراجعة.`,
+        meta: { courseId },
+      });
+      return { ...enrollment, quote };
+    }
 
     await this.activateBundleChildren(course, enrollment);
     await this.notifications.create({

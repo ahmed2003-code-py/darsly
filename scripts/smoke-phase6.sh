@@ -16,18 +16,30 @@ echo "── 1. Logins"
 KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"teacher1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 check "teacher login" "yes" "$([ -n "$KH" ] && [ "$KH" != ERR ] && echo yes || echo no)"
 
-# Find Khaled's algebra course + a student with an ACTIVE enrollment in it.
-COURSE=$(curl -s $API/teacher/courses -H "Authorization: Bearer $KH" | python3 -c 'import sys,json;print([x for x in json.load(sys.stdin) if "الجبر" in x["title"]][0]["id"])')
-check "found algebra course" "yes" "$([ -n "$COURSE" ] && [ "$COURSE" != ERR ] && echo yes || echo no)"
+# Find any published course of this teacher that a seeded student is actively
+# enrolled in. This used to search for a course titled "الجبر" — a name from a
+# dataset that no longer exists, so the lookup returned nothing and all fifteen
+# assertions below failed against an empty course id rather than on their own
+# merits. Pairing by enrolment works whatever the courses are called.
+COURSES=$(curl -s $API/teacher/courses -H "Authorization: Bearer $KH" | python3 -c '
+import sys, json
+print(" ".join(c["id"] for c in json.load(sys.stdin) if c.get("status") == "PUBLISHED"))')
 
-ST=""
+COURSE=""; ST=""
 for em in student1@darsly.app student2@darsly.app student3@darsly.app student4@darsly.app student5@darsly.app; do
   TOK=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$em\",\"password\":\"Darsly@123\"}" | jget "['accessToken']")
-  [ -z "$TOK" ] || [ "$TOK" = ERR ] && continue
-  HAS=$(curl -s $API/enrollments/mine -H "Authorization: Bearer $TOK" | python3 -c "import sys,json;d=json.load(sys.stdin);print('yes' if any(e['course']['id']=='$COURSE' and e['status']=='ACTIVE' for e in d) else 'no')" 2>/dev/null)
-  if [ "$HAS" = yes ]; then ST=$TOK; break; fi
+  { [ -z "$TOK" ] || [ "$TOK" = ERR ]; } && continue
+  MATCH=$(curl -s $API/enrollments/mine -H "Authorization: Bearer $TOK" | COURSES="$COURSES" python3 -c "
+import sys, json, os
+wanted = set(os.environ['COURSES'].split())
+for e in json.load(sys.stdin):
+    cid = (e.get('course') or {}).get('id')
+    if cid in wanted and e.get('status') == 'ACTIVE':
+        print(cid); break
+" 2>/dev/null)
+  if [ -n "$MATCH" ]; then COURSE=$MATCH; ST=$TOK; break; fi
 done
-check "found active student for the course" "yes" "$([ -n "$ST" ] && echo yes || echo no)"
+check "found a published course with an active student" "yes" "$([ -n "$COURSE" ] && [ -n "$ST" ] && echo yes || echo no)"
 
 echo "── 2. Author a quiz lesson"
 UNIT=$(curl -s -X POST $API/teacher/courses/$COURSE/units -H "Authorization: Bearer $KH" -H 'Content-Type: application/json' -d '{"title":"Phase6 Smoke"}' | jget "['id']")

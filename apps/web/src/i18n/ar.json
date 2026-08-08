@@ -329,7 +329,29 @@
       "colAmount": "المبلغ",
       "colStatus": "الحالة",
       "colActions": "إجراءات",
-      "awaitingTransfer": "في انتظار تأكيد التحويل"
+      "awaitingTransfer": "في انتظار تأكيد التحويل",
+      "search": "ابحث باسم الطالب أو رقمه…",
+      "noMatch": "لا يوجد طالب مطابق لبحثك",
+      "students": "طالب",
+      "courseCount": "{{count}} كورس",
+      "totalPaid": "إجمالي المدفوع",
+      "expand": "عرض الكورسات",
+      "collapse": "إخفاء الكورسات",
+      "activeCount": "{{count}} نشط",
+      "pendingCount": "{{count}} في الانتظار",
+      "sortRecent": "الأحدث",
+      "sortName": "الاسم",
+      "sortSpend": "الأكثر دفعًا",
+      "sortBy": "ترتيب",
+      "lastEnrolled": "آخر التحاق",
+      "noPhone": "لا يوجد رقم",
+      "status": {
+        "ACTIVE": "نشط",
+        "PENDING_APPROVAL": "في الانتظار",
+        "REJECTED": "مرفوض",
+        "REVOKED": "ملغى",
+        "EXPIRED": "منتهي"
+      }
     },
     "coupons": {
       "title": "كوبونات الخصم",

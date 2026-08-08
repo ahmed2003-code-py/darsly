@@ -329,7 +329,29 @@
       "colAmount": "Amount",
       "colStatus": "Status",
       "colActions": "Actions",
-      "awaitingTransfer": "Awaiting transfer confirmation"
+      "awaitingTransfer": "Awaiting transfer confirmation",
+      "search": "Search by student name or phone…",
+      "noMatch": "No student matches your search",
+      "students": "students",
+      "courseCount": "{{count}} courses",
+      "totalPaid": "Total paid",
+      "expand": "Show courses",
+      "collapse": "Hide courses",
+      "activeCount": "{{count}} active",
+      "pendingCount": "{{count}} pending",
+      "sortRecent": "Most recent",
+      "sortName": "Name",
+      "sortSpend": "Highest spend",
+      "sortBy": "Sort",
+      "lastEnrolled": "Last enrolled",
+      "noPhone": "No phone",
+      "status": {
+        "ACTIVE": "Active",
+        "PENDING_APPROVAL": "Pending",
+        "REJECTED": "Rejected",
+        "REVOKED": "Revoked",
+        "EXPIRED": "Expired"
+      }
     },
     "coupons": {
       "title": "Discount coupons",

@@ -125,6 +125,23 @@ print(json.dumps({'sender':'VF-Cash','message':os.environ['BODY'],
                   'receivedAt':os.environ['ISO'],'messageHash':os.environ['HASH']}, ensure_ascii=False))")")
 check "re-POST reported as duplicate" "True" "$(echo "$EV2" | jget "['duplicate']")"
 
+echo "── 6. تحويل تاني بنفس المبلغ من نفس الرقم لازم يتحسب (مش يتبلع كتكرار)"
+# The identity in a wallet SMS is the SENDER'S NUMBER, which repeats. Only the
+# SMS itself is unique — so a second, genuinely different transfer of the same
+# amount from the same person must still be processed.
+LATER=$((NOW + 60))
+ISO2=$(date -u -d "@$LATER" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$LATER" +%Y-%m-%dT%H:%M:%SZ)
+HASH2=$(printf 'vf-cash %s %s' "$BODY" "$LATER" | sha256sum | cut -d' ' -f1)
+EV3=$(post $API/device/sms-events -H "Authorization: Bearer $TOK" \
+  -d "$(BODY="$BODY" ISO="$ISO2" HASH="$HASH2" python3 -c "
+import json, os
+print(json.dumps({'sender':'VF-Cash','message':os.environ['BODY'],
+                  'receivedAt':os.environ['ISO'],'messageHash':os.environ['HASH']}, ensure_ascii=False))")")
+S3=$(echo "$EV3" | jget "['status']")
+check "second transfer is not swallowed as a duplicate" "yes" \
+  "$([ "$S3" != 'DUPLICATE' ] && [ "$S3" != ERR ] && echo yes || echo "no ($S3)")"
+echo "     حالة التحويل التاني: $S3"
+
 echo
 echo "── النتيجة: $pass نجح، $fail فشل"
 [ "$fail" -eq 0 ]

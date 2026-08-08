@@ -122,6 +122,28 @@ describe('parseReference', () => {
   });
 });
 
+describe('parseReference — real wallet SMS carry no transaction id', () => {
+  // Vodafone Cash never sends a transaction reference; the sending wallet's
+  // mobile number is the only identity in the message, and it is what the
+  // student types at checkout.
+  it('takes the sending mobile number as the transfer identity', () => {
+    expect(parseReference('تم استلام مبلغ 5 جنيه من رقم 01029166461 المسجل بإسم احمد')).toBe('01029166461');
+    expect(parseReference('تم استلام مبلغ 5.00 جنيه من 01002589923؛ رصيدك الحالي 300.00 جنيه')).toBe('01002589923');
+  });
+
+  it('is not fooled by a balance or a date printed before the number', () => {
+    expect(parseReference('رصيدك 250000 جنيه. تم استلام مبلغ 450 جنيه من 01112223344')).toBe('01112223344');
+  });
+
+  it('still prefers an explicitly labelled reference when the bank sends one', () => {
+    expect(parseReference('تم تحويل 5.00 جم، رقم العملية TXN-884213، من 01029166461')).toBe('TXN-884213');
+  });
+
+  it('returns null when the message carries no identity at all', () => {
+    expect(parseReference('تم استلام مبلغ 5 جنيه على محفظتك')).toBeNull();
+  });
+});
+
 describe('messageHash', () => {
   it('is deterministic for the same normalized inputs', () => {
     const t = new Date('2026-08-08T06:12:34.000Z');

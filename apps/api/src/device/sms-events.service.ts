@@ -120,6 +120,10 @@ export class SmsEventsService {
     rawMessage: string,
     duplicate = false,
   ): Promise<SmsEventResult> {
+    const record = await this.prisma.deviceSmsEvent.findUnique({
+      where: { id: recordId },
+      select: { messageHash: true },
+    });
     const matched = await this.matching.ingest({
       provider: classification.provider as any,
       amountCents,
@@ -127,6 +131,10 @@ export class SmsEventsService {
       occurredAt: receivedAt.toISOString(),
       rawMessage,
       deviceId,
+      // One SMS = one transfer event. Without this the dedupe identity would be
+      // provider+sender+amount, and a student's second transfer of the same
+      // amount would be swallowed as a duplicate and never credited.
+      externalId: record?.messageHash,
     });
     await this.prisma.deviceSmsEvent.update({
       where: { id: recordId },

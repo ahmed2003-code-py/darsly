@@ -10,6 +10,18 @@ export interface PaymentEventDto {
   occurredAt?: string;
   rawMessage?: string;
   deviceId?: string;
+  /**
+   * A globally unique id for the *transfer event itself* — the SMS message hash
+   * from the listener device.
+   *
+   * Needed because a wallet SMS carries no transaction id: the identity we match
+   * on is the sender's mobile number, which is NOT unique per transfer. Keying
+   * idempotency on provider+reference+amount would then treat a student's second
+   * transfer of the same amount (a monthly subscription, or a second course at
+   * the same price) as a duplicate and silently never credit it. When this is
+   * supplied it becomes the dedupe identity instead.
+   */
+  externalId?: string;
 }
 
 // How far back a pending payment may have been created relative to the transfer.
@@ -44,9 +56,20 @@ export class PaymentMatchingService {
     const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
     const ref = normRef(dto.reference);
 
-    // A stable transfer identity requires a reference. provider+ref+amount is
-    // globally unique per real transfer, and is enforced by the DB unique index.
-    const dedupeKey = ref ? `${dto.provider}:${ref}:${dto.amountCents}` : null;
+    // Idempotency identity, enforced by a DB unique index.
+    //
+    // Preferred: the caller's own unique event id (the listener's SMS hash) — one
+    // real SMS, one event, no matter how often it is retried, and repeat
+    // transfers of the same amount by the same sender stay distinct.
+    //
+    // Legacy fallback (the X-Listener-Key path, which has no event id): a real
+    // transaction reference makes provider+ref+amount unique per transfer.
+    const externalId = (dto.externalId ?? '').trim();
+    const dedupeKey = externalId
+      ? `${dto.provider}:evt:${externalId}`
+      : ref
+        ? `${dto.provider}:${ref}:${dto.amountCents}`
+        : null;
 
     // Hard idempotency: a re-delivered notification collides on dedupeKey and is
     // reported as an already-processed duplicate — it can never match a second,
@@ -58,12 +81,13 @@ export class PaymentMatchingService {
       }
     }
 
-    // No reference ⇒ no stable identity ⇒ NEVER auto-verify. A reference-less
-    // replay must not activate another student's same-amount enrollment. Record
-    // it for manual review only.
-    if (!dedupeKey) {
-      const r = await this.record(dto, occurredAt, null, 'UNMATCHED', null,
-        'no reference — auto-verify disabled without a stable transfer id; needs manual review');
+    // No sender identity ⇒ NEVER auto-verify, even when the event itself is
+    // uniquely identified. Amount + time window alone cannot tell two students'
+    // identical transfers apart, and crediting the wrong enrollment is worse than
+    // asking a human. Recorded (with whatever dedupe identity we have) for review.
+    if (!ref) {
+      const r = await this.record(dto, occurredAt, dedupeKey, 'UNMATCHED', null,
+        'no sender reference — auto-verify disabled without a transfer identity; needs manual review');
       return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
     }
 

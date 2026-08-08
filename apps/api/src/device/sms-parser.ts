@@ -116,10 +116,23 @@ export function parseAmountCents(body: string): number | null {
  */
 export function parseReference(body: string): string | null {
   if (!body) return null;
+
+  // 1. An explicitly labelled transaction id, when the sender bothers to send one
+  //    (banks usually do).
   const labelled = body.match(
     /(?:رقم\s*العملية|رقم\s*مرجعي|الرقم\s*المرجعي|reference|ref(?:erence)?\.?|txn|transaction|trx)\s*[:#.\-]?\s*([A-Za-z0-9\-]{4,})/i,
   );
   if (labelled?.[1]) return labelled[1];
+
+  // 2. The sending wallet's mobile number. Wallet SMS ("تم استلام مبلغ 5 جنيه من
+  //    رقم 01029166461") carry no transaction id at all — the sender's number IS
+  //    the transfer's identity, and it is what the student types at checkout.
+  //    Preferred over the generic digit run below so a balance or a date printed
+  //    earlier in the message cannot be mistaken for the identity.
+  const mobile = body.match(/(?:^|[^\d])((?:\+?20|0)?1[0125]\d{8})(?![\d])/);
+  if (mobile?.[1]) return mobile[1];
+
+  // 3. Last resort: any long digit run.
   const digits = body.match(/\b(\d{6,})\b/);
   return digits?.[1] ?? null;
 }

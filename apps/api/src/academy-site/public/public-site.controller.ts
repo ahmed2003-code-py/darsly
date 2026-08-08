@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
@@ -35,18 +35,29 @@ export class PublicSiteController {
   }
 
   @Get('a/:slug/site-status')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Public: whether the academy has a live AI site' })
   async siteStatus(@Param('slug') slug: string) {
     return { published: await this.site.isPublished(slug) };
   }
 
+  /**
+   * These two exist so a cached page never shows a stale list — the HTML is baked
+   * at publish time and fills these in at view time. That only works if the
+   * responses themselves are not cached, and they carried no Cache-Control at
+   * all, so browsers were free to reuse them by heuristic. A teacher publishing a
+   * course would look at their own site and not find it, with nothing to do but
+   * wait for a cache they cannot see to expire.
+   */
   @Get('a/:slug/courses')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Public: published courses for the academy (hydration)' })
   courses(@Param('slug') slug: string, @Query('limit') limit?: string) {
     return this.site.courses(slug, clampLimit(limit));
   }
 
   @Get('a/:slug/reviews')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Public: recent reviews for the academy (hydration)' })
   reviews(@Param('slug') slug: string, @Query('limit') limit?: string) {
     return this.site.reviews(slug, clampLimit(limit));

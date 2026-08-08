@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
 import { Badge, EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
 
-const TABS = ['PENDING_APPROVAL', 'ACTIVE', 'ALL'] as const;
+const TABS = ['ALL', 'PENDING_APPROVAL', 'ACTIVE'] as const;
 const SORTS = ['recent', 'name', 'spend'] as const;
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
@@ -97,11 +97,20 @@ export default function TeacherEnrollmentsPage() {
   const [sort, setSort] = useState<(typeof SORTS)[number]>('recent');
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
+  // One request for everything, filtered locally. Querying per tab meant the
+  // pending count was unknowable from any other tab — so the badge that tells a
+  // teacher someone is waiting could never be shown where it matters.
   const { data, isLoading, error } = useQuery<Enrollment[]>({
-    queryKey: ['teacher-enrollments', tab],
-    queryFn: async () =>
-      (await api.get('/teacher/enrollments', { params: tab === 'ALL' ? {} : { status: tab } })).data,
+    queryKey: ['teacher-enrollments'],
+    queryFn: async () => (await api.get('/teacher/enrollments')).data,
   });
+
+  const all = data ?? [];
+  const counts = {
+    ALL: all.length,
+    PENDING_APPROVAL: all.filter((e) => e.status === 'PENDING_APPROVAL').length,
+    ACTIVE: all.filter((e) => e.status === 'ACTIVE').length,
+  };
 
   const act = useMutation({
     mutationFn: async ({ id }: { id: string }) =>
@@ -110,21 +119,22 @@ export default function TeacherEnrollmentsPage() {
   });
 
   const groups = useMemo(() => {
-    const all = groupByStudent(data ?? []);
+    const visible = tab === 'ALL' ? all : all.filter((e) => e.status === tab);
+    const grouped = groupByStudent(visible);
     // Match on name or phone: a teacher looking someone up has one or the other.
     const q = search.trim().toLowerCase();
     const filtered = q
-      ? all.filter(
+      ? grouped.filter(
           (g) =>
             g.name.toLowerCase().includes(q) || (g.phone ?? '').replace(/\s/g, '').includes(q),
         )
-      : all;
+      : grouped;
     const sorted = [...filtered];
     if (sort === 'name') sorted.sort((a, b) => a.name.localeCompare(b.name));
     else if (sort === 'spend') sorted.sort((a, b) => b.paidCents - a.paidCents);
     else sorted.sort((a, b) => b.lastEnrolledAt - a.lastEnrolledAt);
     return sorted;
-  }, [data, search, sort]);
+  }, [all, tab, search, sort]);
 
   const totalPaid = groups.reduce((sum, g) => sum + g.paidCents, 0);
 
@@ -132,52 +142,85 @@ export default function TeacherEnrollmentsPage() {
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       <PageHeader title={t('teacher.students.title')} subtitle={t('teacher.students.subtitle')} />
 
-      {/* Status filter, search and sort on one line — a teacher scanning for one
-          person should not have to scroll to find the box. */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className="flex gap-2">
-          {TABS.map((value) => (
-            <button
-              key={value}
-              onClick={() => setTab(value)}
-              className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                tab === value
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
-              }`}
+      {/* One toolbar: filters on top, search and sort beneath. The pending tab
+          carries a live count so a teacher never has to go looking for it. */}
+      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container-low p-3 sm:p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {TABS.map((value) => {
+            const selected = tab === value;
+            const count = counts[value];
+            const waiting = value === 'PENDING_APPROVAL' && count > 0;
+            return (
+              <button
+                key={value}
+                onClick={() => setTab(value)}
+                aria-pressed={selected}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition ${
+                  selected
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : waiting
+                      ? 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20 hover:bg-amber-100'
+                      : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                }`}
+              >
+                {t(`teacher.students.tabs.${value}`)}
+                {count > 0 && (
+                  <span
+                    className={`grid min-w-5 place-items-center rounded-full px-1.5 text-xs font-extrabold leading-5 ${
+                      selected
+                        ? 'bg-on-primary/20 text-on-primary'
+                        : waiting
+                          ? 'bg-error text-on-error'
+                          : 'bg-surface-container-highest text-on-surface-variant'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant/60 pt-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline">
+              search
+            </span>
+            <input
+              className="input w-full ps-11 pe-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('teacher.students.search')}
+              aria-label={t('teacher.students.search')}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                aria-label={t('teacher.students.clearSearch')}
+                className="absolute inset-y-0 end-2 my-auto grid h-7 w-7 place-items-center rounded-full text-outline transition hover:bg-surface-container-highest hover:text-on-surface"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            )}
+          </div>
+
+          <label className="flex shrink-0 items-center gap-2 text-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-base">sort</span>
+            <span className="sr-only sm:not-sr-only">{t('teacher.students.sortBy')}</span>
+            <select
+              className="input py-2"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as (typeof SORTS)[number])}
             >
-              {t(`teacher.students.tabs.${value}`)}
-            </button>
-          ))}
+              {SORTS.map((value) => (
+                <option key={value} value={value}>
+                  {t(`teacher.students.sort${value[0].toUpperCase()}${value.slice(1)}`)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-
-        <div className="relative min-w-[16rem] flex-1">
-          <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline">
-            search
-          </span>
-          <input
-            className="input w-full ps-11"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('teacher.students.search')}
-            aria-label={t('teacher.students.search')}
-          />
-        </div>
-
-        <label className="flex items-center gap-2 text-sm text-on-surface-variant">
-          {t('teacher.students.sortBy')}
-          <select
-            className="input py-2"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as (typeof SORTS)[number])}
-          >
-            {SORTS.map((value) => (
-              <option key={value} value={value}>
-                {t(`teacher.students.sort${value[0].toUpperCase()}${value.slice(1)}`)}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
       <ErrorNote error={error} />

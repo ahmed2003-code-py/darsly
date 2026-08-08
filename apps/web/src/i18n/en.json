@@ -351,7 +351,9 @@
         "REJECTED": "Rejected",
         "REVOKED": "Revoked",
         "EXPIRED": "Expired"
-      }
+      },
+      "clearSearch": "Clear search",
+      "resultsFor": "Results for “{{q}}”"
     },
     "coupons": {
       "title": "Discount coupons",

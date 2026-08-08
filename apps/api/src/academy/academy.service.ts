@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AcademyRole } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
 import { validateImageDataUrl } from '../common/image.util';
@@ -168,12 +168,69 @@ export class AcademyService {
     });
   }
 
+  /**
+   * Words a slug may not take: they either already name a route on this domain
+   * or would let an academy impersonate the platform. Checked before the
+   * uniqueness query so the message says which problem it is.
+   */
+  private static readonly RESERVED_SLUGS = new Set([
+    'admin', 'api', 'app', 'auth', 'login', 'register', 'course', 'courses',
+    'teacher', 'teachers', 'student', 'students', 'discover', 'profile',
+    'settings', 'security', 'wallet', 'payments', 'live', 'messages', 'a', 't',
+    'darsly', 'support', 'help', 'about', 'terms', 'privacy', 'static', 'assets',
+  ]);
+
   async updateSettings(academyId: string, dto: UpdateAcademyDto) {
     this.assertImage(dto.logoUrl, LOGO_MAX_BYTES);
     this.assertImage(dto.coverUrl, COVER_MAX_BYTES);
+
+    if (dto.slug !== undefined) {
+      const slug = dto.slug.trim().toLowerCase();
+      if (AcademyService.RESERVED_SLUGS.has(slug)) {
+        throw new BadRequestException({ message: 'هذا الرابط محجوز، اختر غيره', code: 'SLUG_RESERVED' });
+      }
+      const taken = await this.prisma.academy.findFirst({
+        where: { slug, NOT: { id: academyId } },
+        select: { id: true },
+      });
+      if (taken) {
+        throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
+      }
+      const owner = await this.prisma.academy.findUnique({
+        where: { id: academyId },
+        select: { ownerUserId: true },
+      });
+      const teacherTaken = await this.prisma.teacherProfile.findFirst({
+        where: { slug, NOT: { userId: owner?.ownerUserId ?? '' } },
+        select: { id: true },
+      });
+      if (teacherTaken) {
+        throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
+      }
+    }
+
+    // /a/<slug> and /t/<slug> are the same identity — provisioning copies one to
+    // the other, the generated site's call to action relies on it, and letting
+    // them drift would leave every academy page linking to a 404. Renaming moves
+    // both together or neither.
+    if (dto.slug !== undefined) {
+      const slug = dto.slug.trim().toLowerCase();
+      const owner = await this.prisma.academy.findUnique({
+        where: { id: academyId },
+        select: { ownerUserId: true },
+      });
+      if (owner) {
+        await this.prisma.teacherProfile.updateMany({
+          where: { userId: owner.ownerUserId },
+          data: { slug },
+        });
+      }
+    }
+
     return this.prisma.academy.update({
       where: { id: academyId },
       data: {
+        ...(dto.slug !== undefined ? { slug: dto.slug.trim().toLowerCase() } : {}),
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
         ...(dto.tagline !== undefined ? { tagline: dto.tagline } : {}),
         ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl || null } : {}),

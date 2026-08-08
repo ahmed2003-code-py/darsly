@@ -94,6 +94,8 @@ export class AcademyController {
   @RequirePermission('academy.manage')
   @ApiOperation({ summary: '[academy] Update branding & settings' })
   updateSettings(@CurrentAcademy() ctx: AcademyContext, @Body() dto: UpdateAcademyDto) {
+    // No rebuild needed on a rename: the published page reads its slug from its
+    // own URL, so it follows the new address on the next load.
     return this.academy.updateSettings(ctx.academyId, dto);
   }
 

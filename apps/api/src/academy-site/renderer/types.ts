@@ -10,6 +10,13 @@ export interface RenderMedia {
 
 export interface RenderContext {
   academyName: string;
+  /**
+   * The owner's own name, which is often written in the other script — an
+   * academy called "احمد السيد" belongs to a user called "Ahmed Elsayed".
+   * The compiler picks whichever matches the language the page is rendering in,
+   * so an all-English page stops carrying an Arabic wordmark.
+   */
+  ownerName?: string;
   slug: string;
   defaultLang: 'ar' | 'en';
   /** Resolve a media id to its public URL + metadata (READY media only). */

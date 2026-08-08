@@ -40,10 +40,10 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   const body = plan.blocks
     .map((pb) => getVariantRenderer(pb.block.type, pb.variant)?.(pb.block, renderCtx) ?? '')
     .join('\n');
-  const brand = escapeHtml(ctx.academyName);
+  const brand = escapeHtml(brandFor(lang, ctx.academyName, ctx.ownerName));
   const seoTitle = seo?.title?.[lang]?.trim();
   const seoDesc = seo?.description?.[lang]?.trim();
-  const title = escapeHtml(seoTitle || ctx.academyName);
+  const title = escapeHtml(seoTitle || brandFor(lang, ctx.academyName, ctx.ownerName));
   const descMeta = seoDesc ? `\n<meta name="description" content="${escapeAttr(seoDesc)}">` : '';
 
   return `<!--
@@ -96,6 +96,26 @@ function aiPalette(design: DesignTokens): string {
     '--mut:color-mix(in srgb,var(--ink) 62%,var(--bg));' +
     '--line:color-mix(in srgb,var(--ink) 14%,var(--bg));' +
     '--body:color-mix(in srgb,var(--ink) 86%,var(--bg))}';
+}
+
+const ARABIC = /[\u0600-\u06FF]/;
+
+/**
+ * Which name to show as the wordmark.
+ *
+ * The academy name and the owner's account name are frequently the same person
+ * written in different scripts. Rendering the academy name unconditionally put
+ * "احمد السيد" at the top of a page whose every other word was English. Prefer
+ * the one written in the page's own script; fall back to the academy name, which
+ * is the field the teacher actually curates.
+ */
+function brandFor(lang: string, academyName: string, ownerName?: string): string {
+  const owner = ownerName?.trim();
+  if (!owner) return academyName;
+  const academyIsArabic = ARABIC.test(academyName);
+  const ownerIsArabic = ARABIC.test(owner);
+  if (lang === 'ar') return academyIsArabic ? academyName : ownerIsArabic ? owner : academyName;
+  return academyIsArabic && !ownerIsArabic ? owner : academyName;
 }
 
 const STYLE_RADIUS: Record<string, string> = {
@@ -314,13 +334,29 @@ a.card{overflow:hidden}a.card:hover img{transform:scale(1.06)}
 `.trim();
 }
 
+/**
+ * The slug is read from the page's own URL rather than baked in.
+ *
+ * A teacher renaming their address (darsly.app/a/ae0011w → /a/ahmed-elsayed) used
+ * to leave the published HTML fetching the old one, so a live page silently
+ * stopped listing its own courses until something rebuilt it. Deriving it at run
+ * time means a rename simply works, with no recompile and no cross-module call
+ * to arrange one.
+ */
 function clientJs(slug: string, defaultLang: 'ar' | 'en'): string {
   const s = JSON.stringify(slug);
   const dl = JSON.stringify(defaultLang);
   return `
 (function(){
+  // /api/v1/a/<slug> — the last path segment is this academy's current address.
+  var SLUG=(function(){
+    var m=location.pathname.match(/\/a\/([^/?#]+)/);
+    return m ? decodeURIComponent(m[1]) : ${s};
+  })();
   try{
     document.body.classList.add('reveal-on');
+    // Keep the call to action pointing at whatever the address is now.
+    document.querySelectorAll('a[data-cta]').forEach(function(a){a.setAttribute('href','/t/'+SLUG);});
     var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.1,rootMargin:'0px 0px -8% 0px'});
     document.querySelectorAll('.block').forEach(function(b){io.observe(b);});
   }catch(e){document.body.classList.remove('reveal-on');}
@@ -339,7 +375,7 @@ function clientJs(slug: string, defaultLang: 'ar' | 'en'): string {
   function hydrate(sec){
     var kind=sec.getAttribute('data-hydrate');var limit=sec.getAttribute('data-limit')||6;
     var slot=sec.querySelector('[data-slot]');if(!slot)return;
-    fetch('/api/v1/a/'+encodeURIComponent(${s})+'/'+kind+'?limit='+limit)
+    fetch('/api/v1/a/'+encodeURIComponent(SLUG)+'/'+kind+'?limit='+limit)
       .then(function(r){return r.ok?r.json():[];})
       .then(function(items){
         if(!Array.isArray(items)||!items.length){sec.style.display='none';return;}

@@ -71,10 +71,14 @@ export class AcademySiteService {
     if (!doc) throw new BadRequestException('لا توجد صفحة للمعاينة بعد — قم بالتوليد أولاً');
     const parsed = parseSiteDocument(doc);
     if (!parsed.success) throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
-    const academy = await this.prisma.academy.findUnique({ where: { id: academyId } });
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      include: { owner: { select: { fullName: true } } },
+    });
     if (!academy) throw new NotFoundException('Academy not found');
     return this.render.compile(academyId, parsed.data!, {
       academyName: academy.name,
+      ownerName: academy.owner?.fullName,
       slug: academy.slug,
       defaultLang: academy.language === 'en' ? 'en' : 'ar',
     });
@@ -90,10 +94,14 @@ export class AcademySiteService {
     if (!snap) throw new NotFoundException('Snapshot not found');
     const parsed = parseSiteDocument(snap.doc);
     if (!parsed.success) throw new BadRequestException('Snapshot document is no longer valid');
-    const academy = await this.prisma.academy.findUnique({ where: { id: academyId } });
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      include: { owner: { select: { fullName: true } } },
+    });
     if (!academy) throw new NotFoundException('Academy not found');
     return this.render.compile(academyId, parsed.data!, {
       academyName: academy.name,
+      ownerName: academy.owner?.fullName,
       slug: academy.slug,
       defaultLang: academy.language === 'en' ? 'en' : 'ar',
     });
@@ -299,6 +307,29 @@ export class AcademySiteService {
    *
    * Content is untouched: same document, same version, only the markup is rebuilt.
    */
+  /** Rebuild one academy's live HTML — used after its slug changes. */
+  async recompileAcademy(academyId: string): Promise<boolean> {
+    const site = await this.prisma.academySite.findUnique({ where: { academyId } });
+    if (!site || site.status !== 'PUBLISHED' || !site.publishedDoc) return false;
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      include: { owner: { select: { fullName: true } } },
+    });
+    if (!academy) return false;
+    const html = await this.render.compile(
+      academyId,
+      site.publishedDoc as unknown as SiteDocument,
+      {
+        academyName: academy.name,
+        ownerName: academy.owner?.fullName,
+        slug: academy.slug,
+        defaultLang: academy.language === 'en' ? 'en' : 'ar',
+      },
+    );
+    await this.prisma.academySite.update({ where: { id: site.id }, data: { publishedHtml: html } });
+    return true;
+  }
+
   async recompilePublished(): Promise<{ recompiled: number; failed: string[] }> {
     const sites = await this.prisma.academySite.findMany({
       where: { status: 'PUBLISHED' },
@@ -309,7 +340,10 @@ export class AcademySiteService {
     const failed: string[] = [];
     for (const site of sites) {
       try {
-        const academy = await this.prisma.academy.findUnique({ where: { id: site.academyId } });
+        const academy = await this.prisma.academy.findUnique({
+          where: { id: site.academyId },
+          include: { owner: { select: { fullName: true } } },
+        });
         // A published row with no stored document cannot be rebuilt; leave it
         // serving what it has rather than blanking a live site.
         if (!academy || !site.publishedDoc) {
@@ -321,6 +355,7 @@ export class AcademySiteService {
           site.publishedDoc as unknown as SiteDocument,
           {
             academyName: academy.name,
+            ownerName: academy.owner?.fullName,
             slug: academy.slug,
             defaultLang: academy.language === 'en' ? 'en' : 'ar',
           },
@@ -341,11 +376,15 @@ export class AcademySiteService {
     doc: SiteDocument,
     moderatedById?: string,
   ): Promise<AcademySite> {
-    const academy = await this.prisma.academy.findUnique({ where: { id: academyId } });
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      include: { owner: { select: { fullName: true } } },
+    });
     if (!academy) throw new NotFoundException('Academy not found');
     const site = await this.prisma.academySite.findUniqueOrThrow({ where: { id: siteId } });
     const html = await this.render.compile(academyId, doc, {
       academyName: academy.name,
+      ownerName: academy.owner?.fullName,
       slug: academy.slug,
       defaultLang: academy.language === 'en' ? 'en' : 'ar',
     });

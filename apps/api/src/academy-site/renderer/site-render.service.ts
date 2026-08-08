@@ -16,7 +16,7 @@ export class SiteRenderService {
   async compile(
     academyId: string,
     doc: SiteDocument,
-    ctx: { academyName: string; slug: string; defaultLang: 'ar' | 'en' },
+    ctx: { academyName: string; ownerName?: string; slug: string; defaultLang: 'ar' | 'en' },
   ): Promise<string> {
     const media = await this.prisma.academyMedia.findMany({
       where: { academyId, status: 'READY' },

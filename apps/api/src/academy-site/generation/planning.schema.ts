@@ -50,6 +50,7 @@ export const planningSchema = z.object({
       headingScale: z.enum(['restrained', 'balanced', 'dramatic']),
       heroTreatment: z.enum(['flat', 'gradient', 'mesh', 'spotlight']),
       bodyFont: z.enum(['sans', 'serif', 'mono']).optional(),
+      motion: z.enum(['calm', 'lively', 'cinematic']).optional(),
     })
     .optional(),
 });

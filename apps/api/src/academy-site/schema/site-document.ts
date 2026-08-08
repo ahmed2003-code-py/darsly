@@ -192,6 +192,12 @@ export const siteThemeSchema = z.object({
       heroTreatment: z.enum(['flat', 'gradient', 'mesh', 'spotlight']),
       /** Body typeface. Headings keep their own (serif/sans/display) choice. */
       bodyFont: z.enum(['sans', 'serif', 'mono']).optional(),
+      /**
+       * How much the page moves. The renderer owns *what* animates — the model
+       * only says how far to push it, because an unconstrained brief produces
+       * either a dead page or one that will not sit still long enough to read.
+       */
+      motion: z.enum(['calm', 'lively', 'cinematic']).optional(),
     })
     .optional(),
 });

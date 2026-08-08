@@ -1,7 +1,8 @@
 import { SiteBlock } from '../../schema/site-document';
 import { ListItem, normalizeItems } from '../../text.util';
+import { LT } from '../types';
 import { escapeAttr, escapeHtml, safeUrl } from '../html.util';
-import { COURSES_ANCHOR, head, i18n, skeleton } from '../shared';
+import { CONTACT_ANCHOR, COURSES_ANCHOR, head, headline, i18n, skeleton } from '../shared';
 import { RenderMedia, VariantContext } from '../types';
 import { registerVariant, VariantSelectionContext } from './registry';
 
@@ -24,6 +25,36 @@ function itemText(it: ListItem): string {
   return typeof it === 'string' ? escapeHtml(it) : i18n(it);
 }
 
+/**
+ * The status pill above a hero headline.
+ *
+ * Small, but it is the first thing that says "someone designed this": a bare
+ * headline on an empty background reads as an unstyled document no matter how
+ * good the typography under it is.
+ */
+const HERO_BADGE = `<p class="hero-badge"><span class="dot" aria-hidden="true"></span>${i18n({
+  ar: 'الحجز مفتوح الآن',
+  en: 'Now enrolling',
+})}</p>`;
+
+/**
+ * Both hero calls to action.
+ *
+ * The primary one goes wherever the compiler decided (courses if the page has
+ * them, off-page otherwise). The secondary is deliberately an in-page scroll to
+ * contact: a visitor who is interested but not ready to enrol has, without it,
+ * nothing on the first screen to click.
+ */
+function heroActions(ctx: VariantContext, label: LT): string {
+  return `<div class="hero-actions">
+          <a class="btn" data-cta target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(label)}<span class="btn-arrow" aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost" href="#${CONTACT_ANCHOR}">${i18n({ ar: 'تواصل معي', en: 'Get in touch' })}</a>
+        </div>`;
+}
+
+/** The animated backdrop layers the hero CSS paints and the client parallaxes. */
+const HERO_AURA = '<div class="hero-aura" aria-hidden="true"><i></i><i></i><i></i></div>';
+
 registerVariant(
   'hero',
   'hero_01',
@@ -33,11 +64,12 @@ registerVariant(
     const bg = cover && safeUrl(cover.url)
       ? ` style="background-image:url('${escapeAttr(safeUrl(cover.url))}')"`
       : '';
-    return `<section class="block hero${bg ? ' hero-img' : ''}"${bg}><div class="wrap">
-        <h1>${i18n(block.headline)}</h1>
+    return `<section class="block hero${bg ? ' hero-img' : ''}"${bg}>${bg ? '' : HERO_AURA}<div class="wrap">
+        ${HERO_BADGE}
+        <h1>${headline(block.headline)}</h1>
         <p class="sub">${i18n(block.subheadline)}</p>
-        <div class="hero-actions"><a class="btn" data-cta target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
-      </div></section>`;
+        ${heroActions(ctx, block.ctaLabel)}
+      </div><a class="hero-scroll" href="#${COURSES_ANCHOR}" aria-hidden="true"><span></span></a></section>`;
   },
   // Centered classic — the safe default; wins when there's no cover image and
   // the direction isn't editorial.
@@ -56,13 +88,14 @@ registerVariant(
     const media = url
       ? `<img class="hero-shot" src="${escapeAttr(url)}" alt="" loading="eager">`
       : `<div class="hero-panel" aria-hidden="true"></div>`;
-    return `<section class="block hero hero-split"><div class="wrap hero-split-grid">
+    return `<section class="block hero hero-split">${HERO_AURA}<div class="wrap hero-split-grid">
         <div class="hero-copy">
-          <h1>${i18n(block.headline)}</h1>
+          ${HERO_BADGE}
+          <h1>${headline(block.headline)}</h1>
           <p class="sub">${i18n(block.subheadline)}</p>
-          <div class="hero-actions"><a class="btn" data-cta target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
+          ${heroActions(ctx, block.ctaLabel)}
         </div>
-        <div class="hero-media">${media}</div>
+        <div class="hero-media" data-tilt>${media}</div>
       </div></section>`;
   },
   { score: (ctx) => (ctx.hasHeroImage ? 0.95 : 0.55) },
@@ -75,10 +108,11 @@ registerVariant(
   'hero_03',
   (b, ctx: VariantContext) => {
     const block = b as Of<'hero'>;
-    return `<section class="block hero hero-editorial"><div class="wrap">
-        <h1>${i18n(block.headline)}</h1>
+    return `<section class="block hero hero-editorial">${HERO_AURA}<div class="wrap">
+        ${HERO_BADGE}
+        <h1>${headline(block.headline)}</h1>
         <p class="sub">${i18n(block.subheadline)}</p>
-        <div class="hero-actions"><a class="btn" data-cta target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
+        ${heroActions(ctx, block.ctaLabel)}
       </div></section>`;
   },
   { score: (ctx) => (isEditorial(ctx) ? 0.85 : 0.6) },
@@ -215,16 +249,29 @@ registerVariant('gallery', 'gallery_01', (b, ctx: VariantContext) => {
       </div></section>`;
 });
 
+/**
+ * Glyphs for the platforms teachers actually link to, keyed by the lower-cased
+ * platform name. A link that is only a word is a footnote; a link with a mark in
+ * front of it reads as somewhere to go, which is the whole point of the section.
+ * Anything unrecognised falls back to a generic link glyph rather than nothing,
+ * so an unknown platform still lines up with the rest of the row.
+ */
+const SOCIAL_GLYPH: Record<string, string> = {
+  whatsapp: '💬', telegram: '✈️', facebook: 'f', instagram: '◎', youtube: '▶',
+  tiktok: '♪', linkedin: 'in', twitter: '𝕏', x: '𝕏', email: '✉', mail: '✉',
+  phone: '☎', website: '⌂', site: '⌂',
+};
+
 registerVariant('contact', 'contact_01', (b) => {
   const block = b as Of<'contact'>;
   const links = block.socials
     .filter((s) => safeUrl(s.url))
-    .map(
-      (s) =>
-        `<a class="social" href="${escapeAttr(safeUrl(s.url))}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(s.platform)}</a>`,
-    )
+    .map((s) => {
+      const glyph = SOCIAL_GLYPH[s.platform.trim().toLowerCase()] ?? '↗';
+      return `<a class="social" href="${escapeAttr(safeUrl(s.url))}" target="_blank" rel="noopener noreferrer nofollow"><span class="social-glyph" aria-hidden="true">${escapeHtml(glyph)}</span>${escapeHtml(s.platform)}</a>`;
+    })
     .join('');
-  return `<section class="block contact"><div class="wrap">
+  return `<section id="${CONTACT_ANCHOR}" class="block contact"><div class="wrap">
         <h2>${i18n(block.heading)}</h2><div class="socials">${links}</div>
       </div></section>`;
 });

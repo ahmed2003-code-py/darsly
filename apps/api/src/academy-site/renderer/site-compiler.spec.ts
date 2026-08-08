@@ -30,6 +30,10 @@ function coursesBlock(id = 'blk-courses') {
   return { id, type: 'courses' as const, heading: lt('الدورات'), limit: 6 };
 }
 
+function contactBlock(id = 'blk-contact') {
+  return { id, type: 'contact' as const, heading: lt('تواصل معنا'), socials: [] };
+}
+
 function plan(blocks: any[]): RenderPlan {
   return {
     blocks: blocks.map((block) => ({ block, variant: undefined })),
@@ -131,5 +135,108 @@ describe('compileSite — the AI-composed design system', () => {
     const flat = compileSite(themed({ design: { ...design, heroTreatment: 'flat' as const } }), ctx);
     expect(mesh).not.toEqual(flat);
     expect(mesh).toContain('radial-gradient(46% 52% at 12% 8%');
+  });
+});
+
+describe('compileSite — the page script is valid JavaScript', () => {
+  /**
+   * The script is assembled inside a server-side template literal, so any regex
+   * literal in it has to survive a second round of escape processing. It did not:
+   * `/\/a\/([^/?#]+)/` shipped as `//a/([^/?#]+)/`, a syntax error that took the
+   * entire script down — no language toggle, and the course and review sections
+   * stuck on their loading skeletons on every published page.
+   *
+   * Parsing the emitted source is the only check that catches this class of bug;
+   * every string assertion in this file passed while the page was broken.
+   */
+  function script(html: string): string {
+    const m = html.match(/<script>([\s\S]*?)<\/script>/);
+    if (!m) throw new Error('the page emitted no script');
+    return m[1];
+  }
+
+  it('parses', () => {
+    const src = script(compileSite(plan([heroBlock(), coursesBlock()]), ctx));
+    expect(() => new Function(src)).not.toThrow();
+  });
+
+  it('reads the academy slug out of its own URL', () => {
+    const src = script(compileSite(plan([heroBlock()]), ctx));
+    // A rename has to take effect on the next load, with no recompile — so the
+    // slug is derived, and the baked-in one is only a fallback.
+    // Just the slug resolver — running the whole script would need a DOM, and
+    // this test is about the regex, not the page.
+    const start = src.indexOf('var SLUG=');
+    const decl = src.slice(start, src.indexOf('})();', start) + 5).replace('location.pathname', 'pathname');
+    const read = new Function('pathname', `${decl}return SLUG;`);
+    expect(read('/a/ahmed-elsayed')).toBe('ahmed-elsayed');
+    expect(read('/a/ahmed-elsayed?lang=en')).toBe('ahmed-elsayed');
+    expect(read('/somewhere/else')).toBe('khaled-academy');
+  });
+});
+
+describe('compileSite — the page is designed, not just typeset', () => {
+  it('accents the closing words of a headline', () => {
+    const html = compileSite(plan([heroBlock()]), ctx);
+    // "اتعلم صح" is two words — too short to split without looking like a
+    // mistake — so a longer headline is what proves the gradient is applied.
+    const long = compileSite(
+      plan([{ ...heroBlock(), headline: lt('اتعلم الرياضيات مع خالد') }]),
+      ctx,
+    );
+    expect(long).toContain('class="grad"');
+    expect(html).not.toContain('class="grad"');
+  });
+
+  it('gives the hero a second action for visitors who are not ready to enrol', () => {
+    const html = compileSite(plan([heroBlock(), contactBlock()]), ctx);
+    expect(html).toContain('href="#contact"');
+    expect(html).toContain('id="contact"');
+  });
+
+  it('honours a visitor who asked for less motion', () => {
+    const html = compileSite(plan([heroBlock()]), ctx);
+    const calm = html.slice(html.indexOf('@media(prefers-reduced-motion:reduce)'));
+    // The gradient headline is animated but its fill is not decoration — killing
+    // the animation without pinning the background position renders it invisible.
+    expect(calm).toContain('.grad{animation:none;background-position:0 50%}');
+    expect(calm).toContain('.hero-aura i');
+  });
+});
+
+describe('compileSite — motion is the model\'s decision', () => {
+  const design = {
+    background: '#0B1020', ink: '#EEF2FF', surface: '#141B33',
+    radius: 8, density: 'airy' as const, headingScale: 'dramatic' as const,
+    heroTreatment: 'mesh' as const, bodyFont: 'sans' as const,
+  };
+  const withMotion = (motion?: 'calm' | 'lively' | 'cinematic') =>
+    compileSite(
+      {
+        blocks: [{ block: heroBlock(), variant: undefined }],
+        theme: { defaultLang: 'ar', preset: 'warm', primary: '#4A32C9', accent: '#F0A', design: { ...design, ...(motion ? { motion } : {}) } },
+      } as unknown as RenderPlan,
+      ctx,
+    );
+
+  it('carries the chosen intensity to the page', () => {
+    expect(withMotion('calm')).toContain('data-motion="calm"');
+    expect(withMotion('cinematic')).toContain('data-motion="cinematic"');
+  });
+
+  it('leaves a document written before the choice existed exactly as it was', () => {
+    // `lively` is what every page already did; defaulting anywhere else would
+    // silently restyle every site published so far.
+    expect(withMotion()).toContain('data-motion="lively"');
+  });
+
+  it('keeps a calm page designed rather than stripped', () => {
+    const calm = withMotion('calm');
+    // Dimmed and slowed, never stopped. Asked to choose, the model answers calm
+    // almost every time, so calm decides how most pages look — and a calm that
+    // switched the motion off is exactly the unfinished look this replaced.
+    // Only prefers-reduced-motion stops anything.
+    expect(calm).toContain('[data-motion=calm] .hero-aura{opacity:.42');
+    expect(calm).not.toMatch(/\[data-motion=calm\][^\n]*animation:none/);
   });
 });

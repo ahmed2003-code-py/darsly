@@ -295,7 +295,10 @@ export class SiteGeneratorService {
       type: 'faq',
       id: randomUUID(),
       heading: bilingual('الأسئلة الشائعة', 'FAQ'),
-      items: copy.faq.slice(0, 8),
+      // Four, not eight. An FAQ is the least persuasive thing on a teacher's
+      // page and the easiest for a model to pad, and a wall of accordions at the
+      // bottom is what makes a site read as a support article.
+      items: copy.faq.slice(0, 4),
     });
     const socials = this.normalizeSocials(socialsJson);
     blocks.push({

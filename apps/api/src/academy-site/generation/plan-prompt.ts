@@ -37,10 +37,11 @@ export function systemPlanPrompt(): string {
     '   • headingScale: restrained, balanced, or dramatic (huge editorial headlines).',
     '   • heroTreatment: flat (pure colour), gradient (two-tone wash), mesh (soft colour clouds), or spotlight (a focused glow behind the headline).',
     '   • bodyFont: sans, serif or mono. Serif reads scholarly; mono reads technical; sans is the safe default.',
+    '   • motion: calm, lively or cinematic — how far the page moves, not whether it moves. Every setting animates. This is the field most likely to be answered defensively: a serious subject does not call for a still page, it calls for a restrained palette. Unless there is a reason to hold back, lively or cinematic.',
     '',
     'Choose deliberately, not randomly: a programming/university teacher usually suits a precise or editorial direction; a school/exam-prep teacher a warm or energetic one; a languages/humanities teacher a refined editorial one. Let the STYLE BRIEF override these defaults.',
     'Vary genuinely between academies. Two teachers of the same subject should still get visibly different pages — different mood, different geometry, different rhythm. A page that is merely competent has failed; it should look designed.',
-    'Do not hedge. Recolouring while leaving radius, density, headingScale and heroTreatment at their safe middle is not a design decision — it is the same page in a different paint. Commit: if the direction is editorial, take headingScale to dramatic and density to airy; if it is technical, take radius to 0–4 and consider a mono body; if it is for children, go to 22–28 and airy. Every one of those four fields should be a deliberate answer to THIS teacher, and across your outputs they should span their whole range, not cluster on the middle value.',
+    'Do not hedge. Recolouring while leaving radius, density, headingScale, heroTreatment and motion at their safe middle is not a design decision — it is the same page in a different paint. Commit: if the direction is editorial, take headingScale to dramatic and density to airy; if it is technical, take radius to 0–4 and consider a mono body; if it is for children, go to 22–28 and airy. Every one of those fields should be a deliberate answer to THIS teacher, and across your outputs they should span their whole range, not cluster on the middle value.',
     'Return ONLY the JSON object defined by the schema.',
   ].join('\n');
 }

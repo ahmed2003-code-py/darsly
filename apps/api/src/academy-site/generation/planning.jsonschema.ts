@@ -34,7 +34,7 @@ export const planningJsonSchema: Record<string, unknown> = {
       // listed here — an optional field is rejected outright with a 400, not
       // silently ignored. Optionality lives in the zod schema instead, which is
       // what actually guards the response.
-      required: ['background', 'ink', 'surface', 'radius', 'density', 'headingScale', 'heroTreatment', 'bodyFont'],
+      required: ['background', 'ink', 'surface', 'radius', 'density', 'headingScale', 'heroTreatment', 'bodyFont', 'motion'],
       properties: {
         background: { type: 'string', description: 'Page background, #RRGGBB. Dark or light — your call.' },
         ink: { type: 'string', description: 'Body text colour, #RRGGBB. Must be legible on the background.' },
@@ -44,6 +44,12 @@ export const planningJsonSchema: Record<string, unknown> = {
         headingScale: { type: 'string', enum: ['restrained', 'balanced', 'dramatic'] },
         heroTreatment: { type: 'string', enum: ['flat', 'gradient', 'mesh', 'spotlight'] },
         bodyFont: { type: 'string', enum: ['sans', 'serif', 'mono'] },
+        motion: {
+          type: 'string',
+          enum: ['calm', 'lively', 'cinematic'],
+          description:
+            'How far the page moves. All three animate; they differ in amplitude. calm = slow and understated. lively = the default, confident. cinematic = large, slow, theatrical. Subject matter does not decide this — seriousness is carried by the palette and the typography, not by holding still.',
+        },
       },
     },
   },

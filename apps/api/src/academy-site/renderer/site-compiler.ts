@@ -24,6 +24,9 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   // Emit data-font only when the DNA set one, so pre-Phase-2 documents keep their
   // preset-driven heading font untouched.
   const fontAttr = theme?.headingFont ? ` data-font="${escapeAttr(theme.headingFont)}"` : '';
+  // Documents generated before motion was a choice get `lively`, which is the
+  // behaviour they already had.
+  const motionAttr = ` data-motion="${escapeAttr(theme?.design?.motion ?? 'lively')}"`;
   // Resolve the CTA destination once, here, rather than letting each variant
   // invent one — guessing is what produced `#courses-<hero-block-id>`, an anchor
   // for an element that never existed, so every "ابدأ الآن" did nothing at all.
@@ -59,7 +62,7 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   to _top would navigate the parent window to this raw HTML.
 -->
 <!doctype html>
-<html lang="${lang}" dir="${dir}" data-preset="${escapeAttr(preset)}"${fontAttr}>
+<html lang="${lang}" dir="${dir}" data-preset="${escapeAttr(preset)}"${fontAttr}${motionAttr}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -70,13 +73,17 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
 <style>${css(theme.primary, theme.accent, theme.style, theme.design)}</style>
 </head>
 <body>
+<div class="scroll-bar" aria-hidden="true"><i></i></div>
 <header class="topbar">
   <div class="wrap">
-    <span class="brand">${logo(theme.logoMediaId, ctx)}<span>${brand}</span></span>
-    <button id="langToggle" class="lang-toggle" type="button" aria-label="Language"></button>
+    <a class="brand" href="#top">${logo(theme.logoMediaId, ctx)}<span>${brand}</span></a>
+    <nav class="topnav">
+      <button id="langToggle" class="lang-toggle" type="button" aria-label="Language"></button>
+      <a class="nav-cta" data-cta target="_top" href="${escapeAttr(renderCtx.ctaHref)}"><span class="i18n" data-ar="ابدأ الآن" data-en="Start now">ابدأ الآن</span></a>
+    </nav>
   </div>
 </header>
-<main>
+<main id="top">
 ${body}
 </main>
 <footer class="site-footer"><div class="wrap">© ${brand}</div></footer>
@@ -198,13 +205,27 @@ body{margin:0;font-family:var(--body-font);color:var(--ink);background:var(--bg)
 :lang(ar){font-family:"Tajawal","Plus Jakarta Sans",system-ui,sans-serif}
 img{max-width:100%;display:block}
 .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+/* Reading-progress bar. The page is long and mostly scroll; without it a visitor
+   has no sense of how much is left, which is what makes a long page feel like a
+   document instead of a tour. */
+.scroll-bar{position:fixed;top:0;inset-inline:0;height:3px;z-index:40;pointer-events:none}
+.scroll-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),${heroTo});box-shadow:0 0 14px rgba(var(--pr),.8);transition:width .1s linear}
 /* Nav */
-.topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(16px);border-bottom:1px solid var(--line)}
-.topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:72px}
-.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:1.15rem;color:var(--ink)}
-.logo{width:40px;height:40px;border-radius:11px;object-fit:cover;box-shadow:0 6px 18px -8px rgba(var(--pr),.7)}
+.topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(16px);border-bottom:1px solid transparent;transition:height .3s,border-color .3s,background .3s,box-shadow .3s}
+.topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:80px;transition:height .3s cubic-bezier(.2,.7,.2,1)}
+/* Shrinks once the hero is behind you: full-height and borderless over the hero,
+   compact and separated over content. */
+.topbar.stuck{border-bottom-color:var(--line);box-shadow:0 10px 30px -24px rgba(0,0,0,.5)}
+.topbar.stuck .wrap{height:62px}
+.topbar.stuck .logo{width:32px;height:32px}
+.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:1.15rem;color:var(--ink);text-decoration:none}
+.logo{width:40px;height:40px;border-radius:11px;object-fit:cover;box-shadow:0 6px 18px -8px rgba(var(--pr),.7);transition:.3s}
+.topnav{display:flex;align-items:center;gap:12px}
 .lang-toggle{border:1.5px solid color-mix(in srgb,var(--acc) 45%,transparent);color:var(--acc);background:transparent;border-radius:999px;padding:8px 18px;font-weight:800;font-family:inherit;cursor:pointer;transition:.2s}
 .lang-toggle:hover{background:var(--acc);color:var(--on-p);border-color:var(--acc)}
+.nav-cta{display:inline-flex;align-items:center;background:var(--p);color:var(--on-p);border-radius:999px;padding:10px 22px;font-weight:800;text-decoration:none;box-shadow:0 10px 24px -12px rgba(var(--pr),.9);transition:.2s}
+.nav-cta:hover{background:var(--p-dark);transform:translateY(-1px)}
+@media(max-width:640px){.nav-cta{display:none}}
 /* Section rhythm + numbered eyebrows */
 main{counter-reset:sec}
 .block{padding:var(--pad) 0;position:relative}
@@ -218,9 +239,33 @@ main{counter-reset:sec}
 .hero h1{font-size:clamp(2.6rem,6.5vw,4.8rem);font-weight:800;letter-spacing:-.035em;line-height:1.05;margin:0 0 22px;text-wrap:balance;max-width:17ch;color:var(--ink)}
 .hero .sub{font-size:clamp(1.08rem,1.8vw,1.4rem);color:var(--mut);max-width:62ch;margin:0 auto}
 .hero-actions{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:34px}
-.hero h1,.hero .sub,.hero-actions{animation:rise .8s cubic-bezier(.2,.7,.2,1) both}
-.hero .sub{animation-delay:.09s}.hero-actions{animation-delay:.18s}
+.hero-badge,.hero h1,.hero .sub,.hero-actions{animation:rise .8s cubic-bezier(.2,.7,.2,1) both}
+.hero h1{animation-delay:.07s}.hero .sub{animation-delay:.16s}.hero-actions{animation-delay:.25s}
 @keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+/* Status pill */
+.hero-badge{display:inline-flex;align-items:center;gap:9px;margin:0 0 24px;padding:8px 18px;border-radius:999px;font-size:.85rem;font-weight:800;letter-spacing:.02em;color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent);border:1px solid color-mix(in srgb,var(--acc) 30%,transparent);backdrop-filter:blur(6px)}
+.hero-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 0 rgba(var(--pr),.7);animation:pulse 2.4s ease-out infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 11px rgba(var(--pr),0)}100%{box-shadow:0 0 0 0 rgba(var(--pr),0)}}
+/* The gradient tail of a headline — the one flourish that most separates a
+   designed page from a typed one. */
+.grad{background:linear-gradient(102deg,var(--acc),${heroTo} 55%,var(--acc));background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:sheen 7s ease-in-out infinite}
+@keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+/* Drifting colour fields behind the hero. Three of them at different speeds so
+   the motion never resolves into an obvious loop; the client nudges them with
+   the pointer for parallax. */
+.hero-aura{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;filter:blur(72px);opacity:.62}
+.hero-aura i{position:absolute;display:block;border-radius:50%;will-change:transform}
+.hero-aura i:nth-child(1){width:46vw;height:46vw;inset-inline-start:-8vw;top:-14vw;background:rgba(var(--pr),.55);animation:drift1 19s ease-in-out infinite}
+.hero-aura i:nth-child(2){width:38vw;height:38vw;inset-inline-end:-6vw;top:4vw;background:rgba(var(--ar),.5);animation:drift2 23s ease-in-out infinite}
+.hero-aura i:nth-child(3){width:42vw;height:42vw;inset-inline-start:32vw;bottom:-20vw;background:rgba(var(--pr),.34);animation:drift3 27s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6vw,5vw,0) scale(1.14)}}
+@keyframes drift2{0%,100%{transform:translate3d(0,0,0) scale(1.06)}50%{transform:translate3d(-7vw,6vw,0) scale(.92)}}
+@keyframes drift3{0%,100%{transform:translate3d(0,0,0) scale(.95)}50%{transform:translate3d(4vw,-6vw,0) scale(1.1)}}
+/* Scroll cue */
+.hero-scroll{position:absolute;bottom:26px;inset-inline-start:50%;transform:translateX(-50%);width:26px;height:42px;border:2px solid color-mix(in srgb,var(--ink) 28%,transparent);border-radius:999px;display:flex;justify-content:center;padding-top:8px}
+.hero-scroll span{width:4px;height:8px;border-radius:2px;background:var(--acc);animation:wheel 1.8s ease-in-out infinite}
+@keyframes wheel{0%{opacity:0;transform:translateY(-4px)}40%{opacity:1}100%{opacity:0;transform:translateY(12px)}}
+.hero-img .hero-scroll{border-color:rgba(255,255,255,.5)}
 .hero-img{color:#fff;background-size:cover;background-position:center;min-height:88vh}
 .hero-img::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(8,8,16,.35),rgba(8,8,16,.78))}
 .hero-img h1{color:#fff;max-width:19ch}.hero-img .sub{color:#eef}
@@ -238,9 +283,20 @@ main{counter-reset:sec}
 [data-font=display] h1,[data-font=display] .hero h1,[data-font=display] .block h2{font-family:"Plus Jakarta Sans","Tajawal",system-ui,sans-serif;font-weight:800;letter-spacing:-.045em}
 [data-font=sans] h1,[data-font=sans] .hero h1,[data-font=sans] .block h2{font-family:"Plus Jakarta Sans","Tajawal",system-ui,sans-serif;letter-spacing:-.03em}
 /* Buttons */
-.btn{display:inline-flex;align-items:center;gap:8px;background:var(--p);color:var(--on-p);padding:16px 34px;border-radius:var(--rad);text-decoration:none;font-weight:800;font-size:1.05rem;box-shadow:0 16px 34px -14px rgba(var(--pr),.75);transition:.2s}
-.btn:hover{background:var(--p-dark);transform:translateY(-2px);box-shadow:0 22px 44px -14px rgba(var(--pr),.85)}
+.btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:8px;background:linear-gradient(120deg,var(--p),${heroTo});color:var(--on-p);padding:16px 34px;border-radius:var(--rad);text-decoration:none;font-weight:800;font-size:1.05rem;box-shadow:0 16px 34px -14px rgba(var(--pr),.75);transition:transform .2s,box-shadow .2s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 22px 44px -14px rgba(var(--pr),.85)}
+/* A light sweeps across the button on hover rather than the fill simply
+   darkening — the fill is a gradient now, and darkening a gradient muddies it. */
+.btn::after{content:"";position:absolute;top:0;inset-inline-start:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.4),transparent);transform:skewX(-18deg);transition:inset-inline-start .55s cubic-bezier(.2,.7,.2,1)}
+.btn:hover::after{inset-inline-start:120%}
+.btn-arrow{transition:transform .25s;font-weight:400}
+.btn:hover .btn-arrow{transform:translateX(4px)}
+[dir=rtl] .btn-arrow{transform:scaleX(-1)}
+[dir=rtl] .btn:hover .btn-arrow{transform:scaleX(-1) translateX(4px)}
+.btn-ghost{background:transparent;color:var(--acc);border:1.5px solid color-mix(in srgb,var(--acc) 42%,transparent);box-shadow:none}
+.btn-ghost:hover{background:color-mix(in srgb,var(--acc) 12%,transparent);box-shadow:none}
 .hero-img .btn{box-shadow:0 16px 34px -12px rgba(0,0,0,.6)}
+.hero-img .btn-ghost{color:#fff;border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.08)}
 /* About */
 .about-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:60px;align-items:center}
 .about p{font-size:1.15rem;color:var(--body);white-space:pre-line;margin:0}
@@ -262,6 +318,10 @@ main{counter-reset:sec}
 .hero-split .sub{margin:0;max-width:48ch}
 .hero-split .hero-actions{justify-content:flex-start}
 .hero-shot{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:calc(var(--rad) + 10px);box-shadow:0 50px 90px -50px rgba(var(--pr),.7)}
+/* The portrait leans toward the pointer. --rx/--ry are written by the client and
+   are 0 until it does, so this is inert without JS and on touch devices. */
+.hero-media[data-tilt]{--rx:0deg;--ry:0deg;perspective:1000px}
+.hero-media[data-tilt]>*{transform:rotateX(var(--rx)) rotateY(var(--ry));transition:transform .25s cubic-bezier(.2,.7,.2,1);will-change:transform}
 .hero-panel{width:100%;aspect-ratio:4/3;border-radius:calc(var(--rad) + 10px);border:1px solid var(--line);background:
   radial-gradient(70% 70% at 20% 20%,rgba(var(--pr),.55),transparent 60%),
   radial-gradient(60% 60% at 90% 85%,rgba(var(--ar),.5),transparent 60%),var(--surface)}
@@ -297,8 +357,14 @@ main{counter-reset:sec}
 /* Cards (courses / reviews) */
 .cards,.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:calc(var(--rad) + 2px);padding:0;overflow:hidden;min-height:120px;transition:.28s cubic-bezier(.2,.7,.2,1)}
-a.card{text-decoration:none;color:inherit}
+a.card{text-decoration:none;color:inherit;position:relative}
 a.card:hover{border-color:color-mix(in srgb,var(--acc) 55%,transparent);box-shadow:0 40px 70px -36px rgba(var(--pr),.65);transform:translateY(-6px)}
+/* A soft light that tracks the pointer across a card. --mx/--my are written by
+   the client on pointer move and default to the centre, so a card that is never
+   hovered — or on a touch device, where there is no pointer — still looks right. */
+.card{--mx:50%;--my:50%}
+a.card::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(280px circle at var(--mx) var(--my),rgba(var(--pr),.16),transparent 62%)}
+a.card:hover::after{opacity:1}
 .card img{width:100%;aspect-ratio:16/10;object-fit:cover;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
 a.card{overflow:hidden}a.card:hover img{transform:scale(1.06)}
 .card h3{margin:0;padding:18px 20px 4px;font-size:1.12rem;font-weight:700;color:var(--ink)}
@@ -306,7 +372,15 @@ a.card{overflow:hidden}a.card:hover img{transform:scale(1.06)}
 .card:not(a){padding:24px}.card strong{font-weight:800;color:var(--ink)}.card p{color:var(--body);margin:.4rem 0 0}
 .skeleton{background:linear-gradient(90deg,var(--surface),color-mix(in srgb,var(--surface) 60%,var(--bg)),var(--surface));background-size:200% 100%;animation:sk 1.3s infinite}
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.gallery-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:calc(var(--rad) + 2px);transition:.3s}.gallery-grid img:hover{transform:scale(1.03)}
+/* Gallery as a mosaic, not a contact sheet: the first frame takes a double cell
+   so the grid has a focal point. Equal squares read as an upload, not a portfolio. */
+.gallery-grid{grid-auto-flow:dense}
+.gallery-grid img{width:100%;height:100%;aspect-ratio:1;object-fit:cover;border-radius:calc(var(--rad) + 2px);transition:transform .5s cubic-bezier(.2,.7,.2,1),box-shadow .4s;cursor:zoom-in}
+.gallery-grid img:hover{transform:scale(1.04);box-shadow:0 40px 70px -38px rgba(var(--pr),.75);z-index:1;position:relative}
+@media(min-width:900px){.gallery-grid img:first-child{grid-column:span 2;grid-row:span 2;aspect-ratio:auto}}
+/* Section separators: a hairline that fades out from the accent, rather than a
+   hard rule across the page. */
+.block.numbered+.block.numbered::before{content:"";position:absolute;top:0;inset-inline:24px;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--acc) 40%,transparent),transparent)}
 /* CTA */
 .cta{text-align:center;color:var(--on-p);position:relative;overflow:hidden;background:linear-gradient(130deg,var(--p),${heroTo})}
 .cta::before{content:"";position:absolute;inset:0;background:radial-gradient(50% 90% at 80% 0%,rgba(255,255,255,.2),transparent 60%)}
@@ -314,7 +388,10 @@ a.card{overflow:hidden}a.card:hover img{transform:scale(1.06)}
 /* Contact */
 .contact{text-align:center}
 .socials{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
-.social{border:1.5px solid color-mix(in srgb,var(--acc) 40%,transparent);color:var(--acc);border-radius:999px;padding:13px 28px;text-decoration:none;font-weight:800;transition:.2s}.social:hover{background:var(--acc);color:var(--on-p);border-color:var(--acc)}
+.social{display:inline-flex;align-items:center;gap:10px;border:1.5px solid color-mix(in srgb,var(--acc) 40%,transparent);color:var(--acc);border-radius:999px;padding:13px 26px;text-decoration:none;font-weight:800;text-transform:capitalize;transition:.24s cubic-bezier(.2,.7,.2,1)}
+.social:hover{background:var(--acc);color:var(--on-p);border-color:var(--acc);transform:translateY(-3px);box-shadow:0 18px 34px -18px rgba(var(--pr),.9)}
+.social-glyph{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:color-mix(in srgb,var(--acc) 14%,transparent);font-size:.9rem;line-height:1;transition:.24s}
+.social:hover .social-glyph{background:rgba(255,255,255,.22)}
 .site-footer{padding:48px 0;color:var(--mut);border-top:1px solid var(--line);text-align:center;font-weight:600}
 /* Scroll reveal — sections rise in, then their contents stagger in */
 .reveal-on .block{opacity:0;transform:translateY(28px)}
@@ -329,7 +406,43 @@ a.card{overflow:hidden}a.card:hover img{transform:scale(1.06)}
 .reveal-on .block.in :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img):nth-child(5){transition-delay:.28s}
 .reveal-on .block.in :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img):nth-child(6){transition-delay:.34s}
 .reveal-on .block.in :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img):nth-child(n+7){transition-delay:.40s}
-@media(prefers-reduced-motion:reduce){.reveal-on .block,.reveal-on .block :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img),.hero h1,.hero .sub,.hero-actions{opacity:1!important;transform:none!important;animation:none!important;transition:none!important}[data-preset=energetic] .hero::before{animation:none}html{scroll-behavior:auto}}
+/* ── Motion intensity (the model's own choice) ──────────────────────────────
+   One knob, three settings, applied by scaling the same effects rather than by
+   swapping in different ones — so a page never gains an animation the calm
+   version could not also express, and "calm" stays a designed page rather than a
+   stripped one. */
+[data-motion=calm] .hero-aura{opacity:.42;filter:blur(92px)}
+/* Slower and softer, never stopped. Asked to choose, the model picks calm almost
+   every time — so calm has to be a restrained *designed* page, not the absence of
+   design. Switching the motion off here is what made every second generation
+   look unfinished. Stillness is what prefers-reduced-motion is for; that block
+   below is the only place animation actually stops. */
+[data-motion=calm] .hero-aura i:nth-child(1){animation-duration:34s}
+[data-motion=calm] .hero-aura i:nth-child(2){animation-duration:41s}
+[data-motion=calm] .hero-aura i:nth-child(3){animation-duration:47s}
+[data-motion=calm] .grad{animation-duration:12s}
+[data-motion=calm] .hero-scroll{opacity:.6}
+[data-motion=cinematic] .hero-aura{opacity:.8;filter:blur(58px)}
+[data-motion=cinematic] .hero-aura i:nth-child(1){animation-duration:26s}
+[data-motion=cinematic] .hero-aura i:nth-child(2){animation-duration:31s}
+[data-motion=cinematic] .hero-aura i:nth-child(3){animation-duration:37s}
+[data-motion=cinematic] .hero-badge,[data-motion=cinematic] .hero h1,[data-motion=cinematic] .hero .sub,[data-motion=cinematic] .hero-actions{animation-duration:1.15s}
+[data-motion=cinematic] .hero h1{animation-delay:.12s}
+[data-motion=cinematic] .hero .sub{animation-delay:.26s}
+[data-motion=cinematic] .hero-actions{animation-delay:.4s}
+[data-motion=cinematic] .reveal-on .block{transform:translateY(44px)}
+[data-motion=cinematic] .reveal-on .block.in{transition:opacity 1.05s ease,transform 1.05s cubic-bezier(.2,.7,.2,1)}
+@media(prefers-reduced-motion:reduce){
+  .reveal-on .block,.reveal-on .block :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img),.hero-badge,.hero h1,.hero .sub,.hero-actions{opacity:1!important;transform:none!important;animation:none!important;transition:none!important}
+  /* The decorative motion stops outright. The gradient headline keeps its fill —
+     only its travel is animated — so killing the animation must not kill the
+     background-position that makes the text visible at all. */
+  [data-preset=energetic] .hero::before,.hero-aura i,.hero-badge .dot,.hero-scroll span,.skeleton{animation:none!important}
+  .grad{animation:none;background-position:0 50%}
+  .hero-scroll{display:none}
+  .hero-media[data-tilt]>*{transform:none!important}
+  html{scroll-behavior:auto}
+}
 @media(max-width:820px){.about-grid{grid-template-columns:1fr;gap:34px}.block{padding:min(var(--pad),68px) 0}.hero{min-height:auto;padding:88px 0}}
 `.trim();
 }
@@ -350,7 +463,12 @@ function clientJs(slug: string, defaultLang: 'ar' | 'en'): string {
 (function(){
   // /api/v1/a/<slug> — the last path segment is this academy's current address.
   var SLUG=(function(){
-    var m=location.pathname.match(/\/a\/([^/?#]+)/);
+    // Built from a string, not a literal: a /\\/a\\/…/ literal has to survive being
+    // written inside a template literal on the server, where \\/ collapses to /
+    // and ships the browser //a/([^/?#]+)/ — a syntax error that took the whole
+    // script down with it, leaving the page with no language toggle and its
+    // course list stuck on skeletons.
+    var m=location.pathname.match(new RegExp('/a/([^/?#]+)'));
     return m ? decodeURIComponent(m[1]) : ${s};
   })();
   try{
@@ -360,6 +478,76 @@ function clientJs(slug: string, defaultLang: 'ar' | 'en'): string {
     var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{threshold:.1,rootMargin:'0px 0px -8% 0px'});
     document.querySelectorAll('.block').forEach(function(b){io.observe(b);});
   }catch(e){document.body.classList.remove('reveal-on');}
+  // Everything below is decoration. It is wrapped so that a failure in any one
+  // effect cannot take the language toggle or the course listings down with it.
+  try{
+    var CALM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var bar=document.querySelector('.scroll-bar i'),top=document.querySelector('.topbar');
+    var ticking=false;
+    function onScroll(){
+      if(bar){
+        var h=document.documentElement.scrollHeight-innerHeight;
+        bar.style.width=(h>0?Math.min(100,scrollY/h*100):0)+'%';
+      }
+      if(top)top.classList.toggle('stuck',scrollY>24);
+      ticking=false;
+    }
+    addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(onScroll);}},{passive:true});
+    onScroll();
+
+    if(!CALM){
+      // Pointer parallax on the hero aura and lean on the hero portrait. Both are
+      // written as CSS custom properties so the transitions stay in CSS.
+      var aura=document.querySelectorAll('.hero-aura i'),tilt=document.querySelectorAll('[data-tilt]');
+      if(aura.length||tilt.length){
+        addEventListener('pointermove',function(ev){
+          var x=ev.clientX/innerWidth-.5,y=ev.clientY/innerHeight-.5;
+          requestAnimationFrame(function(){
+            for(var i=0;i<aura.length;i++){
+              var d=(i+1)*14;
+              aura[i].style.translate=(x*d).toFixed(1)+'px '+(y*d).toFixed(1)+'px';
+            }
+            for(var j=0;j<tilt.length;j++){
+              tilt[j].style.setProperty('--ry',(x*7).toFixed(2)+'deg');
+              tilt[j].style.setProperty('--rx',(-y*7).toFixed(2)+'deg');
+            }
+          });
+        },{passive:true});
+      }
+      // The glow that follows the pointer across a card. Delegated, because the
+      // course and review cards do not exist yet — they are fetched below.
+      document.addEventListener('pointermove',function(ev){
+        var c=ev.target.closest&&ev.target.closest('.card');
+        if(!c)return;
+        var r=c.getBoundingClientRect();
+        c.style.setProperty('--mx',(ev.clientX-r.left)+'px');
+        c.style.setProperty('--my',(ev.clientY-r.top)+'px');
+      },{passive:true});
+    }
+
+    // Stat values count up the first time they scroll into view. Only the digits
+    // move: "500+" and "4.9/5" keep whatever wraps them.
+    var nums=document.querySelectorAll('.stat .v');
+    if(nums.length&&!CALM){
+      var nio=new IntersectionObserver(function(es){es.forEach(function(e){
+        if(!e.isIntersecting)return;
+        nio.unobserve(e.target);
+        var raw=e.target.textContent,m=raw.match(/[\\d.,]+/);
+        if(!m)return;
+        var target=parseFloat(m[0].replace(/,/g,''));
+        if(!isFinite(target))return;
+        var dec=(m[0].split('.')[1]||'').length,t0=0;
+        function step(ts){
+          if(!t0)t0=ts;
+          var k=Math.min(1,(ts-t0)/1100),eased=1-Math.pow(1-k,3);
+          e.target.textContent=raw.replace(m[0],(target*eased).toFixed(dec));
+          if(k<1)requestAnimationFrame(step);else e.target.textContent=raw;
+        }
+        requestAnimationFrame(step);
+      });},{threshold:.5});
+      nums.forEach(function(n){nio.observe(n);});
+    }
+  }catch(e){}
   var L=localStorage.getItem('darsly_lang')|| ${dl};
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');

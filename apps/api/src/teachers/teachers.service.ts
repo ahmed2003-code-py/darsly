@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { StudentPriceService } from '../payments/student-price.service';
 
 export interface DiscoverTeachersQuery {
   q?: string;
@@ -17,7 +18,10 @@ export interface DiscoverTeachersQuery {
 
 @Injectable()
 export class TeachersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly studentPrice: StudentPriceService,
+  ) {}
 
   /**
    * Student-facing discovery. Only APPROVED teachers of active users appear.
@@ -163,6 +167,30 @@ export class TeachersService {
       }),
     ]);
 
+    // Student-facing page: prices carry the platform fee, so the card and the
+    // checkout agree and the academy's own price is not derivable by subtraction.
+    const courses = await this.studentPrice.applyToMany(
+      teacher.courses.map((c) => {
+        const lessons = c.units.flatMap((u) => u.lessons);
+        return {
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          thumbnailUrl: c.thumbnailUrl,
+          subject: c.subject,
+          grade: c.grade,
+          pricingModel: c.pricingModel,
+          priceCents: c.priceCents,
+          currency: c.currency,
+          lessonsCount: lessons.length,
+          totalDurationSec: lessons.reduce((sum, l) => sum + l.durationSec, 0),
+          freePreviewCount: lessons.filter((l) => l.isFreePreview).length,
+          studentsCount: c._count.enrollments,
+        };
+      }),
+      (c) => teacher.id,
+    );
+
     return {
       id: teacher.id,
       slug: teacher.slug,
@@ -180,24 +208,7 @@ export class TeachersService {
         reviewsCount: rating._count,
         coursesCount: teacher.courses.length,
       },
-      courses: teacher.courses.map((c) => {
-        const lessons = c.units.flatMap((u) => u.lessons);
-        return {
-          id: c.id,
-          title: c.title,
-          description: c.description,
-          thumbnailUrl: c.thumbnailUrl,
-          subject: c.subject,
-          grade: c.grade,
-          pricingModel: c.pricingModel,
-          priceCents: c.priceCents,
-          currency: c.currency,
-          lessonsCount: lessons.length,
-          totalDurationSec: lessons.reduce((s, l) => s + l.durationSec, 0),
-          freePreviewCount: lessons.filter((l) => l.isFreePreview).length,
-          studentsCount: c._count.enrollments,
-        };
-      }),
+      courses,
       reviews: reviews.map((r) => ({
         id: r.id,
         rating: r.rating,

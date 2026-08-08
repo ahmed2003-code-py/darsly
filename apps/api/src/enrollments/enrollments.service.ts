@@ -10,14 +10,22 @@ import { computeServiceFee } from '../payments/fee.util';
 import { LedgerService } from '../payments/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * What a student is quoted. Deliberately only two numbers.
+ *
+ * The platform fee is additive — the academy names a price, the student pays that
+ * plus the fee, and the academy is credited its price in full. Publishing the
+ * split let a student see they were paying the platform, and made the course card
+ * (academy price) and the checkout (price + fee) show two different figures for
+ * one course. The academy's price and the fee are still computed and stored on
+ * the Payment row; they simply are not part of a student-facing response.
+ */
 export interface Quote {
+  /** The course's list price to a student, fee included, before any coupon. */
   basePriceCents: number;
+  /** The coupon discount the student actually earned. */
   discountCents: number;
-  /** what the academy earns (price − discount) */
-  netCents: number;
-  /** platform service fee the student pays on top */
-  feeCents: number;
-  /** what the student pays = netCents + feeCents */
+  /** What the student pays. */
   totalCents: number;
   currency: string;
   coupon: { id: string; code: string } | null;
@@ -72,11 +80,16 @@ export class EnrollmentsService {
     }
     const net = Math.max(0, course.priceCents - discount);
     const fee = await this.serviceFee(course.tenantId, net);
+    const basePlusFee = course.priceCents + (await this.serviceFee(course.tenantId, course.priceCents));
+
+    // What the student is shown: one price, and the discount they actually
+    // earned. basePriceCents/netCents/feeCents stay out of the response — the
+    // split between the academy's price and the platform's fee is not something
+    // either side of the transaction needs to see, and publishing it made the
+    // course card and the checkout show two different numbers for one course.
     return {
-      basePriceCents: course.priceCents,
+      basePriceCents: basePlusFee,
       discountCents: discount,
-      netCents: net,
-      feeCents: fee,
       totalCents: net + fee,
       currency: course.currency,
       coupon: coupon ? { id: coupon.id, code: coupon.code } : null,

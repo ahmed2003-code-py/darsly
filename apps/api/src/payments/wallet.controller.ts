@@ -54,7 +54,9 @@ export class WalletController {
       payoutMinimumCents: Number((minSetting?.value as number) ?? 50000),
       recentPayments: payments.map((p) => ({
         id: p.id,
-        amountCents: p.amountCents,
+        // The academy's earning, not the total the student paid — the difference
+        // between the two IS the platform fee, so showing the total leaks it.
+        amountCents: p.netCents ?? p.amountCents,
         courseTitle: p.course.title,
         studentName: p.student.user.fullName,
         invoiceSerial: p.invoice?.serial ?? null,

@@ -70,18 +70,19 @@ export default function PaymentModal({
               <span className="material-symbols-outlined text-primary">north_east</span>{t('pay.transferTo')}
             </p>
             <div className="mb-3 rounded-xl bg-primary-fixed/40 p-3">
-              {quote && (
+              {/* One price. The platform fee is already inside it — a student is
+                  buying a course, not paying two parties, and the split is not
+                  theirs to see. A coupon discount IS shown: they earned it. */}
+              {quote && quote.discountCents > 0 && (
                 <div className="mb-2 space-y-1 border-b border-outline-variant pb-2 text-sm">
                   <div className="flex justify-between text-on-surface-variant">
-                    <span>{t('pay.coursePrice')}</span>
-                    <span className="tabular-nums">{egp(quote.netCents ?? quote.basePriceCents)}</span>
+                    <span>{t('pay.originalPrice')}</span>
+                    <span className="tabular-nums line-through">{egp(quote.basePriceCents)}</span>
                   </div>
-                  {quote.feeCents > 0 && (
-                    <div className="flex justify-between text-on-surface-variant">
-                      <span>{t('pay.serviceFee')}</span>
-                      <span className="tabular-nums">{egp(quote.feeCents)}</span>
-                    </div>
-                  )}
+                  <div className="flex justify-between font-semibold text-primary">
+                    <span>{t('pay.discount')}</span>
+                    <span className="tabular-nums">−{egp(quote.discountCents)}</span>
+                  </div>
                 </div>
               )}
               <div className="flex items-center justify-between">

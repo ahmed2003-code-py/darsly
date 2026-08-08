@@ -26,6 +26,7 @@ import { AcademyMediaController } from './media/academy-media.controller';
 import { AcademyMediaProcessor } from './media/academy-media.processor';
 import { AcademyMediaService } from './media/academy-media.service';
 import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
+import { StudentPriceService } from '../payments/student-price.service';
 
 /**
  * Academy Studio (AI site) module. Slice 2 wires the job infrastructure only;
@@ -42,7 +43,7 @@ import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
     PublicSiteController,
     AdminAcademyStudioController,
   ],
-  providers: [
+  providers: [StudentPriceService, 
     AcademySiteConfig,
     AiFeatureEnabledGuard,
     AiClient,

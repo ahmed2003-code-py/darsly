@@ -440,8 +440,6 @@
     "subtitle": "Your earnings and withdrawable balance",
     "balance": "Withdrawable balance",
     "net": "Net earnings",
-    "gross": "Gross sales",
-    "commission": "Platform commission",
     "requestPayout": "Request payout",
     "payoutMethods": "Payout methods",
     "addMethod": "Add method",
@@ -831,8 +829,8 @@
     "submittedTitle": "Payment submitted ✅",
     "submittedBody": "Your payment is under review; access activates once confirmed.",
     "noAccounts": "No receiving accounts available right now.",
-    "coursePrice": "Course price",
-    "serviceFee": "Platform service fee"
+    "originalPrice": "Original price",
+    "discount": "Discount"
   },
   "tpay": {
     "title": "Verify payments",

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StudentPriceService } from '../../payments/student-price.service';
 
 export interface PublishedSite {
   academyId: string;
@@ -9,7 +10,10 @@ export interface PublishedSite {
 
 @Injectable()
 export class PublicSiteService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly studentPrice: StudentPriceService,
+  ) {}
 
   private academyBySlug(slug: string) {
     return this.prisma.academy.findFirst({
@@ -47,12 +51,18 @@ export class PublicSiteService {
       take: limit,
       select: { id: true, title: true, thumbnailUrl: true, priceCents: true },
     });
-    return courses.map((c) => ({
-      title: c.title,
-      thumbnailUrl: c.thumbnailUrl,
-      priceCents: c.priceCents,
-      url: `/course/${c.id}`,
-    }));
+    // The price a student pays, fee included — the same number the checkout will
+    // ask for. Showing the academy's own price here made the card and the
+    // checkout disagree, and exposed the platform's cut by subtraction.
+    return this.studentPrice.applyToMany(
+      courses.map((c) => ({
+        title: c.title,
+        thumbnailUrl: c.thumbnailUrl,
+        priceCents: c.priceCents,
+        url: `/course/${c.id}`,
+      })),
+      () => academy.id,
+    );
   }
 
   async reviews(slug: string, limit: number) {

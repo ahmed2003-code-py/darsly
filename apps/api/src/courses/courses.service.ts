@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { StudentPriceService } from '../payments/student-price.service';
 import {
   CreateCourseDto,
   CreateLessonDto,
@@ -19,7 +20,10 @@ const THUMBNAIL_MAX_BYTES = 700 * 1024;
 
 @Injectable()
 export class CoursesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly studentPrice: StudentPriceService,
+  ) {}
 
   // ── Tenant isolation helpers ─────────────────────────────────────────────
   // Every teacher mutation resolves the row through tenantId; a cross-tenant
@@ -364,7 +368,9 @@ export class CoursesService {
       subject: course.subject,
       grade: course.grade,
       pricingModel: course.pricingModel,
-      priceCents: course.priceCents,
+      // Fee-inclusive: this is a student-facing payload, and the student pays one
+      // number. The academy sees its own price through the teacher endpoints.
+      priceCents: await this.studentPrice.displayPrice(course.tenantId, course.priceCents),
       currency: course.currency,
       requiresEnrollmentApproval: course.requiresEnrollmentApproval,
       studentsCount: course._count.enrollments,

@@ -30,7 +30,7 @@ export default function TeacherDashboardPage() {
   const published = courses?.filter((c: any) => c.status === 'PUBLISHED').length ?? 0;
   const active = enrollments?.filter((e: any) => e.status === 'ACTIVE').length ?? 0;
   const pending = enrollments?.filter((e: any) => e.status === 'PENDING_APPROVAL').length ?? 0;
-  const revenue = wallet?.grossCents ?? 0;
+  const revenue = wallet?.netCents ?? 0;
 
   const stats = [
     { icon: 'menu_book', label: t('teacher.statCourses'), value: published, to: '/teacher/courses', tint: 'bg-primary-fixed text-primary' },

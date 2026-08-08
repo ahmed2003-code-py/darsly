@@ -10,7 +10,7 @@ export class AnalyticsService {
     const [payments, enrollments, activeEnrollments, reviews, quizAgg] = await Promise.all([
       this.prisma.payment.findMany({
         where: { tenantId, status: 'PAID' },
-        select: { amountCents: true, paidAt: true, createdAt: true },
+        select: { amountCents: true, netCents: true, paidAt: true, createdAt: true },
       }),
       this.prisma.enrollment.findMany({
         where: { tenantId },
@@ -28,8 +28,12 @@ export class AnalyticsService {
     ]);
 
     const months = lastMonths(6);
-    const grossCents = payments.reduce((s, p) => s + p.amountCents, 0);
-    const revenueByMonth = bucketByMonth(months, payments.map((p) => ({ at: p.paidAt ?? p.createdAt, v: p.amountCents })));
+    // An academy's revenue is what it earns, not what the student paid: the
+    // difference between the two is the platform fee, so reporting the total
+    // here would disclose it by subtraction against the price they set.
+    const earning = (p: { amountCents: number; netCents: number | null }) => p.netCents ?? p.amountCents;
+    const grossCents = payments.reduce((sum, p) => sum + earning(p), 0);
+    const revenueByMonth = bucketByMonth(months, payments.map((p) => ({ at: p.paidAt ?? p.createdAt, v: earning(p) })));
     const enrollmentsByMonth = bucketByMonth(months, enrollments.map((e) => ({ at: e.createdAt, v: 1 })));
 
     const activeStudents = new Set(activeEnrollments.map((e) => e.studentId)).size;

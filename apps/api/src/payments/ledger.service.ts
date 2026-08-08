@@ -112,15 +112,21 @@ export class LedgerService {
   }
 
   /** Lifetime gross + commission + net for a teacher (for the wallet header). */
+  /**
+   * What the academy has earned — and nothing else.
+   *
+   * This used to return gross and the platform's commission alongside it, and the
+   * wallet spread all three onto the screen. The fee is additive: the academy is
+   * credited the price it set, in full, so gross and commission are the
+   * platform's side of the transaction and are none of the academy's business.
+   * Platform-wide figures live in platformTotals(), for the admin.
+   */
   async teacherEarnings(tenantId: string) {
-    const account = this.teacherAccount(tenantId);
-    const [net, commission] = await Promise.all([
-      this.prisma.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
-      this.prisma.ledgerEntry.aggregate({ where: { account: 'platform:commission', tenantId }, _sum: { amountCents: true } }),
-    ]);
-    const netCents = net._sum.amountCents ?? 0;
-    const commissionCents = commission._sum.amountCents ?? 0;
-    return { grossCents: netCents + commissionCents, commissionCents, netCents };
+    const net = await this.prisma.ledgerEntry.aggregate({
+      where: { account: this.teacherAccount(tenantId), direction: 'CREDIT' },
+      _sum: { amountCents: true },
+    });
+    return { netCents: net._sum.amountCents ?? 0 };
   }
 
   /** Platform-wide totals for the admin financials view. */

@@ -83,8 +83,6 @@ export default function TeacherWalletPage() {
           <p className="mt-1 text-xs opacity-80">{t('wallet.minPayout', { amount: `${minEgp} ${t('common.currencyShort')}` })}</p>
         </div>
         <div className="card"><p className="text-sm text-on-surface-variant">{t('wallet.net')}</p><p className="font-heading text-3xl font-extrabold text-accent">{egp(wallet.netCents)}</p></div>
-        <div className="card"><p className="text-sm text-on-surface-variant">{t('wallet.gross')}</p><p className="font-heading text-3xl font-extrabold">{egp(wallet.grossCents)}</p></div>
-        <div className="card"><p className="text-sm text-on-surface-variant">{t('wallet.commission')}</p><p className="font-heading text-3xl font-extrabold text-outline">{egp(wallet.commissionCents)}</p></div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

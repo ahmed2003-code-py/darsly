@@ -54,8 +54,12 @@ for suite in $SUITES; do
   [ -n "$real" ] && echo "$real"
   [ "$throttled" -gt 0 ] && echo "  ⏳ $throttled check(s) hit the rate limiter — rerun this suite alone to confirm"
 
-  # Both the English and Arabic summary lines end "<n> passed, <m> failed".
-  nums=$(echo "$out" | grep -oE "[0-9]+ (passed|نجح), [0-9]+ (failed|فشل)" | tail -1 | grep -oE "[0-9]+")
+  # Both summary shapes end "<n> passed, <m> failed" — but the Arabic one uses an
+  # Arabic comma (،), and matching only the Latin one made this report 0 passed /
+  # 0 failed for a suite that had actually passed every check. A runner that
+  # silently scores a suite as nothing is worse than no runner: it hides exactly
+  # the regression it exists to catch.
+  nums=$(echo "$out" | grep -oE "[0-9]+ (passed|نجح)[,،] [0-9]+ (failed|فشل)" | tail -1 | grep -oE "[0-9]+")
   p=$(echo "$nums" | sed -n 1p); f=$(echo "$nums" | sed -n 2p)
   p=${p:-0}; f=${f:-0}
   f=$((f - throttled))

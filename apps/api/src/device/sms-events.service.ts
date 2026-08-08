@@ -71,7 +71,7 @@ export class SmsEventsService {
           provider: (classification?.provider as any) ?? null,
           amountCents: amountCents ?? undefined,
           reference: reference ?? undefined,
-          matchStatus: willForward ? null : incoming ? 'LOCAL_ONLY' : 'OUTGOING',
+          matchStatus: willForward ? null : !classification ? 'LOCAL_ONLY' : incoming ? 'LOCAL_ONLY' : 'OUTGOING',
         },
       });
     } catch (e) {
@@ -82,9 +82,11 @@ export class SmsEventsService {
     }
 
     if (!willForward) {
+      // An unmatched sender is local-only whatever the message says; OUTGOING is
+      // reserved for a known payment sender reporting money leaving the account.
       return this.result(
         record.id, false, classification, amountCents, reference, false,
-        incoming ? 'LOCAL_ONLY' : 'OUTGOING',
+        !classification || incoming ? 'LOCAL_ONLY' : 'OUTGOING',
       );
     }
     return this.forward(record.id, device.id, classification!, amountCents!, reference, receivedAt, dto.message);

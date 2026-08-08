@@ -20,6 +20,9 @@ function makeCtx(questions = QUESTIONS) {
     quizAttempt: {
       create: jest.fn((args: any) => { created.push(args.data); return Promise.resolve({ id: 'a1', ...args.data }); }),
       findFirst: jest.fn(),
+      // The attempt cap ("you get N tries") counts prior attempts before
+      // accepting a submission; without this the service throws before it grades.
+      count: jest.fn().mockResolvedValue(0),
       update: jest.fn((args: any) => Promise.resolve({ id: args.where.id, ...args.data })),
     },
     lessonProgress: { upsert: jest.fn().mockResolvedValue({}) },

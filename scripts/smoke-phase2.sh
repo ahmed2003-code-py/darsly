@@ -2,6 +2,10 @@
 # Darsly Phase 2 smoke test: discovery, course CRUD + tenant isolation,
 # uploads, coupons, enrollment lifecycle (quote → enroll → approve → revoke).
 set -u
+# Accounts come from the demo dataset (apps/api/src/common/demo-seed.ts):
+# admin@darsly.app, teacher1..6@darsly.app, student1..N@darsly.app — one
+# password for all of them. Override with DARSLY_PW if yours differs.
+DARSLY_PW=${DARSLY_PW:-Darsly@123}
 API=http://localhost:4000/api/v1
 pass=0; fail=0
 check() { # name expected actual
@@ -34,8 +38,8 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/teachers/pending-teacher")
 check "pending teacher profile → 404" "404" "$CODE"
 
 echo "── 3. Teacher course CRUD + tenant isolation"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jsonget "['accessToken']")
-NO=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"noura@darsly.app","password":"Teacher@12345"}' | jsonget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"teacher1@darsly.app","password":"Darsly@123"}' | jsonget "['accessToken']")
+NO=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"teacher2@darsly.app","password":"Darsly@123"}' | jsonget "['accessToken']")
 
 C=$(curl -s -X POST $API/teacher/courses -H "Authorization: Bearer $KH" -H 'Content-Type: application/json' \
   -d '{"title":"دورة تجريبية للاختبار","description":"smoke","priceCents":10000}')
@@ -111,7 +115,7 @@ MINE=$(curl -s $API/enrollments/mine -H "Authorization: Bearer $ST")
 check "student sees enrollment in /mine" "yes" "$(echo "$MINE" | python3 -c "import sys,json;print('yes' if any(e['id']=='$EID' for e in json.load(sys.stdin)) else 'no')")"
 
 # Auto-approve course (noura's chem, requiresApproval=false)
-CHEM=$(curl -s "$API/teachers/noura-alkhaled" | jsonget "['courses'][0]['id']")
+CHEM=$(curl -s "$API/teachers/teacher2" | jsonget "['courses'][0]['id']")
 E2=$(curl -s -X POST $API/enrollments -H "Authorization: Bearer $ST" -H 'Content-Type: application/json' -d "{\"courseId\":\"$CHEM\"}")
 check "auto-approve course → ACTIVE immediately" "ACTIVE" "$(echo "$E2" | jsonget "['status']")"
 check "subscription gets expiry" "yes" "$([ "$(echo "$E2" | jsonget "['expiresAt']")" != "None" ] && echo yes || echo no)"

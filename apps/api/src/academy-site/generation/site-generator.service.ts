@@ -145,6 +145,11 @@ export class SiteGeneratorService {
       facts.socials,
     );
     doc.theme.archetype = plan.archetype;
+    // The model's own design system, when it produced a valid one. Absent — an
+    // older document, or a response that failed validation — the Design DNA's
+    // preset still supplies the look, so a bad generation degrades to the
+    // previous behaviour rather than to a broken page.
+    if (wantAi && plan.design) doc.theme.design = plan.design;
     // Site Brain: order sections by archetype, then select each section's variant.
     this.brain.arrange(doc, plan.archetype);
     this.brain.assignVariants(doc, {

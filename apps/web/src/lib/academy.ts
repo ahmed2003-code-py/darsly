@@ -3,6 +3,22 @@ import { api } from './api';
 
 /** Academy-first data hooks (Phase 4). Read-only, public where noted. */
 
+/**
+ * The look a teacher approved in Academy Studio, promoted to their brand. Every
+ * field is optional at the type level because a document generated before the
+ * design system existed simply will not have it.
+ */
+export interface BrandTokens {
+  background?: string;
+  ink?: string;
+  surface?: string;
+  radius?: number;
+  density?: 'compact' | 'regular' | 'airy';
+  headingScale?: 'restrained' | 'balanced' | 'dramatic';
+  heroTreatment?: 'flat' | 'gradient' | 'mesh' | 'spotlight';
+  bodyFont?: 'sans' | 'serif' | 'mono';
+}
+
 export interface AcademyBranding {
   id: string;
   slug: string;
@@ -13,6 +29,8 @@ export interface AcademyBranding {
   coverUrl: string | null;
   colorPrimary: string;
   colorAccent: string;
+  /** The design system published from Academy Studio, when there is one. */
+  brandTokens?: BrandTokens | null;
   language: string;
 }
 
@@ -38,7 +56,13 @@ export interface MyAcademy {
   role: string;
   isHome: boolean;
   status: string;
-  branding: { logoUrl: string | null; colorPrimary: string; colorAccent: string };
+  branding: {
+    logoUrl: string | null;
+    colorPrimary: string;
+    colorAccent: string;
+    /** The design system published from Academy Studio, when there is one. */
+    brandTokens?: BrandTokens | null;
+  };
 }
 
 /** Public academy branding by slug. */

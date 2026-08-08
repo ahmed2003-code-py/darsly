@@ -3,13 +3,17 @@
 # assignments (author → submit → grade), reviews, and certificate endpoints.
 # Idempotent: creates a throwaway "Phase6 Smoke" unit on Khaled's algebra course.
 set -u
+# Accounts come from the demo dataset (apps/api/src/common/demo-seed.ts):
+# admin@darsly.app, teacher1..6@darsly.app, student1..N@darsly.app — one
+# password for all of them. Override with DARSLY_PW if yours differs.
+DARSLY_PW=${DARSLY_PW:-Darsly@123}
 API=http://localhost:4000/api/v1
 pass=0; fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi; }
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
 
 echo "── 1. Logins"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"teacher1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 check "teacher login" "yes" "$([ -n "$KH" ] && [ "$KH" != ERR ] && echo yes || echo no)"
 
 # Find Khaled's algebra course + a student with an ACTIVE enrollment in it.
@@ -17,8 +21,8 @@ COURSE=$(curl -s $API/teacher/courses -H "Authorization: Bearer $KH" | python3 -
 check "found algebra course" "yes" "$([ -n "$COURSE" ] && [ "$COURSE" != ERR ] && echo yes || echo no)"
 
 ST=""
-for em in ahmed@student.darsly.app sara@student.darsly.app omar@student.darsly.app mona@student.darsly.app youssef@student.darsly.app; do
-  TOK=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$em\",\"password\":\"Student@12345\"}" | jget "['accessToken']")
+for em in student1@darsly.app student2@darsly.app student3@darsly.app student4@darsly.app student5@darsly.app; do
+  TOK=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$em\",\"password\":\"Darsly@123\"}" | jget "['accessToken']")
   [ -z "$TOK" ] || [ "$TOK" = ERR ] && continue
   HAS=$(curl -s $API/enrollments/mine -H "Authorization: Bearer $TOK" | python3 -c "import sys,json;d=json.load(sys.stdin);print('yes' if any(e['course']['id']=='$COURSE' and e['status']=='ACTIVE' for e in d) else 'no')" 2>/dev/null)
   if [ "$HAS" = yes ]; then ST=$TOK; break; fi

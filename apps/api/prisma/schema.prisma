@@ -95,6 +95,12 @@ model Academy {
   // Branding (inline for now; normalizable later without a domain change).
   logoUrl      String?
   coverUrl     String?
+  // The design system the academy published, promoted to its brand identity.
+  // colorPrimary/colorAccent stay the canonical two-colour brand; this carries
+  // the rest (background, ink, surface, radius, density…) so the console and any
+  // future surface can dress themselves in the look the teacher actually chose,
+  // instead of every academy sharing one platform palette.
+  brandTokens  Json?
   colorPrimary String  @default("#4A32C9")
   colorAccent  String  @default("#4A32C9")
   tagline      String  @default("")

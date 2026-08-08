@@ -76,3 +76,60 @@ describe('compileSite — call-to-action destinations', () => {
     expect(html).not.toMatch(/href="#courses-[^"]+"/);
   });
 });
+
+describe('compileSite — the AI-composed design system', () => {
+  const design = {
+    background: '#0B1020',
+    ink: '#F2F5FF',
+    surface: '#141B33',
+    radius: 4,
+    density: 'airy' as const,
+    headingScale: 'dramatic' as const,
+    heroTreatment: 'mesh' as const,
+    bodyFont: 'serif' as const,
+  };
+
+  function themed(extra: Record<string, unknown>): RenderPlan {
+    return {
+      blocks: [{ block: heroBlock(), variant: undefined }],
+      theme: { defaultLang: 'ar', preset: 'warm', ...extra },
+    } as unknown as RenderPlan;
+  }
+
+  it('renders the palette, geometry and rhythm the model chose', () => {
+    const html = compileSite(themed({ design }), ctx);
+
+    expect(html).toContain('--bg:#0B1020');
+    expect(html).toContain('--ink:#F2F5FF');
+    expect(html).toContain('--surface:#141B33');
+    expect(html).toContain('--rad:4px');
+    expect(html).toContain('--pad:148px'); // airy
+    expect(html).toContain('Fraunces'); // serif body
+  });
+
+  it('overrides the preset it was generated alongside', () => {
+    // The DNA preset still sets a palette; the model's must win the cascade, or a
+    // composed design would render as whichever catalogue entry came with it.
+    const html = compileSite(themed({ design }), ctx);
+    const presetAt = html.indexOf('data-preset=warm]{--bg:');
+    const aiAt = html.lastIndexOf('--bg:#0B1020');
+    expect(presetAt).toBeGreaterThan(-1);
+    expect(aiAt).toBeGreaterThan(presetAt);
+  });
+
+  it('falls back to the preset when the model composed nothing', () => {
+    // An older document, or a response that failed validation, must still render
+    // a competent page rather than an unstyled one.
+    const html = compileSite(themed({}), ctx);
+    expect(html).toContain('--pad:104px');
+    expect(html).not.toContain('#0B1020');
+    expect(html).toContain('data-preset=');
+  });
+
+  it('varies the hero backdrop with the chosen treatment', () => {
+    const mesh = compileSite(themed({ design }), ctx);
+    const flat = compileSite(themed({ design: { ...design, heroTreatment: 'flat' as const } }), ctx);
+    expect(mesh).not.toEqual(flat);
+    expect(mesh).toContain('radial-gradient(46% 52% at 12% 8%');
+  });
+});

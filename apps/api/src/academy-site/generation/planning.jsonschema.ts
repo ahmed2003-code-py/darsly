@@ -11,7 +11,7 @@ export const PLANNING_SCHEMA_NAME = 'academy_plan';
 export const planningJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
-  required: ['designDNA', 'theme', 'archetype'],
+  required: ['designDNA', 'theme', 'archetype', 'design'],
   properties: {
     designDNA: { type: 'string', enum: [...DESIGN_DNA_KEYS] },
     theme: {
@@ -24,5 +24,23 @@ export const planningJsonSchema: Record<string, unknown> = {
       },
     },
     archetype: { type: 'string', enum: [...ARCHETYPES] },
+    // The model composes its own visual system here. Constrained values only —
+    // it never emits markup, CSS or script, so a hostile response can change how
+    // the page looks and nothing else.
+    design: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['background', 'ink', 'surface', 'radius', 'density', 'headingScale', 'heroTreatment'],
+      properties: {
+        background: { type: 'string', description: 'Page background, #RRGGBB. Dark or light — your call.' },
+        ink: { type: 'string', description: 'Body text colour, #RRGGBB. Must be legible on the background.' },
+        surface: { type: 'string', description: 'Cards and section bands, #RRGGBB. Close to the background.' },
+        radius: { type: 'integer', minimum: 0, maximum: 28, description: '0 = hard-edged, 28 = very soft.' },
+        density: { type: 'string', enum: ['compact', 'regular', 'airy'] },
+        headingScale: { type: 'string', enum: ['restrained', 'balanced', 'dramatic'] },
+        heroTreatment: { type: 'string', enum: ['flat', 'gradient', 'mesh', 'spotlight'] },
+        bodyFont: { type: 'string', enum: ['sans', 'serif', 'mono'] },
+      },
+    },
   },
 };

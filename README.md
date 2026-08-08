@@ -35,7 +35,9 @@ npm run dev:web                   # http://localhost:5173
 Verify the auth/RBAC layer end-to-end at any time:
 
 ```bash
-bash scripts/smoke-auth.sh        # 18 checks: auth, RBAC, session control
+bash scripts/smoke-all.sh         # every suite below, in sequence, with the
+                                  # pauses the rate limiter needs — one summary
+bash scripts/smoke-auth.sh        # 23 checks: auth, RBAC, session control
 bash scripts/smoke-phase2.sh      # 37 checks: discovery, course CRUD, tenant
                                   # isolation, uploads, coupons, enrollments
 bash scripts/smoke-phase3.sh      # 21 checks: encrypted-HLS transcode, signed
@@ -59,12 +61,9 @@ npm run check:web                 # every internal link resolves to a route, and
 
 | Role | Login | Credential |
 |---|---|---|
-| Super admin | `admin@darsly.app` | `Admin@12345` |
-| Teacher (math, 20% commission) | `khaled@darsly.app` | `Teacher@12345` |
-| Teacher (chem, 15%, auto-approve) | `noura@darsly.app` | `Teacher@12345` |
-| Teacher (english, `language=en`) | `david@darsly.app` | `Teacher@12345` |
-| Teacher (PENDING — cannot log in until approved) | `pending@darsly.app` | `Teacher@12345` |
-| Students ×5 | `ahmed@student.darsly.app` … (`sara`/`omar`/`mona`/`youssef`) | `Student@12345` |
+| Super admin | `admin@darsly.app` | `Darsly@123` |
+| Teachers ×6 | `teacher1@darsly.app` … `teacher6@darsly.app` | `Darsly@123` |
+| Students ×N | `student1@darsly.app` … | `Darsly@123` |
 
 **Everyone logs in with email + password.** Students self-register and are active
 immediately; teachers register and land `PENDING` until a super admin approves them

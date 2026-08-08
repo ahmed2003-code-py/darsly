@@ -158,6 +158,42 @@ export const siteThemeSchema = z.object({
   archetype: z.string().max(40).optional(),
   // Default language the compiled page opens in (visitor can still toggle).
   defaultLang: z.enum(['ar', 'en']).optional(),
+
+  /**
+   * A design system composed by the model for THIS academy, rather than a preset
+   * picked from a catalogue of five.
+   *
+   * The catalogue guaranteed a competent look and an identical one: two academies
+   * that landed on the same DNA were pixel-identical. These fields let the model
+   * choose its own surface mood, ink, typography, geometry and rhythm, so the
+   * output differs every time.
+   *
+   * Every value is constrained and validated. The model never emits markup, CSS
+   * or script — only tokens the compiler renders — so a hostile or malformed
+   * response can change how the page looks and can do nothing else. When the
+   * field is absent (older documents, or a response that failed validation) the
+   * Design DNA still supplies the look, unchanged.
+   */
+  design: z
+    .object({
+      /** Page background. Drives whether the whole page reads light or dark. */
+      background: z.string().regex(HEX),
+      /** Body text colour. The rules engine checks it against the background. */
+      ink: z.string().regex(HEX),
+      /** Panels, cards and section bands. */
+      surface: z.string().regex(HEX),
+      /** Corner radius in px. 0 = hard-edged brutalist, 28 = very soft. */
+      radius: z.number().int().min(0).max(28),
+      /** Vertical rhythm: how much air the sections breathe. */
+      density: z.enum(['compact', 'regular', 'airy']),
+      /** Headline weight/scale personality. */
+      headingScale: z.enum(['restrained', 'balanced', 'dramatic']),
+      /** Background treatment behind the hero. */
+      heroTreatment: z.enum(['flat', 'gradient', 'mesh', 'spotlight']),
+      /** Body typeface. Headings keep their own (serif/sans/display) choice. */
+      bodyFont: z.enum(['sans', 'serif', 'mono']).optional(),
+    })
+    .optional(),
 });
 
 export const siteSeoSchema = z.object({

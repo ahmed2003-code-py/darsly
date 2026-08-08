@@ -3,17 +3,21 @@
 # Realtime socket delivery is covered by the Node socket check in the repo;
 # this script exercises the REST surface + authorization + notification writes.
 set -u
+# Accounts come from the demo dataset (apps/api/src/common/demo-seed.ts):
+# admin@darsly.app, teacher1..6@darsly.app, student1..N@darsly.app — one
+# password for all of them. Override with DARSLY_PW if yours differs.
+DARSLY_PW=${DARSLY_PW:-Darsly@123}
 API=http://localhost:4000/api/v1
 pass=0; fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi; }
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
 
 echo "── 1. Logins"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"teacher1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 # ahmed (student[0]) is enrolled in khaled's algebra course
-ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ahmed@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
+ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"student1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 # yousef (student[4]) is NOT enrolled with khaled
-YS=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"youssef@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
+YS=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"student5@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 KH_TENANT=$(curl -s $API/teacher/profile -H "Authorization: Bearer $KH" | jget "['id']")
 check "teacher tenant resolved" "yes" "$([ -n "$KH_TENANT" ] && echo yes || echo no)"
 

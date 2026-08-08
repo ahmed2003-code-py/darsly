@@ -6,7 +6,13 @@ import { PlaybackService } from './playback.service';
 /** Minimal Prisma mock: each model gets jest.fn() methods we can program. */
 function makePrisma(overrides: any = {}) {
   const base: any = {
-    lesson: { findUnique: jest.fn() },
+    // The service moved to findFirst when soft-delete filtering was added
+    // (a deleted lesson/unit/course must not play). Both names share one mock so
+    // the tests below keep programming it as `lesson.findUnique`.
+    lesson: (() => {
+      const findLesson = jest.fn();
+      return { findUnique: findLesson, findFirst: findLesson };
+    })(),
     teacherProfile: { findUnique: jest.fn() },
     studentProfile: { findUnique: jest.fn() },
     enrollment: { findUnique: jest.fn() },

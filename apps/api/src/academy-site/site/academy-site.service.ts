@@ -349,6 +349,19 @@ export class AcademySiteService {
       slug: academy.slug,
       defaultLang: academy.language === 'en' ? 'en' : 'ar',
     });
+    // Publishing is the moment the teacher says "this is my academy". Promote the
+    // look they approved to the academy's brand, so the console and every other
+    // surface stop wearing the generic platform palette and start wearing theirs.
+    // Only on publish — a preview they never accepted must not repaint the app.
+    await this.prisma.academy.update({
+      where: { id: academyId },
+      data: {
+        colorPrimary: doc.theme.primary,
+        colorAccent: doc.theme.accent,
+        brandTokens: (doc.theme.design ?? null) as never,
+      },
+    });
+
     return this.prisma.academySite.update({
       where: { id: siteId },
       data: {

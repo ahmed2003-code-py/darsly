@@ -2,14 +2,18 @@
 # Darsly Phase 5 smoke: ledger/wallet, payouts (teacher+admin), admin dashboard,
 # teacher approvals, and Leak-Trace forensics.
 set -u
+# Accounts come from the demo dataset (apps/api/src/common/demo-seed.ts):
+# admin@darsly.app, teacher1..6@darsly.app, student1..N@darsly.app — one
+# password for all of them. Override with DARSLY_PW if yours differs.
+DARSLY_PW=${DARSLY_PW:-Darsly@123}
 API=http://localhost:4000/api/v1
 pass=0; fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi; }
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
 
 echo "── 1. Logins"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
-ADMIN=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@darsly.app","password":"Admin@12345"}' | jget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"teacher1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
+ADMIN=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 check "admin login" "yes" "$([ -n "$ADMIN" ] && echo yes || echo no)"
 
 echo "── 2. Teacher wallet (ledger-backed)"
@@ -64,7 +68,7 @@ for u in d["units"]:
   for l in u["lessons"]:
     if l["isFreePreview"] and l.get("videoAsset"): print(l["id"]); import sys; sys.exit()')
 if [ -n "$LESSON" ]; then
-  ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ahmed@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
+  ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"student1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
   WM=$(curl -s -X POST $API/playback/sessions -H "Authorization: Bearer $ST" -H 'Content-Type: application/json' -d "{\"lessonId\":\"$LESSON\"}" | jget "['watermark']['watermarkId']")
   TRACE=$(curl -s $API/teacher/security/trace/$WM -H "Authorization: Bearer $KH")
   check "leak-trace resolves watermark to a student name" "yes" "$([ "$(echo "$TRACE" | jget "['student']['name']")" != "ERR" ] && echo yes || echo no)"

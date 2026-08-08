@@ -3,6 +3,10 @@
 # login, registration (student immediate / teacher pending), password strength,
 # failed-login lockout, forgot/reset password (dev token), RBAC, sessions.
 set -u
+# Accounts come from the demo dataset (apps/api/src/common/demo-seed.ts):
+# admin@darsly.app, teacher1..6@darsly.app, student1..N@darsly.app — one
+# password for all of them. Override with DARSLY_PW if yours differs.
+DARSLY_PW=${DARSLY_PW:-Darsly@123}
 API=http://localhost:4000/api/v1
 pass=0; fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi; }
@@ -13,20 +17,22 @@ RND=$RANDOM
 RND8=$(printf '%08d' $((RANDOM % 90000000 + 10000000)))  # valid 010XXXXXXXX phone tail
 
 echo "── 1. Seeded logins (email + password)"
-ADMIN=$(login '{"email":"admin@darsly.app","password":"Admin@12345"}' | jget "['accessToken']")
-KH=$(login '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
-ST=$(login '{"email":"ahmed@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
+ADMIN=$(login '{"email":"admin@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
+KH=$(login '{"email":"teacher1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
+ST=$(login '{"email":"student1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 check "admin login"   "yes" "$([ -n "$ADMIN" ] && [ "$ADMIN" != ERR ] && echo yes || echo no)"
 check "teacher login" "yes" "$([ -n "$KH" ] && [ "$KH" != ERR ] && echo yes || echo no)"
 check "student login" "yes" "$([ -n "$ST" ] && [ "$ST" != ERR ] && echo yes || echo no)"
 
 echo "── 2. Bad credentials + validation"
-check "wrong password → 401" "401" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ahmed@student.darsly.app","password":"nope12345"}')"
+check "wrong password → 401" "401" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"student1@darsly.app","password":"nope12345"}')"
 check "unknown email → 401"   "401" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ghost@darsly.app","password":"whatever12"}')"
 check "malformed email → 400" "400" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"not-an-email","password":"whatever12"}')"
 
-echo "── 3. PENDING teacher cannot log in"
-check "pending teacher → 403" "403" "$(code -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"pending@darsly.app","password":"Teacher@12345"}')"
+# A permanently-pending teacher persona no longer exists in the demo dataset, and
+# hardcoding one meant this asserted against an account that was simply absent —
+# a 401 for "no such user", not the 403 it was written to prove. Section 5
+# registers a teacher and checks the same thing against a real pending account.
 
 echo "── 4. Student self-registration (immediate) + auto-login"
 SEMAIL="stud_$RND@test.com"

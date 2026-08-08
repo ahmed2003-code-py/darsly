@@ -32,7 +32,7 @@ export class AcademyService {
         academy: {
           select: {
             id: true, slug: true, name: true, status: true,
-            logoUrl: true, colorPrimary: true, colorAccent: true,
+            logoUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true,
           },
         },
       },
@@ -45,7 +45,14 @@ export class AcademyService {
         role: m.role,
         isHome: m.isHome,
         status: m.academy.status,
-        branding: { logoUrl: m.academy.logoUrl, colorPrimary: m.academy.colorPrimary, colorAccent: m.academy.colorAccent },
+        // brandTokens carries the published design system, so the console can
+        // dress itself in the academy's own look rather than the platform default.
+        branding: {
+          logoUrl: m.academy.logoUrl,
+          colorPrimary: m.academy.colorPrimary,
+          colorAccent: m.academy.colorAccent,
+          brandTokens: m.academy.brandTokens ?? null,
+        },
       }));
   }
 
@@ -55,7 +62,7 @@ export class AcademyService {
       where: { slug, deletedAt: null, status: { in: ['ACTIVE', 'PENDING'] } },
       select: {
         id: true, slug: true, name: true, tagline: true, status: true,
-        logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true, language: true,
+        logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true, language: true,
       },
     });
     return a;

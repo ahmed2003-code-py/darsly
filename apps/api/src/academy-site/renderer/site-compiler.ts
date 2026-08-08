@@ -67,7 +67,7 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Plus+Jakarta+Sans:wght@400;700;800&family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
-<style>${css(theme.primary, theme.accent, theme.style)}</style>
+<style>${css(theme.primary, theme.accent, theme.style, theme.design)}</style>
 </head>
 <body>
 <header class="topbar">
@@ -85,14 +85,73 @@ ${body}
 </html>`;
 }
 
+/**
+ * The model's palette, emitted last so it wins over whichever preset the Design
+ * DNA set. Muted text and hairlines are derived rather than asked for: they have
+ * to relate to the ink and the background, and a model asked for six colours
+ * tends to produce one that clashes.
+ */
+function aiPalette(design: DesignTokens): string {
+  return `:root{--bg:${design.background};--ink:${design.ink};--surface:${design.surface};--card:${design.surface};` +
+    '--mut:color-mix(in srgb,var(--ink) 62%,var(--bg));' +
+    '--line:color-mix(in srgb,var(--ink) 14%,var(--bg));' +
+    '--body:color-mix(in srgb,var(--ink) 86%,var(--bg))}';
+}
+
 const STYLE_RADIUS: Record<string, string> = {
   modern: '18px', bold: '12px', elegant: '10px', minimal: '10px', playful: '26px',
 };
 
-function css(primary: string, accent: string, style?: string): string {
+/** Vertical rhythm per density choice: section padding, top and bottom. */
+const DENSITY_PAD: Record<string, string> = { compact: '68px', regular: '104px', airy: '148px' };
+
+/** Headline scale per personality: min, preferred, max for the clamp(). */
+const HEADING_SCALE: Record<string, string> = {
+  restrained: 'clamp(1.6rem,3vw,2.2rem)',
+  balanced: 'clamp(1.9rem,4vw,2.9rem)',
+  dramatic: 'clamp(2.4rem,6vw,4.2rem)',
+};
+
+const BODY_STACK: Record<string, string> = {
+  sans: '"Plus Jakarta Sans","Tajawal",system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif',
+  serif: 'Fraunces,"Tajawal",Georgia,"Times New Roman",serif',
+  mono: '"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace',
+};
+
+/**
+ * The hero backdrop. `mesh` and `spotlight` are what stop every page opening the
+ * same way; `flat` exists so a deliberately austere direction stays austere.
+ */
+function heroBackdrop(treatment: string | undefined, bg: string): string {
+  switch (treatment) {
+    case 'flat':
+      return bg;
+    case 'spotlight':
+      return `radial-gradient(70% 78% at 50% 0%,rgba(var(--pr),.30),transparent 62%),${bg}`;
+    case 'mesh':
+      return [
+        'radial-gradient(46% 52% at 12% 8%,rgba(var(--pr),.30),transparent 60%)',
+        'radial-gradient(44% 48% at 88% 4%,rgba(var(--ar),.26),transparent 62%)',
+        'radial-gradient(58% 62% at 52% 96%,rgba(var(--pr),.16),transparent 64%)',
+        bg,
+      ].join(',');
+    case 'gradient':
+    default:
+      return [
+        'radial-gradient(58% 60% at 18% 4%,rgba(var(--pr),.22),transparent 60%)',
+        'radial-gradient(52% 55% at 86% 10%,rgba(var(--ar),.18),transparent 60%)',
+        bg,
+      ].join(',');
+  }
+}
+
+type DesignTokens = NonNullable<RenderPlan['theme']['design']>;
+
+function css(primary: string, accent: string, style?: string, design?: DesignTokens): string {
   const p = /^#[0-9a-fA-F]{6}$/.test(primary) ? primary : '#4A32C9';
   const a = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : p;
-  const rad = STYLE_RADIUS[style ?? 'modern'] ?? '18px';
+  // The model's radius wins when it composed a system; otherwise the DNA's.
+  const rad = design ? `${design.radius}px` : (STYLE_RADIUS[style ?? 'modern'] ?? '18px');
   const pDark = darken(p, 0.18);
   const pl = mix(p, '#ffffff', 0.42); // lightened brand — for accents on dark presets
   const onP = onColor(p);
@@ -103,6 +162,9 @@ function css(primary: string, accent: string, style?: string): string {
 :root{
   --p:${p};--pl:${pl};--p-dark:${pDark};--on-p:${onP};--a:${a};--pr:${pr};--ar:${ar};
   --acc:var(--p);--rad:${rad};
+  --pad:${design ? DENSITY_PAD[design.density] ?? '104px' : '104px'};
+  --h2:${design ? HEADING_SCALE[design.headingScale] ?? HEADING_SCALE.balanced : HEADING_SCALE.balanced};
+  --body-font:${design?.bodyFont ? BODY_STACK[design.bodyFont] ?? BODY_STACK.sans : BODY_STACK.sans};
   --bg:#ffffff;--ink:#14141f;--mut:#5a5a72;--surface:#f7f7fb;--card:#ffffff;--line:#e9e9f1;
   --body:color-mix(in srgb,var(--ink) 82%,var(--bg));
 }
@@ -110,8 +172,9 @@ function css(primary: string, accent: string, style?: string): string {
 :root[data-preset=academic]{--bg:#ffffff;--ink:#0e1a2b;--mut:#54607a;--surface:#f4f8fc;--card:#ffffff;--line:#e5ebf3}
 :root[data-preset=premium]{--bg:#0b0b13;--ink:#f4f2f9;--mut:#a09eb2;--surface:#14141e;--card:#15151f;--line:#252531;--acc:var(--pl)}
 :root[data-preset=energetic]{--bg:#0a0a17;--ink:#ffffff;--mut:#bcbbd2;--surface:#15152c;--card:#161630;--line:#272750;--acc:var(--pl)}
+${design ? aiPalette(design) : ''}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;font-family:"Plus Jakarta Sans","Tajawal",system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.7;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{margin:0;font-family:var(--body-font);color:var(--ink);background:var(--bg);line-height:1.7;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 :lang(ar){font-family:"Tajawal","Plus Jakarta Sans",system-ui,sans-serif}
 img{max-width:100%;display:block}
 .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
@@ -124,16 +187,13 @@ img{max-width:100%;display:block}
 .lang-toggle:hover{background:var(--acc);color:var(--on-p);border-color:var(--acc)}
 /* Section rhythm + numbered eyebrows */
 main{counter-reset:sec}
-.block{padding:104px 0;position:relative}
+.block{padding:var(--pad) 0;position:relative}
 .numbered{counter-increment:sec}
-.block h2{font-size:clamp(1.9rem,4vw,2.9rem);font-weight:800;letter-spacing:-.025em;margin:0 0 34px;text-wrap:balance;line-height:1.12;color:var(--ink)}
+.block h2{font-size:var(--h2);font-weight:800;letter-spacing:-.025em;margin:0 0 34px;text-wrap:balance;line-height:1.12;color:var(--ink)}
 .eyebrow{display:flex;align-items:center;gap:10px;font-size:.78rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--acc);margin:0 0 14px}
 .numbered .eyebrow::before{content:counter(sec,decimal-leading-zero) "  —";font-variant-numeric:tabular-nums;opacity:.75}
 /* Hero */
-.hero{min-height:82vh;display:flex;align-items:center;text-align:center;overflow:hidden;isolation:isolate;background:
-  radial-gradient(58% 60% at 18% 4%,rgba(var(--pr),.22),transparent 60%),
-  radial-gradient(52% 55% at 86% 10%,rgba(var(--ar),.18),transparent 60%),
-  var(--bg)}
+.hero{min-height:82vh;display:flex;align-items:center;text-align:center;overflow:hidden;isolation:isolate;background:${heroBackdrop(design?.heroTreatment, 'var(--bg)')}}
 .hero .wrap{display:flex;flex-direction:column;align-items:center}
 .hero h1{font-size:clamp(2.6rem,6.5vw,4.8rem);font-weight:800;letter-spacing:-.035em;line-height:1.05;margin:0 0 22px;text-wrap:balance;max-width:17ch;color:var(--ink)}
 .hero .sub{font-size:clamp(1.08rem,1.8vw,1.4rem);color:var(--mut);max-width:62ch;margin:0 auto}
@@ -250,7 +310,7 @@ a.card{overflow:hidden}a.card:hover img{transform:scale(1.06)}
 .reveal-on .block.in :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img):nth-child(6){transition-delay:.34s}
 .reveal-on .block.in :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img):nth-child(n+7){transition-delay:.40s}
 @media(prefers-reduced-motion:reduce){.reveal-on .block,.reveal-on .block :is(.tag,.record li,.cred-card,.faq-list details,.stat,.cards .card,.gallery-grid img),.hero h1,.hero .sub,.hero-actions{opacity:1!important;transform:none!important;animation:none!important;transition:none!important}[data-preset=energetic] .hero::before{animation:none}html{scroll-behavior:auto}}
-@media(max-width:820px){.about-grid{grid-template-columns:1fr;gap:34px}.block{padding:68px 0}.hero{min-height:auto;padding:88px 0}}
+@media(max-width:820px){.about-grid{grid-template-columns:1fr;gap:34px}.block{padding:min(var(--pad),68px) 0}.hero{min-height:auto;padding:88px 0}}
 `.trim();
 }
 

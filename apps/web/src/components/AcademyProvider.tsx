@@ -19,10 +19,22 @@ export const useAcademy = () => useContext(Ctx);
  */
 export default function AcademyProvider({ slug, children }: { slug: string; children: ReactNode }) {
   const { data, isLoading, error } = useAcademyBranding(slug);
-  const primary = data?.colorPrimary || '#4A32C9';
+  const tokens = data?.brandTokens ?? undefined;
+
+  // Every token the academy actually published becomes a CSS variable on this
+  // subtree. Anything it did not publish is simply absent, so the platform's own
+  // value keeps applying — an academy that never opened the Studio looks exactly
+  // as it did before.
+  const style: Record<string, string> = { '--academy-primary': data?.colorPrimary || '#4A32C9' };
+  if (data?.colorAccent) style['--academy-accent'] = data.colorAccent;
+  if (tokens?.background) style['--academy-bg'] = tokens.background;
+  if (tokens?.ink) style['--academy-ink'] = tokens.ink;
+  if (tokens?.surface) style['--academy-surface'] = tokens.surface;
+  if (typeof tokens?.radius === 'number') style['--academy-radius'] = `${tokens.radius}px`;
+
   return (
     <Ctx.Provider value={{ branding: data, isLoading, error }}>
-      <div style={{ ['--academy-primary' as any]: primary }} className="min-h-screen">
+      <div style={style as never} className="min-h-screen">
         {children}
       </div>
     </Ctx.Provider>

@@ -3,6 +3,10 @@
 # + playback session/access control + anomaly logging.
 # Requires a running API and a generated sample video at $SAMPLE (default below).
 set -u
+# Accounts come from the demo dataset (apps/api/src/common/demo-seed.ts):
+# admin@darsly.app, teacher1..6@darsly.app, student1..N@darsly.app — one
+# password for all of them. Override with DARSLY_PW if yours differs.
+DARSLY_PW=${DARSLY_PW:-Darsly@123}
 API=http://localhost:4000/api/v1
 SAMPLE=${SAMPLE:-/tmp/claude-1000/-home-ahmedeldeeb-darsly/c193dbc6-9884-416e-95bf-568dd9598e04/scratchpad/sample.mp4}
 pass=0; fail=0
@@ -10,7 +14,7 @@ check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
 
 echo "── 1. Teacher uploads a video → transcodes to encrypted HLS"
-KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"khaled@darsly.app","password":"Teacher@12345"}' | jget "['accessToken']")
+KH=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"teacher1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 UP=$(curl -s -X POST $API/uploads/videos -H "Authorization: Bearer $KH" -F "file=@$SAMPLE;type=video/mp4")
 AID=$(echo "$UP" | jget "['id']")
 check "upload accepted, status PROCESSING" "PROCESSING" "$(echo "$UP" | jget "['status']")"
@@ -43,7 +47,7 @@ curl -s -X PATCH $API/teacher/lessons/$LESSON -H "Authorization: Bearer $KH" -H 
 check "video attached to lesson" "yes" "$([ -n "$LESSON" ] && echo yes || echo no)"
 
 echo "── 3. Student starts a protected playback session"
-ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"ahmed@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
+ST=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"student1@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 TICKET=$(curl -s -X POST $API/playback/sessions -H "Authorization: Bearer $ST" -H 'Content-Type: application/json' -d "{\"lessonId\":\"$LESSON\"}")
 PSID=$(echo "$TICKET" | jget "['playbackSessionId']")
 MASTER=$(echo "$TICKET" | jget "['masterUrl']")
@@ -97,7 +101,7 @@ for u in d["units"]:
   else: continue
   break')
 # yousef (student 5) is not enrolled in algebra
-YS=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"youssef@student.darsly.app","password":"Student@12345"}' | jget "['accessToken']")
+YS=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"student5@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
 BLOCK=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/playback/sessions -H "Authorization: Bearer $YS" -H 'Content-Type: application/json' -d "{\"lessonId\":\"$PAID\"}")
 check "non-enrolled student blocked on paid lesson → 403" "403" "$BLOCK"
 

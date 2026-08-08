@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Default locale is Arabic (Darsly is Arabic-first, full RTL); values-en/ carries
+  the English fallback.
+-->
+<resources>
+    <string name="app_name">مستقبِل درسلي</string>
+
+    <string name="common_continue">متابعة</string>
+    <string name="common_retry">إعادة المحاولة</string>
+    <string name="common_cancel">إلغاء</string>
+    <string name="common_confirm">تأكيد</string>
+
+    <!-- Screen 1 — phone verification -->
+    <string name="verify_title">تفعيل الجهاز</string>
+    <string name="verify_intro">أدخل رقم هاتف هذا الجهاز. سنرسل لك رمز تحقق لمرة واحدة.</string>
+    <string name="verify_phone_label">رقم الهاتف</string>
+    <string name="verify_send_otp">إرسال الرمز</string>
+    <string name="verify_code_label">رمز التحقق</string>
+    <string name="verify_submit">تأكيد الرمز</string>
+    <string name="verify_edit_phone">تغيير الرقم</string>
+    <string name="verify_status_sending">جارٍ إرسال الرمز…</string>
+    <string name="verify_status_sent">تم إرسال الرمز إلى هاتفك.</string>
+    <string name="verify_status_verifying">جارٍ التحقق…</string>
+    <string name="verify_status_invalid">رمز غير صحيح أو منتهي الصلاحية.</string>
+    <string name="verify_status_success">تم التحقق بنجاح.</string>
+    <string name="verify_status_network_error">تعذّر الاتصال بالخادم. تحقّق من الإنترنت وحاول مجددًا.</string>
+    <string name="verify_status_rate_limited">محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.</string>
+    <string name="verify_error_phone_invalid">أدخل رقم موبايل مصري صحيح (مثال: 01012345678).</string>
+
+    <!-- Screen 2 — SMS permission -->
+    <string name="perm_title">إذن الرسائل القصيرة</string>
+    <string name="perm_explain">لاستقبال ومعالجة الرسائل القصيرة الواردة، يحتاج هذا التطبيق إلى إذن قراءة الرسائل على هذا الجهاز.</string>
+    <string name="perm_detail">لا يقرأ التطبيق رسائلك السابقة، ولا يرسل أي رسالة إلى الخادم إلا الرسائل الواردة من المرسِلين المُعرَّفين (مثل CIB أو فودافون كاش).</string>
+    <string name="perm_allow">السماح بالوصول للرسائل</string>
+    <string name="perm_denied_title">لم يتم منح الإذن</string>
+    <string name="perm_denied_explain">بدون إذن الرسائل لا يستطيع التطبيق استقبال أي رسالة. يمكنك منح الإذن من إعدادات النظام.</string>
+    <string name="perm_open_settings">فتح إعدادات التطبيق</string>
+    <string name="perm_notif_title">إشعارات (اختياري)</string>
+    <string name="perm_notif_explain">اسمح بالإشعارات لتنبيهك عند وصول رسالة تحويل مالي.</string>
+    <string name="perm_notif_allow">السماح بالإشعارات</string>
+
+    <!-- Screen 3 — inbox -->
+    <string name="inbox_title">الرسائل</string>
+    <string name="inbox_settings">الإعدادات</string>
+    <string name="inbox_empty_title">لا توجد رسائل بعد</string>
+    <string name="inbox_empty_body">ستظهر هنا الرسائل الواردة إلى هذا الجهاز بعد وصولها.</string>
+    <string name="status_synced">تمت المزامنة</string>
+    <string name="status_pending">في الانتظار</string>
+    <string name="status_local">محلي فقط</string>
+    <string name="status_failed">فشل الإرسال</string>
+
+    <!-- Settings -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="settings_section_device">الجهاز</string>
+    <string name="settings_phone">الرقم المُفعَّل</string>
+    <string name="settings_sms_permission">إذن الرسائل</string>
+    <string name="settings_backend">الاتصال بالخادم</string>
+    <string name="settings_granted">ممنوح</string>
+    <string name="settings_denied">مرفوض</string>
+    <string name="settings_backend_ok">متصل</string>
+    <string name="settings_backend_unreachable">غير متاح</string>
+    <string name="settings_backend_checking">جارٍ الفحص…</string>
+    <string name="settings_pending_count">رسائل في انتظار المزامنة</string>
+    <string name="settings_sync_now">مزامنة الآن</string>
+    <string name="settings_section_privacy">الخصوصية</string>
+    <string name="settings_show_preview">إظهار نص الرسالة في الإشعار</string>
+    <string name="settings_show_preview_desc">مغلق افتراضيًا: لا يظهر محتوى الرسالة المالية في الإشعار.</string>
+    <string name="settings_section_danger">إجراءات</string>
+    <string name="settings_delete_messages">حذف الرسائل المحفوظة</string>
+    <string name="settings_delete_messages_desc">يحذف نسخة الرسائل المخزّنة على هذا الجهاز.</string>
+    <string name="settings_delete_confirm">هل تريد حذف كل الرسائل المخزّنة محليًا؟ الرسائل التي لم تتم مزامنتها ستُفقد.</string>
+    <string name="settings_logout">إلغاء تفعيل الجهاز</string>
+    <string name="settings_logout_desc">يُلغي تسجيل الجهاز في الخادم ويمسح البيانات المحلية.</string>
+    <string name="settings_logout_confirm">سيتم إلغاء تفعيل الجهاز ومسح الرسائل والرموز المخزّنة. ستحتاج إلى التحقق برقم الهاتف مرة أخرى.</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_name">رسائل التحويلات</string>
+    <string name="notif_channel_desc">تنبيه عند وصول رسالة تحويل مالي من مرسِل معروف.</string>
+    <string name="notif_title">تم استلام رسالة من %1$s</string>
+    <string name="notif_body_hidden">تم رصد رسالة تحويل ومزامنتها مع درسلي.</string>
+</resources>

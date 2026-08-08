@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG BUILDS ONLY.
+
+  Permits cleartext so a debug APK can talk to a Darsly API running on a laptop —
+  whether that is the emulator alias (10.0.2.2) or the machine's LAN address when
+  testing on a real handset over Wi-Fi.
+
+  Release builds use the HTTPS-only config in src/main, and the build additionally
+  FAILS if the configured base URL is not https:// (see app/build.gradle.kts), so
+  this relaxation cannot reach a shipped APK.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

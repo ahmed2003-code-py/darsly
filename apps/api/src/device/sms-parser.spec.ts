@@ -1,0 +1,137 @@
+import { createHash } from 'crypto';
+import { PaymentMethod } from '@darsly/shared-types';
+import {
+  classifySender,
+  messageHash,
+  normalizeSender,
+  parseAmountCents,
+  parseReference,
+  SenderRuleLike,
+} from './sms-parser';
+
+const RULES: SenderRuleLike[] = [
+  { brand: 'CIB', matchType: 'CONTAINS', pattern: 'cib', provider: PaymentMethod.BANK_TRANSFER, enabled: true, forwardToBackend: true, priority: 10 },
+  { brand: 'Vodafone Cash', matchType: 'CONTAINS', pattern: 'vodafone', provider: PaymentMethod.VODAFONE_CASH, enabled: true, forwardToBackend: true, priority: 20 },
+  { brand: 'InstaPay', matchType: 'EXACT', pattern: 'InstaPay', provider: PaymentMethod.INSTAPAY, enabled: true, forwardToBackend: true, priority: 30 },
+  { brand: 'Disabled', matchType: 'CONTAINS', pattern: 'off', provider: PaymentMethod.OTHER, enabled: false, forwardToBackend: true, priority: 1 },
+];
+
+const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+
+describe('normalizeSender', () => {
+  it('trims, collapses whitespace, lowercases', () => {
+    expect(normalizeSender('  CIB   Bank ')).toBe('cib bank');
+  });
+});
+
+describe('classifySender', () => {
+  it('classifies CIB regardless of case/suffix (CONTAINS)', () => {
+    expect(classifySender('CIB-Alerts', RULES)?.provider).toBe(PaymentMethod.BANK_TRANSFER);
+    expect(classifySender('cibbank', RULES)?.brand).toBe('CIB');
+  });
+
+  it('classifies Vodafone Cash from a VodafoneCash sender id', () => {
+    const c = classifySender('VodafoneCash', RULES);
+    expect(c?.provider).toBe(PaymentMethod.VODAFONE_CASH);
+    expect(c?.brand).toBe('Vodafone Cash');
+  });
+
+  it('separators in the sender id do not defeat a rule', () => {
+    // Observed on a real handset: Vodafone Cash sends from "VF-Cash" while the
+    // seeded rule reads "vfcash", so a genuine payment SMS was filed local-only.
+    const rules: SenderRuleLike[] = [
+      { brand: 'Vodafone Cash', matchType: 'CONTAINS', pattern: 'vfcash', provider: PaymentMethod.VODAFONE_CASH, enabled: true, forwardToBackend: true, priority: 21 },
+    ];
+    for (const sender of ['VF-Cash', 'VF Cash', 'VF_Cash', 'VF.Cash', 'VFCash', 'vf-cash']) {
+      expect(classifySender(sender, rules)?.brand).toBe('Vodafone Cash');
+    }
+    expect(classifySender('CIB-Bank', RULES)?.brand).toBe('CIB');
+  });
+
+  it('separator stripping is for matching only and never changes the hash', () => {
+    // messageHash must keep using normalizeSender, or idempotency would break
+    // against events the backend has already stored.
+    expect(normalizeSender('VF-Cash')).toBe('vf-cash');
+    expect(messageHash('VF-Cash', 'body', new Date(1_000_000), sha256)).toBe(
+      sha256('vf-cash body 1000'),
+    );
+  });
+
+  it('EXACT match requires the whole sender to equal the pattern', () => {
+    expect(classifySender('InstaPay', RULES)?.provider).toBe(PaymentMethod.INSTAPAY);
+    expect(classifySender('InstaPay-Promo', RULES)).toBeNull();
+  });
+
+  it('returns null for unknown senders (stay local-only)', () => {
+    expect(classifySender('+201099998888', RULES)).toBeNull();
+    expect(classifySender('SomeShop', RULES)).toBeNull();
+  });
+
+  it('ignores disabled rules even when they would match', () => {
+    expect(classifySender('turn-off-alerts', RULES)).toBeNull();
+  });
+
+  it('respects priority order (lower wins) when several rules match', () => {
+    const rules: SenderRuleLike[] = [
+      { brand: 'Generic', matchType: 'CONTAINS', pattern: 'bank', provider: PaymentMethod.OTHER, enabled: true, forwardToBackend: false, priority: 100 },
+      { brand: 'CIB', matchType: 'CONTAINS', pattern: 'cib', provider: PaymentMethod.BANK_TRANSFER, enabled: true, forwardToBackend: true, priority: 10 },
+    ];
+    expect(classifySender('CIB Bank', rules)?.brand).toBe('CIB');
+  });
+
+  it('a malformed REGEX rule never throws — it just does not match', () => {
+    const rules: SenderRuleLike[] = [
+      { brand: 'Bad', matchType: 'REGEX', pattern: '([', provider: PaymentMethod.OTHER, enabled: true, forwardToBackend: true, priority: 1 },
+    ];
+    expect(() => classifySender('anything', rules)).not.toThrow();
+    expect(classifySender('anything', rules)).toBeNull();
+  });
+});
+
+describe('parseAmountCents', () => {
+  it('parses Arabic amounts with ج.م', () => {
+    expect(parseAmountCents('استلمت 450 ج.م من محفظتك')).toBe(45000);
+    expect(parseAmountCents('تم إيداع 5,000 جنيه')).toBe(500000);
+  });
+
+  it('parses English EGP amounts with thousands + decimals', () => {
+    expect(parseAmountCents('Your transaction of EGP 5,000.00 was completed')).toBe(500000);
+    expect(parseAmountCents('received EGP450')).toBe(45000);
+    expect(parseAmountCents('Amount: 1234.50 EGP')).toBe(123450);
+  });
+
+  it('returns null when no currency-qualified amount is present', () => {
+    expect(parseAmountCents('Your OTP is 123456')).toBeNull();
+    expect(parseAmountCents('Hello there')).toBeNull();
+  });
+});
+
+describe('parseReference', () => {
+  it('prefers a labelled reference (Arabic + English)', () => {
+    expect(parseReference('استلمت 450 ج.م، رقم العملية 884213')).toBe('884213');
+    expect(parseReference('Ref: TXN-88421 completed')).toBe('TXN-88421');
+    expect(parseReference('transaction 9A8B7C6D done')).toBe('9A8B7C6D');
+  });
+
+  it('falls back to a 6+ digit run', () => {
+    expect(parseReference('credited 500 EGP 778812 thanks')).toBe('778812');
+  });
+
+  it('returns null when there is no plausible reference', () => {
+    expect(parseReference('credited 500 EGP')).toBeNull();
+  });
+});
+
+describe('messageHash', () => {
+  it('is deterministic for the same normalized inputs', () => {
+    const t = new Date('2026-08-08T06:12:34.000Z');
+    const a = messageHash('CIB', 'body', t, sha256);
+    const b = messageHash(' cib ', 'body', new Date('2026-08-08T06:12:34.999Z'), sha256);
+    expect(a).toBe(b); // sender normalized + second-resolution timestamp
+  });
+
+  it('differs when the body differs', () => {
+    const t = new Date('2026-08-08T06:12:34.000Z');
+    expect(messageHash('CIB', 'a', t, sha256)).not.toBe(messageHash('CIB', 'b', t, sha256));
+  });
+});

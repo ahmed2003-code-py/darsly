@@ -14,6 +14,6 @@ import { PaymentMatchingService } from './payment-matching.service';
   imports: [AcademyModule],
   controllers: [WalletController, ManualPaymentsController, PaymentEventsController],
   providers: [LedgerService, ManualPaymentsService, PaymentAccountsService, PaymentMatchingService],
-  exports: [LedgerService],
+  exports: [LedgerService, PaymentMatchingService],
 })
 export class PaymentsModule {}

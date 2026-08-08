@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose supplies the real theme; this is only the launch/window theme, so it
+      deliberately depends on no Material-Components library.
+    -->
+    <style name="Theme.DarslySmsListener" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/brand_primary</item>
+        <item name="android:windowBackground">@color/surface</item>
+    </style>
+</resources>

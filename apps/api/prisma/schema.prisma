@@ -1292,3 +1292,83 @@ model AcademyClaim {
 
   @@index([academyId, state])
 }
+
+// ------------------------- SMS Listener (device) ----------------------------
+// A compliant, user-authorized SMS-monitoring companion app (RECEIVE_SMS +
+// BroadcastReceiver -- NOT notification/accessibility scraping). It authenticates
+// the phone by OTP, then posts payment-relevant SMS as device events that feed
+// the SAME PaymentMatchingService as the legacy X-Listener-Key path.
+// Deliberately independent of User/Role: a listener phone is not a marketplace
+// account, so device auth never touches DeviceSession/Role.
+
+model ListenerDevice {
+  id       String @id @default(cuid())
+  // Verified via OTP, stored E.164 (+2010xxxxxxxx).
+  phone    String
+  platform String @default("android")
+  model    String? // e.g. "Pixel 7" -- best-effort, for the admin/device list
+  appVersion String?
+  // Single active refresh token per device (argon2 hash). Rotation replaces it;
+  // presenting a stale refresh token => reuse => the device is revoked.
+  refreshTokenHash String?
+  revokedAt        DateTime?
+  revokedReason    String?
+  lastSeenAt       DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+
+  smsEvents DeviceSmsEvent[]
+
+  @@index([phone, revokedAt])
+}
+
+enum SenderMatchType {
+  EXACT // sender id equals `pattern` (case-insensitive)
+  CONTAINS // sender id contains `pattern`
+  REGEX // sender id matches `pattern` as a regular expression
+}
+
+// Backend-driven sender classification. The app pulls these so business logic
+// (which senders forward, and to which provider) is never hard-coded in the APK.
+// SMS sender IDs (alphanumeric "CIB", "VodafoneCash", short codes) rarely equal
+// the brand name exactly -- hence the match types.
+model SenderRule {
+  id              String          @id @default(cuid())
+  brand           String // display label, e.g. "CIB", "Vodafone Cash"
+  matchType       SenderMatchType @default(CONTAINS)
+  pattern         String // matched against the normalized SMS sender id
+  provider        PaymentMethod // which payment provider a match maps to
+  enabled         Boolean         @default(true)
+  forwardToBackend Boolean        @default(true)
+  priority        Int             @default(100) // lower wins when several rules match
+  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime        @default(now())
+
+  @@index([enabled, priority])
+}
+
+// The server-side mirror of the device outbox -- the second idempotency layer.
+// The app dedupes locally on messageHash; the backend ALSO enforces
+// UNIQUE(deviceId, messageHash) so a retried POST can never double-forward.
+model DeviceSmsEvent {
+  id          String   @id @default(cuid())
+  deviceId    String
+  device      ListenerDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  sender      String
+  // SHA-256(normalizedSender + ' ' + body + ' ' + receivedAtEpochSec).
+  messageHash String
+  receivedAt  DateTime
+  simSlot     Int?
+  subscriptionId Int?
+  // Classification outcome (server-authoritative; re-derived from rawMessage).
+  brand       String?
+  provider    PaymentMethod?
+  amountCents Int?
+  reference   String?
+  forwarded   Boolean  @default(false) // did we hand it to PaymentMatchingService?
+  paymentEventId String? // the resulting PaymentEvent, when forwarded
+  matchStatus String? // MATCHED | UNMATCHED | AMBIGUOUS | DUPLICATE | LOCAL_ONLY
+  createdAt   DateTime @default(now())
+
+  @@unique([deviceId, messageHash])
+  @@index([deviceId, receivedAt])
+}

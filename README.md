@@ -14,6 +14,7 @@ darsly/
 │   └── web/            React + TS + Vite + Tailwind (RTL-aware) — students, teachers, admin
 ├── packages/
 │   └── shared-types/   Enums & API contracts shared by api and web
+├── android/            Kotlin + Compose SMS listener — forwards payment SMS to the API
 ├── scripts/            smoke-auth.sh + smoke-phase2.sh — end-to-end API verification
 ├── docker-compose.yml  postgres (5434) + minio (9000/9001, S3-compatible dev storage)
 └── .env.example
@@ -42,6 +43,9 @@ bash scripts/smoke-phase3.sh      # 21 checks: encrypted-HLS transcode, signed
                                   # (needs ffmpeg + a sample video; see the script)
 bash scripts/smoke-phase6.sh      # 20 checks: quiz author→take→auto+manual grade,
                                   # assignment submit→grade, reviews, certificates
+bash scripts/smoke-device-sms.sh  # 25 checks: SMS-listener device OTP registration,
+                                  # sender rules, event ingestion, idempotency,
+                                  # token rotation + revocation (needs OTP_DEV_MODE)
 ```
 
 `ffmpeg` and `ffprobe` must be on PATH for the video pipeline (`apt-get install ffmpeg`).

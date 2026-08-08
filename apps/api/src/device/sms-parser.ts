@@ -1,0 +1,141 @@
+import { PaymentMethod } from '@darsly/shared-types';
+
+/**
+ * Pure SMS parsing + sender classification helpers — no framework/DB deps so they
+ * are trivially unit-testable and identical to the logic documented for the app.
+ *
+ * The backend is authoritative for money-affecting fields: even though the phone
+ * classifies and parses locally, the server re-derives provider/amount/reference
+ * from the raw body before anything can auto-verify a payment ("never trust the
+ * client alone").
+ */
+
+export type SenderMatchType = 'EXACT' | 'CONTAINS' | 'REGEX';
+
+export interface SenderRuleLike {
+  brand: string;
+  matchType: SenderMatchType;
+  pattern: string;
+  provider: PaymentMethod;
+  enabled: boolean;
+  forwardToBackend: boolean;
+  priority: number;
+}
+
+export interface Classification {
+  brand: string;
+  provider: PaymentMethod;
+  forwardToBackend: boolean;
+}
+
+/**
+ * Normalize an SMS sender id for matching: trim, collapse whitespace, lowercase.
+ * Sender ids arrive in many shapes ("CIB", "CIB-Bank", "VodafoneCash", short
+ * codes) so matching is done case-insensitively on this normalized form.
+ */
+export function normalizeSender(sender: string): string {
+  return (sender ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * Classify a sender against the (backend-driven) rule set. Rules are considered
+ * in ascending `priority` (lower wins); the first enabled rule that matches is
+ * returned. Returns null when no rule matches — such SMS stay local-only.
+ */
+export function classifySender(sender: string, rules: SenderRuleLike[]): Classification | null {
+  const norm = normalizeSender(sender);
+  const ordered = [...rules].filter((r) => r.enabled).sort((a, b) => a.priority - b.priority);
+  for (const rule of ordered) {
+    if (senderMatches(norm, rule)) {
+      return { brand: rule.brand, provider: rule.provider, forwardToBackend: rule.forwardToBackend };
+    }
+  }
+  return null;
+}
+
+/**
+ * Collapse a sender id to the characters that actually identify it: letters and
+ * digits, nothing else.
+ *
+ * Real sender ids spell the same brand every which way — `VF-Cash`, `VF Cash`,
+ * `VFCash`, `CIB-Bank`, `Vodafone.Cash`. Matching on the raw text means a rule
+ * written as `vfcash` silently misses `VF-Cash`, and a payment SMS stays
+ * local-only. Stripping separators before EXACT/CONTAINS lets one rule cover
+ * every spelling. REGEX deliberately still matches the plain normalized id, so a
+ * rule author who needs punctuation keeps full control.
+ */
+export function senderMatchKey(value: string): string {
+  return normalizeSender(value).replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function senderMatches(normalizedSender: string, rule: SenderRuleLike): boolean {
+  const senderKey = senderMatchKey(normalizedSender);
+  const patternKey = senderMatchKey(rule.pattern);
+  switch (rule.matchType) {
+    case 'EXACT':
+      return senderKey === patternKey;
+    case 'CONTAINS':
+      return !!patternKey && senderKey.includes(patternKey);
+    case 'REGEX':
+      try {
+        // Match against the raw (untrimmed-case) sender via a case-insensitive
+        // regex so authors can write natural patterns.
+        return new RegExp(rule.pattern, 'i').test(normalizedSender);
+      } catch {
+        // A malformed backend regex must never crash ingestion — treat as no match.
+        return false;
+      }
+  }
+}
+
+/**
+ * Extract an EGP amount in integer piasters. Handles Arabic ("استلمت 450 ج.م",
+ * "5,000 جنيه") and English ("received EGP 5,000.00", "EGP5000") forms.
+ * Returns null when no currency-qualified amount is present (ignores OTP codes,
+ * balances embedded without a currency token, etc.).
+ */
+export function parseAmountCents(body: string): number | null {
+  if (!body) return null;
+  const currency = '(?:ج\\.?\\s?م|جنيه|جنيهًا|EGP|LE|L\\.E\\.?|E£)';
+  const number = '(\\d{1,3}(?:[,\\s]\\d{3})*(?:\\.\\d{1,2})?|\\d+(?:\\.\\d{1,2})?)';
+  // amount before OR after the currency token
+  const re = new RegExp(`${number}\\s*${currency}|${currency}\\s*${number}`, 'i');
+  const m = body.match(re);
+  if (!m) return null;
+  const raw = (m[1] ?? m[2] ?? '').replace(/[,\s]/g, '');
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.round(value * 100);
+}
+
+/**
+ * Best-effort transaction/reference extraction. Prefers an explicit labelled
+ * reference (Arabic "رقم العملية"/"رقم مرجعي" or English ref/txn/transaction),
+ * falling back to a standalone 6+ digit run. Returns null when none is found —
+ * and without a reference the backend NEVER auto-verifies (manual review only).
+ */
+export function parseReference(body: string): string | null {
+  if (!body) return null;
+  const labelled = body.match(
+    /(?:رقم\s*العملية|رقم\s*مرجعي|الرقم\s*المرجعي|reference|ref(?:erence)?\.?|txn|transaction|trx)\s*[:#.\-]?\s*([A-Za-z0-9\-]{4,})/i,
+  );
+  if (labelled?.[1]) return labelled[1];
+  const digits = body.match(/\b(\d{6,})\b/);
+  return digits?.[1] ?? null;
+}
+
+/**
+ * Deterministic idempotency id for an SMS, matching the app's local dedupe key:
+ * SHA-256(normalizedSender + ' ' + body + ' ' + receivedAtEpochSeconds).
+ * `sha256` is injected so this stays a pure function (Node crypto in prod, any
+ * impl in tests).
+ */
+export function messageHash(
+  sender: string,
+  body: string,
+  receivedAt: Date,
+  sha256: (input: string) => string,
+): string {
+  const epochSec = Math.floor(receivedAt.getTime() / 1000);
+  return sha256(`${normalizeSender(sender)} ${body ?? ''} ${epochSec}`);
+}

@@ -1,5 +1,14 @@
 # Automatic payment verification — Android notification listener
 
+> ⚠️ **Superseded — kept for historical context.**
+> The `NotificationListenerService` approach below has been **replaced by an
+> SMS-permission app** (`RECEIVE_SMS` + `BroadcastReceiver`) that reads the
+> transfer **SMS** and posts through an OTP-authenticated **device API**. See
+> **[android-sms-listener.md](./android-sms-listener.md)** for the current
+> design. Notification scraping is intentionally no longer used.
+> The legacy `POST /api/v1/payment-events` (`X-Listener-Key`) endpoint still
+> exists for the simulator and back-compat; the matching engine is shared.
+
 Darsly verifies Vodafone Cash / InstaPay transfers **without a payment gateway**.
 A tiny Android app runs on the phone that owns the receiving wallet, reads the
 incoming-transfer notifications, and posts a structured **payment event** to the

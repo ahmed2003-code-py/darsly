@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A simple envelope glyph, centred inside the adaptive-icon safe zone. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,40h44a4,4 0 0 1 4,4v20a4,4 0 0 1 -4,4H32a4,4 0 0 1 -4,-4V44a4,4 0 0 1 4,-4zM32,45.5v1.2l22,13.2 22,-13.2v-1.2H32z" />
+</vector>

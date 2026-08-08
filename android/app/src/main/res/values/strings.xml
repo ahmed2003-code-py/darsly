@@ -12,21 +12,6 @@
     <string name="common_confirm">تأكيد</string>
 
     <!-- Screen 1 — phone verification -->
-    <string name="verify_title">تفعيل الجهاز</string>
-    <string name="verify_intro">أدخل رقم هاتف هذا الجهاز. سنرسل لك رمز تحقق لمرة واحدة.</string>
-    <string name="verify_phone_label">رقم الهاتف</string>
-    <string name="verify_send_otp">إرسال الرمز</string>
-    <string name="verify_code_label">رمز التحقق</string>
-    <string name="verify_submit">تأكيد الرمز</string>
-    <string name="verify_edit_phone">تغيير الرقم</string>
-    <string name="verify_status_sending">جارٍ إرسال الرمز…</string>
-    <string name="verify_status_sent">تم إرسال الرمز إلى هاتفك.</string>
-    <string name="verify_status_verifying">جارٍ التحقق…</string>
-    <string name="verify_status_invalid">رمز غير صحيح أو منتهي الصلاحية.</string>
-    <string name="verify_status_success">تم التحقق بنجاح.</string>
-    <string name="verify_status_network_error">تعذّر الاتصال بالخادم. تحقّق من الإنترنت وحاول مجددًا.</string>
-    <string name="verify_status_rate_limited">محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.</string>
-    <string name="verify_error_phone_invalid">أدخل رقم موبايل مصري صحيح (مثال: 01012345678).</string>
 
     <!-- Screen 2 — SMS permission -->
     <string name="perm_title">إذن الرسائل القصيرة</string>
@@ -72,11 +57,22 @@
     <string name="settings_delete_confirm">هل تريد حذف كل الرسائل المخزّنة محليًا؟ الرسائل التي لم تتم مزامنتها ستُفقد.</string>
     <string name="settings_logout">إلغاء تفعيل الجهاز</string>
     <string name="settings_logout_desc">يُلغي تسجيل الجهاز في الخادم ويمسح البيانات المحلية.</string>
-    <string name="settings_logout_confirm">سيتم إلغاء تفعيل الجهاز ومسح الرسائل والرموز المخزّنة. ستحتاج إلى التحقق برقم الهاتف مرة أخرى.</string>
+    <string name="settings_logout_confirm">سيتم إلغاء تفعيل الجهاز ومسح الرسائل والرموز المخزّنة. ستحتاج إلى كود تفعيل جديد من المسؤول.</string>
 
     <!-- Notifications -->
     <string name="notif_channel_name">رسائل التحويلات</string>
     <string name="notif_channel_desc">تنبيه عند وصول رسالة تحويل مالي من مرسِل معروف.</string>
     <string name="notif_title">تم استلام رسالة من %1$s</string>
     <string name="notif_body_hidden">تم رصد رسالة تحويل ومزامنتها مع درسلي.</string>
+    <!-- Screen 1 — device enrollment -->
+    <string name="enroll_title">تفعيل الجهاز</string>
+    <string name="enroll_intro">أدخل كود التفعيل الذي أنشأه المسؤول لهذا الهاتف. الكود صالح لمرة واحدة ولمدة 15 دقيقة.</string>
+    <string name="enroll_code_label">كود التفعيل</string>
+    <string name="enroll_submit">تفعيل الجهاز</string>
+    <string name="enroll_status_working">جارٍ التفعيل…</string>
+    <string name="enroll_status_success">تم تفعيل الجهاز بنجاح.</string>
+    <string name="enroll_status_invalid">كود غير صحيح أو منتهي الصلاحية.</string>
+    <string name="enroll_status_network_error">تعذّر الاتصال بالخادم. تحقّق من الإنترنت وحاول مجددًا.</string>
+    <string name="enroll_status_rate_limited">محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.</string>
+    <string name="enroll_status_server_error">حدث خطأ في الخادم. حاول مجددًا بعد قليل.</string>
 </resources>

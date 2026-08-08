@@ -11,13 +11,10 @@ import retrofit2.http.POST
  */
 interface DeviceApi {
 
-    // ── Registration (no device token yet) ────────────────────────────────────
+    // ── Enrollment (no device token yet) ──────────────────────────────────────
 
-    @POST("device/auth/request-otp")
-    suspend fun requestOtp(@Body body: RequestOtpRequest): RequestOtpResponse
-
-    @POST("device/auth/verify-otp")
-    suspend fun verifyOtp(@Body body: VerifyOtpRequest): DeviceTokensResponse
+    @POST("device/auth/enroll")
+    suspend fun enroll(@Body body: EnrollRequest): DeviceTokensResponse
 
     @POST("device/auth/refresh")
     suspend fun refresh(@Body body: RefreshRequest): DeviceTokensResponse

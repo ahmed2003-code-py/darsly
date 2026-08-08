@@ -65,7 +65,7 @@ never on the receive path.
 
 ```
 app/src/main/java/com/darsly/smslistener/
-├── domain/        pure logic — classification, hashing, retry policy, phone rules
+├── domain/        pure logic — classification, hashing, retry policy
 ├── data/
 │   ├── local/     Room entities, DAOs, database
 │   ├── remote/    Retrofit API, DTOs, OkHttp auth + token refresh
@@ -74,7 +74,7 @@ app/src/main/java/com/darsly/smslistener/
 ├── sms/           BroadcastReceiver, PDU extraction, dual-SIM slot resolution
 ├── work/          SyncWorker, MaintenanceWorker, WorkScheduler
 ├── notify/        payment-SMS notifications
-├── ui/            Compose screens + ViewModels (verify → permission → inbox)
+├── ui/            Compose screens + ViewModels (enroll → permission → inbox)
 └── di/            ServiceLocator (manual DI — no framework)
 ```
 
@@ -87,9 +87,12 @@ state).
 
 ## User flow
 
-1. **Verify** — enter phone number → backend sends an OTP → enter the code. The
-   phone number is only a claim until the backend confirms its own OTP; the device
-   is registered and issued a device-scoped JWT at that moment.
+1. **Enroll** — an admin generates a single-use code for this handset's number
+   (`POST /admin/device/enrollment-codes`) and reads it out; typing it registers
+   the device and issues a device-scoped JWT. There is no phone-number field: the
+   number is bound to the code server-side, so a handset can never enroll itself
+   under someone else's number, and there is no second registration path to get
+   wrong.
 2. **Permission** — a plain explanation of why SMS access is needed, then the
    standard Android prompt. If it is permanently denied, the app explains that and
    offers a shortcut to the system settings page. It does not work around it.
@@ -229,8 +232,7 @@ which does it for you.
 | `MessageHasherTest` | determinism, normalization, and the exact backend formula |
 | `SmsExtractorTest` | multipart reassembly, dual-SIM metadata, empty broadcasts |
 | `SyncPolicyTest` | retry vs. permanent failure vs. auth failure |
-| `PhoneNumbersTest` | Egyptian number formats |
-| `OtpFlowTest` | request → verify → registered, and every failure state |
+| `EnrollmentTest` | redeem a code → registered, and every failure state |
 | `SmsOutboxTest` | queueing, duplicates, offline, 5xx, 4xx, rules refresh |
 | `TokenRefreshTest` | transparent refresh, revocation, and *not* dropping a session on a blip |
 | `SmsSyncIntegrationTest` (instrumented) | the same guarantees against a real Room database |
@@ -239,8 +241,8 @@ which does it for you.
 
 ## Manual verification
 
-With the API running locally (`npm run dev:api`) and `OTP_DEV_MODE=true`, the dev
-OTP is `0000`. The full device flow can also be exercised without a phone:
+With the API running locally (`npm run dev:api`), the full device flow can be
+exercised without a phone:
 
 ```bash
 bash ../scripts/smoke-device-sms.sh

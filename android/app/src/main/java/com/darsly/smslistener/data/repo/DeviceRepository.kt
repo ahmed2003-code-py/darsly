@@ -1,8 +1,7 @@
 package com.darsly.smslistener.data.repo
 
 import com.darsly.smslistener.data.remote.DeviceApi
-import com.darsly.smslistener.data.remote.RequestOtpRequest
-import com.darsly.smslistener.data.remote.VerifyOtpRequest
+import com.darsly.smslistener.data.remote.EnrollRequest
 import com.darsly.smslistener.data.security.DeviceSession
 import com.darsly.smslistener.data.security.SessionStore
 import kotlinx.coroutines.flow.StateFlow
@@ -31,21 +30,18 @@ class DeviceRepository(
 
     fun isRegistered(): Boolean = session.isRegistered()
 
-    /** Ask the backend to send an OTP. Returns its validity window in seconds. */
-    suspend fun requestOtp(phone: String): ApiOutcome<Int> = apiCall {
-        api.requestOtp(RequestOtpRequest(phone.trim())).expiresInSeconds
-    }
-
     /**
-     * Verify the OTP and register this device. On success the tokens are written
-     * to Keystore-backed storage and the sender rules are pulled immediately, so
-     * classification is correct before the first SMS can arrive.
+     * Redeem an admin-issued enrollment code and register this device.
+     *
+     * On success the tokens are written to Keystore-backed storage and the sender
+     * rules are pulled immediately, so classification is correct before the first
+     * SMS can arrive. The verified phone number comes back from the server — the
+     * app never asserts one.
      */
-    suspend fun verifyOtp(phone: String, code: String): ApiOutcome<Unit> {
+    suspend fun enroll(code: String): ApiOutcome<Unit> {
         val outcome = apiCall {
-            api.verifyOtp(
-                VerifyOtpRequest(
-                    phone = phone.trim(),
+            api.enroll(
+                EnrollRequest(
                     code = code.trim(),
                     model = deviceModel,
                     appVersion = appVersion,
@@ -61,11 +57,11 @@ class DeviceRepository(
                         accessToken = tokens.accessToken,
                         refreshToken = tokens.refreshToken,
                         deviceId = tokens.deviceId,
-                        phone = tokens.phone ?: phone.trim(),
+                        phone = tokens.phone,
                     ),
                 )
                 // Best-effort: a failure here only means the bootstrap rules stay
-                // in use until the next sync, so it must not fail verification.
+                // in use until the next sync, so it must not fail enrollment.
                 smsRepository.refreshRules()
                 ApiOutcome.Success(Unit)
             }

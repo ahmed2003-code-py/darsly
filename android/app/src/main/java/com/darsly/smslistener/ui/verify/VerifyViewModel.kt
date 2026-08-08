@@ -6,99 +6,72 @@ import androidx.lifecycle.viewModelScope
 import com.darsly.smslistener.data.repo.ApiError
 import com.darsly.smslistener.data.repo.ApiOutcome
 import com.darsly.smslistener.di.ServiceLocator
-import com.darsly.smslistener.domain.PhoneNumbers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class VerifyStep { PHONE, CODE }
-
-/** Every state the verification screen can show the user, explicitly. */
-enum class VerifyStatus {
+/** Every state the enrollment screen can show, explicitly. */
+enum class EnrollStatus {
     IDLE,
-    SENDING_OTP,
-    OTP_SENT,
-    VERIFYING,
-    INVALID_CODE,
+    ENROLLING,
     SUCCESS,
+    INVALID_CODE,
     NETWORK_ERROR,
     RATE_LIMITED,
     SERVER_ERROR,
-    PHONE_INVALID,
 }
 
-data class VerifyUiState(
-    val phone: String = "",
+data class EnrollUiState(
     val code: String = "",
-    val step: VerifyStep = VerifyStep.PHONE,
-    val status: VerifyStatus = VerifyStatus.IDLE,
+    val status: EnrollStatus = EnrollStatus.IDLE,
     val busy: Boolean = false,
 ) {
-    val canSendOtp: Boolean get() = !busy && PhoneNumbers.isValid(phone)
-    val canVerify: Boolean get() = !busy && code.trim().length >= 4
+    val canSubmit: Boolean get() = !busy && code.length == CODE_LENGTH
+
+    companion object {
+        /** Two groups of four, e.g. K7QM-3XPD. */
+        const val CODE_LENGTH = 8
+    }
 }
 
+/**
+ * Enrollment is a single step: type the code an admin generated, and the device is
+ * registered. There is deliberately no phone-number field — the number is bound to
+ * the code on the server, so a handset can never enroll itself under someone
+ * else's number.
+ */
 class VerifyViewModel(application: Application) : AndroidViewModel(application) {
 
     private val devices = ServiceLocator.from(application).deviceRepository
 
-    private val _state = MutableStateFlow(VerifyUiState())
-    val state: StateFlow<VerifyUiState> = _state.asStateFlow()
-
-    fun onPhoneChange(value: String) {
-        _state.update {
-            it.copy(
-                phone = value,
-                status = if (it.status == VerifyStatus.PHONE_INVALID) VerifyStatus.IDLE else it.status,
-            )
-        }
-    }
+    private val _state = MutableStateFlow(EnrollUiState())
+    val state: StateFlow<EnrollUiState> = _state.asStateFlow()
 
     fun onCodeChange(value: String) {
+        // Accept it however it is typed — spaces, dashes, lower case.
+        val cleaned = value.uppercase()
+            .filter { it.isLetterOrDigit() }
+            .take(EnrollUiState.CODE_LENGTH)
         _state.update {
             it.copy(
-                code = value.filter { char -> char.isDigit() }.take(8),
-                status = if (it.status == VerifyStatus.INVALID_CODE) VerifyStatus.OTP_SENT else it.status,
+                code = cleaned,
+                status = if (it.status == EnrollStatus.INVALID_CODE) EnrollStatus.IDLE else it.status,
             )
         }
     }
 
-    fun editPhone() {
-        _state.update { it.copy(step = VerifyStep.PHONE, code = "", status = VerifyStatus.IDLE) }
-    }
-
-    fun sendOtp() {
-        val phone = PhoneNumbers.sanitize(_state.value.phone)
-        if (!PhoneNumbers.isValid(phone)) {
-            _state.update { it.copy(status = VerifyStatus.PHONE_INVALID) }
-            return
-        }
-        _state.update { it.copy(busy = true, status = VerifyStatus.SENDING_OTP) }
-        viewModelScope.launch {
-            when (val outcome = devices.requestOtp(phone)) {
-                is ApiOutcome.Success -> _state.update {
-                    it.copy(busy = false, step = VerifyStep.CODE, status = VerifyStatus.OTP_SENT)
-                }
-                is ApiOutcome.Failure -> _state.update {
-                    it.copy(busy = false, status = outcome.error.toStatus())
-                }
-            }
-        }
-    }
-
-    fun verify() {
+    fun submit() {
         val current = _state.value
-        if (!current.canVerify) return
-        _state.update { it.copy(busy = true, status = VerifyStatus.VERIFYING) }
+        if (!current.canSubmit) return
+        _state.update { it.copy(busy = true, status = EnrollStatus.ENROLLING) }
         viewModelScope.launch {
-            val phone = PhoneNumbers.sanitize(current.phone)
-            when (val outcome = devices.verifyOtp(phone, current.code)) {
+            when (val outcome = devices.enroll(current.code)) {
                 // On success the session store flips `registered`, which routes the
-                // app forward; the state update is only so the user sees confirmation.
+                // app forward; this update only lets the user see confirmation.
                 is ApiOutcome.Success -> _state.update {
-                    it.copy(busy = false, status = VerifyStatus.SUCCESS)
+                    it.copy(busy = false, status = EnrollStatus.SUCCESS)
                 }
                 is ApiOutcome.Failure -> _state.update {
                     it.copy(busy = false, status = outcome.error.toStatus())
@@ -107,12 +80,10 @@ class VerifyViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun ApiError.toStatus(): VerifyStatus = when (this) {
-        ApiError.NETWORK -> VerifyStatus.NETWORK_ERROR
-        ApiError.INVALID_CODE -> VerifyStatus.INVALID_CODE
-        ApiError.RATE_LIMITED -> VerifyStatus.RATE_LIMITED
-        ApiError.UNAUTHORIZED -> VerifyStatus.INVALID_CODE
-        ApiError.SERVER -> VerifyStatus.SERVER_ERROR
-        ApiError.UNKNOWN -> VerifyStatus.SERVER_ERROR
+    private fun ApiError.toStatus(): EnrollStatus = when (this) {
+        ApiError.NETWORK -> EnrollStatus.NETWORK_ERROR
+        ApiError.INVALID_CODE, ApiError.UNAUTHORIZED -> EnrollStatus.INVALID_CODE
+        ApiError.RATE_LIMITED -> EnrollStatus.RATE_LIMITED
+        ApiError.SERVER, ApiError.UNKNOWN -> EnrollStatus.SERVER_ERROR
     }
 }

@@ -1302,12 +1302,12 @@ model AcademyClaim {
 // account, so device auth never touches DeviceSession/Role.
 
 model ListenerDevice {
-  id       String @id @default(cuid())
+  id               String    @id @default(cuid())
   // Verified via OTP, stored E.164 (+2010xxxxxxxx).
-  phone    String
-  platform String @default("android")
-  model    String? // e.g. "Pixel 7" -- best-effort, for the admin/device list
-  appVersion String?
+  phone            String
+  platform         String    @default("android")
+  model            String? // e.g. "Pixel 7" -- best-effort, for the admin/device list
+  appVersion       String?
   // Single active refresh token per device (argon2 hash). Rotation replaces it;
   // presenting a stale refresh token => reuse => the device is revoked.
   refreshTokenHash String?
@@ -1332,16 +1332,16 @@ enum SenderMatchType {
 // SMS sender IDs (alphanumeric "CIB", "VodafoneCash", short codes) rarely equal
 // the brand name exactly -- hence the match types.
 model SenderRule {
-  id              String          @id @default(cuid())
-  brand           String // display label, e.g. "CIB", "Vodafone Cash"
-  matchType       SenderMatchType @default(CONTAINS)
-  pattern         String // matched against the normalized SMS sender id
-  provider        PaymentMethod // which payment provider a match maps to
-  enabled         Boolean         @default(true)
-  forwardToBackend Boolean        @default(true)
-  priority        Int             @default(100) // lower wins when several rules match
-  updatedAt       DateTime        @updatedAt
-  createdAt       DateTime        @default(now())
+  id               String          @id @default(cuid())
+  brand            String // display label, e.g. "CIB", "Vodafone Cash"
+  matchType        SenderMatchType @default(CONTAINS)
+  pattern          String // matched against the normalized SMS sender id
+  provider         PaymentMethod // which payment provider a match maps to
+  enabled          Boolean         @default(true)
+  forwardToBackend Boolean         @default(true)
+  priority         Int             @default(100) // lower wins when several rules match
+  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime        @default(now())
 
   @@index([enabled, priority])
 }
@@ -1350,25 +1350,51 @@ model SenderRule {
 // The app dedupes locally on messageHash; the backend ALSO enforces
 // UNIQUE(deviceId, messageHash) so a retried POST can never double-forward.
 model DeviceSmsEvent {
-  id          String   @id @default(cuid())
-  deviceId    String
-  device      ListenerDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  sender      String
+  id             String         @id @default(cuid())
+  deviceId       String
+  device         ListenerDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  sender         String
   // SHA-256(normalizedSender + ' ' + body + ' ' + receivedAtEpochSec).
-  messageHash String
-  receivedAt  DateTime
-  simSlot     Int?
+  messageHash    String
+  receivedAt     DateTime
+  simSlot        Int?
   subscriptionId Int?
   // Classification outcome (server-authoritative; re-derived from rawMessage).
-  brand       String?
-  provider    PaymentMethod?
-  amountCents Int?
-  reference   String?
-  forwarded   Boolean  @default(false) // did we hand it to PaymentMatchingService?
+  brand          String?
+  provider       PaymentMethod?
+  amountCents    Int?
+  reference      String?
+  forwarded      Boolean        @default(false) // did we hand it to PaymentMatchingService?
   paymentEventId String? // the resulting PaymentEvent, when forwarded
-  matchStatus String? // MATCHED | UNMATCHED | AMBIGUOUS | DUPLICATE | LOCAL_ONLY
-  createdAt   DateTime @default(now())
+  matchStatus    String? // MATCHED | UNMATCHED | AMBIGUOUS | DUPLICATE | LOCAL_ONLY
+  createdAt      DateTime       @default(now())
 
   @@unique([deviceId, messageHash])
   @@index([deviceId, receivedAt])
+}
+
+// Admin-issued enrollment code — how a listener phone joins, without SMS.
+//
+// The platform has no SMS gateway, so an OTP cannot be delivered in production.
+// It also isn't the right control here: the listener runs on a phone the operator
+// physically owns, so the question is not "does this person control this number?"
+// but "did an admin authorise this handset?". A super-admin mints a short-lived,
+// single-use code bound to the phone number the device will report, and the app
+// exchanges it for device tokens. Codes are argon2-hashed, so the database never
+// holds a usable one.
+model DeviceEnrollmentCode {
+  id                 String    @id @default(cuid())
+  // The number this code will register, E.164. Bound at mint time by the admin,
+  // so the device can never claim a different one.
+  phone              String
+  codeHash           String
+  label              String? // free-text note, e.g. "الموبايل بتاع الخزنة"
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  consumedByDeviceId String?
+  attempts           Int       @default(0)
+  createdById        String?
+  createdAt          DateTime  @default(now())
+
+  @@index([expiresAt, consumedAt])
 }

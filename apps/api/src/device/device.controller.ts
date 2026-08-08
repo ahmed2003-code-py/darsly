@@ -4,10 +4,11 @@ import { Throttle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentDevice, CurrentDeviceCtx, DeviceAuthGuard } from './device-auth.guard';
 import { DeviceAuthService } from './device-auth.service';
+import { DeviceEnrollmentService } from './device-enrollment.service';
 import { DeviceTokenService } from './device-token.service';
 import { SenderRulesService } from './sender-rules.service';
 import { SmsEventsService } from './sms-events.service';
-import { DeviceRefreshDto, DeviceRequestOtpDto, DeviceSmsEventDto, DeviceVerifyOtpDto } from './dto';
+import { DeviceEnrollDto, DeviceRefreshDto, DeviceSmsEventDto } from './dto';
 
 /**
  * SMS-listener device API. All routes are @Public() to the global user-session
@@ -18,29 +19,27 @@ import { DeviceRefreshDto, DeviceRequestOtpDto, DeviceSmsEventDto, DeviceVerifyO
 export class DeviceController {
   constructor(
     private readonly auth: DeviceAuthService,
+    private readonly enrollment: DeviceEnrollmentService,
     private readonly tokens: DeviceTokenService,
     private readonly rules: SenderRulesService,
     private readonly smsEvents: SmsEventsService,
   ) {}
 
-  // ── Auth / registration ────────────────────────────────────────────────────
+  // ── Enrollment ─────────────────────────────────────────────────────────────
 
+  /**
+   * The single way a listener phone joins. An admin mints a code bound to a phone
+   * number (POST /admin/device/enrollment-codes) and the handset redeems it here.
+   * There is deliberately no SMS-OTP alternative: the platform has no SMS gateway,
+   * and a second registration path is a second thing to get wrong.
+   */
   @Public()
-  @Post('auth/request-otp')
-  @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @ApiOperation({ summary: '[device] Send an OTP to the phone number' })
-  requestOtp(@Body() dto: DeviceRequestOtpDto) {
-    return this.auth.requestOtp(dto.phone);
-  }
-
-  @Public()
-  @Post('auth/verify-otp')
+  @Post('auth/enroll')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @ApiOperation({ summary: '[device] Verify OTP, register the device, issue tokens' })
-  verifyOtp(@Body() dto: DeviceVerifyOtpDto) {
-    return this.auth.verifyOtp(dto.phone, dto.code, { model: dto.model, appVersion: dto.appVersion });
+  @ApiOperation({ summary: '[device] Redeem an admin enrollment code for device tokens' })
+  enroll(@Body() dto: DeviceEnrollDto) {
+    return this.enrollment.enroll(dto.code, { model: dto.model, appVersion: dto.appVersion });
   }
 
   @Public()

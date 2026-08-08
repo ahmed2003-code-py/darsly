@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { DeviceController } from './device.controller';
+import { DeviceAdminController } from './device-admin.controller';
 import { DeviceAuthService } from './device-auth.service';
+import { DeviceEnrollmentService } from './device-enrollment.service';
 import { DeviceTokenService } from './device-token.service';
 import { DeviceAuthGuard } from './device-auth.guard';
 import { SenderRulesService } from './sender-rules.service';
@@ -14,9 +16,10 @@ import { SmsEventsService } from './sms-events.service';
  */
 @Module({
   imports: [AuthModule],
-  controllers: [DeviceController],
+  controllers: [DeviceController, DeviceAdminController],
   providers: [
     DeviceAuthService,
+    DeviceEnrollmentService,
     DeviceTokenService,
     DeviceAuthGuard,
     SenderRulesService,

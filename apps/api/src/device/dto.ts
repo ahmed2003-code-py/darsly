@@ -11,20 +11,24 @@ import {
 } from 'class-validator';
 import { EGY_PHONE_REGEX } from '../auth/dto/auth.dto';
 
-export class DeviceRequestOtpDto {
-  @ApiProperty({ example: '01012345678' })
+/** Admin mints an enrollment code for the handset that will run the listener. */
+export class MintEnrollmentCodeDto {
+  @ApiProperty({ example: '01002589923' })
   @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
   phone: string;
+
+  @ApiPropertyOptional({ example: 'موبايل الخزنة' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  label?: string;
 }
 
-export class DeviceVerifyOtpDto {
-  @ApiProperty({ example: '01012345678' })
-  @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
-  phone: string;
-
-  @ApiProperty({ example: '0000' })
+/** The handset redeems that code. It never chooses its own phone number. */
+export class DeviceEnrollDto {
+  @ApiProperty({ example: 'K7QM-3XPD' })
   @IsString()
-  @Length(4, 8)
+  @Length(8, 20)
   code: string;
 
   @ApiPropertyOptional({ example: 'Pixel 7' })

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Darsly SMS-listener device smoke — the full Android flow without a phone:
-# OTP registration, device auth, sender rules, SMS event ingestion, idempotency,
-# revocation. Requires OTP_DEV_MODE=true (dev OTP "0000").
+# admin-issued enrollment, device auth, sender rules, SMS event ingestion,
+# idempotency, token rotation and revocation. Needs a SUPER_ADMIN login.
 set -u
 API=${API:-http://localhost:4000/api/v1}
+export API   # the inline python helpers read it from the environment
 pass=0; fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi; }
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
@@ -16,18 +17,28 @@ PHONE="010${RND8}"
 # messageHash = SHA-256(normalizedSender + ' ' + body + ' ' + receivedAtEpochSec)
 hash_of() { printf '%s %s %s' "$(echo "$1" | tr '[:upper:]' '[:lower:]')" "$2" "$3" | sha256sum | cut -d' ' -f1; }
 
-echo "── 1. OTP registration"
-check "request-otp → 200" "200" "$(code -X POST $API/device/auth/request-otp -H 'Content-Type: application/json' -d "{\"phone\":\"$PHONE\"}")"
-check "malformed phone → 400" "400" "$(code -X POST $API/device/auth/request-otp -H 'Content-Type: application/json' -d '{"phone":"12345"}')"
-check "wrong OTP → 4xx" "yes" "$(c=$(code -X POST $API/device/auth/verify-otp -H 'Content-Type: application/json' -d "{\"phone\":\"$PHONE\",\"code\":\"9999\"}"); [ "${c:0:1}" = "4" ] && echo yes || echo no)"
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@darsly.app}
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-Darsly@123}
 
-VERIFY=$(post $API/device/auth/verify-otp -d "{\"phone\":\"$PHONE\",\"code\":\"0000\",\"model\":\"Smoke Test\",\"appVersion\":\"1.0.0\"}")
-TOK=$(echo "$VERIFY" | jget "['accessToken']")
-REFRESH=$(echo "$VERIFY" | jget "['refreshToken']")
-DEVICE=$(echo "$VERIFY" | jget "['deviceId']")
-check "verify-otp issues an access token" "yes" "$([ -n "$TOK" ] && [ "$TOK" != ERR ] && echo yes || echo no)"
-check "verify-otp registers a device"     "yes" "$([ -n "$DEVICE" ] && [ "$DEVICE" != ERR ] && echo yes || echo no)"
-check "phone normalized to E.164" "yes" "$(echo "$VERIFY" | jget "['phone']" | grep -q '^+20' && echo yes || echo no)"
+echo "── 1. Enrollment (admin mints a code, the handset redeems it)"
+ADMIN=$(post $API/auth/login -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" | jget "['accessToken']")
+check "admin logged in" "yes" "$([ -n "$ADMIN" ] && [ "$ADMIN" != ERR ] && echo yes || echo no)"
+
+MINT=$(post $API/admin/device/enrollment-codes -H "Authorization: Bearer $ADMIN" -d "{\"phone\":\"$PHONE\",\"label\":\"smoke\"}")
+CODE=$(echo "$MINT" | jget "['code']")
+check "code minted"                "yes" "$([ -n "$CODE" ] && [ "$CODE" != ERR ] && echo yes || echo no)"
+check "code is bound to the phone" "yes" "$(echo "$MINT" | jget "['phone']" | grep -q '^+20' && echo yes || echo no)"
+check "minting requires admin → 401/403" "yes" "$(c=$(code -X POST $API/admin/device/enrollment-codes -H 'Content-Type: application/json' -d "{\"phone\":\"$PHONE\"}"); [ "$c" = 401 ] || [ "$c" = 403 ] && echo yes || echo no)"
+check "garbage code rejected → 400" "400" "$(code -X POST $API/device/auth/enroll -H 'Content-Type: application/json' -d '{"code":"ZZZZZZZZ"}')"
+
+ENROLL=$(post $API/device/auth/enroll -d "{\"code\":\"$CODE\",\"model\":\"Smoke Test\",\"appVersion\":\"1.0.0\"}")
+TOK=$(echo "$ENROLL" | jget "['accessToken']")
+REFRESH=$(echo "$ENROLL" | jget "['refreshToken']")
+DEVICE=$(echo "$ENROLL" | jget "['deviceId']")
+check "enroll issues an access token" "yes" "$([ -n "$TOK" ] && [ "$TOK" != ERR ] && echo yes || echo no)"
+check "enroll registers a device"     "yes" "$([ -n "$DEVICE" ] && [ "$DEVICE" != ERR ] && echo yes || echo no)"
+check "phone comes from the code, not the client" "yes" "$(echo "$ENROLL" | jget "['phone']" | grep -q '^+20' && echo yes || echo no)"
+check "code is single-use → 400" "400" "$(code -X POST $API/device/auth/enroll -H 'Content-Type: application/json' -d "{\"code\":\"$CODE\"}")"
 
 echo "── 2. Device auth"
 check "GET /device/me → 200"          "200" "$(code $API/device/me -H "Authorization: Bearer $TOK")"

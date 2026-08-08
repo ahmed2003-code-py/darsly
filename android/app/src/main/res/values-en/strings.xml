@@ -8,21 +8,6 @@
     <string name="common_confirm">Confirm</string>
 
     <!-- Screen 1 — phone verification -->
-    <string name="verify_title">Activate this device</string>
-    <string name="verify_intro">Enter this phone\'s number. We will send you a one-time verification code.</string>
-    <string name="verify_phone_label">Phone number</string>
-    <string name="verify_send_otp">Send code</string>
-    <string name="verify_code_label">Verification code</string>
-    <string name="verify_submit">Verify code</string>
-    <string name="verify_edit_phone">Change number</string>
-    <string name="verify_status_sending">Sending code…</string>
-    <string name="verify_status_sent">Code sent to your phone.</string>
-    <string name="verify_status_verifying">Verifying…</string>
-    <string name="verify_status_invalid">Invalid or expired code.</string>
-    <string name="verify_status_success">Verified successfully.</string>
-    <string name="verify_status_network_error">Could not reach the server. Check your connection and try again.</string>
-    <string name="verify_status_rate_limited">Too many attempts. Please wait and try again.</string>
-    <string name="verify_error_phone_invalid">Enter a valid Egyptian mobile number (e.g. 01012345678).</string>
 
     <!-- Screen 2 — SMS permission -->
     <string name="perm_title">SMS permission</string>
@@ -68,11 +53,22 @@
     <string name="settings_delete_confirm">Delete all locally stored messages? Anything not yet synced will be lost.</string>
     <string name="settings_logout">Disconnect this device</string>
     <string name="settings_logout_desc">Revokes the device on the server and clears local data.</string>
-    <string name="settings_logout_confirm">This device will be revoked and stored messages and tokens erased. You will need to verify your phone number again.</string>
+    <string name="settings_logout_confirm">This device will be revoked and stored messages and tokens erased. You will need a new enrollment code from an admin.</string>
 
     <!-- Notifications -->
     <string name="notif_channel_name">Transfer messages</string>
     <string name="notif_channel_desc">Alerts when a payment SMS from a known sender arrives.</string>
     <string name="notif_title">Message received from %1$s</string>
     <string name="notif_body_hidden">A transfer message was detected and synced with Darsly.</string>
+    <!-- Screen 1 — device enrollment -->
+    <string name="enroll_title">Activate this device</string>
+    <string name="enroll_intro">Enter the enrollment code an admin generated for this phone. It is single-use and valid for 15 minutes.</string>
+    <string name="enroll_code_label">Enrollment code</string>
+    <string name="enroll_submit">Activate device</string>
+    <string name="enroll_status_working">Activating…</string>
+    <string name="enroll_status_success">Device activated successfully.</string>
+    <string name="enroll_status_invalid">Invalid or expired code.</string>
+    <string name="enroll_status_network_error">Could not reach the server. Check your connection and try again.</string>
+    <string name="enroll_status_rate_limited">Too many attempts. Please wait and try again.</string>
+    <string name="enroll_status_server_error">Server error. Please try again shortly.</string>
 </resources>

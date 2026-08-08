@@ -6,15 +6,13 @@ import kotlinx.serialization.Serializable
 // Every response type tolerates unknown/extra fields (Json { ignoreUnknownKeys })
 // so a backend that adds a field cannot break an already-deployed device.
 
+/**
+ * Redeem an admin-issued enrollment code. The device never claims a phone number
+ * — the number is bound to the code when an admin mints it, and comes back in the
+ * response.
+ */
 @Serializable
-data class RequestOtpRequest(val phone: String)
-
-@Serializable
-data class RequestOtpResponse(val expiresInSeconds: Int = 0)
-
-@Serializable
-data class VerifyOtpRequest(
-    val phone: String,
+data class EnrollRequest(
     val code: String,
     val model: String? = null,
     val appVersion: String? = null,

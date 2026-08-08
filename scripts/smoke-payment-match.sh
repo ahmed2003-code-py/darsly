@@ -9,9 +9,10 @@
 #                  → matching engine finds the one pending payment
 #                       → payment VERIFIED + enrollment ACTIVE
 #
-# Requires OTP_DEV_MODE=true (dev OTP "0000"). Usage: bash scripts/smoke-payment-match.sh
+# Needs a SUPER_ADMIN login. Usage: bash scripts/smoke-payment-match.sh
 set -u
 API=${API:-http://localhost:4000/api/v1}
+export API   # the inline python helpers read it from the environment
 pass=0; fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass+1)); echo "  ✅ $1"; else fail=$((fail+1)); echo "  ❌ $1 (expected $2, got $3)"; fi; }
 jget() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval(\"d$1\"))" 2>/dev/null || echo ERR; }
@@ -65,10 +66,11 @@ check "payment submitted"        "yes" "$([ "$PAY_ID" != ERR ] && echo yes || ec
 check "payment starts PENDING"   "PENDING" "$(echo "$SUB" | jget "['status']")"
 echo "     المبلغ: $AMOUNT قرش | المرجع: $REF"
 
-echo "── 2. تسجيل جهاز الاستماع"
-post $API/device/auth/request-otp -d "{\"phone\":\"$PHONE\"}" > /dev/null
-TOK=$(post $API/device/auth/verify-otp -d "{\"phone\":\"$PHONE\",\"code\":\"0000\",\"model\":\"Match Smoke\"}" | jget "['accessToken']")
-check "device registered" "yes" "$([ -n "$TOK" ] && [ "$TOK" != ERR ] && echo yes || echo no)"
+echo "── 2. تسجيل جهاز الاستماع (كود من الأدمن)"
+ADMIN=$(post $API/auth/login -d '{"email":"admin@darsly.app","password":"Darsly@123"}' | jget "['accessToken']")
+CODE=$(post $API/admin/device/enrollment-codes -H "Authorization: Bearer $ADMIN" -d "{\"phone\":\"$PHONE\",\"label\":\"match smoke\"}" | jget "['code']")
+TOK=$(post $API/device/auth/enroll -d "{\"code\":\"$CODE\",\"model\":\"Match Smoke\"}" | jget "['accessToken']")
+check "device enrolled" "yes" "$([ -n "$TOK" ] && [ "$TOK" != ERR ] && echo yes || echo no)"
 
 echo "── 3. رسالة المحفظة توصل على الموبايل"
 EGP=$(python3 -c "print(f'{$AMOUNT/100:.2f}')")

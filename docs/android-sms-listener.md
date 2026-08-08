@@ -12,7 +12,7 @@ Bank / Wallet → sends transfer SMS → the receiving phone
                           │  BroadcastReceiver (RECEIVE_SMS, user-granted)
                           ▼
              Room (local, source of truth)  →  WorkManager outbox (retry/backoff)
-                          │  device JWT (OTP-verified)
+                          │  device JWT (admin-enrolled)
                           ▼
         POST /api/v1/device/sms-events   →   PaymentMatchingService
                           ├── single confident match → verify → subscription ACTIVE
@@ -49,15 +49,27 @@ Android Keystore. This is independent of the marketplace user/session model.
 
 | Method & path | Auth | Body → Response |
 |---|---|---|
-| `POST /device/auth/request-otp` | public, 5/min | `{ phone }` → `{ expiresInSeconds }` |
-| `POST /device/auth/verify-otp` | public, 10/min | `{ phone, code, model?, appVersion? }` → `{ accessToken, refreshToken, deviceId, phone }` |
+| `POST /admin/device/enrollment-codes` | SUPER_ADMIN | `{ phone, label? }` → `{ code, phone, expiresAt }` |
+| `GET /admin/device/enrollment-codes` | SUPER_ADMIN | codes still usable (never the codes themselves) |
+| `GET /admin/device/devices` | SUPER_ADMIN | enrolled phones + SMS counts |
+| `POST /admin/device/devices/:id/revoke` | SUPER_ADMIN | cut a handset off immediately |
+| `POST /device/auth/enroll` | public, 10/min | `{ code, model?, appVersion? }` → `{ accessToken, refreshToken, deviceId, phone }` |
 | `POST /device/auth/refresh` | public | `{ refreshToken }` → `{ accessToken, refreshToken, deviceId }` |
 
-- OTP reuses the platform `OtpService` (argon2-hashed codes, TTL + attempt cap).
-  In dev (`OTP_DEV_MODE=true`, non-prod only) codes are logged and `0000` is
-  accepted.
-- `phone` accepts any Egyptian format; it is normalized to E.164 (`+2010…`).
-  The client-supplied phone is **never trusted** without a consumed OTP.
+**Enrollment is by admin-issued code, not SMS OTP.** There is no SMS gateway, so
+an OTP cannot be delivered in production at all — and it is the wrong control
+here anyway. The listener runs on a handset the operator physically owns, so the
+question is not "does this person control this number?" but "did an admin
+authorise this handset?".
+
+- A super-admin mints a single-use code (`K7QM-3XPD`, 15-minute TTL) **bound to
+  the phone number** the device will be registered under, and reads it out to
+  whoever is holding the phone.
+- Codes are argon2-hashed, so a database dump yields no usable code. The
+  plaintext is returned exactly once, at mint time.
+- The handset **never chooses its own phone number** — it comes from the code.
+- Failed redemptions increment an attempt counter on every live code, so guessing
+  is bounded; redemption is also rate-limited.
 - Refresh tokens rotate on every use; presenting a rotated-away token is treated
   as reuse → the device is revoked (stored refresh hash is argon2, per device).
 
@@ -142,12 +154,16 @@ The legacy `X-Listener-Key` endpoint remains for quick simulation:
 scripts/simulate-payment-event.sh VODAFONE_CASH 450 TXN-DEMO-8842
 ```
 
-Or exercise the full device flow (dev OTP `0000`):
+Or exercise the full device flow:
 
 ```bash
 API=http://localhost:4000/api/v1
-TOK=$(curl -s -XPOST $API/device/auth/verify-otp -H 'Content-Type: application/json' \
-  -d '{"phone":"01012345678","code":"0000"}' | jq -r .accessToken)
+ADMIN=$(curl -s -XPOST $API/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"admin@darsly.app","password":"Darsly@123"}' | jq -r .accessToken)
+CODE=$(curl -s -XPOST $API/admin/device/enrollment-codes -H "Authorization: Bearer $ADMIN" \
+  -H 'Content-Type: application/json' -d '{"phone":"01012345678"}' | jq -r .code)
+TOK=$(curl -s -XPOST $API/device/auth/enroll -H 'Content-Type: application/json' \
+  -d "{\"code\":\"$CODE\"}" | jq -r .accessToken)
 HASH=$(printf 'demo body' | sha256sum | cut -d' ' -f1)
 curl -s -XPOST $API/device/sms-events -H "Authorization: Bearer $TOK" \
   -H 'Content-Type: application/json' \
@@ -190,8 +206,8 @@ path, the app authenticates with a device JWT it earns at runtime via OTP.
 
 ## Data model (added)
 
-- `listener_devices` — OTP-registered devices (phone, model, refresh-hash,
-  revoked state).
+- `listener_devices` — enrolled devices (phone, model, refresh-hash, revoked state).
+- `device_enrollment_codes` — admin-issued, argon2-hashed, single-use, 15-min TTL.
 - `sender_rules` — backend-driven classification (brand, matchType, pattern,
   provider, enabled, forwardToBackend, priority).
 - `device_sms_events` — server mirror of the device outbox; `UNIQUE(deviceId,

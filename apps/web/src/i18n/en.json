@@ -329,7 +329,7 @@
       "colAmount": "Amount",
       "colStatus": "Status",
       "colActions": "Actions",
-      "reviewPayment": "Review payment"
+      "awaitingTransfer": "Awaiting transfer confirmation"
     },
     "coupons": {
       "title": "Discount coupons",
@@ -703,7 +703,33 @@
   "badges": {
     "title": "Your achievements",
     "earnedOf": "{{earned}} of {{total}}",
-    "unlocked": "Unlocked ✓"
+    "unlocked": "Unlocked ✓",
+    "items": {
+      "first_enroll": {
+        "title": "First step",
+        "desc": "Enrol in your first course"
+      },
+      "streak_7": {
+        "title": "One week strong",
+        "desc": "Keep a 7-day streak"
+      },
+      "dedicated": {
+        "title": "Dedicated",
+        "desc": "Complete 10 lessons"
+      },
+      "quiz_ace": {
+        "title": "Quiz ace",
+        "desc": "Score 100% on a quiz"
+      },
+      "first_certificate": {
+        "title": "Graduate",
+        "desc": "Earn your first certificate"
+      },
+      "scholar": {
+        "title": "Scholar",
+        "desc": "Collect 3 certificates"
+      }
+    }
   },
   "profile": {
     "title": "My profile",

@@ -33,7 +33,6 @@ const TeacherProfilePage = lazy(() => import('./pages/student/TeacherProfilePage
 const AssignmentBuilderPage = lazy(() => import('./pages/teacher/AssignmentBuilderPage'));
 const CourseBuilderPage = lazy(() => import('./pages/teacher/CourseBuilderPage'));
 const TeacherLivePage = lazy(() => import('./pages/teacher/TeacherLivePage'));
-const TeacherPaymentsPage = lazy(() => import('./pages/teacher/TeacherPaymentsPage'));
 const AdminPaymentsPage = lazy(() => import('./pages/admin/AdminPaymentsPage'));
 const AdminAcademyStudioPage = lazy(() => import('./pages/admin/AdminAcademyStudioPage'));
 const TeacherAnalyticsPage = lazy(() => import('./pages/teacher/TeacherAnalyticsPage'));
@@ -108,7 +107,6 @@ export default function App() {
       <Route path="/teacher/lessons/:lessonId/quiz" element={<RequireAuth role={Role.TEACHER}><QuizBuilderPage /></RequireAuth>} />
       <Route path="/teacher/lessons/:lessonId/assignment" element={<RequireAuth role={Role.TEACHER}><AssignmentBuilderPage /></RequireAuth>} />
       <Route path="/teacher/students" element={<RequireAuth role={Role.TEACHER}><TeacherEnrollmentsPage /></RequireAuth>} />
-      <Route path="/teacher/payments" element={<RequireAuth role={Role.TEACHER}><TeacherPaymentsPage /></RequireAuth>} />
       <Route path="/teacher/live" element={<RequireAuth role={Role.TEACHER}><TeacherLivePage /></RequireAuth>} />
       <Route path="/teacher/analytics" element={<RequireAuth role={Role.TEACHER}><TeacherAnalyticsPage /></RequireAuth>} />
       <Route path="/teacher/wallet" element={<RequireAuth role={Role.TEACHER}><TeacherWalletPage /></RequireAuth>} />

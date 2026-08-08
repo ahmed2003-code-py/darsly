@@ -288,6 +288,53 @@ export class AcademySiteService {
 
   // ── Internals ───────────────────────────────────────────────────────────────
 
+  /**
+   * Re-render every published site from the document it was published with.
+   *
+   * Publishing bakes the HTML into `publishedHtml`, so a fix to the renderer
+   * reaches new publishes only — live sites keep serving whatever markup was
+   * correct at the time. That is how every academy went on shipping course cards
+   * pointing at `/courses/<id>`, a path the app has never served, long after the
+   * generator was fixed.
+   *
+   * Content is untouched: same document, same version, only the markup is rebuilt.
+   */
+  async recompilePublished(): Promise<{ recompiled: number; failed: string[] }> {
+    const sites = await this.prisma.academySite.findMany({
+      where: { status: 'PUBLISHED' },
+      select: { id: true, academyId: true, publishedDoc: true },
+    });
+
+    let recompiled = 0;
+    const failed: string[] = [];
+    for (const site of sites) {
+      try {
+        const academy = await this.prisma.academy.findUnique({ where: { id: site.academyId } });
+        // A published row with no stored document cannot be rebuilt; leave it
+        // serving what it has rather than blanking a live site.
+        if (!academy || !site.publishedDoc) {
+          failed.push(site.academyId);
+          continue;
+        }
+        const html = await this.render.compile(
+          site.academyId,
+          site.publishedDoc as unknown as SiteDocument,
+          {
+            academyName: academy.name,
+            slug: academy.slug,
+            defaultLang: academy.language === 'en' ? 'en' : 'ar',
+          },
+        );
+        // Deliberately not bumping `version`: nothing the teacher authored changed.
+        await this.prisma.academySite.update({ where: { id: site.id }, data: { publishedHtml: html } });
+        recompiled++;
+      } catch {
+        failed.push(site.academyId);
+      }
+    }
+    return { recompiled, failed };
+  }
+
   private async compileAndPublish(
     siteId: string,
     academyId: string,

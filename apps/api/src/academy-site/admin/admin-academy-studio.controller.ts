@@ -50,6 +50,18 @@ export class AdminAcademyStudioController {
     return this.site.moderate(academyId, dto.decision, dto.reason, user.sub);
   }
 
+  /**
+   * Rebuild the markup of every live site from the document it was published
+   * with. Needed because publishing bakes the HTML in, so a renderer fix would
+   * otherwise reach new publishes only and live sites would keep serving the old
+   * links. Content is untouched.
+   */
+  @Post('sites/recompile')
+  @ApiOperation({ summary: '[admin] Re-render all published sites with the current renderer' })
+  recompile() {
+    return this.site.recompilePublished();
+  }
+
   @Post('sites/:academyId/takedown')
   @ApiOperation({ summary: '[admin] Take a live site offline' })
   takedown(

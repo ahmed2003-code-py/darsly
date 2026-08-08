@@ -28,7 +28,6 @@ const TEACHER_NAV: NavItem[] = [
   { to: '/academy/studio', icon: 'auto_awesome', labelKey: 'nav.studio' },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
-  { to: '/teacher/payments', icon: 'receipt_long', labelKey: 'nav.verifyPayments' },
   { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
   { to: '/teacher/live', icon: 'sensors', labelKey: 'nav.live' },
   { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },

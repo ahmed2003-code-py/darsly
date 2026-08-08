@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
 import { Badge, EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
@@ -94,14 +93,14 @@ export default function TeacherEnrollmentsPage() {
                   <td className="px-6 py-4">
                     <div className="flex gap-2">
                       {e.status === 'PENDING_APPROVAL' && (
-                        // Activation happens by verifying the payment, never by a
-                        // bare approve — send the teacher to the payments queue.
-                        <Link
-                          to="/teacher/payments"
-                          className="btn-secondary px-3 py-1.5 text-xs"
-                        >
-                          {t('teacher.students.reviewPayment')}
-                        </Link>
+                        // Read-only. Activation follows the transfer itself — the
+                        // listener confirms it against the wallet SMS, and only a
+                        // platform admin resolves what cannot be matched. A teacher
+                        // approving their own incoming payment is the control we
+                        // deliberately removed.
+                        <span className="rounded-lg bg-surface-container-high px-3 py-1.5 text-xs font-semibold text-on-surface-variant">
+                          {t('teacher.students.awaitingTransfer')}
+                        </span>
                       )}
                       {e.status === 'ACTIVE' && (
                         <button

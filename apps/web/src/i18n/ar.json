@@ -329,7 +329,7 @@
       "colAmount": "المبلغ",
       "colStatus": "الحالة",
       "colActions": "إجراءات",
-      "reviewPayment": "مراجعة الدفعة"
+      "awaitingTransfer": "في انتظار تأكيد التحويل"
     },
     "coupons": {
       "title": "كوبونات الخصم",
@@ -703,7 +703,33 @@
   "badges": {
     "title": "إنجازاتك",
     "earnedOf": "{{earned}} من {{total}}",
-    "unlocked": "تم الفتح ✓"
+    "unlocked": "تم الفتح ✓",
+    "items": {
+      "first_enroll": {
+        "title": "أول خطوة",
+        "desc": "اشترك في أول دورة"
+      },
+      "streak_7": {
+        "title": "مواظبة أسبوع",
+        "desc": "حافظ على ٧ أيام متتالية"
+      },
+      "dedicated": {
+        "title": "مثابر",
+        "desc": "أكمِل ١٠ دروس"
+      },
+      "quiz_ace": {
+        "title": "بطل الاختبارات",
+        "desc": "احصل على ١٠٠٪ في اختبار"
+      },
+      "first_certificate": {
+        "title": "متخرّج",
+        "desc": "احصل على أول شهادة"
+      },
+      "scholar": {
+        "title": "عالِم",
+        "desc": "اجمع ٣ شهادات"
+      }
+    }
   },
   "profile": {
     "title": "ملفي الشخصي",

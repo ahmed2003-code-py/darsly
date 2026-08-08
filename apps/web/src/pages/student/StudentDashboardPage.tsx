@@ -71,7 +71,7 @@ export default function StudentDashboardPage() {
             {badges.map((b) => (
               <div
                 key={b.key}
-                title={b.desc}
+                title={t([`badges.items.${b.key}.desc`, b.desc])}
                 className={`flex min-w-[8.5rem] flex-col items-center gap-1.5 rounded-xl border p-4 text-center transition ${
                   b.earned ? 'border-accent-300 bg-primary-fixed/50' : 'border-outline-variant bg-surface-container-low opacity-70'
                 }`}
@@ -79,7 +79,7 @@ export default function StudentDashboardPage() {
                 <span className={`grid h-12 w-12 place-items-center rounded-full ${b.earned ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-outline'}`}>
                   <span className="material-symbols-outlined" style={b.earned ? { fontVariationSettings: "'FILL' 1" } : undefined}>{b.earned ? b.icon : 'lock'}</span>
                 </span>
-                <span className="text-sm font-semibold">{b.title}</span>
+                <span className="text-sm font-semibold">{t([`badges.items.${b.key}.title`, b.title])}</span>
                 {!b.earned && b.goal > 1 && (
                   <span className="font-mono text-xs text-outline">{b.progress}/{b.goal}</span>
                 )}

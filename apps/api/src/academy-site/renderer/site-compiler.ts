@@ -24,13 +24,18 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   // Emit data-font only when the DNA set one, so pre-Phase-2 documents keep their
   // preset-driven heading font untouched.
   const fontAttr = theme?.headingFont ? ` data-font="${escapeAttr(theme.headingFont)}"` : '';
-  // Resolve the CTA destination once, here, because only the compiler sees every
-  // block. A hero cannot know whether a courses section exists further down, and
-  // guessing produced a dead anchor that made every "ابدأ الآن" do nothing.
-  const hasCourses = plan.blocks.some((pb) => pb.block.type === 'courses');
+  // Resolve the CTA destination once, here, rather than letting each variant
+  // invent one — guessing is what produced `#courses-<hero-block-id>`, an anchor
+  // for an element that never existed, so every "ابدأ الآن" did nothing at all.
+  //
+  // It leads to the teacher's own course gallery (`/t/:slug`, which the app gates
+  // behind sign-in) rather than scrolling down the page: a visitor who taps
+  // "start" is ready to enrol, and landing them in the catalogue signed in is the
+  // step that actually converts. The academy and teacher slugs are the same value
+  // by construction — provisioning copies it — so this always resolves.
   const renderCtx: VariantContext = {
     ...ctx,
-    ctaHref: hasCourses ? `#${COURSES_ANCHOR}` : `/a/${encodeURIComponent(ctx.slug)}`,
+    ctaHref: `/t/${encodeURIComponent(ctx.slug)}`,
   };
   const body = plan.blocks
     .map((pb) => getVariantRenderer(pb.block.type, pb.variant)?.(pb.block, renderCtx) ?? '')

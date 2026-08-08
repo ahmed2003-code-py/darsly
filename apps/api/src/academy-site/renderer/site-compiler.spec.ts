@@ -38,21 +38,27 @@ function plan(blocks: any[]): RenderPlan {
 }
 
 describe('compileSite — call-to-action destinations', () => {
-  it('points the hero CTA at the courses section that actually exists', () => {
+  it('sends the hero CTA to the teacher course gallery', () => {
     const html = compileSite(plan([heroBlock(), coursesBlock()]), ctx);
 
+    // A visitor who taps "start" is ready to enrol, so they land in the gallery
+    // (sign-in gated) rather than being scrolled down the marketing page.
+    expect(html).toContain('href="/t/khaled-academy"');
     // The anchor used to be built from the HERO block's id, so it referenced an
     // element that was never rendered and the button did nothing at all.
-    expect(html).toContain('href="#courses"');
-    expect(html).toContain('id="courses"');
     expect(html).not.toContain('href="#courses-blk-hero"');
   });
 
-  it('leaves the page when there is no courses section to scroll to', () => {
-    const html = compileSite(plan([heroBlock()]), ctx);
+  it('uses the same destination whether or not the page lists courses', () => {
+    const withCourses = compileSite(plan([heroBlock(), coursesBlock()]), ctx);
+    const without = compileSite(plan([heroBlock()]), ctx);
 
-    expect(html).not.toContain('href="#courses"');
-    expect(html).toContain('href="/a/khaled-academy"');
+    expect(withCourses).toContain('href="/t/khaled-academy"');
+    expect(without).toContain('href="/t/khaled-academy"');
+  });
+
+  it('still gives the courses section a stable anchor for in-page links', () => {
+    expect(compileSite(plan([heroBlock(), coursesBlock()]), ctx)).toContain('id="courses"');
   });
 
   it('never emits a dead anchor built from a block id', () => {

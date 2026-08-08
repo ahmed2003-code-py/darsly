@@ -32,28 +32,37 @@ STUDENT_PASSWORD=${STUDENT_PASSWORD:-Darsly@123}
 ST=$(post $API/auth/login -d "{\"email\":\"$STUDENT_EMAIL\",\"password\":\"$STUDENT_PASSWORD\"}" | jget "['accessToken']")
 check "student logged in" "yes" "$([ -n "$ST" ] && [ "$ST" != ERR ] && echo yes || echo no)"
 
-# Any priced published course. Discovery goes through the public teacher page,
-# walking the teacher list until one has a course with a price.
-COURSE=${COURSE_ID:-$(curl -s "$API/teachers" | PICK=$RANDOM python3 -c "
-import sys, json, urllib.request, os
+# A priced published course this student is NOT already enrolled in. Picking at
+# random meant a rerun kept landing on a pair that already existed, and the
+# submission was rejected — a flaky red that had nothing to do with matching.
+COURSE=${COURSE_ID:-$(curl -s "$API/teachers" | TOKEN="$ST" python3 -c "
+import sys, json, os, urllib.request
 api = os.environ['API']
-found = []
-try: d = json.load(sys.stdin)
-except Exception: sys.exit()
-rows = d if isinstance(d, list) else (d.get('items') or d.get('data') or [])
-for t in rows[:6]:
+
+def get(path, token=None):
+    req = urllib.request.Request(f'{api}{path}')
+    if token: req.add_header('Authorization', f'Bearer {token}')
+    with urllib.request.urlopen(req, timeout=10) as r: return json.load(r)
+
+taken = set()
+try:
+    for e in get('/enrollments/mine', os.environ['TOKEN']):
+        cid = e.get('courseId') or (e.get('course') or {}).get('id')
+        if cid: taken.add(cid)
+except Exception:
+    pass
+
+try: rows = json.load(sys.stdin)
+except Exception: rows = []
+rows = rows if isinstance(rows, list) else (rows.get('items') or rows.get('data') or [])
+for t in rows[:8]:
     slug = t.get('slug')
     if not slug: continue
-    try:
-        with urllib.request.urlopen(f'{api}/teachers/{slug}', timeout=10) as r:
-            page = json.load(r)
-    except Exception:
-        continue
+    try: page = get(f'/teachers/{slug}')
+    except Exception: continue
     for c in page.get('courses') or []:
-        if c.get('priceCents'):
-            found.append(c['id'])
-if found:
-    print(found[int(os.environ.get('PICK', '0')) % len(found)])
+        if c.get('priceCents') and c['id'] not in taken:
+            print(c['id']); sys.exit()
 " 2>/dev/null)}
 check "found a published course" "yes" "$([ -n "$COURSE" ] && echo yes || echo no)"
 

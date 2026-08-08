@@ -83,7 +83,10 @@ echo "── 5. Coupons + quote"
 CP=$(curl -s -X POST $API/teacher/coupons -H "Authorization: Bearer $KH" -H 'Content-Type: application/json' -d "{\"code\":\"$RUN_CODE\",\"percentOff\":50,\"maxUses\":5}")
 check "coupon created" "$RUN_CODE" "$(echo "$CP" | jsonget "['code']")"
 Q=$(curl -s -X POST $API/enrollments/quote -H 'Content-Type: application/json' -d "{\"courseId\":\"$CID\",\"couponCode\":\"$(echo $RUN_CODE | tr A-Z a-z)\"}")
-check "quote applies 50% (10000→5000)" "5000" "$(echo "$Q" | jsonget "['totalCents']")"
+# totalCents is what the STUDENT pays, which now includes the platform service
+# fee added on top of the academy's price: 10000 − 50% = 5000, +20% fee = 6000.
+# The old expectation read the academy's net, which students never see.
+check "quote applies 50% then adds the fee (10000→6000)" "6000" "$(echo "$Q" | jsonget "['totalCents']")"
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST $API/enrollments/quote -H 'Content-Type: application/json' -d "{\"courseId\":\"$CID\",\"couponCode\":\"NOPE\"}")
 check "invalid coupon → 400" "400" "$CODE"
 

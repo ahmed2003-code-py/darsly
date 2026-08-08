@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
@@ -27,6 +27,9 @@ const EMPTY_FORM: CourseForm = {
   requiresEnrollmentApproval: true,
 };
 
+const TABS = ['ALL', 'PUBLISHED', 'DRAFT', 'ARCHIVED'] as const;
+const SORTS = ['recent', 'name', 'students', 'price'] as const;
+
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'neutral'> = {
   PUBLISHED: 'teal',
   DRAFT: 'warn',
@@ -39,15 +42,59 @@ export default function TeacherCoursesPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CourseForm | null>(null);
   const [searchParams] = useSearchParams();
-  const q = (searchParams.get('q') ?? '').trim().toLowerCase(); // from the TopBar search
+  const queryFromUrl = searchParams.get('q') ?? '';
+  // The TopBar search lands here as ?q=; it seeds the on-page box so a teacher can
+  // refine it without going back up to the header.
+  const [search, setSearch] = useState(queryFromUrl);
+  const [tab, setTab] = useState<(typeof TABS)[number]>('ALL');
+  const [sort, setSort] = useState<(typeof SORTS)[number]>('recent');
+
+  // Searching from the header while already on this page changes the URL but not
+  // component state, so without this the box and the results would silently
+  // ignore it. Keyed on the value so a teacher's own typing is never overwritten.
+  const [lastUrlQuery, setLastUrlQuery] = useState(queryFromUrl);
+  if (queryFromUrl !== lastUrlQuery) {
+    setLastUrlQuery(queryFromUrl);
+    setSearch(queryFromUrl);
+  }
 
   const { data: allCourses, isLoading } = useQuery({
     queryKey: ['teacher-courses'],
     queryFn: async () => (await api.get('/teacher/courses')).data,
   });
-  const courses = q
-    ? (allCourses ?? []).filter((c: any) => c.title.toLowerCase().includes(q))
-    : allCourses;
+  const all: any[] = allCourses ?? [];
+  const lessonCount = (c: any) =>
+    (c.units ?? []).reduce((sum: number, u: any) => sum + (u._count?.lessons ?? 0), 0);
+
+  const counts = {
+    ALL: all.length,
+    PUBLISHED: all.filter((c) => c.status === 'PUBLISHED').length,
+    DRAFT: all.filter((c) => c.status === 'DRAFT').length,
+    ARCHIVED: all.filter((c) => c.status === 'ARCHIVED').length,
+  };
+
+  const courses = useMemo(() => {
+    const byTab = tab === 'ALL' ? all : all.filter((c) => c.status === tab);
+    const q = search.trim().toLowerCase();
+    const found = q
+      ? byTab.filter(
+          (c) =>
+            c.title?.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q),
+        )
+      : byTab;
+    const sorted = [...found];
+    if (sort === 'name') sorted.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    else if (sort === 'students')
+      sorted.sort((a, b) => (b._count?.enrollments ?? 0) - (a._count?.enrollments ?? 0));
+    else if (sort === 'price') sorted.sort((a, b) => (b.priceCents ?? 0) - (a.priceCents ?? 0));
+    else
+      sorted.sort(
+        (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+      );
+    return sorted;
+  }, [all, tab, search, sort]);
+
+  const totalStudents = all.reduce((sum, c) => sum + (c._count?.enrollments ?? 0), 0);
   const { data: subjects } = useQuery({
     queryKey: ['subjects'],
     queryFn: async () => (await api.get('/catalog/subjects')).data,
@@ -100,7 +147,7 @@ export default function TeacherCoursesPage() {
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       <PageHeader
         title={t('teacher.courses.title')}
-        subtitle={q ? t('discovery.resultsFor', { q }) : t('teacher.courses.subtitle')}
+        subtitle={t('teacher.courses.subtitle')}
         action={
           <button className="btn-primary" onClick={() => setForm({ ...EMPTY_FORM })}>
             <span className="material-symbols-outlined">add</span>
@@ -109,14 +156,109 @@ export default function TeacherCoursesPage() {
         }
       />
 
+      {/* Same toolbar as My students: filters with live counts, then a visible
+          search box — the header search alone is easy to miss and impossible to
+          refine once a teacher has more courses than fit on a screen. */}
+      <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container-low p-3 sm:p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {TABS.map((value) => {
+            const selected = tab === value;
+            const count = counts[value];
+            return (
+              <button
+                key={value}
+                onClick={() => setTab(value)}
+                aria-pressed={selected}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition ${
+                  selected
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
+                }`}
+              >
+                {t(`teacher.courses.tabs.${value}`)}
+                {count > 0 && (
+                  <span
+                    className={`grid min-w-5 place-items-center rounded-full px-1.5 text-xs font-extrabold leading-5 ${
+                      selected
+                        ? 'bg-on-primary/20 text-on-primary'
+                        : 'bg-surface-container-highest text-on-surface-variant'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant/60 pt-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline">
+              search
+            </span>
+            <input
+              className="input w-full ps-11 pe-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('teacher.courses.search')}
+              aria-label={t('teacher.courses.search')}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                aria-label={t('teacher.courses.clearSearch')}
+                className="absolute inset-y-0 end-2 my-auto grid h-7 w-7 place-items-center rounded-full text-outline transition hover:bg-surface-container-highest hover:text-on-surface"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            )}
+          </div>
+
+          <label className="flex shrink-0 items-center gap-2 text-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-base">sort</span>
+            <span className="sr-only sm:not-sr-only">{t('teacher.courses.sortBy')}</span>
+            <select
+              className="input py-2"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as (typeof SORTS)[number])}
+            >
+              {SORTS.map((value) => (
+                <option key={value} value={value}>
+                  {t(`teacher.courses.sort${value[0].toUpperCase()}${value.slice(1)}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {!isLoading && all.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-on-surface-variant">
+          <span className="font-semibold text-on-surface">
+            {t('teacher.courses.countCourses', { count: courses.length })}
+          </span>
+          <span>
+            {t('teacher.courses.totalStudents')}:{' '}
+            <strong className="text-on-surface">{totalStudents}</strong>
+          </span>
+        </div>
+      )}
+
       {isLoading ? (
         <CardGridSkeleton count={6} />
       ) : !courses?.length ? (
-        <EmptyState icon="menu_book" title={q ? t('discovery.noResults') : t('teacher.courses.empty')} />
+        <EmptyState
+          icon="menu_book"
+          title={search || tab !== 'ALL' ? t('teacher.courses.noMatch') : t('teacher.courses.empty')}
+        />
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {courses.map((c: any) => (
-            <article key={c.id} className="card flex flex-col p-5">
+            <article
+              key={c.id}
+              className="card flex flex-col p-5 transition hover:-translate-y-0.5 hover:shadow-md"
+            >
               <div className="mb-2 flex items-center justify-between">
                 <Badge tone={STATUS_TONE[c.status]}>{t(`teacher.courses.status.${c.status}`)}</Badge>
                 <span className="text-xs text-outline">
@@ -129,9 +271,7 @@ export default function TeacherCoursesPage() {
               <div className="mb-4 flex items-center gap-4 text-sm text-on-surface-variant">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-base">smart_display</span>
-                  {t('course.lessonsCount', {
-                    count: c.units.reduce((s: number, u: any) => s + u._count.lessons, 0),
-                  })}
+                  {t('course.lessonsCount', { count: lessonCount(c) })}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-base">group</span>
@@ -150,6 +290,8 @@ export default function TeacherCoursesPage() {
                 </Link>
                 <button
                   className="btn-ghost px-3 py-2 text-sm"
+                  title={t('teacher.courses.edit')}
+                  aria-label={t('teacher.courses.edit')}
                   onClick={() =>
                     setForm({
                       id: c.id,
@@ -168,6 +310,9 @@ export default function TeacherCoursesPage() {
                 <button
                   className="btn-ghost px-3 py-2 text-sm"
                   title={c.status === 'PUBLISHED' ? t('teacher.courses.unpublish') : t('teacher.courses.publish')}
+                  aria-label={
+                    c.status === 'PUBLISHED' ? t('teacher.courses.unpublish') : t('teacher.courses.publish')
+                  }
                   onClick={() =>
                     setStatus.mutate({ id: c.id, status: c.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' })
                   }
@@ -177,7 +322,9 @@ export default function TeacherCoursesPage() {
                   </span>
                 </button>
                 <button
-                  className="rounded-lg border border-error/30 px-3 py-2 text-error hover:bg-error-container/40"
+                  className="rounded-lg border border-error/30 px-3 py-2 text-error transition hover:bg-error-container/40"
+                  title={t('teacher.courses.delete')}
+                  aria-label={t('teacher.courses.delete')}
                   onClick={() => window.confirm(t('teacher.courses.deleteConfirm')) && remove.mutate(c.id)}
                 >
                   <span className="material-symbols-outlined text-base">delete</span>

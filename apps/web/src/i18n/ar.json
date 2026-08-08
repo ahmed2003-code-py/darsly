@@ -269,7 +269,23 @@
         "DRAFT": "مسودة",
         "PUBLISHED": "منشورة",
         "ARCHIVED": "مؤرشفة"
-      }
+      },
+      "search": "ابحث باسم الكورس…",
+      "clearSearch": "مسح البحث",
+      "noMatch": "لا يوجد كورس مطابق لبحثك",
+      "tabs": {
+        "ALL": "الكل",
+        "PUBLISHED": "منشور",
+        "DRAFT": "مسوّدة",
+        "ARCHIVED": "مؤرشف"
+      },
+      "sortBy": "ترتيب",
+      "sortRecent": "الأحدث",
+      "sortName": "الاسم",
+      "sortStudents": "الأكثر طلابًا",
+      "sortPrice": "الأعلى سعرًا",
+      "countCourses": "{{count}} كورس",
+      "totalStudents": "إجمالي الطلبة"
     },
     "builder": {
       "title": "منهج الدورة",

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
@@ -9,6 +10,7 @@ import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../../components/u
 const TABS = ['branding', 'members'] as const;
 
 export default function AcademyConsolePage() {
+  const { t } = useTranslation();
   const { academy, isLoading } = useOwnedAcademy();
   const [tab, setTab] = useState<(typeof TABS)[number]>('branding');
 
@@ -16,7 +18,7 @@ export default function AcademyConsolePage() {
   if (!academy) {
     return (
       <div className="mx-auto max-w-container px-6 py-8">
-        <PageHeader title="الأكاديمية" subtitle="لا توجد أكاديمية مملوكة لحسابك." />
+        <PageHeader title={t('academy.none')} subtitle={t('academy.noneSub')} />
       </div>
     );
   }
@@ -24,13 +26,11 @@ export default function AcademyConsolePage() {
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       <PageHeader
-        title="أكاديميتك"
-        subtitle="هوية أكاديميتك وفريقك — كل شيء في مكان واحد."
+        title={t('academy.title')}
+        subtitle={t('academy.subtitle')}
         action={
           <Link to={`/a/${academy.slug}`} target="_blank" className="btn-secondary">
-            <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-            عرض صفحة الأكاديمية
-          </Link>
+            <span className="material-symbols-outlined text-[20px]">open_in_new</span>{t('academy.viewPage')}</Link>
         }
       />
       <div className="mb-6 flex gap-2">
@@ -42,7 +42,7 @@ export default function AcademyConsolePage() {
               tab === tb ? 'bg-primary text-on-primary' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
             }`}
           >
-            {tb === 'branding' ? 'الهوية والإعدادات' : 'الفريق'}
+            {tb === 'branding' ? t('academy.tabBranding') : t('academy.tabTeam')}
           </button>
         ))}
       </div>
@@ -53,6 +53,7 @@ export default function AcademyConsolePage() {
 
 // ── Branding & settings ─────────────────────────────────────────────────────
 export function BrandingTab({ slug }: { slug: string }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const logoRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
@@ -86,19 +87,19 @@ export function BrandingTab({ slug }: { slug: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
       <div className="card">
-        <Field label="اسم الأكاديمية"><input className="input" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} maxLength={80} /></Field>
-        <Field label="الوصف المختصر"><input className="input" value={form.tagline ?? ''} onChange={(e) => set('tagline', e.target.value)} maxLength={160} placeholder="الرياضيات ببساطة" /></Field>
+        <Field label={t('academy.name')}><input className="input" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} maxLength={80} /></Field>
+        <Field label={t('academy.tagline')}><input className="input" value={form.tagline ?? ''} onChange={(e) => set('tagline', e.target.value)} maxLength={160} placeholder={t('academy.taglineHint')} /></Field>
 
         <div className="mb-4 grid grid-cols-2 gap-4">
-          <Field label="اللون الأساسي">
+          <Field label={t('academy.primaryColor')}>
             <div className="flex items-center gap-2">
               <input type="color" className="h-10 w-12 cursor-pointer rounded-lg border border-outline-variant bg-transparent" value={form.colorPrimary} onChange={(e) => set('colorPrimary', e.target.value)} />
               <input className="input" dir="ltr" value={form.colorPrimary} onChange={(e) => set('colorPrimary', e.target.value)} />
             </div>
           </Field>
-          <Field label="لغة الأكاديمية">
+          <Field label={t('academy.language')}>
             <select className="input" value={form.language} onChange={(e) => set('language', e.target.value)}>
-              <option value="ar">العربية</option>
+              <option value="ar">{t('academy.langArabic')}</option>
               <option value="en">English</option>
             </select>
           </Field>
@@ -106,35 +107,35 @@ export function BrandingTab({ slug }: { slug: string }) {
 
         <div className="mb-4 grid grid-cols-2 gap-4">
           <div>
-            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">الشعار</span>
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('academy.logo')}</span>
             <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && pick('logoUrl', e.target.files[0], { maxW: 256, maxH: 256, square: true })} />
             <button type="button" onClick={() => logoRef.current?.click()} className="btn-secondary w-full">
-              {form.logoUrl ? 'تغيير الشعار' : 'رفع شعار'}
+              {form.logoUrl ? t('academy.logoChange') : t('academy.logoUpload')}
             </button>
           </div>
           <div>
-            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">صورة الغلاف</span>
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('academy.cover')}</span>
             <input ref={coverRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && pick('coverUrl', e.target.files[0], { maxW: 1600, maxH: 600, quality: 0.72 })} />
             <button type="button" onClick={() => coverRef.current?.click()} className="btn-secondary w-full">
-              {form.coverUrl ? 'تغيير الغلاف' : 'رفع غلاف'}
+              {form.coverUrl ? t('academy.coverChange') : t('academy.coverUpload')}
             </button>
           </div>
         </div>
 
         <label className="mb-4 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={!!form.requiresEnrollmentApproval} onChange={(e) => set('requiresEnrollmentApproval', e.target.checked)} />
-          يتطلب الالتحاق بالكورسات مراجعة الدفع
+          {t('academy.requireReview')}
         </label>
-        <Field label="أقصى عدد أجهزة متزامنة للطالب">
+        <Field label={t('academy.maxDevices')}>
           <input type="number" min={1} max={10} className="input w-28" value={form.maxConcurrentSessions} onChange={(e) => set('maxConcurrentSessions', e.target.value)} />
         </Field>
 
         <ErrorNote error={save.error} />
         <div className="flex items-center gap-3">
           <button className="btn-primary" disabled={save.isPending} onClick={() => save.mutate()}>
-            {save.isPending ? 'جارٍ الحفظ…' : 'حفظ التغييرات'}
+            {save.isPending ? t('academy.saving') : t('academy.save')}
           </button>
-          {save.isSuccess && <span className="text-sm text-primary">تم الحفظ ✓</span>}
+          {save.isSuccess && <span className="text-sm text-primary">{t('academy.saved')}</span>}
         </div>
       </div>
 
@@ -145,7 +146,7 @@ export function BrandingTab({ slug }: { slug: string }) {
         </div>
         <div className="-mt-8 px-5 pb-5">
           <span className="grid h-16 w-16 place-items-center overflow-hidden rounded-xl border-4 border-surface-container-lowest font-heading text-2xl font-bold text-white" style={{ background: form.colorPrimary }}>
-            {form.logoUrl ? <img src={form.logoUrl} alt="" className="h-full w-full object-cover" /> : (form.name?.charAt(0) ?? '؟')}
+            {form.logoUrl ? <img src={form.logoUrl} alt="" className="h-full w-full object-cover" /> : (form.name?.charAt(0) ?? '?')}
           </span>
           <h3 className="mt-2 font-heading text-lg font-bold tracking-tight">{form.name}</h3>
           {form.tagline && <p className="text-sm text-on-surface-variant">{form.tagline}</p>}
@@ -157,9 +158,11 @@ export function BrandingTab({ slug }: { slug: string }) {
 }
 
 // ── Members ─────────────────────────────────────────────────────────────────
-const ROLE_LABEL: Record<string, string> = { OWNER: 'المالك', TEACHER: 'مدرّس', ASSISTANT: 'مساعد', STUDENT: 'طالب' };
+/** Resolved per render, not at module scope: the label must follow the active language. */
+const ROLE_KEY: Record<string, string> = { OWNER: 'academy.roleOwner', TEACHER: 'academy.roleTeacher', ASSISTANT: 'academy.roleAssistant', STUDENT: 'academy.roleStudent' };
 
 export function MembersTab({ slug }: { slug: string }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('TEACHER');
@@ -187,20 +190,20 @@ export function MembersTab({ slug }: { slug: string }) {
   return (
     <div className="space-y-6">
       <div className="card">
-        <h3 className="mb-3 font-heading font-bold">دعوة عضو للفريق</h3>
+        <h3 className="mb-3 font-heading font-bold">{t('academy.inviteTitle')}</h3>
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[16rem] flex-1">
-            <Field label="بريد العضو (لازم يكون مسجّل)"><input className="input" dir="ltr" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teacher@example.com" /></Field>
+            <Field label={t('academy.inviteEmail')}><input className="input" dir="ltr" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teacher@example.com" /></Field>
           </div>
           <div className="w-40">
-            <Field label="الدور">
+            <Field label={t('academy.inviteRole')}>
               <select className="input" value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="TEACHER">مدرّس</option>
-                <option value="ASSISTANT">مساعد</option>
+                <option value="TEACHER">{t('academy.roleTeacher')}</option>
+                <option value="ASSISTANT">{t('academy.roleAssistant')}</option>
               </select>
             </Field>
           </div>
-          <button className="btn-primary mb-4" disabled={add.isPending || !email.trim()} onClick={() => add.mutate()}>إضافة</button>
+          <button className="btn-primary mb-4" disabled={add.isPending || !email.trim()} onClick={() => add.mutate()}>{t('academy.inviteAdd')}</button>
         </div>
         <ErrorNote error={add.error} />
       </div>
@@ -211,20 +214,20 @@ export function MembersTab({ slug }: { slug: string }) {
             {staff.map((m: any) => (
               <li key={m.id} className="flex flex-wrap items-center gap-3 p-4">
                 <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-primary">
-                  {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" /> : (m.fullName?.charAt(0) ?? '؟')}
+                  {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" /> : (m.fullName?.charAt(0) ?? '?')}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold">{m.fullName}</p>
                   <p className="truncate text-xs text-outline" dir="ltr">{m.email}</p>
                 </div>
-                <Badge tone={m.role === 'OWNER' ? 'primary' : m.role === 'STUDENT' ? 'neutral' : 'teal'}>{ROLE_LABEL[m.role]}</Badge>
+                <Badge tone={m.role === 'OWNER' ? 'primary' : m.role === 'STUDENT' ? 'neutral' : 'teal'}>{t(ROLE_KEY[m.role] ?? 'academy.roleStudent')}</Badge>
                 {m.role !== 'OWNER' && m.role !== 'STUDENT' && (
                   <div className="flex items-center gap-2">
                     <select className="input w-28 py-1.5 text-sm" value={m.role} onChange={(e) => change.mutate({ id: m.id, body: { role: e.target.value } })}>
-                      <option value="TEACHER">مدرّس</option>
-                      <option value="ASSISTANT">مساعد</option>
+                      <option value="TEACHER">{t('academy.roleTeacher')}</option>
+                      <option value="ASSISTANT">{t('academy.roleAssistant')}</option>
                     </select>
-                    <button className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40" onClick={() => remove.mutate(m.id)}>إزالة</button>
+                    <button className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40" onClick={() => remove.mutate(m.id)}>{t('common.remove')}</button>
                   </div>
                 )}
               </li>

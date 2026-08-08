@@ -73,12 +73,12 @@ export default function PaymentModal({
               {quote && (
                 <div className="mb-2 space-y-1 border-b border-outline-variant pb-2 text-sm">
                   <div className="flex justify-between text-on-surface-variant">
-                    <span>{t('pay.coursePrice', 'سعر الكورس')}</span>
+                    <span>{t('pay.coursePrice')}</span>
                     <span className="tabular-nums">{egp(quote.netCents ?? quote.basePriceCents)}</span>
                   </div>
                   {quote.feeCents > 0 && (
                     <div className="flex justify-between text-on-surface-variant">
-                      <span>{t('pay.serviceFee', 'رسوم خدمة المنصّة')}</span>
+                      <span>{t('pay.serviceFee')}</span>
                       <span className="tabular-nums">{egp(quote.feeCents)}</span>
                     </div>
                   )}
@@ -112,10 +112,7 @@ export default function PaymentModal({
             <Field label={t('pay.method')}>
               <select className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
                 <option value="">{t('pay.pickMethod')}</option>
-                <option value="INSTAPAY">إنستاباي</option>
-                <option value="VODAFONE_CASH">فودافون كاش</option>
-                <option value="BANK_TRANSFER">تحويل بنكي</option>
-                <option value="OTHER">أخرى</option>
+                <option value="INSTAPAY">{t('method.INSTAPAY')}</option><option value="VODAFONE_CASH">{t('method.VODAFONE_CASH')}</option><option value="BANK_TRANSFER">{t('method.BANK_TRANSFER')}</option><option value="OTHER">{t('method.OTHER')}</option>
               </select>
             </Field>
             <Field label={t('pay.reference')} hint={t('pay.referenceHint')}>

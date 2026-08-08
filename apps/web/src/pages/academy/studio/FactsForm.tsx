@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { ErrorNote, Field, Spinner } from '../../../components/ui';
 import type { Facts, Social } from './types';
+import i18n from '../../../i18n';
 
 export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
   const { t } = useTranslation();
@@ -52,7 +53,7 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
   if (isLoading || !form) return isError ? <ErrorNote error={error} /> : <Spinner />;
 
   const set = (patch: Partial<Facts>) => setForm({ ...form, ...patch });
-  const csv = (arr: string[]) => arr.join('، ');
+  const csv = (arr: string[]) => arr.join(i18n.t('common.listSeparator'));
   const parseCsv = (s: string) => s.split(/[,،\n]/).map((x) => x.trim()).filter(Boolean);
 
   return (

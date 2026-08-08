@@ -51,7 +51,7 @@ export class PublicSiteService {
       title: c.title,
       thumbnailUrl: c.thumbnailUrl,
       priceCents: c.priceCents,
-      url: `/courses/${c.id}`,
+      url: `/course/${c.id}`,
     }));
   }
 

@@ -3,6 +3,7 @@
  * avatars when square=true), and return a compact JPEG/WEBP data URL. Resizing
  * on the client keeps uploads small enough to live inline in the DB.
  */
+import i18n from '../i18n';
 export function imageToDataUrl(
   file: File,
   opts: { maxW: number; maxH: number; quality?: number; square?: boolean } = { maxW: 800, maxH: 800 },
@@ -15,14 +16,14 @@ export function imageToDataUrl(
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) return reject(new Error('not an image'));
     if (file.size > MAX_SOURCE_BYTES) {
-      return reject(new Error('الصورة كبيرة جداً (الحد الأقصى 25 ميجابايت)'));
+      return reject(new Error(i18n.t('image.tooLarge')));
     }
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
       if (img.width * img.height > MAX_SOURCE_PIXELS) {
-        return reject(new Error('أبعاد الصورة كبيرة جداً — استخدم صورة أصغر'));
+        return reject(new Error(i18n.t('image.tooManyPixels')));
       }
       let sx = 0, sy = 0, sw = img.width, sh = img.height;
       let dw = img.width, dh = img.height;

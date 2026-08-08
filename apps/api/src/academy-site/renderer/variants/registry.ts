@@ -1,5 +1,5 @@
 import { SiteBlock } from '../../schema/site-document';
-import { RenderContext } from '../types';
+import { RenderContext, VariantContext } from '../types';
 
 /**
  * The Variant Registry — an open catalogue of section renderers keyed by
@@ -10,7 +10,7 @@ import { RenderContext } from '../types';
  * The first variant registered for a type is its default (used when a block
  * carries no explicit variant, or an unknown one).
  */
-export type VariantRenderer = (block: SiteBlock, ctx: RenderContext) => string;
+export type VariantRenderer = (block: SiteBlock, ctx: VariantContext) => string;
 
 /** Everything the Site Brain knows when it scores variants for selection. */
 export interface VariantSelectionContext {

@@ -80,7 +80,7 @@ export default function TeacherWalletPage() {
         <div className="card bg-primary text-on-primary">
           <p className="text-sm opacity-90">{t('wallet.balance')}</p>
           <p className="font-heading text-3xl font-extrabold">{egp(wallet.balanceCents)}</p>
-          <p className="mt-1 text-xs opacity-80">{t('wallet.minPayout', { amount: `${minEgp} ج.م` })}</p>
+          <p className="mt-1 text-xs opacity-80">{t('wallet.minPayout', { amount: `${minEgp} ${t('common.currencyShort')}` })}</p>
         </div>
         <div className="card"><p className="text-sm text-on-surface-variant">{t('wallet.net')}</p><p className="font-heading text-3xl font-extrabold text-accent">{egp(wallet.netCents)}</p></div>
         <div className="card"><p className="text-sm text-on-surface-variant">{t('wallet.gross')}</p><p className="font-heading text-3xl font-extrabold">{egp(wallet.grossCents)}</p></div>
@@ -130,7 +130,7 @@ export default function TeacherWalletPage() {
                       <span className="material-symbols-outlined text-base text-primary">account_balance_wallet</span>
                       {t(`wallet.${m.method}`)}
                     </span>
-                    {m.isDefault && <Badge tone="teal">افتراضي</Badge>}
+                    {m.isDefault && <Badge tone="teal">{t('common.default')}</Badge>}
                   </li>
                 ))}
               </ul>

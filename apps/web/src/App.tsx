@@ -1,10 +1,11 @@
 import { lazy, ReactNode, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { Spinner } from './components/ui';
 import LoginPage from './pages/LoginPage';
+import { loginUrlFor } from './lib/redirect';
 import { useAuthStore } from './stores/auth';
 
 // Route-level code splitting: each screen is its own chunk, so the initial
@@ -47,7 +48,13 @@ const TeacherWalletPage = lazy(() => import('./pages/teacher/TeacherWalletPage')
 
 function RequireAuth({ children, role }: { children: ReactNode; role?: Role }) {
   const { accessToken, user } = useAuthStore();
-  if (!accessToken) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  // Carry the destination to the login page. A visitor arriving from a generated
+  // academy site ("ابدأ الآن" → /course/<id>) would otherwise be dropped on a
+  // dashboard after signing in, with no way back to the course they came for.
+  if (!accessToken) {
+    return <Navigate to={loginUrlFor(location.pathname, location.search)} replace />;
+  }
   if (role && user?.role !== role && user?.role !== Role.SUPER_ADMIN) {
     return <Navigate to={user?.role === Role.TEACHER ? '/teacher' : '/'} replace />;
   }

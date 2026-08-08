@@ -1,13 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { paymentMethodLabel } from '../../lib/paymentMethods';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Modal, PageHeader } from '../../components/ui';
 
-const METHOD_LABEL: Record<string, string> = {
-  INSTAPAY: 'إنستاباي', VODAFONE_CASH: 'فودافون كاش', BANK_TRANSFER: 'تحويل بنكي', OTHER: 'أخرى',
-};
 const STATUS_TONE: Record<string, 'warn' | 'teal' | 'error'> = { PENDING: 'warn', PAID: 'teal', REJECTED: 'error' };
 
 export default function TeacherPaymentsPage() {
@@ -72,7 +70,7 @@ export default function TeacherPaymentsPage() {
                 <p className="truncate text-sm text-on-surface-variant">{p.courseTitle}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-outline">
                   <span className="font-heading font-extrabold text-primary">{egp(p.amountCents)}</span>
-                  <span>{METHOD_LABEL[p.method] ?? p.method}</span>
+                  <span>{paymentMethodLabel(p.method)}</span>
                   {p.reference && <span dir="ltr">#{p.reference}</span>}
                 </div>
                 {p.rejectedReason && <p className="mt-1 text-xs text-error">{p.rejectedReason}</p>}

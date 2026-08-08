@@ -132,7 +132,8 @@
     "startingFrom": "يبدأ من",
     "viewProfile": "عرض الملف",
     "noResults": "لا توجد نتائج مطابقة",
-    "noResultsHint": "جرّب تعديل الفلاتر أو البحث بكلمات أخرى"
+    "noResultsHint": "جرّب تعديل الفلاتر أو البحث بكلمات أخرى",
+    "academyPage": "صفحة الأكاديمية"
   },
   "teacherProfile": {
     "verifiedTeacher": "أستاذ معتمد",
@@ -327,7 +328,8 @@
       "colDate": "التاريخ",
       "colAmount": "المبلغ",
       "colStatus": "الحالة",
-      "colActions": "إجراءات"
+      "colActions": "إجراءات",
+      "reviewPayment": "مراجعة الدفعة"
     },
     "coupons": {
       "title": "كوبونات الخصم",
@@ -350,7 +352,8 @@
       "create": "إنشاء الكوبون",
       "deleteConfirm": "حذف هذا الكوبون؟",
       "empty": "لا توجد كوبونات بعد"
-    }
+    },
+    "academyStudio": "استوديو الأكاديمية"
   },
   "common": {
     "loading": "جارِ التحميل…",
@@ -367,7 +370,16 @@
     "free": "مجاني",
     "saving": "جارٍ الحفظ…",
     "saved": "تم الحفظ ✓",
-    "backHome": "العودة للرئيسية"
+    "backHome": "العودة للرئيسية",
+    "remove": "إزالة",
+    "close": "إغلاق",
+    "listSeparator": "، ",
+    "perMonth": " /شهرياً",
+    "unexpectedError": "حدث خطأ غير متوقع",
+    "unexpectedErrorBody": "نعتذر — حدث خطأ أثناء تحميل الصفحة. حاول إعادة التحميل.",
+    "reload": "إعادة تحميل",
+    "default": "افتراضي",
+    "currencyShort": "ج.م"
   },
   "wallet": {
     "title": "المحفظة",
@@ -440,7 +452,10 @@
     "securitySub": "الأحداث الأمنية عبر المنصة",
     "noEvents": "لا توجد أحداث أمنية",
     "auditTitle": "سجل التدقيق",
-    "empty": "لا توجد بيانات"
+    "empty": "لا توجد بيانات",
+    "studioTile": "استوديو الأكاديميات",
+    "studioTileValue": "مراجعة",
+    "rejectReason": "رفض من الإدارة"
   },
   "security": {
     "title": "مراقبة الأمان والنزاهة",
@@ -535,7 +550,9 @@
       "submitAssign": "تسليم الواجب",
       "lockedGraded": "تم تصحيح الواجب — لا يمكن إعادة التسليم.",
       "submitted": "تم التسليم ✓"
-    }
+    },
+    "true": "صح",
+    "false": "خطأ"
   },
   "cert": {
     "myTitle": "شهاداتي",
@@ -615,7 +632,8 @@
       "tokenExpired": "انتهت صلاحية الرابط.",
       "rateLimited": "محاولات كثيرة. برجاء المحاولة بعد قليل.",
       "generic": "حدث خطأ، حاول مرة أخرى."
-    }
+    },
+    "platformTagline": "منصّة الأكاديميات التعليمية"
   },
   "live": {
     "title": "الجلسات المباشرة",
@@ -711,7 +729,9 @@
     "submit": "إرسال للمراجعة",
     "submittedTitle": "تم إرسال دفعتك ✅",
     "submittedBody": "دفعتك قيد المراجعة، هيتفعّل اشتراكك بمجرد التأكيد.",
-    "noAccounts": "لا توجد حسابات استلام متاحة حالياً."
+    "noAccounts": "لا توجد حسابات استلام متاحة حالياً.",
+    "coursePrice": "سعر الكورس",
+    "serviceFee": "رسوم خدمة المنصّة"
   },
   "tpay": {
     "title": "مراجعة الدفعات",
@@ -982,5 +1002,61 @@
     "attempts": "المحاولات",
     "cost": "التكلفة",
     "rerun": "إعادة تشغيل"
+  },
+  "academy": {
+    "none": "الأكاديمية",
+    "noneSub": "لا توجد أكاديمية مملوكة لحسابك.",
+    "title": "أكاديميتك",
+    "subtitle": "هوية أكاديميتك وفريقك — كل شيء في مكان واحد.",
+    "viewPage": "عرض صفحة الأكاديمية",
+    "tabBranding": "الهوية والإعدادات",
+    "tabTeam": "الفريق",
+    "name": "اسم الأكاديمية",
+    "tagline": "الوصف المختصر",
+    "primaryColor": "اللون الأساسي",
+    "language": "لغة الأكاديمية",
+    "langArabic": "العربية",
+    "logo": "الشعار",
+    "logoChange": "تغيير الشعار",
+    "logoUpload": "رفع شعار",
+    "cover": "صورة الغلاف",
+    "coverChange": "تغيير الغلاف",
+    "coverUpload": "رفع غلاف",
+    "requireReview": "يتطلب الالتحاق بالكورسات مراجعة الدفع",
+    "maxDevices": "أقصى عدد أجهزة متزامنة للطالب",
+    "saving": "جارٍ الحفظ…",
+    "save": "حفظ التغييرات",
+    "saved": "تم الحفظ ✓",
+    "roleOwner": "المالك",
+    "roleTeacher": "مدرّس",
+    "roleAssistant": "مساعد",
+    "roleStudent": "طالب",
+    "inviteTitle": "دعوة عضو للفريق",
+    "inviteEmail": "بريد العضو (لازم يكون مسجّل)",
+    "inviteRole": "الدور",
+    "inviteAdd": "إضافة",
+    "taglineHint": "الرياضيات ببساطة"
+  },
+  "method": {
+    "INSTAPAY": "إنستاباي",
+    "VODAFONE_CASH": "فودافون كاش",
+    "BANK_TRANSFER": "تحويل بنكي",
+    "OTHER": "أخرى"
+  },
+  "image": {
+    "tooLarge": "الصورة كبيرة جداً (الحد الأقصى 25 ميجابايت)",
+    "tooManyPixels": "أبعاد الصورة كبيرة جداً — استخدم صورة أصغر"
+  },
+  "storefront": {
+    "notFound": "الأكاديمية غير موجودة",
+    "notFoundBody": "تأكد من الرابط، أو تصفّح الأكاديميات المتاحة.",
+    "browse": "تصفّح الأكاديميات",
+    "login": "تسجيل الدخول",
+    "courseCount": "{{count}} كورس",
+    "inArabic": "بالعربية",
+    "courses": "الكورسات",
+    "noCourses": "لا توجد كورسات منشورة بعد",
+    "poweredBy": "مدعوم من",
+    "lessonCount": "{{count}} درس"
   }
 }

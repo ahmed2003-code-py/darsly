@@ -49,7 +49,7 @@ export default function AuthShell({
         <div className="relative max-w-md">
           <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-on-primary/80">
             <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
-            منصّة الأكاديميات التعليمية
+            {t('auth.platformTagline')}
           </span>
           <h2 className="display text-on-primary">{t('auth.brandHeadline')}</h2>
           <p className="mt-4 text-on-primary/75">{t('auth.brandSub')}</p>

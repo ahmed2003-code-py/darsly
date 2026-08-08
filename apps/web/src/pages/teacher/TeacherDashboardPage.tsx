@@ -48,7 +48,7 @@ export default function TeacherDashboardPage() {
           <div className="flex flex-wrap gap-2">
             <Link to="/academy/studio" className="btn-secondary">
               <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-              استوديو الأكاديمية
+              {t('teacher.academyStudio')}
             </Link>
             <Link to="/teacher/courses" className="btn-primary">
               <span className="material-symbols-outlined">add</span>

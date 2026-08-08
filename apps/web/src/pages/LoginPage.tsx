@@ -1,14 +1,18 @@
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell, { AuthField } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
+import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 
 export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // Where the visitor was heading before being asked to sign in.
+  const destination = safeRedirect(params.get(REDIRECT_PARAM));
   const { setTokens, setUser } = useAuthStore();
 
   const [email, setEmail] = useState('');
@@ -29,7 +33,7 @@ export default function LoginPage() {
       });
       setTokens(data.accessToken, data.refreshToken);
       setUser(data.user);
-      navigate('/');
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(authErrorText(err, t));
     } finally {
@@ -44,7 +48,7 @@ export default function LoginPage() {
       footer={
         <>
           {t('auth.noAccount')}{' '}
-          <Link to="/register" className="font-bold text-primary hover:underline">{t('auth.signupLink')}</Link>
+          <Link to={withRedirect('/register', destination)} className="font-bold text-primary hover:underline">{t('auth.signupLink')}</Link>
         </>
       }
     >
@@ -61,7 +65,7 @@ export default function LoginPage() {
           reveal revealed={show} onReveal={() => setShow((s) => !s)} />
 
         <div className="mb-6 text-end">
-          <Link to="/forgot-password" className="text-sm text-primary hover:underline">{t('auth.forgot')}</Link>
+          <Link to={withRedirect('/forgot-password', destination)} className="text-sm text-primary hover:underline">{t('auth.forgot')}</Link>
         </div>
 
         <button className="btn-primary w-full py-3" disabled={busy}>

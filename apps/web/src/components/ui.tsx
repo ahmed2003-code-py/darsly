@@ -1,6 +1,7 @@
 import { m } from 'framer-motion';
 import { ReactNode } from 'react';
 import { Reveal } from './motion';
+import i18n from '../i18n';
 
 /** Small building blocks shared across screens. */
 
@@ -153,7 +154,7 @@ export function Modal({
           <button
             className="grid h-9 w-9 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
             onClick={onClose}
-            aria-label="إغلاق"
+            aria-label={i18n.t('common.close')}
           >
             <span className="material-symbols-outlined">close</span>
           </button>

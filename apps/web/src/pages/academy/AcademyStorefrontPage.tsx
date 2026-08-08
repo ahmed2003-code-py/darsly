@@ -6,6 +6,7 @@ import { EmptyState, Spinner } from '../../components/ui';
 import { api, apiOrigin } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { AcademyCourseCard, useAcademyCourses } from '../../lib/academy';
+import { useTranslation } from 'react-i18next';
 
 /** Public, academy-branded landing at /a/:slug. When the academy has published
  *  an AI-generated site, that page is shown (full-viewport); otherwise the
@@ -38,6 +39,7 @@ export default function AcademyStorefrontPage() {
 }
 
 function Storefront({ slug }: { slug: string }) {
+  const { t } = useTranslation();
   const { branding, isLoading, error } = useAcademy();
   const { data: courses, isLoading: coursesLoading } = useAcademyCourses(slug);
 
@@ -49,16 +51,16 @@ function Storefront({ slug }: { slug: string }) {
       <div dir="rtl" className="grid min-h-screen place-items-center bg-surface p-6 text-center">
         <div className="max-w-sm space-y-3">
           <div className="text-4xl">🔍</div>
-          <h1 className="font-heading text-xl font-bold">الأكاديمية غير موجودة</h1>
-          <p className="text-sm text-on-surface-variant">تأكد من الرابط، أو تصفّح الأكاديميات المتاحة.</p>
-          <Link to="/discover" className="btn-primary mt-2">تصفّح الأكاديميات</Link>
+          <h1 className="font-heading text-xl font-bold">{t('storefront.notFound')}</h1>
+          <p className="text-sm text-on-surface-variant">{t('storefront.notFoundBody')}</p>
+          <Link to="/discover" className="btn-primary mt-2">{t('storefront.browse')}</Link>
         </div>
       </div>
     );
   }
 
   const accent = branding.colorPrimary || '#4A32C9';
-  const initial = branding.name?.trim()?.charAt(0) ?? '؟';
+  const initial = branding.name?.trim()?.charAt(0) ?? '?';
 
   return (
     <div dir="rtl" className="min-h-screen bg-surface">
@@ -68,7 +70,7 @@ function Storefront({ slug }: { slug: string }) {
           <AcademyMark logoUrl={branding.logoUrl} initial={initial} accent={accent} size={9} />
           <span className="font-heading text-lg font-bold tracking-tight">{branding.name}</span>
           <div className="ms-auto flex items-center gap-2">
-            <Link to="/login" className="btn-secondary px-4 py-2 text-sm">تسجيل الدخول</Link>
+            <Link to="/login" className="btn-secondary px-4 py-2 text-sm">{t('storefront.login')}</Link>
           </div>
         </div>
       </header>
@@ -95,10 +97,10 @@ function Storefront({ slug }: { slug: string }) {
           </Reveal>
           <Reveal delay={0.06} className="flex flex-wrap gap-3 pt-2">
             <span className="rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold">
-              {courses?.length ?? 0} كورس
+              {t('storefront.courseCount', { count: courses?.length ?? 0 })}
             </span>
             <span className="rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold">
-              {branding.language === 'en' ? 'English' : 'بالعربية'}
+              {branding.language === 'en' ? 'English' : t('storefront.inArabic')}
             </span>
           </Reveal>
         </div>
@@ -108,13 +110,13 @@ function Storefront({ slug }: { slug: string }) {
       <main className="mx-auto max-w-container px-6 py-10">
         <Reveal className="mb-6 flex items-center gap-2">
           <span className="h-5 w-1 rounded-full" style={{ background: accent }} />
-          <h2 className="font-heading text-2xl font-bold tracking-tight">الكورسات</h2>
+          <h2 className="font-heading text-2xl font-bold tracking-tight">{t('storefront.courses')}</h2>
         </Reveal>
 
         {coursesLoading ? (
           <Spinner />
         ) : !courses?.length ? (
-          <EmptyState icon="menu_book" title="لا توجد كورسات منشورة بعد" />
+          <EmptyState icon="menu_book" title={t('storefront.noCourses')} />
         ) : (
           <Stagger className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {courses.map((c) => (
@@ -127,7 +129,7 @@ function Storefront({ slug }: { slug: string }) {
       </main>
 
       <footer className="border-t border-outline-variant py-8 text-center text-sm text-on-surface-variant">
-        مدعوم من <Link to="/discover" className="font-semibold" style={{ color: accent }}>درسلي</Link>
+        {t('storefront.poweredBy')}{' '}<Link to="/discover" className="font-semibold" style={{ color: accent }}>{t('brand')}</Link>
       </footer>
     </div>
   );
@@ -148,6 +150,7 @@ function AcademyMark({
 }
 
 function CourseCard({ course: c, accent }: { course: AcademyCourseCard; accent: string }) {
+  const { t } = useTranslation();
   const monthly = c.pricingModel === 'MONTHLY_SUBSCRIPTION';
   return (
     <Link to={`/course/${c.id}`} className="card card-hover flex h-full flex-col overflow-hidden p-0">
@@ -168,10 +171,10 @@ function CourseCard({ course: c, accent }: { course: AcademyCourseCard; accent: 
         <h3 className="mt-0.5 line-clamp-2 font-heading font-bold">{c.title}</h3>
         {c.teacherName && <p className="mt-1 text-xs text-outline">{c.teacherName}</p>}
         <div className="mt-auto flex items-center justify-between pt-3">
-          <span className="text-xs text-outline">{c.lessonsCount} درس</span>
+          <span className="text-xs text-outline">{t('storefront.lessonCount', { count: c.lessonsCount })}</span>
           <span className="font-heading text-lg font-bold tabular-nums">
-            {c.priceCents > 0 ? egp(c.priceCents) : 'مجاني'}
-            {monthly && c.priceCents > 0 && <span className="text-xs font-normal text-outline"> /شهرياً</span>}
+            {c.priceCents > 0 ? egp(c.priceCents) : t('common.free')}
+            {monthly && c.priceCents > 0 && <span className="text-xs font-normal text-outline">{t('common.perMonth')}</span>}
           </span>
         </div>
       </div>

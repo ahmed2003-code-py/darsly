@@ -1,8 +1,8 @@
 import { RenderPlan } from '../pipeline/contracts';
 import { darken, hexToRgb, mix, onColor } from './color.util';
 import { escapeAttr, escapeHtml } from './html.util';
-import { logo } from './shared';
-import { RenderContext } from './types';
+import { COURSES_ANCHOR, logo } from './shared';
+import { RenderContext, VariantContext } from './types';
 import { getVariantRenderer } from './variants';
 
 // Re-exported for callers that imported these from the compiler historically.
@@ -24,8 +24,16 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   // Emit data-font only when the DNA set one, so pre-Phase-2 documents keep their
   // preset-driven heading font untouched.
   const fontAttr = theme?.headingFont ? ` data-font="${escapeAttr(theme.headingFont)}"` : '';
+  // Resolve the CTA destination once, here, because only the compiler sees every
+  // block. A hero cannot know whether a courses section exists further down, and
+  // guessing produced a dead anchor that made every "ابدأ الآن" do nothing.
+  const hasCourses = plan.blocks.some((pb) => pb.block.type === 'courses');
+  const renderCtx: VariantContext = {
+    ...ctx,
+    ctaHref: hasCourses ? `#${COURSES_ANCHOR}` : `/a/${encodeURIComponent(ctx.slug)}`,
+  };
   const body = plan.blocks
-    .map((pb) => getVariantRenderer(pb.block.type, pb.variant)?.(pb.block, ctx) ?? '')
+    .map((pb) => getVariantRenderer(pb.block.type, pb.variant)?.(pb.block, renderCtx) ?? '')
     .join('\n');
   const brand = escapeHtml(ctx.academyName);
   const seoTitle = seo?.title?.[lang]?.trim();

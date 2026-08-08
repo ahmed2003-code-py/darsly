@@ -8,6 +8,15 @@ import { LT, RenderContext } from './types';
  */
 
 // Short section eyebrow labels, numbered in the editorial layout.
+/**
+ * Stable anchor for the courses section.
+ *
+ * Deliberately not derived from a block id: a hero rendering earlier on the page
+ * has no way to know the courses block's id, and inventing one gave every CTA a
+ * link to an element that did not exist.
+ */
+export const COURSES_ANCHOR = 'courses';
+
 export const SECTION_LABEL: Record<string, LT> = {
   about: { ar: 'نبذة', en: 'About' },
   toolkit: { ar: 'المنهج', en: 'Toolkit' },

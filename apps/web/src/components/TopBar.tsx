@@ -64,7 +64,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
     }
   }
 
-  const initial = user?.fullName?.trim()?.charAt(0) ?? '؟';
+  const initial = user?.fullName?.trim()?.charAt(0) ?? '?';
 
   return (
     <header className="glass sticky top-0 z-40">

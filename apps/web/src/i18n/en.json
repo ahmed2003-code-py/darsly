@@ -132,7 +132,8 @@
     "startingFrom": "Starting from",
     "viewProfile": "View profile",
     "noResults": "No matching results",
-    "noResultsHint": "Try adjusting the filters or different keywords"
+    "noResultsHint": "Try adjusting the filters or different keywords",
+    "academyPage": "Academy page"
   },
   "teacherProfile": {
     "verifiedTeacher": "Certified teacher",
@@ -327,7 +328,8 @@
       "colDate": "Date",
       "colAmount": "Amount",
       "colStatus": "Status",
-      "colActions": "Actions"
+      "colActions": "Actions",
+      "reviewPayment": "Review payment"
     },
     "coupons": {
       "title": "Discount coupons",
@@ -350,7 +352,8 @@
       "create": "Create coupon",
       "deleteConfirm": "Delete this coupon?",
       "empty": "No coupons yet"
-    }
+    },
+    "academyStudio": "Academy Studio"
   },
   "common": {
     "loading": "Loading…",
@@ -367,7 +370,16 @@
     "free": "Free",
     "saving": "Saving…",
     "saved": "Saved ✓",
-    "backHome": "Back home"
+    "backHome": "Back home",
+    "remove": "Remove",
+    "close": "Close",
+    "listSeparator": ", ",
+    "perMonth": " /month",
+    "unexpectedError": "Something went wrong",
+    "unexpectedErrorBody": "Sorry — the page failed to load. Please try reloading.",
+    "reload": "Reload",
+    "default": "Default",
+    "currencyShort": "EGP"
   },
   "wallet": {
     "title": "Wallet",
@@ -440,7 +452,10 @@
     "securitySub": "Security events across the platform",
     "noEvents": "No security events",
     "auditTitle": "Audit log",
-    "empty": "No data"
+    "empty": "No data",
+    "studioTile": "Academy Studio",
+    "studioTileValue": "Review",
+    "rejectReason": "Rejected by the platform"
   },
   "security": {
     "title": "Security & integrity",
@@ -535,7 +550,9 @@
       "submitAssign": "Submit assignment",
       "lockedGraded": "This assignment is graded — resubmission is closed.",
       "submitted": "Submitted ✓"
-    }
+    },
+    "true": "True",
+    "false": "False"
   },
   "cert": {
     "myTitle": "My certificates",
@@ -615,7 +632,8 @@
       "tokenExpired": "This link has expired.",
       "rateLimited": "Too many attempts. Please try again shortly.",
       "generic": "Something went wrong, please try again."
-    }
+    },
+    "platformTagline": "The learning-academy platform"
   },
   "live": {
     "title": "Live sessions",
@@ -711,7 +729,9 @@
     "submit": "Submit for review",
     "submittedTitle": "Payment submitted ✅",
     "submittedBody": "Your payment is under review; access activates once confirmed.",
-    "noAccounts": "No receiving accounts available right now."
+    "noAccounts": "No receiving accounts available right now.",
+    "coursePrice": "Course price",
+    "serviceFee": "Platform service fee"
   },
   "tpay": {
     "title": "Verify payments",
@@ -982,5 +1002,61 @@
     "attempts": "Attempts",
     "cost": "Cost",
     "rerun": "Rerun"
+  },
+  "academy": {
+    "none": "Academy",
+    "noneSub": "No academy is owned by your account.",
+    "title": "Your academy",
+    "subtitle": "Your academy's identity and team — everything in one place.",
+    "viewPage": "View academy page",
+    "tabBranding": "Branding & settings",
+    "tabTeam": "Team",
+    "name": "Academy name",
+    "tagline": "Short description",
+    "primaryColor": "Primary colour",
+    "language": "Academy language",
+    "langArabic": "Arabic",
+    "logo": "Logo",
+    "logoChange": "Change logo",
+    "logoUpload": "Upload logo",
+    "cover": "Cover image",
+    "coverChange": "Change cover",
+    "coverUpload": "Upload cover",
+    "requireReview": "Enrolling in a course requires payment review",
+    "maxDevices": "Maximum concurrent devices per student",
+    "saving": "Saving…",
+    "save": "Save changes",
+    "saved": "Saved ✓",
+    "roleOwner": "Owner",
+    "roleTeacher": "Teacher",
+    "roleAssistant": "Assistant",
+    "roleStudent": "Student",
+    "inviteTitle": "Invite a team member",
+    "inviteEmail": "Member's email (must already be registered)",
+    "inviteRole": "Role",
+    "inviteAdd": "Add",
+    "taglineHint": "Maths made simple"
+  },
+  "method": {
+    "INSTAPAY": "InstaPay",
+    "VODAFONE_CASH": "Vodafone Cash",
+    "BANK_TRANSFER": "Bank transfer",
+    "OTHER": "Other"
+  },
+  "image": {
+    "tooLarge": "Image is too large (25 MB maximum)",
+    "tooManyPixels": "Image dimensions are too large — use a smaller image"
+  },
+  "storefront": {
+    "notFound": "Academy not found",
+    "notFoundBody": "Check the link, or browse the available academies.",
+    "browse": "Browse academies",
+    "login": "Sign in",
+    "courseCount": "{{count}} courses",
+    "inArabic": "Arabic",
+    "courses": "Courses",
+    "noCourses": "No published courses yet",
+    "poweredBy": "Powered by",
+    "lessonCount": "{{count}} lessons"
   }
 }

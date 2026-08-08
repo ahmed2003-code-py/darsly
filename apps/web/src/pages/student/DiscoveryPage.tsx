@@ -249,7 +249,7 @@ export default function DiscoveryPage() {
                       <div className="flex items-center gap-2">
                         <Link
                           to={`/a/${tc.slug}`}
-                          title="صفحة الأكاديمية"
+                          title={t('discovery.academyPage')}
                           className="grid h-10 w-10 place-items-center rounded-xl border border-outline-variant text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary"
                         >
                           <span className="material-symbols-outlined text-[20px]">storefront</span>

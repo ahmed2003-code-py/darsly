@@ -1,13 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { paymentMethodLabel } from '../../lib/paymentMethods';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { Badge, ErrorNote, Field, Modal, PageHeader, Skeleton } from '../../components/ui';
+import i18n from '../../i18n';
 
-const METHOD_LABEL: Record<string, string> = {
-  INSTAPAY: 'إنستاباي', VODAFONE_CASH: 'فودافون كاش', BANK_TRANSFER: 'تحويل بنكي', OTHER: 'أخرى',
-};
 const EVENT_TONE: Record<string, string> = {
   MATCHED: 'bg-secondary-container text-on-secondary-container',
   UNMATCHED: 'bg-amber-100 text-amber-700', AMBIGUOUS: 'bg-amber-100 text-amber-700',
@@ -40,7 +39,7 @@ export default function AdminPaymentsPage() {
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['admin-payments'] }); };
   const verify = useMutation({ mutationFn: async (id: string) => (await api.post(`/admin/payments/${id}/verify`)).data, onSuccess: invalidate });
-  const reject = useMutation({ mutationFn: async (id: string) => (await api.post(`/admin/payments/${id}/reject`, { reason: 'رفض من الإدارة' })).data, onSuccess: invalidate });
+  const reject = useMutation({ mutationFn: async (id: string) => (await api.post(`/admin/payments/${id}/reject`, { reason: i18n.t('admin.rejectReason') })).data, onSuccess: invalidate });
 
   const addAccount = useMutation({
     mutationFn: async () => (await api.post('/admin/payment-accounts', form)).data,
@@ -80,7 +79,7 @@ export default function AdminPaymentsPage() {
                     <p className="truncate font-bold">{p.studentName} · <span className="text-sm font-normal text-outline">{p.courseTitle}</span></p>
                     <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-outline">
                       <span className="font-heading font-extrabold text-primary">{egp(p.amountCents)}</span>
-                      <span>{METHOD_LABEL[p.method] ?? p.method}</span>
+                      <span>{paymentMethodLabel(p.method)}</span>
                       {p.reference && <span dir="ltr">#{p.reference}</span>}
                     </div>
                     <div className="mt-2 flex gap-2">
@@ -110,7 +109,7 @@ export default function AdminPaymentsPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate">
-                        <span className="font-bold">{egp(e.amountCents)}</span> · {METHOD_LABEL[e.provider] ?? e.provider}
+                        <span className="font-bold">{egp(e.amountCents)}</span> · {paymentMethodLabel(e.provider)}
                         {e.reference && <span className="text-outline" dir="ltr"> · #{e.reference}</span>}
                       </p>
                       {e.note && <p className="truncate text-xs text-outline">{e.note}</p>}
@@ -158,11 +157,10 @@ export default function AdminPaymentsPage() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t('apay.addTitle')}>
         <Field label={t('pay.method')}>
           <select className="input" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
-            <option value="INSTAPAY">إنستاباي</option><option value="VODAFONE_CASH">فودافون كاش</option>
-            <option value="BANK_TRANSFER">تحويل بنكي</option><option value="OTHER">أخرى</option>
+            <option value="INSTAPAY">{t('method.INSTAPAY')}</option><option value="VODAFONE_CASH">{t('method.VODAFONE_CASH')}</option><option value="BANK_TRANSFER">{t('method.BANK_TRANSFER')}</option><option value="OTHER">{t('method.OTHER')}</option>
           </select>
         </Field>
-        <Field label={t('apay.label')}><input className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="إنستاباي درسلي" /></Field>
+        <Field label={t('apay.label')}><input className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder={t('method.INSTAPAY')} /></Field>
         <Field label={t('apay.handle')}><input className="input" dir="ltr" value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value })} placeholder="darsly@instapay / 010…" /></Field>
         <Field label={t('apay.instructions')}><input className="input" value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></Field>
         <ErrorNote error={addAccount.error} />

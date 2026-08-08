@@ -1,4 +1,5 @@
 import { Component, ReactNode } from 'react';
+import i18n from '../i18n';
 
 interface Props {
   children: ReactNode;
@@ -35,9 +36,9 @@ export default class ErrorBoundary extends Component<Props, State> {
         <div dir="rtl" className="grid min-h-screen place-items-center bg-slate-50 p-6 text-center">
           <div className="max-w-sm space-y-4">
             <div className="text-4xl">😕</div>
-            <h1 className="text-lg font-bold text-slate-800">حدث خطأ غير متوقع</h1>
+            <h1 className="text-lg font-bold text-slate-800">{i18n.t('common.unexpectedError')}</h1>
             <p className="text-sm text-slate-500">
-              نعتذر — حدث خطأ أثناء تحميل الصفحة. حاول إعادة التحميل.
+              {i18n.t('common.unexpectedErrorBody')}
             </p>
             <button
               onClick={() => {
@@ -46,7 +47,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               }}
               className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
             >
-              إعادة تحميل
+              {i18n.t('common.reload')}
             </button>
           </div>
         </div>

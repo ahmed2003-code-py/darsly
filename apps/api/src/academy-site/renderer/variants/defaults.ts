@@ -1,8 +1,8 @@
 import { SiteBlock } from '../../schema/site-document';
 import { ListItem, normalizeItems } from '../../text.util';
 import { escapeAttr, escapeHtml, safeUrl } from '../html.util';
-import { head, i18n, skeleton } from '../shared';
-import { RenderContext, RenderMedia } from '../types';
+import { COURSES_ANCHOR, head, i18n, skeleton } from '../shared';
+import { RenderMedia, VariantContext } from '../types';
 import { registerVariant, VariantSelectionContext } from './registry';
 
 /** DNAs whose personality suits editorial, statement-style layouts. */
@@ -27,7 +27,7 @@ function itemText(it: ListItem): string {
 registerVariant(
   'hero',
   'hero_01',
-  (b, ctx: RenderContext) => {
+  (b, ctx: VariantContext) => {
     const block = b as Of<'hero'>;
     const cover = block.mediaId ? ctx.media(block.mediaId) : undefined;
     const bg = cover && safeUrl(cover.url)
@@ -36,7 +36,7 @@ registerVariant(
     return `<section class="block hero${bg ? ' hero-img' : ''}"${bg}><div class="wrap">
         <h1>${i18n(block.headline)}</h1>
         <p class="sub">${i18n(block.subheadline)}</p>
-        <div class="hero-actions"><a class="btn" href="#courses-${block.id}">${i18n(block.ctaLabel)}</a></div>
+        <div class="hero-actions"><a class="btn" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
       </div></section>`;
   },
   // Centered classic — the safe default; wins when there's no cover image and
@@ -49,7 +49,7 @@ registerVariant(
 registerVariant(
   'hero',
   'hero_02',
-  (b, ctx: RenderContext) => {
+  (b, ctx: VariantContext) => {
     const block = b as Of<'hero'>;
     const cover = block.mediaId ? ctx.media(block.mediaId) : undefined;
     const url = cover && safeUrl(cover.url);
@@ -60,7 +60,7 @@ registerVariant(
         <div class="hero-copy">
           <h1>${i18n(block.headline)}</h1>
           <p class="sub">${i18n(block.subheadline)}</p>
-          <div class="hero-actions"><a class="btn" href="#courses-${block.id}">${i18n(block.ctaLabel)}</a></div>
+          <div class="hero-actions"><a class="btn" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
         </div>
         <div class="hero-media">${media}</div>
       </div></section>`;
@@ -73,12 +73,12 @@ registerVariant(
 registerVariant(
   'hero',
   'hero_03',
-  (b) => {
+  (b, ctx: VariantContext) => {
     const block = b as Of<'hero'>;
     return `<section class="block hero hero-editorial"><div class="wrap">
         <h1>${i18n(block.headline)}</h1>
         <p class="sub">${i18n(block.subheadline)}</p>
-        <div class="hero-actions"><a class="btn" href="#courses-${block.id}">${i18n(block.ctaLabel)}</a></div>
+        <div class="hero-actions"><a class="btn" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
       </div></section>`;
   },
   { score: (ctx) => (isEditorial(ctx) ? 0.85 : 0.6) },
@@ -87,7 +87,7 @@ registerVariant(
 registerVariant(
   'about',
   'about_01',
-  (b, ctx: RenderContext) => {
+  (b, ctx: VariantContext) => {
     const block = b as Of<'about'>;
     const img = block.mediaId ? ctx.media(block.mediaId) : undefined;
     const imgHtml = img && safeUrl(img.url)
@@ -186,7 +186,7 @@ registerVariant('cta', 'cta_01', (b) => {
 
 registerVariant('courses', 'courses_01', (b) => {
   const block = b as Of<'courses'>;
-  return `<section id="courses-${block.id}" class="block numbered courses" data-hydrate="courses" data-limit="${block.limit}"><div class="wrap">
+  return `<section id="${COURSES_ANCHOR}" data-block="courses-${block.id}" class="block numbered courses" data-hydrate="courses" data-limit="${block.limit}"><div class="wrap">
         ${head('courses', block.heading)}
         <div class="cards" data-slot>${skeleton(3)}</div>
       </div></section>`;
@@ -200,7 +200,7 @@ registerVariant('reviews', 'reviews_01', (b) => {
       </div></section>`;
 });
 
-registerVariant('gallery', 'gallery_01', (b, ctx: RenderContext) => {
+registerVariant('gallery', 'gallery_01', (b, ctx: VariantContext) => {
   const block = b as Of<'gallery'>;
   const imgs = block.mediaIds
     .map((id) => ctx.media(id))

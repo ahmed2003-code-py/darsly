@@ -44,7 +44,7 @@ export default function TeacherProfilePage() {
           <p className="mb-3 font-heading text-xl font-bold text-primary">
             {teacher.subject ? (ar ? teacher.subject.nameAr : teacher.subject.nameEn) : ''}
             {teacher.grades?.length
-              ? ` — ${teacher.grades.map((g: any) => (ar ? g.nameAr : g.nameEn)).join('، ')}`
+              ? ` — ${teacher.grades.map((g: any) => (ar ? g.nameAr : g.nameEn)).join(t('common.listSeparator'))}`
               : ''}
           </p>
           <p className="mb-6 leading-relaxed text-on-surface-variant">{teacher.bio}</p>

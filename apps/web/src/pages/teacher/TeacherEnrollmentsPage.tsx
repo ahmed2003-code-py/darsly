@@ -100,7 +100,7 @@ export default function TeacherEnrollmentsPage() {
                           to="/teacher/payments"
                           className="btn-secondary px-3 py-1.5 text-xs"
                         >
-                          {t('teacher.students.reviewPayment', 'مراجعة الدفعة')}
+                          {t('teacher.students.reviewPayment')}
                         </Link>
                       )}
                       {e.status === 'ACTIVE' && (

@@ -52,7 +52,7 @@ export default function ProfilePage() {
         <div className="flex flex-wrap items-center gap-5">
           <div className="relative">
             <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-primary-fixed text-3xl font-extrabold text-primary shadow-card">
-              {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : (name?.[0] ?? '؟')}
+              {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full object-cover" /> : (name?.[0] ?? '?')}
             </div>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
               onChange={(e) => e.target.files?.[0] && avatar.mutate(e.target.files[0])} />

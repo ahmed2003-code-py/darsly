@@ -46,9 +46,11 @@ bash scripts/smoke-phase6.sh      # 20 checks: quiz author→take→auto+manual 
 bash scripts/smoke-device-sms.sh  # 25 checks: SMS-listener device OTP registration,
                                   # sender rules, event ingestion, idempotency,
                                   # token rotation + revocation (needs OTP_DEV_MODE)
-bash scripts/smoke-payment-match.sh # 13 checks: student submits a transfer, the
+bash scripts/smoke-payment-match.sh # 20 checks: student submits a transfer, the
                                   # listener posts the wallet SMS, payment auto-verifies
                                   # and the enrollment activates itself
+npm run check:web                 # every internal link resolves to a route, and
+                                  # ar/en translations are complete on both sides
 ```
 
 `ffmpeg` and `ffprobe` must be on PATH for the video pipeline (`apt-get install ffmpeg`).

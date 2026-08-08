@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Badge, ErrorNote, PageHeader, Spinner } from '../../components/ui';
+import i18n from '../../i18n';
 
 type Opt = { id: string; text: string };
 type Q = {
@@ -18,7 +19,7 @@ type Q = {
 const rid = () => Math.random().toString(36).slice(2, 8);
 const blankQ = (type: Q['type']): Q => {
   if (type === 'TRUE_FALSE') {
-    return { type, prompt: '', options: [{ id: 'true', text: 'صح' }, { id: 'false', text: 'خطأ' }], correctOptionId: 'true', explanation: '', points: 1 };
+    return { type, prompt: '', options: [{ id: 'true', text: i18n.t('assess.true') }, { id: 'false', text: i18n.t('assess.false') }], correctOptionId: 'true', explanation: '', points: 1 };
   }
   if (type === 'SHORT_ANSWER') {
     return { type, prompt: '', options: [], correctOptionId: null, explanation: '', points: 1 };

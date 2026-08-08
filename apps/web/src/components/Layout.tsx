@@ -112,7 +112,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className="p-4">
         <NavLink to="/profile" className="flex items-center gap-3 rounded-xl bg-surface-container-low p-3 transition hover:bg-surface-container">
           <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-primary">
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName?.trim()?.charAt(0) ?? '؟')}
+            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName?.trim()?.charAt(0) ?? '?')}
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold">{user?.fullName}</p>

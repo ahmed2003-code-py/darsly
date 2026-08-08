@@ -1,9 +1,10 @@
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell, { AuthField } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
+import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 
 type Role = 'student' | 'teacher';
@@ -11,6 +12,9 @@ type Role = 'student' | 'teacher';
 export default function RegisterPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // Where the visitor was heading before being asked to sign in.
+  const destination = safeRedirect(params.get(REDIRECT_PARAM));
   const { setTokens, setUser } = useAuthStore();
 
   const [role, setRole] = useState<Role>('student');
@@ -36,7 +40,7 @@ export default function RegisterPage() {
         });
         setTokens(data.accessToken, data.refreshToken);
         setUser(data.user);
-        navigate('/');
+        navigate(destination, { replace: true });
       } else {
         await api.post('/auth/register/teacher', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
@@ -58,7 +62,7 @@ export default function RegisterPage() {
           <p className="font-heading text-lg font-bold">{t('auth.pendingHeadline')}</p>
           <p className="mt-1 text-sm text-on-surface-variant">{t('auth.pendingBody')}</p>
         </div>
-        <Link to="/login" className="btn-primary mt-6 block w-full py-3 text-center">{t('auth.backToLogin')}</Link>
+        <Link to={withRedirect('/login', destination)} className="btn-primary mt-6 block w-full py-3 text-center">{t('auth.backToLogin')}</Link>
       </AuthShell>
     );
   }
@@ -70,7 +74,7 @@ export default function RegisterPage() {
       footer={
         <>
           {t('auth.haveAccount')}{' '}
-          <Link to="/login" className="font-bold text-primary hover:underline">{t('auth.loginLink')}</Link>
+          <Link to={withRedirect('/login', destination)} className="font-bold text-primary hover:underline">{t('auth.loginLink')}</Link>
         </>
       }
     >

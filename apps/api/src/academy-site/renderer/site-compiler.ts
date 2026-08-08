@@ -46,7 +46,19 @@ export function compileSite(plan: RenderPlan, ctx: RenderContext): string {
   const title = escapeHtml(seoTitle || ctx.academyName);
   const descMeta = seoDesc ? `\n<meta name="description" content="${escapeAttr(seoDesc)}">` : '';
 
-  return `<!doctype html>
+  return `<!--
+  target="_top" is load-bearing, not decoration.
+
+  The app embeds this page in a full-viewport iframe, so a link without it
+  navigates the FRAME while the browser's address bar keeps pointing at
+  /a/<slug>. Everything after that — signing in, the course, the whole console —
+  happens inside the frame at a URL nobody can see or bookmark, and the first
+  refresh throws the visitor back to this marketing page.
+
+  In-page anchors (#top, #courses) deliberately stay in the frame: sending those
+  to _top would navigate the parent window to this raw HTML.
+-->
+<!doctype html>
 <html lang="${lang}" dir="${dir}" data-preset="${escapeAttr(preset)}"${fontAttr}>
 <head>
 <meta charset="utf-8">
@@ -274,7 +286,7 @@ function clientJs(slug: string, defaultLang: 'ar' | 'en'): string {
         slot.innerHTML=items.map(function(it){
           if(kind==='courses'){
             var img=it.thumbnailUrl?'<img src="'+esc(it.thumbnailUrl)+'" alt="">':'';
-            return '<a class="card" href="'+esc(it.url||'#')+'">'+img+'<h3>'+esc(it.title)+'</h3><div>'+money(it.priceCents)+'</div></a>';
+            return '<a class="card" target="_top" href="'+esc(it.url||'#')+'">'+img+'<h3>'+esc(it.title)+'</h3><div>'+money(it.priceCents)+'</div></a>';
           }
           return '<div class="card"><strong>'+esc(it.studentName||'')+'</strong><div>'+('★'.repeat(it.rating||0))+'</div><p>'+esc(it.comment||'')+'</p></div>';
         }).join('');

@@ -61,6 +61,16 @@ describe('compileSite — call-to-action destinations', () => {
     expect(compileSite(plan([heroBlock(), coursesBlock()]), ctx)).toContain('id="courses"');
   });
 
+  it('breaks out of the iframe the app renders it in', () => {
+    const html = compileSite(plan([heroBlock(), coursesBlock()]), ctx);
+    // Without target="_top" the click navigates the frame, the address bar keeps
+    // saying /a/<slug>, and the next refresh throws the visitor back here.
+    expect(html).toContain('target="_top" href="/t/khaled-academy"');
+    // In-page anchors must NOT break out — that would navigate the parent window
+    // to this raw HTML document.
+    expect(html).not.toContain('target="_top" href="#');
+  });
+
   it('never emits a dead anchor built from a block id', () => {
     const html = compileSite(plan([heroBlock(), coursesBlock()]), ctx);
     expect(html).not.toMatch(/href="#courses-[^"]+"/);

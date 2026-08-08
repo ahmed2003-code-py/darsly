@@ -36,7 +36,7 @@ registerVariant(
     return `<section class="block hero${bg ? ' hero-img' : ''}"${bg}><div class="wrap">
         <h1>${i18n(block.headline)}</h1>
         <p class="sub">${i18n(block.subheadline)}</p>
-        <div class="hero-actions"><a class="btn" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
+        <div class="hero-actions"><a class="btn" target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
       </div></section>`;
   },
   // Centered classic — the safe default; wins when there's no cover image and
@@ -60,7 +60,7 @@ registerVariant(
         <div class="hero-copy">
           <h1>${i18n(block.headline)}</h1>
           <p class="sub">${i18n(block.subheadline)}</p>
-          <div class="hero-actions"><a class="btn" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
+          <div class="hero-actions"><a class="btn" target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
         </div>
         <div class="hero-media">${media}</div>
       </div></section>`;
@@ -78,7 +78,7 @@ registerVariant(
     return `<section class="block hero hero-editorial"><div class="wrap">
         <h1>${i18n(block.headline)}</h1>
         <p class="sub">${i18n(block.subheadline)}</p>
-        <div class="hero-actions"><a class="btn" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
+        <div class="hero-actions"><a class="btn" target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.ctaLabel)}</a></div>
       </div></section>`;
   },
   { score: (ctx) => (isEditorial(ctx) ? 0.85 : 0.6) },
@@ -176,11 +176,13 @@ registerVariant('faq', 'faq_01', (b) => {
       </div></section>`;
 });
 
-registerVariant('cta', 'cta_01', (b) => {
+registerVariant('cta', 'cta_01', (b, ctx: VariantContext) => {
   const block = b as Of<'cta'>;
+  // A closing call to action that scrolled back to the top of the page was a
+  // dead end; it goes where the hero goes.
   return `<section class="block cta"><div class="wrap">
         <h2>${i18n(block.headline)}</h2>
-        <a class="btn" href="#top">${i18n(block.buttonLabel)}</a>
+        <a class="btn" target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(block.buttonLabel)}</a>
       </div></section>`;
 });
 

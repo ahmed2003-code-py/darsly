@@ -31,6 +31,34 @@ export default function SecureVideoPlayerPage() {
   const [tab, setTab] = useState<Tab>('notes');
   const [noteBody, setNoteBody] = useState('');
 
+  /**
+   * Fullscreen the frame, never the bare <video>.
+   *
+   * The browser's own fullscreen button promotes the video element alone, and
+   * everything we draw on top of it — the speed and quality menus, and the
+   * watermark carrying the viewer's identity — is outside that element. So
+   * fullscreen simultaneously removed the controls a student wants and the mark
+   * that makes a leak traceable, which is the worst possible pairing.
+   */
+  const frameRef = useRef<HTMLDivElement>(null);
+  const toggleFullscreen = () => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else frame.requestFullscreen?.().catch(() => {});
+  };
+  useEffect(() => {
+    const onChange = () => {
+      const el = document.fullscreenElement;
+      // The native button fullscreened the <video>; put the frame there instead.
+      if (el && el === videoRef.current && frameRef.current) {
+        document.exitFullscreen().then(() => frameRef.current?.requestFullscreen?.()).catch(() => {});
+      }
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
   // ── Advanced player controls ──────────────────────────────────────────────
   const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   const [rate, setRate] = useState<number>(() => Number(localStorage.getItem('darsly-rate')) || 1);
@@ -165,7 +193,7 @@ export default function SecureVideoPlayerPage() {
         case 'ArrowUp': e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); break;
         case 'ArrowDown': e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); break;
         case 'm': v.muted = !v.muted; break;
-        case 'f': if (v.requestFullscreen) v.requestFullscreen().catch(() => {}); break;
+        case 'f': toggleFullscreen(); break;
         case '>': case '.': { const i = rates.indexOf(v.playbackRate); applyRate(rates[Math.min(rates.length - 1, i + 1)] ?? v.playbackRate); break; }
         case '<': case ',': { const i = rates.indexOf(v.playbackRate); applyRate(rates[Math.max(0, i - 1)] ?? v.playbackRate); break; }
       }
@@ -317,7 +345,13 @@ export default function SecureVideoPlayerPage() {
 
         {/* Player + panels */}
         <div className="min-w-0 flex-1">
-          <div className="relative aspect-video overflow-hidden rounded-xl bg-black shadow-modal">
+          <div
+            ref={frameRef}
+            // Everything that must stay with the picture lives inside this frame:
+            // the video, the overlay controls and the watermark.
+            className="player-frame relative aspect-video overflow-hidden rounded-xl bg-black shadow-modal"
+            onContextMenu={(e) => e.preventDefault()}
+          >
             {error ? (
               <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-white/80">
                 <span className="material-symbols-outlined text-5xl text-error">error</span>
@@ -333,9 +367,14 @@ export default function SecureVideoPlayerPage() {
                   ref={videoRef}
                   className="h-full w-full"
                   controls
-                  controlsList="nodownload noplaybackrate noremoteplayback"
+                  // `noplaybackrate` used to be here, which removed the browser's
+                  // own speed control. Together with our overlay disappearing in
+                  // fullscreen, that left a student with no way to speed a lesson
+                  // up at all — the one player feature people ask for first.
+                  controlsList="nodownload noremoteplayback"
                   disablePictureInPicture
                   onContextMenu={(e) => e.preventDefault()}
+                  onRateChange={(e) => setRate(e.currentTarget.playbackRate)}
                   onLoadedMetadata={(e) => {
                     const v = e.currentTarget;
                     v.playbackRate = rate;

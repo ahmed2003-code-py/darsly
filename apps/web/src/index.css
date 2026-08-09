@@ -139,3 +139,18 @@
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   line-height: 1;
 }
+
+/* The player frame, in fullscreen.
+   Tailwind has no `fullscreen:` variant, and the frame has to drop its 16:9 box
+   and its corners when it owns the whole screen — otherwise the video sits in a
+   letterboxed rounded rectangle in the middle of a black page. */
+.player-frame:fullscreen {
+  aspect-ratio: auto;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+}
+.player-frame:fullscreen > video {
+  height: 100%;
+  object-fit: contain;
+}

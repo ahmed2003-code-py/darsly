@@ -7,6 +7,7 @@ import { egp } from '../../lib/format';
 import { CardGridSkeleton, EmptyState, Stars } from '../../components/ui';
 import { Stagger, StaggerItem } from '../../components/motion';
 import Pager from '../../components/Pager';
+import { FilterBar, FilterSheet } from '../../components/FilterBar';
 
 /**
  * The teacher directory.
@@ -118,10 +119,20 @@ export default function DiscoveryPage() {
     placeholderData: keepPreviousData,
   });
 
-  const FILTER_KEYS = ['subjectId', 'gradeId', 'language', 'priceMin', 'priceMax'];
-  const active = FILTER_KEYS.filter((k) => get(k)).length;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   const name = (x: Named | null | undefined) => (!x ? '' : ar ? x.nameAr : x.nameEn);
+
+  // The subject keeps its place in the bar; everything else lives in the sheet.
+  const SHEET_KEYS = ['gradeId', 'language', 'priceMin', 'priceMax'];
+  const active = SHEET_KEYS.filter((k) => get(k)).length;
+  const [sheet, setSheet] = useState(false);
+
+  const activeChips = [
+    get('gradeId') && { key: 'gradeId', label: name((grades ?? []).find((g) => g.id === get('gradeId'))) },
+    get('language') && { key: 'language', label: t(get('language') === 'ar' ? 'discovery.arabic' : 'discovery.english') },
+    get('priceMin') && { key: 'priceMin', label: `${t('discovery.min')} ${get('priceMin')}` },
+    get('priceMax') && { key: 'priceMax', label: `${t('discovery.max')} ${get('priceMax')}` },
+  ].filter(Boolean) as { key: string; label: string }[];
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
@@ -132,110 +143,62 @@ export default function DiscoveryPage() {
         </p>
       </header>
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <label className="relative flex-1">
-          <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-4 my-auto h-fit text-[20px] text-outline">
-            search
-          </span>
-          <input
-            className="input h-12 ps-12 text-base"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder={t('discovery.searchPh')}
-            aria-label={t('discovery.searchPh')}
-          />
-          {isFetching && !isLoading && (
-            <span className="absolute inset-y-0 end-4 my-auto h-4 w-4 animate-spin rounded-full border-2 border-outline-variant border-t-primary" />
-          )}
+      <FilterBar
+        chips={(subjects ?? []).map((x) => ({ id: x.id, label: name(x) }))}
+        selectedChip={get('subjectId')}
+        onChip={(id) => patch({ subjectId: id })}
+        search={typed}
+        onSearch={setTyped}
+        searchPlaceholder={t('discovery.searchPh')}
+        sort={get('sort') || 'rating'}
+        onSort={(v) => patch({ sort: v })}
+        sorts={SORTS.map((x) => ({ value: x, label: t(`discovery.sort.${x}`) }))}
+        sortLabel={t('discovery.sortBy')}
+        activeCount={active}
+        activeChips={activeChips}
+        onRemove={(k) => patch({ [k]: '' })}
+        onClear={() => patch(Object.fromEntries(SHEET_KEYS.map((k) => [k, ''])))}
+        onOpen={() => setSheet(true)}
+        busy={isFetching && !isLoading}
+      />
+
+      <FilterSheet open={sheet} onClose={() => setSheet(false)} count={active}>
+        <label className="mb-5 block">
+          <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.grade')}</span>
+          <select className="input" value={get('gradeId')} onChange={(e) => patch({ gradeId: e.target.value })}>
+            <option value="">{t('discovery.allGrades')}</option>
+            {(grades ?? []).map((g) => (
+              <option key={g.id} value={g.id}>{name(g)}</option>
+            ))}
+          </select>
         </label>
-        <select
-          className="input h-12 sm:w-52"
-          value={get('sort') || 'rating'}
-          onChange={(e) => patch({ sort: e.target.value })}
-          aria-label={t('discovery.sortBy')}
-        >
-          {SORTS.map((s) => (
-            <option key={s} value={s}>{t(`discovery.sort.${s}`)}</option>
-          ))}
-        </select>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        <aside className="card h-fit lg:sticky lg:top-24">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-heading font-bold">
-              <span className="material-symbols-outlined text-[20px]">tune</span>
-              {t('discovery.filters')}
-              {active > 0 && (
-                <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-on-primary">{active}</span>
-              )}
-            </h2>
-            {active > 0 && (
-              <button
-                className="text-sm font-semibold text-primary hover:underline"
-                onClick={() => patch(Object.fromEntries(FILTER_KEYS.map((k) => [k, ''])))}
-              >
-                {t('discovery.clearAll')}
-              </button>
-            )}
-          </div>
+        <label className="mb-5 block">
+          <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.language')}</span>
+          <select className="input" value={get('language')} onChange={(e) => patch({ language: e.target.value })}>
+            <option value="">{t('discovery.allLanguages')}</option>
+            <option value="ar">{t('discovery.arabic')}</option>
+            <option value="en">{t('discovery.english')}</option>
+          </select>
+        </label>
 
-          <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('discovery.subject')}</p>
-          <div className="mb-5 flex flex-wrap gap-1.5">
-            {(subjects ?? []).map((s) => {
-              const on = get('subjectId') === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => patch({ subjectId: on ? '' : s.id })}
-                  aria-pressed={on}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                    on
-                      ? 'bg-primary text-on-primary'
-                      : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-                  }`}
-                >
-                  {name(s)}
-                </button>
-              );
-            })}
-          </div>
+        <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('discovery.price')}</p>
+        <div className="flex items-center gap-2">
+          <input
+            className="input" type="number" min={0} inputMode="numeric"
+            placeholder={t('discovery.min')} value={get('priceMin')}
+            onChange={(e) => patch({ priceMin: e.target.value })}
+          />
+          <span className="text-outline">—</span>
+          <input
+            className="input" type="number" min={0} inputMode="numeric"
+            placeholder={t('discovery.max')} value={get('priceMax')}
+            onChange={(e) => patch({ priceMax: e.target.value })}
+          />
+        </div>
+      </FilterSheet>
 
-          <label className="mb-4 block">
-            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.grade')}</span>
-            <select className="input" value={get('gradeId')} onChange={(e) => patch({ gradeId: e.target.value })}>
-              <option value="">{t('discovery.allGrades')}</option>
-              {(grades ?? []).map((g) => (
-                <option key={g.id} value={g.id}>{name(g)}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="mb-4 block">
-            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.language')}</span>
-            <select className="input" value={get('language')} onChange={(e) => patch({ language: e.target.value })}>
-              <option value="">{t('discovery.allLanguages')}</option>
-              <option value="ar">{t('discovery.arabic')}</option>
-              <option value="en">{t('discovery.english')}</option>
-            </select>
-          </label>
-
-          <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('discovery.price')}</p>
-          <div className="flex items-center gap-2">
-            <input
-              className="input" type="number" min={0} inputMode="numeric"
-              placeholder={t('discovery.min')} value={get('priceMin')}
-              onChange={(e) => patch({ priceMin: e.target.value })}
-            />
-            <span className="text-outline">—</span>
-            <input
-              className="input" type="number" min={0} inputMode="numeric"
-              placeholder={t('discovery.max')} value={get('priceMax')}
-              onChange={(e) => patch({ priceMax: e.target.value })}
-            />
-          </div>
-        </aside>
-
+      <div>
         <section aria-live="polite">
           <p className="mb-4 text-sm text-on-surface-variant">
             {isLoading ? t('discovery.loading') : t('discovery.count', { n: data?.total ?? 0 })}
@@ -246,7 +209,7 @@ export default function DiscoveryPage() {
           ) : !data?.items.length ? (
             <EmptyState icon="search_off" title={t('discovery.noResults')} hint={t('discovery.noResultsHint')} />
           ) : (
-            <Stagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {data.items.map((tc) => (
                 <StaggerItem key={tc.id} className="h-full">
                   <TeacherCard teacher={tc} t={t} name={name} />

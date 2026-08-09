@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { CardGridSkeleton, EmptyState, Stars } from '../../components/ui';
+import { FilterBar, FilterSheet } from '../../components/FilterBar';
 import { Stagger, StaggerItem } from '../../components/motion';
 import Pager from '../../components/Pager';
 
@@ -121,11 +122,22 @@ export default function BrowseCoursesPage() {
     placeholderData: keepPreviousData,
   });
 
-  const active = ['subjectId', 'gradeId', 'language', 'free', 'hasPreview', 'priceMin', 'priceMax']
-    .filter((k) => get(k)).length;
-
   const name = (x: { nameAr: string; nameEn: string } | null | undefined) =>
     !x ? '' : ar ? x.nameAr : x.nameEn;
+
+  // Everything except the subject, which keeps its place in the bar.
+  const SHEET_KEYS = ['gradeId', 'language', 'free', 'hasPreview', 'priceMin', 'priceMax'];
+  const active = SHEET_KEYS.filter((k) => get(k)).length;
+  const [sheet, setSheet] = useState(false);
+
+  const activeChips = [
+    get('gradeId') && { key: 'gradeId', label: name((grades ?? []).find((g) => g.id === get('gradeId'))) },
+    get('language') && { key: 'language', label: t(get('language') === 'ar' ? 'browse.arabic' : 'browse.english') },
+    get('free') === '1' && { key: 'free', label: t('browse.freeOnly') },
+    get('hasPreview') === '1' && { key: 'hasPreview', label: t('browse.previewOnly') },
+    get('priceMin') && { key: 'priceMin', label: `${t('browse.min')} ${get('priceMin')}` },
+    get('priceMax') && { key: 'priceMax', label: `${t('browse.max')} ${get('priceMax')}` },
+  ].filter(Boolean) as { key: string; label: string }[];
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
@@ -134,48 +146,30 @@ export default function BrowseCoursesPage() {
         <p className="mt-2 max-w-prose text-on-surface-variant">{t('browse.subtitle')}</p>
       </header>
 
-      {/* Search and sort sit above everything: they are what a student reaches
-          for first, and burying them in the filter panel is what made the old
-          page feel like a form. */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <label className="relative flex-1">
-          <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-4 my-auto h-fit text-[20px] text-outline">
-            search
-          </span>
-          <input
-            className="input h-12 ps-12 text-base"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder={t('browse.searchPh')}
-            aria-label={t('browse.searchPh')}
-          />
-          {isFetching && !isLoading && (
-            <span className="absolute inset-y-0 end-4 my-auto h-4 w-4 animate-spin rounded-full border-2 border-outline-variant border-t-primary" />
-          )}
-        </label>
-        <select
-          className="input h-12 sm:w-52"
-          value={get('sort') || 'newest'}
-          onChange={(e) => patch({ sort: e.target.value })}
-          aria-label={t('browse.sortBy')}
-        >
-          {SORTS.map((s) => (
-            <option key={s} value={s}>{t(`browse.sort.${s}`)}</option>
-          ))}
-        </select>
-      </div>
+      <FilterBar
+        chips={(subjects ?? []).map((x) => ({ id: x.id, label: name(x) }))}
+        selectedChip={get('subjectId')}
+        onChip={(id) => patch({ subjectId: id })}
+        search={typed}
+        onSearch={setTyped}
+        searchPlaceholder={t('browse.searchPh')}
+        sort={get('sort') || 'newest'}
+        onSort={(v) => patch({ sort: v })}
+        sorts={SORTS.map((x) => ({ value: x, label: t(`browse.sort.${x}`) }))}
+        sortLabel={t('browse.sortBy')}
+        activeCount={active}
+        activeChips={activeChips}
+        onRemove={(k) => patch({ [k]: '' })}
+        onClear={() => patch(Object.fromEntries(SHEET_KEYS.map((k) => [k, ''])))}
+        onOpen={() => setSheet(true)}
+        busy={isFetching && !isLoading}
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        <FilterPanel
-          ar={ar}
-          t={t}
-          get={get}
-          patch={patch}
-          subjects={subjects ?? []}
-          grades={grades ?? []}
-          active={active}
-        />
+      <FilterSheet open={sheet} onClose={() => setSheet(false)} count={active}>
+        <SheetFilters t={t} get={get} patch={patch} grades={grades ?? []} name={name} />
+      </FilterSheet>
 
+      <div>
         <section aria-live="polite">
           <p className="mb-4 text-sm text-on-surface-variant">
             {isLoading ? t('browse.loading') : t('browse.count', { n: data?.total ?? 0 })}
@@ -190,7 +184,7 @@ export default function BrowseCoursesPage() {
               hint={active || get('q') ? t('browse.emptyFiltered') : t('browse.emptyAll')}
             />
           ) : (
-            <Stagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {data.items.map((c) => (
                 <StaggerItem key={c.id}>
                   <CourseCard course={c} ar={ar} t={t} name={name} />
@@ -297,62 +291,18 @@ function CourseCard({
   );
 }
 
-function FilterPanel({
-  ar, t, get, patch, subjects, grades, active,
+function SheetFilters({
+  t, get, patch, grades, name,
 }: {
-  ar: boolean;
   t: (k: string, o?: Record<string, unknown>) => string;
   get: (k: string) => string;
   patch: (n: Q, resetPage?: boolean) => void;
-  subjects: { id: string; nameAr: string; nameEn: string }[];
   grades: { id: string; nameAr: string; nameEn: string }[];
-  active: number;
+  name: (x: { nameAr: string; nameEn: string } | null | undefined) => string;
 }) {
-  const name = (x: { nameAr: string; nameEn: string }) => (ar ? x.nameAr : x.nameEn);
-  const clear = () =>
-    patch({ subjectId: '', gradeId: '', language: '', free: '', hasPreview: '', priceMin: '', priceMax: '' });
-
   return (
-    <aside className="card h-fit lg:sticky lg:top-24">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-heading font-bold">
-          <span className="material-symbols-outlined text-[20px]">tune</span>
-          {t('browse.filters')}
-          {active > 0 && (
-            <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-on-primary">{active}</span>
-          )}
-        </h2>
-        {active > 0 && (
-          <button className="text-sm font-semibold text-primary hover:underline" onClick={clear}>
-            {t('browse.clear')}
-          </button>
-        )}
-      </div>
-
-      {/* Subjects as chips rather than a list of radio-like rows: it is the
-          filter students reach for most, and one tap should apply it. */}
-      <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('browse.subject')}</p>
-      <div className="mb-5 flex flex-wrap gap-1.5">
-        {subjects.map((s) => {
-          const on = get('subjectId') === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => patch({ subjectId: on ? '' : s.id })}
-              aria-pressed={on}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                on
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
-              }`}
-            >
-              {name(s)}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="mb-4 block">
+    <>
+      <label className="mb-5 block">
         <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('browse.grade')}</span>
         <select className="input" value={get('gradeId')} onChange={(e) => patch({ gradeId: e.target.value })}>
           <option value="">{t('browse.allGrades')}</option>
@@ -362,7 +312,7 @@ function FilterPanel({
         </select>
       </label>
 
-      <label className="mb-4 block">
+      <label className="mb-5 block">
         <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('browse.language')}</span>
         <select className="input" value={get('language')} onChange={(e) => patch({ language: e.target.value })}>
           <option value="">{t('browse.allLanguages')}</option>
@@ -372,7 +322,7 @@ function FilterPanel({
       </label>
 
       <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('browse.price')}</p>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-5 flex items-center gap-2">
         <input
           className="input" type="number" min={0} inputMode="numeric"
           placeholder={t('browse.min')} value={get('priceMin')}
@@ -398,7 +348,7 @@ function FilterPanel({
         on={get('hasPreview') === '1'}
         onChange={(v) => patch({ hasPreview: v ? '1' : '' })}
       />
-    </aside>
+    </>
   );
 }
 

@@ -1209,5 +1209,12 @@
     "prev": "Previous",
     "next": "Next",
     "label": "Result pages"
+  },
+  "filters": {
+    "button": "Filters",
+    "clear": "Clear all",
+    "all": "All",
+    "close": "Close",
+    "show": "Show results"
   }
 }

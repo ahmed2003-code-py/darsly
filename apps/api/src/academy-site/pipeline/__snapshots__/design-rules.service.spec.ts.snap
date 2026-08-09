@@ -1,0 +1,11 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`the shipped Design DNA palettes records which signature palettes fail their own button-contrast rule 1`] = `
+[
+  "bold_energetic",
+  "editorial_dark",
+  "royal_night",
+  "sunrise_warm",
+  "warm_mentor",
+]
+`;

@@ -1,9 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Archetype } from '../generation/planning.schema';
-import { SiteDocument } from '../schema/site-document';
+import { SectionSpec, SectionSurface } from '../schema/design-spec';
+import { SiteBlock, SiteDocument } from '../schema/site-document';
 import { resolveVariantId, selectVariant, VariantSelectionContext } from '../renderer/variants';
-import { RenderPlan } from './contracts';
+import { choosePattern, getPattern, patternFits, ResolvedSection } from '../renderer/compose';
+import { ComposePlan, ComposeSection, RenderPlan, RulesVerdict } from './contracts';
+import { ContentProfile, EMPTY_PROFILE, fitFor } from './content-profile';
+import { designFor } from './design-lift';
+import { repairDesign } from './design-repair';
 import { DesignRulesService } from './design-rules.service';
+import { blockContentCount, blockHasContent, blockMediaId } from './block-content';
 
 // Section flow. Hero always opens; contact + CTA always close. The middle band
 // is ordered by archetype so each teacher's page leads with their strength.
@@ -70,6 +76,146 @@ export class SiteBrainService {
     for (const block of doc.blocks) {
       block.variant = selectVariant(block.type, ctx);
     }
+  }
+
+  /**
+   * Turn an assembled Site Document into an authoritative composition plan.
+   *
+   * This is where a proposal becomes a decision. Everything the model suggested
+   * is either honoured, corrected or replaced here, and the compiler downstream
+   * is total: it never has to ask whether a pattern exists, whether a colour is
+   * legible or whether a section has enough content to justify its layout.
+   */
+  compose(doc: SiteDocument, profile: ContentProfile = EMPTY_PROFILE): ComposePlan {
+    const archetype = (doc.theme.archetype as Archetype) ?? 'general';
+    const { design, verdicts } = repairDesign(designFor(doc));
+
+    // A section that would render to nothing is dropped rather than left to
+    // occupy a slot in the numbering and contribute an empty band of padding.
+    const kept: SiteBlock[] = [];
+    for (const block of doc.blocks) {
+      if (blockHasContent(block)) kept.push(block);
+      else {
+        verdicts.push({
+          code: 'section-empty',
+          severity: 'warn',
+          message: `the ${block.type} section has no content and was left out`,
+          target: block.id,
+        });
+      }
+    }
+
+    // Carried down the page rather than held on the service: this is a
+    // singleton, and two academies rendering at once must not see each other's
+    // sections.
+    const recentSurfaces: SectionSurface[] = [];
+    const sections: ComposeSection[] = kept.map((block, index) =>
+      this.resolveSection(block, index, design, archetype, profile, verdicts, recentSurfaces),
+    );
+
+    return { theme: doc.theme, design, seo: doc.seo, sections, verdicts };
+  }
+
+  /** Fill in every optional on one section, and hold its pattern to the content. */
+  private resolveSection(
+    block: SiteBlock,
+    index: number,
+    design: ComposePlan['design'],
+    archetype: string,
+    profile: ContentProfile,
+    verdicts: RulesVerdict[],
+    recentSurfaces: SectionSurface[],
+  ): ComposeSection {
+    const asked: SectionSpec | undefined = block.section;
+    const fit = fitFor(profile, archetype, {
+      items: blockContentCount(block),
+      hasMedia: !!blockMediaId(block),
+      textLength: block.type === 'about' ? profile.bioLength : 0,
+    });
+
+    // The pattern the model asked for, if it exists and the content can carry
+    // it; otherwise the best one that can. An unknown or unaffordable pattern is
+    // a downgrade, never a failed generation.
+    let pattern = getPattern(asked?.pattern);
+    if (asked?.pattern && !pattern) {
+      verdicts.push({
+        code: 'pattern-unknown',
+        severity: 'warn',
+        message: `no pattern named "${asked.pattern}"; the best available one was used instead`,
+        target: block.id,
+      });
+    } else if (pattern && pattern.section !== block.type) {
+      verdicts.push({
+        code: 'pattern-mismatched',
+        severity: 'warn',
+        message: `"${pattern.id}" does not lay out a ${block.type} section`,
+        target: block.id,
+      });
+      pattern = undefined;
+    } else if (pattern && !patternFits(pattern, fit)) {
+      verdicts.push({
+        code: 'pattern-unaffordable',
+        severity: 'warn',
+        message: `"${pattern.id}" needs more content than this ${block.type} section has`,
+        target: block.id,
+      });
+      pattern = undefined;
+    }
+    const resolved = pattern ?? choosePattern(block.type, fit);
+
+    const spec: ResolvedSection = {
+      pattern: resolved?.id ?? '',
+      emphasis: asked?.emphasis ?? (index === 0 ? 'feature' : 'normal'),
+      width: asked?.width ?? (resolved?.fullBleed ? 'full' : design.rhythm.containerWidth),
+      surface: this.surfaceFor(asked?.surface, recentSurfaces, verdicts, block.id),
+      align: asked?.align ?? 'start',
+      columns: Math.max(1, Math.min(4, asked?.columns ?? 3)),
+      accents: (asked?.accents ?? design.decoration.accents).slice(0, 2),
+      imageTreatment: asked?.imageTreatment ?? design.decoration.imageTreatment,
+      index,
+    };
+
+    // A pattern that cannot go full-bleed must not be asked to.
+    if (spec.width === 'full' && !resolved?.fullBleed) {
+      spec.width = design.rhythm.containerWidth === 'full' ? 'wide' : design.rhythm.containerWidth;
+      verdicts.push({
+        code: 'fullbleed-unsupported',
+        severity: 'warn',
+        message: `"${spec.pattern}" is not built to run edge to edge`,
+        target: block.id,
+      });
+    }
+    return { block, spec };
+  }
+
+  /**
+   * The band a section sits on.
+   *
+   * The one rule worth enforcing is against monotony in either direction: three
+   * consecutive sections on the same loud surface stops reading as structure,
+   * and a hero is never inverted because it already owns the whole first screen.
+   */
+  private surfaceFor(
+    asked: SectionSurface | undefined,
+    recent: SectionSurface[],
+    verdicts: RulesVerdict[],
+    blockId: string,
+  ): SectionSurface {
+    // With nothing asked for, the page's own band. `alternating` is then
+    // expressed in CSS, so the document stays a description of intent rather
+    // than of paint.
+    let surface: SectionSurface = asked ?? 'page';
+    if (surface !== 'page' && recent.length >= 2 && recent.slice(-2).every((s) => s === surface)) {
+      verdicts.push({
+        code: 'surface-monotony',
+        severity: 'warn',
+        message: 'three sections in a row on the same band; this one was returned to the page',
+        target: blockId,
+      });
+      surface = 'page';
+    }
+    recent.push(surface);
+    return surface;
   }
 
   /** Turn an assembled Site Document into an authoritative RenderPlan. */

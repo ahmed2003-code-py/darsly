@@ -42,6 +42,13 @@ export class AcademySiteController {
     return this.site.saveEditedDraft(ctx.academyId, body, ctx.userId);
   }
 
+  @Post('upgrade')
+  @AcademyStaff('academy.manage')
+  @ApiOperation({ summary: '[staff] Move the page to the composition renderer (no AI call)' })
+  upgrade(@CurrentAcademy() ctx: AcademyContext) {
+    return this.site.upgradeDraft(ctx.academyId, ctx.userId);
+  }
+
   @Post('publish')
   @AcademyStaff('academy.manage')
   @ApiOperation({ summary: '[staff] Publish the draft (first time → moderation queue)' })

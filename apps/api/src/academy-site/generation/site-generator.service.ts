@@ -14,13 +14,24 @@ import { AI_COPY_SCHEMA_NAME, aiCopyJsonSchema } from './ai-copy.jsonschema';
 import { ContentSignals, systemPlanPrompt, userPlanPrompt } from './plan-prompt';
 import { PLANNING_SCHEMA_NAME, planningJsonSchema } from './planning.jsonschema';
 import { Archetype, parseSitePlan } from './planning.schema';
-import { systemPrompt, userPrompt } from './prompt';
+import { composedCopyPrompt, systemPrompt, userPrompt } from './prompt';
 import { SECTION_SPECS, regenUserPrompt } from './regen';
+import { ContentProfile } from '../pipeline/content-profile';
+import { guessArchetype } from '../pipeline/archetype-profiles';
+import { enforceDivergence } from '../pipeline/divergence';
+import { fingerprint } from '../pipeline/fingerprint';
+import { COMPOSITION_SCHEMA_NAME, compositionJsonSchema } from './composition.jsonschema';
+import { parseComposition } from './composition.schema';
+import { systemComposePrompt, userComposePrompt } from './compose-prompt';
+import { assembleComposition, fallbackSections } from './compose-assembler';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 type LT = { ar: string; en: string };
 const hasText = (lt: LT | undefined): boolean => !!(lt && (lt.ar?.trim() || lt.en?.trim()));
+
+const asStrings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 
 /**
  * The staged generation pipeline:
@@ -42,6 +53,178 @@ export class SiteGeneratorService {
     private readonly brain: SiteBrainService,
     private readonly evolution: EvolutionService,
   ) {}
+
+  /**
+   * The composition pipeline.
+   *
+   * COMPOSE (AI) → repair → assemble → diverge → validate. One model call
+   * designs the whole page — its visual system, its sections, their order and
+   * their layouts — and a second writes exactly the copy that design asked for.
+   * Everything between and after them is deterministic.
+   */
+  async buildComposedDraft(
+    academyId: string,
+    vibe?: string,
+    stylePrompt?: string,
+    lang?: 'ar' | 'en',
+  ): Promise<{ doc: SiteDocument; costCents: number }> {
+    const { academy, facts, media, profile, lists } = await this.extract(academyId);
+    const evo = await this.evolution.context(academyId);
+    const recent = await this.evolution.recentFingerprints(academyId);
+
+    const counts = { toolkit: lists.rawSubjects.length, credentials: lists.rawAchievements.length };
+    const archetypeGuess = guessArchetype(lists.rawSubjects, asStrings(facts.stages), facts.bio ?? '');
+
+    // ── COMPOSE (AI stage 1) ──
+    const planCall = await this.ai.completeStructured<unknown>({
+      system: systemComposePrompt(),
+      messages: [{
+        role: 'user',
+        content: userComposePrompt({
+          facts, academyName: academy.name, vibe, stylePrompt,
+          profile, counts, archetypeGuess, evo, recent,
+        }),
+      }],
+      // The composition is an order of magnitude larger than the old plan, and a
+      // truncated one costs the whole generation.
+      maxTokens: 8000,
+      schemaName: COMPOSITION_SCHEMA_NAME,
+      schema: compositionJsonSchema,
+    });
+
+    const parsed = parseComposition(planCall.data);
+    if (parsed.error) {
+      throw new AiJobError(`AI composition failed validation: ${parsed.error}`, 'RETRYABLE');
+    }
+    const composition = parsed.data!;
+
+    // ── COPY (AI stage 2) ── writes exactly what the composition asked for.
+    const copyCall = await this.ai.completeStructured<unknown>({
+      system: systemPrompt(),
+      messages: [{
+        role: 'user',
+        content: composedCopyPrompt(facts, academy.name, vibe, composition),
+      }],
+      maxTokens: 6000,
+      schemaName: AI_COPY_SCHEMA_NAME,
+      schema: aiCopyJsonSchema,
+    });
+    const copyParsed = parseAiCopy(copyCall.data);
+    if (copyParsed.error) {
+      throw new AiJobError(`AI output failed validation: ${copyParsed.error}`, 'RETRYABLE');
+    }
+
+    // ── assemble (deterministic) ──
+    let doc = assembleComposition({
+      composition,
+      copy: copyParsed.data!,
+      media: { logoId: media.logoId, coverId: media.coverId, galleryIds: media.galleryIds },
+      lists: {
+        toolkit: this.pickItems(copyParsed.data!.highlights, lists.rawSubjects, { min: 2, maxLen: 60, cap: 20 }),
+        credentials: this.pickItems(copyParsed.data!.credentials, lists.rawAchievements, { min: 2, maxLen: 240, cap: 12 }),
+      },
+      socials: this.normalizeSocials(facts.socials),
+      defaultLang: lang,
+    });
+
+    // A page with a hero and nothing else is not a page. Falling back to the
+    // built-in composition costs nothing and never happens on a good response.
+    if (doc.blocks.length < 3) {
+      doc = assembleComposition({
+        composition: { ...composition, sections: fallbackSections() },
+        copy: copyParsed.data!,
+        media: { logoId: media.logoId, coverId: media.coverId, galleryIds: media.galleryIds },
+        lists: {
+          toolkit: this.pickItems(copyParsed.data!.highlights, lists.rawSubjects, { min: 2, maxLen: 60, cap: 20 }),
+          credentials: this.pickItems(copyParsed.data!.credentials, lists.rawAchievements, { min: 2, maxLen: 240, cap: 12 }),
+        },
+        socials: this.normalizeSocials(facts.socials),
+        defaultLang: lang,
+      });
+      this.logger.warn(`composition produced too few sections for ${academyId}; used the built-in page`);
+    }
+
+    // ── diverge ── the deterministic guarantee that regenerating gives something
+    // genuinely different, whatever the model did with the history brief.
+    const diverged = enforceDivergence(
+      doc.theme.designSpec!,
+      doc.blocks,
+      recent,
+      evo.regenCount,
+    );
+    doc.theme.designSpec = diverged.design;
+    doc.blocks = diverged.blocks;
+    doc.theme.primary = diverged.design.palette.primary;
+    doc.theme.accent = diverged.design.palette.accent;
+    for (const v of diverged.verdicts) this.logger.debug(`${v.severity}:${v.code} — ${v.message}`);
+
+    doc.fingerprint = fingerprint(diverged.design, doc);
+
+    const res = parseSiteDocument(doc);
+    if (!res.success) {
+      throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
+    }
+    return { doc: res.data!, costCents: planCall.costCents + copyCall.costCents };
+  }
+
+  /** Load and normalise everything the pipeline reasons about. */
+  private async extract(academyId: string) {
+    const [academy, facts] = await Promise.all([
+      this.prisma.academy.findUnique({ where: { id: academyId } }),
+      this.prisma.academyProfileFacts.findUnique({ where: { academyId } }),
+    ]);
+    if (!academy) throw new AiJobError('Academy not found', 'TERMINAL');
+    if (!facts || (!facts.bio && !facts.rawIntake && !(facts.subjects as string[])?.length)) {
+      throw new AiJobError('Not enough profile facts to generate a site', 'TERMINAL');
+    }
+
+    const mediaRows = await this.prisma.academyMedia.findMany({
+      where: { academyId, status: 'READY', kind: { in: ['LOGO', 'COVER', 'GALLERY'] } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const logoId = mediaRows.find((m) => m.kind === 'LOGO')?.id;
+    const coverId = mediaRows.find((m) => m.kind === 'COVER')?.id;
+    const galleryIds = mediaRows.filter((m) => m.kind === 'GALLERY').map((m) => m.id);
+
+    const rawSubjects = asStrings(facts.subjects);
+    const rawAchievements = asStrings(facts.achievements);
+
+    // The live half of the profile. Nothing before this looked at the catalogue,
+    // which is why "this teacher has twelve courses, lead with them" was not a
+    // decision the pipeline could make.
+    const [courseCount, reviewAgg] = await Promise.all([
+      this.prisma.course.count({ where: { tenantId: academyId, status: 'PUBLISHED', deletedAt: null } }),
+      this.prisma.review.aggregate({
+        where: { tenantId: academyId, comment: { not: '' } },
+        _count: { _all: true },
+        _avg: { rating: true },
+      }),
+    ]);
+
+    const bio = facts.bio ?? '';
+    const profile: ContentProfile = {
+      hasCover: !!coverId,
+      hasLogo: !!logoId,
+      galleryCount: galleryIds.length,
+      bioLength: bio.length,
+      subjectsCount: rawSubjects.length,
+      achievementsCount: rawAchievements.length,
+      courseCount,
+      reviewCount: reviewAgg._count._all ?? 0,
+      avgRating: reviewAgg._avg.rating ?? 0,
+      bioParagraphs: bio.split(/\n{2,}/).filter((p) => p.trim()).length,
+      avgAchievementLength: rawAchievements.length
+        ? Math.round(rawAchievements.join('').length / rawAchievements.length)
+        : 0,
+    };
+
+    return {
+      academy, facts,
+      media: { logoId, coverId, galleryIds },
+      profile,
+      lists: { rawSubjects, rawAchievements },
+    };
+  }
 
   async buildDraft(
     academyId: string,
@@ -67,7 +250,6 @@ export class SiteGeneratorService {
     const coverId = media.find((m) => m.kind === 'COVER')?.id;
     const galleryIds = media.filter((m) => m.kind === 'GALLERY').map((m) => m.id);
 
-    const asStrings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
     const rawSubjects = asStrings(facts.subjects);
     const rawAchievements = asStrings(facts.achievements);
     const signals: ContentSignals = {

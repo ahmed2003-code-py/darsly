@@ -15,10 +15,20 @@ const localizedText = {
 
 export const AI_COPY_SCHEMA_NAME = 'academy_copy';
 
+/**
+ * The sections the composition stage can now place also need writing. Strict
+ * mode requires every property to be listed as required, so the model is asked
+ * for all of them and the plan's `content` counts decide what is actually used —
+ * an empty array is a perfectly good answer to "write zero statistics".
+ */
 export const aiCopyJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
-  required: ['seo', 'hero', 'about', 'toolkitHeading', 'highlights', 'credentialsHeading', 'credentials', 'faq', 'cta'],
+  required: [
+    'seo', 'hero', 'about', 'toolkitHeading', 'highlights', 'credentialsHeading', 'credentials',
+    'faq', 'cta', 'stats', 'statsHeading', 'timeline', 'timelineHeading', 'process',
+    'processHeading', 'quote',
+  ],
   properties: {
     seo: {
       type: 'object',
@@ -56,6 +66,46 @@ export const aiCopyJsonSchema: Record<string, unknown> = {
       additionalProperties: false,
       required: ['headline', 'buttonLabel'],
       properties: { headline: localizedText, buttonLabel: localizedText },
+    },
+    statsHeading: localizedText,
+    stats: {
+      type: 'array',
+      description: 'Figures grounded in the FACTS. Never invent one. Empty array if there are none.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['label', 'value'],
+        properties: { label: localizedText, value: { type: 'string', description: 'e.g. "12", "400+", "4.9/5"' } },
+      },
+    },
+    timelineHeading: localizedText,
+    timeline: {
+      type: 'array',
+      description: 'The teacher\'s journey, oldest first. marker is a year or a stage.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['marker', 'title', 'body'],
+        properties: { marker: localizedText, title: localizedText, body: localizedText },
+      },
+    },
+    processHeading: localizedText,
+    process: {
+      type: 'array',
+      description: 'What actually happens when a student enrols, in order.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'body'],
+        properties: { title: localizedText, body: localizedText },
+      },
+    },
+    quote: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['text', 'attribution'],
+      properties: { text: localizedText, attribution: localizedText },
+      description: 'One sentence in the teacher\'s own voice about how they teach.',
     },
   },
 };

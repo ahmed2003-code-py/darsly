@@ -1055,7 +1055,10 @@
         "generate": "AI generation",
         "manual-save": "Manual edit",
         "rollback": "Version restore"
-      }
+      },
+      "designNote": "About this design",
+      "blocking": "Fix these before publishing",
+      "suggestions": "{{n}} suggestion(s) to improve the page"
     },
     "wizard": {
       "skip": "Skip",

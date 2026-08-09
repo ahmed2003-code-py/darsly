@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AiJob, AiJobType } from '@prisma/client';
+import { AcademySiteConfig } from '../academy-site.config';
 import { AiJobHandler, AiJobResult } from '../jobs/ai-job.handler';
 import { AiJobService } from '../jobs/ai-job.service';
 import { AcademySiteService } from '../site/academy-site.service';
@@ -14,6 +15,7 @@ export class SiteGenerateHandler implements AiJobHandler {
     private readonly generator: SiteGeneratorService,
     private readonly site: AcademySiteService,
     private readonly jobs: AiJobService,
+    private readonly config: AcademySiteConfig,
   ) {}
 
   async handle(job: AiJob): Promise<AiJobResult> {
@@ -30,7 +32,14 @@ export class SiteGenerateHandler implements AiJobHandler {
     }
 
     await this.jobs.setStage(job.id, 'copy');
-    const { doc, costCents } = await this.generator.buildDraft(
+    // Which pipeline designs the page is a runtime switch, not a deploy: a bad
+    // composition release can be turned off without touching the code, and
+    // pages already published are unaffected either way because each document
+    // is rendered by the engine it was designed against.
+    const build = this.config.compositionEnabled
+      ? this.generator.buildComposedDraft.bind(this.generator)
+      : this.generator.buildDraft.bind(this.generator);
+    const { doc, costCents } = await build(
       job.academyId,
       input?.vibe ?? undefined,
       input?.stylePrompt ?? undefined,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { designSpecSchema, fingerprintSchema, sectionSpecSchema } from './design-spec';
 
 /**
  * The Site Document — the single source of truth for an academy landing page.
@@ -18,10 +19,18 @@ export const localizedText = (max: number) =>
 // render with each section's default variant — still validate.
 const variant = z.string().max(40).optional();
 
+/**
+ * Site Document v3: how this section is composed — which pattern renders it and
+ * how loudly it is played. Present only on documents the composition pipeline
+ * produced; a document without one renders through the frozen legacy path.
+ */
+const section = sectionSpecSchema.optional();
+
 const heroBlock = z.object({
   type: z.literal('hero'),
   id: z.string(),
   variant,
+  section,
   headline: localizedText(160),
   subheadline: localizedText(400),
   ctaLabel: localizedText(60),
@@ -32,6 +41,7 @@ const aboutBlock = z.object({
   type: z.literal('about'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   body: localizedText(2000),
   mediaId: z.string().optional(),
@@ -41,6 +51,7 @@ const statsBlock = z.object({
   type: z.literal('stats'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   items: z
     .array(z.object({ label: localizedText(60), value: z.string().max(40) }))
@@ -51,6 +62,7 @@ const faqBlock = z.object({
   type: z.literal('faq'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   items: z.array(z.object({ q: localizedText(200), a: localizedText(800) })).max(8),
 });
@@ -59,6 +71,7 @@ const ctaBlock = z.object({
   type: z.literal('cta'),
   id: z.string(),
   variant,
+  section,
   headline: localizedText(160),
   buttonLabel: localizedText(60),
 });
@@ -73,6 +86,7 @@ const toolkitBlock = z.object({
   type: z.literal('toolkit'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   items: z.array(listItem(60)).max(20),
 });
@@ -82,6 +96,7 @@ const credentialsBlock = z.object({
   type: z.literal('credentials'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   items: z.array(listItem(240)).max(12),
 });
@@ -91,6 +106,7 @@ const coursesBlock = z.object({
   type: z.literal('courses'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   mode: z.literal('auto'),
   limit: z.number().int().min(1).max(24),
@@ -100,6 +116,7 @@ const reviewsBlock = z.object({
   type: z.literal('reviews'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   mode: z.literal('auto'),
   limit: z.number().int().min(1).max(24),
@@ -109,6 +126,7 @@ const galleryBlock = z.object({
   type: z.literal('gallery'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   mediaIds: z.array(z.string()).max(12),
 });
@@ -117,10 +135,53 @@ const contactBlock = z.object({
   type: z.literal('contact'),
   id: z.string(),
   variant,
+  section,
   heading: localizedText(120),
   socials: z
     .array(z.object({ platform: z.string().max(30), url: z.string().url().max(300) }))
     .max(10),
+});
+
+/**
+ * A dated or ordered track record: study, posts held, results delivered. A list
+ * of achievements says the same things a timeline does, but a timeline says them
+ * as a career, which is the argument an experienced teacher is actually making.
+ */
+const timelineBlock = z.object({
+  type: z.literal('timeline'),
+  id: z.string(),
+  variant,
+  section,
+  heading: localizedText(120),
+  items: z
+    .array(
+      z.object({
+        marker: localizedText(24), // a year, a stage, a number
+        title: localizedText(120),
+        body: localizedText(400),
+      }),
+    )
+    .max(10),
+});
+
+/** How the teaching actually works, as ordered steps. Answers "what happens if I enrol?" */
+const processBlock = z.object({
+  type: z.literal('process'),
+  id: z.string(),
+  variant,
+  section,
+  heading: localizedText(120),
+  steps: z.array(z.object({ title: localizedText(120), body: localizedText(400) })).max(8),
+});
+
+/** One sentence, set large. The cheapest way to give a page a moment of quiet. */
+const quoteBlock = z.object({
+  type: z.literal('quote'),
+  id: z.string(),
+  variant,
+  section,
+  text: localizedText(400),
+  attribution: localizedText(80),
 });
 
 export const siteBlockSchema = z.discriminatedUnion('type', [
@@ -135,6 +196,9 @@ export const siteBlockSchema = z.discriminatedUnion('type', [
   reviewsBlock,
   galleryBlock,
   contactBlock,
+  timelineBlock,
+  processBlock,
+  quoteBlock,
 ]);
 
 export const SITE_STYLES = ['modern', 'bold', 'elegant', 'minimal', 'playful'] as const;
@@ -200,6 +264,20 @@ export const siteThemeSchema = z.object({
       motion: z.enum(['calm', 'lively', 'cinematic']).optional(),
     })
     .optional(),
+
+  /**
+   * Site Document v3: the full design system composed for this academy.
+   *
+   * Where `design` above is a palette plus six knobs bolted onto a fixed
+   * stylesheet, this is the stylesheet — colour, type, geometry, rhythm, motion
+   * and decoration, all chosen per academy and all rendered by modules the
+   * compiler emits only when they are used.
+   *
+   * Its presence is what routes a document to the composition renderer. A
+   * document without it keeps the frozen legacy renderer, byte for byte, which
+   * is what lets every page published so far go on looking exactly as approved.
+   */
+  designSpec: designSpecSchema.optional(),
 });
 
 export const siteSeoSchema = z.object({
@@ -207,11 +285,28 @@ export const siteSeoSchema = z.object({
   description: localizedText(160),
 });
 
+/** The renderer generation a document was designed against. */
+export const RENDERER_LEGACY = 1;
+export const RENDERER_COMPOSITION = 2;
+
 export const siteDocumentSchema = z.object({
   version: z.literal(1),
   theme: siteThemeSchema,
   // Optional so documents generated before SEO existed still validate.
   seo: siteSeoSchema.optional(),
+  /**
+   * Which compiler generation this document was designed against.
+   *
+   * Published pages are compiled HTML frozen at publish time, so upgrading the
+   * renderer repaints pages a teacher already approved. Stamping the generation
+   * makes that an explicit decision — a document always compiles the way it was
+   * designed until something deliberately moves it forward.
+   */
+  renderer: z.object({ version: z.number().int().min(1).max(9) }).optional(),
+  /** What this generation looked like, on the axes evolution reasons about. */
+  fingerprint: fingerprintSchema.optional(),
+  /** One line from the model on why it designed the page this way (never rendered). */
+  rationale: z.string().max(400).optional(),
   blocks: z.array(siteBlockSchema).min(1).max(24),
 });
 

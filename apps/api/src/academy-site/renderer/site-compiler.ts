@@ -1,5 +1,5 @@
 import { RenderPlan } from '../pipeline/contracts';
-import { darken, hexToRgb, mix, onColor } from './color.util';
+import { darken, hexToRgb, isHex, mix, onColor } from './color.util';
 import { escapeAttr, escapeHtml } from './html.util';
 import { COURSES_ANCHOR, logo } from './shared';
 import { RenderContext, VariantContext } from './types';
@@ -97,12 +97,29 @@ ${body}
  * DNA set. Muted text and hairlines are derived rather than asked for: they have
  * to relate to the ink and the background, and a model asked for six colours
  * tends to produce one that clashes.
+ *
+ * Every value is re-checked here even though the document schema already
+ * enforces hex. `recompilePublished()` and `recompileAcademy()` cast a stored
+ * JSON column straight into this function without re-parsing it, so the renderer
+ * is the last thing standing between that column and the page's stylesheet. A
+ * palette that is not three valid colours is dropped whole rather than patched:
+ * the preset underneath it is a complete, legible design, and half a palette is
+ * not.
  */
 function aiPalette(design: DesignTokens): string {
-  return `:root{--bg:${design.background};--ink:${design.ink};--surface:${design.surface};--card:${design.surface};` +
+  const { background, ink, surface } = design;
+  if (!isHex(background) || !isHex(ink) || !isHex(surface)) return '';
+  return `:root{--bg:${background};--ink:${ink};--surface:${surface};--card:${surface};` +
     '--mut:color-mix(in srgb,var(--ink) 62%,var(--bg));' +
     '--line:color-mix(in srgb,var(--ink) 14%,var(--bg));' +
     '--body:color-mix(in srgb,var(--ink) 86%,var(--bg))}';
+}
+
+/** The corner radius, held to the range the design system actually defines. */
+function safeRadius(radius: unknown): number {
+  const n = Math.round(Number(radius));
+  if (!Number.isFinite(n)) return 14;
+  return Math.min(28, Math.max(0, n));
 }
 
 const ARABIC = /[\u0600-\u06FF]/;
@@ -178,7 +195,7 @@ function css(primary: string, accent: string, style?: string, design?: DesignTok
   const p = /^#[0-9a-fA-F]{6}$/.test(primary) ? primary : '#4A32C9';
   const a = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : p;
   // The model's radius wins when it composed a system; otherwise the DNA's.
-  const rad = design ? `${design.radius}px` : (STYLE_RADIUS[style ?? 'modern'] ?? '18px');
+  const rad = design ? `${safeRadius(design.radius)}px` : (STYLE_RADIUS[style ?? 'modern'] ?? '18px');
   const pDark = darken(p, 0.18);
   const pl = mix(p, '#ffffff', 0.42); // lightened brand — for accents on dark presets
   const onP = onColor(p);

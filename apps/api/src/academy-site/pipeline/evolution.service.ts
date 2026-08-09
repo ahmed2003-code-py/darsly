@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DesignFingerprint } from '../schema/design-spec';
+import { SiteDocument, parseSiteDocument } from '../schema/site-document';
 import { DESIGN_DNA_KEYS, isDnaKey } from './design-dna';
+import { designFor } from './design-lift';
+import { fingerprint } from './fingerprint';
 
 /**
  * The Website Evolution layer. Generation is not memoryless: past decisions and
@@ -18,6 +22,20 @@ export interface EvolutionContext {
   recentDnas: string[];
   /** How many prior generations exist (0 = first ever). */
   regenCount: number;
+}
+
+/**
+ * The fingerprint of a stored document: the one it recorded, or one measured
+ * from it. A snapshot that no longer parses is skipped rather than throwing —
+ * history is advisory, and a corrupt old version must not block a new design.
+ */
+function fingerprintOf(raw: unknown): DesignFingerprint | undefined {
+  const stored = (raw as { fingerprint?: DesignFingerprint } | null)?.fingerprint;
+  if (stored && typeof stored === 'object' && 'mode' in stored) return stored;
+  const parsed = parseSiteDocument(raw);
+  if (!parsed.success) return undefined;
+  const doc = parsed.data as SiteDocument;
+  return fingerprint(designFor(doc), doc);
 }
 
 const themeStr = (doc: unknown, key: 'dna' | 'archetype'): string | undefined => {
@@ -76,5 +94,33 @@ export class EvolutionService {
   /** Guard against an unknown/stale DNA string reaching token resolution. */
   normalizeDna(dna: string): string {
     return isDnaKey(dna) ? dna : DESIGN_DNA_KEYS[0];
+  }
+
+  /**
+   * The design fingerprints of recent generations, most recent first.
+   *
+   * A composed document stores its own fingerprint, so this is usually a read.
+   * Documents from before fingerprints existed are measured on the spot, which
+   * is what lets an academy's first composed page still be pushed away from the
+   * legacy page it is replacing.
+   */
+  async recentFingerprints(academyId: string, take = 3): Promise<DesignFingerprint[]> {
+    const site = await this.prisma.academySite.findUnique({
+      where: { academyId },
+      select: { id: true },
+    });
+    if (!site) return [];
+    const snaps = await this.prisma.academySiteSnapshot.findMany({
+      where: { siteId: site.id, reason: 'generate' },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { doc: true },
+    });
+    const out: DesignFingerprint[] = [];
+    for (const s of snaps) {
+      const fp = fingerprintOf(s.doc);
+      if (fp) out.push(fp);
+    }
+    return out;
   }
 }

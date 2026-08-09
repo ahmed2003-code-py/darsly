@@ -8,7 +8,9 @@ import { AcademySite, AcademySiteSnapshot } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AcademySiteConfig } from '../academy-site.config';
+import { ContentProfile } from '../pipeline/content-profile';
 import { QualityGateService } from '../pipeline/quality-gate.service';
+import { needsUpgrade, upgradeToComposition } from '../pipeline/upgrade';
 import { SiteRenderService } from '../renderer/site-render.service';
 import { SiteBlock, SiteDocument, parseSiteDocument } from '../schema/site-document';
 
@@ -53,6 +55,24 @@ export class AcademySiteService {
       orderBy: { createdAt: 'desc' },
       select: { id: true, status: true, stage: true, error: true, createdAt: true },
     });
+
+    // What the quality gate thinks of the current draft, and why the design
+    // looks the way it does. Both were computed and thrown away before: the
+    // verdicts went to a debug log and the rationale was never stored, so a
+    // teacher had no way to know their page had a problem short of finding it.
+    let quality: { errors: string[]; warnings: string[] } | null = null;
+    let rationale: string | null = null;
+    if (site?.draftDoc) {
+      const parsed = parseSiteDocument(site.draftDoc);
+      if (parsed.success) {
+        const { errors, warnings } = this.quality.evaluate(parsed.data!);
+        quality = { errors: errors.map((e) => e.message), warnings: warnings.map((w) => w.message) };
+        rationale = parsed.data!.rationale ?? null;
+      } else {
+        quality = { errors: parsed.errors ?? ['the draft is no longer valid'], warnings: [] };
+      }
+    }
+
     return {
       status: site?.status ?? 'DRAFT',
       hasDraft: !!site?.draftDoc,
@@ -61,6 +81,8 @@ export class AcademySiteService {
       moderationApproved: site?.moderationApproved ?? false,
       moderationReason: site?.moderationReason ?? null,
       lastJob,
+      quality,
+      rationale,
     };
   }
 
@@ -328,6 +350,62 @@ export class AcademySiteService {
     );
     await this.prisma.academySite.update({ where: { id: site.id }, data: { publishedHtml: html } });
     return true;
+  }
+
+  /**
+   * Move this academy's draft to the composition engine without a model call.
+   *
+   * The design it was published with is lifted into the new system and each
+   * section is given the best layout its content can carry. Explicit on purpose:
+   * a teacher asks for it, sees the preview, and publishes if they want it.
+   */
+  async upgradeDraft(academyId: string, actorUserId: string) {
+    const site = await this.getByAcademy(academyId);
+    const source = site?.draftDoc ?? site?.publishedDoc;
+    if (!source) throw new BadRequestException('There is no page to upgrade yet');
+    const parsed = parseSiteDocument(source);
+    if (!parsed.success) {
+      throw new BadRequestException({ message: 'The current page is invalid', errors: parsed.errors });
+    }
+    if (!needsUpgrade(parsed.data!)) {
+      return { upgraded: false, version: site!.version, reason: 'already on the composition engine' };
+    }
+    const upgraded = upgradeToComposition(parsed.data!, await this.contentProfile(academyId));
+    const { site: updated, snapshot } = await this.saveDraft(academyId, upgraded, 'upgrade');
+    await this.log(actorUserId, 'site.upgrade', updated.id, { version: updated.version });
+    return { upgraded: true, version: updated.version, snapshotId: snapshot.id };
+  }
+
+  /** The live half of the content profile, for pattern selection during upgrade. */
+  private async contentProfile(academyId: string): Promise<ContentProfile> {
+    const [courseCount, reviews, media, facts] = await Promise.all([
+      this.prisma.course.count({ where: { tenantId: academyId, status: 'PUBLISHED', deletedAt: null } }),
+      this.prisma.review.aggregate({
+        where: { tenantId: academyId, comment: { not: '' } },
+        _count: { _all: true },
+        _avg: { rating: true },
+      }),
+      this.prisma.academyMedia.findMany({
+        where: { academyId, status: 'READY' },
+        select: { kind: true },
+      }),
+      this.prisma.academyProfileFacts.findUnique({ where: { academyId } }),
+    ]);
+    const bio = facts?.bio ?? '';
+    const list = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+    return {
+      hasCover: media.some((m) => m.kind === 'COVER'),
+      hasLogo: media.some((m) => m.kind === 'LOGO'),
+      galleryCount: media.filter((m) => m.kind === 'GALLERY').length,
+      bioLength: bio.length,
+      subjectsCount: list(facts?.subjects),
+      achievementsCount: list(facts?.achievements),
+      courseCount,
+      reviewCount: reviews._count._all ?? 0,
+      avgRating: reviews._avg.rating ?? 0,
+      bioParagraphs: bio.split(/\n{2,}/).filter((p) => p.trim()).length,
+      avgAchievementLength: 0,
+    };
   }
 
   async recompilePublished(): Promise<{ recompiled: number; failed: string[] }> {

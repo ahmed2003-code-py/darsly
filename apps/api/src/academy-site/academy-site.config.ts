@@ -29,4 +29,12 @@ export class AcademySiteConfig {
   // When off (default), publishing goes live immediately (admin keeps takedown).
   // Turn on to require admin approval before a first publish goes public.
   readonly moderationEnabled = process.env.ACADEMY_SITE_MODERATION === 'true';
+  /**
+   * The composition pipeline: the model designs the whole page rather than
+   * choosing a catalogue entry. On by default. Setting this to `false` returns
+   * new generations to the Design DNA pipeline without a deploy — pages already
+   * published are unaffected either way, since each document is rendered by the
+   * engine it was designed against.
+   */
+  readonly compositionEnabled = (process.env.ACADEMY_COMPOSITION ?? 'true') !== 'false';
 }

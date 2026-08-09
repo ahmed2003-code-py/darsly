@@ -1,3 +1,5 @@
+import { DesignSpec } from '../schema/design-spec';
+import { ResolvedSection } from '../renderer/compose';
 import { SiteBlock, SiteDocument, SiteSeo, SiteTheme } from '../schema/site-document';
 
 /**
@@ -43,6 +45,27 @@ export interface RenderPlan {
   seo?: SiteSeo;
   blocks: RenderPlanBlock[];
   /** Advisory/diagnostic verdicts carried alongside (never block rendering). */
+  verdicts: RulesVerdict[];
+}
+
+/** One section promoted to a concrete, ready-to-render composition decision. */
+export interface ComposeSection {
+  block: SiteBlock;
+  spec: ResolvedSection;
+}
+
+/**
+ * The Site Brain's output for a v3 document, and the only thing the composition
+ * compiler reads. Every optional in the design and in each section spec has
+ * already been filled in, every pattern id already resolved against the
+ * registry, and every content requirement already checked — so the compiler is
+ * total and never has to decide anything.
+ */
+export interface ComposePlan {
+  theme: SiteTheme;
+  design: DesignSpec;
+  seo?: SiteSeo;
+  sections: ComposeSection[];
   verdicts: RulesVerdict[];
 }
 

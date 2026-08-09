@@ -85,6 +85,43 @@ export default function PublishTab({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-6">
+      {/* What the design is trying to do, and anything wrong with it.
+          Both were computed on every generation and then discarded: the design
+          rationale was never stored and the quality verdicts went to a debug
+          log, so a teacher had no way to learn their page had a problem short
+          of finding it themselves. */}
+      {ov?.rationale && (
+        <div className="card flex items-start gap-3 border-s-4 border-s-primary">
+          <span className="material-symbols-outlined text-primary">palette</span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold">{t('studio.publish.designNote')}</p>
+            <p className="text-sm text-on-surface-variant">{ov.rationale}</p>
+          </div>
+        </div>
+      )}
+      {!!ov?.quality?.errors.length && (
+        <div className="card border-s-4 border-s-error bg-error-container/20">
+          <p className="mb-2 flex items-center gap-2 text-sm font-bold text-on-error-container">
+            <span className="material-symbols-outlined text-[18px]">error</span>
+            {t('studio.publish.blocking')}
+          </p>
+          <ul className="list-disc space-y-1 ps-6 text-sm text-on-surface-variant">
+            {ov.quality.errors.map((e) => <li key={e}>{e}</li>)}
+          </ul>
+        </div>
+      )}
+      {!!ov?.quality?.warnings.length && (
+        <details className="card">
+          <summary className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+            <span className="material-symbols-outlined text-[18px] text-amber-600">info</span>
+            {t('studio.publish.suggestions', { n: ov.quality.warnings.length })}
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 ps-6 text-sm text-on-surface-variant">
+            {ov.quality.warnings.map((w) => <li key={w}>{w}</li>)}
+          </ul>
+        </details>
+      )}
+
       {/* Status hero */}
       <div className="card">
         <div className="flex flex-wrap items-start gap-4">

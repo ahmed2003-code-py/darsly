@@ -23,6 +23,10 @@ export interface SiteOverview {
   moderationApproved: boolean;
   moderationReason: string | null;
   lastJob: { id: string; status: string; stage: string | null } | null;
+  /** Quality-gate result for the current draft: errors block a publish. */
+  quality: { errors: string[]; warnings: string[] } | null;
+  /** One line from the designer on why the page looks the way it does. */
+  rationale: string | null;
 }
 
 export type MediaKind = 'LOGO' | 'COVER' | 'GALLERY' | 'AVATAR';

@@ -3,7 +3,7 @@ import { contrastRatio } from '../renderer/color.util';
 import { getPattern } from '../renderer/compose';
 import { usesComposition } from '../renderer/site-render.service';
 import { SiteBlock, SiteDocument } from '../schema/site-document';
-import { blockHasContent } from './block-content';
+import { blockHasContent, singleLanguageFields } from './block-content';
 import { designFor } from './design-lift';
 import { repairDesign } from './design-repair';
 import { DesignRulesService } from './design-rules.service';
@@ -75,6 +75,18 @@ export class QualityGateService {
     }
     if (!doc.seo || !hasText(doc.seo.title)) {
       push('missing-seo-title', 'warn', 'no SEO title set');
+    }
+
+    // The page falls back to whichever language it has rather than blanking the
+    // field, so this never breaks a page — but half a bilingual site is still
+    // something the teacher should be told about before it goes public.
+    const halfWritten = blocks.flatMap((b) => singleLanguageFields(b));
+    if (halfWritten.length) {
+      push(
+        'single-language',
+        'warn',
+        `${halfWritten.length} field(s) are written in only one language and will show that language to every visitor: ${halfWritten.slice(0, 6).join(', ')}${halfWritten.length > 6 ? '…' : ''}`,
+      );
     }
 
     // ── Accessibility ─────────────────────────────────────────────────────────

@@ -423,7 +423,16 @@ Grammar arrives in context rather than as a list to memorise.">الحصة كله
   var L=localStorage.getItem('darsly_lang')|| "en";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -877,7 +886,16 @@ I focus on understanding the idea first; the practice then takes care of itself.
   var L=localStorage.getItem('darsly_lang')|| "ar";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -1337,7 +1355,16 @@ Each week you ship a small project and get a line-by-line review.">بشرح كل
   var L=localStorage.getItem('darsly_lang')|| "ar";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -1794,7 +1821,16 @@ Grammar arrives in context rather than as a list to memorise.">الحصة كله
   var L=localStorage.getItem('darsly_lang')|| "ar";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -2248,7 +2284,16 @@ Each week you ship a small project and get a line-by-line review.">بشرح كل
   var L=localStorage.getItem('darsly_lang')|| "ar";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -2702,7 +2747,16 @@ Grammar arrives in context rather than as a list to memorise.">الحصة كله
   var L=localStorage.getItem('darsly_lang')|| "ar";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -3164,7 +3218,16 @@ Each week you ship a small project and get a line-by-line review.">بشرح كل
   var L=localStorage.getItem('darsly_lang')|| "ar";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -3621,7 +3684,16 @@ I focus on understanding the idea first; the practice then takes care of itself.
   var L=localStorage.getItem('darsly_lang')|| "ar";
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }
@@ -3654,71 +3726,71 @@ I focus on understanding the idea first; the practice then takes care of itself.
 
 exports[`golden — the whole matrix is byte-stable every DNA × persona × cover state 1`] = `
 {
-  "academic_precise/languages/cover": "8ed67ca6b59fa256",
-  "academic_precise/languages/no-cover": "594692ffa907263f",
-  "academic_precise/math_science/cover": "52ea4c2b033cc18f",
-  "academic_precise/math_science/no-cover": "f800cad2b295a30d",
-  "academic_precise/programming/cover": "4594583f028d171b",
-  "academic_precise/programming/no-cover": "9ee8761cd10390ea",
-  "bold_energetic/languages/cover": "253857eb76cb7387",
-  "bold_energetic/languages/no-cover": "d7cbb98df29565e0",
-  "bold_energetic/math_science/cover": "8e9042faaf3fbfa1",
-  "bold_energetic/math_science/no-cover": "77c9cba4ac7d2c72",
-  "bold_energetic/programming/cover": "3e2e964f393d42f7",
-  "bold_energetic/programming/no-cover": "8a3b330f521c08ac",
-  "creative_serif/languages/cover": "87dfc5f467f692b3",
-  "creative_serif/languages/no-cover": "dc061bf70943d709",
-  "creative_serif/math_science/cover": "4b38a52cb26bdd84",
-  "creative_serif/math_science/no-cover": "35b48f8838e33a6b",
-  "creative_serif/programming/cover": "a1c3573473337df4",
-  "creative_serif/programming/no-cover": "b1fae5b6beb725c1",
-  "editorial_dark/languages/cover": "0753c311d2ac16a2",
-  "editorial_dark/languages/no-cover": "7c1ed3596b25adda",
-  "editorial_dark/math_science/cover": "6d4602f41e9b9d62",
-  "editorial_dark/math_science/no-cover": "08c270c78a16327f",
-  "editorial_dark/programming/cover": "46cf3141363889b3",
-  "editorial_dark/programming/no-cover": "ba65b7396a554a6e",
-  "royal_night/languages/cover": "312c7b9c2eaec49d",
-  "royal_night/languages/no-cover": "fe8126d5f1424a3c",
-  "royal_night/math_science/cover": "eec4940a166723f1",
-  "royal_night/math_science/no-cover": "4956b2ab5d9bd776",
-  "royal_night/programming/cover": "6d58a80ad6275b47",
-  "royal_night/programming/no-cover": "0bbc04683bca11d9",
-  "sunrise_warm/languages/cover": "d3f35b9f5987e072",
-  "sunrise_warm/languages/no-cover": "8a3960c39132d7b8",
-  "sunrise_warm/math_science/cover": "6ddac80399efd36b",
-  "sunrise_warm/math_science/no-cover": "621febfdff18d997",
-  "sunrise_warm/programming/cover": "1e1fb3efe7badb6c",
-  "sunrise_warm/programming/no-cover": "2d94d171e7ebf188",
-  "warm_mentor/languages/cover": "b3afd22135582a84",
-  "warm_mentor/languages/no-cover": "7f14d7619ae71bf4",
-  "warm_mentor/math_science/cover": "604919a8b218363f",
-  "warm_mentor/math_science/no-cover": "a30a83f41d4e1eb6",
-  "warm_mentor/programming/cover": "7c112a55168ffde5",
-  "warm_mentor/programming/no-cover": "b4556b702e13809f",
+  "academic_precise/languages/cover": "4d49a5fe7e14fd52",
+  "academic_precise/languages/no-cover": "6fca4c931a618161",
+  "academic_precise/math_science/cover": "4167c354a6c3d0dd",
+  "academic_precise/math_science/no-cover": "dada4e979cfb1f72",
+  "academic_precise/programming/cover": "491d6b678ebdd4b1",
+  "academic_precise/programming/no-cover": "6858d5e5e9d6084b",
+  "bold_energetic/languages/cover": "92f5c6e665481c3c",
+  "bold_energetic/languages/no-cover": "c4bb406465d43201",
+  "bold_energetic/math_science/cover": "7dc55c049f9491a3",
+  "bold_energetic/math_science/no-cover": "35006b7e954dffd8",
+  "bold_energetic/programming/cover": "fbda77cc589a9834",
+  "bold_energetic/programming/no-cover": "4e2c6b173ba00c20",
+  "creative_serif/languages/cover": "d6cf79a6cf34449e",
+  "creative_serif/languages/no-cover": "4d419dcb6e41b6d2",
+  "creative_serif/math_science/cover": "b9b4a22be46be088",
+  "creative_serif/math_science/no-cover": "dd38143f7cc28779",
+  "creative_serif/programming/cover": "a5f64246879b1d38",
+  "creative_serif/programming/no-cover": "4a1826ae2f2323c7",
+  "editorial_dark/languages/cover": "2d31a23718538268",
+  "editorial_dark/languages/no-cover": "6c44dd42b0188cd6",
+  "editorial_dark/math_science/cover": "39a7feded7ec1375",
+  "editorial_dark/math_science/no-cover": "ea67b58b0796d056",
+  "editorial_dark/programming/cover": "2409e97c7d60a8ba",
+  "editorial_dark/programming/no-cover": "2d45bad3f2a56555",
+  "royal_night/languages/cover": "ff3582e585546e96",
+  "royal_night/languages/no-cover": "f97cb82d91144d16",
+  "royal_night/math_science/cover": "4b49b92541f0ca31",
+  "royal_night/math_science/no-cover": "39ee2bc2312ffc05",
+  "royal_night/programming/cover": "dc530e6d2622831e",
+  "royal_night/programming/no-cover": "b50787bd0f41a63e",
+  "sunrise_warm/languages/cover": "1d9c18eeb69db1f8",
+  "sunrise_warm/languages/no-cover": "eef8f4a98e2fc54c",
+  "sunrise_warm/math_science/cover": "4991d9d53f265880",
+  "sunrise_warm/math_science/no-cover": "4eec376f5fac5f85",
+  "sunrise_warm/programming/cover": "2dfc257921c2bf97",
+  "sunrise_warm/programming/no-cover": "536a7d83dfea7060",
+  "warm_mentor/languages/cover": "4a4069e01fd1f5a1",
+  "warm_mentor/languages/no-cover": "d836b8d35691a339",
+  "warm_mentor/math_science/cover": "1052c67d5f1c1f94",
+  "warm_mentor/math_science/no-cover": "af08e52557fc2f5b",
+  "warm_mentor/programming/cover": "8c860680c9d35486",
+  "warm_mentor/programming/no-cover": "bea7699a0544b5c0",
 }
 `;
 
 exports[`golden — the whole matrix is byte-stable every axis of the AI-composed design system 1`] = `
 {
-  "bodyFont=mono": "130c0627bcb73366",
-  "bodyFont=sans": "ea4e1a937bc170ad",
-  "bodyFont=serif": "aefdff7b165ea6b5",
-  "density=airy": "ea4e1a937bc170ad",
-  "density=compact": "0c8b65d3c693c638",
-  "density=regular": "ae87ba563eae75ab",
-  "headingScale=balanced": "f8cba633f9fe2393",
-  "headingScale=dramatic": "ea4e1a937bc170ad",
-  "headingScale=restrained": "3ea8e1d83c8ba931",
-  "heroTreatment=flat": "10486f990a675622",
-  "heroTreatment=gradient": "0868df99c5ea899c",
-  "heroTreatment=mesh": "ea4e1a937bc170ad",
-  "heroTreatment=spotlight": "9dfb51dbc7a23c77",
-  "motion=calm": "4086129664a121c5",
-  "motion=cinematic": "a7f6d960b13e685d",
-  "motion=lively": "ea4e1a937bc170ad",
-  "radius=0": "9b657ec52a9e4be4",
-  "radius=14": "befb9fe84e3705b6",
-  "radius=28": "293231ab696e3f04",
+  "bodyFont=mono": "4cf1a393ccd1e2a6",
+  "bodyFont=sans": "2f86a6612db660cc",
+  "bodyFont=serif": "ed308683498c994e",
+  "density=airy": "2f86a6612db660cc",
+  "density=compact": "1e9da9e3698e5031",
+  "density=regular": "056dbf1ac1ae9943",
+  "headingScale=balanced": "5e7ce78ea3d2e4ec",
+  "headingScale=dramatic": "2f86a6612db660cc",
+  "headingScale=restrained": "70638f76af7883bd",
+  "heroTreatment=flat": "3eda65cd87d3b8ce",
+  "heroTreatment=gradient": "f365b3bd113e295f",
+  "heroTreatment=mesh": "2f86a6612db660cc",
+  "heroTreatment=spotlight": "b9b8e6ed4a9c0fb8",
+  "motion=calm": "8b2778d29afe733d",
+  "motion=cinematic": "2d86179119ac785b",
+  "motion=lively": "2f86a6612db660cc",
+  "radius=0": "cb89718c0c66e3c9",
+  "radius=14": "e50682c17456f31d",
+  "radius=28": "25384290ad528a5a",
 }
 `;

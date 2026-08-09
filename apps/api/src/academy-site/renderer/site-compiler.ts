@@ -568,7 +568,16 @@ function clientJs(slug: string, defaultLang: 'ar' | 'en'): string {
   var L=localStorage.getItem('darsly_lang')|| ${dl};
   function apply(l){
     document.documentElement.lang=l;document.documentElement.dir=(l==='ar'?'rtl':'ltr');
-    document.querySelectorAll('.i18n').forEach(function(e){var v=e.dataset[l];if(v!=null)e.textContent=v;});
+    document.querySelectorAll('.i18n').forEach(function(e){
+      var v=e.dataset[l];
+      /* Fall back rather than blank. A field the writer only filled in one
+         language used to erase itself the moment the visitor was on the other
+         one — which is how a credentials list rendered as seven numbered rules
+         with nothing beside them. Showing the language we have beats showing
+         nothing. */
+      if(!v||!v.trim())v=e.dataset[l==='ar'?'en':'ar'];
+      if(v!=null)e.textContent=v;
+    });
     var b=document.getElementById('langToggle');if(b)b.textContent=(l==='ar'?'English':'العربية');
     localStorage.setItem('darsly_lang',l);
   }

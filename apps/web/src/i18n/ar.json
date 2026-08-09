@@ -52,7 +52,8 @@
     "adminPayments": "الدفعات",
     "academy": "الأكاديمية",
     "studio": "استوديو الأكاديمية",
-    "adminStudio": "استوديو الأكاديميات"
+    "adminStudio": "استوديو الأكاديميات",
+    "browse": "تصفّح الدورات"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -1160,5 +1161,46 @@
     "noCourses": "لا توجد كورسات منشورة بعد",
     "poweredBy": "مدعوم من",
     "lessonCount": "{{count}} درس"
+  },
+  "browse": {
+    "title": "تصفّح الدورات",
+    "subtitle": "كل الدورات المنشورة على المنصة — دوّر بالمادة أو المرحلة أو المدرّس.",
+    "searchPh": "دوّر باسم الدورة أو المدرّس…",
+    "sortBy": "ترتيب حسب",
+    "loading": "جاري التحميل…",
+    "count": "{{n}} دورة",
+    "emptyTitle": "مفيش نتايج",
+    "emptyFiltered": "جرّب توسّع الفلاتر أو تغيّر كلمة البحث.",
+    "emptyAll": "لسه مفيش دورات منشورة.",
+    "filters": "الفلاتر",
+    "clear": "مسح الكل",
+    "subject": "المادة",
+    "grade": "المرحلة",
+    "allGrades": "كل المراحل",
+    "language": "لغة الشرح",
+    "allLanguages": "كل اللغات",
+    "arabic": "عربي",
+    "english": "إنجليزي",
+    "price": "السعر",
+    "min": "من",
+    "max": "إلى",
+    "freeOnly": "المجاني فقط",
+    "previewOnly": "فيه حصة مجانية",
+    "free": "مجاني",
+    "perMonth": "شهرياً",
+    "view": "التفاصيل",
+    "lessons": "{{n}} حصة",
+    "noReviews": "لسه مفيش تقييمات",
+    "freePreview": "حصة مجانية",
+    "prev": "السابق",
+    "next": "التالي",
+    "pagination": "صفحات النتائج",
+    "sort": {
+      "newest": "الأحدث",
+      "popular": "الأكثر التحاقاً",
+      "rating": "الأعلى تقييماً",
+      "priceAsc": "الأرخص أولاً",
+      "priceDesc": "الأغلى أولاً"
+    }
   }
 }

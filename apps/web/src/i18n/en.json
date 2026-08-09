@@ -52,7 +52,8 @@
     "adminPayments": "Payments",
     "academy": "Academy",
     "studio": "Academy Studio",
-    "adminStudio": "Academy Studio"
+    "adminStudio": "Academy Studio",
+    "browse": "Browse courses"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1160,5 +1161,46 @@
     "noCourses": "No published courses yet",
     "poweredBy": "Powered by",
     "lessonCount": "{{count}} lessons"
+  },
+  "browse": {
+    "title": "Browse courses",
+    "subtitle": "Every course published on the platform — search by subject, stage or teacher.",
+    "searchPh": "Search a course or a teacher…",
+    "sortBy": "Sort by",
+    "loading": "Loading…",
+    "count": "{{n}} course(s)",
+    "emptyTitle": "No results",
+    "emptyFiltered": "Try widening the filters or changing the search.",
+    "emptyAll": "No courses have been published yet.",
+    "filters": "Filters",
+    "clear": "Clear all",
+    "subject": "Subject",
+    "grade": "Stage",
+    "allGrades": "All stages",
+    "language": "Teaching language",
+    "allLanguages": "All languages",
+    "arabic": "Arabic",
+    "english": "English",
+    "price": "Price",
+    "min": "Min",
+    "max": "Max",
+    "freeOnly": "Free only",
+    "previewOnly": "Has a free lesson",
+    "free": "Free",
+    "perMonth": "per month",
+    "view": "Details",
+    "lessons": "{{n}} lessons",
+    "noReviews": "No reviews yet",
+    "freePreview": "Free lesson",
+    "prev": "Previous",
+    "next": "Next",
+    "pagination": "Result pages",
+    "sort": {
+      "newest": "Newest",
+      "popular": "Most enrolled",
+      "rating": "Top rated",
+      "priceAsc": "Cheapest first",
+      "priceDesc": "Most expensive first"
+    }
   }
 }

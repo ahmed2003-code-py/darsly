@@ -15,6 +15,7 @@ interface NavItem {
 
 const STUDENT_NAV: NavItem[] = [
   { to: '/', icon: 'space_dashboard', labelKey: 'nav.home', end: true },
+  { to: '/courses', icon: 'auto_stories', labelKey: 'nav.browse' },
   { to: '/discover', icon: 'travel_explore', labelKey: 'nav.discover' },
   { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
   { to: '/saved', icon: 'favorite', labelKey: 'nav.saved' },

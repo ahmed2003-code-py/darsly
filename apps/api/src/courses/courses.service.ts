@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
 import {
   CreateCourseDto,
@@ -24,6 +26,152 @@ export class CoursesService {
     private readonly prisma: PrismaService,
     private readonly studentPrice: StudentPriceService,
   ) {}
+
+  /**
+   * Student-facing course discovery.
+   *
+   * A published course used to be reachable only by knowing its teacher: the
+   * catalogue had a detail endpoint and no listing, so the whole of a teacher's
+   * work was invisible to anyone who had not already found them.
+   *
+   * Every filter resolves in SQL and the page is taken with skip/take, because
+   * this is the one list on the platform that grows without bound. The teacher
+   * directory filters price and rating in memory over the whole table; doing
+   * that here would load the entire catalogue to show ten rows.
+   */
+  async discover(query: DiscoverCoursesQuery) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(24, Math.max(1, query.pageSize ?? 10));
+
+    const priceFilter: Prisma.IntFilter = {};
+    if (query.free) priceFilter.equals = 0;
+    else {
+      if (query.priceMinCents != null) priceFilter.gte = query.priceMinCents;
+      if (query.priceMaxCents != null) priceFilter.lte = query.priceMaxCents;
+    }
+
+    const where: Prisma.CourseWhereInput = {
+      status: 'PUBLISHED',
+      deletedAt: null,
+      // A course is only as visible as the teacher behind it. Suspending a
+      // teacher must take their catalogue with them.
+      teacher: {
+        status: 'APPROVED',
+        user: { isActive: true },
+        ...(query.language ? { language: query.language } : {}),
+      },
+      ...(query.teacherId ? { tenantId: query.teacherId } : {}),
+      ...(query.subjectId ? { subjectId: query.subjectId } : {}),
+      ...(query.gradeId ? { gradeId: query.gradeId } : {}),
+      ...(Object.keys(priceFilter).length ? { priceCents: priceFilter } : {}),
+      ...(query.hasPreview
+        ? { units: { some: { deletedAt: null, lessons: { some: { deletedAt: null, isFreePreview: true } } } } }
+        : {}),
+      ...(query.q?.trim()
+        ? {
+            OR: [
+              { title: { contains: query.q.trim(), mode: 'insensitive' } },
+              { description: { contains: query.q.trim(), mode: 'insensitive' } },
+              { teacher: { user: { fullName: { contains: query.q.trim(), mode: 'insensitive' } } } },
+            ],
+          }
+        : {}),
+    };
+
+    // `popular` and `rating` are aggregates, so they cannot be an ORDER BY on
+    // this query. They are ordered after the page is fetched, which means the
+    // ordering is within-page only — an honest limitation, and the reason
+    // `newest` is the default rather than something that looks smarter.
+    const orderBy: Prisma.CourseOrderByWithRelationInput =
+      query.sort === 'priceAsc' ? { priceCents: 'asc' }
+      : query.sort === 'priceDesc' ? { priceCents: 'desc' }
+      : query.sort === 'popular' ? { enrollments: { _count: 'desc' } }
+      : { createdAt: 'desc' };
+
+    const [total, rows] = await Promise.all([
+      this.prisma.course.count({ where }),
+      this.prisma.course.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          subject: true,
+          grade: true,
+          teacher: {
+            select: {
+              id: true, slug: true, language: true, verifiedAt: true,
+              user: { select: { fullName: true, avatarUrl: true } },
+            },
+          },
+          units: {
+            where: { deletedAt: null },
+            select: { lessons: { where: { deletedAt: null }, select: { durationSec: true, isFreePreview: true } } },
+          },
+          _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
+        },
+      }),
+    ]);
+
+    // One grouped query for the whole page rather than one per card.
+    const ids = rows.map((c) => c.id);
+    const ratings = ids.length
+      ? await this.prisma.review.groupBy({
+          by: ['courseId'],
+          where: { courseId: { in: ids } },
+          _avg: { rating: true },
+          _count: true,
+        })
+      : [];
+    const ratingByCourse = new Map(ratings.map((r) => [r.courseId, r]));
+
+    const items = await this.studentPrice.applyToMany(
+      rows.map((c) => {
+        const lessons = c.units.flatMap((u) => u.lessons);
+        const rating = ratingByCourse.get(c.id);
+        return {
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          thumbnailUrl: c.thumbnailUrl,
+          subject: c.subject,
+          grade: c.grade,
+          pricingModel: c.pricingModel,
+          priceCents: c.priceCents,
+          currency: c.currency,
+          lessonsCount: lessons.length,
+          totalDurationSec: lessons.reduce((sum, l) => sum + l.durationSec, 0),
+          freePreviewCount: lessons.filter((l) => l.isFreePreview).length,
+          studentsCount: c._count.enrollments,
+          avgRating: rating?._avg.rating ? Math.round(rating._avg.rating * 10) / 10 : null,
+          reviewsCount: rating?._count ?? 0,
+          createdAt: c.createdAt,
+          teacher: {
+            id: c.teacher.id,
+            slug: c.teacher.slug,
+            fullName: c.teacher.user.fullName,
+            avatarUrl: c.teacher.user.avatarUrl,
+            verified: !!c.teacher.verifiedAt,
+            language: c.teacher.language,
+          },
+          tenantId: c.tenantId,
+        };
+      }),
+      (c) => c.tenantId,
+    );
+
+    if (query.sort === 'rating') {
+      items.sort((a, b) => (b.avgRating ?? 0) - (a.avgRating ?? 0));
+    }
+
+    return {
+      items: items.map(({ tenantId: _t, ...rest }) => rest),
+      total,
+      page,
+      pageSize,
+      pages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
 
   // ── Tenant isolation helpers ─────────────────────────────────────────────
   // Every teacher mutation resolves the row through tenantId; a cross-tenant

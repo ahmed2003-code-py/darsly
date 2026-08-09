@@ -23,6 +23,7 @@ const AdminSecurityPage = lazy(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazy(() => import('./pages/admin/AdminTeachersPage'));
 const CourseDetailPage = lazy(() => import('./pages/student/CourseDetailPage'));
 const DiscoveryPage = lazy(() => import('./pages/student/DiscoveryPage'));
+const BrowseCoursesPage = lazy(() => import('./pages/student/BrowseCoursesPage'));
 const MyCoursesPage = lazy(() => import('./pages/student/MyCoursesPage'));
 const CertificatesPage = lazy(() => import('./pages/student/CertificatesPage'));
 const LiveSessionsPage = lazy(() => import('./pages/student/LiveSessionsPage'));
@@ -87,6 +88,7 @@ export default function App() {
       {/* Student / public browsing */}
       <Route path="/" element={<HomeRedirect />} />
       <Route path="/discover" element={<RequireAuth><DiscoveryPage /></RequireAuth>} />
+      <Route path="/courses" element={<RequireAuth><BrowseCoursesPage /></RequireAuth>} />
       <Route path="/t/:slug" element={<RequireAuth><TeacherProfilePage /></RequireAuth>} />
       <Route path="/course/:id" element={<RequireAuth><CourseDetailPage /></RequireAuth>} />
       <Route path="/learn/:courseId/:lessonId" element={<RequireAuth><LessonRouter /></RequireAuth>} />

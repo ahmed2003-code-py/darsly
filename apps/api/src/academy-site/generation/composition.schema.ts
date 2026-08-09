@@ -62,7 +62,9 @@ export type ContentPlan = z.infer<typeof contentPlanSchema>;
 export const compositionSchema = z.object({
   archetype: z.enum(ARCHETYPES),
   design: designSpecSchema,
-  sections: z.array(composedSectionSchema).min(3).max(14),
+  // Six is the floor for something that reads as a landing page rather than a
+  // teaser. Anything essential still missing is added during assembly.
+  sections: z.array(composedSectionSchema).min(6).max(14),
   content: contentPlanSchema,
   /** One line on the thinking. Stored and shown in the Studio; never rendered. */
   rationale: z.string().max(400),

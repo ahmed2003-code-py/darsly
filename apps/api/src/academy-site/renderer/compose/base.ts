@@ -139,12 +139,19 @@ p:last-child{margin-bottom:0}
    One mechanism, five personalities. The class is added by script, so a page
    with no JavaScript shows everything rather than nothing. */
 .reveal-on .block:not(.hero){opacity:0}
-.reveal-on .block.in{opacity:1;transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1),clip-path .9s cubic-bezier(.2,.7,.2,1)}
+.reveal-on .block.in{opacity:1;transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}
 [data-entrance=rise] .reveal-on .block:not(.hero){transform:translateY(30px)}
 [data-entrance=slide] .reveal-on .block:not(.hero){transform:translateX(-28px)}
 [dir=rtl] [data-entrance=slide] .reveal-on .block:not(.hero){transform:translateX(28px)}
-[data-entrance=mask-reveal] .reveal-on .block:not(.hero){clip-path:inset(0 0 100% 0)}
-[data-entrance=mask-reveal] .reveal-on .block.in{clip-path:inset(0 0 0 0)}
+/* The mask is applied to the section's CONTENTS, never to the section itself.
+   An IntersectionObserver computes visibility from the target's clipped box, so
+   a section that clips itself to zero height reports that it is not on screen —
+   and the observer that would un-clip it never fires. The section stays invisible
+   forever, at full height, and the page serves a header, a footer and nothing in
+   between. Clipping one level down breaks the deadlock: the observed box is
+   always its real size. */
+[data-entrance=mask-reveal] .reveal-on .block:not(.hero)>*{clip-path:inset(0 0 100% 0);transition:clip-path .9s cubic-bezier(.2,.7,.2,1)}
+[data-entrance=mask-reveal] .reveal-on .block.in>*{clip-path:inset(0 0 0 0)}
 .reveal-on .block.in{transform:none}
 [data-entrance=stagger-grid] .reveal-on .block :is(.card,.tag,li,.grid>*,.auto-grid>*){opacity:0;transform:translateY(18px)}
 [data-entrance=stagger-grid] .reveal-on .block.in :is(.card,.tag,li,.grid>*,.auto-grid>*){opacity:1;transform:none;transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1)}
@@ -158,7 +165,7 @@ ${stagger()}
    restrained design; this is a visitor telling us they need stillness. */
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
-  .reveal-on .block,.reveal-on .block :is(.card,.tag,li){opacity:1!important;transform:none!important;clip-path:none!important}
+  .reveal-on .block,.reveal-on .block>*,.reveal-on .block :is(.card,.tag,li){opacity:1!important;transform:none!important;clip-path:none!important}
   .grad{background-position:0 50%}
   html{scroll-behavior:auto}
 }

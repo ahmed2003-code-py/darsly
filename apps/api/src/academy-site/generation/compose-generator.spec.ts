@@ -143,10 +143,44 @@ describe('buildComposedDraft — the page the model designed', () => {
 
   it('builds the sections the composition asked for, in its order', async () => {
     const { doc } = await build().generator.buildComposedDraft('acad-1');
+    // The composition's own eleven, in its order — plus the two essentials it
+    // forgot. `about` lands under the hero where a visitor asks who this is;
+    // the gallery joins the end of the middle band.
     expect(types(doc)).toEqual([
-      'hero', 'toolkit', 'courses', 'process', 'timeline', 'stats',
-      'credentials', 'reviews', 'quote', 'faq', 'contact',
+      'hero', 'about', 'toolkit', 'courses', 'process', 'timeline', 'stats',
+      'credentials', 'reviews', 'quote', 'faq', 'gallery', 'contact',
     ]);
+  });
+
+  it('adds back an essential section the composition left out', async () => {
+    // Given the choice the model will happily return eight handsome sections
+    // with no course list and no social proof — a page that looks designed and
+    // sells nothing.
+    const sparse = {
+      ...COMPOSITION,
+      sections: [
+        section('hero', 'hero.centered'), section('toolkit', 'toolkit.tags'),
+        section('process', 'process.rail'), section('timeline', 'timeline.rail'),
+        section('quote', 'quote.statement'), section('stats', 'stats.band'),
+      ],
+    };
+    const { doc } = await build({ composition: sparse }).generator.buildComposedDraft('acad-1');
+    for (const essential of ['about', 'courses', 'credentials', 'reviews', 'faq', 'contact']) {
+      expect(types(doc)).toContain(essential);
+    }
+    expect(doc.blocks.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it('does not add back a section the teacher cannot fill', async () => {
+    const { generator } = build({
+      composition: { ...COMPOSITION, sections: COMPOSITION.sections.slice(0, 6) },
+      media: [{ id: 'm-logo', kind: 'LOGO' }],
+      facts: { ...FACTS, achievements: [] } as unknown as AcademyProfileFacts,
+      copy: { ...COPY, credentials: [] },
+    });
+    const { doc } = await generator.buildComposedDraft('acad-1');
+    expect(types(doc)).not.toContain('gallery');
+    expect(types(doc)).not.toContain('credentials');
   });
 
   it('finally emits the sections the old pipeline never could', async () => {
@@ -172,6 +206,9 @@ describe('buildComposedDraft — the page the model designed', () => {
       sections: [
         section('contact', 'contact.pills'),
         section('faq', 'faq.accordion'),
+        section('courses', 'courses.grid'),
+        section('about', 'about.statement'),
+        section('toolkit', 'toolkit.tags'),
         section('hero', 'hero.centered'),
       ],
     };
@@ -235,7 +272,11 @@ describe('buildComposedDraft — what the model is told', () => {
   it('tells the writer to leave out what the page does not have', async () => {
     const noExtras = {
       ...COMPOSITION,
-      sections: [section('hero', 'hero.centered'), section('about', 'about.statement'), section('contact', 'contact.pills')],
+      sections: [
+        section('hero', 'hero.centered'), section('about', 'about.statement'),
+        section('toolkit', 'toolkit.tags'), section('credentials', 'credentials.record'),
+        section('courses', 'courses.grid'), section('contact', 'contact.pills'),
+      ],
       content: { statCount: 0, timelineCount: 0, processCount: 0, faqCount: 3, includeQuote: false },
     };
     const { generator, prompts } = build({ composition: noExtras });
@@ -261,10 +302,10 @@ describe('buildComposedDraft — imperfect answers still produce a page', () => 
     expect(types(doc)).toContain('hero');
   });
 
-  it('falls back to a complete page when the sections all drop out', async () => {
+  it('still produces a complete page when every section it asked for drops out', async () => {
     // A composition can be perfectly valid and still leave almost nothing: here
-    // every section it asked for depends on content this teacher has none of.
-    // A hero alone is not a page, so the built-in composition takes over.
+    // every section it asked for depends on content the writer did not produce.
+    // A hero alone is not a page.
     const { generator } = build({
       composition: {
         ...COMPOSITION,
@@ -273,10 +314,12 @@ describe('buildComposedDraft — imperfect answers still produce a page', () => 
           section('timeline', 'timeline.rail'),
           section('process', 'process.numbered'),
           section('quote', 'quote.statement'),
+          section('stats', 'stats.band'),
+          section('gallery', 'gallery.mosaic'),
         ],
         content: { statCount: 0, timelineCount: 0, processCount: 0, faqCount: 4, includeQuote: false },
       },
-      copy: { ...COPY, timeline: [], process: [] },
+      copy: { ...COPY, timeline: [], process: [], stats: [] },
     });
     const { doc } = await generator.buildComposedDraft('acad-1');
     expect(doc.blocks.length).toBeGreaterThan(4);

@@ -82,6 +82,22 @@ export function assembleComposition(input: AssembleInput): SiteDocument {
     blocks.push(block);
   }
 
+  // Anything the page needs and the composition left out. `about` goes straight
+  // under the hero, where a visitor asks "who is this?"; the rest join the end of
+  // the middle band. Appending everything would put the teacher's introduction
+  // after the FAQ, which is worse than the omission it fixes.
+  for (const section of missingEssentials(seen, input)) {
+    const block = buildBlock(section, input);
+    if (!block) continue;
+    seen.add(section.type);
+    if (section.type === 'about') {
+      const heroAt = blocks.findIndex((b) => b.type === 'hero');
+      blocks.splice(heroAt + 1, 0, block);
+    } else {
+      blocks.push(block);
+    }
+  }
+
   // The hero opens the page and contact closes it, whatever order was proposed.
   // These two are navigation, not composition: the CTA scroll target and the
   // in-page contact anchor both depend on them being where visitors expect.
@@ -105,6 +121,52 @@ export function assembleComposition(input: AssembleInput): SiteDocument {
     rationale: composition.rationale.slice(0, 400),
     blocks: ordered,
   };
+}
+
+/**
+ * The sections a landing page does not get to skip.
+ *
+ * The composition stage is free to design the page, but it is not free to leave
+ * out the things a visitor came for. Given the choice it will happily return
+ * eight handsome sections with no course list, no social proof and no answer to
+ * "how do I start?" — a page that looks designed and sells nothing.
+ *
+ * So anything essential the teacher has content for and the composition did not
+ * ask for is appended here, laid out by the best pattern that content can carry.
+ * Ordered by how much each one is missed.
+ */
+function missingEssentials(present: Set<string>, input: AssembleInput): ComposedSection[] {
+  const { copy, media, lists, socials } = input;
+  const wanted: { type: ComposedSection['type']; has: boolean }[] = [
+    { type: 'about', has: filled(copy.about.body) },
+    { type: 'courses', has: true },
+    { type: 'credentials', has: lists.credentials.length > 0 },
+    { type: 'toolkit', has: lists.toolkit.length > 0 },
+    { type: 'reviews', has: true },
+    { type: 'faq', has: copy.faq.length > 0 },
+    { type: 'gallery', has: media.galleryIds.length > 0 },
+    { type: 'contact', has: socials.length > 0 },
+  ];
+
+  const out: ComposedSection[] = [];
+  for (const { type, has } of wanted) {
+    if (present.has(type) || !has) continue;
+    out.push({
+      type,
+      // Deliberately empty: the Site Brain resolves it against the registry with
+      // the real content profile at render time, which knows more here than a
+      // guess made during assembly ever could.
+      pattern: '',
+      emphasis: 'normal',
+      width: 'standard',
+      surface: 'page',
+      align: type === 'contact' ? 'center' : 'start',
+      columns: 3,
+      accents: [],
+      imageTreatment: 'rounded',
+    });
+  }
+  return out;
 }
 
 function buildBlock(section: ComposedSection, input: AssembleInput): SiteBlock | null {

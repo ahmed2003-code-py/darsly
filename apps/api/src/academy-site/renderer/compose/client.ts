@@ -21,13 +21,61 @@ var SLUG=(function(){
   var m=location.pathname.match(new RegExp('/a/([^/?#]+)'));
   return m?decodeURIComponent(m[1]):${JSON.stringify(slug)};
 })();
+/* Scroll entrance.
+
+   The hidden state is added by script and removed by script, which means every
+   section on the page is invisible until something says otherwise. That is one
+   dependency too many for the content of a marketing page: an observer that
+   does not fire — for any reason, in any browser, in any embedding — leaves the
+   visitor a header, a footer and nothing in between.
+
+   So the observer is the *nicety* and geometry is the guarantee. Anything on
+   screen is revealed immediately and synchronously, a throttled scroll handler
+   keeps revealing as you go whether or not the observer works, and a timer
+   gives up on the whole effect if it has plainly failed. The animation is
+   allowed to break; the page is not. */
+var PENDING=[];
 try{
   document.body.classList.add('reveal-on');
   document.querySelectorAll('a[data-cta]').forEach(function(a){a.setAttribute('href','/t/'+SLUG);});
-  var io=new IntersectionObserver(function(es){es.forEach(function(e){
-    if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}
-  });},{threshold:.08,rootMargin:'0px 0px -6% 0px'});
-  document.querySelectorAll('.block').forEach(function(b){io.observe(b);});
+  PENDING=[].slice.call(document.querySelectorAll('.block'));
+
+  function reveal(el){
+    el.classList.add('in');
+    var i=PENDING.indexOf(el);
+    if(i>-1)PENDING.splice(i,1);
+  }
+  function revealOnScreen(){
+    for(var i=PENDING.length-1;i>=0;i--){
+      var r=PENDING[i].getBoundingClientRect();
+      if(r.top<innerHeight*0.94&&r.bottom>0)reveal(PENDING[i]);
+    }
+  }
+
+  try{
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){if(e.isIntersecting)reveal(e.target);});
+    },{threshold:0,rootMargin:'0px 0px -6% 0px'});
+    PENDING.forEach(function(b){io.observe(b);});
+  }catch(err){}
+
+  revealOnScreen();
+  var pend=false;
+  addEventListener('scroll',function(){
+    if(pend||!PENDING.length)return;
+    pend=true;
+    requestAnimationFrame(function(){pend=false;revealOnScreen();});
+  },{passive:true});
+  addEventListener('resize',revealOnScreen,{passive:true});
+  addEventListener('load',revealOnScreen);
+
+  // If the first screen is still hidden a moment after load, the effect is not
+  // working. Drop it entirely rather than serve a blank page.
+  setTimeout(function(){
+    if(document.querySelector('.block:not(.hero):not(.in)')&&!document.querySelector('.block.in')){
+      document.body.classList.remove('reveal-on');
+    }
+  },1800);
 }catch(e){document.body.classList.remove('reveal-on');}
 
 var L=localStorage.getItem('darsly_lang')||${JSON.stringify(defaultLang)};

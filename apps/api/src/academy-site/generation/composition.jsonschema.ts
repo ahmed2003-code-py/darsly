@@ -103,10 +103,10 @@ export const compositionJsonSchema: Record<string, unknown> = object({
   design: designSchema,
   sections: {
     type: 'array',
-    minItems: 3,
+    minItems: 6,
     maxItems: 14,
     items: sectionSchema,
-    description: 'The page, in order. The first must be the hero. Include only sections the content supports.',
+    description: 'The page, in order — 8 to 12 sections. The first must be the hero, the last contact. about, courses, reviews and faq belong on essentially every page.',
   },
   content: object({
     statCount: { type: 'integer', minimum: 0, maximum: 6, description: 'Figures to write. 0 if the facts contain no real numbers.' },

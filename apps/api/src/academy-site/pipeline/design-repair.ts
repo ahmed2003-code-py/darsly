@@ -137,6 +137,32 @@ export function repairDesign(input: DesignSpec): RepairResult {
     warn('accent-indistinct', 'the accent was nearly identical to the primary and was separated', 'palette.accent');
   }
 
+  // A filled button has to read as a *shape* against the page before anyone
+  // reads its label. A forest primary on a near-black background technically
+  // passes every text-contrast check — its white label is perfectly legible —
+  // and still looks like a rectangle of nothing. This is the rule that catches
+  // the colour pairs that are individually fine and jointly muddy.
+  // 2.6, not 2. A forest green on near-black measures 2.15 and still reads as a
+  // rectangle of nothing — the number was set by looking at the pairs that
+  // actually shipped, not by picking a round one.
+  const BUTTON_SEPARATION = 2.6;
+  const primaryGap = contrastRatio(p.primary, p.background);
+  if (primaryGap < BUTTON_SEPARATION) {
+    p.primary = pushToContrast(p.primary, p.background, BUTTON_SEPARATION);
+    warn(
+      'primary-indistinct',
+      `a filled button in this primary sat at ${primaryGap.toFixed(2)}:1 against the page and barely read as a button; it was brightened`,
+      'palette.primary',
+    );
+  }
+  // The accent carries eyebrows, marks and the headline tail. It is allowed to
+  // be quieter than the primary, but not to disappear into the page.
+  const accentGap = contrastRatio(p.accent, p.background);
+  if (accentGap < 1.6 && p.accent.toLowerCase() !== p.primary.toLowerCase()) {
+    p.accent = pushToContrast(p.accent, p.background, 1.6);
+    warn('accent-indistinct-on-page', 'the accent was almost invisible against the page and was lifted', 'palette.accent');
+  }
+
   // `mode` is the model describing its own palette, and it can simply be wrong.
   // The compiler derives the truth from the background; this keeps the stored
   // document honest so evolution reasons about what was actually built.

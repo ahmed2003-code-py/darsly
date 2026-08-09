@@ -93,8 +93,13 @@ export const GRAIN_CSS = `
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")}`;
 
 export const ACCENT_CSS: Record<AccentMark, string> = {
+  /* grid-column is load-bearing. Several patterns make `.wrap` a grid, and a
+     pseudo-element in a grid container is a grid ITEM: this rule quietly took
+     the first cell, pushing the hero copy into the second and the photograph
+     onto a row of its own. Spanning the whole row is both correct layout and
+     the look the accent is for. */
   'rule-lines': `
-.block[data-accent~=rule-lines]>.wrap::before{content:"";display:block;width:64px;height:2px;background:var(--a);margin-bottom:2em}
+.block[data-accent~=rule-lines]>.wrap::before{content:"";display:block;grid-column:1/-1;width:64px;height:2px;background:var(--acc);margin-bottom:2em}
 .center[data-accent~=rule-lines]>.wrap::before{margin-inline:auto}`,
 
   'numbered-sections': `

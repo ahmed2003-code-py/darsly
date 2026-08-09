@@ -37,14 +37,14 @@ img{max-width:100%;display:block}
    out of existence, and a credentials list rendered as seven numbered rules
    with nothing beside them. One indirection means a pattern written today is
    still correct on a band invented tomorrow. */
-body{--band:var(--bg);--panel:var(--surface);--fg:var(--ink);--fg-soft:var(--body);--fg-mut:var(--mut);--rule:var(--line);--acc:var(--a-text)}
+body{--band:var(--bg);--panel:var(--surface);--fg:var(--ink);--fg-soft:var(--body);--fg-mut:var(--mut);--rule:var(--line);--acc:var(--a-text);--acc-2:var(--p-text)}
 
 /* ── Section surfaces ──────────────────────────────────────────────────────
    A page whose every band is the same colour reads as one long scroll. These
    are how a composition gives it structure without changing the palette — and
    each one restates every role, so nothing inside has to know which band it
    landed on. */
-.block[data-surface=raised]{background:var(--surface);--band:var(--surface);--panel:var(--bg);--acc:var(--a-surface)}
+.block[data-surface=raised]{background:var(--surface);--band:var(--surface);--panel:var(--bg);--acc:var(--a-surface);--acc-2:var(--p-surface)}
 .block[data-surface=inverted]{
   background:var(--ink);color:var(--bg);
   --band:var(--ink);
@@ -54,6 +54,7 @@ body{--band:var(--bg);--panel:var(--surface);--fg:var(--ink);--fg-soft:var(--bod
   --fg-mut:color-mix(in srgb,var(--bg) 60%,var(--ink));
   --rule:color-mix(in srgb,var(--bg) 24%,var(--ink));
   --acc:color-mix(in srgb,var(--a) 72%,var(--bg));
+  --acc-2:color-mix(in srgb,var(--p) 72%,var(--bg));
 }
 .block[data-surface=accent]{
   background:linear-gradient(135deg,var(--p),var(--a));color:var(--on-p);
@@ -63,14 +64,14 @@ body{--band:var(--bg);--panel:var(--surface);--fg:var(--ink);--fg-soft:var(--bod
   --fg-soft:color-mix(in srgb,var(--on-p) 88%,transparent);
   --fg-mut:color-mix(in srgb,var(--on-p) 72%,transparent);
   --rule:color-mix(in srgb,var(--on-p) 30%,transparent);
-  --acc:var(--on-p);
+  --acc:var(--on-p);--acc-2:var(--on-p);
 }
 /* A photograph decides its own contrast, so this band is always light-on-dark
    under the scrim the pattern paints. */
 .block[data-surface=image]{
   color:#fff;--band:#0b0b12;--panel:rgba(255,255,255,.10);--fg:#fff;
   --fg-soft:rgba(255,255,255,.88);--fg-mut:rgba(255,255,255,.72);
-  --rule:rgba(255,255,255,.28);--acc:#fff;
+  --rule:rgba(255,255,255,.28);--acc:#fff;--acc-2:#fff;
 }
 
 /* ── Type ──────────────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ p:last-child{margin-bottom:0}
 
 /* The one flourish that most separates a designed page from a typed one: the
    closing words of a headline carrying the brand gradient. */
-.grad{background:linear-gradient(102deg,var(--a),var(--p) 55%,var(--a));background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:sheen 8s ease-in-out infinite}
+.grad{background:linear-gradient(102deg,var(--acc),var(--acc-2) 55%,var(--acc));background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:sheen 8s ease-in-out infinite}
 @keyframes sheen{0%,100%{background-position:0 50%}50%{background-position:100% 50%}}
 
 /* ── Actions ───────────────────────────────────────────────────────────────*/

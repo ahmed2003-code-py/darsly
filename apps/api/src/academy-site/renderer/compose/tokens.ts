@@ -179,11 +179,12 @@ export function tokens(design: DesignSpec): string {
   const primaryText = readableOn(c.primary, c.background);
   const accentText = readableOn(c.accent, c.background);
   const accentOnSurface = readableOn(c.accent, c.surface);
+  const primaryOnSurface = readableOn(c.primary, c.surface);
 
   return `:root{
 --bg:${c.background};--ink:${c.ink};--surface:${c.surface};--surface-2:${c.surfaceAlt};
 --p:${c.primary};--a:${c.accent};--on-p:${c.onPrimary};--on-a:${c.onAccent};
---p-text:${primaryText};--a-text:${accentText};--a-surface:${accentOnSurface};
+--p-text:${primaryText};--a-text:${accentText};--a-surface:${accentOnSurface};--p-surface:${primaryOnSurface};
 --pr:${hexToRgb(c.primary).join(',')};--ar:${hexToRgb(c.accent).join(',')};--inkr:${hexToRgb(c.ink).join(',')};
 --mut:color-mix(in srgb,var(--ink) 60%,var(--bg));
 --body:color-mix(in srgb,var(--ink) 88%,var(--bg));

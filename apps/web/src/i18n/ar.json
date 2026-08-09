@@ -134,7 +134,12 @@
     "viewProfile": "عرض الملف",
     "noResults": "لا توجد نتائج مطابقة",
     "noResultsHint": "جرّب تعديل الفلاتر أو البحث بكلمات أخرى",
-    "academyPage": "صفحة الأكاديمية"
+    "academyPage": "صفحة الأكاديمية",
+    "searchPh": "دوّر باسم المدرّس أو المادة…",
+    "loading": "جاري التحميل…",
+    "count": "{{n}} مدرّس",
+    "newTeacher": "مدرّس جديد",
+    "noCoursesYet": "لسه مفيش دورات"
   },
   "teacherProfile": {
     "verifiedTeacher": "أستاذ معتمد",
@@ -1192,9 +1197,6 @@
     "lessons": "{{n}} حصة",
     "noReviews": "لسه مفيش تقييمات",
     "freePreview": "حصة مجانية",
-    "prev": "السابق",
-    "next": "التالي",
-    "pagination": "صفحات النتائج",
     "sort": {
       "newest": "الأحدث",
       "popular": "الأكثر التحاقاً",
@@ -1202,5 +1204,10 @@
       "priceAsc": "الأرخص أولاً",
       "priceDesc": "الأغلى أولاً"
     }
+  },
+  "pager": {
+    "prev": "السابق",
+    "next": "التالي",
+    "label": "صفحات النتائج"
   }
 }

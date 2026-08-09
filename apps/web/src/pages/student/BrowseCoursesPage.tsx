@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { CardGridSkeleton, EmptyState, Stars } from '../../components/ui';
 import { Stagger, StaggerItem } from '../../components/motion';
+import Pager from '../../components/Pager';
 
 /**
  * The course catalogue.
@@ -198,9 +199,7 @@ export default function BrowseCoursesPage() {
             </Stagger>
           )}
 
-          {data && data.pages > 1 && (
-            <Pager page={data.page} pages={data.pages} onGo={(p) => patch({ page: String(p) }, false)} t={t} />
-          )}
+          <Pager page={page} pages={data?.pages ?? 1} onGo={(p) => patch({ page: String(p) }, false)} />
         </section>
       </div>
     </div>
@@ -417,55 +416,3 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
   );
 }
 
-/**
- * Paging with the ends always reachable. A long catalogue collapses the middle
- * rather than growing a row of forty numbers.
- */
-function Pager({
-  page, pages, onGo, t,
-}: {
-  page: number; pages: number; onGo: (p: number) => void;
-  t: (k: string, o?: Record<string, unknown>) => string;
-}) {
-  const around = [page - 1, page, page + 1].filter((p) => p > 1 && p < pages);
-  const shown = [...new Set([1, ...around, pages])].sort((a, b) => a - b);
-
-  return (
-    <nav className="mt-8 flex flex-wrap items-center justify-center gap-1.5" aria-label={t('browse.pagination')}>
-      <button
-        className="btn-secondary px-3 py-2 disabled:opacity-40"
-        onClick={() => onGo(page - 1)}
-        disabled={page <= 1}
-        aria-label={t('browse.prev')}
-      >
-        <span className="material-symbols-outlined text-[18px] rtl:-scale-x-100">chevron_left</span>
-      </button>
-
-      {shown.map((p, i) => (
-        <span key={p} className="flex items-center gap-1.5">
-          {i > 0 && p - shown[i - 1] > 1 && <span className="px-1 text-outline">…</span>}
-          <button
-            onClick={() => onGo(p)}
-            aria-current={p === page ? 'page' : undefined}
-            className={`min-w-10 rounded-xl px-3 py-2 font-heading text-sm font-semibold transition-colors ${
-              p === page
-                ? 'bg-primary text-on-primary'
-                : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
-            }`}
-          >
-            {p}
-          </button>
-        </span>
-      ))}
-
-      <button
-        className="btn-secondary px-3 py-2 disabled:opacity-40"
-        onClick={() => onGo(page + 1)}
-        disabled={page >= pages}
-        aria-label={t('browse.next')}
-      >
-        <span className="material-symbols-outlined text-[18px] rtl:-scale-x-100">chevron_right</span>
-      </button>
-    </nav>
-  );
-}

@@ -134,7 +134,12 @@
     "viewProfile": "View profile",
     "noResults": "No matching results",
     "noResultsHint": "Try adjusting the filters or different keywords",
-    "academyPage": "Academy page"
+    "academyPage": "Academy page",
+    "searchPh": "Search a teacher or a subject…",
+    "loading": "Loading…",
+    "count": "{{n}} teacher(s)",
+    "newTeacher": "New teacher",
+    "noCoursesYet": "No courses yet"
   },
   "teacherProfile": {
     "verifiedTeacher": "Certified teacher",
@@ -1192,9 +1197,6 @@
     "lessons": "{{n}} lessons",
     "noReviews": "No reviews yet",
     "freePreview": "Free lesson",
-    "prev": "Previous",
-    "next": "Next",
-    "pagination": "Result pages",
     "sort": {
       "newest": "Newest",
       "popular": "Most enrolled",
@@ -1202,5 +1204,10 @@
       "priceAsc": "Cheapest first",
       "priceDesc": "Most expensive first"
     }
+  },
+  "pager": {
+    "prev": "Previous",
+    "next": "Next",
+    "label": "Result pages"
   }
 }

@@ -1,290 +1,360 @@
-import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
-import { CardGridSkeleton, EmptyState, PageHeader, Stars } from '../../components/ui';
+import { CardGridSkeleton, EmptyState, Stars } from '../../components/ui';
 import { Stagger, StaggerItem } from '../../components/motion';
+import Pager from '../../components/Pager';
 
-interface Filters {
-  subjectId: string;
-  gradeId: string;
-  language: string;
-  priceMin: string;
-  priceMax: string;
+/**
+ * The teacher directory.
+ *
+ * Rebuilt to sit alongside the course catalogue rather than beside it: same
+ * toolbar, same filter language, same paging. Two discovery pages that behave
+ * differently read as two products, and this one had drifted — filters that
+ * needed an Apply button, an unlabelled icon next to every price, names cut off
+ * mid-word, and every page of results at the same URL.
+ *
+ * Everything is now in the URL, so a filtered directory is a link.
+ */
+
+interface Named {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  icon?: string | null;
 }
 
-const EMPTY: Filters = { subjectId: '', gradeId: '', language: '', priceMin: '', priceMax: '' };
+interface Teacher {
+  id: string;
+  slug: string;
+  fullName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  verified: boolean;
+  subject: Named | null;
+  grades: Named[];
+  coursesCount: number;
+  studentsCount: number;
+  minPriceCents: number | null;
+  avgRating: number | null;
+  reviewsCount: number;
+}
+
+interface Page {
+  items: Teacher[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+const PAGE_SIZE = 12;
+const SORTS = ['rating', 'newest', 'priceAsc', 'priceDesc'] as const;
+type Q = Record<string, string>;
 
 export default function DiscoveryPage() {
   const { t, i18n } = useTranslation();
   const ar = i18n.language === 'ar';
-  const [searchParams] = useSearchParams();
-  const q = searchParams.get('q') ?? ''; // driven by the TopBar search
+  const [params, setParams] = useSearchParams();
 
-  const [draft, setDraft] = useState<Filters>(EMPTY);
-  const [applied, setApplied] = useState<Filters>(EMPTY);
-  const [sort, setSort] = useState('rating');
-  const [page, setPage] = useState(1);
+  const get = (k: string) => params.get(k) ?? '';
+  const page = Math.max(1, Number(params.get('page') || 1));
 
-  // Reset to first page whenever the search text changes.
-  useEffect(() => setPage(1), [q]);
+  const patch = (next: Q, resetPage = true) => {
+    const merged = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(next)) {
+      if (v) merged.set(k, v);
+      else merged.delete(k);
+    }
+    if (resetPage) merged.delete('page');
+    setParams(merged, { replace: true });
+  };
 
-  const { data: subjects } = useQuery({
+  // Typed now, requested when you stop. A filter that needs an Apply button is
+  // a filter most people never use.
+  const [typed, setTyped] = useState(get('q'));
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const id = setTimeout(() => patch({ q: typed }), 300);
+    return () => clearTimeout(id);
+  }, [typed]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setTyped(get('q')), [params.get('q')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { data: subjects } = useQuery<Named[]>({
     queryKey: ['subjects'],
     queryFn: async () => (await api.get('/catalog/subjects')).data,
+    staleTime: 5 * 60_000,
   });
-  const { data: grades } = useQuery({
+  const { data: grades } = useQuery<Named[]>({
     queryKey: ['grades'],
     queryFn: async () => (await api.get('/catalog/grades')).data,
+    staleTime: 5 * 60_000,
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['teachers', applied, sort, page, q],
-    queryFn: async () =>
-      (
-        await api.get('/teachers', {
-          params: {
-            q: q || undefined,
-            subjectId: applied.subjectId || undefined,
-            gradeId: applied.gradeId || undefined,
-            language: applied.language || undefined,
-            priceMinCents: applied.priceMin ? Number(applied.priceMin) * 100 : undefined,
-            priceMaxCents: applied.priceMax ? Number(applied.priceMax) * 100 : undefined,
-            sort,
-            page,
-            pageSize: 9,
-          },
-        })
-      ).data,
+  const query = useMemo(
+    () => ({
+      q: get('q') || undefined,
+      subjectId: get('subjectId') || undefined,
+      gradeId: get('gradeId') || undefined,
+      language: get('language') || undefined,
+      priceMinCents: get('priceMin') ? Number(get('priceMin')) * 100 : undefined,
+      priceMaxCents: get('priceMax') ? Number(get('priceMax')) * 100 : undefined,
+      sort: get('sort') || 'rating',
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    [params], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const { data, isLoading, isFetching } = useQuery<Page>({
+    queryKey: ['teachers', query],
+    queryFn: async () => (await api.get('/teachers', { params: query })).data,
+    placeholderData: keepPreviousData,
   });
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const activeFilters =
-    (applied.subjectId ? 1 : 0) + (applied.gradeId ? 1 : 0) + (applied.language ? 1 : 0) +
-    (applied.priceMin || applied.priceMax ? 1 : 0);
+  const FILTER_KEYS = ['subjectId', 'gradeId', 'language', 'priceMin', 'priceMax'];
+  const active = FILTER_KEYS.filter((k) => get(k)).length;
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const name = (x: Named | null | undefined) => (!x ? '' : ar ? x.nameAr : x.nameEn);
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-      <PageHeader
-        title={t('discovery.title')}
-        subtitle={q ? t('discovery.resultsFor', { q }) : t('discovery.subtitle')}
-        action={
-          <label className="flex items-center gap-2 text-sm text-on-surface-variant">
-            {t('discovery.sortBy')}
-            <select
-              className="input w-auto py-2"
-              value={sort}
-              onChange={(e) => {
-                setSort(e.target.value);
-                setPage(1);
-              }}
-            >
-              {['rating', 'priceAsc', 'priceDesc', 'newest'].map((s) => (
-                <option key={s} value={s}>
-                  {t(`discovery.sort.${s}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-        }
-      />
+      <header className="mb-8">
+        <h1 className="display">{t('discovery.title')}</h1>
+        <p className="mt-2 max-w-prose text-on-surface-variant">
+          {get('q') ? t('discovery.resultsFor', { q: get('q') }) : t('discovery.subtitle')}
+        </p>
+      </header>
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Filter panel */}
-        <aside className="card h-fit w-full shrink-0 lg:sticky lg:top-24 lg:w-72">
-          <div className="mb-4 flex items-center justify-between border-b border-outline-variant/50 pb-3">
-            <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
-              <span className="material-symbols-outlined text-primary">tune</span>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label className="relative flex-1">
+          <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-4 my-auto h-fit text-[20px] text-outline">
+            search
+          </span>
+          <input
+            className="input h-12 ps-12 text-base"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={t('discovery.searchPh')}
+            aria-label={t('discovery.searchPh')}
+          />
+          {isFetching && !isLoading && (
+            <span className="absolute inset-y-0 end-4 my-auto h-4 w-4 animate-spin rounded-full border-2 border-outline-variant border-t-primary" />
+          )}
+        </label>
+        <select
+          className="input h-12 sm:w-52"
+          value={get('sort') || 'rating'}
+          onChange={(e) => patch({ sort: e.target.value })}
+          aria-label={t('discovery.sortBy')}
+        >
+          {SORTS.map((s) => (
+            <option key={s} value={s}>{t(`discovery.sort.${s}`)}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+        <aside className="card h-fit lg:sticky lg:top-24">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-heading font-bold">
+              <span className="material-symbols-outlined text-[20px]">tune</span>
               {t('discovery.filters')}
-              {activeFilters > 0 && (
-                <span className="pill bg-primary text-on-primary">{activeFilters}</span>
+              {active > 0 && (
+                <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-on-primary">{active}</span>
               )}
             </h2>
-            <button
-              className="text-sm text-primary hover:underline"
-              onClick={() => {
-                setDraft(EMPTY);
-                setApplied(EMPTY);
-              }}
-            >
-              {t('discovery.clearAll')}
-            </button>
+            {active > 0 && (
+              <button
+                className="text-sm font-semibold text-primary hover:underline"
+                onClick={() => patch(Object.fromEntries(FILTER_KEYS.map((k) => [k, ''])))}
+              >
+                {t('discovery.clearAll')}
+              </button>
+            )}
           </div>
 
-          <p className="mb-2 text-sm font-bold">{t('discovery.subject')}</p>
-          <div className="mb-5 space-y-1">
-            {(subjects ?? []).map((s: any) => {
-              const on = draft.subjectId === s.id;
+          <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('discovery.subject')}</p>
+          <div className="mb-5 flex flex-wrap gap-1.5">
+            {(subjects ?? []).map((s) => {
+              const on = get('subjectId') === s.id;
               return (
                 <button
                   key={s.id}
-                  onClick={() => setDraft({ ...draft, subjectId: on ? '' : s.id })}
-                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-sm transition ${
-                    on ? 'bg-primary-fixed font-bold text-primary' : 'hover:bg-surface-container-low'
+                  onClick={() => patch({ subjectId: on ? '' : s.id })}
+                  aria-pressed={on}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    on
+                      ? 'bg-primary text-on-primary'
+                      : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
                   }`}
                 >
-                  {s.icon && <span className="material-symbols-outlined text-lg">{s.icon}</span>}
-                  {ar ? s.nameAr : s.nameEn}
+                  {name(s)}
                 </button>
               );
             })}
           </div>
 
-          <p className="mb-2 text-sm font-bold">{t('discovery.grade')}</p>
-          <select
-            className="input mb-5 py-2.5"
-            value={draft.gradeId}
-            onChange={(e) => setDraft({ ...draft, gradeId: e.target.value })}
-          >
-            <option value="">{t('discovery.allGrades')}</option>
-            {(grades ?? []).map((g: any) => (
-              <option key={g.id} value={g.id}>
-                {ar ? g.nameAr : g.nameEn}
-              </option>
-            ))}
-          </select>
+          <label className="mb-4 block">
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.grade')}</span>
+            <select className="input" value={get('gradeId')} onChange={(e) => patch({ gradeId: e.target.value })}>
+              <option value="">{t('discovery.allGrades')}</option>
+              {(grades ?? []).map((g) => (
+                <option key={g.id} value={g.id}>{name(g)}</option>
+              ))}
+            </select>
+          </label>
 
-          <p className="mb-2 text-sm font-bold">{t('discovery.language')}</p>
-          <select
-            className="input mb-5 py-2.5"
-            value={draft.language}
-            onChange={(e) => setDraft({ ...draft, language: e.target.value })}
-          >
-            <option value="">{t('discovery.allLanguages')}</option>
-            <option value="ar">{t('discovery.arabic')}</option>
-            <option value="en">{t('discovery.english')}</option>
-          </select>
+          <label className="mb-4 block">
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.language')}</span>
+            <select className="input" value={get('language')} onChange={(e) => patch({ language: e.target.value })}>
+              <option value="">{t('discovery.allLanguages')}</option>
+              <option value="ar">{t('discovery.arabic')}</option>
+              <option value="en">{t('discovery.english')}</option>
+            </select>
+          </label>
 
-          <p className="mb-2 text-sm font-bold">{t('discovery.price')}</p>
-          <div className="mb-6 flex items-center gap-2">
+          <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('discovery.price')}</p>
+          <div className="flex items-center gap-2">
             <input
-              className="input py-2.5"
-              inputMode="numeric"
-              placeholder={t('discovery.min')}
-              value={draft.priceMin}
-              onChange={(e) => setDraft({ ...draft, priceMin: e.target.value.replace(/\D/g, '') })}
+              className="input" type="number" min={0} inputMode="numeric"
+              placeholder={t('discovery.min')} value={get('priceMin')}
+              onChange={(e) => patch({ priceMin: e.target.value })}
             />
             <span className="text-outline">—</span>
             <input
-              className="input py-2.5"
-              inputMode="numeric"
-              placeholder={t('discovery.max')}
-              value={draft.priceMax}
-              onChange={(e) => setDraft({ ...draft, priceMax: e.target.value.replace(/\D/g, '') })}
+              className="input" type="number" min={0} inputMode="numeric"
+              placeholder={t('discovery.max')} value={get('priceMax')}
+              onChange={(e) => patch({ priceMax: e.target.value })}
             />
           </div>
-
-          <button
-            className="btn-primary w-full"
-            onClick={() => {
-              setApplied(draft);
-              setPage(1);
-            }}
-          >
-            {t('discovery.apply')}
-          </button>
         </aside>
 
-        {/* Results */}
-        <section className="min-w-0 flex-1">
+        <section aria-live="polite">
+          <p className="mb-4 text-sm text-on-surface-variant">
+            {isLoading ? t('discovery.loading') : t('discovery.count', { n: data?.total ?? 0 })}
+          </p>
+
           {isLoading ? (
             <CardGridSkeleton count={6} />
           ) : !data?.items.length ? (
             <EmptyState icon="search_off" title={t('discovery.noResults')} hint={t('discovery.noResultsHint')} />
           ) : (
-            <>
-              <Stagger className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                {data.items.map((tc: any) => (
-                  <StaggerItem key={tc.id} className="h-full">
-                  <article className="card card-hover flex h-full flex-col p-5">
-                    {/* Avatar on the inline-start (right in RTL), text flows left — per design */}
-                    <div className="mb-3 flex items-start gap-3">
-                      {tc.avatarUrl ? (
-                        <img src={tc.avatarUrl} alt="" loading="lazy" className="h-16 w-16 rounded-full object-cover ring-1 ring-outline-variant" />
-                      ) : (
-                        <div className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading text-2xl font-bold text-primary">
-                          {tc.fullName?.trim()?.charAt(0)}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <h3 className="truncate font-heading text-lg font-bold">{tc.fullName}</h3>
-                          {tc.verified && (
-                            <span className="material-symbols-outlined text-lg text-primary" title={t('discovery.verified')}>
-                              verified
-                            </span>
-                          )}
-                        </div>
-                        <p className="truncate text-sm text-primary">
-                          {tc.subject ? (ar ? tc.subject.nameAr : tc.subject.nameEn) : '—'}
-                          {tc.grades?.length ? ` · ${ar ? tc.grades[0].nameAr : tc.grades[0].nameEn}` : ''}
-                        </p>
-                        <div className="mt-1 flex items-center gap-2 text-xs text-outline">
-                          <Stars rating={tc.avgRating} />
-                          <span>{t('discovery.reviewsCount', { count: tc.reviewsCount })}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="mb-4 line-clamp-2 flex-1 text-sm leading-relaxed text-on-surface-variant">{tc.bio}</p>
-
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      <span className="pill bg-surface-container-high text-on-surface-variant">
-                        <span className="material-symbols-outlined text-sm">menu_book</span>
-                        {t('discovery.coursesCount', { count: tc.coursesCount })}
-                      </span>
-                      <span className="pill bg-surface-container-high text-on-surface-variant">
-                        <span className="material-symbols-outlined text-sm">group</span>
-                        {t('discovery.studentsCount', { count: tc.studentsCount })}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-outline-variant/50 pt-4">
-                      <div>
-                        <p className="text-xs text-outline">{t('discovery.startingFrom')}</p>
-                        <p className="font-heading text-2xl font-extrabold">{egp(tc.minPriceCents)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Link
-                          to={`/a/${tc.slug}`}
-                          title={t('discovery.academyPage')}
-                          className="grid h-10 w-10 place-items-center rounded-xl border border-outline-variant text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary"
-                        >
-                          <span className="material-symbols-outlined text-[20px]">storefront</span>
-                        </Link>
-                        <Link to={`/t/${tc.slug}`} className="btn-primary px-5 py-2.5 text-sm">
-                          {t('discovery.viewProfile')}
-                        </Link>
-                      </div>
-                    </div>
-                  </article>
-                  </StaggerItem>
-                ))}
-              </Stagger>
-
-              {totalPages > 1 && (
-                <div className="mt-8 flex items-center justify-center gap-2">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      className={`h-10 w-10 rounded-full font-semibold transition-colors ${
-                        p === page
-                          ? 'bg-primary text-on-primary'
-                          : 'border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
-                      }`}
-                      onClick={() => setPage(p)}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+            <Stagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {data.items.map((tc) => (
+                <StaggerItem key={tc.id} className="h-full">
+                  <TeacherCard teacher={tc} t={t} name={name} />
+                </StaggerItem>
+              ))}
+            </Stagger>
           )}
+
+          <Pager page={page} pages={pages} onGo={(p) => patch({ page: String(p) }, false)} />
         </section>
       </div>
     </div>
+  );
+}
+
+function TeacherCard({
+  teacher: tc,
+  t,
+  name,
+}: {
+  teacher: Teacher;
+  t: (k: string, o?: Record<string, unknown>) => string;
+  name: (x: Named | null | undefined) => string;
+}) {
+  // A teacher with no courses has no price to start from, and "—" beside the
+  // words "starting from" reads as a rendering fault rather than as a fact.
+  const isNew = tc.coursesCount === 0;
+
+  return (
+    <Link
+      to={`/t/${tc.slug}`}
+      className="card card-hover flex h-full flex-col gap-3 p-5"
+    >
+      <div className="flex items-start gap-3">
+        {tc.avatarUrl ? (
+          <img
+            src={tc.avatarUrl}
+            alt=""
+            loading="lazy"
+            className="h-14 w-14 shrink-0 rounded-full object-cover ring-1 ring-outline-variant"
+          />
+        ) : (
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading text-xl font-bold text-on-primary-fixed-variant">
+            {tc.fullName?.trim()?.charAt(0)}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-start gap-1.5">
+            {/* Two lines, not an ellipsis. A directory that cuts people's names
+                in half is the first thing that looks unfinished. */}
+            <span className="line-clamp-2 font-heading text-base font-bold leading-snug">{tc.fullName}</span>
+            {tc.verified && (
+              <span className="material-symbols-outlined mt-0.5 shrink-0 text-[16px] text-primary" title={t('discovery.verified')}>
+                verified
+              </span>
+            )}
+          </span>
+          {tc.subject && (
+            <span className="mt-1 block truncate text-sm text-on-surface-variant">
+              {name(tc.subject)}
+              {tc.grades?.length ? ` · ${name(tc.grades[0])}` : ''}
+            </span>
+          )}
+        </span>
+      </div>
+
+      {tc.avgRating != null ? (
+        <span className="flex items-center gap-1.5 text-sm">
+          <Stars rating={tc.avgRating} />
+          <span className="font-bold">{tc.avgRating}</span>
+          <span className="text-on-surface-variant">
+            {t('discovery.reviewsCount', { count: tc.reviewsCount })}
+          </span>
+        </span>
+      ) : (
+        <span className="w-fit rounded-md bg-primary-fixed px-2 py-0.5 text-xs font-semibold text-on-primary-fixed-variant">
+          {t('discovery.newTeacher')}
+        </span>
+      )}
+
+      {tc.bio && (
+        <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-on-surface-variant">{tc.bio}</p>
+      )}
+
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-[15px]">menu_book</span>
+          {t('discovery.coursesCount', { count: tc.coursesCount })}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-[15px]">group</span>
+          {t('discovery.studentsCount', { count: tc.studentsCount })}
+        </span>
+      </p>
+
+      <span className="mt-auto flex items-end justify-between gap-2 border-t border-outline-variant pt-3">
+        <span className="min-w-0">
+          {isNew || tc.minPriceCents == null ? (
+            <span className="text-sm text-on-surface-variant">{t('discovery.noCoursesYet')}</span>
+          ) : (
+            <>
+              <span className="block text-[11px] text-on-surface-variant">{t('discovery.startingFrom')}</span>
+              <span className="font-heading text-lg font-bold">{egp(tc.minPriceCents)}</span>
+            </>
+          )}
+        </span>
+        <span className="btn-secondary shrink-0 px-4 py-2 text-xs">{t('discovery.viewProfile')}</span>
+      </span>
+    </Link>
   );
 }

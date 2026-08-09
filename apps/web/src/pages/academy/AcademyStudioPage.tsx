@@ -87,59 +87,101 @@ export default function AcademyStudioPage() {
   const ov = overview.data;
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-      <PageHeader
-        title={t('studio.title')}
-        subtitle={t('studio.subtitle')}
-        action={
-          ov?.status === 'PUBLISHED' ? (
-            <Link to={`/a/${academy.slug}`} target="_blank" className="btn-secondary">
+      {/* One header band rather than a title, a subtitle and a thin status strip
+          stacked on top of each other. The state of the page is the first thing
+          a teacher needs and it belongs beside the name, not under it. */}
+      <header className="mb-8 border-b border-outline-variant pb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="display">{t('studio.title')}</h1>
+            <p className="mt-2 max-w-prose text-on-surface-variant">{t('studio.subtitle')}</p>
+          </div>
+          {ov?.status === 'PUBLISHED' && (
+            <Link to={`/a/${academy.slug}`} target="_blank" className="btn-secondary shrink-0">
               <span className="material-symbols-outlined text-[20px]">open_in_new</span>
               {t('studio.viewPublished')}
             </Link>
-          ) : undefined
-        }
-      />
-
-      {ov && (
-        <div className="card mb-6 flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-on-surface-variant">{t('studio.pageStatus')}</span>
-            <Badge tone={STATUS_TONE[ov.status]}>{t(`studio.status.${ov.status}`)}</Badge>
-          </div>
-          {ov.hasDraft && <span className="text-sm text-on-surface-variant">• {t('studio.draftV', { v: ov.version })}</span>}
-          {ov.status === 'REJECTED' && ov.moderationReason && (
-            <span className="text-sm text-error">• {t('studio.rejectedReason', { reason: ov.moderationReason })}</span>
           )}
         </div>
-      )}
+        {ov && (
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            <span className="text-on-surface-variant">{t('studio.pageStatus')}</span>
+            <Badge tone={STATUS_TONE[ov.status]}>{t(`studio.status.${ov.status}`)}</Badge>
+            {ov.hasDraft && (
+              <span className="text-on-surface-variant">
+                <span className="mx-1 text-outline-variant">·</span>
+                {t('studio.draftV', { v: ov.version })}
+              </span>
+            )}
+            {ov.status === 'REJECTED' && ov.moderationReason && (
+              <span className="text-error">
+                <span className="mx-1 text-outline-variant">·</span>
+                {t('studio.rejectedReason', { reason: ov.moderationReason })}
+              </span>
+            )}
+          </div>
+        )}
+      </header>
 
       {mode === 'wizard' ? (
         <OnboardingWizard slug={academy.slug} onExit={() => setMode('tabs')} />
       ) : (
         <>
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            {TABS.map((tb) => (
+          {/* The build flow is a sequence, so it is drawn as one: a numbered
+              track you move along, not seven loose pills of equal weight. The
+              settings tab sits outside it, because it is not a step. */}
+          <nav className="mb-8 flex flex-wrap items-stretch gap-y-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-stretch overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
+              {FLOW.map((key, i) => {
+                const meta = TABS.find((x) => x.key === key)!;
+                const on = tab === key;
+                const done = FLOW.indexOf(tab) > i;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setTab(key)}
+                    aria-current={on ? 'step' : undefined}
+                    className={`relative flex flex-1 items-center justify-center gap-2 px-4 py-3 font-heading text-sm font-semibold transition-colors ${
+                      on
+                        ? 'bg-primary text-on-primary'
+                        : done
+                          ? 'text-on-surface hover:bg-surface-container-low'
+                          : 'text-on-surface-variant hover:bg-surface-container-low'
+                    } ${i > 0 ? 'border-s border-outline-variant' : ''}`}
+                  >
+                    <span
+                      className={`material-symbols-outlined text-[19px] ${on ? '' : done ? 'text-primary' : 'text-outline'}`}
+                    >
+                      {done ? 'check_circle' : meta.icon}
+                    </span>
+                    <span className="whitespace-nowrap">{t(`studio.tabs.${key}`)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2 ps-3">
               <button
-                key={tb.key}
-                onClick={() => setTab(tb.key)}
-                className={`flex items-center gap-2 rounded-full px-5 py-2 font-heading text-sm font-semibold transition-colors ${
-                  tab === tb.key
-                    ? 'bg-primary text-on-primary'
-                    : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
+                onClick={() => setTab('settings')}
+                title={t('studio.tabs.settings')}
+                aria-pressed={tab === 'settings'}
+                className={`flex h-full items-center gap-2 rounded-xl border px-4 font-heading text-sm font-semibold transition-colors ${
+                  tab === 'settings'
+                    ? 'border-primary bg-primary-fixed text-on-primary-fixed-variant'
+                    : 'border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
                 }`}
               >
-                <span className="material-symbols-outlined text-[20px]">{tb.icon}</span>
-                {t(`studio.tabs.${tb.key}`)}
+                <span className="material-symbols-outlined text-[19px]">storefront</span>
+                <span className="hidden sm:inline">{t('studio.tabs.settings')}</span>
               </button>
-            ))}
-            <button
-              onClick={() => setMode('wizard')}
-              className="ms-auto flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold text-primary hover:bg-surface-container-low"
-            >
-              <span className="material-symbols-outlined text-[20px]">assistant_direction</span>
-              {t('studio.guided')}
-            </button>
-          </div>
+              <button
+                onClick={() => setMode('wizard')}
+                className="flex h-full items-center gap-2 rounded-xl px-4 font-heading text-sm font-semibold text-primary transition-colors hover:bg-primary-fixed"
+              >
+                <span className="material-symbols-outlined text-[19px]">assistant_direction</span>
+                <span className="hidden md:inline">{t('studio.guided')}</span>
+              </button>
+            </div>
+          </nav>
 
           {tab === 'facts' && <FactsForm onSaved={() => goNext('facts')} />}
           {tab === 'media' && <MediaManager onNext={() => goNext('media')} />}

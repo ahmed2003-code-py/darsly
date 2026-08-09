@@ -2,6 +2,7 @@ import { AcademyProfileFacts } from '@prisma/client';
 import { ContentProfile, availablePatterns, evidenceStrength } from '../pipeline/content-profile';
 import { EvolutionContext } from '../pipeline/evolution.service';
 import { archetypeBrief } from '../pipeline/archetype-profiles';
+import { vibeBrief } from '../pipeline/vibe-profiles';
 import { allPatterns } from '../renderer/compose';
 import { DesignFingerprint } from '../schema/design-spec';
 
@@ -121,14 +122,22 @@ export function userComposePrompt(args: {
     : '(none given — choose a direction that fits the subject and the audience)';
 
   return [
-    `PREFERRED VIBE (a soft hint from the teacher): ${vibe ?? 'trusted'}`,
-    `STYLE BRIEF (what the teacher asked for — this overrides every default below): ${styleBrief}`,
+    // Precedence, stated before anything else so the model is never guessing
+    // which of three overlapping briefs wins. The teacher's own choice used to
+    // arrive as a single adjective under a page of subject guidance, so the
+    // subject decided the design and the choice did nothing.
+    'THREE BRIEFS, IN ORDER OF AUTHORITY. Where they disagree, the higher one wins.',
+    '',
+    `1. STYLE BRIEF — what the teacher wrote, in their own words: ${styleBrief}`,
+    '',
+    '2. DIRECTION — the direction the teacher chose from four. This is a decision, not a hint. Follow it through the palette, the type, the geometry, the motion AND the section order; a page that could be swapped with one of the other three directions has ignored it.',
+    vibeBrief(vibe),
+    '',
+    '3. SUBJECT GUIDANCE — how this subject usually wants to be treated. It shapes what goes ON the page; the direction above shapes how it LOOKS. Where they pull apart, the direction wins.',
+    archetypeBrief(archetypeGuess),
     '',
     'WHAT THIS TEACHER HAS:',
     contentBrief(profile, counts),
-    '',
-    'SUBJECT GUIDANCE (a starting point, not a rule — go against it when you have a reason):',
-    archetypeBrief(archetypeGuess),
     '',
     'PATTERN CATALOGUE — every layout available to you, by section:',
     patternCatalogue(profile, archetypeGuess, counts),

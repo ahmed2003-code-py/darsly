@@ -7,22 +7,34 @@ interface Vibe {
   guidance: string;
 }
 
+/**
+ * The writing voice for each direction.
+ *
+ * Deliberately parallel to the design brief in `vibe-profiles.ts`: a page set in
+ * expensive restraint and written in exclamation marks is not one design, it is
+ * two arguing. Each entry says what to do and what that voice sounds like when
+ * it goes wrong.
+ */
 const VIBES: Record<string, Vibe> = {
   academic: {
-    tone: 'trustworthy, precise, results-focused',
-    guidance: 'Emphasise rigor, clear curricula, and exam outcomes. Confident but never boastful.',
+    tone: 'precise, ordered, results-focused',
+    guidance:
+      'Write like a good syllabus: say exactly what is covered, in what order, and what the student will be able to do at the end. Plain declarative sentences. Numbers only where they are real. Never hype — the structure is the persuasion. Avoid: "amazing", "the best", exclamation marks.',
   },
   premium: {
-    tone: 'polished, aspirational, high-end',
-    guidance: 'Elegant and refined wording. Convey quality and exclusivity without arrogance.',
+    tone: 'restrained, assured, unhurried',
+    guidance:
+      'Say less. Short sentences with space around them, no stacking of adjectives, no superlatives. Confidence here sounds like a teacher who does not need to convince you. Avoid: "world-class", "exclusive", "premium" — a page that says it is premium is not.',
   },
   energetic: {
-    tone: 'motivating, youthful, high-energy',
-    guidance: 'Punchy, encouraging, momentum-driven. Short sentences. Speak to ambition.',
+    tone: 'direct, motivating, urgent',
+    guidance:
+      'Speak to a student with a deadline. Short punchy lines, active verbs, second person. Lead with the outcome and the time it takes. Momentum in every heading. Avoid: long paragraphs, hedging, anything that reads as calm.',
   },
   trusted: {
-    tone: 'warm, reassuring, community-focused',
-    guidance: 'Friendly and supportive, like a mentor a parent would trust. Calm confidence.',
+    tone: 'warm, reassuring, human',
+    guidance:
+      'Write like the teacher talking to a parent at the school gate. First person, plain words, no jargon. Reassure about the things people actually worry about: the pace, the attention, what happens if the student falls behind. Avoid: corporate "we", buzzwords, anything that sounds like a brochure.',
   },
 };
 

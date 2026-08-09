@@ -967,13 +967,13 @@
       "starting": "Starting…",
       "vibes": {
         "trusted": "Warm & trusted",
-        "trustedD": "Warm and reassuring, builds trust.",
+        "trustedD": "Warm and close — light paper, round edges, room to breathe. For the parent choosing for their child.",
         "academic": "Academic",
-        "academicD": "Precise and results-focused.",
+        "academicD": "Ordered and quiet — sharp edges, hairlines, clear structure. The syllabus does the persuading.",
         "premium": "Premium",
-        "premiumD": "Refined and aspirational.",
+        "premiumD": "Dark and spare — gold on near-black, wide margins, slow motion. Luxury by subtraction.",
         "energetic": "Energetic",
-        "energeticD": "Motivating and youthful."
+        "energeticD": "Loud and fast — saturated colour, heavy type, numbers up front. For a student with a deadline."
       }
     },
     "editor": {

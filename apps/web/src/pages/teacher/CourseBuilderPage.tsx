@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
@@ -17,11 +17,21 @@ export default function CourseBuilderPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
 
-  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
-  const [newUnitTitle, setNewUnitTitle] = useState('');
-  const [addingUnit, setAddingUnit] = useState(false);
-  const [newLessonUnit, setNewLessonUnit] = useState<string | null>(null);
-  const [newLessonTitle, setNewLessonTitle] = useState('');
+  // The open lesson is in the URL, not in component state.
+  //
+  // A teacher who opened a lesson's quiz and pressed back landed at the top of
+  // the course with nothing selected — the browser restored the page, and the
+  // page had forgotten everything. The address is the one piece of state that
+  // survives leaving.
+  const [params, setParams] = useSearchParams();
+  const selectedLessonId = params.get('lesson');
+  const setSelectedLessonId = (v: string | null) => {
+    const next = new URLSearchParams(params);
+    if (v) next.set('lesson', v);
+    else next.delete('lesson');
+    setParams(next, { replace: true });
+  };
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [videoPct, setVideoPct] = useState<number | null>(null);
   const [filePct, setFilePct] = useState<number | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -36,6 +46,36 @@ export default function CourseBuilderPage() {
   const videoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const thumbInput = useRef<HTMLInputElement>(null);
+
+  /**
+   * Unsaved lesson settings, kept until they are saved.
+   *
+   * Opening a lesson's quiz and coming back used to discard whatever had been
+   * changed but not yet saved. It is held per lesson so switching between two
+   * lessons does not mix them up, and cleared the moment a save succeeds.
+   */
+  const draftKey = (lessonId: string) => `darsly.lessonDraft.${lessonId}`;
+  const readDraft = (lessonId: string) => {
+    try {
+      const raw = localStorage.getItem(draftKey(lessonId));
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Come back to where you were standing, not to the top of the page.
+  const scrollKey = `darsly.builderScroll.${id}`;
+  useEffect(() => {
+    const y = Number(sessionStorage.getItem(scrollKey) || 0);
+    if (y) requestAnimationFrame(() => window.scrollTo({ top: y }));
+    const save = () => sessionStorage.setItem(scrollKey, String(window.scrollY));
+    window.addEventListener('pagehide', save);
+    return () => {
+      save();
+      window.removeEventListener('pagehide', save);
+    };
+  }, [scrollKey]);
 
   const { data: course, isLoading } = useQuery({
     queryKey: ['teacher-course', id],
@@ -55,14 +95,26 @@ export default function CourseBuilderPage() {
     queryClient.invalidateQueries({ queryKey: ['teacher-courses'] });
   };
 
+  /**
+   * Adding used to open a form and demand a name before anything existed.
+   *
+   * Most of what a teacher uploads is a lesson, not a syllabus — sections are
+   * scaffolding, and being made to name one before you can add a video is the
+   * step everybody resented. A tap creates it with a sensible name and puts the
+   * cursor in that name if you care to change it. Most people will not.
+   */
   const addUnit = useMutation({
     mutationFn: async (title: string) =>
       (await api.post(`/teacher/courses/${id}/units`, { title })).data,
-    onSuccess: () => {
+    onSuccess: (unit) => {
       invalidate();
-      setNewUnitTitle('');
-      setAddingUnit(false);
+      setRenaming(`unit:${unit.id}`);
     },
+  });
+  const renameUnit = useMutation({
+    mutationFn: async ({ unitId, title }: { unitId: string; title: string }) =>
+      (await api.patch(`/teacher/units/${unitId}`, { title })).data,
+    onSuccess: invalidate,
   });
   const removeUnit = useMutation({
     mutationFn: async (unitId: string) => (await api.delete(`/teacher/units/${unitId}`)).data,
@@ -73,10 +125,14 @@ export default function CourseBuilderPage() {
       (await api.post(`/teacher/units/${unitId}/lessons`, { title })).data,
     onSuccess: (lesson) => {
       invalidate();
-      setNewLessonTitle('');
-      setNewLessonUnit(null);
       selectLesson(lesson);
+      setRenaming(`lesson:${lesson.id}`);
     },
+  });
+  const renameLesson = useMutation({
+    mutationFn: async ({ lessonId, title }: { lessonId: string; title: string }) =>
+      (await api.patch(`/teacher/lessons/${lessonId}`, { title })).data,
+    onSuccess: invalidate,
   });
   const removeLesson = useMutation({
     mutationFn: async (lessonId: string) => (await api.delete(`/teacher/lessons/${lessonId}`)).data,
@@ -90,6 +146,7 @@ export default function CourseBuilderPage() {
       (await api.patch(`/teacher/lessons/${selectedLessonId}`, payload)).data,
     onSuccess: () => {
       invalidate();
+      if (selectedLessonId) localStorage.removeItem(draftKey(selectedLessonId));
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     },
@@ -135,13 +192,31 @@ export default function CourseBuilderPage() {
     onSuccess: invalidate,
   });
 
+  /** Load a lesson into the settings panel — its unsaved draft wins if there is one. */
   function selectLesson(lesson: any) {
     setSelectedLessonId(lesson.id);
-    setFreePreview(!!lesson.isFreePreview);
-    setDurationMin(lesson.durationSec ? String(Math.round(lesson.durationSec / 60)) : '');
+    applyLesson(lesson, readDraft(lesson.id));
+  }
+
+  function applyLesson(lesson: any, draft: any) {
+    const src = draft ?? lesson;
+    setFreePreview(!!src.isFreePreview);
+    setDurationMin(
+      draft
+        ? String(src.durationMin ?? '')
+        : lesson.durationSec
+          ? String(Math.round(lesson.durationSec / 60))
+          : '',
+    );
+    if (draft) {
+      setDrip(src.drip ?? 'now');
+      setDripDate(src.dripDate ?? '');
+      setDripDays(src.dripDays ?? '');
+      return;
+    }
     if (lesson.dripUnlockAt) {
       setDrip('date');
-      setDripDate(lesson.dripUnlockAt.slice(0, 10));
+      setDripDate(String(lesson.dripUnlockAt).slice(0, 10));
       setDripDays('');
     } else if (lesson.dripAfterEnrollDays != null) {
       setDrip('days');
@@ -167,6 +242,28 @@ export default function CourseBuilderPage() {
           : {}),
     });
   }
+
+  // Every change to the panel is written down, so leaving the page for a quiz
+  // and coming back finds the work still there.
+  useEffect(() => {
+    if (!selectedLessonId) return;
+    localStorage.setItem(
+      draftKey(selectedLessonId),
+      JSON.stringify({ isFreePreview: freePreview, durationMin, drip, dripDate, dripDays }),
+    );
+  }, [selectedLessonId, freePreview, durationMin, drip, dripDate, dripDays]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Landing on the page with ?lesson=… — a back button, a bookmark, a reload —
+  // opens that lesson rather than an empty panel.
+  const hydrated = useRef<string | null>(null);
+  useEffect(() => {
+    if (!course || !selectedLessonId || hydrated.current === selectedLessonId) return;
+    const all = course.units.flatMap((u: any) => u.lessons);
+    const lesson = all.find((l: any) => l.id === selectedLessonId);
+    if (!lesson) return;
+    hydrated.current = selectedLessonId;
+    applyLesson(lesson, readDraft(selectedLessonId));
+  }, [course, selectedLessonId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading || !course) return <Spinner />;
 
@@ -229,58 +326,68 @@ export default function CourseBuilderPage() {
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Curriculum tree */}
         <section className="min-w-0 flex-1">
-          <button
-            className="btn-secondary mb-5 flex items-center gap-2 py-2 text-sm"
-            onClick={() => setAddingUnit(true)}
-          >
-            <span className="material-symbols-outlined">add</span>
-            {t('teacher.builder.addUnit')}
-          </button>
-
-          {addingUnit && (
-            <form
-              className="card mb-4 flex gap-2 p-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newUnitTitle.trim()) addUnit.mutate(newUnitTitle.trim());
-              }}
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-on-surface-variant">
+              {t('teacher.builder.countSummary', { lessons: lessons.length, time: duration(totalSec) })}
+            </p>
+            <button
+              className="btn-secondary py-2 text-sm"
+              disabled={addUnit.isPending}
+              onClick={() => addUnit.mutate(t('teacher.builder.newUnitName', { n: course.units.length + 1 }))}
             >
-              <input autoFocus className="input py-2" placeholder={t('teacher.builder.unitTitlePlaceholder')}
-                value={newUnitTitle} onChange={(e) => setNewUnitTitle(e.target.value)} />
-              <button className="btn-primary px-4 py-2 text-sm" disabled={addUnit.isPending}>{t('common.save')}</button>
-              <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => setAddingUnit(false)}>
-                {t('common.cancel')}
+              <span className="material-symbols-outlined text-[20px]">add</span>
+              {t('teacher.builder.addUnit')}
+            </button>
+          </div>
+
+          {course.units.length === 0 && (
+            <div className="card grid place-items-center gap-2 py-14 text-center">
+              <span className="material-symbols-outlined text-4xl text-outline">library_add</span>
+              <p className="font-heading text-lg font-bold">{t('teacher.builder.emptyTitle')}</p>
+              <p className="max-w-xs text-sm text-on-surface-variant">{t('teacher.builder.emptyHint')}</p>
+              <button
+                className="btn-primary mt-2"
+                disabled={addUnit.isPending}
+                onClick={() => addUnit.mutate(t('teacher.builder.newUnitName', { n: 1 }))}
+              >
+                <span className="material-symbols-outlined text-[20px]">add</span>
+                {t('teacher.builder.addUnit')}
               </button>
-            </form>
+            </div>
           )}
 
           <div className="space-y-5">
             {course.units.map((u: any, ui: number) => (
               <div key={u.id} className="card p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
-                    <h3 className="font-heading text-lg font-bold">{u.title}</h3>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-outline">
-                    <span>
-                      {t('teacher.builder.lessonsMeta', { count: u.lessons.length })} ·{' '}
-                      {duration(u.lessons.reduce((s: number, l: any) => s + (l.durationSec ?? 0), 0))}
-                    </span>
-                    <button
-                      className="text-error/70 hover:text-error"
-                      onClick={() => window.confirm(t('teacher.builder.deleteUnitConfirm')) && removeUnit.mutate(u.id)}
-                    >
-                      <span className="material-symbols-outlined text-base">delete</span>
-                    </button>
-                  </div>
+                <div className="group/unit mb-4 flex items-center gap-3">
+                  <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
+                  <InlineName
+                    value={u.title}
+                    editing={renaming === `unit:${u.id}`}
+                    onEdit={() => setRenaming(`unit:${u.id}`)}
+                    onDone={(title) => {
+                      setRenaming(null);
+                      if (title && title !== u.title) renameUnit.mutate({ unitId: u.id, title });
+                    }}
+                    className="font-heading text-lg font-bold"
+                  />
+                  <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
+                    {t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
+                  </span>
+                  <button
+                    title={t('common.delete')}
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/unit:opacity-100"
+                    onClick={() => window.confirm(t('teacher.builder.deleteUnitConfirm')) && removeUnit.mutate(u.id)}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
                 </div>
 
                 <ul className="space-y-2">
                   {u.lessons.map((l: any, li: number) => (
                     <li
                       key={l.id}
-                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition ${
+                      className={`group/lesson flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${
                         selectedLessonId === l.id
                           ? 'border-primary-container bg-primary-fixed/40'
                           : 'border-outline-variant/40 bg-surface-container-lowest hover:bg-surface-container-low'
@@ -293,8 +400,17 @@ export default function CourseBuilderPage() {
                         </span>
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold">
-                          {li + 1}. {l.title}
+                        <p className="flex items-center gap-1.5 font-bold">
+                          <span className="shrink-0 text-outline">{li + 1}.</span>
+                          <InlineName
+                            value={l.title}
+                            editing={renaming === `lesson:${l.id}`}
+                            onEdit={() => setRenaming(`lesson:${l.id}`)}
+                            onDone={(title) => {
+                              setRenaming(null);
+                              if (title && title !== l.title) renameLesson.mutate({ lessonId: l.id, title });
+                            }}
+                          />
                         </p>
                         <p className="flex flex-wrap gap-2 text-xs text-outline">
                           {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
@@ -311,52 +427,39 @@ export default function CourseBuilderPage() {
                         </p>
                       </div>
                       <button
-                        className="text-error/70 hover:text-error"
+                        title={t('common.delete')}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/lesson:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (window.confirm(t('teacher.builder.deleteLessonConfirm'))) removeLesson.mutate(l.id);
                         }}
                       >
-                        <span className="material-symbols-outlined text-base">delete</span>
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
                       </button>
                     </li>
                   ))}
                 </ul>
 
-                {newLessonUnit === u.id ? (
-                  <form
-                    className="mt-3 flex gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (newLessonTitle.trim()) addLesson.mutate({ unitId: u.id, title: newLessonTitle.trim() });
-                    }}
-                  >
-                    <input autoFocus className="input py-2" placeholder={t('teacher.builder.lessonTitlePlaceholder')}
-                      value={newLessonTitle} onChange={(e) => setNewLessonTitle(e.target.value)} />
-                    <button className="btn-primary px-4 py-2 text-sm" disabled={addLesson.isPending}>{t('common.save')}</button>
-                    <button type="button" className="btn-ghost px-4 py-2 text-sm" onClick={() => setNewLessonUnit(null)}>
-                      {t('common.cancel')}
-                    </button>
-                  </form>
-                ) : (
-                  <button
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-outline-variant py-3 text-sm text-on-surface-variant transition hover:border-primary hover:text-primary"
-                    onClick={() => {
-                      setNewLessonUnit(u.id);
-                      setNewLessonTitle('');
-                    }}
-                  >
-                    <span className="material-symbols-outlined">add_circle</span>
-                    {t('teacher.builder.addLesson')}
-                  </button>
-                )}
+                <button
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-outline-variant py-3.5 text-sm font-semibold text-on-surface-variant transition hover:border-primary hover:bg-primary-fixed/40 hover:text-primary"
+                  disabled={addLesson.isPending}
+                  onClick={() =>
+                    addLesson.mutate({
+                      unitId: u.id,
+                      title: t('teacher.builder.newLessonName', { n: u.lessons.length + 1 }),
+                    })
+                  }
+                >
+                  <span className="material-symbols-outlined text-[20px]">add</span>
+                  {t('teacher.builder.addLesson')}
+                </button>
               </div>
             ))}
           </div>
         </section>
 
         {/* Side panel: pricing + lesson settings */}
-        <aside className="w-full shrink-0 space-y-5 lg:w-96">
+        <aside className="w-full shrink-0 space-y-5 lg:sticky lg:top-24 lg:h-fit lg:w-96">
           <div className="card">
             <h3 className="mb-3 font-heading text-lg font-bold">{t('teacher.builder.pricing')}</h3>
             <p className="flex items-baseline justify-between">
@@ -377,10 +480,14 @@ export default function CourseBuilderPage() {
 
           {selected ? (
             <div className="card">
-              <h3 className="mb-1 font-heading text-lg font-bold">{t('teacher.builder.settings')}</h3>
-              <p className="mb-4 rounded-lg bg-surface-container-low px-3 py-2 text-sm text-on-surface-variant">
-                {t('teacher.builder.editing')} <b>{selected.title}</b>
-              </p>
+              <div className="mb-4 border-b border-outline-variant pb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                  {t('teacher.builder.settings')}
+                </p>
+                <p className="mt-0.5 truncate font-heading text-lg font-bold" title={selected.title}>
+                  {selected.title}
+                </p>
+              </div>
 
               {/* Drip */}
               <p className="mb-2 flex items-center gap-1 text-sm font-bold">
@@ -532,6 +639,14 @@ export default function CourseBuilderPage() {
               <button className="btn-primary w-full" disabled={saveLesson.isPending} onClick={saveSettings}>
                 {savedFlash ? t('teacher.builder.saved') + ' ✓' : t('teacher.builder.saveChanges')}
               </button>
+              {/* Held in the browser until it is saved, so leaving this page for
+                  a quiz and coming back does not lose the work. */}
+              {!savedFlash && !saveLesson.isPending && (
+                <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[14px]">cloud_off</span>
+                  {t('teacher.builder.unsaved')}
+                </p>
+              )}
               <ErrorNote error={saveLesson.error} />
             </div>
           ) : (
@@ -543,5 +658,57 @@ export default function CourseBuilderPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * A name you edit where it sits.
+ *
+ * Adding used to mean filling a form before anything existed. Now the thing is
+ * created with a sensible name and this is how you change it if you want to —
+ * click, type, Enter. Escape puts it back.
+ */
+function InlineName({
+  value, editing, onEdit, onDone, className = '',
+}: {
+  value: string;
+  editing: boolean;
+  onEdit: () => void;
+  onDone: (title: string) => void;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value, editing]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+        title={value}
+        className={`min-w-0 truncate rounded-md px-1 text-start transition hover:bg-surface-container-high ${className}`}
+      >
+        {value}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      className={`min-w-0 flex-1 rounded-md border border-primary bg-surface-container-lowest px-1.5 py-0.5 outline-none ${className}`}
+      value={draft}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => onDone(draft.trim())}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') onDone(draft.trim());
+        if (e.key === 'Escape') onDone('');
+      }}
+    />
   );
 }

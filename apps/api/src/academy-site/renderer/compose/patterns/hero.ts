@@ -24,8 +24,8 @@ const HERO_BASE = `
 .hero{display:flex;align-items:center;min-height:var(--hero-h,80vh)}
 .hero .wrap{width:100%}
 .hero h1{margin-bottom:.5em}
-.hero .lead{color:var(--mut)}
-.hero-cue{position:absolute;bottom:22px;inset-inline-start:50%;transform:translateX(-50%);width:24px;height:38px;border:2px solid color-mix(in srgb,var(--ink) 26%,transparent);border-radius:999px;display:flex;justify-content:center;padding-top:7px}
+.hero .lead{color:var(--fg-mut)}
+.hero-cue{position:absolute;bottom:22px;inset-inline-start:50%;transform:translateX(-50%);width:24px;height:38px;border:2px solid color-mix(in srgb,var(--fg) 26%,transparent);border-radius:999px;display:flex;justify-content:center;padding-top:7px}
 .hero-cue span{width:3px;height:7px;border-radius:2px;background:var(--a);animation:cue 1.8s ease-in-out infinite}
 @keyframes cue{0%{opacity:0;transform:translateY(-4px)}40%{opacity:1}100%{opacity:0;transform:translateY(11px)}}
 .hero :is(.badge,h1,.lead,.actions){animation:hero-in .85s cubic-bezier(.2,.7,.2,1) both}
@@ -95,7 +95,7 @@ registerPattern({
 .hero-editorial .wrap{display:flex;flex-direction:column;align-items:flex-start;text-align:start}
 .hero-editorial h1{max-width:13ch;font-size:calc(var(--h1) * 1.12)}
 .hero-editorial .lead{max-width:52ch;margin-top:.4em}
-.hero-editorial .rule{width:min(100%,520px);height:1px;background:var(--line);margin:2em 0 0}`,
+.hero-editorial .rule{width:min(100%,520px);height:1px;background:var(--rule);margin:2em 0 0}`,
   render: (b, spec, ctx) => {
     const block = b as Hero;
     return `${sectionOpen('hero', spec, ctx, { extraClass: 'hero hero-editorial' })}
@@ -148,8 +148,8 @@ registerPattern({
   .hero-bento .b-copy{grid-column:span 2}
   .hero-bento .b-wide{grid-column:span 3}
 }
-.hero-bento .b-panel{background:var(--surface);border:var(--bw) solid var(--line);border-radius:var(--rad-l);padding:1.8em;display:flex;flex-direction:column;justify-content:space-between;gap:1em}
-.hero-bento .b-panel .k{font-family:var(--font-h);font-size:2.2rem;font-weight:var(--wh);color:var(--a-text);line-height:1}
+.hero-bento .b-panel{background:var(--panel);border:var(--bw) solid var(--rule);border-radius:var(--rad-l);padding:1.8em;display:flex;flex-direction:column;justify-content:space-between;gap:1em}
+.hero-bento .b-panel .k{font-family:var(--font-h);font-size:2.2rem;font-weight:var(--wh);color:var(--acc);line-height:1}
 .hero-bento .b-media .img{height:100%;min-height:200px;border-radius:var(--rad-l)}
 .hero-bento h1{max-width:14ch}`,
   render: (b, spec, ctx) => {

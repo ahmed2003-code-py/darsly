@@ -25,13 +25,13 @@ const CARD_CSS = `
 .course-card .img{border-radius:0}
 .course-card .course-body{padding:1.2em 1.3em 1.4em;display:flex;flex-direction:column;gap:.5em}
 .course-card h3{font-size:1.05rem}
-.course-card .price{font-family:var(--font-h);font-weight:700;color:var(--a-text)}
+.course-card .price{font-family:var(--font-h);font-weight:700;color:var(--acc)}
 .course-card:hover .img{transform:scale(1.04)}
 .course-card .img{transition:transform .5s cubic-bezier(.2,.7,.2,1)}
 .review-card{margin:0;display:flex;flex-direction:column;gap:.8em}
-.review-card .rating{color:var(--a-text);letter-spacing:.15em}
-.review-card blockquote{margin:0;color:var(--body)}
-.review-card figcaption{font-family:var(--font-h);font-weight:700;color:var(--ink);font-size:.95rem}`;
+.review-card .rating{color:var(--acc);letter-spacing:.15em}
+.review-card blockquote{margin:0;color:var(--fg-soft)}
+.review-card figcaption{font-family:var(--font-h);font-weight:700;color:var(--fg);font-size:.95rem}`;
 
 // ── Courses ──────────────────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ registerPattern({
   weight: { university: 1.3, math_science: 1.1 },
   css: () => `${CARD_CSS}
 .courses-list [data-slot]{display:flex;flex-direction:column}
-.courses-list .course-card{flex-direction:row;align-items:center;gap:1.2em;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;padding:1.2em 0}
+.courses-list .course-card{flex-direction:row;align-items:center;gap:1.2em;border:0;border-top:1px solid var(--rule);border-radius:0;background:transparent;padding:1.2em 0}
 .courses-list .course-card .img{width:110px;flex:0 0 110px;aspect-ratio:4/3;border-radius:var(--rad-s)}
 .courses-list .course-card .course-body{padding:0;flex:1;flex-direction:row;justify-content:space-between;align-items:center;gap:1em}
 .courses-list .skeleton{min-height:90px;margin-top:1px}`,
@@ -165,7 +165,7 @@ registerPattern({
   css: () => `${CARD_CSS}
 .reviews-spot [data-slot]{display:grid;gap:var(--gap);grid-template-columns:1fr}
 .reviews-spot .review-card{border:0;background:transparent;padding:0;text-align:center;align-items:center}
-.reviews-spot .review-card blockquote{font-family:var(--font-h);font-size:var(--h3);line-height:1.45;color:var(--ink);max-width:44ch;margin-inline:auto}
+.reviews-spot .review-card blockquote{font-family:var(--font-h);font-size:var(--h3);line-height:1.45;color:var(--fg);max-width:44ch;margin-inline:auto}
 .reviews-spot .review-card:not(:first-child){display:none}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'reviews'>;
@@ -257,7 +257,7 @@ function socialLinks(block: Of<'contact'>): string {
 const SOCIAL_CSS = `
 .socials{display:flex;flex-wrap:wrap;gap:12px}
 .center .socials{justify-content:center}
-.social{display:inline-flex;align-items:center;gap:.6em;border:1px solid color-mix(in srgb,var(--a) 40%,transparent);color:var(--a-text);border-radius:var(--pill);padding:.75em 1.4em;text-decoration:none;font-family:var(--font-h);font-weight:700;text-transform:capitalize;transition:.24s}
+.social{display:inline-flex;align-items:center;gap:.6em;border:1px solid color-mix(in srgb,var(--a) 40%,transparent);color:var(--acc);border-radius:var(--pill);padding:.75em 1.4em;text-decoration:none;font-family:var(--font-h);font-weight:700;text-transform:capitalize;transition:.24s}
 .social:hover{background:var(--a);color:var(--on-a);border-color:var(--a);transform:translateY(-3px)}
 .social-glyph{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:color-mix(in srgb,var(--a) 15%,transparent);font-size:.85rem;line-height:1}`;
 

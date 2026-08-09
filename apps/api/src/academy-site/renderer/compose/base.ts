@@ -10,7 +10,7 @@ export function baseCss(): string {
   return `
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--body);font-family:var(--font-b);line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--fg-soft);font-family:var(--font-b);line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
 :lang(ar){font-family:"Tajawal",var(--font-b)}
 img{max-width:100%;display:block}
 ::selection{background:var(--a);color:var(--on-a)}
@@ -28,34 +28,64 @@ img{max-width:100%;display:block}
 .block[data-emph=quiet]{--emph:.62}
 .block[data-emph=feature]{--emph:1.4}
 [data-rhythm=crescendo] .block{padding-block:calc(var(--pad) * var(--emph,1) * (1 + var(--i,0) * .045))}
-[data-rhythm=alternating] .block:nth-of-type(even):not([data-surface]){background:color-mix(in srgb,var(--surface) 55%,var(--bg))}
+[data-rhythm=alternating] .block[data-surface=page]:nth-of-type(even){background:color-mix(in srgb,var(--surface) 55%,var(--bg));--band:color-mix(in srgb,var(--surface) 55%,var(--bg))}
+
+/* ── Content roles ─────────────────────────────────────────────────────────
+   What a section's contents paint with, as roles rather than palette tokens.
+   Patterns must never reach for --ink, --line or --surface directly: on an
+   inverted band --ink IS the background, so ink-coloured text painted itself
+   out of existence, and a credentials list rendered as seven numbered rules
+   with nothing beside them. One indirection means a pattern written today is
+   still correct on a band invented tomorrow. */
+body{--band:var(--bg);--panel:var(--surface);--fg:var(--ink);--fg-soft:var(--body);--fg-mut:var(--mut);--rule:var(--line);--acc:var(--a-text)}
 
 /* ── Section surfaces ──────────────────────────────────────────────────────
    A page whose every band is the same colour reads as one long scroll. These
-   are how a composition gives it structure without changing the palette. */
-.block[data-surface=raised]{background:var(--surface)}
-.block[data-surface=accent]{background:linear-gradient(135deg,var(--p),var(--a));color:var(--on-p)}
-.block[data-surface=accent] :is(h1,h2,h3,p,.lead){color:var(--on-p)}
-.block[data-surface=accent] .eyebrow{color:color-mix(in srgb,var(--on-p) 80%,transparent)}
-.block[data-surface=inverted]{background:var(--ink);color:var(--bg)}
-.block[data-surface=inverted] :is(h1,h2,h3){color:var(--bg)}
-.block[data-surface=inverted] :is(p,.lead){color:color-mix(in srgb,var(--bg) 82%,var(--ink))}
-.block[data-surface=inverted] .card{background:color-mix(in srgb,var(--bg) 10%,var(--ink));border-color:color-mix(in srgb,var(--bg) 22%,var(--ink))}
-.block[data-surface=inverted] .eyebrow{color:color-mix(in srgb,var(--bg) 78%,var(--ink))}
+   are how a composition gives it structure without changing the palette — and
+   each one restates every role, so nothing inside has to know which band it
+   landed on. */
+.block[data-surface=raised]{background:var(--surface);--band:var(--surface);--panel:var(--bg);--acc:var(--a-surface)}
+.block[data-surface=inverted]{
+  background:var(--ink);color:var(--bg);
+  --band:var(--ink);
+  --panel:color-mix(in srgb,var(--bg) 10%,var(--ink));
+  --fg:var(--bg);
+  --fg-soft:color-mix(in srgb,var(--bg) 84%,var(--ink));
+  --fg-mut:color-mix(in srgb,var(--bg) 60%,var(--ink));
+  --rule:color-mix(in srgb,var(--bg) 24%,var(--ink));
+  --acc:color-mix(in srgb,var(--a) 72%,var(--bg));
+}
+.block[data-surface=accent]{
+  background:linear-gradient(135deg,var(--p),var(--a));color:var(--on-p);
+  --band:var(--p);
+  --panel:color-mix(in srgb,var(--on-p) 12%,transparent);
+  --fg:var(--on-p);
+  --fg-soft:color-mix(in srgb,var(--on-p) 88%,transparent);
+  --fg-mut:color-mix(in srgb,var(--on-p) 72%,transparent);
+  --rule:color-mix(in srgb,var(--on-p) 30%,transparent);
+  --acc:var(--on-p);
+}
+/* A photograph decides its own contrast, so this band is always light-on-dark
+   under the scrim the pattern paints. */
+.block[data-surface=image]{
+  color:#fff;--band:#0b0b12;--panel:rgba(255,255,255,.10);--fg:#fff;
+  --fg-soft:rgba(255,255,255,.88);--fg-mut:rgba(255,255,255,.72);
+  --rule:rgba(255,255,255,.28);--acc:#fff;
+}
 
 /* ── Type ──────────────────────────────────────────────────────────────────
    Headings take the design's family, weight, tracking and case in one place, so
    a monumental condensed uppercase page and a restrained serif one are the same
    markup. */
-h1,h2,h3,.h-face{font-family:var(--font-h);font-weight:var(--wh);letter-spacing:var(--tr);text-transform:var(--case);color:var(--ink);margin:0;text-wrap:balance}
+h1,h2,h3,.h-face{font-family:var(--font-h);font-weight:var(--wh);letter-spacing:var(--tr);text-transform:var(--case);color:var(--fg);margin:0;text-wrap:balance}
 h1{font-size:var(--h1);line-height:1.02}
 h2{font-size:var(--h2);line-height:1.1;margin-bottom:.6em}
 h3{font-size:var(--h3);line-height:1.25}
 p{margin:0 0 1em;max-width:var(--measure)}
 p:last-child{margin-bottom:0}
-.lead{font-size:var(--lead);line-height:1.55;color:var(--body)}
-.mut{color:var(--mut)}
-.eyebrow{display:flex;align-items:center;gap:.6em;font-family:var(--font-h);font-size:.76rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--a-text);margin:0 0 1em}
+.lead{font-size:var(--lead);line-height:1.55;color:var(--fg-soft)}
+.mut{color:var(--fg-mut)}
+.eyebrow{display:flex;align-items:center;gap:.6em;font-family:var(--font-h);font-size:.76rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--acc);margin:0 0 1em}
 .center{text-align:center}
 .center .eyebrow,.center .actions{justify-content:center}
 .center p,.center .lead{margin-inline:auto}
@@ -75,25 +105,25 @@ p:last-child{margin-bottom:0}
 .btn:hover .btn-arrow{transform:translateX(4px)}
 [dir=rtl] .btn-arrow{transform:scaleX(-1)}
 [dir=rtl] .btn:hover .btn-arrow{transform:scaleX(-1) translateX(4px)}
-.btn-ghost{background:transparent;color:var(--a-text);border-color:color-mix(in srgb,var(--a) 45%,transparent);box-shadow:none}
+.btn-ghost{background:transparent;color:var(--acc);border-color:color-mix(in srgb,var(--a) 45%,transparent);box-shadow:none}
 .btn-ghost:hover{background:color-mix(in srgb,var(--a) 12%,transparent);box-shadow:none}
 .block[data-surface=accent] .btn{background:var(--bg);color:var(--p-text)}
 .block[data-surface=accent] .btn-ghost{background:transparent;color:var(--on-p);border-color:color-mix(in srgb,var(--on-p) 55%,transparent)}
 
-.badge{display:inline-flex;align-items:center;gap:.55em;padding:.5em 1.1em;border-radius:var(--pill);font-family:var(--font-h);font-size:.82rem;font-weight:700;color:var(--a-text);background:color-mix(in srgb,var(--a) 10%,transparent);border:1px solid color-mix(in srgb,var(--a) 28%,transparent)}
+.badge{display:inline-flex;align-items:center;gap:.55em;padding:.5em 1.1em;border-radius:var(--pill);font-family:var(--font-h);font-size:.82rem;font-weight:700;color:var(--acc);background:color-mix(in srgb,var(--a) 10%,transparent);border:1px solid color-mix(in srgb,var(--a) 28%,transparent)}
 .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--a);animation:pulse 2.4s ease-out infinite}
 @keyframes pulse{70%{box-shadow:0 0 0 10px rgba(var(--ar),0)}100%{box-shadow:0 0 0 0 rgba(var(--ar),0)}}
 
 /* ── Surfaces ──────────────────────────────────────────────────────────────*/
-.card{background:var(--surface);border:var(--bw) solid var(--line);border-radius:var(--rad);padding:1.6em;transition:transform .26s cubic-bezier(.2,.7,.2,1),box-shadow .26s,border-color .26s}
-.card.lift:hover{transform:translateY(-5px);box-shadow:var(--sh2);border-color:color-mix(in srgb,var(--a) 50%,var(--line))}
+.card{background:var(--panel);border:var(--bw) solid var(--rule);border-radius:var(--rad);padding:1.6em;transition:transform .26s cubic-bezier(.2,.7,.2,1),box-shadow .26s,border-color .26s}
+.card.lift:hover{transform:translateY(-5px);box-shadow:var(--sh2);border-color:color-mix(in srgb,var(--a) 50%,var(--rule))}
 [data-radius=cut-corner] .card{border-radius:0;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
 [data-radius=mixed] .card:nth-child(odd){border-start-end-radius:calc(var(--rad) * 3)}
 [data-radius=mixed] .card:nth-child(even){border-end-start-radius:calc(var(--rad) * 3)}
 [data-shadow=brutal] .card{box-shadow:var(--sh1)}
 [data-border=none] .card{border-color:transparent}
 
-.tag{display:inline-flex;align-items:center;padding:.6em 1.2em;border-radius:var(--pill);border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:var(--font-h);font-weight:600;font-size:.95rem;transition:.2s}
+.tag{display:inline-flex;align-items:center;padding:.6em 1.2em;border-radius:var(--pill);border:1px solid var(--rule);background:var(--panel);color:var(--fg);font-family:var(--font-h);font-weight:600;font-size:.95rem;transition:.2s}
 .tag:hover{background:var(--p);border-color:var(--p);color:var(--on-p);transform:translateY(-3px)}
 
 /* ── Grids ─────────────────────────────────────────────────────────────────
@@ -117,23 +147,23 @@ p:last-child{margin-bottom:0}
 .img[data-ratio="16:9"]{aspect-ratio:16/9}
 
 /* ── Loading placeholders ──────────────────────────────────────────────────*/
-.skeleton{background:linear-gradient(90deg,var(--surface),color-mix(in srgb,var(--surface) 55%,var(--bg)),var(--surface));background-size:200% 100%;animation:sk 1.3s infinite;border-radius:var(--rad);min-height:180px}
+.skeleton{background:linear-gradient(90deg,var(--panel),color-mix(in srgb,var(--panel) 55%,var(--bg)),var(--panel));background-size:200% 100%;animation:sk 1.3s infinite;border-radius:var(--rad);min-height:180px}
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* ── Chrome ────────────────────────────────────────────────────────────────*/
 .topbar{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:saturate(180%) blur(14px);border-bottom:1px solid transparent;transition:border-color .3s,box-shadow .3s}
-.topbar.stuck{border-bottom-color:var(--line);box-shadow:0 10px 30px -26px rgba(var(--inkr),.6)}
+.topbar.stuck{border-bottom-color:var(--rule);box-shadow:0 10px 30px -26px rgba(var(--inkr),.6)}
 .topbar .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;height:74px;transition:height .3s}
 .topbar.stuck .wrap{height:60px}
-.brand{display:flex;align-items:center;gap:12px;font-family:var(--font-h);font-weight:var(--wh);letter-spacing:var(--tr);font-size:1.1rem;color:var(--ink);text-decoration:none}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--font-h);font-weight:var(--wh);letter-spacing:var(--tr);font-size:1.1rem;color:var(--fg);text-decoration:none}
 .logo{width:38px;height:38px;border-radius:var(--rad-s);object-fit:cover;transition:.3s}
 .topnav{display:flex;align-items:center;gap:10px}
-.lang-toggle{font-family:var(--font-h);font-weight:700;cursor:pointer;border:1px solid color-mix(in srgb,var(--a) 40%,transparent);color:var(--a-text);background:transparent;border-radius:var(--pill);padding:.5em 1.1em;transition:.2s}
+.lang-toggle{font-family:var(--font-h);font-weight:700;cursor:pointer;border:1px solid color-mix(in srgb,var(--a) 40%,transparent);color:var(--acc);background:transparent;border-radius:var(--pill);padding:.5em 1.1em;transition:.2s}
 .lang-toggle:hover{background:var(--a);color:var(--on-a)}
 .nav-cta{display:inline-flex;align-items:center;background:var(--p);color:var(--on-p);border-radius:var(--pill);padding:.6em 1.3em;font-family:var(--font-h);font-weight:700;text-decoration:none;transition:.2s}
 .nav-cta:hover{filter:brightness(1.08)}
 @media(max-width:640px){.nav-cta{display:none}}
-.site-footer{padding:3em 0;color:var(--mut);border-top:1px solid var(--line);text-align:center;font-size:.95rem}
+.site-footer{padding:3em 0;color:var(--fg-mut);border-top:1px solid var(--rule);text-align:center;font-size:.95rem}
 
 /* ── Entrance ──────────────────────────────────────────────────────────────
    One mechanism, five personalities. The class is added by script, so a page

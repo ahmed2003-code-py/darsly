@@ -47,7 +47,7 @@ registerPattern({
   weight: { university: 1.3, languages: 1.2 },
   css: () => `.about-statement .wrap{max-width:min(var(--w,var(--wrap)),860px);text-align:center}
 .about-statement .eyebrow{justify-content:center}
-.about-statement .say{font-family:var(--font-h);font-weight:calc(var(--wh) - 100);font-size:var(--h3);line-height:1.5;color:var(--ink);white-space:pre-line;max-width:none}`,
+.about-statement .say{font-family:var(--font-h);font-weight:calc(var(--wh) - 100);font-size:var(--h3);line-height:1.5;color:var(--fg);white-space:pre-line;max-width:none}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'about'>;
     return `${sectionOpen('about', spec, ctx, { extraClass: 'about about-statement' })}
@@ -104,13 +104,13 @@ registerPattern({
   needs: { items: 4 },
   base: 1.1,
   weight: { programming: 1.6, math_science: 1.3, exam_prep: 1.15 },
-  css: () => `.matrix{display:grid;gap:1px;background:var(--line);border:var(--bw) solid var(--line);border-radius:var(--rad);overflow:hidden;grid-template-columns:1fr}
+  css: () => `.matrix{display:grid;gap:1px;background:var(--rule);border:var(--bw) solid var(--rule);border-radius:var(--rad);overflow:hidden;grid-template-columns:1fr}
 @media(min-width:620px){.matrix{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:960px){.matrix{grid-template-columns:repeat(var(--cols,3),1fr)}}
-.matrix .cell{background:var(--bg);padding:1.5em 1.4em;display:flex;gap:1em;align-items:baseline;transition:background .25s}
-.matrix .cell:hover{background:var(--surface)}
-.matrix .n{font-family:var(--font-h);font-size:.85rem;font-weight:700;color:var(--a-text);font-variant-numeric:tabular-nums}
-.matrix .t{font-family:var(--font-h);font-weight:600;color:var(--ink)}`,
+.matrix .cell{background:var(--band);padding:1.5em 1.4em;display:flex;gap:1em;align-items:baseline;transition:background .25s}
+.matrix .cell:hover{background:var(--panel)}
+.matrix .n{font-family:var(--font-h);font-size:.85rem;font-weight:700;color:var(--acc);font-variant-numeric:tabular-nums}
+.matrix .t{font-family:var(--font-h);font-weight:600;color:var(--fg)}`,
   render: (b, spec, ctx) => {
     const items = toolkitItems(b);
     if (!items.length) return '';
@@ -157,8 +157,8 @@ registerPattern({
   brief: 'A numbered editorial list separated by hairlines. Quiet authority.',
   base: 1,
   css: () => `.record{list-style:none;margin:0;padding:0;counter-reset:rec;max-width:min(100%,920px)}
-.record li{counter-increment:rec;display:grid;grid-template-columns:auto 1fr;gap:1.4em;align-items:baseline;padding:1.3em 0;border-top:1px solid var(--line);font-size:1.1rem;font-weight:600;color:var(--ink)}
-.record li::before{content:counter(rec,decimal-leading-zero);font-family:var(--font-h);font-size:1.1rem;color:var(--a-text);font-variant-numeric:tabular-nums}`,
+.record li{counter-increment:rec;display:grid;grid-template-columns:auto 1fr;gap:1.4em;align-items:baseline;padding:1.3em 0;border-top:1px solid var(--rule);font-size:1.1rem;font-weight:600;color:var(--fg)}
+.record li::before{content:counter(rec,decimal-leading-zero);font-family:var(--font-h);font-size:1.1rem;color:var(--acc);font-variant-numeric:tabular-nums}`,
   render: (b, spec, ctx) => {
     const items = credentialItems(b);
     if (!items.length) return '';
@@ -179,8 +179,8 @@ registerPattern({
   css: () => `.cred-grid{display:grid;gap:var(--gap);counter-reset:crd;grid-template-columns:1fr}
 @media(min-width:620px){.cred-grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1000px){.cred-grid{grid-template-columns:repeat(var(--cols,3),1fr)}}
-.cred-card{counter-increment:crd;font-weight:600;color:var(--ink)}
-.cred-card::before{content:counter(crd,decimal-leading-zero);display:block;font-family:var(--font-h);font-size:1.1rem;color:var(--a-text);margin-bottom:.6em;font-variant-numeric:tabular-nums}`,
+.cred-card{counter-increment:crd;font-weight:600;color:var(--fg)}
+.cred-card::before{content:counter(crd,decimal-leading-zero);display:block;font-family:var(--font-h);font-size:1.1rem;color:var(--acc);margin-bottom:.6em;font-variant-numeric:tabular-nums}`,
   render: (b, spec, ctx) => {
     const items = credentialItems(b);
     if (!items.length) return '';
@@ -201,8 +201,8 @@ registerPattern({
   weight: { exam_prep: 1.3, university: 1.2 },
   css: () => `.cred-wall{display:grid;gap:0;grid-template-columns:1fr}
 @media(min-width:760px){.cred-wall{grid-template-columns:repeat(2,1fr)}}
-.cred-wall span{padding:1.15em 1.2em;border-top:1px solid var(--line);font-weight:600;color:var(--ink)}
-@media(min-width:760px){.cred-wall span:nth-child(odd){border-inline-end:1px solid var(--line)}}`,
+.cred-wall span{padding:1.15em 1.2em;border-top:1px solid var(--rule);font-weight:600;color:var(--fg)}
+@media(min-width:760px){.cred-wall span:nth-child(odd){border-inline-end:1px solid var(--rule)}}`,
   render: (b, spec, ctx) => {
     const items = credentialItems(b);
     if (!items.length) return '';
@@ -224,8 +224,8 @@ registerPattern({
   js: ['counters'],
   css: () => `.stat-grid{display:grid;gap:var(--gap);grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .stat{text-align:center;padding:1.6em 1em}
-.stat .v{display:block;font-family:var(--font-h);font-size:2.6rem;font-weight:var(--wh);color:var(--a-text);line-height:1;font-variant-numeric:tabular-nums}
-.stat .l{display:block;margin-top:.5em;color:var(--mut);font-weight:600;font-size:.95rem}`,
+.stat .v{display:block;font-family:var(--font-h);font-size:2.6rem;font-weight:var(--wh);color:var(--acc);line-height:1;font-variant-numeric:tabular-nums}
+.stat .l{display:block;margin-top:.5em;color:var(--fg-mut);font-weight:600;font-size:.95rem}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'stats'>;
     if (!block.items.length) return '';
@@ -248,7 +248,7 @@ registerPattern({
   css: () => `.stats-big .stat-grid{display:grid;gap:var(--gap);grid-template-columns:1fr}
 @media(min-width:700px){.stats-big .stat-grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}}
 .stats-big .stat{text-align:start;padding:0;border-top:2px solid var(--a);padding-top:1em}
-.stats-big .stat .v{font-size:clamp(3rem,7vw,5rem);color:var(--ink)}
+.stats-big .stat .v{font-size:clamp(3rem,7vw,5rem);color:var(--fg)}
 .stats-big .stat .l{text-transform:uppercase;letter-spacing:.12em;font-size:.78rem}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'stats'>;
@@ -268,10 +268,10 @@ registerPattern({
   brief: 'A single quiet line of figures. Use as punctuation between two heavier sections.',
   base: .9,
   js: ['counters'],
-  css: () => `.stats-strip .stat-row{display:flex;flex-wrap:wrap;gap:2.4em;align-items:baseline;justify-content:space-between;border-block:1px solid var(--line);padding-block:1.4em}
+  css: () => `.stats-strip .stat-row{display:flex;flex-wrap:wrap;gap:2.4em;align-items:baseline;justify-content:space-between;border-block:1px solid var(--rule);padding-block:1.4em}
 .stats-strip .stat{display:flex;align-items:baseline;gap:.6em;padding:0}
-.stats-strip .v{font-family:var(--font-h);font-weight:var(--wh);font-size:1.9rem;color:var(--a-text);font-variant-numeric:tabular-nums}
-.stats-strip .l{color:var(--mut);font-weight:600}`,
+.stats-strip .v{font-family:var(--font-h);font-weight:var(--wh);font-size:1.9rem;color:var(--acc);font-variant-numeric:tabular-nums}
+.stats-strip .l{color:var(--fg-mut);font-weight:600}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'stats'>;
     if (!block.items.length) return '';
@@ -292,12 +292,12 @@ registerPattern({
   brief: 'A vertical rail with markers. Turns a list of achievements into a career.',
   base: 1,
   css: () => `.tl{list-style:none;margin:0;padding:0;position:relative}
-.tl::before{content:"";position:absolute;inset-block:.6em;inset-inline-start:7px;width:1px;background:var(--line)}
+.tl::before{content:"";position:absolute;inset-block:.6em;inset-inline-start:7px;width:1px;background:var(--rule)}
 .tl li{position:relative;padding-inline-start:2.6em;padding-block:0 1.8em}
-.tl li::before{content:"";position:absolute;inset-inline-start:0;top:.45em;width:15px;height:15px;border-radius:50%;background:var(--bg);border:2px solid var(--a)}
-.tl .m{font-family:var(--font-h);font-size:.82rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--a-text)}
+.tl li::before{content:"";position:absolute;inset-inline-start:0;top:.45em;width:15px;height:15px;border-radius:50%;background:var(--band);border:2px solid var(--a)}
+.tl .m{font-family:var(--font-h);font-size:.82rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc)}
 .tl h3{margin:.2em 0 .35em}
-.tl p{color:var(--mut);margin:0}`,
+.tl p{color:var(--fg-mut);margin:0}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'timeline'>;
     if (!block.items.length) return '';
@@ -319,9 +319,9 @@ registerPattern({
   css: () => `.tl-cols{list-style:none;margin:0;padding:0;display:grid;gap:var(--gap);grid-template-columns:1fr}
 @media(min-width:760px){.tl-cols{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}
 .tl-cols li{border-top:2px solid var(--a);padding-top:1.1em}
-.tl-cols .m{font-family:var(--font-h);font-size:2rem;font-weight:var(--wh);color:var(--a-text);line-height:1}
+.tl-cols .m{font-family:var(--font-h);font-size:2rem;font-weight:var(--wh);color:var(--acc);line-height:1}
 .tl-cols h3{margin:.4em 0 .3em}
-.tl-cols p{color:var(--mut);margin:0;font-size:.98rem}`,
+.tl-cols p{color:var(--fg-mut);margin:0;font-size:.98rem}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'timeline'>;
     if (!block.items.length) return '';
@@ -345,7 +345,7 @@ registerPattern({
 .steps li{counter-increment:st;position:relative;padding-top:2.6em}
 .steps li::before{content:counter(st);position:absolute;top:0;inset-inline-start:0;width:2em;height:2em;display:grid;place-items:center;border-radius:var(--pill);background:var(--a);color:var(--on-a);font-family:var(--font-h);font-weight:700}
 .steps h3{margin-bottom:.35em}
-.steps p{color:var(--mut);margin:0}`,
+.steps p{color:var(--fg-mut);margin:0}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'process'>;
     if (!block.steps.length) return '';
@@ -364,11 +364,11 @@ registerPattern({
   weight: { programming: 1.3, exam_prep: 1.2 },
   css: () => `.rail{list-style:none;margin:0;padding:0;counter-reset:st;display:grid;gap:0;grid-template-columns:1fr}
 @media(min-width:860px){.rail{grid-auto-flow:column;grid-auto-columns:1fr}}
-.rail li{counter-increment:st;position:relative;padding:1.6em 1.4em;border:var(--bw) solid var(--line);margin:-1px 0 0 -1px}
+.rail li{counter-increment:st;position:relative;padding:1.6em 1.4em;border:var(--bw) solid var(--rule);margin:-1px 0 0 -1px}
 @media(min-width:860px){.rail li{margin:0 0 0 -1px}}
-.rail li::before{content:counter(st,decimal-leading-zero);font-family:var(--font-h);font-size:.82rem;font-weight:700;color:var(--a-text);display:block;margin-bottom:.7em}
+.rail li::before{content:counter(st,decimal-leading-zero);font-family:var(--font-h);font-size:.82rem;font-weight:700;color:var(--acc);display:block;margin-bottom:.7em}
 .rail h3{margin-bottom:.35em}
-.rail p{color:var(--mut);margin:0;font-size:.97rem}`,
+.rail p{color:var(--fg-mut);margin:0;font-size:.97rem}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'process'>;
     if (!block.steps.length) return '';
@@ -386,9 +386,9 @@ registerPattern({
   brief: 'One sentence set large, alone on the page. The cheapest way to give a long page a moment of quiet.',
   base: 1,
   css: () => `.quote-block .wrap{max-width:min(var(--w,var(--wrap)),840px);text-align:center}
-.quote-block blockquote{margin:0;font-family:var(--font-h);font-weight:calc(var(--wh) - 100);font-size:var(--h2);line-height:1.35;letter-spacing:var(--tr);color:var(--ink)}
-.quote-block figcaption{margin-top:1.4em;color:var(--mut);font-weight:600;letter-spacing:.06em}
-.quote-block .mark{font-family:var(--font-h);font-size:3.5rem;line-height:.6;color:var(--a-text);opacity:.5;display:block;margin-bottom:.2em}`,
+.quote-block blockquote{margin:0;font-family:var(--font-h);font-weight:calc(var(--wh) - 100);font-size:var(--h2);line-height:1.35;letter-spacing:var(--tr);color:var(--fg)}
+.quote-block figcaption{margin-top:1.4em;color:var(--fg-mut);font-weight:600;letter-spacing:.06em}
+.quote-block .mark{font-family:var(--font-h);font-size:3.5rem;line-height:.6;color:var(--acc);opacity:.5;display:block;margin-bottom:.2em}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'quote'>;
     return `${sectionOpen('quote', spec, ctx, { extraClass: 'quote-block' })}
@@ -400,13 +400,13 @@ registerPattern({
 
 // ── FAQ ──────────────────────────────────────────────────────────────────────
 
-const FAQ_BASE = `.faq-item{border:var(--bw) solid var(--line);border-radius:var(--rad);background:var(--surface);margin-bottom:12px;transition:border-color .2s}
-.faq-item[open]{border-color:color-mix(in srgb,var(--a) 50%,var(--line))}
-.faq-item summary{cursor:pointer;list-style:none;padding:1.1em 1.3em;font-family:var(--font-h);font-weight:600;font-size:1.03rem;color:var(--ink);position:relative;padding-inline-end:2.6em}
+const FAQ_BASE = `.faq-item{border:var(--bw) solid var(--rule);border-radius:var(--rad);background:var(--panel);margin-bottom:12px;transition:border-color .2s}
+.faq-item[open]{border-color:color-mix(in srgb,var(--a) 50%,var(--rule))}
+.faq-item summary{cursor:pointer;list-style:none;padding:1.1em 1.3em;font-family:var(--font-h);font-weight:600;font-size:1.03rem;color:var(--fg);position:relative;padding-inline-end:2.6em}
 .faq-item summary::-webkit-details-marker{display:none}
-.faq-item summary::after{content:"+";position:absolute;inset-inline-end:1.1em;top:50%;transform:translateY(-50%);font-size:1.4rem;color:var(--a-text);transition:transform .2s}
+.faq-item summary::after{content:"+";position:absolute;inset-inline-end:1.1em;top:50%;transform:translateY(-50%);font-size:1.4rem;color:var(--acc);transition:transform .2s}
 .faq-item[open] summary::after{transform:translateY(-50%) rotate(45deg)}
-.faq-item .a{padding:0 1.3em 1.2em;color:var(--body)}`;
+.faq-item .a{padding:0 1.3em 1.2em;color:var(--fg-soft)}`;
 
 registerPattern({
   id: 'faq.accordion',
@@ -453,9 +453,9 @@ registerPattern({
   brief: 'Questions and answers open, with no accordion. Honest and fast to read when there are only a few.',
   base: .95,
   css: () => `.faq-plain dl{margin:0;max-width:min(100%,860px)}
-.faq-plain dt{font-family:var(--font-h);font-weight:600;font-size:1.05rem;color:var(--ink);padding-top:1.3em;border-top:1px solid var(--line);margin-top:1.3em}
+.faq-plain dt{font-family:var(--font-h);font-weight:600;font-size:1.05rem;color:var(--fg);padding-top:1.3em;border-top:1px solid var(--rule);margin-top:1.3em}
 .faq-plain dt:first-of-type{border-top:0;margin-top:0;padding-top:0}
-.faq-plain dd{margin:.5em 0 0;color:var(--body)}`,
+.faq-plain dd{margin:.5em 0 0;color:var(--fg-soft)}`,
   render: (b, spec, ctx) => {
     const block = b as Of<'faq'>;
     if (!block.items.length) return '';

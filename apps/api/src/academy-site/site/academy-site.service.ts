@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { AcademySite, AcademySiteSnapshot } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
+import { brandTokensFromTheme } from '../../branding/app-theme';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AcademySiteConfig } from '../academy-site.config';
 import { ContentProfile } from '../pipeline/content-profile';
@@ -470,12 +471,17 @@ export class AcademySiteService {
     // look they approved to the academy's brand, so the console and every other
     // surface stop wearing the generic platform palette and start wearing theirs.
     // Only on publish — a preview they never accepted must not repaint the app.
+    //
+    // Read through a normaliser rather than off `theme.design`: that field is the
+    // older three-colour block, so every site composed by the v3 pipeline — which
+    // keeps its colour in `designSpec.palette` — was recording nothing here and
+    // publishing left the console on the platform palette.
     await this.prisma.academy.update({
       where: { id: academyId },
       data: {
         colorPrimary: doc.theme.primary,
         colorAccent: doc.theme.accent,
-        brandTokens: (doc.theme.design ?? null) as never,
+        brandTokens: brandTokensFromTheme(doc.theme) as never,
       },
     });
 

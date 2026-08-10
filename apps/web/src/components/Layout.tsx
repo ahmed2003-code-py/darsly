@@ -69,9 +69,12 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col">
       {/* Brand block — flat accent tile, editorial wordmark, start-aligned */}
       <div className="flex items-center gap-3 px-5 py-6">
-        {/* The real mark, not a stock glyph — and the same file the browser
-            tab uses, so the two can never drift apart. */}
-        <img src="/icon.svg" alt="" width={44} height={44} className="h-11 w-11 shrink-0 rounded-xl" />
+        {/* The real mark, not a stock glyph — and the same artwork the browser
+            tab uses, so the two can never drift apart. Drawn as a themed tile
+            rather than a fixed image: once a teacher publishes their academy,
+            an indigo square would be the one thing on screen still wearing the
+            platform's colours. */}
+        <span className="brand-tile h-11 w-11" aria-hidden />
         <div className="min-w-0">
           <h1 className="font-heading text-xl font-bold tracking-tight text-on-surface">{t('brand')}</h1>
           <p className="text-xs text-on-surface-variant">{roleLabel}</p>

@@ -6,6 +6,12 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './i18n';
 import './index.css';
+import { bootTheme } from './lib/theme';
+
+// Replay the academy's colours before the first paint. Waiting for React and a
+// query to resolve would show the platform indigo first and then swap it, which
+// reads as the app loading someone else's brand.
+bootTheme();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },

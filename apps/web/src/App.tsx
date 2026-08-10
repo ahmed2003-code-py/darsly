@@ -1,6 +1,7 @@
 import { lazy, ReactNode, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
+import BrandTheme from './components/BrandTheme';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { Spinner } from './components/ui';
@@ -76,6 +77,9 @@ function HomeRedirect() {
 export default function App() {
   return (
     <ErrorBoundary>
+    {/* Above the router on purpose: the academy's colours belong to the whole
+        app, not to one branch of it, and switching route must not repaint. */}
+    <BrandTheme />
     <Suspense fallback={<div className="grid min-h-screen place-items-center"><Spinner /></div>}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />

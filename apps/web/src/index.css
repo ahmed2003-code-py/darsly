@@ -3,6 +3,93 @@
 @tailwind utilities;
 
 @layer base {
+  /**
+   * The platform palette, and the only place these literals live.
+   *
+   * Tailwind's colour tokens all resolve through these variables, so a teacher
+   * who publishes an academy can have the API's derived token set written onto
+   * this element and every utility class in the app follows — buttons, panels,
+   * hairlines, shadows. Nothing else has to know a theme exists.
+   *
+   * Values are "R G B" triples rather than hex because `rgb(... / <alpha>)` is
+   * what keeps opacity modifiers such as `bg-primary/50` working.
+   */
+  :root {
+    --c-accent-50: 239 237 251;
+    --c-accent-100: 222 217 246;
+    --c-accent-200: 191 182 238;
+    --c-accent-300: 156 143 226;
+    --c-accent-400: 120 99 212;
+    --c-accent-500: 90 68 203;
+    --c-accent-600: 74 50 201;
+    --c-accent-700: 60 40 159;
+    --c-accent-800: 46 31 121;
+    --c-accent-900: 34 23 89;
+
+    --c-primary: 74 50 201;
+    --c-on-primary: 255 255 255;
+    --c-primary-container: 90 68 203;
+    --c-on-primary-container: 255 255 255;
+    --c-inverse-primary: 156 143 226;
+    --c-primary-hover: 60 40 159;
+    --c-primary-fixed: 235 232 250;
+    --c-primary-fixed-dim: 215 209 244;
+    --c-on-primary-fixed: 34 23 89;
+    --c-on-primary-fixed-variant: 60 40 159;
+
+    --c-secondary: 63 62 71;
+    --c-on-secondary: 255 255 255;
+    --c-secondary-container: 235 232 250;
+    --c-on-secondary-container: 60 40 159;
+    --c-secondary-fixed: 235 232 250;
+    --c-secondary-fixed-dim: 215 209 244;
+    --c-on-secondary-fixed: 34 23 89;
+    --c-on-secondary-fixed-variant: 60 40 159;
+
+    --c-tertiary: 74 74 82;
+    --c-on-tertiary: 255 255 255;
+    --c-tertiary-container: 231 230 224;
+    --c-on-tertiary-container: 63 62 71;
+
+    --c-error: 187 59 46;
+    --c-on-error: 255 255 255;
+    --c-error-container: 246 225 222;
+    --c-on-error-container: 122 36 28;
+
+    --c-surface: 247 247 244;
+    --c-surface-dim: 236 235 230;
+    --c-surface-bright: 253 253 251;
+    --c-surface-container-lowest: 253 253 251;
+    --c-surface-container-low: 242 241 236;
+    --c-surface-container: 236 235 230;
+    --c-surface-container-high: 230 229 222;
+    --c-surface-container-highest: 223 222 214;
+    --c-surface-variant: 236 235 230;
+    --c-surface-tint: 74 50 201;
+    --c-on-surface: 27 27 34;
+    --c-on-surface-variant: 87 86 95;
+    --c-inverse-surface: 38 38 46;
+    --c-inverse-on-surface: 244 243 239;
+
+    --c-outline: 135 134 143;
+    /* Hairlines and shadows are drawn as an alpha of these. */
+    --c-line: 24 24 34;
+    --c-shadow: 24 24 34;
+
+    --c-background: 247 247 244;
+    --c-on-background: 27 27 34;
+
+    --c-brand-accent: 74 50 201;
+    --c-on-brand-accent: 255 255 255;
+  }
+
+  /* The handful of effects that are not a flat colour and so cannot ride on a
+     token. `data-theme` is set by the theme provider from the derived mode. */
+  :root[data-theme='dark'] {
+    --shimmer-alpha: 0.08;
+    color-scheme: dark;
+  }
+
   html {
     @apply bg-background text-on-background;
     scroll-behavior: smooth;
@@ -10,8 +97,10 @@
   }
   body {
     @apply font-body antialiased;
-    /* Flat warm paper — no gradient washes. Depth comes from hairlines. */
-    background-color: theme('colors.background');
+    /* Flat warm paper — no gradient washes. Depth comes from hairlines.
+       Read straight from the variable: `theme()` would inline the token
+       verbatim, `<alpha-value>` placeholder and all, which is not valid CSS. */
+    background-color: rgb(var(--c-background));
   }
   /* Subtle film grain to kill the flat "digital" surface. Fixed, non-blocking. */
   body::before {
@@ -37,20 +126,21 @@
     line-height: 1.6;
   }
   ::selection {
-    background: theme('colors.accent.200');
-    color: theme('colors.accent.900');
+    background: rgb(var(--c-accent-200));
+    color: rgb(var(--c-accent-900));
   }
   :focus-visible {
     outline: none;
   }
-  /* Slim neutral scrollbars. */
+  /* Slim neutral scrollbars. Drawn from the ink, so on a dark academy palette
+     they come back as light thumbs instead of disappearing into the page. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(24, 24, 34, 0.18) transparent;
+    scrollbar-color: rgb(var(--c-line) / 0.18) transparent;
   }
   *::-webkit-scrollbar { width: 8px; height: 8px; }
-  *::-webkit-scrollbar-thumb { background: rgba(24, 24, 34, 0.16); border-radius: 999px; }
-  *::-webkit-scrollbar-thumb:hover { background: rgba(24, 24, 34, 0.28); }
+  *::-webkit-scrollbar-thumb { background: rgb(var(--c-line) / 0.16); border-radius: 999px; }
+  *::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-line) / 0.28); }
 }
 
 @layer components {
@@ -63,10 +153,29 @@
     font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem);
   }
 
+  /* ── Brand mark ───────────────────────────────────────────────────────────
+     The tile takes its colour from the theme, so under an academy palette the
+     logo is that academy's colour rather than an indigo square sitting in
+     someone else's brand. The mark is painted as a mask rather than an <img>,
+     because an image cannot inherit a colour and would need one exported file
+     per theme. */
+  .brand-tile {
+    @apply grid shrink-0 place-items-center rounded-xl bg-primary;
+  }
+  .brand-tile::before {
+    content: '';
+    display: block;
+    width: 62%;
+    height: 62%;
+    background-color: rgb(var(--c-on-primary));
+    -webkit-mask: url('/mark.svg') center / contain no-repeat;
+    mask: url('/mark.svg') center / contain no-repeat;
+  }
+
   /* ── Buttons — flat single accent, hairline structure ─────────────────── */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-on-primary transition-[background-color,transform,box-shadow] duration-200 ease-premium
-      hover:bg-accent-700 hover:shadow-glow
+      hover:bg-primary-hover hover:shadow-glow
       active:scale-[0.98]
       focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface
       disabled:pointer-events-none disabled:opacity-50;
@@ -117,7 +226,14 @@
   .skeleton::after {
     content: '';
     @apply absolute inset-0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    /* A light sweep reads as "loading" on paper; at the same strength on a dark
+       palette it is a strobe, so the alpha follows the theme. */
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / var(--shimmer-alpha, 0.55)),
+      transparent
+    );
     transform: translateX(-100%);
     animation: darsly-shimmer 1.4s infinite;
   }

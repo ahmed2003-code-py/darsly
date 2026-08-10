@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AcademyRole } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
+import { deriveAppTheme, paletteFromBrandTokens } from '../branding/app-theme';
 import { validateImageDataUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcademyContext } from './academy-context';
@@ -52,6 +53,13 @@ export class AcademyService {
           colorPrimary: m.academy.colorPrimary,
           colorAccent: m.academy.colorAccent,
           brandTokens: m.academy.brandTokens ?? null,
+          // The console's own token set, derived here rather than in the browser
+          // so the contrast floors are enforced in one tested place. Derived on
+          // read, not frozen at publish, so sharpening the rules improves every
+          // academy rather than only the ones that publish again.
+          appTheme: deriveAppTheme(
+            paletteFromBrandTokens(m.academy.brandTokens, m.academy.colorPrimary, m.academy.colorAccent),
+          ),
         },
       }));
   }

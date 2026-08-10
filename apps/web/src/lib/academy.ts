@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '../stores/auth';
 import { api } from './api';
+import type { AppTheme } from './theme';
 
 /** Academy-first data hooks (Phase 4). Read-only, public where noted. */
 
@@ -62,6 +64,12 @@ export interface MyAcademy {
     colorAccent: string;
     /** The design system published from Academy Studio, when there is one. */
     brandTokens?: BrandTokens | null;
+    /**
+     * The console's own token set, derived from the published palette by the
+     * API — where the contrast floors are enforced. Applied wholesale by
+     * `applyTheme`; the browser makes no colour decisions of its own.
+     */
+    appTheme?: AppTheme | null;
   };
 }
 
@@ -86,9 +94,13 @@ export function useAcademyCourses(slug?: string) {
 
 /** Academies the signed-in user belongs to (for the switcher / home). */
 export function useMyAcademies() {
+  // Gated on the token: the theme provider mounts above the router, so without
+  // this the login screen would fire a request that can only ever be a 401.
+  const token = useAuthStore((s) => s.accessToken);
   return useQuery<MyAcademy[]>({
     queryKey: ['my-academies'],
     queryFn: async () => (await api.get('/me/academies')).data,
+    enabled: !!token,
   });
 }
 

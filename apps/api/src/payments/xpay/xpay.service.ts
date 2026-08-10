@@ -94,23 +94,59 @@ export class XPayService {
       });
     });
 
-    const session = await this.client.createCheckoutSession({
-      amountCents: payment.amountCents,
-      currency: payment.currency,
-      reference: payment.id,
-      description: course.title,
-      customer: { name: student.user.fullName, email: student.user.email ?? undefined },
-    });
+    // The payment row has to exist before the call, because its id is the
+    // reference XPay sends back. That means a provider failure leaves a pending
+    // payment and a pending enrolment behind for a student who never reached a
+    // payment page — a teacher would see an approval request for money nobody
+    // was asked for. So the rows are unwound if the call does not produce a
+    // usable checkout link.
+    let session: Awaited<ReturnType<XPayClient['createCheckoutSession']>>;
+    try {
+      session = await this.client.createCheckoutSession({
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        reference: payment.id,
+        description: course.title,
+        customer: { name: student.user.fullName, email: student.user.email ?? undefined },
+      });
+      if (!session.url) throw new BadRequestException('The payment provider did not return a checkout link');
+    } catch (e) {
+      await this.unwind(payment.id, existing ? { id: existing.id, status: existing.status } : null);
+      throw e;
+    }
 
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: { gatewayRef: session.id },
     });
-
-    if (!session.url) {
-      throw new BadRequestException('The payment provider did not return a checkout link');
-    }
     return { paymentId: payment.id, checkoutUrl: session.url, testMode: this.config.testMode };
+  }
+
+  /**
+   * Undo a checkout that never reached a payment page.
+   *
+   * Best-effort and never rethrows: the caller is already failing, and a
+   * cleanup error would replace a clear "provider unreachable" with something
+   * meaningless to the student.
+   */
+  private async unwind(paymentId: string, previous: { id: string; status: string } | null) {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.delete({ where: { id: paymentId } });
+        if (!payment.enrollmentId) return;
+        if (previous) {
+          // It existed before this attempt; put it back as it was.
+          await tx.enrollment.update({
+            where: { id: previous.id },
+            data: { status: previous.status as never },
+          });
+        } else {
+          await tx.enrollment.delete({ where: { id: payment.enrollmentId } });
+        }
+      });
+    } catch (e) {
+      this.logger.error(`Could not unwind checkout ${paymentId}: ${String(e)}`);
+    }
   }
 
   /**

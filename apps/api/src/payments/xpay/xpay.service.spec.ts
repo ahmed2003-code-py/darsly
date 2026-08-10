@@ -20,6 +20,8 @@ function build(over: {
   payment?: Record<string, unknown> | null;
   session?: Record<string, unknown>;
   webhookSecret?: string;
+  createFails?: boolean;
+  createReturnsNoUrl?: boolean;
 } = {}) {
   const prisma = {
     payment: {
@@ -34,6 +36,10 @@ function build(over: {
 
   const client = {
     getCheckoutSession: jest.fn().mockResolvedValue(over.session ?? { id: 'cs_1', status: 'paid' }),
+    createCheckoutSession: jest.fn(async () => {
+      if (over.createFails) throw new Error('provider unreachable');
+      return over.createReturnsNoUrl ? { id: 'cs_1' } : { id: 'cs_1', url: 'https://pay.test/cs_1' };
+    }),
   } as unknown as XPayClient;
 
   const config = new XPayConfig();
@@ -195,5 +201,94 @@ describe('configuration', () => {
     Object.defineProperty(config, 'secretKey', { value: 'KEY' });
     Object.defineProperty(config, 'authFormat', { value: 'Token {key}' });
     expect(config.authorizationValue()).toBe('Token KEY');
+  });
+});
+
+
+/**
+ * A checkout that never reached a payment page.
+ *
+ * The payment row must exist before the provider is called — its id is the
+ * reference XPay sends back — so a failed call would otherwise leave a pending
+ * payment and a pending enrolment for a student who was never shown a payment
+ * page, and a teacher looking at an approval request for money nobody asked for.
+ */
+describe('a failed checkout leaves nothing behind', () => {
+  function buildStart(over: { createFails?: boolean; createReturnsNoUrl?: boolean; existing?: unknown } = {}) {
+    const deleted: string[] = [];
+    const tx = {
+      payment: {
+        create: jest.fn().mockResolvedValue({
+          id: 'pay_1', amountCents: 12000, currency: 'EGP', enrollmentId: 'enr_1',
+        }),
+        delete: jest.fn(async ({ where }: { where: { id: string } }) => {
+          deleted.push(`payment:${where.id}`);
+          return { id: where.id, enrollmentId: 'enr_1' };
+        }),
+      },
+      enrollment: {
+        create: jest.fn().mockResolvedValue({ id: 'enr_1' }),
+        update: jest.fn(async () => {
+          deleted.push('enrollment:restored');
+          return {};
+        }),
+        delete: jest.fn(async () => {
+          deleted.push('enrollment:deleted');
+          return {};
+        }),
+      },
+    };
+    const prisma = {
+      studentProfile: { findFirst: jest.fn().mockResolvedValue({ id: 'st_1', user: { fullName: 'A', email: 'a@b.c' } }) },
+      course: { findFirst: jest.fn().mockResolvedValue({ id: 'c_1', tenantId: 't_1', title: 'X', priceCents: 10000, currency: 'EGP' }) },
+      enrollment: { findUnique: jest.fn().mockResolvedValue(over.existing ?? null) },
+      payment: { update: jest.fn().mockResolvedValue({}) },
+      $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
+    } as unknown as PrismaService;
+
+    const client = {
+      createCheckoutSession: jest.fn(async () => {
+        if (over.createFails) throw new Error('provider unreachable');
+        return over.createReturnsNoUrl ? { id: 'cs_1' } : { id: 'cs_1', url: 'https://pay.test/cs_1' };
+      }),
+    } as unknown as XPayClient;
+
+    const config = new XPayConfig();
+    const payments = { quote: jest.fn().mockResolvedValue({ netCents: 10000, feeCents: 2000, totalCents: 12000 }) } as unknown as ManualPaymentsService;
+    return { service: new XPayService(prisma, client, config, payments), deleted, prisma };
+  }
+
+  it('returns the checkout link on the happy path', async () => {
+    const { service } = buildStart();
+    await expect(service.startCheckout('u1', 'c_1')).resolves.toMatchObject({
+      paymentId: 'pay_1',
+      checkoutUrl: 'https://pay.test/cs_1',
+    });
+  });
+
+  it('deletes the payment and the enrolment when the provider is unreachable', async () => {
+    const { service, deleted } = buildStart({ createFails: true });
+    await expect(service.startCheckout('u1', 'c_1')).rejects.toThrow();
+    expect(deleted).toEqual(['payment:pay_1', 'enrollment:deleted']);
+  });
+
+  it('does the same when the provider returns no checkout link', async () => {
+    const { service, deleted } = buildStart({ createReturnsNoUrl: true });
+    await expect(service.startCheckout('u1', 'c_1')).rejects.toThrow();
+    expect(deleted).toContain('payment:pay_1');
+  });
+
+  it('restores an enrolment that existed before the attempt instead of deleting it', async () => {
+    // A student retrying a payment already had an enrolment row. Deleting it
+    // would take away a record this checkout did not create.
+    const { service, deleted } = buildStart({
+      createFails: true,
+      existing: { id: 'enr_1', status: 'PENDING_APPROVAL', expiresAt: null },
+    });
+    await expect(service.startCheckout('u1', 'c_1')).rejects.toThrow();
+    // The payment goes; the enrolment is put back rather than removed.
+    expect(deleted).toContain('payment:pay_1');
+    expect(deleted).not.toContain('enrollment:deleted');
+    expect(deleted.at(-1)).toBe('enrollment:restored');
   });
 });

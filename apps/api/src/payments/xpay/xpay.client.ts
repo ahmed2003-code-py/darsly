@@ -87,6 +87,10 @@ export class XPayClient {
           [this.config.authHeader]: this.config.authorizationValue(),
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          // XPay sits behind a WAF that answers anonymous-looking clients with
+          // an HTML block page. Identifying ourselves is both good manners and
+          // the thing support will ask for when whitelisting us.
+          'User-Agent': 'Darsly/1.0 (+https://darsly.app)',
         },
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
@@ -103,7 +107,15 @@ export class XPayClient {
     try {
       return JSON.parse(text) as T;
     } catch {
-      throw new ServiceUnavailableException('Payment provider returned a response we could not read');
+      // A WAF block returns an HTML page with a 2xx-looking shape. Saying so
+      // plainly saves an afternoon of debugging a "malformed JSON" that was
+      // never JSON in the first place.
+      const blocked = /CloudWAF|<!DOCTYPE html/i.test(text);
+      throw new ServiceUnavailableException(
+        blocked
+          ? 'The payment provider blocked this request at its firewall — the server may need whitelisting'
+          : 'Payment provider returned a response we could not read',
+      );
     }
   }
 

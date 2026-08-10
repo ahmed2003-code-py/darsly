@@ -11,22 +11,24 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import * as crypto from 'crypto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { IsOptionalId, LIMITS } from '../common/validation';
 import { PaymentMatchingService } from './payment-matching.service';
 
 class PaymentEventDto {
   @IsEnum(PaymentMethod) provider: PaymentMethod;
   /** integer piasters (EGP × 100) */
-  @IsInt() @Min(1) amountCents: number;
-  @IsOptional() @IsString() reference?: string;
-  @IsOptional() @IsString() occurredAt?: string;
-  @IsOptional() @IsString() rawMessage?: string;
-  @IsOptional() @IsString() deviceId?: string;
+  @IsInt() @Min(1) @Max(100_000_000) amountCents: number;
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+  @IsOptional() @IsISO8601() occurredAt?: string;
+  // The raw bank SMS, kept for the matcher's audit trail.
+  @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) rawMessage?: string;
+  @IsOptionalId() deviceId?: string;
 }
 
 @ApiTags('payments')

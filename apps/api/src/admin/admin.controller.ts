@@ -1,8 +1,9 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, Logger, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, PayoutStatus, Role, TeacherStatus } from '@darsly/shared-types';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { seedDatabase } from '../common/demo-seed';
+import { LIMITS } from '../common/validation';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PayoutsService } from '../payouts/payouts.service';
@@ -14,10 +15,10 @@ class TeacherStatusDto {
 }
 class ProcessPayoutDto {
   @IsEnum(PayoutStatus) status: PayoutStatus;
-  @IsOptional() @IsString() note?: string;
+  @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) note?: string;
 }
 class ReseedDto {
-  @IsString() confirm: string;
+  @IsString() @MaxLength(LIMITS.NAME) confirm: string;
 }
 
 /** Platform administration — SUPER_ADMIN only. */

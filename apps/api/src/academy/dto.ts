@@ -1,6 +1,7 @@
 import {
   IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength,
 } from 'class-validator';
+import { LIMITS } from '../common/validation';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -24,8 +25,10 @@ export class UpdateAcademyDto {
   @MaxLength(40)
   slug?: string;
 
-  @IsOptional() @IsString() logoUrl?: string; // data URL or https
-  @IsOptional() @IsString() coverUrl?: string;
+  // data URL or https. The service (`assertImage`) rejects anything that is
+  // neither; the cap here keeps an oversized string out of the base64 decoder.
+  @IsOptional() @IsString() @MaxLength(LIMITS.IMAGE_DATA_URL) logoUrl?: string;
+  @IsOptional() @IsString() @MaxLength(LIMITS.IMAGE_DATA_URL) coverUrl?: string;
   @IsOptional() @IsString() @Matches(HEX, { message: 'colorPrimary must be a #RRGGBB hex' }) colorPrimary?: string;
   @IsOptional() @IsString() @Matches(HEX, { message: 'colorAccent must be a #RRGGBB hex' }) colorAccent?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;

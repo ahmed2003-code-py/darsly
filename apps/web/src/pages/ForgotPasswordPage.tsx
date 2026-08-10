@@ -1,18 +1,22 @@
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthShell, { AuthField } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
 
+/**
+ * Step 1 of the reset: prove the account exists and get a code into the inbox.
+ *
+ * An unknown address is now an error the user can see, rather than the old
+ * always-"ok" answer that left a typo looking exactly like success.
+ */
 export default function ForgotPasswordPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
-  // Dev convenience: without SMTP the API returns the token so you can test.
-  const [devLink, setDevLink] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -20,8 +24,9 @@ export default function ForgotPasswordPage() {
     setBusy(true);
     try {
       const { data } = await api.post('/auth/forgot-password', { email: email.trim() });
-      setSent(true);
-      if (data?.devResetToken) setDevLink(`/reset-password?token=${data.devResetToken}`);
+      // Dev convenience: without a mail provider the API hands back the code.
+      const devCode = data?.devResetCode ? `&code=${data.devResetCode}` : '';
+      navigate(`/reset-password?email=${encodeURIComponent(email.trim())}${devCode}`);
     } catch (err) {
       setError(authErrorText(err, t));
     } finally {
@@ -35,29 +40,16 @@ export default function ForgotPasswordPage() {
       subtitle={t('auth.forgotSub')}
       footer={<Link to="/login" className="font-bold text-primary hover:underline">{t('auth.backToLogin')}</Link>}
     >
-      {sent ? (
-        <div className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center">
-          <span className="material-symbols-outlined mb-2 text-5xl text-secondary">outgoing_mail</span>
-          <p className="font-heading text-lg font-bold">{t('auth.forgotSentTitle')}</p>
-          <p className="mt-1 text-sm text-on-surface-variant">{t('auth.forgotSentBody')}</p>
-          {devLink && (
-            <Link to={devLink} className="mt-4 inline-block break-all rounded-lg bg-primary-fixed/60 px-3 py-2 text-xs text-primary hover:underline">
-              {t('auth.devResetLink')} →
-            </Link>
-          )}
-        </div>
-      ) : (
-        <form onSubmit={submit}>
-          {error && (
-            <p className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container" role="alert">{error}</p>
-          )}
-          <AuthField icon="mail" type="email" dir="ltr" label={t('auth.email')} placeholder="name@example.com"
-            value={email} onChange={setEmail} autoComplete="email" />
-          <button className="btn-primary mt-2 w-full py-3" disabled={busy}>
-            {busy ? t('auth.sending') : t('auth.sendResetLink')}
-          </button>
-        </form>
-      )}
+      <form onSubmit={submit}>
+        {error && (
+          <p className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container" role="alert">{error}</p>
+        )}
+        <AuthField icon="mail" type="email" dir="ltr" label={t('auth.email')} placeholder="name@example.com"
+          value={email} onChange={setEmail} autoComplete="email" maxLength={160} />
+        <button className="btn-primary mt-2 w-full py-3" disabled={busy}>
+          {busy ? t('auth.sending') : t('auth.sendResetCode')}
+        </button>
+      </form>
     </AuthShell>
   );
 }

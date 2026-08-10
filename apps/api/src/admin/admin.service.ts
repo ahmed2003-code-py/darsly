@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TeacherStatus } from '@darsly/shared-types';
 import { ACADEMY_STATUS_FOR, provisionTeacherAcademy } from '../academy/provision';
+import { MailService } from '../mail/mail.service';
+import { teacherApprovedEmail, teacherStatusChangedEmail } from '../mail/templates';
 import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,6 +13,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   async overview() {
@@ -53,7 +56,7 @@ export class AdminService {
   async setTeacherStatus(id: string, status: TeacherStatus, adminUserId: string) {
     const teacher = await this.prisma.teacherProfile.findUnique({
       where: { id },
-      include: { user: { select: { id: true, fullName: true } } },
+      include: { user: { select: { id: true, fullName: true, email: true } } },
     });
     if (!teacher) throw new NotFoundException('Teacher not found');
 
@@ -96,6 +99,17 @@ export class AdminService {
         title: msg[0],
         body: msg[1],
       });
+      // The in-app bell only reaches a teacher who is already logged in — and a
+      // PENDING teacher cannot log in at all, so approval has to travel by mail.
+      if (teacher.user.email) {
+        const name = teacher.user.fullName;
+        this.mail.sendInBackground({
+          to: teacher.user.email,
+          ...(status === 'APPROVED'
+            ? teacherApprovedEmail({ name, loginUrl: this.mail.webUrl('/login') })
+            : teacherStatusChangedEmail({ name, status: status as 'REJECTED' | 'SUSPENDED' })),
+        });
+      }
     }
     await this.prisma.auditLog.create({
       data: {

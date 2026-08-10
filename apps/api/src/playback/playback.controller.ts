@@ -15,11 +15,12 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
-import { IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { IsBoundedRecord, IsId } from '../common/validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { HlsKeyService } from '../video/hls-key.service';
 import { StorageProvider } from '../storage/storage.provider';
@@ -28,16 +29,20 @@ import { KEY_URI_PLACEHOLDER } from '../video/transcode.service';
 import { SignedUrlService } from './signed-url.service';
 
 class StartSessionDto {
-  @IsString() lessonId: string;
+  @IsId() lessonId: string;
 }
 class HeartbeatDto {
-  @IsInt() @Min(0) positionSec: number;
-  @IsString() type: string; // play | pause | seek | hb
-  @IsOptional() @IsInt() watchedPct?: number;
+  @IsInt() @Min(0) @Max(86_400) positionSec: number;
+  // A closed set: `seek` drives the scrub-anomaly detector, and an unrecognised
+  // verb used to be counted as telemetry all the same.
+  @IsIn(['play', 'pause', 'seek', 'hb']) type: string;
+  @IsOptional() @IsInt() @Min(0) @Max(100) watchedPct?: number;
 }
 class ReportEventDto {
-  @IsString() type: string; // devtools | ...
-  @IsOptional() @IsObject() meta?: Record<string, unknown>;
+  // Deliberately open-ended (the service maps anything unknown to MANUAL_FLAG),
+  // but bounded — the raw value is persisted into the security-flag meta.
+  @IsString() @MaxLength(40) type: string; // devtools | ...
+  @IsOptional() @IsBoundedRecord({ maxKeys: 30, maxKeyLength: 60 }) meta?: Record<string, unknown>;
 }
 
 function ctx(req: Request) {

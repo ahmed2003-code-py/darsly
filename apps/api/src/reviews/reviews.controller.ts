@@ -4,10 +4,11 @@ import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validato
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { IsId } from '../common/validation';
 import { ReviewsService } from './reviews.service';
 
 class UpsertReviewDto {
-  @IsString() courseId: string;
+  @IsId() courseId: string;
   @IsInt() @Min(1) @Max(5) rating: number;
   @IsOptional() @IsString() @MaxLength(1000) comment?: string;
 }

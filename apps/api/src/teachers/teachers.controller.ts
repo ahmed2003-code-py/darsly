@@ -20,20 +20,21 @@ import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { IsOptionalId } from '../common/validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscoverTeachersQuery, TeachersService } from './teachers.service';
 
 class DiscoverTeachersDto implements DiscoverTeachersQuery {
-  @IsOptional() @IsString() q?: string;
-  @IsOptional() @IsString() subjectId?: string;
-  @IsOptional() @IsString() gradeId?: string;
+  @IsOptional() @IsString() @MaxLength(120) q?: string;
+  @IsOptionalId() subjectId?: string;
+  @IsOptionalId() gradeId?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) priceMinCents?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) priceMaxCents?: number;
   @IsOptional() @Type(() => Number) @Min(0) @Max(5) minRating?: number;
   @IsOptional() @IsIn(['rating', 'priceAsc', 'priceDesc', 'newest'])
   sort?: 'rating' | 'priceAsc' | 'priceDesc' | 'newest';
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10_000) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) pageSize?: number;
 }
 
@@ -41,7 +42,7 @@ class UpdateMyTeacherProfileDto {
   @IsOptional() @IsString() @MaxLength(2_000) bio?: string;
   @IsOptional() @IsUrl({ require_tld: false }) @MaxLength(500) introVideoUrl?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
-  @IsOptional() @IsString() subjectId?: string;
+  @IsOptionalId() subjectId?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(50) @ArrayUnique() @IsString({ each: true }) gradeIds?: string[];
   @IsOptional() @IsBoolean() autoApproveEnrollments?: boolean;
 }

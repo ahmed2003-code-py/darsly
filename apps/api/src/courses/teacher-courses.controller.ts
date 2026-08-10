@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { IsString, MaxLength } from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy, RequirePermission } from '../academy/academy-context';
 import { AcademyMembershipGuard } from '../academy/guards/academy-membership.guard';
@@ -8,6 +8,7 @@ import { PermissionGuard } from '../academy/guards/permission.guard';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { validateImageDataUrl } from '../common/image.util';
+import { LIMITS } from '../common/validation';
 import { CoursesService } from './courses.service';
 import {
   CreateCourseDto,
@@ -20,7 +21,7 @@ import {
 } from './dto/course.dto';
 
 class SetThumbnailDto {
-  @IsString() dataUrl: string;
+  @IsString() @MaxLength(LIMITS.IMAGE_DATA_URL) dataUrl: string;
 }
 
 /**

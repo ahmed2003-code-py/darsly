@@ -7,16 +7,19 @@ import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { IsId, LIMITS } from '../common/validation';
 import { ManualPaymentsService } from './manual-payments.service';
 import { PaymentAccountsService, UpsertAccountDto } from './payment-accounts.service';
 import { PaymentMatchingService } from './payment-matching.service';
 
 class SubmitPaymentDto {
-  @IsString() courseId: string;
+  @IsId() courseId: string;
   @IsEnum(PaymentMethod) method: PaymentMethod;
-  @IsString() @MaxLength(2_000_000) proofImageUrl: string;
+  // A receipt photo as a base64 data URL. Bigger than the other image caps on
+  // purpose: an unreadable receipt cannot be verified.
+  @IsString() @MaxLength(LIMITS.PROOF_DATA_URL) proofImageUrl: string;
   @IsOptional() @IsString() @MaxLength(120) reference?: string;
-  @IsOptional() @IsString() couponCode?: string;
+  @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
 }
 class RejectDto {
   @IsOptional() @IsString() @MaxLength(300) reason?: string;

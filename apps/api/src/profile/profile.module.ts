@@ -4,13 +4,16 @@ import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { validateImageDataUrl } from '../common/image.util';
+import { LIMITS } from '../common/validation';
 import { PrismaService } from '../prisma/prisma.service';
 
 // ~300 KB after decode is plenty for a client-resized 256² avatar.
 const AVATAR_MAX_BYTES = 300 * 1024;
 
+// The data-URL's mime and decoded size are checked by `validateImageDataUrl`
+// below; this cap stops an oversized string from reaching the decoder at all.
 class AvatarDto {
-  @IsString() dataUrl: string;
+  @IsString() @MaxLength(LIMITS.IMAGE_DATA_URL) dataUrl: string;
 }
 class UpdateMeDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) fullName?: string;

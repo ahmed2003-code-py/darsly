@@ -64,6 +64,16 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     warnings.push('ALLOWED_ORIGINS is unset or points at localhost — CORS will reject your real domain');
   }
 
+  // Mail is best-effort by design (MailService never throws into a flow), but a
+  // production deploy without it silently breaks password recovery — the reset
+  // link would only ever reach the server log.
+  if (isProd && !env.RESEND_API_KEY) {
+    warnings.push('RESEND_API_KEY unset — password-reset and approval emails will be logged, not sent');
+  }
+  if (isProd && env.MAIL_FROM?.includes('resend.dev')) {
+    warnings.push('MAIL_FROM still uses resend.dev — verify your own domain in Resend, or mail only reaches the account owner');
+  }
+
   if (isProd && !env.PAYMENT_LISTENER_KEY) {
     warnings.push('PAYMENT_LISTENER_KEY unset — automatic payment verification endpoint will reject all events');
   }

@@ -1,8 +1,10 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { JSON_BODY_LIMIT } from './common/validation';
 import { validateConfig } from './common/config.validation';
 
 async function bootstrap() {
@@ -22,6 +24,14 @@ async function bootstrap() {
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
+
+  // Images (avatars, course thumbnails, payment-proof photos) arrive as base64
+  // data URLs inside JSON. Express defaults to a 100 KB body, which rejected a
+  // resized receipt photo with a bare 413 BEFORE any DTO ran — so the per-field
+  // MaxLength caps were never the real boundary. Set the transport limit above
+  // the largest field cap; validation, not body-parser, decides what's too big.
+  app.use(json({ limit: JSON_BODY_LIMIT }));
+  app.use(urlencoded({ limit: JSON_BODY_LIMIT, extended: true }));
 
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
     .split(',')

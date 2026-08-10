@@ -5,10 +5,17 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  IsUrl,
+  Max,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
+import { IsOptionalId, LIMITS } from '../common/validation';
+
+/** A live session is a class, not a broadcast station: 12 hours is the ceiling. */
+const MAX_DURATION_MIN = 720;
+const MAX_CAPACITY = 100_000;
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
@@ -20,20 +27,21 @@ class CreateLiveDto {
   @IsString() @MinLength(2) @MaxLength(160) title: string;
   @IsOptional() @IsString() @MaxLength(1000) description?: string;
   @IsISO8601() startsAt: string;
-  @IsOptional() @IsInt() @Min(5) durationMin?: number;
-  @IsOptional() @IsInt() @Min(1) capacity?: number | null;
-  @IsOptional() @IsString() courseId?: string | null;
-  @IsOptional() @IsString() joinUrl?: string | null;
+  @IsOptional() @IsInt() @Min(5) @Max(MAX_DURATION_MIN) durationMin?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_CAPACITY) capacity?: number | null;
+  @IsOptionalId() courseId?: string | null;
+  // Rendered as a link students click — anything but a real URL is a trap.
+  @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?: string | null;
 }
 
 class UpdateLiveDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(160) title?: string;
   @IsOptional() @IsString() @MaxLength(1000) description?: string;
   @IsOptional() @IsISO8601() startsAt?: string;
-  @IsOptional() @IsInt() @Min(5) durationMin?: number;
-  @IsOptional() @IsInt() @Min(1) capacity?: number | null;
-  @IsOptional() @IsString() courseId?: string | null;
-  @IsOptional() @IsString() joinUrl?: string | null;
+  @IsOptional() @IsInt() @Min(5) @Max(MAX_DURATION_MIN) durationMin?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_CAPACITY) capacity?: number | null;
+  @IsOptionalId() courseId?: string | null;
+  @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?: string | null;
 }
 
 @ApiTags('live')

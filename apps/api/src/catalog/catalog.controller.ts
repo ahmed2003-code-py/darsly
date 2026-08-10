@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
-import { IsBoolean, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { LIMITS } from '../common/validation';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -9,18 +10,18 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 class UpsertSubjectDto {
-  @IsString() @MinLength(2) nameAr: string;
-  @IsString() @MinLength(2) nameEn: string;
-  @IsOptional() @IsString() icon?: string;
-  @IsOptional() @IsInt() sortOrder?: number;
+  @IsString() @MinLength(2) @MaxLength(LIMITS.NAME) nameAr: string;
+  @IsString() @MinLength(2) @MaxLength(LIMITS.NAME) nameEn: string;
+  @IsOptional() @IsString() @MaxLength(60) icon?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(10_000) sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 class UpsertGradeDto {
-  @IsString() @MinLength(2) nameAr: string;
-  @IsString() @MinLength(2) nameEn: string;
-  @IsString() @MinLength(2) code: string;
-  @IsOptional() @IsInt() sortOrder?: number;
+  @IsString() @MinLength(2) @MaxLength(LIMITS.NAME) nameAr: string;
+  @IsString() @MinLength(2) @MaxLength(LIMITS.NAME) nameEn: string;
+  @IsString() @MinLength(2) @MaxLength(40) code: string;
+  @IsOptional() @IsInt() @Min(0) @Max(10_000) sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 

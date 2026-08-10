@@ -170,12 +170,18 @@ model AcademyMembership {
 
 // Single-use, hashed password-reset tokens (forgot-password flow).
 model PasswordResetToken {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // sha256(userId + ":" + code). Binding the user into the hash is what lets a
+  // short 6-digit code stay unique across the table — two people can hold the
+  // code 123456 at the same time without colliding.
   tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
+  // Wrong guesses against this code. A 6-digit code is only as strong as the
+  // number of tries allowed, so the count is enforced, not just observed.
+  attempts  Int       @default(0)
   createdAt DateTime  @default(now())
 
   @@index([userId, usedAt])

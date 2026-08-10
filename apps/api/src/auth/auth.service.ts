@@ -3,12 +3,16 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Role, TeacherStatus } from '@darsly/shared-types';
 import * as argon2 from 'argon2';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, randomInt } from 'crypto';
 import { provisionTeacherAcademy } from '../academy/provision';
+import { MailService } from '../mail/mail.service';
+import { otpEmail, teacherPendingEmail, welcomeStudentEmail } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeviceContext, TokenService } from './token.service';
 import {
@@ -18,15 +22,14 @@ import {
   RegisterStudentDto,
   RegisterTeacherDto,
   ResetPasswordDto,
+  VerifyResetCodeDto,
 } from './dto/auth.dto';
 
 const MAX_FAILED_LOGINS = 10;
 const LOCK_MINUTES = 15;
-const RESET_TTL_MINUTES = 30;
-// The reset-token-over-HTTP backdoor is dev-only. Belt-and-suspenders with the
-// boot-time config check that refuses to start with OTP_DEV_MODE=true in prod.
-const DEV_MODE =
-  process.env.OTP_DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
+/** Short-lived on purpose: a 6-digit code is weaker than a 32-byte link. */
+const RESET_TTL_MINUTES = 15;
+const MAX_RESET_ATTEMPTS = 5;
 
 @Injectable()
 export class AuthService {
@@ -37,7 +40,21 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokenService: TokenService,
+    private readonly mail: MailService,
   ) {}
+
+  /**
+   * Returning the reset code over HTTP is a dev-only convenience — belt and
+   * braces with the boot-time config check that refuses to start a production
+   * process with OTP_DEV_MODE=true.
+   *
+   * Read per call rather than captured at import: a module-level constant is
+   * fixed by whatever the environment happened to be when the file first
+   * loaded, which makes the flag untestable and surprising to toggle.
+   */
+  private get devMode(): boolean {
+    return process.env.OTP_DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
+  }
 
   // ── Registration ───────────────────────────────────────────────────────────
 
@@ -45,8 +62,8 @@ export class AuthService {
   async registerStudent(dto: RegisterStudentDto, device: DeviceContext) {
     const email = dto.email.toLowerCase().trim();
     await this.assertEmailFree(email);
-    const phone = dto.phone ? normalizeEgyptianPhone(dto.phone) : undefined;
-    if (phone) await this.assertPhoneFree(phone);
+    const phone = normalizeEgyptianPhone(dto.phone);
+    await this.assertPhoneFree(phone);
 
     const user = await this.prisma.user.create({
       data: {
@@ -64,6 +81,12 @@ export class AuthService {
       { id: user.id, role: user.role as Role, tenantId: undefined },
       { ...device, deviceName: dto.deviceName ?? device.deviceName },
     );
+    // Not awaited: a slow mail provider must not delay the signup response, and
+    // a failed welcome mail must not fail an account that already exists.
+    this.mail.sendInBackground({
+      to: email,
+      ...welcomeStudentEmail({ name: user.fullName, loginUrl: this.mail.webUrl('/courses') }),
+    });
     return { user: this.publicUser(user), isNewUser: true, ...tokens };
   }
 
@@ -111,6 +134,7 @@ export class AuthService {
         fullName,
       );
     });
+    this.mail.sendInBackground({ to: email, ...teacherPendingEmail({ name: fullName }) });
     return { pending: true };
   }
 
@@ -160,49 +184,89 @@ export class AuthService {
   // ── Forgot / reset password ─────────────────────────────────────────────────
 
   /**
-   * Always responds ok (no email enumeration). Issues a single-use hashed
-   * token. Without SMTP configured we surface the token in dev mode only.
+   * Step 1 — the account must exist, then a 6-digit code goes out by email.
+   *
+   * This deliberately tells the caller when an email is unknown. The usual
+   * advice is the opposite (answer "ok" either way so nobody can enumerate
+   * accounts), and that is what this endpoint used to do — but it made a real
+   * failure indistinguishable from success: a typo, an unknown address and a
+   * mail provider outage all produced the same cheerful "check your inbox",
+   * and the user sat waiting for a message that was never coming.
+   *
+   * The enumeration risk is real and is mitigated rather than ignored: the
+   * route is throttled to 5 requests per 10 minutes per IP, which makes
+   * harvesting a list of addresses impractical while keeping the honest user
+   * informed. If that trade stops being acceptable, this is the one method to
+   * change back.
    */
   async forgotPassword(dto: ForgotPasswordDto) {
     const email = dto.email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || !user.isActive) return { ok: true };
+    if (!user) {
+      throw new NotFoundException({
+        message: 'لا يوجد حساب مسجَّل بهذا البريد الإلكتروني',
+        code: 'EMAIL_NOT_FOUND',
+      });
+    }
+    if (!user.isActive) {
+      throw new ForbiddenException({ message: 'Account disabled', code: 'ACCOUNT_DISABLED' });
+    }
 
-    // Invalidate any previous unused tokens for this user.
+    // Invalidate any previous unused code for this user, so the newest code is
+    // the only one that works — two live codes double the guessing surface.
     await this.prisma.passwordResetToken.updateMany({
       where: { userId: user.id, usedAt: null },
       data: { usedAt: new Date() },
     });
 
-    const rawToken = randomBytes(32).toString('hex');
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     await this.prisma.passwordResetToken.create({
       data: {
         userId: user.id,
-        tokenHash: this.hashToken(rawToken),
+        tokenHash: this.hashResetCode(user.id, code),
         expiresAt: new Date(Date.now() + RESET_TTL_MINUTES * 60_000),
       },
     });
 
-    // TODO(prod): email the reset link. Until SMTP lands, dev mode returns it.
-    if (DEV_MODE) {
+    // Awaited, and its verdict is reported: "we emailed you a code" is the
+    // whole response, so claiming it after a rejected send would be a lie.
+    const delivery = await this.mail.send({
+      to: email,
+      ...otpEmail({
+        name: user.fullName,
+        code,
+        expiresInMinutes: RESET_TTL_MINUTES,
+        purpose: 'إعادة تعيين كلمة المرور',
+      }),
+    });
+
+    if (this.devMode) {
       // eslint-disable-next-line no-console
-      console.log(`[DEV] password reset token for ${email}: ${rawToken}`);
-      return { ok: true, devResetToken: rawToken };
+      console.log(`[DEV] password reset code for ${email}: ${code}`);
+      return { ok: true, expiresInMinutes: RESET_TTL_MINUTES, devResetCode: code };
     }
+
+    if (!delivery.delivered) {
+      throw new ServiceUnavailableException({
+        message: 'تعذّر إرسال البريد الآن، حاول بعد قليل',
+        code: 'MAIL_DELIVERY_FAILED',
+      });
+    }
+    return { ok: true, expiresInMinutes: RESET_TTL_MINUTES };
+  }
+
+  /**
+   * Step 2 (optional) — check a code without spending it, so the UI can move to
+   * the new-password field before asking the user to type one.
+   */
+  async verifyResetCode(dto: VerifyResetCodeDto) {
+    await this.consumableResetToken(dto.email, dto.code);
     return { ok: true };
   }
 
+  /** Step 3 — the code is spent here, exactly once. */
   async resetPassword(dto: ResetPasswordDto) {
-    const row = await this.prisma.passwordResetToken.findUnique({
-      where: { tokenHash: this.hashToken(dto.token.trim()) },
-      include: { user: true },
-    });
-    if (!row || row.usedAt || !row.user.isActive) {
-      throw new BadRequestException({ message: 'Invalid or used reset link', code: 'INVALID_TOKEN' });
-    }
-    if (row.expiresAt < new Date()) {
-      throw new BadRequestException({ message: 'Reset link has expired', code: 'TOKEN_EXPIRED' });
-    }
+    const row = await this.consumableResetToken(dto.email, dto.code);
 
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -319,8 +383,57 @@ export class AuthService {
     return `${base}-${randomBytes(4).toString('hex')}`;
   }
 
-  private hashToken(raw: string): string {
-    return createHash('sha256').update(raw).digest('hex');
+  /**
+   * The stored hash binds the code to its owner, so a 6-digit code stays unique
+   * table-wide and a code issued to one account can never unlock another.
+   */
+  private hashResetCode(userId: string, code: string): string {
+    return createHash('sha256').update(`${userId}:${code.trim()}`).digest('hex');
+  }
+
+  /**
+   * Look up a live reset code for an email, or explain precisely why it isn't
+   * usable. Every wrong guess is counted against the code, so a 6-digit secret
+   * cannot be walked through even if the per-IP throttle is sidestepped.
+   */
+  private async consumableResetToken(rawEmail: string, code: string) {
+    const email = rawEmail.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, isActive: true },
+    });
+    if (!user || !user.isActive) {
+      throw new BadRequestException({ message: 'Invalid or expired code', code: 'INVALID_CODE' });
+    }
+
+    // The active code for this user, whether or not the submitted digits match —
+    // needed so a wrong guess has something to be counted against.
+    const active = await this.prisma.passwordResetToken.findFirst({
+      where: { userId: user.id, usedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!active) {
+      throw new BadRequestException({ message: 'Invalid or expired code', code: 'INVALID_CODE' });
+    }
+    if (active.expiresAt < new Date()) {
+      throw new BadRequestException({ message: 'Reset code has expired', code: 'CODE_EXPIRED' });
+    }
+    if (active.attempts >= MAX_RESET_ATTEMPTS) {
+      throw new BadRequestException({
+        message: 'Too many attempts — request a new code',
+        code: 'TOO_MANY_ATTEMPTS',
+      });
+    }
+
+    if (active.tokenHash !== this.hashResetCode(user.id, code)) {
+      await this.prisma.passwordResetToken.update({
+        where: { id: active.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new BadRequestException({ message: 'Invalid or expired code', code: 'INVALID_CODE' });
+    }
+
+    return active;
   }
 
   private publicUser(user: any) {

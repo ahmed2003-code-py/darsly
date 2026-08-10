@@ -2,24 +2,25 @@ import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nes
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { EnrollmentStatus, JwtPayload, Role } from '@darsly/shared-types';
-import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { IsId, LIMITS } from '../common/validation';
 import { EnrollmentsService } from './enrollments.service';
 
 class EnrollDto {
-  @IsString() @MinLength(1) courseId: string;
-  @IsOptional() @IsString() couponCode?: string;
+  @IsId() courseId: string;
+  @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
 }
 
 class QuoteDto extends EnrollDto {}
 
 class ModerateDto {
-  @IsOptional() @IsString() reason?: string;
+  @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) reason?: string;
 }
 
 class TeacherEnrollmentsQuery {

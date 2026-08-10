@@ -16,6 +16,7 @@ import { ChatModule } from './chat/chat.module';
 import { CoursesModule } from './courses/courses.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { HealthController } from './health/health.controller';
+import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PayoutsModule } from './payouts/payouts.module';
@@ -50,6 +51,7 @@ const webDist = join(__dirname, '..', '..', 'web', 'dist');
       : []),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
+    MailModule,
     AuditModule,
     AuthModule,
     CatalogModule,

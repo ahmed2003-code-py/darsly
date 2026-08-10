@@ -13,6 +13,7 @@ import {
   RegisterStudentDto,
   RegisterTeacherDto,
   ResetPasswordDto,
+  VerifyResetCodeDto,
 } from './dto/auth.dto';
 import { TokenService } from './token.service';
 
@@ -58,20 +59,32 @@ export class AuthController {
     return this.authService.login(dto, deviceContext(req));
   }
 
+  // The throttle is load-bearing here, not routine hardening: this endpoint
+  // confirms whether an email is registered, so the rate limit is what keeps
+  // that from becoming a way to harvest a list of the platform's users.
   @Public()
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @Post('forgot-password')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Request a password-reset link (no email enumeration)' })
+  @ApiOperation({ summary: 'Email a 6-digit reset code — 404s if the email is unknown' })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
   }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @Post('verify-reset-code')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Check a reset code without spending it' })
+  verifyResetCode(@Body() dto: VerifyResetCodeDto) {
+    return this.authService.verifyResetCode(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
   @Post('reset-password')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Reset password with a valid token' })
+  @ApiOperation({ summary: 'Set a new password using the emailed code' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
   }

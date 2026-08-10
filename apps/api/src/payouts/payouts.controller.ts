@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, PayoutMethod } from '@darsly/shared-types';
-import { IsBoolean, IsEnum, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoundedRecord, IsId } from '../common/validation';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AuditService } from '../audit/audit.service';
@@ -10,12 +11,16 @@ import { PayoutsService } from './payouts.service';
 
 class AddMethodDto {
   @IsEnum(PayoutMethod) method: PayoutMethod;
-  @IsObject() details: Record<string, unknown>;
+  // Free-form by design (each method carries different fields), bounded so it
+  // stays a payout method and not an arbitrary JSON store.
+  @IsBoundedRecord({ maxKeys: 20, maxKeyLength: 40, maxValueLength: 200 })
+  details: Record<string, unknown>;
   @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 class RequestPayoutDto {
-  @IsInt() @Min(1) amountCents: number;
-  @IsString() methodId: string;
+  /** piasters — 1,000,000 EGP is far past any real payout. */
+  @IsInt() @Min(1) @Max(100_000_000) amountCents: number;
+  @IsId() methodId: string;
 }
 
 @ApiTags('payouts')

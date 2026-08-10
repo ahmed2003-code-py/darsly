@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { AcademyRole } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
 import { deriveAppTheme, paletteFromBrandTokens } from '../branding/app-theme';
-import { validateImageDataUrl } from '../common/image.util';
+import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcademyContext } from './academy-context';
 import { AddMemberDto, UpdateAcademyDto, UpdateMemberDto } from './dto';
@@ -229,8 +229,16 @@ export class AcademyService {
 
   // ── Academy settings (owner: academy.manage) ──────────────────────────────
 
+  /**
+   * A logo/cover is either an uploaded data URL or a hosted image link.
+   *
+   * This used to check only the `data:` branch, so any other string — a
+   * `javascript:` URI included — was stored verbatim and later handed to
+   * whatever rendered the academy's branding. `validateThumbnailUrl` is the
+   * project's existing answer for exactly this pair of cases.
+   */
   private assertImage(url: string | undefined, maxBytes: number) {
-    if (url && url.startsWith('data:')) validateImageDataUrl(url, maxBytes);
+    if (url) validateThumbnailUrl(url, maxBytes);
   }
 
   /** Full academy settings for the console editor. */

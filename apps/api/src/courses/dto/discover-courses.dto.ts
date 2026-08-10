@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsOptionalId } from '../../common/validation';
 
 export const COURSE_SORTS = ['popular', 'rating', 'newest', 'priceAsc', 'priceDesc'] as const;
 export type CourseSort = (typeof COURSE_SORTS)[number];
@@ -29,13 +30,11 @@ export class DiscoverCoursesDto {
   q?: string;
 
   @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
+  @IsOptionalId()
   subjectId?: string;
 
   @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
+  @IsOptionalId()
   gradeId?: string;
 
   @ApiPropertyOptional({ description: 'Teaching language of the teacher (ar / en).' })
@@ -45,8 +44,7 @@ export class DiscoverCoursesDto {
   language?: string;
 
   @ApiPropertyOptional({ description: 'Only this teacher\'s courses.' })
-  @IsOptional()
-  @IsString()
+  @IsOptionalId()
   teacherId?: string;
 
   /** Prices are in piasters, and are the academy's own price before the fee. */
@@ -84,12 +82,16 @@ export class DiscoverCoursesDto {
   @Transform(toInt)
   @IsInt()
   @Min(1)
+  @Max(10_000)
   page?: number;
 
+  // The service already clamps to 24; rejecting here too means an absurd value
+  // is an error the caller can see rather than a silently different result.
   @ApiPropertyOptional({ default: 10, description: 'Capped at 24.' })
   @IsOptional()
   @Transform(toInt)
   @IsInt()
   @Min(1)
+  @Max(24)
   pageSize?: number;
 }

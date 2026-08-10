@@ -47,6 +47,7 @@ export class DeviceEnrollDto {
 export class DeviceRefreshDto {
   @ApiProperty()
   @IsString()
+  @MaxLength(4_096)
   refreshToken: string;
 }
 

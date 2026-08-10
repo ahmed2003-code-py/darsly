@@ -40,8 +40,7 @@ export default function RegisterPage() {
     try {
       if (role === 'student') {
         const { data } = await api.post('/auth/register/student', {
-          fullName: fullName.trim(), email: email.trim(), password,
-          ...(phone.trim() ? { phone: phone.trim() } : {}),
+          fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
           deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
         });
         setTokens(data.accessToken, data.refreshToken);
@@ -105,10 +104,13 @@ export default function RegisterPage() {
           </p>
         )}
         <AuthField icon="person" label={t('auth.fullName')} placeholder={t('auth.fullNamePh')}
-          value={fullName} onChange={setFullName} autoComplete="name" />
+          value={fullName} onChange={setFullName} autoComplete="name" maxLength={120} />
         <AuthField icon="mail" type="email" dir="ltr" label={t('auth.email')} placeholder="name@example.com"
-          value={email} onChange={setEmail} autoComplete="email" />
-        <AuthField icon="phone" type="tel" dir="ltr" label={role === 'teacher' ? t('auth.phone') : t('auth.phoneOptional')}
+          value={email} onChange={setEmail} autoComplete="email" maxLength={160} />
+        {/* Mirrors EGY_PHONE_REGEX on the API — a wrong number is caught here
+            rather than after a round trip that also creates nothing. */}
+        <AuthField icon="phone" type="tel" dir="ltr" label={t('auth.phone')} inputMode="tel"
+          pattern="(\+20|0020|20|0)?1[0125][0-9]{8}" title={t('auth.phoneHint')} maxLength={16}
           placeholder="01xxxxxxxxx" value={phone} onChange={setPhone} autoComplete="tel" />
         <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.password')}
           placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"

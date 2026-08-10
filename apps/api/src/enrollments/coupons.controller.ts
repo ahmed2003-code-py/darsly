@@ -25,21 +25,22 @@ import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { IsOptionalId } from '../common/validation';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateCouponDto {
   @IsString() @Matches(/^[A-Za-z0-9_-]{3,24}$/) code: string;
   @IsOptional() @IsInt() @Min(1) @Max(100) percentOff?: number;
-  @IsOptional() @IsInt() @Min(1) amountOffCents?: number;
-  @IsOptional() @IsString() courseId?: string;
-  @IsOptional() @IsInt() @Min(1) maxUses?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(100_000_000) amountOffCents?: number;
+  @IsOptionalId() courseId?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(1_000_000) maxUses?: number;
   @IsOptional() @IsISO8601() expiresAt?: string;
 }
 
 class UpdateCouponDto {
   @IsOptional() @IsInt() @Min(1) @Max(100) percentOff?: number;
-  @IsOptional() @IsInt() @Min(1) amountOffCents?: number;
-  @IsOptional() @IsInt() @Min(1) maxUses?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(100_000_000) amountOffCents?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(1_000_000) maxUses?: number;
   @IsOptional() @IsISO8601() expiresAt?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }

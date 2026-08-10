@@ -14,6 +14,13 @@ const CODE_KEYS: Record<string, string> = {
   PHONE_TAKEN: 'auth.err.phoneTaken',
   INVALID_TOKEN: 'auth.err.invalidToken',
   TOKEN_EXPIRED: 'auth.err.tokenExpired',
+  EMAIL_NOT_FOUND: 'auth.err.emailNotFound',
+  INVALID_CODE: 'auth.err.invalidCode',
+  CODE_EXPIRED: 'auth.err.codeExpired',
+  TOO_MANY_ATTEMPTS: 'auth.err.tooManyAttempts',
+  MAIL_DELIVERY_FAILED: 'auth.err.mailFailed',
+  ACCOUNT_DISABLED: 'auth.err.suspended',
+  INVALID_PHONE: 'auth.err.invalidPhone',
 };
 
 export function authErrorText(err: any, t: TFunction): string {

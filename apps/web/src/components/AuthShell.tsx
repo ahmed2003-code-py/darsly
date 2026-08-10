@@ -114,6 +114,7 @@ export default function AuthShell({
 /** Labelled input with an inline leading icon + optional password reveal. */
 export function AuthField({
   icon, type = 'text', value, onChange, placeholder, label, dir, autoComplete, reveal, onReveal, revealed, maxLength,
+  pattern, inputMode, title,
 }: {
   icon: string;
   type?: string;
@@ -127,6 +128,11 @@ export function AuthField({
   onReveal?: () => void;
   revealed?: boolean;
   maxLength?: number;
+  /** Client-side format check — catches a typo before the request leaves. */
+  pattern?: string;
+  inputMode?: 'text' | 'tel' | 'email' | 'numeric';
+  /** The hint the browser shows when `pattern` fails. */
+  title?: string;
 }) {
   return (
     <label className="mb-4 block">
@@ -141,6 +147,9 @@ export function AuthField({
           autoComplete={autoComplete}
           maxLength={maxLength}
           placeholder={placeholder}
+          pattern={pattern}
+          inputMode={inputMode}
+          title={title}
           onChange={(e) => onChange(e.target.value)}
           required
         />

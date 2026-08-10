@@ -321,7 +321,13 @@ export class ManualPaymentsService {
     return s;
   }
 
-  private async quote(course: { id: string; priceCents: number; tenantId: string }, couponCode?: string) {
+  /**
+   * The fee split and coupon for a course. Public because the card-payment route
+   * has to price a course identically — two routes that price differently is how
+   * a card payment and a bank transfer end up crediting a teacher different
+   * amounts for the same course.
+   */
+  async quote(course: { id: string; priceCents: number; tenantId: string }, couponCode?: string) {
     let discount = 0;
     let couponId: string | null = null;
     let couponMaxUses: number | null = null;

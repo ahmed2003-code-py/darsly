@@ -37,6 +37,9 @@ function clean(theme: unknown): AppTheme | null {
   return { mode: t.mode === 'dark' ? 'dark' : 'light', tokens };
 }
 
+/** The theme the server wrote into the document, when it knew which one to use. */
+const serverTheme = () => document.getElementById('academy-theme');
+
 /** Paint the app in `theme`, or hand it back to the platform palette. */
 export function applyTheme(theme: unknown): void {
   const root = document.documentElement;
@@ -48,6 +51,9 @@ export function applyTheme(theme: unknown): void {
     for (const name of Array.from(root.style).filter((n) => n.startsWith('--c-'))) {
       root.style.removeProperty(name);
     }
+    // The server's block is another `:root`, so clearing the inline properties
+    // alone would fall back to the academy rather than to the platform.
+    serverTheme()?.remove();
     root.removeAttribute('data-theme');
     localStorage.removeItem(CACHE_KEY);
     return;
@@ -71,8 +77,15 @@ export function applyTheme(theme: unknown): void {
  *
  * Called from the module top level rather than an effect: by the time React has
  * mounted and a query has resolved, the wrong colours are already on screen.
+ *
+ * Skipped entirely when the server has already answered. It knows which academy
+ * this page load is about; the cache only knows which one the last one was. On a
+ * visitor who opens a second teacher's link, replaying the cache would paint the
+ * first teacher's colours *over* the correct ones — inline properties beat a
+ * stylesheet — which is worse than the flash it exists to prevent.
  */
 export function bootTheme(): void {
+  if (serverTheme()) return;
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (raw) applyTheme(JSON.parse(raw));

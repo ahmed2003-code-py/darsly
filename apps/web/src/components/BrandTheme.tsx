@@ -48,7 +48,9 @@ export default function BrandTheme() {
 
   // Only fetched while signed out — once there is an account, what the person
   // actually belongs to is a better answer than where they came from.
-  const { data: arrived } = useAcademyBranding(user ? undefined : (arrival ?? undefined));
+  const { data: arrived, isFetched: arrivalSettled } = useAcademyBranding(
+    user ? undefined : (arrival ?? undefined),
+  );
 
   useEffect(() => {
     if (isAdmin) {
@@ -58,7 +60,11 @@ export default function BrandTheme() {
     if (!user) {
       // Signing out has to drop the account's colours, but not the ones the
       // visitor arrived with — the login screen still belongs to that teacher.
-      applyTheme(arrived?.appTheme ?? null);
+      if (arrived?.appTheme) applyTheme(arrived.appTheme);
+      // Nothing is cleared while the answer is still in flight. The server may
+      // already have painted this page in the right colours, and clearing would
+      // reintroduce exactly the flash the injection removes.
+      else if (!arrival || arrivalSettled) applyTheme(null);
       return;
     }
     if (!data) return; // Keep whatever `bootTheme` replayed until the list lands.
@@ -71,7 +77,7 @@ export default function BrandTheme() {
       clearArrival();
       setArrival(null);
     }
-  }, [user, isAdmin, data, arrived]);
+  }, [user, isAdmin, data, arrival, arrived, arrivalSettled]);
 
   return null;
 }

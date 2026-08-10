@@ -39,14 +39,16 @@ function Section({
 
 function ReadOnlyRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-outline-variant/40 py-3 last:border-0">
-      <span className="text-sm text-on-surface-variant">{label}</span>
-      <span className="text-end">
-        <span className="block font-semibold" dir="auto">
+    <div className="border-b border-outline-variant/40 py-3 last:border-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span className="text-sm text-on-surface-variant">{label}</span>
+        <span className="min-w-0 break-all font-semibold" dir="auto">
           {value}
         </span>
-        {hint && <span className="block text-xs text-outline">{hint}</span>}
-      </span>
+      </div>
+      {/* On its own line rather than tucked under the value: right-aligned, a
+          sentence-long hint wraps to three ragged lines in a half-width card. */}
+      {hint && <p className="mt-1 text-xs text-outline">{hint}</p>}
     </div>
   );
 }
@@ -118,12 +120,20 @@ export default function ProfilePage() {
   const role = data?.role ?? user?.role;
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8 sm:px-8">
+    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       <PageHeader title={t('profile.title')} subtitle={t('profile.subtitle')} />
 
-      <div className="grid gap-5">
-        {/* Identity */}
-        <section className="card">
+      {/*
+        Identity on one side, the settings beside it. As a single narrow column
+        this was five cards deep — a page of mostly empty margin that had to be
+        scrolled to reach a language dropdown. Nothing here is long enough to
+        deserve its own screenful, so on a wide viewport it all sits above the
+        fold, and the columns collapse back to the stack on a phone.
+      */}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,22rem)_1fr]">
+        {/* Identity — who the account belongs to, and the one thing here that is
+            editable inline. Sticky, so it stays put while the rest is read. */}
+        <section className="card lg:sticky lg:top-8">
           <div className="flex flex-wrap items-center gap-5">
             <div className="relative">
               <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-primary-fixed text-3xl font-extrabold text-primary shadow-card">
@@ -192,6 +202,9 @@ export default function ProfilePage() {
           </div>
         </section>
 
+        {/* Everything that is settings rather than identity. Two-up once there
+            is room for it — these blocks are three rows each, not articles. */}
+        <div className="grid gap-5 xl:grid-cols-2">
         <Section icon="badge" title={t('profile.sectionAccount')}>
           <ReadOnlyRow
             label={t('profile.email')}
@@ -254,6 +267,7 @@ export default function ProfilePage() {
             </button>
           </div>
         </Section>
+        </div>
       </div>
     </div>
   );

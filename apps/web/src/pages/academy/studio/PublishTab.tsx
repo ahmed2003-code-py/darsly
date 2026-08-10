@@ -55,6 +55,11 @@ export default function PublishTab({ slug }: { slug: string }) {
     qc.invalidateQueries({ queryKey: ['studio-snapshots'] });
     qc.invalidateQueries({ queryKey: ['studio-preview'] });
     qc.invalidateQueries({ queryKey: ['studio-draft'] });
+    // Publishing is what promotes the design to the academy's brand, and the
+    // console reads that brand from this query. Without invalidating it the new
+    // colours only appear on the next hard reload — the app would sit there
+    // still wearing the palette the teacher just replaced.
+    qc.invalidateQueries({ queryKey: ['my-academies'] });
   };
 
   const publish = useMutation({ mutationFn: async () => (await api.post('/academy/site/publish')).data, onSuccess: refresh });

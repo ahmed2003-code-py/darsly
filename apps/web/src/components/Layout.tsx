@@ -69,9 +69,9 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col">
       {/* Brand block — flat accent tile, editorial wordmark, start-aligned */}
       <div className="flex items-center gap-3 px-5 py-6">
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-on-primary">
-          <span className="material-symbols-outlined text-2xl">school</span>
-        </div>
+        {/* The real mark, not a stock glyph — and the same file the browser
+            tab uses, so the two can never drift apart. */}
+        <img src="/icon.svg" alt="" width={44} height={44} className="h-11 w-11 shrink-0 rounded-xl" />
         <div className="min-w-0">
           <h1 className="font-heading text-xl font-bold tracking-tight text-on-surface">{t('brand')}</h1>
           <p className="text-xs text-on-surface-variant">{roleLabel}</p>

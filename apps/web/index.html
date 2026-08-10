@@ -4,7 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>درسلي — Darsly</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23422EC7'/%3E%3Ctext x='50' y='73' font-size='62' font-weight='bold' text-anchor='middle' fill='white' font-family='Tahoma,Arial'%3E%D8%AF%3C/text%3E%3C/svg%3E" />
+    <!-- One brand asset for the whole product: the tab, the PWA, the installed
+      app and the sidebar all read /icon.svg, so replacing that one file
+      changes the logo everywhere. The favicon used to be a second copy of the
+      mark inlined here, which meant changing it in one place changed it in
+      one place. -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="alternate icon" href="/icon-192.png" />
     <!-- PWA: installable on mobile -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#4A32C9" />

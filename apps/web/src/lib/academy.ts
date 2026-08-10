@@ -33,6 +33,8 @@ export interface AcademyBranding {
   colorAccent: string;
   /** The design system published from Academy Studio, when there is one. */
   brandTokens?: BrandTokens | null;
+  /** Derived console tokens, so the signed-out auth screens can wear them too. */
+  appTheme?: AppTheme | null;
   language: string;
 }
 

@@ -1,3 +1,4 @@
+import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
 import { CoursesService } from './courses.service';
@@ -30,7 +31,10 @@ function build(rows: unknown[] = [], total = rows.length) {
   const price = {
     applyToMany: jest.fn(async (items: unknown[]) => items),
   } as unknown as StudentPriceService;
-  return { service: new CoursesService(prisma, price), prisma, calls };
+  // Nothing is hidden here: exclusivity has its own suite, and letting it
+  // return anything would make every assertion below depend on it.
+  const openToEveryone = { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService;
+  return { service: new CoursesService(prisma, price, openToEveryone), prisma, calls };
 }
 
 const course = (over: Record<string, unknown> = {}) => ({
@@ -202,10 +206,66 @@ describe('prices carry the platform fee', () => {
       course: { count: jest.fn().mockResolvedValue(1), findMany: jest.fn().mockResolvedValue([course()]) },
       review: { groupBy: jest.fn().mockResolvedValue([]) },
     } as unknown as PrismaService;
-    const service = new CoursesService(prisma, { applyToMany: price } as unknown as StudentPriceService);
+    const service = new CoursesService(
+      prisma,
+      { applyToMany: price } as unknown as StudentPriceService,
+      { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService,
+    );
     await service.discover({});
     // The card and the checkout must agree, and the academy's own price must not
     // be derivable by subtracting one from the other.
     expect(price).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The rival teachers a student must not be shown.
+ *
+ * The rule itself is tested in SubjectExclusivityService; what matters here is
+ * that its answer reaches the SQL, and that it composes with the filter a
+ * student is most likely to have on at the time.
+ */
+describe('a student is not shown the catalogues of their teacher\'s rivals', () => {
+  function buildWith(hidden: string[]) {
+    const calls: { where?: Record<string, unknown> } = {};
+    const prisma = {
+      course: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn(async (args: Record<string, unknown>) => {
+          Object.assign(calls, args);
+          return [];
+        }),
+      },
+      review: { groupBy: jest.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    const service = new CoursesService(
+      prisma,
+      { applyToMany: jest.fn(async (i: unknown[]) => i) } as unknown as StudentPriceService,
+      { hiddenTeacherIds: jest.fn().mockResolvedValue(hidden) } as unknown as SubjectExclusivityService,
+    );
+    return { service, calls };
+  }
+
+  it('excludes them from the query', async () => {
+    const { service, calls } = buildWith(['rival_a', 'rival_b']);
+    await service.discover({}, 'u1');
+    expect(calls.where?.tenantId).toEqual({ notIn: ['rival_a', 'rival_b'] });
+  });
+
+  it('adds no clause at all when there is nobody to hide', async () => {
+    // The common case — anonymous visitors and new students — must not pay for
+    // a filter, and `notIn: []` is not a filter worth generating.
+    const { service, calls } = buildWith([]);
+    await service.discover({}, 'u1');
+    expect(calls.where?.tenantId).toBeUndefined();
+  });
+
+  it('still narrows to one teacher when asked for that teacher', async () => {
+    // Both conditions land on `tenantId`. Spread separately, the second silently
+    // drops the first and "this teacher's courses" quietly becomes "everyone
+    // except the rivals".
+    const { service, calls } = buildWith(['rival_a']);
+    await service.discover({ teacherId: 'mine' }, 'u1');
+    expect(calls.where?.tenantId).toEqual({ equals: 'mine', notIn: ['rival_a'] });
   });
 });

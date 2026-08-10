@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JwtPayload, Role } from '@darsly/shared-types';
+import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
@@ -25,6 +26,7 @@ export class CoursesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly studentPrice: StudentPriceService,
+    private readonly exclusivity: SubjectExclusivityService,
   ) {}
 
   /**
@@ -39,9 +41,14 @@ export class CoursesService {
    * directory filters price and rating in memory over the whole table; doing
    * that here would load the entire catalogue to show ten rows.
    */
-  async discover(query: DiscoverCoursesQuery) {
+  async discover(query: DiscoverCoursesQuery, viewerUserId?: string) {
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(24, Math.max(1, query.pageSize ?? 10));
+
+    // A student already studying a subject is not shown the other teachers of
+    // it. Empty for everyone else, and the clause is only added when it has
+    // something in it — `notIn: []` is not a filter worth generating.
+    const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
 
     const priceFilter: Prisma.IntFilter = {};
     if (query.free) priceFilter.equals = 0;
@@ -60,7 +67,17 @@ export class CoursesService {
         user: { isActive: true },
         ...(query.language ? { language: query.language } : {}),
       },
-      ...(query.teacherId ? { tenantId: query.teacherId } : {}),
+      // Both conditions land on `tenantId`, so when both apply they are merged
+      // rather than spread — two spreads of the same key silently drop the
+      // first, which would have turned "this teacher's courses" into "everyone
+      // but the rivals" the moment a student filtered by teacher. With nobody
+      // to hide the clause stays exactly as it was, which is every anonymous
+      // request and every request from a student who has not enrolled yet.
+      ...(hidden.length
+        ? { tenantId: { ...(query.teacherId ? { equals: query.teacherId } : {}), notIn: hidden } }
+        : query.teacherId
+          ? { tenantId: query.teacherId }
+          : {}),
       ...(query.subjectId ? { subjectId: query.subjectId } : {}),
       ...(query.gradeId ? { gradeId: query.gradeId } : {}),
       ...(Object.keys(priceFilter).length ? { priceCents: priceFilter } : {}),

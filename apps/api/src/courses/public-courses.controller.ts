@@ -14,8 +14,11 @@ export class PublicCoursesController {
   @Public()
   @Get()
   @ApiOperation({ summary: 'Public course catalogue: search, filter, sort, paginate' })
-  discover(@Query() query: DiscoverCoursesDto) {
-    return this.courses.discover(query);
+  // Public, but viewer-aware: a signed-in student is not shown the catalogues of
+  // teachers competing with their own. The guard attaches the user on public
+  // routes when a token is present, so this stays anonymous-friendly.
+  discover(@Query() query: DiscoverCoursesDto, @CurrentUser() viewer?: JwtPayload) {
+    return this.courses.discover(query, viewer?.sub);
   }
 
   @Public()

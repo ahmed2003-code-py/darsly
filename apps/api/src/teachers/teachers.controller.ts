@@ -58,8 +58,10 @@ export class TeachersController {
   @Public()
   @Get('teachers')
   @ApiOperation({ summary: 'Discover teachers (search + filters: subject, grade, price, rating, language)' })
-  discover(@Query() query: DiscoverTeachersDto) {
-    return this.teachers.discover(query);
+  // Public, but viewer-aware: a signed-in student does not see the teachers
+  // competing with the one they already study that subject with.
+  discover(@Query() query: DiscoverTeachersDto, @CurrentUser() viewer?: JwtPayload) {
+    return this.teachers.discover(query, viewer?.sub);
   }
 
   @Public()

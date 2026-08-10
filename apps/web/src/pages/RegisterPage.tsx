@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell, { AuthField } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
+import { arrivalAcademy } from '../lib/arrival';
 import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 
@@ -17,6 +18,11 @@ export default function RegisterPage() {
   const destination = safeRedirect(params.get(REDIRECT_PARAM));
   const { setTokens, setUser } = useAuthStore();
 
+  // Someone who followed a teacher's link is here to be that teacher's student.
+  // Offering "sign up as a teacher" at that moment is an invitation to make the
+  // wrong account — and a teacher account cannot even sign in until an admin
+  // approves it, so the mistake ends the journey rather than delaying it.
+  const fromAcademy = !!arrivalAcademy();
   const [role, setRole] = useState<Role>('student');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -78,7 +84,8 @@ export default function RegisterPage() {
         </>
       }
     >
-      {/* Role toggle */}
+      {/* Role toggle — hidden for anyone who came in through an academy. */}
+      {!fromAcademy && (
       <div className="mb-6 grid grid-cols-2 gap-1 rounded-2xl bg-surface-container-low p-1">
         {(['student', 'teacher'] as Role[]).map((r) => (
           <button key={r} type="button" onClick={() => setRole(r)}
@@ -89,6 +96,7 @@ export default function RegisterPage() {
           </button>
         ))}
       </div>
+      )}
 
       <form onSubmit={submit}>
         {error && (

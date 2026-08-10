@@ -38,7 +38,7 @@ export class AcademyService {
         },
       },
     });
-    return rows
+    const mine = rows
       .map((m) => ({
         academyId: m.academyId,
         slug: m.academy.slug,
@@ -62,6 +62,68 @@ export class AcademyService {
           ),
         },
       }));
+
+    // A student who enrolled through a teacher's link is not a member of
+    // anything — enrolling in a course has never created an AcademyMembership,
+    // those come from provisioning an owner or an admin adding someone by hand.
+    // So this list was empty for exactly the people it most needed to answer
+    // for, and the console kept the platform palette however many courses they
+    // had bought. Enrolments are the missing half of "academies I belong to".
+    const enrolled = await this.academiesIEnrolledIn(userId, new Set(mine.map((m) => m.academyId)));
+    return [...mine, ...enrolled];
+  }
+
+  /**
+   * Academies the user studies at, derived from their enrolments.
+   *
+   * Ordered by first enrolment, so the teacher a student came to the platform
+   * for stays first and stays the one whose colours the app wears.
+   */
+  private async academiesIEnrolledIn(userId: string, already: Set<string>) {
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!student) return [];
+
+    const rows = await this.prisma.enrollment.findMany({
+      where: { studentId: student.id, status: { in: ['ACTIVE', 'PENDING_APPROVAL'] } },
+      select: { tenantId: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const ids = [...new Set(rows.map((r) => r.tenantId))].filter((id) => !already.has(id));
+    if (!ids.length) return [];
+
+    const academies = await this.prisma.academy.findMany({
+      where: { id: { in: ids }, deletedAt: null, status: { not: 'ARCHIVED' } },
+      select: {
+        id: true, slug: true, name: true, status: true,
+        logoUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true,
+      },
+    });
+    const byId = new Map(academies.map((a) => [a.id, a]));
+
+    return ids
+      .map((id) => byId.get(id))
+      .filter((a): a is NonNullable<typeof a> => !!a)
+      .map((a) => ({
+        academyId: a.id,
+        slug: a.slug,
+        name: a.name,
+        role: 'STUDENT' as const,
+        // Not a membership, so nothing here is anyone's declared home. The order
+        // carries the same meaning without claiming a flag that means something
+        // else on the membership table.
+        isHome: false,
+        status: a.status,
+        branding: {
+          logoUrl: a.logoUrl,
+          colorPrimary: a.colorPrimary,
+          colorAccent: a.colorAccent,
+          brandTokens: a.brandTokens ?? null,
+          appTheme: deriveAppTheme(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
+        },
+      }));
   }
 
   /** Public branding for an academy landing page (no membership required). */
@@ -73,7 +135,15 @@ export class AcademyService {
         logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true, language: true,
       },
     });
-    return a;
+    if (!a) return a;
+    // The console theme travels with the public branding so the sign-in and
+    // sign-up screens can wear it. A visitor arriving from a teacher's site is
+    // not signed in yet, and handing them the platform's indigo at the exact
+    // moment they decide to join reads as having left the teacher's site.
+    return {
+      ...a,
+      appTheme: deriveAppTheme(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
+    };
   }
 
   /**

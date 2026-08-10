@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
 
@@ -21,6 +22,7 @@ export class TeachersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly studentPrice: StudentPriceService,
+    private readonly exclusivity: SubjectExclusivityService,
   ) {}
 
   /**
@@ -29,10 +31,14 @@ export class TeachersService {
    * computed per-teacher then filtered/sorted in memory (teacher counts are
    * small enough per page of the marketplace to keep this simple for now).
    */
-  async discover(query: DiscoverTeachersQuery) {
+  async discover(query: DiscoverTeachersQuery, viewerUserId?: string) {
+    // A student already studying a subject is not shown the other teachers of
+    // it — see SubjectExclusivityService for why the rule is drawn this way.
+    const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
     const where: Prisma.TeacherProfileWhereInput = {
       status: 'APPROVED',
       user: { isActive: true },
+      ...(hidden.length ? { id: { notIn: hidden } } : {}),
       ...(query.subjectId ? { subjectId: query.subjectId } : {}),
       ...(query.gradeId ? { grades: { some: { gradeId: query.gradeId } } } : {}),
       ...(query.language ? { language: query.language } : {}),

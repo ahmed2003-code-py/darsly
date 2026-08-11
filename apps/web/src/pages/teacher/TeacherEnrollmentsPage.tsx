@@ -89,6 +89,50 @@ function groupByStudent(rows: Enrollment[]): StudentGroup[] {
   return [...groups.values()];
 }
 
+/** A compact figure + its label, for the strip above the list. */
+function SummaryChip({ icon, value, label }: { icon: string; value: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2.5 rounded-xl border border-outline-variant bg-surface-container-low px-3.5 py-2">
+      <span className="material-symbols-outlined text-[20px] text-primary">{icon}</span>
+      <span className="leading-tight">
+        <strong className="block font-heading text-base font-bold tabular-nums">{value}</strong>
+        <span className="block text-xs text-outline">{label}</span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Reach a student in one tap.
+ *
+ * A private tutor's follow-up happens on WhatsApp or the phone, not in the
+ * console — the number was already printed here, so the teacher was copying it
+ * by hand into another app.
+ */
+function ContactLink({
+  href,
+  icon,
+  label,
+  external,
+}: {
+  href: string;
+  icon: string;
+  label: string;
+  external?: boolean;
+}) {
+  return (
+    <a
+      href={href}
+      title={label}
+      aria-label={label}
+      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      className="grid h-9 w-9 place-items-center rounded-full text-outline transition hover:bg-primary-fixed hover:text-primary"
+    >
+      <span className="material-symbols-outlined text-[20px]">{icon}</span>
+    </a>
+  );
+}
+
 export default function TeacherEnrollmentsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -106,10 +150,17 @@ export default function TeacherEnrollmentsPage() {
   });
 
   const all = data ?? [];
+
+  // People, not rows. These chips sit directly above a list that groups by
+  // student and reports "2 students" — counting enrolments here put two
+  // contradictory numbers on the same screen, and the tab was the one a teacher
+  // reads first.
+  const studentsWhere = (predicate: (e: Enrollment) => boolean) =>
+    new Set(all.filter(predicate).map((e) => e.student?.id)).size;
   const counts = {
-    ALL: all.length,
-    PENDING_APPROVAL: all.filter((e) => e.status === 'PENDING_APPROVAL').length,
-    ACTIVE: all.filter((e) => e.status === 'ACTIVE').length,
+    ALL: studentsWhere(() => true),
+    PENDING_APPROVAL: studentsWhere((e) => e.status === 'PENDING_APPROVAL'),
+    ACTIVE: studentsWhere((e) => e.status === 'ACTIVE'),
   };
 
   const act = useMutation({
@@ -137,6 +188,11 @@ export default function TeacherEnrollmentsPage() {
   }, [all, tab, search, sort]);
 
   const totalPaid = groups.reduce((sum, g) => sum + g.paidCents, 0);
+  const visibleEnrollments = groups.reduce((sum, g) => sum + g.enrollments.length, 0);
+  const allExpanded = groups.length > 0 && groups.every((g) => open[g.studentId]);
+
+  const toggleAll = () =>
+    setOpen(allExpanded ? {} : Object.fromEntries(groups.map((g) => [g.studentId, true])));
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
@@ -234,15 +290,34 @@ export default function TeacherEnrollmentsPage() {
         />
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-on-surface-variant">
-            <span>
-              <strong className="text-on-surface">{groups.length}</strong>{' '}
-              {t('teacher.students.students')}
-            </span>
-            <span>
-              {t('teacher.students.totalPaid')}:{' '}
-              <strong className="text-on-surface">{egp(totalPaid)}</strong>
-            </span>
+          {/* Both figures at once, because they answer different questions and
+              were previously one ambiguous number: how many people, and how
+              many things those people bought. */}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <SummaryChip
+              icon="group"
+              value={String(groups.length)}
+              label={t('teacher.students.students')}
+            />
+            <SummaryChip
+              icon="menu_book"
+              value={String(visibleEnrollments)}
+              label={t('teacher.students.enrollmentsLabel')}
+            />
+            <SummaryChip
+              icon="payments"
+              value={egp(totalPaid)}
+              label={t('teacher.students.totalPaid')}
+            />
+            <button
+              onClick={toggleAll}
+              className="ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-primary transition hover:bg-primary-fixed"
+            >
+              <span className="material-symbols-outlined text-base">
+                {allExpanded ? 'unfold_less' : 'unfold_more'}
+              </span>
+              {t(allExpanded ? 'teacher.students.collapseAll' : 'teacher.students.expandAll')}
+            </button>
           </div>
 
           <div className="grid gap-3">
@@ -253,53 +328,101 @@ export default function TeacherEnrollmentsPage() {
                   key={group.studentId}
                   className="overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-low transition hover:border-primary/40"
                 >
-                  <button
-                    onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
-                    aria-expanded={expanded}
-                    className="flex w-full items-center gap-4 p-4 text-start"
-                  >
-                    <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
-                      {group.avatarUrl ? (
-                        <img src={group.avatarUrl} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        (group.name.trim().charAt(0) || '?')
-                      )}
-                    </span>
-
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-bold">{group.name}</span>
-                      <span className="block font-mono text-xs text-outline" dir="ltr">
-                        {group.phone || t('teacher.students.noPhone')}
-                      </span>
-                    </span>
-
-                    <span className="hidden shrink-0 flex-wrap items-center gap-2 sm:flex">
-                      {group.activeCount > 0 && (
-                        <Badge tone="teal">
-                          {t('teacher.students.activeCount', { count: group.activeCount })}
-                        </Badge>
-                      )}
-                      {group.pendingCount > 0 && (
-                        <Badge tone="warn">
-                          {t('teacher.students.pendingCount', { count: group.pendingCount })}
-                        </Badge>
-                      )}
-                    </span>
-
-                    <span className="shrink-0 text-end">
-                      <span className="block text-sm font-bold">{egp(group.paidCents)}</span>
-                      <span className="block text-xs text-outline">
-                        {t('teacher.students.courseCount', { count: group.enrollments.length })}
-                      </span>
-                    </span>
-
-                    <span
-                      className="material-symbols-outlined shrink-0 text-outline transition"
-                      style={{ transform: expanded ? 'rotate(180deg)' : undefined }}
+                  {/* The contact links sit beside the disclosure button rather
+                      than inside it: an anchor nested in a button is invalid,
+                      and tapping "call" must not also expand the card. */}
+                  <div className="flex items-center gap-2 p-4">
+                    <button
+                      onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
+                      aria-expanded={expanded}
+                      className="flex min-w-0 flex-1 items-center gap-4 text-start"
                     >
-                      expand_more
-                    </span>
-                  </button>
+                      <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
+                        {group.avatarUrl ? (
+                          <img src={group.avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          (group.name.trim().charAt(0) || '?')
+                        )}
+                      </span>
+
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-bold">
+                          <bdi>{group.name}</bdi>
+                        </span>
+                        {/* The monospace/LTR treatment is for digits. Applying
+                            it to the "no phone" fallback made an absence look
+                            like a malformed number. */}
+                        {group.phone ? (
+                          <span className="block font-mono text-xs text-outline" dir="ltr">
+                            {group.phone}
+                          </span>
+                        ) : (
+                          <span className="block text-xs text-outline/60">
+                            {t('teacher.students.noPhone')}
+                          </span>
+                        )}
+                      </span>
+
+                      <span className="hidden shrink-0 flex-wrap items-center gap-2 sm:flex">
+                        {group.activeCount > 0 && (
+                          <Badge tone="teal">
+                            {t('teacher.students.activeCount', { count: group.activeCount })}
+                          </Badge>
+                        )}
+                        {group.pendingCount > 0 && (
+                          <Badge tone="warn">
+                            {t('teacher.students.pendingCount', { count: group.pendingCount })}
+                          </Badge>
+                        )}
+                      </span>
+
+                      <span className="shrink-0 text-end">
+                        <span className="block text-sm font-bold">{egp(group.paidCents)}</span>
+                        <span className="block text-xs text-outline">
+                          {t('teacher.students.courseCount', { count: group.enrollments.length })}
+                        </span>
+                        <span className="hidden text-xs text-outline/70 sm:block">
+                          {/* `lastEnrolledAt` is epoch ms, kept that way for the sort. */}
+                          {t('teacher.students.lastEnrolled')}: {dateShort(new Date(group.lastEnrolledAt))}
+                        </span>
+                      </span>
+
+                    </button>
+
+                    {group.phone && (
+                      <span className="flex shrink-0 items-center gap-1">
+                        <ContactLink
+                          href={`https://wa.me/${group.phone.replace(/\D/g, '')}`}
+                          external
+                          icon="chat"
+                          label={t('teacher.students.whatsapp')}
+                        />
+                        <ContactLink
+                          href={`tel:${group.phone}`}
+                          icon="call"
+                          label={t('teacher.students.call')}
+                        />
+                      </span>
+                    )}
+
+                    {/* Its own control, placed last so the row always ends with
+                        the disclosure regardless of whether the contact icons
+                        are there. Labelled, because a lone chevron says nothing
+                        to a screen reader. */}
+                    <button
+                      onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
+                      aria-expanded={expanded}
+                      aria-label={t(expanded ? 'teacher.students.collapse' : 'teacher.students.expand')}
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-outline transition hover:bg-surface-container-high hover:text-on-surface"
+                    >
+                      <span
+                        className="material-symbols-outlined transition-transform"
+                        style={{ transform: expanded ? 'rotate(180deg)' : undefined }}
+                      >
+                        expand_more
+                      </span>
+                    </button>
+                  </div>
 
                   {expanded && (
                     <div className="border-t border-outline-variant bg-surface">
@@ -309,7 +432,9 @@ export default function TeacherEnrollmentsPage() {
                           className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-outline-variant/60 px-4 py-3 last:border-0"
                         >
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate font-semibold">{e.course.title}</span>
+                            <span className="block truncate font-semibold">
+                              <bdi>{e.course.title}</bdi>
+                            </span>
                             <span className="block text-xs text-outline">
                               {t('teacher.students.colDate')}: {dateShort(e.createdAt)}
                             </span>

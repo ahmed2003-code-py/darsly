@@ -386,7 +386,7 @@
       "search": "Search by student name or phone…",
       "noMatch": "No student matches your search",
       "students": "students",
-      "courseCount": "{{count}} courses",
+      "courseCount": "Courses: {{count}}",
       "totalPaid": "Total paid",
       "expand": "Show courses",
       "collapse": "Hide courses",
@@ -406,7 +406,12 @@
         "EXPIRED": "Expired"
       },
       "clearSearch": "Clear search",
-      "resultsFor": "Results for “{{q}}”"
+      "resultsFor": "Results for “{{q}}”",
+      "enrollmentsLabel": "Enrolments",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
+      "whatsapp": "Message on WhatsApp",
+      "call": "Call"
     },
     "coupons": {
       "title": "Discount coupons",

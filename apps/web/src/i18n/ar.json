@@ -386,7 +386,7 @@
       "search": "ابحث باسم الطالب أو رقمه…",
       "noMatch": "لا يوجد طالب مطابق لبحثك",
       "students": "طالب",
-      "courseCount": "{{count}} كورس",
+      "courseCount": "الدورات: {{count}}",
       "totalPaid": "إجمالي المدفوع",
       "expand": "عرض الكورسات",
       "collapse": "إخفاء الكورسات",
@@ -406,7 +406,12 @@
         "EXPIRED": "منتهي"
       },
       "clearSearch": "مسح البحث",
-      "resultsFor": "نتائج البحث عن «{{q}}»"
+      "resultsFor": "نتائج البحث عن «{{q}}»",
+      "enrollmentsLabel": "الاشتراكات",
+      "expandAll": "افتح الكل",
+      "collapseAll": "اقفل الكل",
+      "whatsapp": "مراسلة على واتساب",
+      "call": "اتصال"
     },
     "coupons": {
       "title": "كوبونات الخصم",

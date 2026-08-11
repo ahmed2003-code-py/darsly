@@ -1,5 +1,5 @@
 import { HTMLMotionProps, m, useReducedMotion, Variants } from 'framer-motion';
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 
 /**
  * Shared motion primitives. One curve (easeOutExpo), short durations, small
@@ -38,7 +38,17 @@ export function Reveal({
   );
 }
 
-/** Wrap a list; children using <StaggerItem> reveal with a ~50ms cascade. */
+/**
+ * Wrap a list; children using <StaggerItem> reveal with a ~50ms cascade.
+ *
+ * The revealed state is held in React state rather than left to `whileInView`.
+ * With `once: true` the observer stops watching after it fires, so a child that
+ * mounts *later* — a list re-keyed by a re-render, which is what switching
+ * language does — arrived at the hidden variant with nothing left to move it,
+ * and stayed invisible until the page was reloaded. Driving `animate` from
+ * state means the container is authoritative: whatever mounts under a revealed
+ * container is revealed too.
+ */
 export function Stagger({
   children,
   className,
@@ -49,6 +59,7 @@ export function Stagger({
   gap?: number;
 }) {
   const reduce = useReducedMotion();
+  const [revealed, setRevealed] = useState(false);
   const container: Variants = {
     hidden: {},
     show: { transition: { staggerChildren: reduce ? 0 : gap } },
@@ -58,7 +69,8 @@ export function Stagger({
       className={className}
       variants={container}
       initial={reduce ? false : 'hidden'}
-      whileInView={reduce ? undefined : 'show'}
+      animate={reduce || revealed ? 'show' : 'hidden'}
+      onViewportEnter={() => setRevealed(true)}
       viewport={{ once: true, margin: '-40px' }}
     >
       {children}

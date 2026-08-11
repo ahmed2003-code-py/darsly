@@ -1,11 +1,11 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AcademyService } from './academy.service';
 import { AcademyContext, CurrentAcademy, RequirePermission } from './academy-context';
-import { AddMemberDto, UpdateAcademyDto, UpdateMemberDto } from './dto';
+import { AddMemberDto, CheckSlugDto, UpdateAcademyDto, UpdateMemberDto } from './dto';
 import { AcademyMembershipGuard } from './guards/academy-membership.guard';
 import { PermissionGuard } from './guards/permission.guard';
 import { CAPABILITIES } from './permissions';
@@ -87,6 +87,16 @@ export class AcademyController {
   @ApiOperation({ summary: '[academy] Full settings for the console editor' })
   settings(@CurrentAcademy() ctx: AcademyContext) {
     return this.academy.getManaged(ctx.academyId);
+  }
+
+  @Get('academies/:slug/slug-check')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('academy.manage')
+  @ApiOperation({
+    summary: '[academy] Is this address free? Normalizes the input and suggests alternatives',
+  })
+  checkSlug(@CurrentAcademy() ctx: AcademyContext, @Query() query: CheckSlugDto) {
+    return this.academy.checkSlug(ctx.academyId, query.value);
   }
 
   @Patch('academies/:slug/settings')

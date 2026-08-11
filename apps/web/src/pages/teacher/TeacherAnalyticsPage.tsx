@@ -60,7 +60,7 @@ export default function TeacherAnalyticsPage() {
       {/* KPIs */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.label} className="card flex items-center gap-4">
+          <div key={k.icon} className="card flex items-center gap-4">
             <span className={`grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed ${k.tint}`}>
               <span className="material-symbols-outlined">{k.icon}</span>
             </span>

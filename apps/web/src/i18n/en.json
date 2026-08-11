@@ -1174,7 +1174,15 @@
     "inviteEmail": "Member's email (must already be registered)",
     "inviteRole": "Role",
     "inviteAdd": "Add",
-    "taglineHint": "Maths made simple"
+    "taglineHint": "Maths made simple",
+    "link": "Academy link",
+    "linkHint": "What students type to reach you. Letters, numbers and hyphens.",
+    "linkChecking": "Checking…",
+    "linkAvailable": "Available ✓",
+    "linkTaken": "Already taken — pick another",
+    "linkReserved": "This word is reserved by the platform",
+    "linkInvalid": "At least 3 characters: letters, numbers and single hyphens",
+    "linkSuggestions": "Free alternatives:"
   },
   "method": {
     "INSTAPAY": "InstaPay",

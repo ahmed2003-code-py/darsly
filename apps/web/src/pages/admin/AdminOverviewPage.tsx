@@ -43,7 +43,7 @@ export default function AdminOverviewPage() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         {money.map((m) => (
-          <div key={m.label} className={`card flex items-center gap-4 ${m.card}`}>
+          <div key={m.icon} className={`card flex items-center gap-4 ${m.card}`}>
             <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-xl ${m.iconBg}`}>
               <span className="material-symbols-outlined text-3xl">{m.icon}</span>
             </span>
@@ -68,7 +68,7 @@ export default function AdminOverviewPage() {
               </div>
             </div>
           );
-          return c.to ? <Link key={c.label} to={c.to}>{inner}</Link> : <div key={c.label}>{inner}</div>;
+          return c.to ? <Link key={c.icon} to={c.to}>{inner}</Link> : <div key={c.icon}>{inner}</div>;
         })}
       </div>
     </div>

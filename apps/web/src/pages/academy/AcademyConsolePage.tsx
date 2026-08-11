@@ -67,6 +67,10 @@ export function BrandingTab({ slug }: { slug: string }) {
   const save = useMutation({
     mutationFn: async () => (await api.patch(`/academies/${slug}/settings`, {
       name: form.name, tagline: form.tagline, logoUrl: form.logoUrl, coverUrl: form.coverUrl,
+      // Only sent when it actually changed: the server rejects a slug that
+      // another academy holds, and re-sending the current one is a no-op that
+      // would still cost the uniqueness queries.
+      ...(form.slug && form.slug !== slug ? { slug: form.slug } : {}),
       colorPrimary: form.colorPrimary, colorAccent: form.colorPrimary,
       language: form.language, requiresEnrollmentApproval: form.requiresEnrollmentApproval,
       maxConcurrentSessions: Number(form.maxConcurrentSessions),
@@ -88,6 +92,7 @@ export function BrandingTab({ slug }: { slug: string }) {
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
       <div className="card">
         <Field label={t('academy.name')}><input className="input" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} maxLength={80} /></Field>
+        <AcademyAddressField slug={slug} value={form.slug ?? slug} onChange={(v) => set('slug', v)} />
         <Field label={t('academy.tagline')}><input className="input" value={form.tagline ?? ''} onChange={(e) => set('tagline', e.target.value)} maxLength={160} placeholder={t('academy.taglineHint')} /></Field>
 
         <div className="mb-4 grid grid-cols-2 gap-4">
@@ -154,6 +159,137 @@ export function BrandingTab({ slug }: { slug: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── The academy's public address ────────────────────────────────────────────
+
+interface SlugCheck {
+  value: string;
+  available: boolean;
+  reason: 'INVALID' | 'RESERVED' | 'TAKEN' | null;
+  suggestions: string[];
+}
+
+/**
+ * Light client-side normalization, for the typing feel only.
+ *
+ * The server owns the rules and returns the address it would actually store;
+ * this exists so "Ahmed Elsayed" visibly becomes "ahmed-elsayed" under the
+ * cursor rather than after a round trip. Deliberately permissive — it leaves a
+ * trailing hyphen alone while the person is still typing the next word.
+ */
+function typeAsSlug(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 40);
+}
+
+/**
+ * The one thing a teacher hands out on paper. It is auto-generated at signup as
+ * something like `ae0011w`, which nobody can read back over a phone — so this
+ * lets them take their own name, tells them straight away when it is gone, and
+ * offers addresses that are actually free rather than making them guess.
+ */
+function AcademyAddressField({
+  slug,
+  value,
+  onChange,
+}: {
+  slug: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [check, setCheck] = useState<SlugCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const unchanged = value === slug;
+
+  useEffect(() => {
+    if (unchanged || !value) {
+      setCheck(null);
+      setChecking(false);
+      return;
+    }
+    setChecking(true);
+    // Debounced: a check on every keystroke would ask the database how it feels
+    // about half-typed words.
+    const id = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/academies/${slug}/slug-check`, { params: { value } });
+        setCheck(data);
+      } catch {
+        setCheck(null);
+      } finally {
+        setChecking(false);
+      }
+    }, 400);
+    return () => clearTimeout(id);
+  }, [value, slug, unchanged]);
+
+  const status = (() => {
+    if (unchanged || !value) return null;
+    if (checking) return { tone: 'text-outline', text: t('academy.linkChecking') };
+    if (!check) return null;
+    if (check.available) return { tone: 'text-primary', text: t('academy.linkAvailable') };
+    const key =
+      check.reason === 'RESERVED' ? 'academy.linkReserved'
+      : check.reason === 'INVALID' ? 'academy.linkInvalid'
+      : 'academy.linkTaken';
+    return { tone: 'text-error', text: t(key) };
+  })();
+
+  return (
+    <Field label={t('academy.link')}>
+      <div className="flex items-stretch overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
+        {/* The prefix is part of the address, so it is shown, not implied — and
+            it is LTR even in Arabic, because a URL always is. */}
+        <span className="grid shrink-0 place-items-center bg-surface-container-low px-3 font-mono text-xs text-outline" dir="ltr">
+          /a/
+        </span>
+        <input
+          className="w-full bg-transparent px-3 py-2.5 font-mono outline-none"
+          dir="ltr"
+          value={value}
+          maxLength={40}
+          spellCheck={false}
+          autoCapitalize="none"
+          onChange={(e) => onChange(typeAsSlug(e.target.value))}
+          onBlur={() => onChange(value.replace(/-+$/, ''))}
+        />
+      </div>
+
+      {/* The hint answers "what may I type", the status answers "did it work" —
+          so the hint gives way once there is an answer, rather than trailing
+          below the suggestions where it read as a footnote to them. */}
+      {status ? (
+        <p className={`mt-1.5 text-xs font-semibold ${status.tone}`}>{status.text}</p>
+      ) : (
+        <p className="mt-1.5 text-xs text-outline">{t('academy.linkHint')}</p>
+      )}
+
+      {check && !check.available && check.suggestions.length > 0 && (
+        <div className="mt-2">
+          <p className="mb-1.5 text-xs text-outline">{t('academy.linkSuggestions')}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {check.suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onChange(s)}
+                className="rounded-lg border border-outline-variant px-2.5 py-1 font-mono text-xs text-primary transition hover:border-primary hover:bg-primary-fixed"
+                dir="ltr"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </Field>
   );
 }
 

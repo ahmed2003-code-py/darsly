@@ -6,6 +6,7 @@ import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcademyContext } from './academy-context';
 import { AddMemberDto, UpdateAcademyDto, UpdateMemberDto } from './dto';
+import { slugCandidates, slugify, slugShapeError } from './slug';
 import { Capability, permissionsFor, ROLE_PERMISSIONS } from './permissions';
 
 const LOGO_MAX_BYTES = 600 * 1024;
@@ -255,16 +256,70 @@ export class AcademyService {
   }
 
   /**
-   * Words a slug may not take: they either already name a route on this domain
-   * or would let an academy impersonate the platform. Checked before the
-   * uniqueness query so the message says which problem it is.
+   * Is this address free for this academy to take, and if not, what could it
+   * take instead?
+   *
+   * Runs the exact checks `updateSettings` runs, so the answer here and the
+   * answer there cannot disagree — a suggestion that the save then rejects
+   * would be worse than offering none.
    */
-  private static readonly RESERVED_SLUGS = new Set([
-    'admin', 'api', 'app', 'auth', 'login', 'register', 'course', 'courses',
-    'teacher', 'teachers', 'student', 'students', 'discover', 'profile',
-    'settings', 'security', 'wallet', 'payments', 'live', 'messages', 'a', 't',
-    'darsly', 'support', 'help', 'about', 'terms', 'privacy', 'static', 'assets',
-  ]);
+  async checkSlug(academyId: string, raw: string) {
+    const value = slugify(raw ?? '');
+    const shape = slugShapeError(value);
+    if (shape) {
+      return {
+        value,
+        available: false,
+        reason: shape,
+        // Nothing to suggest from an empty normalization — an Arabic-only name
+        // leaves no ASCII behind to build on.
+        suggestions: value ? await this.freeSlugs(academyId, slugCandidates(value)) : [],
+      };
+    }
+    if (!(await this.slugTaken(academyId, value))) {
+      return { value, available: true, reason: null, suggestions: [] };
+    }
+    return {
+      value,
+      available: false,
+      reason: 'TAKEN' as const,
+      suggestions: await this.freeSlugs(academyId, slugCandidates(value)),
+    };
+  }
+
+  /** Taken by another academy, or by another teacher's profile address. */
+  private async slugTaken(academyId: string, slug: string): Promise<boolean> {
+    const [academy, owner] = await Promise.all([
+      this.prisma.academy.findFirst({ where: { slug, NOT: { id: academyId } }, select: { id: true } }),
+      this.prisma.academy.findUnique({ where: { id: academyId }, select: { ownerUserId: true } }),
+    ]);
+    if (academy) return true;
+    const teacher = await this.prisma.teacherProfile.findFirst({
+      where: { slug, NOT: { userId: owner?.ownerUserId ?? '' } },
+      select: { id: true },
+    });
+    return !!teacher;
+  }
+
+  /** The first three candidates nobody else holds. Two queries, not two dozen. */
+  private async freeSlugs(academyId: string, candidates: string[], want = 3): Promise<string[]> {
+    const owner = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { ownerUserId: true },
+    });
+    const [academies, teachers] = await Promise.all([
+      this.prisma.academy.findMany({
+        where: { slug: { in: candidates }, NOT: { id: academyId } },
+        select: { slug: true },
+      }),
+      this.prisma.teacherProfile.findMany({
+        where: { slug: { in: candidates }, NOT: { userId: owner?.ownerUserId ?? '' } },
+        select: { slug: true },
+      }),
+    ]);
+    const used = new Set([...academies, ...teachers].map((r) => r.slug));
+    return candidates.filter((c) => !used.has(c)).slice(0, want);
+  }
 
   async updateSettings(academyId: string, dto: UpdateAcademyDto) {
     this.assertImage(dto.logoUrl, LOGO_MAX_BYTES);
@@ -272,25 +327,14 @@ export class AcademyService {
 
     if (dto.slug !== undefined) {
       const slug = dto.slug.trim().toLowerCase();
-      if (AcademyService.RESERVED_SLUGS.has(slug)) {
+      const shape = slugShapeError(slug);
+      if (shape === 'RESERVED') {
         throw new BadRequestException({ message: 'هذا الرابط محجوز، اختر غيره', code: 'SLUG_RESERVED' });
       }
-      const taken = await this.prisma.academy.findFirst({
-        where: { slug, NOT: { id: academyId } },
-        select: { id: true },
-      });
-      if (taken) {
-        throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
+      if (shape) {
+        throw new BadRequestException({ message: 'رابط غير صالح', code: 'SLUG_INVALID' });
       }
-      const owner = await this.prisma.academy.findUnique({
-        where: { id: academyId },
-        select: { ownerUserId: true },
-      });
-      const teacherTaken = await this.prisma.teacherProfile.findFirst({
-        where: { slug, NOT: { userId: owner?.ownerUserId ?? '' } },
-        select: { id: true },
-      });
-      if (teacherTaken) {
+      if (await this.slugTaken(academyId, slug)) {
         throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
       }
     }

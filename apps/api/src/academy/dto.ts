@@ -41,6 +41,11 @@ export class AddMemberDto {
   @IsIn(['TEACHER', 'ASSISTANT']) role: 'TEACHER' | 'ASSISTANT';
 }
 
+/** The raw text a teacher typed into the address field, before normalizing. */
+export class CheckSlugDto {
+  @IsString() @MaxLength(120) value: string;
+}
+
 export class UpdateMemberDto {
   @IsOptional() @IsIn(['TEACHER', 'ASSISTANT']) role?: 'TEACHER' | 'ASSISTANT';
   @IsOptional() @IsIn(['ACTIVE', 'SUSPENDED']) status?: 'ACTIVE' | 'SUSPENDED';

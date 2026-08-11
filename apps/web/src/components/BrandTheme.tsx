@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { arrivalAcademy, clearArrival, rememberArrival } from '../lib/arrival';
 import { useAcademyBranding, useMyAcademies } from '../lib/academy';
-import { applyTheme } from '../lib/theme';
+import { applyTheme, hasServerTheme, rememberedTheme } from '../lib/theme';
 import { useAuthStore } from '../stores/auth';
 
 /**
@@ -20,6 +20,9 @@ import { useAuthStore } from '../stores/auth';
  *   - a visitor who has not signed in yet sees the academy they arrived
  *     through. They are usually mid-way through a teacher's funnel, and the
  *     sign-in screen is the last step of it, not the first step of ours.
+ *   - someone whose session just expired keeps the colours they were already
+ *     looking at. Signing out is not a reason to repaint the screen under
+ *     someone's eyes, and they are about to sign back into the same academy.
  *   - a super admin is never themed. They move between academies all day, and a
  *     console that repaints itself would misreport whose data is on screen.
  *
@@ -64,7 +67,17 @@ export default function BrandTheme() {
       // Nothing is cleared while the answer is still in flight. The server may
       // already have painted this page in the right colours, and clearing would
       // reintroduce exactly the flash the injection removes.
-      else if (!arrival || arrivalSettled) applyTheme(null);
+      else if (!arrival || arrivalSettled) {
+        // A session that expires drops the user onto the sign-in screen without
+        // a page load. Clearing here snapped a dark, gold console back to
+        // platform indigo mid-glance — the one moment the app changes colour
+        // while the person is already looking at it. So the last theme is kept:
+        // signing back in lands on the same palette, and nothing flashes.
+        //
+        // Left alone when the server painted the page: it knows which academy
+        // this URL is for, and the cache only knows which one came before.
+        if (!hasServerTheme()) applyTheme(rememberedTheme());
+      }
       return;
     }
     if (!data) return; // Keep whatever `bootTheme` replayed until the list lands.

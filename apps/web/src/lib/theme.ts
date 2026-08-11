@@ -40,6 +40,34 @@ function clean(theme: unknown): AppTheme | null {
 /** The theme the server wrote into the document, when it knew which one to use. */
 const serverTheme = () => document.getElementById('academy-theme');
 
+/**
+ * True when the server already decided this page's colours.
+ *
+ * Callers that would otherwise fall back to a remembered theme have to check
+ * this first: inline properties beat a stylesheet, so replaying the cache over
+ * a server-painted page paints the wrong academy.
+ */
+export function hasServerTheme(): boolean {
+  return !!serverTheme();
+}
+
+/**
+ * The last theme this browser wore, if any.
+ *
+ * Kept separate from `bootTheme` because it answers a different question. That
+ * one asks "what should I paint before React mounts"; this one asks "what were
+ * we wearing a moment ago" — which is what a screen that has just lost its
+ * session needs in order not to change colour in the user's face.
+ */
+export function rememberedTheme(): AppTheme | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? clean(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Paint the app in `theme`, or hand it back to the platform palette. */
 export function applyTheme(theme: unknown): void {
   const root = document.documentElement;

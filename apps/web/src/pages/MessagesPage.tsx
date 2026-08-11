@@ -153,7 +153,7 @@ export default function MessagesPage() {
             <>
               <header className="flex items-center gap-3 border-b border-outline-variant/40 px-5 py-3">
                 <button className="sm:hidden" onClick={() => setParams({})}>
-                  <span className="material-symbols-outlined rtl:rotate-180">arrow_back</span>
+                  <span className="material-symbols-outlined rtl:-scale-x-100">arrow_back</span>
                 </button>
                 <span className="grid h-10 w-10 place-items-center rounded-full bg-primary-fixed font-heading font-bold text-primary">
                   {active.counterpartName?.trim()?.charAt(0)}

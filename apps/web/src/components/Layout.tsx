@@ -123,7 +123,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               {user?.role ? t(`dashboard.role.${user.role}`) : ''}
             </p>
           </div>
-          <span className="material-symbols-outlined ms-auto text-lg text-outline">chevron_left</span>
+          <span className="material-symbols-outlined ms-auto text-lg text-outline rtl:-scale-x-100">chevron_right</span>
         </NavLink>
       </div>
     </div>
@@ -136,11 +136,15 @@ export default function Layout({ children }: { children: ReactNode }) {
         {sidebar}
       </aside>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — the same navigation the desktop sidebar shows, so it
+          belongs on the same side of the screen: `start`, which is the left in
+          English and the right in Arabic. Anchoring it to `end` put it opposite
+          both the desktop sidebar and the hamburger that opens it, and swapped
+          sides between the two languages in exactly the wrong direction. */}
       {drawer && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-on-surface/40" onClick={() => setDrawer(false)} />
-          <aside className="absolute inset-y-0 end-0 w-64 border-s border-outline-variant/40 bg-surface-container-lowest shadow-modal">
+          <aside className="absolute inset-y-0 start-0 w-64 border-e border-outline-variant/40 bg-surface-container-lowest shadow-modal">
             {sidebar}
           </aside>
         </div>

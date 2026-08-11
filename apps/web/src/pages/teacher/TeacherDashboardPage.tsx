@@ -191,7 +191,7 @@ export default function TeacherDashboardPage() {
                 </span>
                 {/* Direction-neutral on purpose: a chevron would point the
                     wrong way in one of the two languages the app ships in. */}
-                <span className="material-symbols-outlined text-[18px] text-outline/40 transition-colors group-hover:text-primary">
+                <span className="material-symbols-outlined text-[18px] text-outline/40 transition-colors group-hover:text-primary rtl:-scale-x-100">
                   arrow_outward
                 </span>
               </div>

@@ -56,13 +56,13 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
 
       <div className="flex items-center justify-between">
         <button className="btn-secondary" onClick={i === 0 ? onExit : back}>
-          <span className="material-symbols-outlined text-[20px]">{i === 0 ? 'close' : 'arrow_forward'}</span>
+          <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">{i === 0 ? 'close' : 'arrow_back'}</span>
           {i === 0 ? t('studio.wizard.skip') : t('studio.wizard.prev')}
         </button>
         {i < STEPS.length - 1 ? (
           <button className="btn-primary" onClick={next}>
             {t('studio.wizard.next')}
-            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">arrow_forward</span>
           </button>
         ) : (
           <button className="btn-primary" onClick={onExit}>

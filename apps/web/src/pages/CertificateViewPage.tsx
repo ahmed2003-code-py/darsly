@@ -35,7 +35,7 @@ export default function CertificateViewPage() {
       <div className="mx-auto max-w-3xl">
         <div className="mb-4 flex items-center justify-between print:hidden">
           <Link to="/my-certificates" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-            <span className="material-symbols-outlined text-base">arrow_forward</span>{t('cert.myTitle')}
+            <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('cert.myTitle')}
           </Link>
           <button className="btn-ghost" onClick={() => window.print()}>
             <span className="material-symbols-outlined text-base">print</span>{t('cert.print')}

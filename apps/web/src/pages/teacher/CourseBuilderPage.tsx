@@ -280,7 +280,7 @@ export default function CourseBuilderPage() {
             <Link to="/teacher/courses" className="text-primary hover:underline">
               {t('teacher.builder.back')}
             </Link>
-            <span className="material-symbols-outlined text-sm rtl:rotate-180">chevron_left</span>
+            <span className="material-symbols-outlined text-sm rtl:-scale-x-100">chevron_left</span>
             <span>{course.title}</span>
           </p>
           <h1 className="font-heading text-4xl font-extrabold">{t('teacher.builder.title')}</h1>

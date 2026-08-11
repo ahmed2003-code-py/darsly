@@ -251,7 +251,6 @@ function CourseCard({
         {c.avgRating != null ? (
           <span className="flex items-center gap-1.5 text-sm">
             <Stars rating={c.avgRating} />
-            <span className="font-bold">{c.avgRating}</span>
             <span className="text-on-surface-variant">({c.reviewsCount})</span>
           </span>
         ) : (

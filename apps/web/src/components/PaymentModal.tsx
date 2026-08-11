@@ -67,7 +67,7 @@ export default function PaymentModal({
           {/* Where to send */}
           <div>
             <p className="mb-2 flex items-center gap-2 font-heading font-bold">
-              <span className="material-symbols-outlined text-primary">north_east</span>{t('pay.transferTo')}
+              <span className="material-symbols-outlined text-primary rtl:-scale-x-100">north_east</span>{t('pay.transferTo')}
             </p>
             <div className="mb-3 rounded-xl bg-primary-fixed/40 p-3">
               {/* One price. The platform fee is already inside it — a student is

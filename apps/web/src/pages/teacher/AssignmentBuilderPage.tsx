@@ -47,7 +47,7 @@ export default function AssignmentBuilderPage() {
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       <Link to="/teacher/courses" className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
-        <span className="material-symbols-outlined text-base">arrow_forward</span>{t('assess.builder.backCourses')}
+        <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.builder.backCourses')}
       </Link>
       <PageHeader title={t('assess.builder.assignTitle')} subtitle={t('assess.builder.assignSubtitle')} />
 

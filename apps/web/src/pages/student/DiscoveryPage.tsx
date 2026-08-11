@@ -278,8 +278,9 @@ function TeacherCard({
 
       {tc.avgRating != null ? (
         <span className="flex items-center gap-1.5 text-sm">
+          {/* `Stars` prints the figure itself — repeating it here rendered
+              every rating twice ("5 5 (2 reviews)"). */}
           <Stars rating={tc.avgRating} />
-          <span className="font-bold">{tc.avgRating}</span>
           <span className="text-on-surface-variant">
             {t('discovery.reviewsCount', { count: tc.reviewsCount })}
           </span>

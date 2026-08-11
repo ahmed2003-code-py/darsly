@@ -202,7 +202,7 @@ export default function CourseDetailPage() {
                             {l.isFreePreview && <Badge tone="teal">{t('course.freePreview')}</Badge>}
                             {!l.locked && (
                               <span className="material-symbols-outlined text-primary">
-                                {l.type === 'QUIZ' ? 'chevron_left' : l.type === 'ASSIGNMENT' ? 'chevron_left' : 'play_circle'}
+                                {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : 'play_circle'}
                               </span>
                             )}
                           </>

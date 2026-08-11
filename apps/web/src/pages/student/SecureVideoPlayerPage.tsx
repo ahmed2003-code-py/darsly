@@ -279,7 +279,7 @@ export default function SecureVideoPlayerPage() {
       <div className="mb-5 flex items-center justify-between">
         <div>
           <Link to={`/course/${courseId}`} className="mb-1 flex items-center gap-1 text-sm text-primary hover:underline">
-            <span className="material-symbols-outlined text-base rtl:rotate-180">arrow_back</span>
+            <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>
             {course?.title}
           </Link>
           <h1 className="font-heading text-2xl font-extrabold">{current?.title}</h1>

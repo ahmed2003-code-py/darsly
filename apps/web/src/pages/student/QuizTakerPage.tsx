@@ -36,7 +36,7 @@ export default function QuizTakerPage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-8 sm:px-8">
       <Link to={`/course/${courseId}`} className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
-        <span className="material-symbols-outlined text-base">arrow_forward</span>{t('assess.take.backCourse')}
+        <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.take.backCourse')}
       </Link>
       <div className="mb-6 flex items-center gap-3">
         <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed text-primary">

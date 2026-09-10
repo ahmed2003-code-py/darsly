@@ -182,6 +182,12 @@ export class TeacherCoursesController {
     return this.courses.removeLesson(ctx.academyId, id);
   }
 
+  @Delete('lessons/:id/video')
+  @ApiOperation({ summary: '[teacher] Remove a lesson\'s video and clean up its storage' })
+  removeLessonVideo(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.courses.removeLessonVideo(ctx.academyId, id);
+  }
+
   @Patch('units/:unitId/lessons/reorder')
   @ApiOperation({ summary: '[teacher] Reorder lessons within a unit' })
   reorderLessons(

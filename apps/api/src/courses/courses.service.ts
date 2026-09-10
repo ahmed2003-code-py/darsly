@@ -4,6 +4,7 @@ import { JwtPayload, Role } from '@darsly/shared-types';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageProvider } from '../storage/storage.provider';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
 import {
@@ -27,6 +28,7 @@ export class CoursesService {
     private readonly prisma: PrismaService,
     private readonly studentPrice: StudentPriceService,
     private readonly exclusivity: SubjectExclusivityService,
+    private readonly storage: StorageProvider,
   ) {}
 
   /**
@@ -425,6 +427,31 @@ export class CoursesService {
         videoAsset: { select: { id: true, status: true, durationSec: true } },
       },
     });
+  }
+
+  /**
+   * Detach a lesson's video and clean up its storage entirely, rather than
+   * leaving an orphaned `VideoAsset` (and its HLS files) behind every time a
+   * teacher swaps in a better take.
+   */
+  async removeLessonVideo(tenantId: string, lessonId: string) {
+    const lesson = await this.assertLesson(tenantId, lessonId);
+    if (!lesson.videoAssetId) return { id: lessonId, videoRemoved: false };
+    const asset = await this.assertVideoAssetOwned(tenantId, lesson.videoAssetId);
+
+    // The relation has no cascade, so the FK must be cleared before the row
+    // it points at can be deleted.
+    await this.prisma.$transaction([
+      this.prisma.lesson.update({ where: { id: lessonId }, data: { videoAssetId: null } }),
+      this.prisma.videoAsset.delete({ where: { id: asset.id } }),
+    ]);
+
+    await this.storage.deletePrefix(`hls/${asset.id}`).catch(() => undefined);
+    await this.storage.delete(asset.originalKey).catch(() => undefined);
+    if (asset.encryptionKeyId) {
+      await this.prisma.hlsEncryptionKey.delete({ where: { id: asset.encryptionKeyId } }).catch(() => undefined);
+    }
+    return { id: lessonId, videoRemoved: true };
   }
 
   async removeLesson(tenantId: string, lessonId: string) {

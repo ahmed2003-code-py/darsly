@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { api } from '../../lib/api';
+import { PlaybackTicket } from '@darsly/shared-types';
+import { api, apiOrigin } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
-import { Badge, ErrorNote, Field, ProgressBar, Spinner } from '../../components/ui';
+import { Badge, ErrorNote, Modal, ProgressBar, Spinner } from '../../components/ui';
 
 /**
  * Course builder per the course_builder design: curriculum tree in the middle
@@ -41,7 +43,15 @@ export default function CourseBuilderPage() {
   const [dripDate, setDripDate] = useState('');
   const [dripDays, setDripDays] = useState('');
   const [freePreview, setFreePreview] = useState(false);
-  const [durationMin, setDurationMin] = useState('');
+
+  // Preview modal — a short-lived, session-backed HLS playback of the lesson's
+  // own video, the same way a student would see it, minus the telemetry.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTicket, setPreviewTicket] = useState<PlaybackTicket | null>(null);
+  const [previewError, setPreviewError] = useState('');
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewHlsRef = useRef<Hls | null>(null);
+  const previewSessionRef = useRef<string | null>(null);
 
   const videoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -80,6 +90,16 @@ export default function CourseBuilderPage() {
   const { data: course, isLoading } = useQuery({
     queryKey: ['teacher-course', id],
     queryFn: async () => (await api.get(`/teacher/courses/${id}`)).data,
+    // A video keeps transcoding after the upload request already returned, so
+    // while any lesson is still UPLOADING/PROCESSING, poll until it settles —
+    // otherwise the panel is stuck showing "processing" long after it is ready.
+    refetchInterval: (q) => {
+      const c = q.state.data as any;
+      const pending = c?.units?.some((u: any) =>
+        u.lessons.some((l: any) => l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status)),
+      );
+      return pending ? 4000 : false;
+    },
   });
 
   const thumbUpload = useMutation({
@@ -192,6 +212,72 @@ export default function CourseBuilderPage() {
     onSuccess: invalidate,
   });
 
+  const removeVideo = useMutation({
+    mutationFn: async () => (await api.delete(`/teacher/lessons/${selectedLessonId}/video`)).data,
+    onSuccess: invalidate,
+  });
+
+  function openPreview() {
+    setPreviewError('');
+    setPreviewTicket(null);
+    setPreviewOpen(true);
+  }
+
+  function closePreview() {
+    setPreviewOpen(false);
+    setPreviewTicket(null);
+    previewHlsRef.current?.destroy();
+    previewHlsRef.current = null;
+    if (previewSessionRef.current) {
+      api.post(`/playback/sessions/${previewSessionRef.current}/end`).catch(() => {});
+      previewSessionRef.current = null;
+    }
+  }
+
+  // Start a preview session once the modal opens — the same signed-ticket flow
+  // a student gets, minus watermark/telemetry, gated to the owning teacher.
+  useEffect(() => {
+    if (!previewOpen || !selectedLessonId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.post<PlaybackTicket>('/playback/sessions', { lessonId: selectedLessonId });
+        if (cancelled) return;
+        previewSessionRef.current = data.playbackSessionId;
+        setPreviewTicket(data);
+      } catch (e: any) {
+        if (!cancelled) setPreviewError(e.response?.data?.message?.toString() ?? t('teacher.builder.previewError'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewOpen]);
+
+  // Attach HLS only once the ticket is back AND the modal's <video> is mounted.
+  useEffect(() => {
+    if (!previewTicket || !previewVideoRef.current || previewHlsRef.current) return;
+    const video = previewVideoRef.current;
+    const masterUrl = `${apiOrigin()}${previewTicket.masterUrl}`;
+    if (Hls.isSupported()) {
+      const hls = new Hls({ maxBufferLength: 30 });
+      hls.loadSource(masterUrl);
+      hls.attachMedia(video);
+      previewHlsRef.current = hls;
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = masterUrl;
+    } else {
+      setPreviewError(t('teacher.builder.previewError'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewTicket]);
+
+  // Leaving the page mid-preview must still end the session.
+  useEffect(() => () => {
+    if (previewSessionRef.current) api.post(`/playback/sessions/${previewSessionRef.current}/end`).catch(() => {});
+  }, []);
+
   /** Load a lesson into the settings panel — its unsaved draft wins if there is one. */
   function selectLesson(lesson: any) {
     setSelectedLessonId(lesson.id);
@@ -201,13 +287,6 @@ export default function CourseBuilderPage() {
   function applyLesson(lesson: any, draft: any) {
     const src = draft ?? lesson;
     setFreePreview(!!src.isFreePreview);
-    setDurationMin(
-      draft
-        ? String(src.durationMin ?? '')
-        : lesson.durationSec
-          ? String(Math.round(lesson.durationSec / 60))
-          : '',
-    );
     if (draft) {
       setDrip(src.drip ?? 'now');
       setDripDate(src.dripDate ?? '');
@@ -232,7 +311,9 @@ export default function CourseBuilderPage() {
   function saveSettings() {
     saveLesson.mutate({
       isFreePreview: freePreview,
-      durationSec: durationMin ? Number(durationMin) * 60 : 0,
+      // durationSec is never sent from here — it is detected server-side from
+      // the video itself once processing finishes, and must not be stomped by
+      // a stale client value on an unrelated save.
       // Always reset the previous schedule, then apply the chosen mode.
       clearDrip: true,
       ...(drip === 'date' && dripDate
@@ -249,9 +330,9 @@ export default function CourseBuilderPage() {
     if (!selectedLessonId) return;
     localStorage.setItem(
       draftKey(selectedLessonId),
-      JSON.stringify({ isFreePreview: freePreview, durationMin, drip, dripDate, dripDays }),
+      JSON.stringify({ isFreePreview: freePreview, drip, dripDate, dripDays }),
     );
-  }, [selectedLessonId, freePreview, durationMin, drip, dripDate, dripDays]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedLessonId, freePreview, drip, dripDate, dripDays]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Landing on the page with ?lesson=… — a back button, a bookmark, a reload —
   // opens that lesson rather than an empty panel.
@@ -577,15 +658,51 @@ export default function CourseBuilderPage() {
                   <ProgressBar pct={videoPct} tone="primary" />
                 </div>
               ) : selected.videoAsset ? (
-                <p className="mb-4 flex items-center justify-between rounded-lg bg-secondary-container/40 px-3 py-2 text-sm">
-                  <span className="flex items-center gap-1 font-bold text-on-secondary-container">
-                    <span className="material-symbols-outlined text-base">check_circle</span>
-                    {t('teacher.builder.videoReady')}
-                  </span>
-                  <button className="text-primary hover:underline" onClick={() => videoInput.current?.click()}>
-                    {t('teacher.builder.uploadVideo')}
-                  </button>
-                </p>
+                <div className="mb-4 space-y-2">
+                  <p className="flex items-center gap-1.5 rounded-lg bg-secondary-container/40 px-3 py-2 text-sm font-bold text-on-secondary-container">
+                    <span className="material-symbols-outlined text-base">
+                      {selected.videoAsset.status === 'READY'
+                        ? 'check_circle'
+                        : selected.videoAsset.status === 'FAILED'
+                          ? 'error'
+                          : 'hourglass_top'}
+                    </span>
+                    {selected.videoAsset.status === 'READY'
+                      ? t('teacher.builder.videoReady')
+                      : selected.videoAsset.status === 'FAILED'
+                        ? t('teacher.builder.videoFailed')
+                        : t('teacher.builder.videoProcessing')}
+                  </p>
+                  {selected.videoAsset.status === 'READY' && selected.durationSec > 0 && (
+                    <p className="text-xs text-outline">
+                      {t('teacher.builder.videoDuration', { time: duration(selected.durationSec) })}
+                    </p>
+                  )}
+                  <div className="flex gap-2 text-sm font-bold">
+                    {selected.videoAsset.status === 'READY' && (
+                      <button
+                        className="flex-1 rounded-lg border border-outline-variant/60 py-2 text-primary transition hover:border-primary"
+                        onClick={openPreview}
+                      >
+                        {t('teacher.builder.videoPreview')}
+                      </button>
+                    )}
+                    <button
+                      className="flex-1 rounded-lg border border-outline-variant/60 py-2 text-on-surface-variant transition hover:border-primary hover:text-primary"
+                      onClick={() => videoInput.current?.click()}
+                    >
+                      {t('teacher.builder.videoReplace')}
+                    </button>
+                    <button
+                      className="flex-1 rounded-lg border border-outline-variant/60 py-2 text-error transition hover:border-error"
+                      disabled={removeVideo.isPending}
+                      onClick={() => window.confirm(t('teacher.builder.videoDeleteConfirm')) && removeVideo.mutate()}
+                    >
+                      {t('teacher.builder.videoDelete')}
+                    </button>
+                  </div>
+                  <ErrorNote error={removeVideo.error} />
+                </div>
               ) : (
                 <button
                   className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-outline-variant py-3 text-sm text-on-surface-variant hover:border-primary hover:text-primary"
@@ -595,11 +712,6 @@ export default function CourseBuilderPage() {
                   {t('teacher.builder.uploadVideo')}
                 </button>
               )}
-
-              <Field label={t('teacher.builder.durationMin')}>
-                <input className="input py-2" inputMode="numeric" value={durationMin}
-                  onChange={(e) => setDurationMin(e.target.value.replace(/\D/g, ''))} />
-              </Field>
 
               {/* Attachments */}
               <p className="mb-2 flex items-center gap-1 text-sm font-bold">
@@ -657,6 +769,19 @@ export default function CourseBuilderPage() {
           )}
         </aside>
       </div>
+
+      <Modal open={previewOpen} title={t('teacher.builder.previewTitle')} onClose={closePreview} wide>
+        {previewError ? (
+          <ErrorNote error={{ message: previewError }} />
+        ) : (
+          <video
+            ref={previewVideoRef}
+            controls
+            autoPlay
+            className="aspect-video w-full rounded-xl bg-black"
+          />
+        )}
+      </Modal>
     </div>
   );
 }

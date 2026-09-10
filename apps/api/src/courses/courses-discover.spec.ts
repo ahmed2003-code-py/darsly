@@ -1,7 +1,11 @@
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
+import { StorageProvider } from '../storage/storage.provider';
 import { CoursesService } from './courses.service';
+
+// Discovery never touches storage — a stand-in is enough to satisfy the constructor.
+const noStorage = {} as unknown as StorageProvider;
 
 /**
  * Course discovery.
@@ -34,7 +38,7 @@ function build(rows: unknown[] = [], total = rows.length) {
   // Nothing is hidden here: exclusivity has its own suite, and letting it
   // return anything would make every assertion below depend on it.
   const openToEveryone = { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService;
-  return { service: new CoursesService(prisma, price, openToEveryone), prisma, calls };
+  return { service: new CoursesService(prisma, price, openToEveryone, noStorage), prisma, calls };
 }
 
 const course = (over: Record<string, unknown> = {}) => ({
@@ -210,6 +214,7 @@ describe('prices carry the platform fee', () => {
       prisma,
       { applyToMany: price } as unknown as StudentPriceService,
       { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService,
+      noStorage,
     );
     await service.discover({});
     // The card and the checkout must agree, and the academy's own price must not
@@ -242,6 +247,7 @@ describe('a student is not shown the catalogues of their teacher\'s rivals', () 
       prisma,
       { applyToMany: jest.fn(async (i: unknown[]) => i) } as unknown as StudentPriceService,
       { hiddenTeacherIds: jest.fn().mockResolvedValue(hidden) } as unknown as SubjectExclusivityService,
+      noStorage,
     );
     return { service, calls };
   }

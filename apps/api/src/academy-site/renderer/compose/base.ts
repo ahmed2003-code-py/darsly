@@ -12,7 +12,12 @@ export function baseCss(): string {
 html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg-soft);font-family:var(--font-b);line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
 :lang(ar){font-family:"Tajawal",var(--font-b)}
+/* Headings get their own Arabic face (see --font-h-ar in tokens.ts) rather than
+   collapsing to the body's Tajawal — :is() gives this the extra specificity it
+   needs to win over the :lang(ar) rule above regardless of source order. */
+:lang(ar) :is(h1,h2,h3,.h-face){font-family:var(--font-h-ar)}
 img{max-width:100%;display:block}
+video{max-width:100%;display:block}
 ::selection{background:var(--a);color:var(--on-a)}
 
 /* ── Container ─────────────────────────────────────────────────────────────

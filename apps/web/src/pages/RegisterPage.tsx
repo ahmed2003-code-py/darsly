@@ -5,6 +5,7 @@ import AuthShell, { AuthField } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
 import { arrivalAcademy } from '../lib/arrival';
+import { useAcademyBranding } from '../lib/academy';
 import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 
@@ -23,6 +24,11 @@ export default function RegisterPage() {
   // wrong account — and a teacher account cannot even sign in until an admin
   // approves it, so the mistake ends the journey rather than delaying it.
   const fromAcademy = !!arrivalAcademy();
+  // Only the name is shown, not the courses or colours already carried by
+  // BrandTheme — this is the one screen the teacher never designed, so it
+  // borrows just enough of their identity to say "still their door in", not a
+  // second copy of their site.
+  const { data: academy } = useAcademyBranding(fromAcademy ? arrivalAcademy()! : undefined);
   const [role, setRole] = useState<Role>('student');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -74,8 +80,10 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      title={t('auth.createAccount')}
-      subtitle={t('auth.signupSubtitle')}
+      title={academy ? t('auth.joinAcademyTitle', { name: academy.name }) : t('auth.createAccount')}
+      subtitle={academy ? t('auth.joinAcademySubtitle', { name: academy.name }) : t('auth.signupSubtitle')}
+      brandName={academy?.name}
+      brandTagline={academy?.tagline}
       footer={
         <>
           {t('auth.haveAccount')}{' '}

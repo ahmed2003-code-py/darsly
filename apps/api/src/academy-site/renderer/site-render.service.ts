@@ -39,10 +39,12 @@ export class SiteRenderService {
   ): Promise<string> {
     const media = await this.prisma.academyMedia.findMany({
       where: { academyId, status: 'READY' },
-      select: { id: true, url: true, blurhash: true, width: true, height: true },
+      select: { id: true, url: true, blurhash: true, width: true, height: true, mimeType: true },
     });
     const map = new Map<string, RenderMedia>(
-      media.map((m) => [m.id, { url: m.url ?? '', blurhash: m.blurhash, width: m.width, height: m.height }]),
+      media.map((m) => [m.id, {
+        url: m.url ?? '', blurhash: m.blurhash, width: m.width, height: m.height, mimeType: m.mimeType,
+      }]),
     );
     const renderCtx = { ...ctx, media: (id: string) => map.get(id) };
 

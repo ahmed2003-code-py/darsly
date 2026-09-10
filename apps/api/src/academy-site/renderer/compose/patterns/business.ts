@@ -176,11 +176,20 @@ registerPattern({
 
 // ── Gallery ──────────────────────────────────────────────────────────────────
 
+/** A gallery frame: an image, or — for PROMO media — a silent, looping clip that
+ *  plays inline in the same frame an image would occupy. No controls, so a strip
+ *  of mixed photos and clips reads as one gallery rather than a media player
+ *  bolted onto a grid; the clip is muted, which is what lets it autoplay at all. */
 function galleryImages(block: Of<'gallery'>, ctx: Parameters<typeof image>[1]): string[] {
   return block.mediaIds
     .map((id) => ctx.media(id))
     .filter((m): m is RenderMedia => !!m && !!safeUrl(m.url))
-    .map((m) => `<img class="img" src="${escapeAttr(safeUrl(m.url))}" alt="" loading="lazy">`);
+    .map((m) => {
+      const url = escapeAttr(safeUrl(m.url));
+      return m.mimeType?.startsWith('video/')
+        ? `<video class="img" src="${url}" autoplay muted loop playsinline preload="metadata"></video>`
+        : `<img class="img" src="${url}" alt="" loading="lazy">`;
+    });
 }
 
 registerPattern({

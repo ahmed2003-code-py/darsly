@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { arrivalAcademy, clearArrival, rememberArrival } from '../lib/arrival';
 import { useAcademyBranding, useMyAcademies } from '../lib/academy';
@@ -33,6 +33,7 @@ export default function BrandTheme() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === Role.SUPER_ADMIN;
   const { pathname } = useLocation();
+  const [searchParams] = useSearchParams();
   const { data } = useMyAcademies();
 
   // Both the storefront and the teacher's course gallery identify the academy in
@@ -43,11 +44,15 @@ export default function BrandTheme() {
   const [arrival, setArrival] = useState<string | null>(() => arrivalAcademy());
   useEffect(() => {
     const match = pathname.match(/^\/(?:a|t)\/([^/]+)/);
-    if (!match) return;
-    const slug = decodeURIComponent(match[1]);
+    // A hand-authored academy page (e.g. an AI-composed site opened outside the
+    // storefront iframe) can't put the slug in the path, so it may pass it as
+    // `?academy=` on whichever page it links to instead — a login or register
+    // link included. Either source paints the same sign-in screen.
+    const slug = match ? decodeURIComponent(match[1]) : searchParams.get('academy');
+    if (!slug) return;
     rememberArrival(slug);
     setArrival(arrivalAcademy());
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   // Only fetched while signed out — once there is an account, what the person
   // actually belongs to is a better answer than where they came from.

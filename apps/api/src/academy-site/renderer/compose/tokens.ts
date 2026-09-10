@@ -42,6 +42,25 @@ export const FONT_FAMILY: Record<HeadingFamily | BodyFamily, { css: string; goog
 
 const ARABIC_FAMILY = 'Tajawal:wght@400;700;800';
 
+/**
+ * The Arabic *heading* typeface for each `headingFamily` choice.
+ *
+ * Every family above is a Latin face that falls back to Tajawal for Arabic
+ * glyphs — so on an Arabic-first page (the common case on this platform) the
+ * heading-family choice never actually showed up: every headline, in every
+ * design, rendered in the same font as the body. This gives Arabic headings a
+ * real family of their own per choice, keyed to the same enum so no schema or
+ * AI-prompt change is needed. Body copy is untouched — Tajawal there is a
+ * deliberate legibility choice, not a gap.
+ */
+const ARABIC_HEADING_FAMILY: Record<HeadingFamily, { css: string; google?: string }> = {
+  sans: { css: '"Tajawal"' },
+  serif: { css: '"Markazi Text","Tajawal"', google: 'Markazi+Text:wght@500;600;700' },
+  display: { css: '"El Messiri","Tajawal"', google: 'El+Messiri:wght@600;700' },
+  condensed: { css: '"Cairo","Tajawal"', google: 'Cairo:wght@700;800' },
+  mono: { css: '"Tajawal"' },
+};
+
 /** The single stylesheet request for exactly the families this design uses. */
 export function fontHref(design: DesignSpec): string {
   const families = new Set<string>([ARABIC_FAMILY]);
@@ -49,6 +68,8 @@ export function fontHref(design: DesignSpec): string {
     const g = FONT_FAMILY[key]?.google;
     if (g) families.add(g);
   }
+  const arabicHeading = ARABIC_HEADING_FAMILY[design.typography.headingFamily]?.google;
+  if (arabicHeading) families.add(arabicHeading);
   const q = [...families].map((f) => `family=${f}`).join('&');
   return `https://fonts.googleapis.com/css2?${q}&display=swap`;
 }
@@ -162,6 +183,7 @@ export function tokens(design: DesignSpec): string {
   const [h1, h2, h3, lead] = SCALE[t.scale] ?? SCALE.balanced;
   const headFamily = FONT_FAMILY[t.headingFamily]?.css ?? FONT_FAMILY.sans.css;
   const bodyFamily = FONT_FAMILY[t.bodyFamily]?.css ?? FONT_FAMILY.sans.css;
+  const headFamilyAr = ARABIC_HEADING_FAMILY[t.headingFamily]?.css ?? ARABIC_HEADING_FAMILY.sans.css;
   const weight = [400, 500, 600, 700, 800, 900].includes(t.headingWeight) ? t.headingWeight : 700;
 
   const radius = clampInt(g.radius, 0, 32, 14);
@@ -189,7 +211,7 @@ export function tokens(design: DesignSpec): string {
 --mut:color-mix(in srgb,var(--ink) 60%,var(--bg));
 --body:color-mix(in srgb,var(--ink) 88%,var(--bg));
 --line:color-mix(in srgb,var(--ink) ${g.border === 'strong' ? 26 : 13}%,var(--bg));
---font-h:${headFamily};--font-b:${bodyFamily};
+--font-h:${headFamily};--font-b:${bodyFamily};--font-h-ar:${headFamilyAr};
 --wh:${weight};--tr:${TRACKING[t.tracking] ?? TRACKING.normal};--case:${t.headingCase === 'upper' ? 'uppercase' : 'none'};
 --h1:${h1};--h2:${h2};--h3:${h3};--lead:${lead};--measure:${MEASURE[t.measure] ?? MEASURE.normal};
 --rad:${cardRadius}px;--rad-s:${Math.round(cardRadius * 0.6)}px;--rad-l:${cardRadius + 8}px;--pill:${pillRadius}px;

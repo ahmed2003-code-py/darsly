@@ -4,6 +4,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell, { AuthField } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
+import { arrivalAcademy } from '../lib/arrival';
+import { useAcademyBranding } from '../lib/academy';
 import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 
@@ -14,6 +16,8 @@ export default function LoginPage() {
   // Where the visitor was heading before being asked to sign in.
   const destination = safeRedirect(params.get(REDIRECT_PARAM));
   const { setTokens, setUser } = useAuthStore();
+  const arrival = arrivalAcademy();
+  const { data: academy } = useAcademyBranding(arrival ?? undefined);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,8 +47,10 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title={t('auth.welcomeBack')}
-      subtitle={t('auth.loginSubtitle')}
+      title={academy ? t('auth.welcomeAcademy', { name: academy.name }) : t('auth.welcomeBack')}
+      subtitle={academy ? t('auth.loginAcademySubtitle', { name: academy.name }) : t('auth.loginSubtitle')}
+      brandName={academy?.name}
+      brandTagline={academy?.tagline}
       footer={
         <>
           {t('auth.noAccount')}{' '}

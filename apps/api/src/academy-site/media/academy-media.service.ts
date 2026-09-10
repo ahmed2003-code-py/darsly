@@ -11,12 +11,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageProvider } from '../../storage/storage.provider';
 import { AcademyMediaProcessor } from './academy-media.processor';
 
-// Max non-REJECTED media per kind. GALLERY is the only repeatable kind.
+// Max non-REJECTED media per kind. GALLERY and PROMO are the repeatable kinds.
 const KIND_MAX_COUNT: Partial<Record<AcademyMediaKind, number>> = {
   LOGO: 1,
   COVER: 1,
   AVATAR: 1,
   GALLERY: 12,
+  PROMO: 6,
 };
 
 const STUCK_MINUTES = 30;
@@ -32,8 +33,9 @@ export class AcademyMediaService {
     private readonly processor: AcademyMediaProcessor,
   ) {}
 
-  private key(academyId: string, mediaId: string): string {
-    return `academy-media/${academyId}/${mediaId}.webp`;
+  private key(academyId: string, mediaId: string, kind: AcademyMediaKind): string {
+    const ext = kind === 'PROMO' ? 'mp4' : 'webp';
+    return `academy-media/${academyId}/${mediaId}.${ext}`;
   }
 
   private publicUrl(mediaId: string): string {
@@ -62,18 +64,21 @@ export class AcademyMediaService {
     });
     if (existing >= max) {
       throw new ConflictException(
-        `You already have the maximum number of ${kind.toLowerCase()} images (${max}). Delete one first.`,
+        `You already have the maximum number of ${kind.toLowerCase()} items (${max}). Delete one first.`,
       );
     }
 
     // Process (cheap, in-memory) so a bad file never leaves a stored object.
-    const processed = await this.processor.process(file.buffer, file.mimetype, kind);
+    // PROMO is video — stored as-is, not re-encoded through the image pipeline.
+    const processed = kind === 'PROMO'
+      ? await this.processor.processVideo(file.buffer, file.mimetype)
+      : await this.processor.process(file.buffer, file.mimetype, kind);
 
     const media = await this.prisma.academyMedia.create({
       data: { academyId, kind, status: 'PROCESSING', mimeType: processed.mimeType },
     });
     try {
-      const storageKey = this.key(academyId, media.id);
+      const storageKey = this.key(academyId, media.id, kind);
       await this.storage.put(storageKey, processed.data, {
         contentType: processed.mimeType,
         cacheControl: 'public, max-age=31536000, immutable',
@@ -87,7 +92,7 @@ export class AcademyMediaService {
           width: processed.width,
           height: processed.height,
           bytes: processed.bytes,
-          blurhash: processed.blurhash || null,
+          blurhash: 'blurhash' in processed ? processed.blurhash || null : null,
           contentHash: processed.contentHash,
         },
       });

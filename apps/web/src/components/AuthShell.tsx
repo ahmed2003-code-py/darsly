@@ -12,11 +12,17 @@ export default function AuthShell({
   subtitle,
   children,
   footer,
+  brandName,
+  brandTagline,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** Override the platform wordmark — set when the visitor arrived through a
+   *  specific academy, so the brand panel matches the door they walked in. */
+  brandName?: string;
+  brandTagline?: string;
 }) {
   const { t, i18n } = useTranslation();
 
@@ -41,8 +47,8 @@ export default function AuthShell({
             <span className="material-symbols-outlined text-2xl">school</span>
           </span>
           <div className="leading-none">
-            <p className="font-heading text-2xl font-bold tracking-tight">{t('brand')}</p>
-            <p className="mt-1 text-xs text-on-primary/70">{t('brandTagline')}</p>
+            <p className="font-heading text-2xl font-bold tracking-tight">{brandName ?? t('brand')}</p>
+            <p className="mt-1 text-xs text-on-primary/70">{brandTagline ?? t('brandTagline')}</p>
           </div>
         </div>
 
@@ -96,7 +102,7 @@ export default function AuthShell({
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-on-primary">
               <span className="material-symbols-outlined">school</span>
             </span>
-            <span className="font-heading text-xl font-bold tracking-tight text-on-surface">{t('brand')}</span>
+            <span className="font-heading text-xl font-bold tracking-tight text-on-surface">{brandName ?? t('brand')}</span>
           </div>
 
           <h1 className="display text-on-surface">{title}</h1>

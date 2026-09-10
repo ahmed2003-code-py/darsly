@@ -256,6 +256,7 @@
     "resumedFrom": "Resumed from {{time}}",
     "normal": "Normal",
     "auto": "Auto",
+    "fullscreen": "Fullscreen",
     "shortcuts": "Keyboard shortcuts",
     "kPlay": "Play / pause",
     "kSeek": "Seek ±10s",

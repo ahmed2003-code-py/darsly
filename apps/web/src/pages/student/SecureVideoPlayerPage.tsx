@@ -36,11 +36,19 @@ export default function SecureVideoPlayerPage() {
    *
    * The browser's own fullscreen button promotes the video element alone, and
    * everything we draw on top of it — the speed and quality menus, and the
-   * watermark carrying the viewer's identity — is outside that element. So
-   * fullscreen simultaneously removed the controls a student wants and the mark
-   * that makes a leak traceable, which is the worst possible pairing.
+   * watermark carrying the viewer's identity — is outside that element. Asking
+   * the browser to swap that button's target after the fact (exit the video's
+   * fullscreen, then request it on the frame instead) used to be the whole
+   * fix — but that hop crosses a promise boundary, and by the time it resolves
+   * some browsers no longer treat the click as a real user gesture and silently
+   * refuse the second request, leaving the student with no fullscreen at all.
+   * So the native button is hidden below (`nofullscreen` in controlsList) and
+   * this toggle — reachable only from a direct click or the `f` shortcut, both
+   * genuine gestures — is the one path in. The listener stays only for
+   * browsers that ignore controlsList (Firefox, Safari) and still show it.
    */
   const frameRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const toggleFullscreen = () => {
     const frame = frameRef.current;
     if (!frame) return;
@@ -50,7 +58,7 @@ export default function SecureVideoPlayerPage() {
   useEffect(() => {
     const onChange = () => {
       const el = document.fullscreenElement;
-      // The native button fullscreened the <video>; put the frame there instead.
+      setIsFullscreen(!!el);
       if (el && el === videoRef.current && frameRef.current) {
         document.exitFullscreen().then(() => frameRef.current?.requestFullscreen?.()).catch(() => {});
       }
@@ -367,11 +375,13 @@ export default function SecureVideoPlayerPage() {
                   ref={videoRef}
                   className="h-full w-full"
                   controls
-                  // `noplaybackrate` used to be here, which removed the browser's
-                  // own speed control. Together with our overlay disappearing in
-                  // fullscreen, that left a student with no way to speed a lesson
-                  // up at all — the one player feature people ask for first.
-                  controlsList="nodownload noremoteplayback"
+                  // The overlay above (speed/quality menus, fullscreen button)
+                  // duplicates the native speed and fullscreen controls, and the
+                  // native fullscreen button fullscreens the bare <video> — losing
+                  // the overlay and the watermark. Both are hidden here so there is
+                  // exactly one of each, and fullscreen always goes through the
+                  // frame.
+                  controlsList="nodownload noremoteplayback noplaybackrate nofullscreen"
                   disablePictureInPicture
                   onContextMenu={(e) => e.preventDefault()}
                   onRateChange={(e) => setRate(e.currentTarget.playbackRate)}
@@ -421,6 +431,13 @@ export default function SecureVideoPlayerPage() {
                       ]}
                     />
                   )}
+                  <button
+                    className="grid h-9 w-9 place-items-center rounded-lg bg-black/50 text-white/90 backdrop-blur transition hover:bg-black/70"
+                    title={t('player.fullscreen')}
+                    onClick={toggleFullscreen}
+                  >
+                    <span className="material-symbols-outlined text-lg">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
+                  </button>
                   <button
                     className="grid h-9 w-9 place-items-center rounded-lg bg-black/50 text-white/90 backdrop-blur transition hover:bg-black/70"
                     title={t('player.shortcuts')}

@@ -334,6 +334,7 @@ export class AcademySiteService {
   async recompileAcademy(academyId: string): Promise<boolean> {
     const site = await this.prisma.academySite.findUnique({ where: { academyId } });
     if (!site || site.status !== 'PUBLISHED' || !site.publishedDoc) return false;
+    if (site.htmlLocked) return false; // hand-authored HTML — nothing to recompile
     const academy = await this.prisma.academy.findUnique({
       where: { id: academyId },
       include: { owner: { select: { fullName: true } } },
@@ -411,7 +412,7 @@ export class AcademySiteService {
 
   async recompilePublished(): Promise<{ recompiled: number; failed: string[] }> {
     const sites = await this.prisma.academySite.findMany({
-      where: { status: 'PUBLISHED' },
+      where: { status: 'PUBLISHED', htmlLocked: false },
       select: { id: true, academyId: true, publishedDoc: true },
     });
 
@@ -455,12 +456,30 @@ export class AcademySiteService {
     doc: SiteDocument,
     moderatedById?: string,
   ): Promise<AcademySite> {
+    const site = await this.prisma.academySite.findUniqueOrThrow({ where: { id: siteId } });
+
+    // A hand-authored page stands in for the generated one entirely — publishing
+    // only flips status/version, since there is no compiled markup to replace it
+    // with and the owner's own colours were set on purpose, not derived from a doc.
+    if (site.htmlLocked) {
+      return this.prisma.academySite.update({
+        where: { id: siteId },
+        data: {
+          status: 'PUBLISHED',
+          publishedDoc: doc as unknown as object,
+          publishedAt: new Date(),
+          moderationApproved: true,
+          version: site.version + 1,
+          ...(moderatedById ? { moderatedById } : {}),
+        },
+      });
+    }
+
     const academy = await this.prisma.academy.findUnique({
       where: { id: academyId },
       include: { owner: { select: { fullName: true } } },
     });
     if (!academy) throw new NotFoundException('Academy not found');
-    const site = await this.prisma.academySite.findUniqueOrThrow({ where: { id: siteId } });
     const html = await this.render.compile(academyId, doc, {
       academyName: academy.name,
       ownerName: academy.owner?.fullName,

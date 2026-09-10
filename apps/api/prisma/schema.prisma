@@ -1216,6 +1216,7 @@ model AcademySite {
   draftDoc           Json? // working Site Document
   publishedDoc       Json? // last approved Site Document
   publishedHtml      String? // compiled HTML served at /a/:slug (Postgres text)
+  htmlLocked         Boolean           @default(false) // publishedHtml is hand-authored — publish/recompile must never regenerate it
   moderationApproved Boolean           @default(false)
   moderatedById      String?
   moderationReason   String?

@@ -270,3 +270,38 @@
   height: 100%;
   object-fit: contain;
 }
+
+/* Player scrubber — a plain range input restyled into a thin filled track
+   with a small thumb, so the custom control bar's seek bar reads like a
+   normal video player's instead of the browser's default slider. The fill
+   is a hard-stop gradient driven by --seek-pct, set inline from playback
+   position — cheaper than a wrapping div and re-painted on every frame. */
+.video-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #fff var(--seek-pct, 0%), rgb(255 255 255 / 0.25) var(--seek-pct, 0%));
+  cursor: pointer;
+}
+.video-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+}
+.video-seek::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+}
+.video-seek::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+}

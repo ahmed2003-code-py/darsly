@@ -75,6 +75,13 @@ export default function SecureVideoPlayerPage() {
   const [menu, setMenu] = useState<'speed' | 'quality' | 'keys' | null>(null);
   const [resumedAt, setResumedAt] = useState<number>(0);
 
+  // ── Custom control bar state (the player has no native controls at all —
+  // one bar, one set of buttons, nothing the browser draws on top of it) ────
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [muted, setMuted] = useState(false);
+
   function applyRate(r: number) {
     setRate(r);
     localStorage.setItem('darsly-rate', String(r));
@@ -266,6 +273,20 @@ export default function SecureVideoPlayerPage() {
     }
   }
 
+  /** Dragging the scrubber moves the position without forcing playback to start. */
+  function scrub(sec: number) {
+    if (videoRef.current) videoRef.current.currentTime = sec;
+  }
+  function togglePlay() {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {});
+    else v.pause();
+  }
+  function toggleMute() {
+    if (videoRef.current) videoRef.current.muted = !videoRef.current.muted;
+  }
+
   /** Start (or continue) a Q&A thread with the teacher, pinned to this moment. */
   async function askTeacher() {
     const q = window.prompt(t('player.askPrompt'));
@@ -374,20 +395,21 @@ export default function SecureVideoPlayerPage() {
                 <video
                   ref={videoRef}
                   className="h-full w-full"
-                  controls
-                  // The overlay above (speed/quality menus, fullscreen button)
-                  // duplicates the native speed and fullscreen controls, and the
-                  // native fullscreen button fullscreens the bare <video> — losing
-                  // the overlay and the watermark. Both are hidden here so there is
-                  // exactly one of each, and fullscreen always goes through the
-                  // frame.
-                  controlsList="nodownload noremoteplayback noplaybackrate nofullscreen"
+                  // No native controls at all — a native bar plus this overlay
+                  // used to mean two of everything (two speed menus, a native
+                  // fullscreen button that promoted the bare <video> and dropped
+                  // the overlay + watermark with it). One custom bar below owns
+                  // every control now, so there is exactly one of each.
                   disablePictureInPicture
                   onContextMenu={(e) => e.preventDefault()}
+                  onClick={togglePlay}
                   onRateChange={(e) => setRate(e.currentTarget.playbackRate)}
+                  onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
+                  onDurationChange={(e) => setVideoDuration(e.currentTarget.duration || 0)}
                   onLoadedMetadata={(e) => {
                     const v = e.currentTarget;
                     v.playbackRate = rate;
+                    setVideoDuration(v.duration || 0);
                     const r = ticket?.resumeAtSec ?? 0;
                     if (r > 5 && v.duration && r < v.duration - 5) {
                       v.currentTime = r;
@@ -395,76 +417,126 @@ export default function SecureVideoPlayerPage() {
                       window.setTimeout(() => setResumedAt(0), 6000);
                     }
                   }}
-                  onPlay={() => heartbeat('play')}
-                  onPause={() => heartbeat('pause')}
+                  onPlay={() => { setIsPlaying(true); heartbeat('play'); }}
+                  onPause={() => { setIsPlaying(false); heartbeat('pause'); }}
                   onSeeked={() => heartbeat('seek')}
-                  onTimeUpdate={() => heartbeat('hb')}
+                  onTimeUpdate={(e) => { setCurrentTime(e.currentTarget.currentTime); heartbeat('hb'); }}
                 />
                 <RovingWatermark payload={ticket.watermark} />
 
+                {/* Big center play button — shown whenever paused, doubles as
+                    an affordance that the whole frame is clickable. */}
+                {!isPlaying && (
+                  <button
+                    className="absolute inset-0 z-10 grid place-items-center"
+                    onClick={togglePlay}
+                    aria-label={t('player.kPlay')}
+                  >
+                    <span className="material-symbols-outlined grid h-16 w-16 place-items-center rounded-full bg-black/55 text-4xl text-white backdrop-blur">
+                      play_arrow
+                    </span>
+                  </button>
+                )}
+
                 {/* Resume toast */}
                 {resumedAt > 0 && (
-                  <div className="absolute bottom-16 start-4 z-20 flex items-center gap-2 rounded-xl bg-black/80 px-3 py-2 text-sm text-white backdrop-blur">
+                  <div className="absolute bottom-20 start-4 z-20 flex items-center gap-2 rounded-xl bg-black/80 px-3 py-2 text-sm text-white backdrop-blur">
                     <span className="material-symbols-outlined text-base text-accent">history</span>
                     {t('player.resumedFrom', { time: formatClock(resumedAt) })}
                   </div>
                 )}
 
-                {/* Advanced controls toolbar (speed / quality / shortcuts) */}
-                <div className="absolute end-3 top-3 z-20 flex items-center gap-2" dir="ltr">
-                  <PlayerMenu
-                    icon="speed"
-                    label={`${rate}×`}
-                    open={menu === 'speed'}
-                    onToggle={() => setMenu(menu === 'speed' ? null : 'speed')}
-                    items={RATES.map((r) => ({ key: String(r), label: r === 1 ? t('player.normal') : `${r}×`, active: r === rate, onClick: () => applyRate(r) }))}
+                {/* One control bar, everything in it — no floating duplicate
+                    up top and no native bar underneath. */}
+                <div
+                  className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-3 pb-2 pt-6"
+                  dir="ltr"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="range"
+                    className="video-seek mb-1.5 block w-full"
+                    min={0}
+                    max={videoDuration || 0}
+                    step={0.1}
+                    value={Math.min(currentTime, videoDuration || currentTime)}
+                    onChange={(e) => scrub(Number(e.target.value))}
+                    style={{ '--seek-pct': `${videoDuration ? (currentTime / videoDuration) * 100 : 0}%` } as React.CSSProperties}
+                    aria-label={t('player.kSeek')}
                   />
-                  {levels.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/90 transition hover:bg-white/10"
+                      onClick={togglePlay}
+                    >
+                      <span className="material-symbols-outlined text-2xl">{isPlaying ? 'pause' : 'play_arrow'}</span>
+                    </button>
+                    <button
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/90 transition hover:bg-white/10"
+                      onClick={toggleMute}
+                    >
+                      <span className="material-symbols-outlined text-xl">{muted ? 'volume_off' : 'volume_up'}</span>
+                    </button>
+                    <span className="shrink-0 font-mono text-xs text-white/80">
+                      {formatClock(Math.floor(currentTime))} / {formatClock(Math.floor(videoDuration))}
+                    </span>
+                    <div className="flex-1" />
                     <PlayerMenu
-                      icon="hd"
-                      label={quality === -1 ? t('player.auto') : `${levels.find((_, i) => i === quality)?.height ?? ''}p`}
-                      open={menu === 'quality'}
-                      onToggle={() => setMenu(menu === 'quality' ? null : 'quality')}
-                      items={[
-                        { key: 'auto', label: t('player.auto'), active: quality === -1, onClick: () => applyQuality(-1) },
-                        ...levels.map((l, i) => ({ key: String(i), label: `${l.height}p`, active: quality === i, onClick: () => applyQuality(i) })),
-                      ]}
+                      icon="speed"
+                      label={`${rate}×`}
+                      open={menu === 'speed'}
+                      onToggle={() => setMenu(menu === 'speed' ? null : 'speed')}
+                      items={RATES.map((r) => ({ key: String(r), label: r === 1 ? t('player.normal') : `${r}×`, active: r === rate, onClick: () => applyRate(r) }))}
                     />
-                  )}
-                  <button
-                    className="grid h-9 w-9 place-items-center rounded-lg bg-black/50 text-white/90 backdrop-blur transition hover:bg-black/70"
-                    title={t('player.fullscreen')}
-                    onClick={toggleFullscreen}
-                  >
-                    <span className="material-symbols-outlined text-lg">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
-                  </button>
-                  <button
-                    className="grid h-9 w-9 place-items-center rounded-lg bg-black/50 text-white/90 backdrop-blur transition hover:bg-black/70"
-                    title={t('player.shortcuts')}
-                    onClick={() => setMenu(menu === 'keys' ? null : 'keys')}
-                  >
-                    <span className="material-symbols-outlined text-lg">keyboard</span>
-                  </button>
-                  {menu === 'keys' && (
-                    <div className="absolute end-0 top-11 w-56 rounded-xl bg-black/85 p-3 text-xs text-white/90 backdrop-blur">
-                      <p className="mb-2 font-bold text-white">{t('player.shortcuts')}</p>
-                      <ul className="space-y-1">
-                        {[
-                          ['Space / K', t('player.kPlay')],
-                          ['← / →', t('player.kSeek')],
-                          ['↑ / ↓', t('player.kVolume')],
-                          ['M', t('player.kMute')],
-                          ['F', t('player.kFullscreen')],
-                          ['< / >', t('player.kSpeed')],
-                        ].map(([k, d]) => (
-                          <li key={k} className="flex items-center justify-between gap-3">
-                            <span className="text-white/70">{d}</span>
-                            <kbd className="rounded bg-white/15 px-1.5 py-0.5 font-mono">{k}</kbd>
-                          </li>
-                        ))}
-                      </ul>
+                    {levels.length > 1 && (
+                      <PlayerMenu
+                        icon="hd"
+                        label={quality === -1 ? t('player.auto') : `${levels.find((_, i) => i === quality)?.height ?? ''}p`}
+                        open={menu === 'quality'}
+                        onToggle={() => setMenu(menu === 'quality' ? null : 'quality')}
+                        items={[
+                          { key: 'auto', label: t('player.auto'), active: quality === -1, onClick: () => applyQuality(-1) },
+                          ...levels.map((l, i) => ({ key: String(i), label: `${l.height}p`, active: quality === i, onClick: () => applyQuality(i) })),
+                        ]}
+                      />
+                    )}
+                    <button
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/90 transition hover:bg-white/10"
+                      title={t('player.fullscreen')}
+                      onClick={toggleFullscreen}
+                    >
+                      <span className="material-symbols-outlined text-lg">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
+                    </button>
+                    <div className="relative shrink-0">
+                      <button
+                        className="grid h-9 w-9 place-items-center rounded-lg text-white/90 transition hover:bg-white/10"
+                        title={t('player.shortcuts')}
+                        onClick={() => setMenu(menu === 'keys' ? null : 'keys')}
+                      >
+                        <span className="material-symbols-outlined text-lg">keyboard</span>
+                      </button>
+                      {menu === 'keys' && (
+                        <div className="absolute bottom-11 end-0 w-56 rounded-xl bg-black/85 p-3 text-xs text-white/90 backdrop-blur">
+                          <p className="mb-2 font-bold text-white">{t('player.shortcuts')}</p>
+                          <ul className="space-y-1">
+                            {[
+                              ['Space / K', t('player.kPlay')],
+                              ['← / →', t('player.kSeek')],
+                              ['↑ / ↓', t('player.kVolume')],
+                              ['M', t('player.kMute')],
+                              ['F', t('player.kFullscreen')],
+                              ['< / >', t('player.kSpeed')],
+                            ].map(([k, d]) => (
+                              <li key={k} className="flex items-center justify-between gap-3">
+                                <span className="text-white/70">{d}</span>
+                                <kbd className="rounded bg-white/15 px-1.5 py-0.5 font-mono">{k}</kbd>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
                 {/* Pause + blur overlay on tab blur / devtools */}
                 {obscured && (
@@ -603,16 +675,16 @@ function PlayerMenu({
   items: { key: string; label: string; active: boolean; onClick: () => void }[];
 }) {
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <button
-        className="flex h-9 items-center gap-1 rounded-lg bg-black/50 px-2.5 text-sm font-bold text-white/90 backdrop-blur transition hover:bg-black/70"
+        className="flex h-9 items-center gap-1 rounded-lg px-2.5 text-sm font-bold text-white/90 transition hover:bg-white/10"
         onClick={onToggle}
       >
         <span className="material-symbols-outlined text-lg">{icon}</span>
         {label}
       </button>
       {open && (
-        <div className="absolute end-0 top-11 min-w-[7rem] overflow-hidden rounded-xl bg-black/85 py-1 text-sm text-white/90 backdrop-blur">
+        <div className="absolute bottom-11 end-0 min-w-[7rem] overflow-hidden rounded-xl bg-black/85 py-1 text-sm text-white/90 backdrop-blur">
           {items.map((it) => (
             <button
               key={it.key}

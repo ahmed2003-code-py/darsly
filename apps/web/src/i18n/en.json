@@ -77,6 +77,7 @@
     "logout": "Sign out"
   },
   "nav": {
+    "more": "More",
     "home": "Home",
     "discover": "Discover teachers",
     "myCourses": "My courses",

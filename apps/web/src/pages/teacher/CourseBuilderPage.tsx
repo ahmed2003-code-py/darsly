@@ -162,7 +162,9 @@ export default function CourseBuilderPage() {
   // to the whole batch, same as the single-lesson add did before it existed.
   const [importOpen, setImportOpen] = useState(false);
   const [importUnitId, setImportUnitId] = useState<string | undefined>(undefined);
-  const [importUrls, setImportUrls] = useState('');
+  // One field per link — "فيديو 1", "فيديو 2"… — not one box to paste a block
+  // into, so a single bad link is easy to spot and fix without hunting for it.
+  const [importUrls, setImportUrls] = useState<string[]>(['']);
   const [importFreePreview, setImportFreePreview] = useState(false);
   const [importDrip, setImportDrip] = useState<'now' | 'date' | 'days'>('now');
   const [importDripDate, setImportDripDate] = useState('');
@@ -170,7 +172,7 @@ export default function CourseBuilderPage() {
 
   function openImport(unitId?: string) {
     setImportUnitId(unitId);
-    setImportUrls('');
+    setImportUrls(['']);
     setImportFreePreview(false);
     setImportDrip('now');
     setImportDripDate('');
@@ -178,13 +180,15 @@ export default function CourseBuilderPage() {
     importYoutube.reset();
     setImportOpen(true);
   }
+  const setImportUrlAt = (i: number, value: string) =>
+    setImportUrls((prev) => prev.map((u, idx) => (idx === i ? value : u)));
+  const addImportUrl = () => setImportUrls((prev) => [...prev, '']);
+  const removeImportUrl = (i: number) =>
+    setImportUrls((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
 
   const importYoutube = useMutation({
     mutationFn: async () => {
-      const urls = importUrls
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const urls = importUrls.map((s) => s.trim()).filter(Boolean);
       return (
         await api.post(`/teacher/courses/${id}/lessons/import-youtube`, {
           urls,
@@ -891,14 +895,40 @@ export default function CourseBuilderPage() {
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-bold">{t('teacher.builder.importYoutubeLabel')}</label>
-            <textarea
-              className="input min-h-32"
-              dir="ltr"
-              placeholder={t('teacher.builder.importYoutubePh')}
-              value={importUrls}
-              onChange={(e) => setImportUrls(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-outline">{t('teacher.builder.importYoutubeHint')}</p>
+            <div className="space-y-2">
+              {importUrls.map((url, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-16 shrink-0 text-sm font-bold text-on-surface-variant">
+                    {t('teacher.builder.importVideoN', { n: i + 1 })}
+                  </span>
+                  <input
+                    className="input"
+                    dir="ltr"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={url}
+                    onChange={(e) => setImportUrlAt(i, e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    title={t('common.delete')}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container disabled:pointer-events-none disabled:opacity-30"
+                    disabled={importUrls.length <= 1}
+                    onClick={() => removeImportUrl(i)}
+                  >
+                    <span className="material-symbols-outlined text-lg">close</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mt-2 flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+              onClick={addImportUrl}
+            >
+              <span className="material-symbols-outlined text-base">add</span>
+              {t('teacher.builder.importAddLink')}
+            </button>
+            <p className="mt-2 text-xs text-outline">{t('teacher.builder.importYoutubeHint')}</p>
           </div>
 
           <div>
@@ -975,7 +1005,7 @@ export default function CourseBuilderPage() {
 
           <button
             className="btn-primary w-full py-3"
-            disabled={importYoutube.isPending || !importUrls.trim()}
+            disabled={importYoutube.isPending || !importUrls.some((u) => u.trim())}
             onClick={() => importYoutube.mutate()}
           >
             {importYoutube.isPending ? t('teacher.builder.importing') : t('teacher.builder.importNow')}

@@ -27,6 +27,9 @@ model User {
   phone        String?   @unique
   // Primary login handle for everyone (students, teachers, admins).
   email        String?   @unique
+  // Optional handle a person can sign in with instead of their email or phone.
+  // Lowercase, starts with a letter, so it can never be mistaken for a number.
+  username     String?   @unique
   passwordHash String?
   fullName     String
   avatarUrl    String?

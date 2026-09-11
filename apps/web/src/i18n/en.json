@@ -529,7 +529,8 @@
     "unexpectedErrorBody": "Sorry — the page failed to load. Please try reloading.",
     "reload": "Reload",
     "default": "Default",
-    "currencyShort": "EGP"
+    "currencyShort": "EGP",
+    "optional": "optional"
   },
   "wallet": {
     "title": "Wallet",
@@ -751,6 +752,12 @@
     "fullNamePh": "e.g. Ahmed Mahmoud",
     "phone": "Phone number",
     "phoneHint": "A valid Egyptian mobile number, e.g. 01012345678",
+    "username": "Username",
+    "usernameHint": "Leave it empty and we make one from the front of your email — you can sign in with it instead.",
+    "usernameRule": "At least 3 characters, starting with a letter: letters, digits and _ only",
+    "methodEmail": "Email",
+    "methodPhone": "Phone",
+    "methodUsername": "Username",
     "passwordHint": "At least 8 characters, including a letter and a number.",
     "createBtn": "Create account",
     "creating": "Creating…",
@@ -776,13 +783,14 @@
     "resetDone": "Password changed",
     "resetRedirect": "Redirecting to sign in…",
     "err": {
-      "invalidCredentials": "Incorrect email or password.",
+      "invalidCredentials": "Those details don't match — check your email, phone or username and the password.",
       "pending": "Your teacher account is awaiting admin approval.",
       "locked": "Account temporarily locked after too many attempts. Try again shortly.",
       "suspended": "This account is suspended.",
       "rejected": "This account was rejected.",
       "emailTaken": "This email is already registered.",
       "phoneTaken": "This phone is already registered.",
+      "usernameTaken": "That username is taken — try another.",
       "invalidToken": "Invalid or already-used link.",
       "tokenExpired": "This link has expired.",
       "emailNotFound": "No account is registered with this email.",

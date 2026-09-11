@@ -1,7 +1,8 @@
+import { m } from 'framer-motion';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import AuthShell, { AuthField } from '../components/AuthShell';
+import AuthShell, { AuthField, AuthSegmented, AuthSubmit, rise } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
 import { arrivalAcademy } from '../lib/arrival';
@@ -33,6 +34,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
@@ -47,6 +49,7 @@ export default function RegisterPage() {
       if (role === 'student') {
         const { data } = await api.post('/auth/register/student', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
+          ...(username.trim() ? { username: username.trim() } : {}),
           deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
         });
         setTokens(data.accessToken, data.refreshToken);
@@ -55,6 +58,7 @@ export default function RegisterPage() {
       } else {
         await api.post('/auth/register/teacher', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
+          ...(username.trim() ? { username: username.trim() } : {}),
         });
         setPendingDone(true);
       }
@@ -68,12 +72,21 @@ export default function RegisterPage() {
   if (pendingDone) {
     return (
       <AuthShell title={t('auth.pendingTitle')} subtitle={t('auth.pendingSub')}>
-        <div className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center">
-          <span className="material-symbols-outlined mb-2 text-5xl text-secondary">mark_email_read</span>
+        <m.div variants={rise} className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center">
+          <m.span
+            className="material-symbols-outlined mb-2 inline-block text-5xl text-secondary"
+            initial={{ scale: 0.6, rotate: -10 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.15 }}
+          >
+            mark_email_read
+          </m.span>
           <p className="font-heading text-lg font-bold">{t('auth.pendingHeadline')}</p>
           <p className="mt-1 text-sm text-on-surface-variant">{t('auth.pendingBody')}</p>
-        </div>
-        <Link to={withRedirect('/login', destination)} className="btn-primary mt-6 block w-full py-3 text-center">{t('auth.backToLogin')}</Link>
+        </m.div>
+        <m.div variants={rise}>
+          <Link to={withRedirect('/login', destination)} className="btn-primary mt-6 block w-full py-3 text-center">{t('auth.backToLogin')}</Link>
+        </m.div>
       </AuthShell>
     );
   }
@@ -91,25 +104,27 @@ export default function RegisterPage() {
         </>
       }
     >
-      {/* Role toggle — hidden for anyone who came in through an academy. */}
-      {!fromAcademy && (
-      <div className="mb-6 grid grid-cols-2 gap-1 rounded-2xl bg-surface-container-low p-1">
-        {(['student', 'teacher'] as Role[]).map((r) => (
-          <button key={r} type="button" onClick={() => setRole(r)}
-            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold transition ${
-              role === r ? 'bg-primary text-on-primary shadow' : 'text-on-surface-variant hover:text-primary'}`}>
-            <span className="material-symbols-outlined text-lg">{r === 'student' ? 'backpack' : 'cast_for_education'}</span>
-            {t(r === 'student' ? 'auth.asStudent' : 'auth.asTeacher')}
-          </button>
-        ))}
-      </div>
-      )}
-
       <form onSubmit={submit}>
+        {/* Role toggle — hidden for anyone who came in through an academy. */}
+        {!fromAcademy && (
+          <AuthSegmented<Role>
+            value={role}
+            onChange={setRole}
+            options={[
+              { value: 'student', label: t('auth.asStudent'), icon: 'backpack' },
+              { value: 'teacher', label: t('auth.asTeacher'), icon: 'cast_for_education' },
+            ]}
+          />
+        )}
         {error && (
-          <p className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container" role="alert">
+          <m.p
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container"
+            role="alert"
+          >
             {error}
-          </p>
+          </m.p>
         )}
         <AuthField icon="person" label={t('auth.fullName')} placeholder={t('auth.fullNamePh')}
           value={fullName} onChange={setFullName} autoComplete="name" maxLength={120} />
@@ -120,14 +135,19 @@ export default function RegisterPage() {
         <AuthField icon="phone" type="tel" dir="ltr" label={t('auth.phone')} inputMode="tel"
           pattern="(\+20|0020|20|0)?1[0125][0-9]{8}" title={t('auth.phoneHint')} maxLength={16}
           placeholder="01xxxxxxxxx" value={phone} onChange={setPhone} autoComplete="tel" />
+        {/* Mirrors USERNAME_REGEX on the API. Left empty, the server makes one
+            from the front of the email — so this is a preference, not a chore. */}
+        <AuthField icon="alternate_email" dir="ltr" label={t('auth.username')} placeholder="ahmed_m"
+          pattern="[A-Za-z][A-Za-z0-9_]{2,29}" title={t('auth.usernameRule')} maxLength={30}
+          value={username} onChange={(v) => setUsername(v.toLowerCase())} autoComplete="username"
+          optional hint={t('auth.usernameHint')} />
         <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.password')}
           placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
-          reveal revealed={show} onReveal={() => setShow((s) => !s)} />
-        <p className="mb-6 -mt-2 text-xs text-outline">{t('auth.passwordHint')}</p>
+          reveal revealed={show} onReveal={() => setShow((s) => !s)} hint={t('auth.passwordHint')} />
 
-        <button className="btn-primary w-full py-3" disabled={busy}>
-          {busy ? t('auth.creating') : t('auth.createBtn')}
-        </button>
+        <div className="mt-6">
+          <AuthSubmit busy={busy}>{busy ? t('auth.creating') : t('auth.createBtn')}</AuthSubmit>
+        </div>
       </form>
     </AuthShell>
   );

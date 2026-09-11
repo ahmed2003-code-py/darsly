@@ -64,12 +64,14 @@ export class AuthService {
     await this.assertEmailFree(email);
     const phone = normalizeEgyptianPhone(dto.phone);
     await this.assertPhoneFree(phone);
+    const username = await this.usernameFor(dto.username, email);
 
     const user = await this.prisma.user.create({
       data: {
         role: Role.STUDENT,
         email,
         phone,
+        username,
         fullName: dto.fullName.trim(),
         passwordHash: await argon2.hash(dto.password),
         studentProfile: { create: {} },
@@ -100,6 +102,7 @@ export class AuthService {
     await this.assertEmailFree(email);
     const phone = normalizeEgyptianPhone(dto.phone);
     await this.assertPhoneFree(phone);
+    const username = await this.usernameFor(dto.username, email);
 
     const slug = await this.uniqueSlug(dto.email, dto.fullName);
     const fullName = dto.fullName.trim();
@@ -112,6 +115,7 @@ export class AuthService {
           role: Role.TEACHER,
           email,
           phone,
+          username,
           fullName,
           passwordHash: await argon2.hash(dto.password),
           teacherProfile: { create: { slug, bio: dto.bio ?? '', status: TeacherStatus.PENDING } },
@@ -140,11 +144,12 @@ export class AuthService {
 
   // ── Login ──────────────────────────────────────────────────────────────────
 
-  /** Email + password login for everyone (students, teachers, admins). */
+  /** Email / phone / username + password login for everyone. */
   async login(dto: LoginDto, device: DeviceContext) {
-    const email = dto.email.toLowerCase().trim();
+    const handle = (dto.identifier ?? dto.email ?? '').trim();
+    if (!handle) throw new UnauthorizedException('Invalid credentials');
     const user = await this.prisma.user.findUnique({
-      where: { email },
+      where: this.resolveIdentifier(handle),
       include: { teacherProfile: true, studentProfile: true },
     });
 
@@ -157,11 +162,11 @@ export class AuthService {
     }
 
     // Always run a verify (against a dummy hash when the user/hash is absent) so
-    // login latency is the same for existing and non-existing emails.
+    // login latency is the same for existing and non-existing handles.
     const ok = await argon2.verify(user?.passwordHash ?? (await this.dummyHash), dto.password);
     if (!user || !user.passwordHash || !ok) {
       if (user?.isActive) await this.recordFailedLogin(user.id, user.failedLogins);
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     this.assertLoginAllowed(user);
@@ -365,6 +370,56 @@ export class AuthService {
   private async assertPhoneFree(phone: string) {
     const exists = await this.prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (exists) throw new ConflictException({ message: 'Phone already registered', code: 'PHONE_TAKEN' });
+  }
+
+  private async assertUsernameFree(username: string) {
+    const exists = await this.prisma.user.findUnique({ where: { username }, select: { id: true } });
+    if (exists) throw new ConflictException({ message: 'Username already taken', code: 'USERNAME_TAKEN' });
+  }
+
+  /**
+   * The username a new account gets: the one they typed, or one made from the
+   * front of their email — "ahmed.m@x.com" becomes "ahmed_m", so everyone has
+   * a handle to sign in with even if they never chose one. It must start with
+   * a letter (never mistakable for a phone) and be unique, so a clash gets a
+   * numeric suffix.
+   */
+  private async usernameFor(requested: string | undefined, email: string): Promise<string> {
+    const explicit = requested?.trim().toLowerCase();
+    if (explicit) {
+      await this.assertUsernameFree(explicit);
+      return explicit;
+    }
+    let base = email
+      .split('@')[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 28);
+    if (!/^[a-z]/.test(base)) base = `u_${base}`;
+    if (base.length < 3) base = `${base}_${randomInt(100, 999)}`;
+    for (let i = 0; i < 25; i++) {
+      const candidate = i === 0 ? base : `${base}_${i}`;
+      const taken = await this.prisma.user.findUnique({ where: { username: candidate }, select: { id: true } });
+      if (!taken) return candidate;
+    }
+    return `${base.slice(0, 22)}_${randomBytes(3).toString('hex')}`;
+  }
+
+  /**
+   * Which unique column a login handle refers to.
+   *
+   * An "@" makes it an email; an Egyptian mobile number (with or without its
+   * +20 / 0 prefix) makes it a phone, stored in E.164 exactly as registration
+   * stored it; anything else is a username. Usernames must start with a letter
+   * and contain no "@", so the three can never be confused for one another.
+   */
+  private resolveIdentifier(raw: string): { email: string } | { phone: string } | { username: string } {
+    const v = raw.trim();
+    if (v.includes('@')) return { email: v.toLowerCase() };
+    const digits = v.replace(/[\s-]/g, '');
+    if (/^(?:\+20|0020|20|0)?1[0125][0-9]{8}$/.test(digits)) return { phone: normalizeEgyptianPhone(digits) };
+    return { username: v.toLowerCase() };
   }
 
   private async uniqueSlug(email: string, fullName: string): Promise<string> {

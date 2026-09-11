@@ -18,10 +18,27 @@ export const EGY_PHONE_REGEX = /^(\+20|0020|20|0)?1[0125][0-9]{8}$/;
 export const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,128}$/;
 const PASSWORD_MSG = 'Password must be at least 8 characters and include a letter and a number';
 
+// A username starts with a letter so it can never be read as a phone number,
+// and has no "@" so it can never be read as an email. 3–30 chars.
+export const USERNAME_REGEX = /^[a-z][a-z0-9_]{2,29}$/i;
+const USERNAME_MSG = 'Username must be 3–30 characters: letters, digits or _, starting with a letter';
+
 export class LoginDto {
-  @ApiProperty({ example: 'student1@darsly.app' })
-  @IsEmail({}, { message: 'A valid email is required' })
-  email: string;
+  /**
+   * Email, Egyptian mobile number, or username — the server works out which.
+   * `email` stays accepted so a tab open across a deploy keeps working.
+   */
+  @ApiPropertyOptional({ example: 'student1@darsly.app' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  identifier?: string;
+
+  @ApiPropertyOptional({ example: 'student1@darsly.app', deprecated: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  email?: string;
 
   @ApiProperty({ example: 'Student@12345' })
   @IsString()
@@ -54,6 +71,11 @@ export class RegisterStudentDto {
   @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
   phone: string;
 
+  @ApiPropertyOptional({ example: 'ahmed_m' })
+  @IsOptional()
+  @Matches(USERNAME_REGEX, { message: USERNAME_MSG })
+  username?: string;
+
   @ApiPropertyOptional({ example: 'Chrome on Android' })
   @IsOptional()
   @IsString()
@@ -79,6 +101,11 @@ export class RegisterTeacherDto {
   @ApiProperty({ example: '01012345678' })
   @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
   phone: string;
+
+  @ApiPropertyOptional({ example: 'mr_khaled' })
+  @IsOptional()
+  @Matches(USERNAME_REGEX, { message: USERNAME_MSG })
+  username?: string;
 
   @ApiPropertyOptional({ example: 'مدرس رياضيات بخبرة 10 سنوات' })
   @IsOptional()

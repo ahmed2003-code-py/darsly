@@ -10,6 +10,8 @@ import { Role } from '@darsly/shared-types';
 import { validateImageDataUrl } from '../common/image.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { activateBundleChildren } from '../enrollments/bundle';
+import { releaseCouponUse, reserveCouponUse } from './coupon-use';
 import { computeServiceFee } from './fee.util';
 import { LedgerService } from './ledger.service';
 
@@ -64,7 +66,7 @@ export class ManualPaymentsService {
     // enrolment, and create the PENDING payment together. Any failure (incl. the
     // coupon being exhausted by a concurrent submit) rolls the whole thing back.
     const payment = await this.prisma.$transaction(async (tx) => {
-      if (couponId) await this.reserveCoupon(tx, couponId, couponMaxUses);
+      if (couponId) await reserveCouponUse(tx, couponId, couponMaxUses);
 
       const enr = enrollment
         ? await tx.enrollment.update({
@@ -139,7 +141,7 @@ export class ManualPaymentsService {
     }
     const course = await this.prisma.course.findUnique({
       where: { id: payment.courseId },
-      select: { pricingModel: true, title: true },
+      select: { id: true, tenantId: true, pricingModel: true, title: true },
     });
     const expiresAt = course?.pricingModel === 'MONTHLY_SUBSCRIPTION'
       ? new Date(Date.now() + 30 * 86_400_000)
@@ -168,6 +170,8 @@ export class ManualPaymentsService {
           where: { id: payment.enrollmentId },
           data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt },
         });
+        // A bundle is only worth what it unlocks.
+        if (course) await activateBundleChildren(tx, course, payment.studentId, expiresAt);
       }
       if (settle) await this.ledger.recordPayment(payment.id, tx);
       return true;
@@ -231,7 +235,7 @@ export class ManualPaymentsService {
       }
       // Release the coupon slot reserved at submit time so a rejected payment
       // never permanently consumes a use.
-      await this.releaseCoupon(tx, payment.couponId);
+      await releaseCouponUse(tx, payment.couponId);
       if (payment.enrollmentId) {
         await tx.enrollment.updateMany({
           where: { id: payment.enrollmentId, status: 'PENDING_APPROVAL' },
@@ -359,36 +363,6 @@ export class ManualPaymentsService {
         : computeServiceFee('PERCENT', 20, netCents);
     }
     return { netCents, feeCents, totalCents: netCents + feeCents, couponId, couponMaxUses };
-  }
-
-  /**
-   * Atomically reserve one coupon slot inside the caller's transaction. For a
-   * capped coupon the conditional updateMany (usedCount < maxUses) is the race
-   * guard: two concurrent submits can never both pass a maxUses:1 coupon — the DB
-   * serializes the increments and the loser's update matches zero rows. Throws
-   * COUPON_LIMIT_REACHED so the whole submit transaction rolls back.
-   */
-  private async reserveCoupon(tx: Prisma.TransactionClient, couponId: string, maxUses: number | null) {
-    if (maxUses == null) {
-      await tx.coupon.update({ where: { id: couponId }, data: { usedCount: { increment: 1 } } });
-      return;
-    }
-    const reserved = await tx.coupon.updateMany({
-      where: { id: couponId, usedCount: { lt: maxUses } },
-      data: { usedCount: { increment: 1 } },
-    });
-    if (reserved.count === 0) {
-      throw new ConflictException({ message: 'Coupon usage limit reached', code: 'COUPON_LIMIT_REACHED' });
-    }
-  }
-
-  /** Release a previously reserved coupon slot (floored at 0). */
-  private async releaseCoupon(tx: Prisma.TransactionClient, couponId: string | null) {
-    if (!couponId) return;
-    await tx.coupon.updateMany({
-      where: { id: couponId, usedCount: { gt: 0 } },
-      data: { usedCount: { decrement: 1 } },
-    });
   }
 
   private async notifyStudent(studentId: string, type: string, title: string, body: string) {

@@ -147,7 +147,7 @@ export class PlaybackService {
    * and return signed credentials + the watermark payload for the overlay.
    */
   async startSession(user: JwtPayload, lessonId: string, device: DeviceCtx) {
-    const { lesson, course, student } = await this.resolveAccess(user.sub, user.role, lessonId);
+    const { lesson, course, student, viewsCap } = await this.resolveAccess(user.sub, user.role, lessonId);
     const watermarkId = this.newWatermarkId();
 
     // Teacher/admin preview: no PlaybackSession row (studentId is required and
@@ -192,11 +192,24 @@ export class PlaybackService {
       priorProgress && priorProgress.watchedPct < 95 && priorProgress.lastPositionSec > 5
         ? priorProgress.lastPositionSec
         : 0;
-    await this.prisma.lessonProgress.upsert({
-      where: { studentId_lessonId: { studentId: student.id, lessonId } },
-      update: { viewCount: { increment: 1 } },
-      create: { studentId: student.id, lessonId, viewCount: 1, firstUnlockedAt: new Date() },
-    });
+    // With a cap, the increment is conditional on still being under it — the
+    // read in resolveAccess and this write are not one step, and two plays
+    // started together used to both count as "one under the cap".
+    if (viewsCap != null && priorProgress) {
+      const took = await this.prisma.lessonProgress.updateMany({
+        where: { studentId: student.id, lessonId, viewCount: { lt: viewsCap } },
+        data: { viewCount: { increment: 1 } },
+      });
+      if (took.count === 0) {
+        throw new ForbiddenException('You have reached the maximum number of views for this lesson');
+      }
+    } else {
+      await this.prisma.lessonProgress.upsert({
+        where: { studentId_lessonId: { studentId: student.id, lessonId } },
+        update: { viewCount: { increment: 1 } },
+        create: { studentId: student.id, lessonId, viewCount: 1, firstUnlockedAt: new Date() },
+      });
+    }
 
     const session = await this.prisma.playbackSession.create({
       data: {
@@ -318,7 +331,10 @@ export class PlaybackService {
     // with zero viewing. We cap it by what the wall-clock elapsed since the session
     // opened makes physically possible (allowing up to ~2x playback + a startup
     // grace), so completion can only be reached after genuinely spending the time.
-    if (body.watchedPct != null) {
+    // Only the student's own player writes their progress. Staff in the tenant
+    // may end or flag a session, but must never be able to complete a lesson —
+    // and so a course, and so a certificate — on a student's behalf.
+    if (body.watchedPct != null && user.role === Role.STUDENT) {
       const lesson = await this.prisma.lesson.findUnique({
         where: { id: session.lessonId },
         select: { durationSec: true },

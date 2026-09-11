@@ -122,6 +122,12 @@ export class PayoutsService {
       throw new BadRequestException('Payout is already finalized');
     }
 
+    // The write itself refuses a finalised row. Two admins acting at once used
+    // to both get through the check above: one completed it (and debited the
+    // teacher), the other then overwrote it as rejected — money gone, payout
+    // showing refused.
+    const open = { id, status: { notIn: ['COMPLETED', 'REJECTED'] as PayoutStatus[] } };
+    const data = { status, adminNote: note, processedBy: adminUserId, processedAt: new Date() };
     let updated;
     if (status === 'COMPLETED') {
       // Re-validate the balance at completion (it may have dropped since the
@@ -132,20 +138,17 @@ export class PayoutsService {
           if (payout.amountCents > balance) {
             throw new BadRequestException('Teacher balance no longer covers this payout');
           }
-          const u = await tx.payoutRequest.update({
-            where: { id },
-            data: { status, adminNote: note, processedBy: adminUserId, processedAt: new Date() },
-          });
+          const flip = await tx.payoutRequest.updateMany({ where: open, data });
+          if (flip.count === 0) throw new BadRequestException('Payout is already finalized');
           await this.ledger.recordPayout(id, tx);
-          return u;
+          return tx.payoutRequest.findUniqueOrThrow({ where: { id } });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } else {
-      updated = await this.prisma.payoutRequest.update({
-        where: { id },
-        data: { status, adminNote: note, processedBy: adminUserId, processedAt: new Date() },
-      });
+      const flip = await this.prisma.payoutRequest.updateMany({ where: open, data });
+      if (flip.count === 0) throw new BadRequestException('Payout is already finalized');
+      updated = await this.prisma.payoutRequest.findUniqueOrThrow({ where: { id } });
     }
 
     if (status === 'COMPLETED') {

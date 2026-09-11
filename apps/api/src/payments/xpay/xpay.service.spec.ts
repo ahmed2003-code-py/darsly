@@ -27,12 +27,16 @@ function build(over: {
     payment: {
       findUnique: jest.fn().mockResolvedValue(
         over.payment === undefined
-          ? { id: 'pay_1', gateway: 'xpay', status: 'PENDING', gatewayRef: 'cs_1' }
+          ? { id: 'pay_1', gateway: 'xpay', status: 'PENDING', gatewayRef: 'cs_1', couponId: null }
           : over.payment,
       ),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
+    coupon: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
   } as unknown as PrismaService;
+  // The failure path writes inside a transaction; run it against the same mocks.
+  (prisma as unknown as { $transaction: unknown }).$transaction = jest.fn(async (fn: (t: unknown) => unknown) => fn(prisma));
 
   const client = {
     getCheckoutSession: jest.fn().mockResolvedValue(over.session ?? { id: 'cs_1', status: 'paid' }),
@@ -167,10 +171,22 @@ describe('settling a payment', () => {
   it('marks a failed payment rejected without touching the ledger', async () => {
     const { service, prisma, payments } = build();
     await expect(service.handleEvent(event('payment.failed'))).resolves.toMatchObject({ failed: true });
-    expect(prisma.payment.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'REJECTED' }) }),
+    // Conditional on still being PENDING: a success that landed in between
+    // must not be turned back into a failure.
+    expect(prisma.payment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
+        data: expect.objectContaining({ status: 'REJECTED' }),
+      }),
     );
     expect(payments.systemVerify).not.toHaveBeenCalled();
+  });
+
+  it('does not fail a payment that was settled in the meantime', async () => {
+    const { service, prisma } = build();
+    (prisma.payment.updateMany as jest.Mock).mockResolvedValueOnce({ count: 0 });
+    await expect(service.handleEvent(event('payment.failed'))).resolves.toMatchObject({ failed: false });
+    expect(prisma.coupon.updateMany).not.toHaveBeenCalled();
   });
 
   it('leaves an event type it does not understand alone', async () => {
@@ -217,13 +233,14 @@ describe('a failed checkout leaves nothing behind', () => {
   function buildStart(over: { createFails?: boolean; createReturnsNoUrl?: boolean; existing?: unknown } = {}) {
     const deleted: string[] = [];
     const tx = {
+      coupon: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       payment: {
         create: jest.fn().mockResolvedValue({
           id: 'pay_1', amountCents: 12000, currency: 'EGP', enrollmentId: 'enr_1',
         }),
         delete: jest.fn(async ({ where }: { where: { id: string } }) => {
           deleted.push(`payment:${where.id}`);
-          return { id: where.id, enrollmentId: 'enr_1' };
+          return { id: where.id, enrollmentId: 'enr_1', couponId: null };
         }),
       },
       enrollment: {

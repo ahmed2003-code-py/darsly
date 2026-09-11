@@ -56,13 +56,17 @@ export class CertificatesService {
 
   /** Completion = every lesson in the course has a completed LessonProgress. */
   async checkCourseCompletion(studentId: string, courseId: string) {
-    const totalLessons = await this.prisma.lesson.count({
-      where: { unit: { courseId } },
-    });
+    // Both counts exclude deleted lessons and units explicitly. The soft-delete
+    // middleware hides deleted lessons from the first count but cannot see
+    // into the nested relation of the second — so progress on a lesson the
+    // teacher had since removed kept counting, and a course whose lessons had
+    // been swapped out could certify a student who never watched the new ones.
+    const live = { deletedAt: null, unit: { deletedAt: null, courseId } };
+    const totalLessons = await this.prisma.lesson.count({ where: live });
     if (totalLessons === 0) return null;
 
     const completed = await this.prisma.lessonProgress.count({
-      where: { studentId, completedAt: { not: null }, lesson: { unit: { courseId } } },
+      where: { studentId, completedAt: { not: null }, lesson: live },
     });
     if (completed < totalLessons) return null;
 

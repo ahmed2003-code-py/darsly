@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { releaseCouponUse, reserveCouponUse } from '../coupon-use';
 import { ManualPaymentsService } from '../manual-payments.service';
 import { XPayClient } from './xpay.client';
 import { XPayConfig } from './xpay.config';
@@ -63,6 +64,10 @@ export class XPayService {
     const quote = await this.payments.quote(course, couponCode);
 
     const payment = await this.prisma.$transaction(async (tx) => {
+      // The discount is granted the moment the checkout is priced, so the use
+      // is taken now — same as the bank-transfer route — and given back if the
+      // provider call fails or the charge does.
+      if (quote.couponId) await reserveCouponUse(tx, quote.couponId, quote.couponMaxUses);
       const enrollment = existing
         ? await tx.enrollment.update({
             where: { id: existing.id },
@@ -133,6 +138,7 @@ export class XPayService {
     try {
       await this.prisma.$transaction(async (tx) => {
         const payment = await tx.payment.delete({ where: { id: paymentId } });
+        await releaseCouponUse(tx, payment.couponId);
         if (!payment.enrollmentId) return;
         if (previous) {
           // It existed before this attempt; put it back as it was.
@@ -214,11 +220,18 @@ export class XPayService {
     }
 
     if (FAILURE_EVENTS.some((e) => type.includes(e))) {
-      await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: 'REJECTED', rejectedReason: `xpay:${type}` },
+      // Conditional: a success that landed between the read above and this
+      // write must not be turned back into a failure.
+      const failed = await this.prisma.$transaction(async (tx) => {
+        const flip = await tx.payment.updateMany({
+          where: { id: paymentId, status: 'PENDING' },
+          data: { status: 'REJECTED', rejectedReason: `xpay:${type}` },
+        });
+        if (flip.count === 0) return false;
+        await releaseCouponUse(tx, payment.couponId);
+        return true;
       });
-      return { handled: true, failed: true };
+      return { handled: true, failed };
     }
 
     return { handled: false, reason: `unhandled:${type}` };

@@ -6,9 +6,11 @@ import {
 } from '@nestjs/common';
 import { Coupon, Course, Enrollment } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { reserveCouponUse } from '../payments/coupon-use';
 import { computeServiceFee } from '../payments/fee.util';
 import { LedgerService } from '../payments/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { activateBundleChildren } from './bundle';
 
 /**
  * What a student is quoted. Deliberately only two numbers.
@@ -28,7 +30,7 @@ export interface Quote {
   /** What the student pays. */
   totalCents: number;
   currency: string;
-  coupon: { id: string; code: string } | null;
+  coupon: { id: string; code: string; maxUses: number | null } | null;
 }
 
 @Injectable()
@@ -92,7 +94,7 @@ export class EnrollmentsService {
       discountCents: discount,
       totalCents: net + fee,
       currency: course.currency,
-      coupon: coupon ? { id: coupon.id, code: coupon.code } : null,
+      coupon: coupon ? { id: coupon.id, code: coupon.code, maxUses: coupon.maxUses } : null,
     };
   }
 
@@ -161,11 +163,17 @@ export class EnrollmentsService {
           expiresAt: this.expiryFor(course),
           revokedReason: null,
         };
-    const enrollment = existing
-      ? await this.prisma.enrollment.update({ where: { id: existing.id }, data })
-      : await this.prisma.enrollment.create({
-          data: { studentId: student.id, courseId, tenantId: course.tenantId, ...data },
-        });
+    // A coupon that made the course free is still a use of that coupon — taken
+    // in the same transaction as the enrolment, so a one-use code cannot enrol
+    // a whole class, and a failed enrolment gives the slot back.
+    const enrollment = await this.prisma.$transaction(async (tx) => {
+      if (quote.coupon) await reserveCouponUse(tx, quote.coupon.id, quote.coupon.maxUses);
+      return existing
+        ? tx.enrollment.update({ where: { id: existing.id }, data })
+        : tx.enrollment.create({
+            data: { studentId: student.id, courseId, tenantId: course.tenantId, ...data },
+          });
+    });
 
     if (needsApproval) {
       // Nothing is unlocked yet — tell the student it is waiting, not granted.
@@ -179,7 +187,7 @@ export class EnrollmentsService {
       return { ...enrollment, quote };
     }
 
-    await this.activateBundleChildren(course, enrollment);
+    await activateBundleChildren(this.prisma, course, enrollment.studentId, enrollment.expiresAt);
     await this.notifications.create({
       userId,
       type: 'ENROLLMENT_APPROVED',
@@ -195,28 +203,6 @@ export class EnrollmentsService {
     return course.pricingModel === 'MONTHLY_SUBSCRIPTION'
       ? new Date(Date.now() + 30 * 86_400_000)
       : null;
-  }
-
-  /** Activating a BUNDLE unlocks each child course as its own enrollment. */
-  private async activateBundleChildren(course: Course, parent: Enrollment) {
-    if (course.pricingModel !== 'BUNDLE') return;
-    const items = await this.prisma.bundleItem.findMany({ where: { bundleId: course.id } });
-    for (const item of items) {
-      await this.prisma.enrollment.upsert({
-        where: {
-          studentId_courseId: { studentId: parent.studentId, courseId: item.courseId },
-        },
-        update: { status: 'ACTIVE', approvedAt: new Date(), expiresAt: parent.expiresAt },
-        create: {
-          studentId: parent.studentId,
-          courseId: item.courseId,
-          tenantId: course.tenantId,
-          status: 'ACTIVE',
-          approvedAt: new Date(),
-          expiresAt: parent.expiresAt,
-        },
-      });
-    }
   }
 
   async myEnrollments(userId: string) {
@@ -324,11 +310,18 @@ export class EnrollmentsService {
     // A paid course can only be activated by confirming a real payment — never
     // by a bare "approve" click. Payments are normally verified from the
     // payments queue; this endpoint is a safety-belted equivalent.
-    if (enrollment.course.priceCents > 0 && enrollment.payments.length === 0) {
-      throw new BadRequestException({
-        message: 'No pending payment to confirm — verify the payment from the payments queue',
-        code: 'NO_PENDING_PAYMENT',
-      });
+    //
+    // Only a bank transfer can be vouched for here: staff saw the money. A card
+    // checkout is confirmed by the gateway's own webhook, and marking it PAID
+    // ahead of that made the webhook stand down — the student was in, and the
+    // teacher's earning was never booked.
+    const vouchable = enrollment.payments.filter((p) => p.gateway !== 'xpay');
+    if (enrollment.course.priceCents > 0 && vouchable.length === 0) {
+      throw new BadRequestException(
+        enrollment.payments.length
+          ? { message: 'This payment is being confirmed by the card provider — it activates on its own', code: 'AWAITING_GATEWAY' }
+          : { message: 'No pending payment to confirm — verify the payment from the payments queue', code: 'NO_PENDING_PAYMENT' },
+      );
     }
     const expiresAt = this.expiryFor(enrollment.course);
 
@@ -345,7 +338,7 @@ export class EnrollmentsService {
       });
       if (flip.count === 0) return null; // another caller handled it
 
-      for (const payment of enrollment.payments) {
+      for (const payment of vouchable) {
         await tx.payment.updateMany({
           where: { id: payment.id, status: 'PENDING' },
           data: { status: 'PAID', paidAt: new Date() },
@@ -355,8 +348,8 @@ export class EnrollmentsService {
     });
     if (!updated) throw new BadRequestException('Only pending enrollments can be approved');
 
-    for (const payment of enrollment.payments) await this.ledger.ensureInvoice(payment.id);
-    await this.activateBundleChildren(enrollment.course, updated);
+    for (const payment of vouchable) await this.ledger.ensureInvoice(payment.id);
+    await activateBundleChildren(this.prisma, enrollment.course, updated.studentId, updated.expiresAt);
     await this.notifications.create({
       userId: enrollment.student.user.id,
       type: 'ENROLLMENT_APPROVED',
@@ -375,10 +368,14 @@ export class EnrollmentsService {
     // Fail the pending payments AND release each coupon slot they reserved at
     // submit time (a rejected enrollment must not permanently consume a use).
     const updated = await this.prisma.$transaction(async (tx) => {
-      const enr = await tx.enrollment.update({
-        where: { id },
+      // Conditional, so an approve that landed a moment ago is not overwritten —
+      // that left a PAID payment under a REJECTED enrolment.
+      const flip = await tx.enrollment.updateMany({
+        where: { id, status: 'PENDING_APPROVAL' },
         data: { status: 'REJECTED', revokedReason: reason ?? null },
       });
+      if (flip.count === 0) throw new BadRequestException('Only pending enrollments can be rejected');
+      const enr = await tx.enrollment.findUniqueOrThrow({ where: { id } });
       await tx.payment.updateMany({
         where: { enrollmentId: id, status: 'PENDING' },
         data: { status: 'FAILED' },
@@ -408,10 +405,12 @@ export class EnrollmentsService {
     if (enrollment.status !== 'ACTIVE') {
       throw new BadRequestException('Only active enrollments can be revoked');
     }
-    const updated = await this.prisma.enrollment.update({
-      where: { id },
+    const flip = await this.prisma.enrollment.updateMany({
+      where: { id, status: 'ACTIVE' },
       data: { status: 'REVOKED', revokedReason: reason ?? null },
     });
+    if (flip.count === 0) throw new BadRequestException('Only active enrollments can be revoked');
+    const updated = await this.prisma.enrollment.findUniqueOrThrow({ where: { id } });
     await this.notifications.create({
       userId: enrollment.student.user.id,
       type: 'SECURITY_ALERT',

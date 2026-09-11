@@ -258,7 +258,22 @@ export class PaymentMatchingService {
     const event = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
     if (event.status === 'MATCHED') throw new BadRequestException('Event already matched');
-    await this.manual.systemVerify(paymentId);
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    // A transfer is proof of exactly the amount it carried, not of any payment
+    // an admin points it at.
+    if (event.amountCents !== payment.amountCents) {
+      throw new BadRequestException({
+        message: `Transfer is ${event.amountCents} but the payment is ${payment.amountCents}`,
+        code: 'AMOUNT_MISMATCH',
+      });
+    }
+    // Same as an automatic match: a pending payment is verified and settled;
+    // one a teacher already self-verified is settled — that is the whole point
+    // of a real transfer turning up for it.
+    if (payment.status === 'PENDING') await this.manual.systemVerify(paymentId);
+    else if (payment.status === 'PAID' && !payment.settledAt) await this.manual.settle(paymentId, actorId);
+    else throw new BadRequestException({ message: 'Payment is neither pending nor awaiting settlement', code: 'NOT_MATCHABLE' });
     await this.prisma.paymentEvent.update({
       where: { id: eventId },
       data: { status: 'MATCHED', matchedPaymentId: paymentId, note: `manual match by ${actorId}` },

@@ -104,6 +104,12 @@ export default function SecureVideoPlayerPage() {
   const idx = flatLessons.findIndex((l) => l.id === lessonId);
   const nextLesson = flatLessons.slice(idx + 1).find((l) => !l.locked);
 
+  // A course can be nothing but a flat list of lessons — the sidebar numbers
+  // only the named sections, and the unnamed one just isn't labelled.
+  let sectionNumber = 0;
+  const sidebarUnits: { unit: any; sectionN: number | null }[] =
+    course?.units.map((u: any) => ({ unit: u, sectionN: u.isDefault ? null : ++sectionNumber })) ?? [];
+
   // ── Notes ────────────────────────────────────────────────────────────────
   const { data: notes } = useQuery({
     queryKey: ['notes', lessonId],
@@ -336,11 +342,13 @@ export default function SecureVideoPlayerPage() {
           <div className="card p-4">
             <h2 className="mb-3 font-heading text-lg font-bold">{t('player.courseContent')}</h2>
             <div className="space-y-4">
-              {course?.units.map((u: any, ui: number) => (
+              {sidebarUnits.map(({ unit: u, sectionN }) => (
                 <div key={u.id}>
-                  <p className="mb-2 text-xs font-bold text-outline">
-                    {t('teacher.builder.unitBadge', { n: ui + 1 })} · {u.title}
-                  </p>
+                  {sectionN != null && (
+                    <p className="mb-2 text-xs font-bold text-outline">
+                      {t('teacher.builder.unitBadge', { n: sectionN })} · {u.title}
+                    </p>
+                  )}
                   <ul className="space-y-1">
                     {u.lessons.map((l: any) => {
                       const active = l.id === lessonId;

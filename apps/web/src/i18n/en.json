@@ -406,6 +406,8 @@
       "closePanel": "Close",
       "lessonNamePh": "Name the lesson and press Enter",
       "addLessonCta": "Add",
+      "directLessons": "Course lessons",
+      "noLessonsToPublish": "Add at least one lesson before you can publish the course.",
       "descLabel": "Lesson description",
       "descPh": "What does this lesson cover? (optional)",
       "publishTitle": "Lessons all done?",
@@ -427,9 +429,7 @@
       "newUnitName": "Section {{n}}",
       "newLessonName": "Lesson {{n}}",
       "countSummary": "{{lessons}} lessons · {{time}}",
-      "unsaved": "You have unsaved changes",
-      "emptyTitle": "Start with your first lesson",
-      "emptyHint": "Press \"New section\", then add your lessons inside it."
+      "unsaved": "You have unsaved changes"
     },
     "students": {
       "title": "My students",

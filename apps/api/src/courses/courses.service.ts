@@ -283,7 +283,10 @@ export class CoursesService {
         where: { unit: { courseId } },
       });
       if (lessons === 0) {
-        throw new BadRequestException('Cannot publish a course with no lessons');
+        throw new BadRequestException({
+          message: 'Cannot publish a course with no lessons',
+          code: 'NO_LESSONS',
+        });
       }
     }
 
@@ -387,6 +390,35 @@ export class CoursesService {
   async createLesson(tenantId: string, unitId: string, dto: CreateLessonDto) {
     await this.assertUnit(tenantId, unitId);
     if (dto.videoAssetId) await this.assertVideoAssetOwned(tenantId, dto.videoAssetId);
+    return this.insertLesson(unitId, dto);
+  }
+
+  /**
+   * Add a lesson straight to the course — no section required. A short
+   * course that is really just a playlist of lessons shouldn't need a
+   * container invented for it first.
+   *
+   * Lands in one hidden "default" unit, created the first time this is
+   * called. It never appears as a section in the curriculum tree — the
+   * builder renders its lessons as a flat list above the named sections —
+   * but underneath it is an ordinary CourseUnit, so nothing else in the
+   * lesson/quiz/assignment/progress pipeline needs to know it's different.
+   */
+  async addLessonDirect(tenantId: string, courseId: string, dto: CreateLessonDto) {
+    await this.assertCourse(tenantId, courseId);
+    if (dto.videoAssetId) await this.assertVideoAssetOwned(tenantId, dto.videoAssetId);
+    let unit = await this.prisma.courseUnit.findFirst({ where: { courseId, isDefault: true } });
+    if (!unit) {
+      // Sorted before every named section, so "just add lessons" lessons read
+      // first — the closest thing to "no sections at all" the schema allows.
+      unit = await this.prisma.courseUnit.create({
+        data: { courseId, title: '', isDefault: true, sortOrder: -1 },
+      });
+    }
+    return this.insertLesson(unit.id, dto);
+  }
+
+  private async insertLesson(unitId: string, dto: CreateLessonDto) {
     const last = await this.prisma.lesson.aggregate({
       where: { unitId },
       _max: { sortOrder: true },
@@ -585,6 +617,7 @@ export class CoursesService {
       units: course.units.map((u) => ({
         id: u.id,
         title: u.title,
+        isDefault: u.isDefault,
         lessons: u.lessons.map((l) => {
           const open =
             isOwner || l.isFreePreview || (!!activeEnrollment && unlockedByDrip(l));

@@ -76,6 +76,15 @@ export default function CourseDetailPage() {
     }),
     { lessons: 0, sec: 0 },
   );
+  // A course can be nothing but a flat list of lessons — only named sections
+  // get a number and a header; the unnamed one just isn't labelled, and
+  // (being sorted first) opens on its own.
+  let sectionNumber = 0;
+  const curriculumUnits: { unit: any; sectionN: number | null }[] = course.units.map((u: any) => ({
+    unit: u,
+    sectionN: u.isDefault ? null : ++sectionNumber,
+  }));
+
   const enrollmentStatus: string | null = course.viewer.enrollmentStatus;
   const isStudent = user?.role === Role.STUDENT;
   const priced = quote.data;
@@ -155,23 +164,26 @@ export default function CourseDetailPage() {
           {/* Curriculum */}
           <h2 className="mb-4 font-heading text-2xl font-extrabold">{t('course.curriculum')}</h2>
           <div className="space-y-4">
-            {course.units.map((u: any, ui: number) => {
-              const open = openUnits[u.id] ?? ui === 0;
+            {curriculumUnits.map(({ unit: u, sectionN }) => {
+              // No section, no toggle — the unnamed unit's lessons are just there.
+              const open = sectionN == null ? true : (openUnits[u.id] ?? sectionN === 1);
               return (
                 <div key={u.id} className="card p-0">
-                  <button
-                    className="flex w-full items-center justify-between px-6 py-4"
-                    onClick={() => setOpenUnits({ ...openUnits, [u.id]: !open })}
-                  >
-                    <span className="flex items-center gap-3">
-                      <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
-                      <span className="font-heading text-lg font-bold">{u.title}</span>
-                    </span>
-                    <span className="flex items-center gap-3 text-sm text-outline">
-                      {t('course.lessonsCount', { count: u.lessons.length })}
-                      <span className="material-symbols-outlined">{open ? 'expand_less' : 'expand_more'}</span>
-                    </span>
-                  </button>
+                  {sectionN != null && (
+                    <button
+                      className="flex w-full items-center justify-between px-6 py-4"
+                      onClick={() => setOpenUnits({ ...openUnits, [u.id]: !open })}
+                    >
+                      <span className="flex items-center gap-3">
+                        <Badge>{t('teacher.builder.unitBadge', { n: sectionN })}</Badge>
+                        <span className="font-heading text-lg font-bold">{u.title}</span>
+                      </span>
+                      <span className="flex items-center gap-3 text-sm text-outline">
+                        {t('course.lessonsCount', { count: u.lessons.length })}
+                        <span className="material-symbols-outlined">{open ? 'expand_less' : 'expand_more'}</span>
+                      </span>
+                    </button>
+                  )}
                   {open && (
                     <ul className="border-t border-outline-variant/40">
                       {u.lessons.map((l: any) => {

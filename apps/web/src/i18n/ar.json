@@ -406,6 +406,8 @@
       "closePanel": "إقفال",
       "lessonNamePh": "اكتب اسم الدرس واضغط Enter",
       "addLessonCta": "إضافة",
+      "directLessons": "دروس الكورس",
+      "noLessonsToPublish": "محتاج تضيف درس واحد على الأقل قبل ما تقدر تنشر الكورس.",
       "descLabel": "وصف الدرس",
       "descPh": "الدرس ده بيغطّي إيه؟ (اختياري)",
       "publishTitle": "خلصت الدروس؟",
@@ -427,9 +429,7 @@
       "newUnitName": "القسم {{n}}",
       "newLessonName": "الدرس {{n}}",
       "countSummary": "{{lessons}} درس · {{time}}",
-      "unsaved": "فيه تعديلات لسه متحفظتش",
-      "emptyTitle": "ابدأ بأول درس",
-      "emptyHint": "اضغط \"قسم جديد\" وبعدها ضيف دروسك جواه."
+      "unsaved": "فيه تعديلات لسه متحفظتش"
     },
     "students": {
       "title": "طلابي",

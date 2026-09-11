@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Hls from 'hls.js';
-import { useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { PlaybackTicket } from '@darsly/shared-types';
@@ -95,6 +95,10 @@ export default function CourseBuilderPage() {
   });
 
   const units: any[] = course?.units ?? [];
+  // Sections are opt-in: a course can be nothing but a flat list of lessons.
+  // The default unit that holds them is never shown as a section itself.
+  const defaultUnit = units.find((u: any) => u.isDefault) ?? null;
+  const sections = units.filter((u: any) => !u.isDefault);
   const lessons: any[] = units.flatMap((u: any) => u.lessons);
   const selected = lessons.find((l: any) => l.id === selectedLessonId) ?? null;
   const selectedVideo = selected?.videoAsset ?? null;
@@ -137,6 +141,16 @@ export default function CourseBuilderPage() {
   const addLesson = useMutation({
     mutationFn: async ({ unitId, title }: { unitId: string; title: string }) =>
       (await api.post(`/teacher/units/${unitId}/lessons`, { title })).data,
+    onSuccess: (lesson) => {
+      invalidate();
+      selectLesson(lesson);
+    },
+  });
+  // No section chosen — lands in the hidden default unit the API creates on
+  // first use. The same "type a name, press Enter" flow, one step shorter.
+  const addLessonDirect = useMutation({
+    mutationFn: async (title: string) =>
+      (await api.post(`/teacher/courses/${id}/lessons`, { title })).data,
     onSuccess: (lesson) => {
       invalidate();
       selectLesson(lesson);
@@ -634,7 +648,7 @@ export default function CourseBuilderPage() {
           )}
         </div>
       </div>
-      <ErrorNote error={publish.error} />
+      {publish.error && <PublishError error={publish.error} t={t} />}
 
       {/* Course cover / thumbnail */}
       <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
@@ -676,165 +690,156 @@ export default function CourseBuilderPage() {
         </p>
       </div>
 
-      {/* Curriculum — full width, lessons open in place */}
-      {units.length === 0 && (
-        <div className="card grid place-items-center gap-2 py-14 text-center">
-          <span className="material-symbols-outlined text-4xl text-outline">library_add</span>
-          <p className="font-heading text-lg font-bold">{t('teacher.builder.emptyTitle')}</p>
-          <p className="max-w-xs text-sm text-on-surface-variant">{t('teacher.builder.emptyHint')}</p>
-          <button
-            className="btn-primary mt-2"
-            disabled={addUnit.isPending}
-            onClick={() => addUnit.mutate(t('teacher.builder.newUnitName', { n: 1 }))}
-          >
-            <span className="material-symbols-outlined text-[20px]">add</span>
-            {t('teacher.builder.addUnit')}
-          </button>
-        </div>
-      )}
-
-      <div className="space-y-5">
-        {units.map((u: any, ui: number) => (
-          <div key={u.id} className="card p-5">
-            <div className="group/unit mb-4 flex items-center gap-3">
-              <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
-              <InlineName
-                value={u.title}
-                editing={renaming === `unit:${u.id}`}
-                onEdit={() => setRenaming(`unit:${u.id}`)}
-                onDone={(title) => {
-                  setRenaming(null);
-                  if (title && title !== u.title) renameUnit.mutate({ unitId: u.id, title });
-                }}
-                className="font-heading text-lg font-bold"
-              />
-              <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
-                {t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
-              </span>
-              <button
-                title={t('common.delete')}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/unit:opacity-100"
-                onClick={() => window.confirm(t('teacher.builder.deleteUnitConfirm')) && removeUnit.mutate(u.id)}
-              >
-                <span className="material-symbols-outlined text-[18px]">delete</span>
-              </button>
-            </div>
-
-            <ul className="space-y-2">
-              {u.lessons.map((l: any, li: number) => {
-                const open = selectedLessonId === l.id;
-                return (
-                  <li key={l.id}>
-                    <div
-                      className={`group/lesson flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${
-                        open
-                          ? 'border-primary-container bg-primary-fixed/40'
-                          : 'border-outline-variant/40 bg-surface-container-lowest hover:bg-surface-container-low'
-                      }`}
-                      onClick={() => (open ? setSelectedLessonId(null) : selectLesson(l))}
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
-                        <span className="material-symbols-outlined text-xl">
-                          {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'draft'}
-                        </span>
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-1.5 font-bold">
-                          <span className="shrink-0 text-outline">{li + 1}.</span>
-                          <InlineName
-                            value={l.title}
-                            editing={renaming === `lesson:${l.id}`}
-                            onEdit={() => setRenaming(`lesson:${l.id}`)}
-                            onDone={(title) => {
-                              setRenaming(null);
-                              if (title && title !== l.title) renameLesson.mutate({ lessonId: l.id, title });
-                            }}
-                          />
-                        </p>
-                        <p className="flex flex-wrap gap-2 text-xs text-outline">
-                          {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
-                          {l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status) && (
-                            <span className="text-primary">{t('teacher.builder.videoProcessing')}</span>
-                          )}
-                          {l.isFreePreview && <span className="text-secondary">{t('teacher.builder.freePreview')}</span>}
-                          {(l.dripUnlockAt || l.dripAfterEnrollDays != null) && (
-                            <span className="flex items-center gap-0.5">
-                              <span className="material-symbols-outlined text-xs">lock_clock</span>
-                              Drip
-                            </span>
-                          )}
-                          {l.attachments?.length > 0 && (
-                            <span>{t('course.attachmentsCount', { count: l.attachments.length })}</span>
-                          )}
-                        </p>
-                      </div>
-                      <span className={`material-symbols-outlined shrink-0 text-outline transition ${open ? 'rotate-180' : ''}`}>
-                        expand_more
-                      </span>
-                      <button
-                        title={t('common.delete')}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/lesson:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm(t('teacher.builder.deleteLessonConfirm'))) removeLesson.mutate(l.id);
-                        }}
-                      >
-                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                      </button>
-                    </div>
-                    {open && lessonPanel}
-                  </li>
-                );
-              })}
-            </ul>
-
-            {/* Type a name, press Enter, keep going. */}
-            <AddLessonRow
-              busy={addLesson.isPending}
-              placeholder={t('teacher.builder.lessonNamePh')}
-              label={t('teacher.builder.addLessonCta')}
-              onAdd={(title) => addLesson.mutate({ unitId: u.id, title })}
-            />
-          </div>
-        ))}
-      </div>
-
-      {units.length > 0 && (
-        <button
-          className="btn-secondary mt-5 w-full py-3"
-          disabled={addUnit.isPending}
-          onClick={() => addUnit.mutate(t('teacher.builder.newUnitName', { n: units.length + 1 }))}
-        >
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          {t('teacher.builder.addUnit')}
-        </button>
-      )}
-
-      {/* Publishing, where the work ends rather than before it starts. */}
-      {lessons.length > 0 && (
-        <div className="card mt-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="font-heading text-lg font-bold">
-              {isPublished ? t('teacher.builder.publishedTitle') : t('teacher.builder.publishTitle')}
-            </p>
-            <p className="mt-1 text-sm text-on-surface-variant">
-              {isPublished ? t('teacher.builder.publishedHint') : t('teacher.builder.publishHint')}
-            </p>
-          </div>
-          {isPublished ? (
-            <button className="btn-secondary" disabled={publish.isPending} onClick={() => publish.mutate('DRAFT')}>
-              <span className="material-symbols-outlined text-[20px]">visibility_off</span>
-              {t('teacher.builder.unpublish')}
-            </button>
-          ) : (
-            <button className="btn-primary px-7 py-3" disabled={publish.isPending} onClick={() => publish.mutate('PUBLISHED')}>
-              <span className="material-symbols-outlined text-[20px]">publish</span>
-              {t('teacher.builder.publishNow')}
-            </button>
+      {/* Curriculum — full width, lessons open in place.
+          Sections are opt-in: lessons can sit right here with no section at
+          all, or be grouped into named ones below — both at once, even. */}
+      <div className="card mb-5 p-5">
+        <div className="mb-4 flex items-center gap-3">
+          <p className="font-heading text-lg font-bold">{t('teacher.builder.directLessons')}</p>
+          {defaultUnit?.lessons.length > 0 && (
+            <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
+              {t('teacher.builder.lessonsMeta', { count: defaultUnit.lessons.length })}
+            </span>
           )}
         </div>
+
+        {defaultUnit?.lessons.length > 0 && (
+          <ul className="mb-3 space-y-2">
+            {defaultUnit.lessons.map((l: any, li: number) => (
+              <LessonRow
+                key={l.id}
+                l={l}
+                li={li}
+                open={selectedLessonId === l.id}
+                onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
+                editingTitle={renaming === `lesson:${l.id}`}
+                onEdit={() => setRenaming(`lesson:${l.id}`)}
+                onRename={(title) => {
+                  setRenaming(null);
+                  if (title && title !== l.title) renameLesson.mutate({ lessonId: l.id, title });
+                }}
+                onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
+                panel={lessonPanel}
+                t={t}
+              />
+            ))}
+          </ul>
+        )}
+
+        <AddLessonRow
+          busy={addLessonDirect.isPending}
+          placeholder={t('teacher.builder.lessonNamePh')}
+          label={t('teacher.builder.addLessonCta')}
+          onAdd={(title) => addLessonDirect.mutate(title)}
+        />
+      </div>
+
+      {sections.length > 0 && (
+        <div className="mb-5 space-y-5">
+          {sections.map((u: any, ui: number) => (
+            <div key={u.id} className="card p-5">
+              <div className="group/unit mb-4 flex items-center gap-3">
+                <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
+                <InlineName
+                  value={u.title}
+                  editing={renaming === `unit:${u.id}`}
+                  onEdit={() => setRenaming(`unit:${u.id}`)}
+                  onDone={(title) => {
+                    setRenaming(null);
+                    if (title && title !== u.title) renameUnit.mutate({ unitId: u.id, title });
+                  }}
+                  className="font-heading text-lg font-bold"
+                />
+                <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
+                  {t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
+                </span>
+                <button
+                  title={t('common.delete')}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/unit:opacity-100"
+                  onClick={() => window.confirm(t('teacher.builder.deleteUnitConfirm')) && removeUnit.mutate(u.id)}
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </div>
+
+              <ul className="space-y-2">
+                {u.lessons.map((l: any, li: number) => (
+                  <LessonRow
+                    key={l.id}
+                    l={l}
+                    li={li}
+                    open={selectedLessonId === l.id}
+                    onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
+                    editingTitle={renaming === `lesson:${l.id}`}
+                    onEdit={() => setRenaming(`lesson:${l.id}`)}
+                    onRename={(title) => {
+                      setRenaming(null);
+                      if (title && title !== l.title) renameLesson.mutate({ lessonId: l.id, title });
+                    }}
+                    onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
+                    panel={lessonPanel}
+                    t={t}
+                  />
+                ))}
+              </ul>
+
+              {/* Type a name, press Enter, keep going. */}
+              <AddLessonRow
+                busy={addLesson.isPending}
+                placeholder={t('teacher.builder.lessonNamePh')}
+                label={t('teacher.builder.addLessonCta')}
+                onAdd={(title) => addLesson.mutate({ unitId: u.id, title })}
+              />
+            </div>
+          ))}
+        </div>
       )}
+
+      <button
+        className="btn-secondary w-full py-3"
+        disabled={addUnit.isPending}
+        onClick={() => addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 }))}
+      >
+        <span className="material-symbols-outlined text-[20px]">add</span>
+        {t('teacher.builder.addUnit')}
+      </button>
+
+      {/* Publishing, always reachable — no reason to leave the page for it. */}
+      <div className="card mt-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-heading text-lg font-bold">
+            {isPublished ? t('teacher.builder.publishedTitle') : t('teacher.builder.publishTitle')}
+          </p>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            {isPublished ? t('teacher.builder.publishedHint') : t('teacher.builder.publishHint')}
+          </p>
+        </div>
+        {isPublished ? (
+          <button className="btn-secondary" disabled={publish.isPending} onClick={() => publish.mutate('DRAFT')}>
+            <span className="material-symbols-outlined text-[20px]">visibility_off</span>
+            {t('teacher.builder.unpublish')}
+          </button>
+        ) : (
+          <button className="btn-primary px-7 py-3" disabled={publish.isPending} onClick={() => publish.mutate('PUBLISHED')}>
+            <span className="material-symbols-outlined text-[20px]">publish</span>
+            {t('teacher.builder.publishNow')}
+          </button>
+        )}
+      </div>
+      {publish.error && <PublishError error={publish.error} t={t} />}
     </div>
+  );
+}
+
+/** A publish failure the teacher can actually read — "no lessons yet" gets
+ *  its own line; anything else falls back to whatever the server said. */
+function PublishError({ error, t }: { error: unknown; t: (k: string) => string }) {
+  const data = (error as any)?.response?.data;
+  const text = data?.code === 'NO_LESSONS' ? t('teacher.builder.noLessonsToPublish') : data?.message;
+  return (
+    <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
+      {text || t('common.error')}
+    </p>
   );
 }
 
@@ -865,6 +870,80 @@ function VideoActions({
         {t('teacher.builder.videoDelete')}
       </button>
     </div>
+  );
+}
+
+/**
+ * One row in the curriculum — a lesson's name, type icon, badges and delete
+ * button, expanding into its settings panel when open. The same row is used
+ * whether the lesson sits directly in the course or inside a named section;
+ * only where the list comes from differs.
+ */
+function LessonRow({
+  l, li, open, onToggle, editingTitle, onEdit, onRename, onDelete, panel, t,
+}: {
+  l: any;
+  li: number;
+  open: boolean;
+  onToggle: () => void;
+  editingTitle: boolean;
+  onEdit: () => void;
+  onRename: (title: string) => void;
+  onDelete: () => void;
+  panel: ReactNode;
+  t: (k: string, o?: any) => string;
+}) {
+  return (
+    <li>
+      <div
+        className={`group/lesson flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${
+          open
+            ? 'border-primary-container bg-primary-fixed/40'
+            : 'border-outline-variant/40 bg-surface-container-lowest hover:bg-surface-container-low'
+        }`}
+        onClick={onToggle}
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
+          <span className="material-symbols-outlined text-xl">
+            {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'draft'}
+          </span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 font-bold">
+            <span className="shrink-0 text-outline">{li + 1}.</span>
+            <InlineName value={l.title} editing={editingTitle} onEdit={onEdit} onDone={onRename} />
+          </p>
+          <p className="flex flex-wrap gap-2 text-xs text-outline">
+            {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
+            {l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status) && (
+              <span className="text-primary">{t('teacher.builder.videoProcessing')}</span>
+            )}
+            {l.isFreePreview && <span className="text-secondary">{t('teacher.builder.freePreview')}</span>}
+            {(l.dripUnlockAt || l.dripAfterEnrollDays != null) && (
+              <span className="flex items-center gap-0.5">
+                <span className="material-symbols-outlined text-xs">lock_clock</span>
+                Drip
+              </span>
+            )}
+            {l.attachments?.length > 0 && <span>{t('course.attachmentsCount', { count: l.attachments.length })}</span>}
+          </p>
+        </div>
+        <span className={`material-symbols-outlined shrink-0 text-outline transition ${open ? 'rotate-180' : ''}`}>
+          expand_more
+        </span>
+        <button
+          title={t('common.delete')}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/lesson:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <span className="material-symbols-outlined text-[18px]">delete</span>
+        </button>
+      </div>
+      {open && panel}
+    </li>
   );
 }
 

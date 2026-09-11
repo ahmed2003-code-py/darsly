@@ -157,13 +157,23 @@ export class TeacherCoursesController {
   // ── Lessons ──────────────────────────────────────────────────────────────
 
   @Post('units/:unitId/lessons')
-  @ApiOperation({ summary: '[teacher] Add lesson (drip, preview, caps, video asset)' })
+  @ApiOperation({ summary: '[teacher] Add lesson to a section (drip, preview, caps, video asset)' })
   createLesson(
     @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
     @Param('unitId') unitId: string,
     @Body() dto: CreateLessonDto,
   ) {
     return this.courses.createLesson(ctx.academyId, unitId, dto);
+  }
+
+  @Post('courses/:courseId/lessons')
+  @ApiOperation({ summary: '[teacher] Add a lesson straight to the course, no section required' })
+  addLessonDirect(
+    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @Param('courseId') courseId: string,
+    @Body() dto: CreateLessonDto,
+  ) {
+    return this.courses.addLessonDirect(ctx.academyId, courseId, dto);
   }
 
   @Patch('lessons/:id')

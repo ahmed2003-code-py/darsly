@@ -68,9 +68,11 @@ export class VideoProcessingService {
         },
       });
 
-      // Propagate duration to the lesson if it didn't have one.
+      // The video is the only source a lesson's length has — teachers no longer
+      // type it in — so the probe always wins. Filling only an empty duration
+      // meant swapping in a longer take left the old one on display forever.
       await this.prisma.lesson.updateMany({
-        where: { videoAssetId: assetId, durationSec: 0 },
+        where: { videoAssetId: assetId },
         data: { durationSec: result.durationSec },
       });
 

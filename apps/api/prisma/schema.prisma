@@ -448,6 +448,8 @@ model Lesson {
   unitId    String
   unit      CourseUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
   title     String
+  // What the lesson covers, shown to the student above the player.
+  description String?
   type      LessonType @default(VIDEO)
   sortOrder Int        @default(0)
 

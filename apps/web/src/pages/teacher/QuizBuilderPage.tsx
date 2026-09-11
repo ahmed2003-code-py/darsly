@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Badge, ErrorNote, PageHeader, Spinner } from '../../components/ui';
 import i18n from '../../i18n';
@@ -31,6 +31,9 @@ const blankQ = (type: Q['type']): Q => {
 export default function QuizBuilderPage() {
   const { t } = useTranslation();
   const { lessonId } = useParams();
+  const [search] = useSearchParams();
+  const fromCourse = search.get('course');
+  const backTo = fromCourse ? `/teacher/courses/${fromCourse}?lesson=${lessonId}` : '/teacher/courses';
   const qc = useQueryClient();
 
   const [passingScore, setPassingScore] = useState(50);
@@ -75,7 +78,10 @@ export default function QuizBuilderPage() {
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-      <Link to="/teacher/courses" className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
+      {/* Back to the lesson this quiz belongs to, with its panel still open —
+          the builder passes the course along precisely so this can return
+          there rather than dumping the teacher at the course list. */}
+      <Link to={backTo} className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
         <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.builder.backCourses')}
       </Link>
       <PageHeader title={t('assess.builder.quizTitle')} subtitle={t('assess.builder.quizSubtitle')} />

@@ -395,6 +395,7 @@ export class CoursesService {
       data: {
         unitId,
         title: dto.title,
+        description: dto.description,
         type: dto.type,
         sortOrder: dto.sortOrder ?? (last._max.sortOrder ?? -1) + 1,
         durationSec: dto.durationSec,
@@ -440,9 +441,10 @@ export class CoursesService {
     const asset = await this.assertVideoAssetOwned(tenantId, lesson.videoAssetId);
 
     // The relation has no cascade, so the FK must be cleared before the row
-    // it points at can be deleted.
+    // it points at can be deleted. The duration goes with it — it was probed
+    // from this video, and a lesson with no video has no length to report.
     await this.prisma.$transaction([
-      this.prisma.lesson.update({ where: { id: lessonId }, data: { videoAssetId: null } }),
+      this.prisma.lesson.update({ where: { id: lessonId }, data: { videoAssetId: null, durationSec: 0 } }),
       this.prisma.videoAsset.delete({ where: { id: asset.id } }),
     ]);
 

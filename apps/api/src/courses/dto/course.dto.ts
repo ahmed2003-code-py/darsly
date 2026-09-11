@@ -52,6 +52,7 @@ export class UpsertUnitDto {
 
 export class CreateLessonDto {
   @IsString() @MinLength(1) @MaxLength(LIMITS.TITLE) title: string;
+  @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) description?: string;
   @IsOptional() @IsEnum(LessonType) type?: LessonType;
   @IsOptional() @IsInt() @Min(0) @Max(10_000) sortOrder?: number;
   // A 24-hour lesson is already absurd; the cap keeps a typo out of progress maths.

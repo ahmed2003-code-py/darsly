@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../../components/ui';
 
 export default function AssignmentBuilderPage() {
   const { t } = useTranslation();
   const { lessonId } = useParams();
+  const [search] = useSearchParams();
+  const fromCourse = search.get('course');
+  const backTo = fromCourse ? `/teacher/courses/${fromCourse}?lesson=${lessonId}` : '/teacher/courses';
   const qc = useQueryClient();
 
   const [prompt, setPrompt] = useState('');
@@ -46,7 +49,8 @@ export default function AssignmentBuilderPage() {
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-      <Link to="/teacher/courses" className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
+      {/* Back to the lesson this assignment belongs to, panel still open. */}
+      <Link to={backTo} className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
         <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.builder.backCourses')}
       </Link>
       <PageHeader title={t('assess.builder.assignTitle')} subtitle={t('assess.builder.assignSubtitle')} />

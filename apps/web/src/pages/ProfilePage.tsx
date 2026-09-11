@@ -38,6 +38,43 @@ function Section({
   );
 }
 
+/** A password box with an eye — what you typed, when you want to see it. */
+function PasswordInput({
+  value, onChange, autoComplete, minLength,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete: string;
+  minLength?: number;
+}) {
+  const [shown, setShown] = useState(false);
+  // The whole box is LTR, like the password inside it, so the eye and the
+  // padding that makes room for it land on the same side in either language.
+  return (
+    <span className="relative block" dir="ltr">
+      <input
+        className="input pe-12"
+        type={shown ? 'text' : 'password'}
+        dir="ltr"
+        autoComplete={autoComplete}
+        required
+        minLength={minLength}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        className="absolute end-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-outline transition hover:bg-surface-container-low hover:text-primary"
+        onClick={() => setShown((v) => !v)}
+        aria-label={shown ? 'hide password' : 'show password'}
+      >
+        <span className="material-symbols-outlined text-xl">{shown ? 'visibility_off' : 'visibility'}</span>
+      </button>
+    </span>
+  );
+}
+
 function ReadOnlyRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="border-b border-outline-variant/40 py-3 last:border-0">
@@ -137,7 +174,7 @@ export default function ProfilePage() {
   const role = data?.role ?? user?.role;
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="mx-auto max-w-container px-4 py-5 sm:px-8 sm:py-8">
       <PageHeader title={t('profile.title')} subtitle={t('profile.subtitle')} />
 
       {/*
@@ -147,11 +184,11 @@ export default function ProfilePage() {
         deserve its own screenful, so on a wide viewport it all sits above the
         fold, and the columns collapse back to the stack on a phone.
       */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,22rem)_1fr]">
+      <div className="grid items-start gap-4 sm:gap-5 lg:grid-cols-[minmax(0,22rem)_1fr]">
         {/* Identity — who the account belongs to, and the one thing here that is
             editable inline. Sticky, so it stays put while the rest is read. */}
         <section className="card lg:sticky lg:top-8">
-          <div className="flex flex-wrap items-center gap-5">
+          <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-start">
             <div className="relative">
               <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-primary-fixed text-3xl font-extrabold text-primary shadow-card">
                 {avatarUrl ? (
@@ -181,7 +218,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <p className="font-heading text-xl font-extrabold">{data?.fullName}</p>
                 {role && <Badge tone="primary">{t(`profile.role${role}`)}</Badge>}
               </div>
@@ -203,9 +240,9 @@ export default function ProfilePage() {
             <Field label={t('profile.fullName')}>
               <input className="input" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
-                className="btn-primary"
+                className="btn-primary w-full sm:w-auto"
                 disabled={saveName.isPending || !name.trim() || name.trim() === data?.fullName}
                 onClick={() => saveName.mutate()}
               >
@@ -221,7 +258,7 @@ export default function ProfilePage() {
 
         {/* Everything that is settings rather than identity. Two-up once there
             is room for it — these blocks are three rows each, not articles. */}
-        <div className="grid gap-5 xl:grid-cols-2">
+        <div className="grid gap-4 sm:gap-5 xl:grid-cols-2">
         <Section icon="badge" title={t('profile.sectionAccount')}>
           <ReadOnlyRow
             label={t('profile.email')}
@@ -256,24 +293,25 @@ export default function ProfilePage() {
           <p className="mb-4 text-sm text-on-surface-variant">{t('profile.passwordHint')}</p>
           <form onSubmit={submitPassword} className="grid gap-3 sm:max-w-md">
             <Field label={t('profile.currentPassword')}>
-              <input className="input" type="password" dir="ltr" autoComplete="current-password" required
-                value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} />
+              <PasswordInput value={currentPw} onChange={setCurrentPw} autoComplete="current-password" />
             </Field>
             <Field label={t('profile.newPassword')} hint={t('auth.passwordHint')}>
-              <input className="input" type="password" dir="ltr" autoComplete="new-password" required minLength={8}
-                value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+              <PasswordInput value={newPw} onChange={setNewPw} autoComplete="new-password" minLength={8} />
             </Field>
             <Field label={t('profile.confirmPassword')}>
-              <input className="input" type="password" dir="ltr" autoComplete="new-password" required
-                value={confirmPw} onChange={(e) => { setConfirmPw(e.target.value); setPwMismatch(false); }} />
+              <PasswordInput
+                value={confirmPw}
+                onChange={(v) => { setConfirmPw(v); setPwMismatch(false); }}
+                autoComplete="new-password"
+              />
             </Field>
             {pwMismatch && (
               <p className="rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container" role="alert">
                 {t('profile.passwordMismatch')}
               </p>
             )}
-            <div className="flex items-center gap-3">
-              <button className="btn-primary" disabled={changePassword.isPending || !currentPw || !newPw || !confirmPw}>
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="btn-primary w-full sm:w-auto" disabled={changePassword.isPending || !currentPw || !newPw || !confirmPw}>
                 {changePassword.isPending ? t('common.saving') : t('profile.changePassword')}
               </button>
               {changePassword.isSuccess && (
@@ -292,13 +330,13 @@ export default function ProfilePage() {
         </Section>
 
         <Section icon="logout" title={t('profile.sectionSession')}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-semibold">{t('profile.logoutTitle')}</p>
               <p className="text-sm text-on-surface-variant">{t('profile.logoutHint')}</p>
             </div>
             <button
-              className="rounded-xl border border-error/40 px-5 py-2.5 font-bold text-error transition hover:bg-error-container/40"
+              className="w-full rounded-xl border border-error/40 px-5 py-2.5 font-bold text-error transition hover:bg-error-container/40 sm:w-auto"
               onClick={() => window.confirm(t('profile.logoutConfirm')) && logout()}
             >
               <span className="material-symbols-outlined me-1 align-middle text-base">logout</span>

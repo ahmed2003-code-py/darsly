@@ -18,29 +18,26 @@ const YT_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const YT_HOSTS = new Set(['www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com']);
 
 /**
- * YouTube increasingly withholds playable format URLs from the plain "web"
- * client behind a proof-of-origin token it won't hand out without a real
- * browser session (the "SABR-only streaming" experiment) — confirmed on
- * 2026-09-11 against a real teacher-uploaded video that failed with "This
- * video is not available" until the client list below was added. Trying
- * android first (rarely gated the same way, so it resolves most videos on
- * its own) and falling back to web covers the rest; this is a moving target
- * as YouTube's rollout and yt-dlp's countermeasures both keep changing, so
- * it is a list to widen later, not a one-time fix.
+ * Client order decides the quality ceiling, not just whether an import works.
+ * As of 2026-09-11 YouTube's SABR rollout withholds every separate
+ * video/audio stream from "web" (it wants a proof-of-origin token it only
+ * mints for a real browser) and from "android" (which is left with itag 18,
+ * a single pre-merged 360p stream) — so both cap an import at 360p. Only
+ * "visionos" still serves the full DASH ladder up to 2160p, verified live
+ * against real videos. It doesn't resolve every video ("made for kids" ones,
+ * and at least one real teacher upload that answers "This video is not
+ * available"), which is why the other two stay behind it as fallbacks:
+ * yt-dlp walks the list and takes the formats from the first client that
+ * answers. This is a moving target — if imports start coming in at 360p
+ * again, this list is the first thing to re-test.
  */
-const PLAYER_CLIENT_ARGS = ['--extractor-args', 'youtube:player_client=android,web'];
+const PLAYER_CLIENT_ARGS = ['--extractor-args', 'youtube:player_client=visionos,android,web'];
 
 /**
- * yt-dlp refuses to run the "android" client at all once cookies are set (it
- * doesn't support cookie auth, full stop — confirmed 2026-09-11), so every
- * import falls back to "web" for as long as cookiesArgs() below returns
- * something, i.e. for every import once cookies are configured at all, not
- * just the ones that actually needed them. "web" needs a real JS run to
- * solve YouTube's signature/"n" challenges, and yt-dlp won't fetch its own
- * solver script without this flag — without it, cookies+web fails even
- * ordinary videos with "Requested format is not available", which is worse
- * than not having cookies configured at all. Costs one GitHub fetch (cached
- * after) the first time it runs per container.
+ * Only "web" needs a real JS run (to solve YouTube's signature/"n"
+ * challenges), and yt-dlp won't fetch its own solver script without this
+ * flag — without it the web fallback fails with "Requested format is not
+ * available". Costs one GitHub fetch, cached after, per container.
  */
 const JS_CHALLENGE_ARGS = ['--remote-components', 'ejs:github'];
 
@@ -81,6 +78,9 @@ export class YoutubeImportService {
    *
    * Stored in `PlatformSetting` (DB), not an env var: it can be rotated by
    * writing a new row, no redeploy required, and it never touches the repo.
+   *
+   * Used only by `withCookieFallback` — never on a first attempt. See there
+   * for why handing these to every call makes imports worse, not better.
    */
   private async cookiesArgs(): Promise<string[]> {
     const now = Date.now();
@@ -127,12 +127,37 @@ export class YoutubeImportService {
     return m ? m[1] : null;
   }
 
+  /**
+   * Runs yt-dlp without cookies first and only retries with them if that
+   * fails. The order matters more than it looks: yt-dlp refuses to run any
+   * app client — visionos and android both — the moment cookies are present,
+   * because neither supports cookie auth. Handing cookies to every call
+   * therefore forces every import down the "web" path, which SABR caps at
+   * 360p; that is exactly how a fix for one bot-walled video quietly became
+   * a quality ceiling on all of them (2026-09-11). Cookies are worth it only
+   * when the clean attempt got nothing at all — a bot wall, where a 360p
+   * import still beats no import.
+   */
+  private async withCookieFallback(
+    buildArgs: (cookies: string[]) => string[],
+    timeoutMs: number,
+  ): Promise<string> {
+    try {
+      return await this.run(buildArgs([]), timeoutMs);
+    } catch (err: any) {
+      const cookies = await this.cookiesArgs();
+      if (!cookies.length) throw err;
+      this.logger.warn(`yt-dlp failed without cookies, retrying signed in: ${err.message.slice(-200)}`);
+      return await this.run(buildArgs(cookies), timeoutMs);
+    }
+  }
+
   async fetchMetadata(videoId: string): Promise<YoutubeMeta> {
-    const out = await this.run(
-      [
+    const out = await this.withCookieFallback(
+      (cookies) => [
         ...PLAYER_CLIENT_ARGS,
         ...JS_CHALLENGE_ARGS,
-        ...(await this.cookiesArgs()),
+        ...cookies,
         // Title/description live in the info dict regardless of whether any
         // playable format resolved — without this flag yt-dlp refuses to dump
         // JSON at all for a video with none (e.g. one under YouTube's
@@ -155,35 +180,34 @@ export class YoutubeImportService {
   }
 
   /**
-   * A video that needs cookies to get past the bot-check (see cookiesArgs())
-   * can still fail here even once authenticated: android — the client that
-   * usually dodges the SABR gate — categorically refuses to run with cookies
-   * (yt-dlp skips it outright), and every client that does accept cookies
-   * (web/tv/mweb/...) requires a real proof-of-origin token YouTube's server
-   * withholds without one, cookies or not. That combination has no fix short
-   * of standing up a PO-token generator — a reverse-engineered, third-party
-   * emulation of Google's anti-bot challenge — which is a real trust/
-   * maintenance tradeoff, not a one-line change. Left unimplemented on
-   * purpose: this call just fails cleanly, the caller already marks the
-   * VideoAsset FAILED, and the teacher falls back to the existing
-   * replace-video upload for that one lesson.
+   * A video that only the cookie fallback can reach comes down at 360p: the
+   * clients that still serve the full ladder can't run signed in (see
+   * `withCookieFallback`). That is accepted rather than fixed — the one tool
+   * that mints the token "web" needs, bgutil, was built and tested in an
+   * isolated container on 2026-09-11 and YouTube rejected its tokens anyway,
+   * so it would have added a long-running third-party process for nothing.
+   * When even the fallback fails, this throws, the caller marks the
+   * VideoAsset FAILED, and the teacher uses the replace-video upload — which
+   * has no quality ceiling at all.
    */
   async download(videoId: string, destPath: string): Promise<void> {
-    await this.run(
-      [
+    await this.withCookieFallback(
+      (cookies) => [
         ...PLAYER_CLIENT_ARGS,
         ...JS_CHALLENGE_ARGS,
-        ...(await this.cookiesArgs()),
+        ...cookies,
         '-f',
-        // The SABR gate above often leaves only a single progressive stream
-        // (audio+video already combined, typically format 18) actually
-        // servable — the separate-streams tiers are kept first because they
-        // are better quality on a video where the split ones are still
-        // exposed, and `best` alone is the guaranteed-available last resort.
+        // Separate video+audio first: that tier is the whole reason the
+        // visionos client is tried first, since it's what carries 720p and
+        // up. The pre-merged tiers below it are what a SABR-gated client is
+        // left with (typically itag 18, 360p) — a floor, not a preference.
         `bestvideo[ext=mp4][filesize<${MAX_FILESIZE}]+bestaudio[ext=m4a]/best[ext=mp4][filesize<${MAX_FILESIZE}]/best[filesize<${MAX_FILESIZE}]/best`,
         '--merge-output-format', 'mp4',
         '--max-filesize', MAX_FILESIZE,
         '--no-playlist',
+        // The retry re-downloads rather than tripping over what the failed
+        // attempt left behind.
+        '--force-overwrites',
         '-o', destPath,
         this.canonicalUrl(videoId),
       ],

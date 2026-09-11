@@ -4,9 +4,9 @@
 FROM node:20-slim
 
 # System deps: ffmpeg for transcoding, openssl+ca-certificates for Prisma/TLS,
-# curl to fetch yt-dlp below.
+# curl to fetch yt-dlp/deno below, unzip because the deno installer needs it.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg openssl ca-certificates curl \
+  && apt-get install -y --no-install-recommends ffmpeg openssl ca-certificates curl unzip \
   && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp: the PyInstaller-frozen `yt-dlp_linux` build — no system Python
@@ -17,6 +17,13 @@ RUN apt-get update \
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
   -o /usr/local/bin/yt-dlp \
   && chmod a+rx /usr/local/bin/yt-dlp
+
+# deno: yt-dlp's own words are that extraction without a JS runtime "has been
+# deprecated" — some YouTube videos now withhold format URLs until a JS
+# challenge is solved, and deno is the one runtime it fully supports out of
+# the box (a system node was tried and yt-dlp marks it "unsupported").
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
+  && chmod a+rx /usr/local/bin/deno
 
 WORKDIR /app
 

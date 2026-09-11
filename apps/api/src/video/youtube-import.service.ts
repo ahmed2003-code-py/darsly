@@ -17,6 +17,19 @@ const YT_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const YT_HOSTS = new Set(['www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com']);
 
 /**
+ * YouTube increasingly withholds playable format URLs from the plain "web"
+ * client behind a proof-of-origin token it won't hand out without a real
+ * browser session (the "SABR-only streaming" experiment) — confirmed on
+ * 2026-09-11 against a real teacher-uploaded video that failed with "This
+ * video is not available" until the client list below was added. Trying
+ * android first (rarely gated the same way, so it resolves most videos on
+ * its own) and falling back to web covers the rest; this is a moving target
+ * as YouTube's rollout and yt-dlp's countermeasures both keep changing, so
+ * it is a list to widen later, not a one-time fix.
+ */
+const PLAYER_CLIENT_ARGS = ['--extractor-args', 'youtube:player_client=android,web'];
+
+/**
  * Turns a YouTube link into a real, owned VideoAsset — same encrypted-HLS
  * pipeline as a manual upload, just sourced from yt-dlp instead of multer.
  *
@@ -57,7 +70,11 @@ export class YoutubeImportService {
 
   async fetchMetadata(videoId: string): Promise<YoutubeMeta> {
     const out = await this.run(
-      ['--dump-json', '--skip-download', '--no-warnings', '--no-playlist', this.canonicalUrl(videoId)],
+      [
+        ...PLAYER_CLIENT_ARGS,
+        '--dump-json', '--skip-download', '--no-warnings', '--no-playlist',
+        this.canonicalUrl(videoId),
+      ],
       METADATA_TIMEOUT_MS,
     );
     const json = JSON.parse(out);
@@ -70,8 +87,14 @@ export class YoutubeImportService {
   async download(videoId: string, destPath: string): Promise<void> {
     await this.run(
       [
+        ...PLAYER_CLIENT_ARGS,
         '-f',
-        `bestvideo[ext=mp4][filesize<${MAX_FILESIZE}]+bestaudio[ext=m4a]/best[ext=mp4][filesize<${MAX_FILESIZE}]/best[filesize<${MAX_FILESIZE}]`,
+        // The SABR gate above often leaves only a single progressive stream
+        // (audio+video already combined, typically format 18) actually
+        // servable — the separate-streams tiers are kept first because they
+        // are better quality on a video where the split ones are still
+        // exposed, and `best` alone is the guaranteed-available last resort.
+        `bestvideo[ext=mp4][filesize<${MAX_FILESIZE}]+bestaudio[ext=m4a]/best[ext=mp4][filesize<${MAX_FILESIZE}]/best[filesize<${MAX_FILESIZE}]/best`,
         '--merge-output-format', 'mp4',
         '--max-filesize', MAX_FILESIZE,
         '--no-playlist',

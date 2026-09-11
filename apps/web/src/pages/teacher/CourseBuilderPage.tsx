@@ -828,7 +828,7 @@ export default function CourseBuilderPage() {
                 </span>
                 <button
                   title={t('common.delete')}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/unit:opacity-100"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container sm:h-8 sm:w-8 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/unit:opacity-100"
                   onClick={() => window.confirm(t('teacher.builder.deleteUnitConfirm')) && removeUnit.mutate(u.id)}
                 >
                   <span className="material-symbols-outlined text-[18px]">delete</span>
@@ -1136,9 +1136,14 @@ function LessonRow({
         <span className={`material-symbols-outlined shrink-0 text-outline transition ${open ? 'rotate-180' : ''}`}>
           expand_more
         </span>
+        {/* Full-size tap target that is always visible on a touch screen. The
+            reveal-on-hover treatment below it is desktop-only for a reason:
+            a phone never hovers, so the button was invisible there while
+            still taking the tap — landing on a delete you couldn't see, or
+            missing it and toggling the row instead. */}
         <button
           title={t('common.delete')}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-outline opacity-0 transition hover:bg-error-container hover:text-on-error-container focus-visible:opacity-100 group-hover/lesson:opacity-100"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container sm:h-8 sm:w-8 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/lesson:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
@@ -1196,7 +1201,7 @@ function AddLessonRow({
         }}
       />
       <button
-        className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-primary transition hover:bg-primary-fixed disabled:opacity-40"
+        className="grid min-h-11 shrink-0 place-items-center rounded-lg px-4 text-sm font-bold text-primary transition hover:bg-primary-fixed disabled:opacity-40 sm:min-h-0 sm:px-3 sm:py-1.5"
         disabled={!value.trim() || busy}
         onClick={submit}
       >

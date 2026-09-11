@@ -70,7 +70,10 @@ export default function SecureVideoPlayerPage() {
   // ── Advanced player controls ──────────────────────────────────────────────
   const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   const [rate, setRate] = useState<number>(() => Number(localStorage.getItem('darsly-rate')) || 1);
-  const [levels, setLevels] = useState<{ height: number; bitrate: number }[]>([]);
+  // `index` is the position in hls.levels, kept because the menu lists them
+  // best-first while hls.js orders them worst-first — handing it a display
+  // position as a level index picks the opposite quality to the one tapped.
+  const [levels, setLevels] = useState<{ index: number; height: number; label: string }[]>([]);
   const [quality, setQuality] = useState<number>(-1); // -1 = auto
   const [menu, setMenu] = useState<'speed' | 'quality' | 'keys' | null>(null);
   const [resumedAt, setResumedAt] = useState<number>(0);
@@ -238,8 +241,21 @@ export default function SecureVideoPlayerPage() {
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         // Expose the rendition ladder for the quality menu (highest first).
-        const ls = [...hls.levels]
-          .map((l) => ({ height: l.height, bitrate: l.bitrate }))
+        // A rendition whose master-playlist entry had an unparseable
+        // RESOLUTION arrives with height 0 — every video encoded before that
+        // was fixed server-side, which would otherwise list as "0p". Its own
+        // playlist still lives under a "<height>p/" folder, so the URL names
+        // the size the manifest failed to.
+        const ls = hls.levels
+          .map((l, index) => {
+            const fromUrl = String((l as { uri?: string }).uri ?? l.url?.[0] ?? '').match(/\/(\d{3,4})p\//);
+            const height = l.height || Number(fromUrl?.[1]) || 0;
+            return {
+              index,
+              height,
+              label: height ? `${height}p` : `${Math.round(l.bitrate / 1000)}k`,
+            };
+          })
           .sort((a, b) => b.height - a.height);
         setLevels(ls);
       });
@@ -502,12 +518,12 @@ export default function SecureVideoPlayerPage() {
                     {levels.length > 1 && (
                       <PlayerMenu
                         icon="hd"
-                        label={quality === -1 ? t('player.auto') : `${levels.find((_, i) => i === quality)?.height ?? ''}p`}
+                        label={quality === -1 ? t('player.auto') : (levels.find((l) => l.index === quality)?.label ?? '')}
                         open={menu === 'quality'}
                         onToggle={() => setMenu(menu === 'quality' ? null : 'quality')}
                         items={[
                           { key: 'auto', label: t('player.auto'), active: quality === -1, onClick: () => applyQuality(-1) },
-                          ...levels.map((l, i) => ({ key: String(i), label: `${l.height}p`, active: quality === i, onClick: () => applyQuality(i) })),
+                          ...levels.map((l) => ({ key: String(l.index), label: l.label, active: quality === l.index, onClick: () => applyQuality(l.index) })),
                         ]}
                       />
                     )}

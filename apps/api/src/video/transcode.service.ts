@@ -24,7 +24,7 @@ export interface TranscodeOutput {
   /** temp working dir holding master.m3u8 + <h>p/ segment dirs (caller uploads then cleans) */
   workDir: string;
   masterName: string;
-  renditions: { height: number; bandwidth: number; playlistName: string }[];
+  renditions: { height: number; width: number; bandwidth: number; playlistName: string }[];
   durationSec: number;
 }
 
@@ -40,13 +40,13 @@ export interface TranscodeOutput {
 export class TranscodeService {
   private readonly logger = new Logger(TranscodeService.name);
 
-  async probe(sourcePath: string): Promise<{ height: number; durationSec: number }> {
+  async probe(sourcePath: string): Promise<{ width: number; height: number; durationSec: number }> {
     const out = await this.run(
       'ffprobe',
       [
         '-v', 'error',
         '-select_streams', 'v:0',
-        '-show_entries', 'stream=height',
+        '-show_entries', 'stream=width,height',
         '-show_entries', 'format=duration',
         '-of', 'json',
         sourcePath,
@@ -55,6 +55,7 @@ export class TranscodeService {
     );
     const json = JSON.parse(out);
     return {
+      width: json.streams?.[0]?.width ?? 1280,
       height: json.streams?.[0]?.height ?? 720,
       durationSec: Math.round(Number(json.format?.duration ?? 0)),
     };
@@ -69,9 +70,16 @@ export class TranscodeService {
     keyBytes: Buffer,
     keyUriInPlaylist = KEY_URI_PLACEHOLDER,
   ): Promise<TranscodeOutput> {
-    const { height: srcHeight, durationSec } = await this.probe(sourcePath);
+    const { width: srcWidth, height: srcHeight, durationSec } = await this.probe(sourcePath);
     const rungs = LADDER.filter((r) => r.height <= srcHeight);
     if (rungs.length === 0) rungs.push(LADDER[0]);
+
+    // What `scale=-2:<height>` below will actually produce: the aspect-preserving
+    // width, snapped to an even number. The master playlist has to state it —
+    // a RESOLUTION missing its width is unparseable, and players that can't read
+    // a rendition's size fall back to labelling it "0p".
+    const widthFor = (height: number) =>
+      Math.max(2, Math.round((srcWidth * height) / srcHeight / 2) * 2);
 
     const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'darsly-hls-'));
     const iv = require('crypto').randomBytes(16).toString('hex');
@@ -103,6 +111,7 @@ export class TranscodeService {
       ]);
       renditions.push({
         height: rung.height,
+        width: widthFor(rung.height),
         bandwidth: rung.bitrateKbps * 1000,
         playlistName: `${rung.height}p/index.m3u8`,
       });
@@ -114,7 +123,7 @@ export class TranscodeService {
       renditions
         .map(
           (r) =>
-            `#EXT-X-STREAM-INF:BANDWIDTH=${r.bandwidth},RESOLUTION=x${r.height}\n${r.playlistName}`,
+            `#EXT-X-STREAM-INF:BANDWIDTH=${r.bandwidth},RESOLUTION=${r.width}x${r.height}\n${r.playlistName}`,
         )
         .join('\n') +
       '\n';

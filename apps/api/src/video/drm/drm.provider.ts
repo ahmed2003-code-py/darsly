@@ -22,6 +22,7 @@ export interface PackageInput {
 
 export interface Rendition {
   height: number;
+  width: number;
   bandwidth: number;
   /** storage key of this rendition's media playlist */
   playlistKey: string;

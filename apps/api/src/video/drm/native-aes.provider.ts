@@ -64,6 +64,7 @@ export class NativeAesDrmProvider implements IDrmProvider {
       masterKey: `${prefix}/${out.masterName}`,
       renditions: out.renditions.map((r) => ({
         height: r.height,
+        width: r.width,
         bandwidth: r.bandwidth,
         playlistKey: `${prefix}/${r.playlistName}`,
       })),

@@ -6,6 +6,7 @@ import { Role } from '@darsly/shared-types';
 import { setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { dateShort } from '../lib/format';
+import { useNotificationPermission } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
 
 /**
@@ -23,6 +24,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
   const [menuOpen, setMenuOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { permission, request, supported } = useNotificationPermission();
 
   const { data: notif } = useQuery({
     queryKey: ['notifications'],
@@ -126,6 +128,20 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
                     </button>
                   )}
                 </div>
+                {/* Asking here rather than on load: the browser only honours a
+                    request that follows a real click, and this is the one place
+                    a user has just shown they care about notifications. Hidden
+                    once answered — a denial can only be undone in browser
+                    settings, so re-offering the button would do nothing. */}
+                {supported && permission === 'default' && (
+                  <button
+                    onClick={() => void request()}
+                    className="flex w-full items-center gap-2 border-b border-outline-variant/40 bg-primary-fixed/40 px-4 py-3 text-start text-xs font-bold text-primary transition hover:bg-primary-fixed"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+                    {t('topbar.enablePush')}
+                  </button>
+                )}
                 <div className="max-h-96 overflow-y-auto">
                   {!notif?.items?.length ? (
                     <p className="px-4 py-8 text-center text-sm text-outline">{t('topbar.noNotifications')}</p>

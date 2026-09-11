@@ -131,6 +131,7 @@
     "adminConsole": "لوحة تحكم المنصة"
   },
   "topbar": {
+    "enablePush": "فعّل تنبيهات المتصفح",
     "searchPlaceholder": "ابحث عن أستاذ، مادة، أو مهارة...",
     "notifications": "الإشعارات",
     "markAllRead": "تحديد الكل كمقروء",

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { useRealtime } from '../lib/useRealtime';
+import { useWebNotifications } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
 import TopBar from './TopBar';
 
@@ -49,15 +50,15 @@ const ADMIN_NAV: NavItem[] = [
 ];
 
 /**
- * The four destinations that earn a permanent spot on a phone, per role —
+ * The destinations that earn a permanent spot on a phone, per role —
  * everything else stays one tap away behind "more". Reaching anything on a
  * phone meant opening the drawer first, which is a tap and a decision in front
  * of the screens people actually live in: a student's courses, a teacher's
  * builder, an admin's queue, and now the wallet each of them checks.
  */
 const BOTTOM_TABS: Record<string, string[]> = {
-  [Role.STUDENT]: ['/', '/my-courses', '/courses', '/wallet'],
-  [Role.TEACHER]: ['/teacher', '/teacher/courses', '/teacher/students', '/teacher/wallet'],
+  [Role.STUDENT]: ['/', '/my-courses', '/courses', '/messages', '/wallet'],
+  [Role.TEACHER]: ['/teacher', '/teacher/courses', '/teacher/students', '/messages', '/teacher/wallet'],
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
 };
 
@@ -72,6 +73,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { user } = useAuthStore();
   const [drawer, setDrawer] = useState(false);
   useRealtime(); // live bell + chat list on every authenticated page
+  useWebNotifications(); // ...and the same events as OS notifications when the tab is away
   const nav =
     user?.role === Role.SUPER_ADMIN ? ADMIN_NAV : user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
   // Ordered by the tab list, not by where they happen to sit in the sidebar,

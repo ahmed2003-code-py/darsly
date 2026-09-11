@@ -131,6 +131,7 @@
     "adminConsole": "Platform console"
   },
   "topbar": {
+    "enablePush": "Enable browser alerts",
     "searchPlaceholder": "Search for a teacher, subject, or skill...",
     "notifications": "Notifications",
     "markAllRead": "Mark all read",

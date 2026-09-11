@@ -446,6 +446,7 @@ export class CoursesService {
       lesson?: unknown;
       error?: 'INVALID_URL' | 'METADATA_FAILED';
       detail?: string;
+      retried?: boolean;
     }> = [];
     for (const url of dto.urls) {
       const videoId = this.youtubeImport.resolveVideoId(url);
@@ -464,6 +465,37 @@ export class CoursesService {
         // check), which is worth more to whoever is looking at this than a
         // bare "failed".
         results.push({ url, error: 'METADATA_FAILED', detail: String(err.message ?? '').slice(0, 300) });
+        continue;
+      }
+
+      // A teacher who retries the same link after a failed download (there's
+      // no way to tell them apart from a genuinely new video — nothing here
+      // stores the source video id) would otherwise get a second lesson every
+      // time instead of the existing one just trying again. YouTube's title
+      // is stable per video, so a same-title lesson already in this section
+      // is treated as the same import: a FAILED one is retried in place, a
+      // still-good one is left untouched, and neither spawns a duplicate.
+      const existing = await this.prisma.lesson.findFirst({
+        where: { unitId, title: meta.title, deletedAt: null, videoAssetId: { not: null } },
+        include: { videoAsset: true },
+      });
+      if (existing?.videoAsset) {
+        // VideoAsset.sizeBytes is a BigInt — fine for Prisma, fatal for
+        // JSON.stringify, so the lesson goes out without the nested relation
+        // exactly like the plain-create path below already returns it.
+        const { videoAsset, ...lessonOnly } = existing;
+        if (videoAsset.status === 'FAILED') {
+          await this.prisma.videoAsset.update({
+            where: { id: videoAsset.id },
+            data: { status: 'UPLOADING' },
+          });
+          results.push({ url, lesson: lessonOnly, retried: true });
+          void this.downloadAndProcessYoutube(videoAsset.id, videoId).catch((err) =>
+            this.logger.error(`YouTube import retry ${videoId} (asset ${videoAsset.id}) failed: ${err.message}`),
+          );
+        } else {
+          results.push({ url, lesson: lessonOnly });
+        }
         continue;
       }
 

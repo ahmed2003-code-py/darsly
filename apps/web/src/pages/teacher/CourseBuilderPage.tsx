@@ -209,7 +209,17 @@ export default function CourseBuilderPage() {
         }[];
       };
     },
-    onSuccess: () => invalidate(),
+    // A fully clean run closes the modal outright — nothing left to review.
+    // A partial failure keeps it open but drops the succeeded links from the
+    // fields, leaving only the ones that need fixing: otherwise they sit
+    // there looking untouched and inviting a second "استيراد" press that
+    // would import the same working links again as duplicate lessons.
+    onSuccess: (data) => {
+      invalidate();
+      const failedUrls = data.results.filter((r) => r.error).map((r) => r.url);
+      if (failedUrls.length === 0) setImportOpen(false);
+      else setImportUrls(failedUrls);
+    },
   });
 
   const renameLesson = useMutation({

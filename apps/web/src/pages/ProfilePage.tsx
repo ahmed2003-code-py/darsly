@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { authErrorText } from '../lib/authError';
 import { dateShort } from '../lib/format';
 import { imageToDataUrl } from '../lib/image';
 import { setLanguage } from '../i18n';
@@ -90,11 +91,27 @@ export default function ProfilePage() {
     onSuccess: (d) => syncUser({ fullName: d.fullName }),
   });
 
-  // There is no direct change-password endpoint; the platform's flow is the
-  // hashed single-use reset link, so the button triggers exactly that.
-  const resetPassword = useMutation({
-    mutationFn: async () => (await api.post('/auth/forgot-password', { email: data?.email })).data,
+  // Changed right here, against the current password — the emailed link it
+  // replaced depended on a mail provider the platform doesn't reliably have.
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwMismatch, setPwMismatch] = useState(false);
+  const changePassword = useMutation({
+    mutationFn: async () =>
+      (await api.post('/auth/change-password', { currentPassword: currentPw, newPassword: newPw })).data,
+    onSuccess: () => {
+      setCurrentPw('');
+      setNewPw('');
+      setConfirmPw('');
+    },
   });
+  function submitPassword(e: React.FormEvent) {
+    e.preventDefault();
+    const mismatch = newPw !== confirmPw;
+    setPwMismatch(mismatch);
+    if (!mismatch) changePassword.mutate();
+  }
 
   async function logout() {
     // Best effort: the local session must be cleared even if the call fails,
@@ -235,21 +252,43 @@ export default function ProfilePage() {
         </Section>
 
         <Section icon="lock" title={t('profile.sectionSecurity')}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold">{t('profile.password')}</p>
-              <p className="text-sm text-on-surface-variant">{t('profile.passwordHint')}</p>
+          <p className="font-semibold">{t('profile.password')}</p>
+          <p className="mb-4 text-sm text-on-surface-variant">{t('profile.passwordHint')}</p>
+          <form onSubmit={submitPassword} className="grid gap-3 sm:max-w-md">
+            <Field label={t('profile.currentPassword')}>
+              <input className="input" type="password" dir="ltr" autoComplete="current-password" required
+                value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} />
+            </Field>
+            <Field label={t('profile.newPassword')} hint={t('auth.passwordHint')}>
+              <input className="input" type="password" dir="ltr" autoComplete="new-password" required minLength={8}
+                value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+            </Field>
+            <Field label={t('profile.confirmPassword')}>
+              <input className="input" type="password" dir="ltr" autoComplete="new-password" required
+                value={confirmPw} onChange={(e) => { setConfirmPw(e.target.value); setPwMismatch(false); }} />
+            </Field>
+            {pwMismatch && (
+              <p className="rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container" role="alert">
+                {t('profile.passwordMismatch')}
+              </p>
+            )}
+            <div className="flex items-center gap-3">
+              <button className="btn-primary" disabled={changePassword.isPending || !currentPw || !newPw || !confirmPw}>
+                {changePassword.isPending ? t('common.saving') : t('profile.changePassword')}
+              </button>
+              {changePassword.isSuccess && (
+                <span className="flex items-center gap-1 text-sm font-semibold text-secondary">
+                  <span className="material-symbols-outlined text-base">check_circle</span>
+                  {t('profile.passwordChanged')}
+                </span>
+              )}
             </div>
-            <button
-              className="btn-secondary"
-              disabled={!data?.email || resetPassword.isPending || resetPassword.isSuccess}
-              onClick={() => resetPassword.mutate()}
-            >
-              {resetPassword.isSuccess ? t('profile.passwordSent') : t('profile.passwordSend')}
-            </button>
-          </div>
-
-          <ErrorNote error={resetPassword.error} />
+            {changePassword.error && (
+              <p className="rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container" role="alert">
+                {authErrorText(changePassword.error, t)}
+              </p>
+            )}
+          </form>
         </Section>
 
         <Section icon="logout" title={t('profile.sectionSession')}>

@@ -16,6 +16,7 @@ import { otpEmail, teacherPendingEmail, welcomeStudentEmail } from '../mail/temp
 import { PrismaService } from '../prisma/prisma.service';
 import { DeviceContext, TokenService } from './token.service';
 import {
+  ChangePasswordDto,
   ForgotPasswordDto,
   LoginDto,
   normalizeEgyptianPhone,
@@ -289,6 +290,35 @@ export class AuthService {
       this.prisma.deviceSession.updateMany({
         where: { userId: row.userId, revokedAt: null },
         data: { revokedAt: new Date(), revokedReason: 'PASSWORD_RESET' },
+      }),
+    ]);
+    return { ok: true };
+  }
+
+  /**
+   * Change the password from inside the app: prove the old one, set the new
+   * one. Every other device is signed out — if the reason for the change is
+   * a phone that went missing, that phone must not stay in — but this one
+   * stays signed in, since the person just proved they hold the password.
+   */
+  async changePassword(user: { sub: string; sessionId: string }, dto: ChangePasswordDto) {
+    const row = await this.prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { passwordHash: true },
+    });
+    if (!row?.passwordHash) throw new UnauthorizedException('Invalid credentials');
+    const ok = await argon2.verify(row.passwordHash, dto.currentPassword);
+    if (!ok) {
+      throw new BadRequestException({ message: 'Current password is incorrect', code: 'WRONG_PASSWORD' });
+    }
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.sub },
+        data: { passwordHash: await argon2.hash(dto.newPassword), failedLogins: 0, lockedUntil: null },
+      }),
+      this.prisma.deviceSession.updateMany({
+        where: { userId: user.sub, revokedAt: null, id: { not: user.sessionId } },
+        data: { revokedAt: new Date(), revokedReason: 'PASSWORD_CHANGED' },
       }),
     ]);
     return { ok: true };

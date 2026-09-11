@@ -7,6 +7,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
 import {
+  ChangePasswordDto,
   ForgotPasswordDto,
   LoginDto,
   RefreshTokenDto,
@@ -103,6 +104,17 @@ export class AuthController {
   @ApiOperation({ summary: 'Revoke the current device session' })
   logout(@CurrentUser() user: JwtPayload) {
     return this.authService.logout(user.sessionId);
+  }
+
+  // Throttled: a signed-in attacker guessing the current password gets the
+  // same slow lane as a login guesser.
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @Post('change-password')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password with the current one; signs out every other device' })
+  changePassword(@CurrentUser() user: JwtPayload, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user, dto);
   }
 
   @Get('me')

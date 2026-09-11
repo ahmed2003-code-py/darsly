@@ -12,7 +12,7 @@ const CODE_KEYS: Record<string, string> = {
   ACCOUNT_REJECTED: 'auth.err.rejected',
   EMAIL_TAKEN: 'auth.err.emailTaken',
   PHONE_TAKEN: 'auth.err.phoneTaken',
-  USERNAME_TAKEN: 'auth.err.usernameTaken',
+  WRONG_PASSWORD: 'auth.err.wrongPassword',
   INVALID_TOKEN: 'auth.err.invalidToken',
   TOKEN_EXPIRED: 'auth.err.tokenExpired',
   EMAIL_NOT_FOUND: 'auth.err.emailNotFound',

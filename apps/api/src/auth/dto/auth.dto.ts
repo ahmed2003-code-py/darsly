@@ -114,6 +114,17 @@ export class RegisterTeacherDto {
   bio?: string;
 }
 
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'OldPassw0rd' })
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string;
+
+  @ApiProperty({ example: 'NewPassw0rd!' })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_MSG })
+  newPassword: string;
+}
+
 export class ForgotPasswordDto {
   @ApiProperty({ example: 'ahmed@example.com' })
   @IsEmail({}, { message: 'A valid email is required' })

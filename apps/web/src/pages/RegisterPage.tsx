@@ -34,7 +34,6 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
@@ -49,7 +48,6 @@ export default function RegisterPage() {
       if (role === 'student') {
         const { data } = await api.post('/auth/register/student', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
-          ...(username.trim() ? { username: username.trim() } : {}),
           deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
         });
         setTokens(data.accessToken, data.refreshToken);
@@ -58,7 +56,6 @@ export default function RegisterPage() {
       } else {
         await api.post('/auth/register/teacher', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
-          ...(username.trim() ? { username: username.trim() } : {}),
         });
         setPendingDone(true);
       }
@@ -135,12 +132,6 @@ export default function RegisterPage() {
         <AuthField icon="phone" type="tel" dir="ltr" label={t('auth.phone')} inputMode="tel"
           pattern="(\+20|0020|20|0)?1[0125][0-9]{8}" title={t('auth.phoneHint')} maxLength={16}
           placeholder="01xxxxxxxxx" value={phone} onChange={setPhone} autoComplete="tel" />
-        {/* Mirrors USERNAME_REGEX on the API. Left empty, the server makes one
-            from the front of the email — so this is a preference, not a chore. */}
-        <AuthField icon="alternate_email" dir="ltr" label={t('auth.username')} placeholder="ahmed_m"
-          pattern="[A-Za-z][A-Za-z0-9_]{2,29}" title={t('auth.usernameRule')} maxLength={30}
-          value={username} onChange={(v) => setUsername(v.toLowerCase())} autoComplete="username"
-          optional hint={t('auth.usernameHint')} />
         <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.password')}
           placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
           reveal revealed={show} onReveal={() => setShow((s) => !s)} hint={t('auth.passwordHint')} />

@@ -13,6 +13,7 @@ import { CoursesService } from './courses.service';
 import {
   CreateCourseDto,
   CreateLessonDto,
+  ImportYoutubeDto,
   ReorderDto,
   SetBundleItemsDto,
   UpdateCourseDto,
@@ -174,6 +175,16 @@ export class TeacherCoursesController {
     @Body() dto: CreateLessonDto,
   ) {
     return this.courses.addLessonDirect(ctx.academyId, courseId, dto);
+  }
+
+  @Post('courses/:courseId/lessons/import-youtube')
+  @ApiOperation({ summary: '[teacher] Bulk-create lessons from YouTube links (metadata + protected video)' })
+  importYoutube(
+    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @Param('courseId') courseId: string,
+    @Body() dto: ImportYoutubeDto,
+  ) {
+    return this.courses.importYoutube(ctx.academyId, courseId, dto);
   }
 
   @Patch('lessons/:id')

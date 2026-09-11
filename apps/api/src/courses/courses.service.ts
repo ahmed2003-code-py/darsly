@@ -1,15 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import * as fs from 'fs';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
+import { VideoProcessingService } from '../video/video-processing.service';
+import { YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
 import {
   CreateCourseDto,
   CreateLessonDto,
+  ImportYoutubeDto,
   ReorderDto,
   SetBundleItemsDto,
   UpdateCourseDto,
@@ -24,11 +28,15 @@ const THUMBNAIL_MAX_BYTES = 700 * 1024;
 
 @Injectable()
 export class CoursesService {
+  private readonly logger = new Logger(CoursesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly studentPrice: StudentPriceService,
     private readonly exclusivity: SubjectExclusivityService,
     private readonly storage: StorageProvider,
+    private readonly videoProcessing: VideoProcessingService,
+    private readonly youtubeImport: YoutubeImportService,
   ) {}
 
   /**
@@ -407,15 +415,101 @@ export class CoursesService {
   async addLessonDirect(tenantId: string, courseId: string, dto: CreateLessonDto) {
     await this.assertCourse(tenantId, courseId);
     if (dto.videoAssetId) await this.assertVideoAssetOwned(tenantId, dto.videoAssetId);
-    let unit = await this.prisma.courseUnit.findFirst({ where: { courseId, isDefault: true } });
-    if (!unit) {
-      // Sorted before every named section, so "just add lessons" lessons read
-      // first — the closest thing to "no sections at all" the schema allows.
-      unit = await this.prisma.courseUnit.create({
-        data: { courseId, title: '', isDefault: true, sortOrder: -1 },
-      });
-    }
+    const unit = await this.getOrCreateDefaultUnit(courseId);
     return this.insertLesson(unit.id, dto);
+  }
+
+  /**
+   * Bulk-create lessons from YouTube links in one request. Metadata (title,
+   * description) is fetched synchronously per link — a few seconds each, but
+   * worth it so the lessons come back named, not as placeholders — while the
+   * actual download and transcode run in the background through the exact
+   * same VideoProcessingService pipeline a manual upload goes through, so an
+   * imported lesson is neither special-cased nor less protected than any other.
+   */
+  async importYoutube(tenantId: string, courseId: string, dto: ImportYoutubeDto) {
+    await this.assertCourse(tenantId, courseId);
+
+    let unitId: string;
+    if (dto.unitId) {
+      const unit = await this.assertUnit(tenantId, dto.unitId);
+      if (unit.courseId !== courseId) {
+        throw new BadRequestException('That section does not belong to this course');
+      }
+      unitId = unit.id;
+    } else {
+      unitId = (await this.getOrCreateDefaultUnit(courseId)).id;
+    }
+
+    const results: Array<{ url: string; lesson?: unknown; error?: 'INVALID_URL' | 'METADATA_FAILED' }> = [];
+    for (const url of dto.urls) {
+      const videoId = this.youtubeImport.resolveVideoId(url);
+      if (!videoId) {
+        results.push({ url, error: 'INVALID_URL' });
+        continue;
+      }
+
+      let meta;
+      try {
+        meta = await this.youtubeImport.fetchMetadata(videoId);
+      } catch (err: any) {
+        this.logger.warn(`YouTube metadata fetch failed for ${videoId}: ${err.message}`);
+        results.push({ url, error: 'METADATA_FAILED' });
+        continue;
+      }
+
+      const asset = await this.prisma.videoAsset.create({
+        data: { tenantId, originalKey: '', status: 'UPLOADING' },
+      });
+      const lesson = await this.insertLesson(unitId, {
+        title: meta.title,
+        description: meta.description || undefined,
+        isFreePreview: dto.isFreePreview,
+        dripUnlockAt: dto.dripUnlockAt,
+        dripAfterEnrollDays: dto.dripAfterEnrollDays,
+        videoAssetId: asset.id,
+      } as CreateLessonDto);
+      results.push({ url, lesson });
+
+      // Off the request thread — the caller doesn't wait for a download.
+      void this.downloadAndProcessYoutube(asset.id, videoId).catch((err) =>
+        this.logger.error(`YouTube import ${videoId} (asset ${asset.id}) failed: ${err.message}`),
+      );
+    }
+    return { results };
+  }
+
+  private async downloadAndProcessYoutube(assetId: string, videoId: string): Promise<void> {
+    const tmp = this.youtubeImport.tempPath(assetId);
+    try {
+      await this.youtubeImport.download(videoId, tmp);
+      const sourceKey = `source/${assetId}.mp4`;
+      const stat = await fs.promises.stat(tmp);
+      await this.storage.put(sourceKey, fs.createReadStream(tmp), { contentType: 'video/mp4' });
+      await this.prisma.videoAsset.update({
+        where: { id: assetId },
+        data: { originalKey: sourceKey, sizeBytes: BigInt(stat.size) },
+      });
+      this.videoProcessing.enqueue(assetId);
+    } catch (err) {
+      await this.prisma.videoAsset
+        .update({ where: { id: assetId }, data: { status: 'FAILED' } })
+        .catch(() => undefined);
+      throw err;
+    } finally {
+      await this.youtubeImport.cleanup(tmp);
+    }
+  }
+
+  /** The one unit a course may have for lessons added with no section at all. */
+  private async getOrCreateDefaultUnit(courseId: string) {
+    const existing = await this.prisma.courseUnit.findFirst({ where: { courseId, isDefault: true } });
+    if (existing) return existing;
+    // Sorted before every named section, so "just add lessons" lessons read
+    // first — the closest thing to "no sections at all" the schema allows.
+    return this.prisma.courseUnit.create({
+      data: { courseId, title: '', isDefault: true, sortOrder: -1 },
+    });
   }
 
   private async insertLesson(unitId: string, dto: CreateLessonDto) {

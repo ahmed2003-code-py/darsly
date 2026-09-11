@@ -11,6 +11,7 @@ import {
 import { HlsKeyService } from './hls-key.service';
 import { TranscodeService } from './transcode.service';
 import { VideoProcessingService } from './video-processing.service';
+import { YoutubeImportService } from './youtube-import.service';
 
 /**
  * Selects the active DRM provider by DRM_SCHEME (default AES_128_CLEARKEY, the
@@ -55,7 +56,8 @@ import { VideoProcessingService } from './video-processing.service';
       inject: [TranscodeService, HlsKeyService, StorageProvider, SignedUrlService],
     },
     VideoProcessingService,
+    YoutubeImportService,
   ],
-  exports: [VideoProcessingService, HlsKeyService, SignedUrlService, DRM_PROVIDER],
+  exports: [VideoProcessingService, HlsKeyService, SignedUrlService, DRM_PROVIDER, YoutubeImportService],
 })
 export class VideoModule {}

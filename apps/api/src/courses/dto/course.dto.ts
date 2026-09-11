@@ -3,6 +3,7 @@ import { CoursePricingModel, CourseStatus, LessonType } from '@darsly/shared-typ
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -70,6 +71,22 @@ export class CreateLessonDto {
 export class UpdateLessonDto extends PartialType(CreateLessonDto) {
   /** set true to clear the drip schedule */
   @IsOptional() @IsBoolean() clearDrip?: boolean;
+}
+
+/** Bulk-create lessons from YouTube links — one release/pricing setting for the whole batch. */
+export class ImportYoutubeDto {
+  // Small on purpose: each URL costs a real yt-dlp process (metadata now, a
+  // full download in the background right after) — this is not a bulk-id list.
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10)
+  @IsString({ each: true }) @MaxLength(500, { each: true })
+  urls: string[];
+
+  /** Target section; omitted lands the lessons with no section, like a single direct add. */
+  @IsOptionalId() unitId?: string;
+
+  @IsOptional() @IsBoolean() isFreePreview?: boolean;
+  @IsOptional() @IsISO8601() dripUnlockAt?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_WINDOW_DAYS) dripAfterEnrollDays?: number;
 }
 
 export class ReorderDto {

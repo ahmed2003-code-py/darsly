@@ -404,6 +404,17 @@
       "previewError": "Couldn't start the preview",
       "lessonDetails": "Lesson details",
       "closePanel": "Close",
+      "importYoutubeBtn": "Import several YouTube links at once",
+      "importYoutubeTitle": "Import from YouTube",
+      "importYoutubeLabel": "YouTube links (one per line)",
+      "importYoutubePh": "https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/watch?v=...",
+      "importYoutubeHint": "The lesson's name and description are pulled from YouTube automatically, and the video is prepared protected, the same as any regular upload. These settings apply to every link entered.",
+      "importNow": "Import",
+      "importing": "Importing…",
+      "importError": {
+        "INVALID_URL": "Not a valid YouTube link — skipped",
+        "METADATA_FAILED": "Couldn't fetch this video's details"
+      },
       "lessonNamePh": "Name the lesson and press Enter",
       "addLessonCta": "Add",
       "directLessons": "Course lessons",

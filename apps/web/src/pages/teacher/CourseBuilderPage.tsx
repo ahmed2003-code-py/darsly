@@ -7,7 +7,7 @@ import { PlaybackTicket } from '@darsly/shared-types';
 import { api, apiOrigin } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
-import { Badge, ErrorNote, ProgressBar, Spinner } from '../../components/ui';
+import { Badge, ErrorNote, Modal, ProgressBar, Spinner } from '../../components/ui';
 
 /**
  * Course builder — the curriculum is the page, and a lesson opens in place.
@@ -156,6 +156,51 @@ export default function CourseBuilderPage() {
       selectLesson(lesson);
     },
   });
+  // Bulk import — paste several YouTube links, get several lessons. The
+  // target (a section, or none) is fixed when the modal opens from wherever
+  // it was triggered; one release setting and one paid/free setting apply
+  // to the whole batch, same as the single-lesson add did before it existed.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importUnitId, setImportUnitId] = useState<string | undefined>(undefined);
+  const [importUrls, setImportUrls] = useState('');
+  const [importFreePreview, setImportFreePreview] = useState(false);
+  const [importDrip, setImportDrip] = useState<'now' | 'date' | 'days'>('now');
+  const [importDripDate, setImportDripDate] = useState('');
+  const [importDripDays, setImportDripDays] = useState('');
+
+  function openImport(unitId?: string) {
+    setImportUnitId(unitId);
+    setImportUrls('');
+    setImportFreePreview(false);
+    setImportDrip('now');
+    setImportDripDate('');
+    setImportDripDays('');
+    importYoutube.reset();
+    setImportOpen(true);
+  }
+
+  const importYoutube = useMutation({
+    mutationFn: async () => {
+      const urls = importUrls
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return (
+        await api.post(`/teacher/courses/${id}/lessons/import-youtube`, {
+          urls,
+          ...(importUnitId ? { unitId: importUnitId } : {}),
+          isFreePreview: importFreePreview,
+          ...(importDrip === 'date' && importDripDate
+            ? { dripUnlockAt: new Date(importDripDate).toISOString() }
+            : importDrip === 'days'
+              ? { dripAfterEnrollDays: Number(importDripDays || 0) }
+              : {}),
+        })
+      ).data as { results: { url: string; lesson?: { title: string }; error?: 'INVALID_URL' | 'METADATA_FAILED' }[] };
+    },
+    onSuccess: () => invalidate(),
+  });
+
   const renameLesson = useMutation({
     mutationFn: async ({ lessonId, title }: { lessonId: string; title: string }) =>
       (await api.patch(`/teacher/lessons/${lessonId}`, { title })).data,
@@ -732,6 +777,13 @@ export default function CourseBuilderPage() {
           label={t('teacher.builder.addLessonCta')}
           onAdd={(title) => addLessonDirect.mutate(title)}
         />
+        <button
+          className="mt-2 flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+          onClick={() => openImport(undefined)}
+        >
+          <span className="material-symbols-outlined text-base">smart_display</span>
+          {t('teacher.builder.importYoutubeBtn')}
+        </button>
       </div>
 
       {sections.length > 0 && (
@@ -790,6 +842,13 @@ export default function CourseBuilderPage() {
                 label={t('teacher.builder.addLessonCta')}
                 onAdd={(title) => addLesson.mutate({ unitId: u.id, title })}
               />
+              <button
+                className="mt-2 flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+                onClick={() => openImport(u.id)}
+              >
+                <span className="material-symbols-outlined text-base">smart_display</span>
+                {t('teacher.builder.importYoutubeBtn')}
+              </button>
             </div>
           ))}
         </div>
@@ -827,6 +886,102 @@ export default function CourseBuilderPage() {
         )}
       </div>
       {publish.error && <PublishError error={publish.error} t={t} />}
+
+      <Modal open={importOpen} title={t('teacher.builder.importYoutubeTitle')} onClose={() => setImportOpen(false)} wide>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-bold">{t('teacher.builder.importYoutubeLabel')}</label>
+            <textarea
+              className="input min-h-32"
+              dir="ltr"
+              placeholder={t('teacher.builder.importYoutubePh')}
+              value={importUrls}
+              onChange={(e) => setImportUrls(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-outline">{t('teacher.builder.importYoutubeHint')}</p>
+          </div>
+
+          <div>
+            <p className="mb-2 flex items-center gap-1 text-sm font-bold">
+              <span className="material-symbols-outlined text-base">visibility</span>
+              {t('teacher.builder.accessType')}
+            </p>
+            <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-outline-variant/60">
+              <button type="button"
+                className={`py-2 text-sm font-bold ${!importFreePreview ? 'bg-primary-fixed text-primary' : 'bg-surface-container-lowest text-on-surface-variant'}`}
+                onClick={() => setImportFreePreview(false)}>
+                {t('teacher.builder.paid')}
+              </button>
+              <button type="button"
+                className={`py-2 text-sm font-bold ${importFreePreview ? 'bg-primary-fixed text-primary' : 'bg-surface-container-lowest text-on-surface-variant'}`}
+                onClick={() => setImportFreePreview(true)}>
+                {t('teacher.builder.freePreview')}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 flex items-center gap-1 text-sm font-bold">
+              <span className="material-symbols-outlined text-base">lock_clock</span>
+              {t('teacher.builder.drip')}
+            </p>
+            <div className="space-y-2">
+              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'now' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
+                <input type="radio" className="mt-1 accent-primary" checked={importDrip === 'now'} onChange={() => setImportDrip('now')} />
+                <span>
+                  <span className="block text-sm font-bold">{t('teacher.builder.dripImmediate')}</span>
+                  <span className="text-xs text-outline">{t('teacher.builder.dripImmediateHint')}</span>
+                </span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'date' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
+                <input type="radio" className="mt-1 accent-primary" checked={importDrip === 'date'} onChange={() => setImportDrip('date')} />
+                <span className="flex-1">
+                  <span className="block text-sm font-bold">{t('teacher.builder.dripDate')}</span>
+                  {importDrip === 'date' && (
+                    <input type="date" className="input mt-2 py-1.5 text-sm" value={importDripDate}
+                      onChange={(e) => setImportDripDate(e.target.value)} />
+                  )}
+                </span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'days' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
+                <input type="radio" className="mt-1 accent-primary" checked={importDrip === 'days'} onChange={() => setImportDrip('days')} />
+                <span className="flex-1">
+                  <span className="block text-sm font-bold">{t('teacher.builder.dripDays')}</span>
+                  {importDrip === 'days' && (
+                    <span className="mt-2 flex items-center gap-2">
+                      <input className="input w-20 py-1.5 text-sm" inputMode="numeric" value={importDripDays}
+                        onChange={(e) => setImportDripDays(e.target.value.replace(/\D/g, ''))} />
+                      <span className="text-xs text-outline">{t('teacher.builder.dripDaysHint')}</span>
+                    </span>
+                  )}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {importYoutube.data?.results && (
+            <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-outline-variant/40 p-3 text-sm">
+              {importYoutube.data.results.map((r, i) => (
+                <li key={i} className={`flex items-center gap-1.5 ${r.error ? 'text-error' : 'text-secondary'}`}>
+                  <span className="material-symbols-outlined text-base">{r.error ? 'error' : 'check_circle'}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {r.error ? t(`teacher.builder.importError.${r.error}`) : r.lesson?.title}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {importYoutube.error && <ErrorNote error={importYoutube.error} />}
+
+          <button
+            className="btn-primary w-full py-3"
+            disabled={importYoutube.isPending || !importUrls.trim()}
+            onClick={() => importYoutube.mutate()}
+          >
+            {importYoutube.isPending ? t('teacher.builder.importing') : t('teacher.builder.importNow')}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

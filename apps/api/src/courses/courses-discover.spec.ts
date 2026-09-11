@@ -2,10 +2,15 @@ import { SubjectExclusivityService } from '../catalog/subject-exclusivity.servic
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
 import { StorageProvider } from '../storage/storage.provider';
+import { VideoProcessingService } from '../video/video-processing.service';
+import { YoutubeImportService } from '../video/youtube-import.service';
 import { CoursesService } from './courses.service';
 
-// Discovery never touches storage — a stand-in is enough to satisfy the constructor.
+// Discovery never touches storage, transcoding or YouTube import — stand-ins
+// are enough to satisfy the constructor.
 const noStorage = {} as unknown as StorageProvider;
+const noVideoProcessing = {} as unknown as VideoProcessingService;
+const noYoutubeImport = {} as unknown as YoutubeImportService;
 
 /**
  * Course discovery.
@@ -38,7 +43,7 @@ function build(rows: unknown[] = [], total = rows.length) {
   // Nothing is hidden here: exclusivity has its own suite, and letting it
   // return anything would make every assertion below depend on it.
   const openToEveryone = { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService;
-  return { service: new CoursesService(prisma, price, openToEveryone, noStorage), prisma, calls };
+  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport), prisma, calls };
 }
 
 const course = (over: Record<string, unknown> = {}) => ({
@@ -215,6 +220,8 @@ describe('prices carry the platform fee', () => {
       { applyToMany: price } as unknown as StudentPriceService,
       { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService,
       noStorage,
+      noVideoProcessing,
+      noYoutubeImport,
     );
     await service.discover({});
     // The card and the checkout must agree, and the academy's own price must not
@@ -248,6 +255,8 @@ describe('a student is not shown the catalogues of their teacher\'s rivals', () 
       { applyToMany: jest.fn(async (i: unknown[]) => i) } as unknown as StudentPriceService,
       { hiddenTeacherIds: jest.fn().mockResolvedValue(hidden) } as unknown as SubjectExclusivityService,
       noStorage,
+      noVideoProcessing,
+      noYoutubeImport,
     );
     return { service, calls };
   }

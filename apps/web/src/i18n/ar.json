@@ -404,6 +404,17 @@
       "previewError": "معرفناش نشغّل المعاينة",
       "lessonDetails": "تفاصيل الدرس",
       "closePanel": "إقفال",
+      "importYoutubeBtn": "استيراد كذا لينك يوتيوب دفعة واحدة",
+      "importYoutubeTitle": "استيراد من يوتيوب",
+      "importYoutubeLabel": "لينكات اليوتيوب (لينك في كل سطر)",
+      "importYoutubePh": "https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/watch?v=...",
+      "importYoutubeHint": "هنجيب اسم الدرس ووصفه من يوتيوب تلقائي، ونجهّز الفيديو محمي زي أي رفعة عادية. الإعدادات دي هتتطبّق على كل اللينكات المدخلة.",
+      "importNow": "استيراد",
+      "importing": "بيستورد…",
+      "importError": {
+        "INVALID_URL": "لينك مش صحيح أو مش من يوتيوب — اتجوّز",
+        "METADATA_FAILED": "معرفناش نجيب بيانات الفيديو ده"
+      },
       "lessonNamePh": "اكتب اسم الدرس واضغط Enter",
       "addLessonCta": "إضافة",
       "directLessons": "دروس الكورس",

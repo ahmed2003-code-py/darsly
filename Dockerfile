@@ -3,10 +3,20 @@
 # Prisma. The API build also builds apps/web/dist, which ServeStatic serves.
 FROM node:20-slim
 
-# System deps: ffmpeg for transcoding, openssl+ca-certificates for Prisma/TLS.
+# System deps: ffmpeg for transcoding, openssl+ca-certificates for Prisma/TLS,
+# curl to fetch yt-dlp below.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg openssl ca-certificates \
+  && apt-get install -y --no-install-recommends ffmpeg openssl ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
+
+# yt-dlp: the PyInstaller-frozen `yt-dlp_linux` build — no system Python
+# needed, which node:20-slim doesn't have. Pulled fresh at every image build
+# rather than pinned: YouTube changes what breaks an extractor often enough
+# that a pinned version goes stale — a rebuild is the update mechanism, same
+# as any other scraping-based tool; no version stays correct forever.
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
+  -o /usr/local/bin/yt-dlp \
+  && chmod a+rx /usr/local/bin/yt-dlp
 
 WORKDIR /app
 

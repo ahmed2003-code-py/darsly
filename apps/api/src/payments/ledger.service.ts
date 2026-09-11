@@ -31,6 +31,52 @@ export class LedgerService {
     return `teacher:${tenantId}:balance`;
   }
 
+  /** A student's prepaid wallet — a platform liability held for the student. */
+  private walletAccount(studentId: string) {
+    return `student:${studentId}:wallet`;
+  }
+
+  /**
+   * A student's spendable wallet balance: credits − debits on their wallet
+   * account. Derived from the ledger, never stored, so it can never drift.
+   */
+  async walletBalance(studentId: string, db: Db = this.prisma): Promise<number> {
+    const account = this.walletAccount(studentId);
+    const [credits, debits] = await Promise.all([
+      db.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
+      db.ledgerEntry.aggregate({ where: { account, direction: 'DEBIT' }, _sum: { amountCents: true } }),
+    ]);
+    return (credits._sum.amountCents ?? 0) - (debits._sum.amountCents ?? 0);
+  }
+
+  /**
+   * Add funds to a student's wallet: real cash entered the platform, and the
+   * platform now owes it to the student. DEBIT platform:cash (asset up),
+   * CREDIT student:<id>:wallet (liability up). Returns the ledger transaction id
+   * so the caller can stamp its WalletTransaction mirror row. Pass the tx client
+   * to book it atomically with the top-up status flip.
+   */
+  async creditWallet(
+    studentId: string,
+    amountCents: number,
+    description: string,
+    db: Db = this.prisma,
+  ): Promise<string> {
+    if (amountCents <= 0) throw new Error('creditWallet: amount must be positive');
+    const txn = await db.ledgerTransaction.create({
+      data: {
+        description,
+        entries: {
+          create: [
+            { account: 'platform:cash', direction: 'DEBIT', amountCents },
+            { account: this.walletAccount(studentId), direction: 'CREDIT', amountCents },
+          ],
+        },
+      },
+    });
+    return txn.id;
+  }
+
   /**
    * Record a paid enrollment: cash in, split into platform commission and the
    * teacher's balance. Idempotent per payment (the LedgerTransaction.paymentId

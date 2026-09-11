@@ -173,9 +173,9 @@ model AcademyMembership {
 
 // Single-use, hashed password-reset tokens (forgot-password flow).
 model PasswordResetToken {
-  id String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   // sha256(userId + ":" + code). Binding the user into the hash is what lets a
   // short 6-digit code stay unique across the table — two people can hold the
   // code 123456 at the same time without colliding.
@@ -295,6 +295,8 @@ model StudentProfile {
   chatThreads      ChatThread[]
   liveBookings     LiveBooking[]
   savedCourses     SavedCourse[]
+  walletTxns       WalletTransaction[]
+  walletTopups     WalletTopup[]
 }
 
 // A student's saved / wishlisted course.
@@ -816,6 +818,70 @@ model LedgerEntry {
 
   @@index([account])
   @@index([tenantId])
+}
+
+// ─────────────────────────── Student wallet ────────────────────────────────
+// A student's prepaid balance is a platform-global liability: one balance the
+// student spends across any academy. Like a teacher's balance, the authoritative
+// number is DERIVED from the ledger (account `student:<studentId>:wallet`), never
+// stored — so it can never drift. WalletTransaction below is a human-readable
+// mirror for the "my wallet" history screen, not the source of truth.
+enum WalletTxnKind {
+  TOPUP // funds in — a matched transfer (reuses the payment listener), card, or admin credit
+  PURCHASE // funds out — bought a course/lesson from the balance
+  REFUND // funds back in — a reversed purchase
+  ADJUST // manual correction by an admin
+}
+
+model WalletTransaction {
+  id          String         @id @default(cuid())
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  kind        WalletTxnKind
+  // Signed in the student's favour: TOPUP/REFUND positive, PURCHASE negative.
+  amountCents Int
+  description String
+  // Provenance links (all optional): the payment that funded a top-up, or the
+  // course/lesson a purchase unlocked. The ledger transaction carries the balanced
+  // double-entry; this row is the label the student reads.
+  paymentId   String?
+  courseId    String?
+  lessonId    String?
+  ledgerTxnId String?
+  createdAt   DateTime       @default(now())
+
+  @@index([studentId, createdAt])
+}
+
+enum WalletTopupStatus {
+  PENDING // student submitted a transfer proof, awaiting confirmation
+  APPROVED // confirmed → wallet credited
+  REJECTED // proof rejected
+}
+
+// A student's request to add funds to their wallet by transfer. Kept separate
+// from Payment (which is course-bound) so the wallet top-up never needs a course.
+// On APPROVED the ledger is credited and a WalletTransaction(TOPUP) is written.
+// The proof-based approval mirrors manual course payments; a later increment can
+// auto-approve from a matched listener transfer.
+model WalletTopup {
+  id             String            @id @default(cuid())
+  studentId      String
+  student        StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  amountCents    Int
+  currency       String            @default("EGP")
+  method         PaymentMethod
+  proofImageUrl  String
+  reference      String?
+  status         WalletTopupStatus @default(PENDING)
+  rejectedReason String?
+  reviewedById   String? // admin user id who approved/rejected
+  reviewedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([status, createdAt])
+  @@index([studentId, createdAt])
 }
 
 model Coupon {

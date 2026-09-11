@@ -18,6 +18,7 @@ const STUDENT_NAV: NavItem[] = [
   { to: '/courses', icon: 'auto_stories', labelKey: 'nav.browse' },
   { to: '/discover', icon: 'travel_explore', labelKey: 'nav.discover' },
   { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
+  { to: '/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
   { to: '/saved', icon: 'favorite', labelKey: 'nav.saved' },
   { to: '/live', icon: 'sensors', labelKey: 'nav.live' },
   { to: '/my-certificates', icon: 'workspace_premium', labelKey: 'nav.certificates' },
@@ -42,6 +43,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/teachers', icon: 'verified_user', labelKey: 'nav.adminTeachers' },
   { to: '/admin/academy-studio', icon: 'auto_awesome', labelKey: 'nav.adminStudio' },
   { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },
+  { to: '/admin/wallet', icon: 'account_balance_wallet', labelKey: 'nav.adminWallet' },
   { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },
   { to: '/admin/security', icon: 'gpp_maybe', labelKey: 'nav.adminSecurity' },
 ];

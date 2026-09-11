@@ -30,6 +30,8 @@ const CertificatesPage = lazy(() => import('./pages/student/CertificatesPage'));
 const LiveSessionsPage = lazy(() => import('./pages/student/LiveSessionsPage'));
 const SavedCoursesPage = lazy(() => import('./pages/student/SavedCoursesPage'));
 const LessonRouter = lazy(() => import('./pages/student/LessonRouter'));
+const WalletPage = lazy(() => import('./pages/student/WalletPage'));
+const AdminWalletPage = lazy(() => import('./pages/admin/AdminWalletPage'));
 const StudentDashboardPage = lazy(() => import('./pages/student/StudentDashboardPage'));
 const TeacherProfilePage = lazy(() => import('./pages/student/TeacherProfilePage'));
 const AssignmentBuilderPage = lazy(() => import('./pages/teacher/AssignmentBuilderPage'));
@@ -100,6 +102,7 @@ export default function App() {
       <Route path="/my-certificates" element={<RequireAuth role={Role.STUDENT}><CertificatesPage /></RequireAuth>} />
       <Route path="/live" element={<RequireAuth role={Role.STUDENT}><LiveSessionsPage /></RequireAuth>} />
       <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
+      <Route path="/wallet" element={<RequireAuth role={Role.STUDENT}><WalletPage /></RequireAuth>} />
       <Route path="/certificate/:token" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
@@ -124,6 +127,7 @@ export default function App() {
       <Route path="/admin/teachers" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminTeachersPage /></RequireAuth>} />
       <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />
       <Route path="/admin/payments" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPaymentsPage /></RequireAuth>} />
+      <Route path="/admin/wallet" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminWalletPage /></RequireAuth>} />
       <Route path="/admin/security" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminSecurityPage /></RequireAuth>} />
       <Route path="/admin/academy-studio" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademyStudioPage /></RequireAuth>} />
 

@@ -312,6 +312,9 @@ export default function SecureVideoPlayerPage() {
             {course?.title}
           </Link>
           <h1 className="font-heading text-2xl font-extrabold">{current?.title}</h1>
+          {current?.description && (
+            <p className="mt-1 max-w-2xl text-sm text-on-surface-variant" dir="auto">{current.description}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {user?.role === Role.STUDENT && course?.teacher && (

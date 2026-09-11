@@ -591,6 +591,7 @@ export class CoursesService {
           return {
             id: l.id,
             title: l.title,
+            description: l.description,
             type: l.type,
             durationSec: l.durationSec,
             isFreePreview: l.isFreePreview,

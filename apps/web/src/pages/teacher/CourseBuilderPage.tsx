@@ -200,7 +200,14 @@ export default function CourseBuilderPage() {
               ? { dripAfterEnrollDays: Number(importDripDays || 0) }
               : {}),
         })
-      ).data as { results: { url: string; lesson?: { title: string }; error?: 'INVALID_URL' | 'METADATA_FAILED' }[] };
+      ).data as {
+        results: {
+          url: string;
+          lesson?: { title: string };
+          error?: 'INVALID_URL' | 'METADATA_FAILED';
+          detail?: string;
+        }[];
+      };
     },
     onSuccess: () => invalidate(),
   });
@@ -992,11 +999,14 @@ export default function CourseBuilderPage() {
           {importYoutube.data?.results && (
             <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-outline-variant/40 p-3 text-sm">
               {importYoutube.data.results.map((r, i) => (
-                <li key={i} className={`flex items-center gap-1.5 ${r.error ? 'text-error' : 'text-secondary'}`}>
-                  <span className="material-symbols-outlined text-base">{r.error ? 'error' : 'check_circle'}</span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {r.error ? t(`teacher.builder.importError.${r.error}`) : r.lesson?.title}
+                <li key={i} className={r.error ? 'text-error' : 'text-secondary'}>
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined shrink-0 text-base">{r.error ? 'error' : 'check_circle'}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {r.error ? t(`teacher.builder.importError.${r.error}`) : r.lesson?.title}
+                    </span>
                   </span>
+                  {r.detail && <span className="ms-6 block truncate text-xs text-outline" dir="ltr">{r.detail}</span>}
                 </li>
               ))}
             </ul>

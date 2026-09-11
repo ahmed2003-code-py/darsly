@@ -441,7 +441,12 @@ export class CoursesService {
       unitId = (await this.getOrCreateDefaultUnit(courseId)).id;
     }
 
-    const results: Array<{ url: string; lesson?: unknown; error?: 'INVALID_URL' | 'METADATA_FAILED' }> = [];
+    const results: Array<{
+      url: string;
+      lesson?: unknown;
+      error?: 'INVALID_URL' | 'METADATA_FAILED';
+      detail?: string;
+    }> = [];
     for (const url of dto.urls) {
       const videoId = this.youtubeImport.resolveVideoId(url);
       if (!videoId) {
@@ -454,7 +459,11 @@ export class CoursesService {
         meta = await this.youtubeImport.fetchMetadata(videoId);
       } catch (err: any) {
         this.logger.warn(`YouTube metadata fetch failed for ${videoId}: ${err.message}`);
-        results.push({ url, error: 'METADATA_FAILED' });
+        // Surfaced to the caller (truncated) rather than logged only — yt-dlp's
+        // own message usually says WHY (age-restricted, region-locked, a bot
+        // check), which is worth more to whoever is looking at this than a
+        // bare "failed".
+        results.push({ url, error: 'METADATA_FAILED', detail: String(err.message ?? '').slice(0, 300) });
         continue;
       }
 

@@ -175,6 +175,10 @@ export default function TeacherCoursesPage() {
           {TABS.map((value) => {
             const selected = tab === value;
             const count = counts[value];
+            // Nothing archives a course any more — delete deletes. The filter
+            // stays only while a teacher still has ones archived by the old
+            // behaviour, and disappears as they clear them.
+            if (value === 'ARCHIVED' && count === 0 && !selected) return null;
             return (
               <button
                 key={value}
@@ -336,7 +340,16 @@ export default function TeacherCoursesPage() {
                   className="rounded-lg border border-error/30 px-3 py-2 text-error transition hover:bg-error-container/40"
                   title={t('teacher.courses.delete')}
                   aria-label={t('teacher.courses.delete')}
-                  onClick={() => window.confirm(t('teacher.courses.deleteConfirm')) && remove.mutate(c.id)}
+                  onClick={() => {
+                    // The count is the whole point of asking: removing a course
+                    // nobody joined costs nothing, and removing one with a class
+                    // in it takes their access with it.
+                    const enrolled = c._count?.enrollments ?? 0;
+                    const ask = enrolled
+                      ? t('teacher.courses.deleteConfirmWithStudents', { count: enrolled })
+                      : t('teacher.courses.deleteConfirm');
+                    if (window.confirm(ask)) remove.mutate(c.id);
+                  }}
                 >
                   <span className="material-symbols-outlined text-base">delete</span>
                 </button>

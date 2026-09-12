@@ -72,8 +72,10 @@ export class TeachersController {
   @Public()
   @Get('teachers/:slug')
   @ApiOperation({ summary: 'Public teacher profile (bio, intro video, courses, reviews)' })
-  profile(@Param('slug') slug: string) {
-    return this.teachers.publicProfile(slug);
+  // Public, but viewer-aware in the same way discovery is: signed in, the
+  // listing narrows to the year that student is actually in.
+  profile(@Param('slug') slug: string, @CurrentUser() viewer?: JwtPayload) {
+    return this.teachers.publicProfile(slug, viewer?.sub);
   }
 
   @Get('teacher/profile')

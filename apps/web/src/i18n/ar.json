@@ -319,7 +319,7 @@
       "publish": "نشر",
       "unpublish": "إلغاء النشر",
       "delete": "حذف",
-      "deleteConfirm": "هل أنت متأكد من حذف هذه الدورة؟ سيتم أرشفتها إذا كان بها طلاب.",
+      "deleteConfirm": "متأكد إنك عايز تمسح الدورة دي؟",
       "empty": "لا توجد دورات بعد — أنشئ أول دورة",
       "createTitle": "دورة جديدة",
       "editTitle": "تعديل الدورة",
@@ -378,7 +378,8 @@
       "sortStudents": "الأكثر طلابًا",
       "sortPrice": "الأعلى سعرًا",
       "countCourses": "{{count}} كورس",
-      "totalStudents": "إجمالي الطلبة"
+      "totalStudents": "إجمالي الطلبة",
+      "deleteConfirmWithStudents": "الدورة دي فيها {{count}} طالب مشترك — لو مسحتها هيفقدوا الوصول ليها. متأكد؟"
     },
     "builder": {
       "title": "محتوى الكورس",

@@ -319,7 +319,7 @@
       "publish": "Publish",
       "unpublish": "Unpublish",
       "delete": "Delete",
-      "deleteConfirm": "Delete this course? It will be archived if it has students.",
+      "deleteConfirm": "Delete this course?",
       "empty": "No courses yet — create your first course",
       "createTitle": "New course",
       "editTitle": "Edit course",
@@ -378,7 +378,8 @@
       "sortStudents": "Most students",
       "sortPrice": "Highest price",
       "countCourses": "{{count}} courses",
-      "totalStudents": "Total students"
+      "totalStudents": "Total students",
+      "deleteConfirmWithStudents": "{{count}} student(s) are enrolled — deleting this takes their access with it. Sure?"
     },
     "builder": {
       "title": "Course content",

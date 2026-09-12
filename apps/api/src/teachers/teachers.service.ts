@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
-import { viewerStage } from '../catalog/stage.util';
+import { viewerGrade, viewerStage } from '../catalog/stage.util';
 
 export interface DiscoverTeachersQuery {
   q?: string;
@@ -137,7 +137,15 @@ export class TeachersService {
   }
 
   /** Public teacher profile: bio, intro video, stats, published courses, reviews. */
-  async publicProfile(slug: string) {
+  async publicProfile(slug: string, viewerUserId?: string) {
+    // A signed-in student sees this teacher's courses for their own year. The
+    // page is a shop window, and a first-year reading three years of listings
+    // to find the one that is theirs is the thing the year question exists to
+    // stop. A visitor with no year still sees the whole catalogue.
+    const gradeId = await viewerGrade(this.prisma, {}, viewerUserId);
+    const forMyYear = gradeId
+      ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
+      : {};
     const teacher = await this.prisma.teacherProfile.findFirst({
       where: { slug, status: 'APPROVED', user: { isActive: true } },
       include: {
@@ -145,7 +153,7 @@ export class TeachersService {
         subject: true,
         grades: { include: { grade: true } },
         courses: {
-          where: { status: 'PUBLISHED', deletedAt: null },
+          where: { status: 'PUBLISHED', deletedAt: null, ...forMyYear },
           include: {
             subject: true,
             grades: { include: { grade: true } },

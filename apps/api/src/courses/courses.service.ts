@@ -373,18 +373,27 @@ export class CoursesService {
   }
 
   /** Hard-delete only when nobody ever enrolled; otherwise archive. */
+  /**
+   * Delete means delete.
+   *
+   * This used to archive anything with an enrolment, which left the course
+   * sitting in the teacher's list wearing an "archived" badge after they had
+   * asked for it to be gone — a refusal dressed as a result. The row is still
+   * recoverable: `delete` on this model stamps `deletedAt` rather than
+   * destroying anything, so a course removed by mistake comes back with one
+   * UPDATE. What it does not do is stay on screen.
+   *
+   * The enrolments are answered too. A student who paid for this keeps the
+   * payment and the record; what they lose is a course the teacher withdrew,
+   * which is the teacher's call to make about their own catalogue.
+   */
   async remove(tenantId: string, courseId: string) {
     await this.assertCourse(tenantId, courseId);
-    const enrollments = await this.prisma.enrollment.count({ where: { courseId } });
-    if (enrollments > 0) {
-      const course = await this.prisma.course.update({
-        where: { id: courseId },
-        data: { status: 'ARCHIVED' },
-      });
-      return { ...course, archived: true, deleted: false };
-    }
+    const students = await this.prisma.enrollment.count({
+      where: { courseId, status: 'ACTIVE' },
+    });
     await this.prisma.course.delete({ where: { id: courseId } });
-    return { id: courseId, archived: false, deleted: true };
+    return { id: courseId, deleted: true, studentsAffected: students };
   }
 
   async setBundleItems(tenantId: string, bundleId: string, dto: SetBundleItemsDto) {

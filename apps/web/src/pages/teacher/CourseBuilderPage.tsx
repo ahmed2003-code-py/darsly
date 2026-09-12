@@ -40,6 +40,10 @@ export default function CourseBuilderPage() {
   };
   const [renaming, setRenaming] = useState<string | null>(null);
   const [videoPct, setVideoPct] = useState<number | null>(null);
+  // Which lesson the upload belongs to. Without it the bar followed whichever
+  // lesson happened to be open, so opening a second one while a video uploaded
+  // showed that lesson filling up with someone else's progress.
+  const [uploadingLessonId, setUploadingLessonId] = useState<string | null>(null);
   const [filePct, setFilePct] = useState<number | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -128,6 +132,10 @@ export default function CourseBuilderPage() {
       setRenaming(`unit:${unit.id}`);
     },
   });
+  // Clicks that land while the page is busy must not each become a section —
+  // they would also all be numbered the same, since the name counts what
+  // exists at the moment of the click.
+  const addSection = useOnce(addUnit.isPending);
   const renameUnit = useMutation({
     mutationFn: async ({ unitId, title }: { unitId: string; title: string }) =>
       (await api.patch(`/teacher/units/${unitId}`, { title })).data,
@@ -251,28 +259,59 @@ export default function CourseBuilderPage() {
     onSuccess: invalidate,
   });
 
+  /**
+   * Report progress without repainting the page for every packet.
+   *
+   * A browser fires upload progress many times a second, and this percentage
+   * lives on the whole builder — so a large video meant the entire tree
+   * re-rendering continuously for minutes. The page stopped answering clicks,
+   * the ones that were queued all arrived at once, and a teacher who pressed
+   * Enter twice got two lessons. Only whole-percent changes are published, so
+   * a two-minute upload costs a hundred renders instead of thousands.
+   */
+  function throttledPct(set: (v: number | null) => void) {
+    let last = -1;
+    return (e: { loaded: number; total?: number }, size: number) => {
+      const pct = Math.round((e.loaded / (e.total ?? size)) * 100);
+      if (pct === last) return;
+      last = pct;
+      set(pct);
+    };
+  }
+
   async function uploadVideo(file: File) {
+    // Which lesson this belongs to is decided now, not when the upload lands:
+    // the teacher is free to open another lesson while it runs, and the video
+    // has to arrive where they started it.
+    const lessonId = selectedLessonId;
+    if (!lessonId) return;
     setVideoPct(0);
+    setUploadingLessonId(lessonId);
+    const onPct = throttledPct(setVideoPct);
     try {
       const fd = new FormData();
       fd.append('file', file);
       const { data: asset } = await api.post('/uploads/videos', fd, {
-        onUploadProgress: (e) => setVideoPct(Math.round((e.loaded / (e.total ?? file.size)) * 100)),
+        onUploadProgress: (e) => onPct(e, file.size),
       });
-      await api.patch(`/teacher/lessons/${selectedLessonId}`, { videoAssetId: asset.id });
+      await api.patch(`/teacher/lessons/${lessonId}`, { videoAssetId: asset.id });
       invalidate();
     } finally {
       setVideoPct(null);
+      setUploadingLessonId(null);
     }
   }
 
   async function uploadAttachment(file: File) {
+    const lessonId = selectedLessonId;
+    if (!lessonId) return;
     setFilePct(0);
+    const onPct = throttledPct(setFilePct);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      await api.post(`/uploads/lessons/${selectedLessonId}/attachments`, fd, {
-        onUploadProgress: (e) => setFilePct(Math.round((e.loaded / (e.total ?? file.size)) * 100)),
+      await api.post(`/uploads/lessons/${lessonId}/attachments`, fd, {
+        onUploadProgress: (e) => onPct(e, file.size),
       });
       invalidate();
     } finally {
@@ -466,7 +505,7 @@ export default function CourseBuilderPage() {
               onChange={(e) => e.target.files?.[0] && uploadVideo(e.target.files[0])}
             />
 
-            {videoPct != null ? (
+            {videoPct != null && uploadingLessonId === selectedLessonId ? (
               <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-3">
                 <p className="mb-1.5 text-xs font-bold text-on-surface-variant">
                   {t('teacher.builder.uploading', { pct: videoPct })}
@@ -879,7 +918,7 @@ export default function CourseBuilderPage() {
       <button
         className="btn-secondary w-full py-3"
         disabled={addUnit.isPending}
-        onClick={() => addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 }))}
+        onClick={() => addSection(() => addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })))}
       >
         <span className="material-symbols-outlined text-[20px]">add</span>
         {t('teacher.builder.addUnit')}
@@ -1165,6 +1204,27 @@ function LessonRow({
  * box, which is two steps to do one thing. Type the name, press Enter, the
  * lesson exists and opens — and the box is empty and focused for the next one.
  */
+/**
+ * Let an action fire once, even when the page is too busy to re-render.
+ *
+ * `isPending` is state, and state arrives a render late. While a video uploads
+ * the main thread has other work, so the clicks and keystrokes queued in the
+ * meantime all run before React has had a chance to disable anything — and the
+ * teacher gets two sections, or three lessons, all named the same. A ref closes
+ * in the same tick as the event, which is the only thing fast enough.
+ */
+function useOnce(busy: boolean) {
+  const sending = useRef(false);
+  useEffect(() => {
+    if (!busy) sending.current = false;
+  }, [busy]);
+  return (run: () => void) => {
+    if (busy || sending.current) return;
+    sending.current = true;
+    run();
+  };
+}
+
 function AddLessonRow({
   onAdd, busy, placeholder, label,
 }: {
@@ -1175,13 +1235,16 @@ function AddLessonRow({
 }) {
   const [value, setValue] = useState('');
   const ref = useRef<HTMLInputElement>(null);
+  const once = useOnce(busy);
 
   const submit = () => {
     const title = value.trim();
-    if (!title || busy) return;
-    onAdd(title);
-    setValue('');
-    ref.current?.focus();
+    if (!title) return;
+    once(() => {
+      onAdd(title);
+      setValue('');
+      ref.current?.focus();
+    });
   };
 
   return (

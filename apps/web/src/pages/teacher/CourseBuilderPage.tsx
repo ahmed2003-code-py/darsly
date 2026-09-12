@@ -44,6 +44,9 @@ export default function CourseBuilderPage() {
   // lesson happened to be open, so opening a second one while a video uploaded
   // showed that lesson filling up with someone else's progress.
   const [uploadingLessonId, setUploadingLessonId] = useState<string | null>(null);
+  // Read by the poll, which runs outside React's render and must not be a
+  // render behind on whether a file is currently going up.
+  const uploadingRef = useRef(false);
   const [filePct, setFilePct] = useState<number | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -95,7 +98,11 @@ export default function CourseBuilderPage() {
       const pending = c?.units?.some((u: any) =>
         u.lessons.some((l: any) => l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status)),
       );
-      return pending ? 4000 : false;
+      if (!pending) return false;
+      // Backed off while a file is going up. This poll watches transcoding,
+      // which has not started yet — all it does during an upload is take
+      // bandwidth from it and re-render the page that is drawing the progress.
+      return uploadingRef.current ? 15000 : 4000;
     },
   });
 
@@ -116,6 +123,41 @@ export default function CourseBuilderPage() {
     queryClient.invalidateQueries({ queryKey: ['teacher-courses'] });
   };
 
+  /**
+   * Show the new lesson now, reconcile after.
+   *
+   * The server already handed back the row it created, so waiting for a full
+   * refetch of the course before drawing it buys nothing — and during a video
+   * upload that refetch queues behind the upload on the same connection, which
+   * is why adding a lesson felt like it had not worked until it suddenly did.
+   * The cache is updated from the response and the refetch still runs, so a
+   * server-side detail we did not receive is picked up a moment later.
+   */
+  const insertLesson = (lesson: any, intoNewDefaultUnit = false) => {
+    queryClient.setQueryData(['teacher-course', id], (prev: any) => {
+      if (!prev?.units) return prev;
+      const unit = prev.units.find((u: any) => u.id === lesson.unitId);
+      if (unit) {
+        if (unit.lessons.some((l: any) => l.id === lesson.id)) return prev;
+        return {
+          ...prev,
+          units: prev.units.map((u: any) =>
+            u.id === lesson.unitId ? { ...u, lessons: [...u.lessons, lesson] } : u,
+          ),
+        };
+      }
+      // The very first lesson in a course: the API made the hidden default unit
+      // to hold it, and we have never seen it. Only assumed for the path that
+      // targets that unit by definition — a section we do not know about is
+      // left to the refetch rather than guessed at.
+      if (!intoNewDefaultUnit) return prev;
+      return {
+        ...prev,
+        units: [...prev.units, { id: lesson.unitId, title: '', isDefault: true, lessons: [lesson] }],
+      };
+    });
+  };
+
   const thumbUpload = useMutation({
     mutationFn: async (file: File) => {
       const dataUrl = await imageToDataUrl(file, { maxW: 960, maxH: 540, quality: 0.78 });
@@ -128,8 +170,16 @@ export default function CourseBuilderPage() {
     mutationFn: async (title: string) =>
       (await api.post(`/teacher/courses/${id}/units`, { title })).data,
     onSuccess: (unit) => {
-      invalidate();
+      // Drawn from the response for the same reason a lesson is: the section
+      // exists, and making the teacher wait for a refetch to believe it is how
+      // a click starts feeling like it did nothing.
+      queryClient.setQueryData(['teacher-course', id], (prev: any) =>
+        prev?.units && !prev.units.some((u: any) => u.id === unit.id)
+          ? { ...prev, units: [...prev.units, { ...unit, lessons: [] }] }
+          : prev,
+      );
       setRenaming(`unit:${unit.id}`);
+      invalidate();
     },
   });
   // Clicks that land while the page is busy must not each become a section —
@@ -151,8 +201,9 @@ export default function CourseBuilderPage() {
     mutationFn: async ({ unitId, title }: { unitId: string; title: string }) =>
       (await api.post(`/teacher/units/${unitId}/lessons`, { title })).data,
     onSuccess: (lesson) => {
-      invalidate();
+      insertLesson(lesson);
       selectLesson(lesson);
+      invalidate();
     },
   });
   // No section chosen — lands in the hidden default unit the API creates on
@@ -161,8 +212,9 @@ export default function CourseBuilderPage() {
     mutationFn: async (title: string) =>
       (await api.post(`/teacher/courses/${id}/lessons`, { title })).data,
     onSuccess: (lesson) => {
-      invalidate();
+      insertLesson(lesson, true);
       selectLesson(lesson);
+      invalidate();
     },
   });
   // Bulk import — paste several YouTube links, get several lessons. The
@@ -287,6 +339,7 @@ export default function CourseBuilderPage() {
     if (!lessonId) return;
     setVideoPct(0);
     setUploadingLessonId(lessonId);
+    uploadingRef.current = true;
     const onPct = throttledPct(setVideoPct);
     try {
       const fd = new FormData();
@@ -297,6 +350,7 @@ export default function CourseBuilderPage() {
       await api.patch(`/teacher/lessons/${lessonId}`, { videoAssetId: asset.id });
       invalidate();
     } finally {
+      uploadingRef.current = false;
       setVideoPct(null);
       setUploadingLessonId(null);
     }
@@ -306,6 +360,7 @@ export default function CourseBuilderPage() {
     const lessonId = selectedLessonId;
     if (!lessonId) return;
     setFilePct(0);
+    uploadingRef.current = true;
     const onPct = throttledPct(setFilePct);
     try {
       const fd = new FormData();
@@ -315,6 +370,7 @@ export default function CourseBuilderPage() {
       });
       invalidate();
     } finally {
+      uploadingRef.current = false;
       setFilePct(null);
     }
   }

@@ -34,6 +34,7 @@ const WalletPage = lazy(() => import('./pages/student/WalletPage'));
 const LearningCenterPage = lazy(() => import('./pages/student/LearningCenterPage'));
 const AdminWalletPage = lazy(() => import('./pages/admin/AdminWalletPage'));
 const AdminDevicesPage = lazy(() => import('./pages/admin/AdminDevicesPage'));
+const AdminGamificationPage = lazy(() => import('./pages/admin/AdminGamificationPage'));
 const StudentDashboardPage = lazy(() => import('./pages/student/StudentDashboardPage'));
 const TeacherProfilePage = lazy(() => import('./pages/student/TeacherProfilePage'));
 const AssignmentBuilderPage = lazy(() => import('./pages/teacher/AssignmentBuilderPage'));
@@ -132,6 +133,7 @@ export default function App() {
       <Route path="/admin/payments" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPaymentsPage /></RequireAuth>} />
       <Route path="/admin/wallet" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminWalletPage /></RequireAuth>} />
       <Route path="/admin/devices" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminDevicesPage /></RequireAuth>} />
+      <Route path="/admin/gamification" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminGamificationPage /></RequireAuth>} />
       <Route path="/admin/security" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminSecurityPage /></RequireAuth>} />
       <Route path="/admin/academy-studio" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademyStudioPage /></RequireAuth>} />
 

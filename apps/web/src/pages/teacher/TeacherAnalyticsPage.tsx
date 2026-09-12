@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { PageHeader, Skeleton } from '../../components/ui';
+import { EngagementPanel } from '../../components/gamification/EngagementPanel';
 
 /** Dependency-free SVG bar chart (keeps the bundle lean). */
 function BarChart({ data, format }: { data: { label: string; value: number }[]; format?: (v: number) => string }) {
@@ -119,6 +120,14 @@ export default function TeacherAnalyticsPage() {
           </div>
         </div>
       </div>
+
+      {/* Engagement sits under revenue deliberately: money is why a teacher
+          opens this page, and whether their students keep coming back is the
+          thing that decides it next month. */}
+      <section className="mt-10">
+        <h2 className="mb-4 font-heading text-2xl font-extrabold">{t('engagement.title')}</h2>
+        <EngagementPanel scope="teacher" />
+      </section>
     </div>
   );
 }

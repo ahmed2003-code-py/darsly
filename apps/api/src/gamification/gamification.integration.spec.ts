@@ -5,6 +5,7 @@ import { GamificationConfigService } from './gamification.config.service';
 import { GamificationService } from './gamification.service';
 import { LeaderboardService } from './leaderboard.service';
 import { MissionsService } from './missions.service';
+import { GamificationAnalyticsService } from './gamification-analytics.service';
 import { StudentGamificationService } from './student-gamification.service';
 
 /**
@@ -35,6 +36,7 @@ let engine: GamificationService;
 let students: StudentGamificationService;
 let leaderboard: LeaderboardService;
 let config: GamificationConfigService;
+let analytics: GamificationAnalyticsService;
 
 const ids: { users: string[]; students: string[] } = { users: [], students: [] };
 
@@ -70,6 +72,7 @@ beforeAll(async () => {
     }),
   };
   students = new StudentGamificationService(prisma, engine, config, achievements, missions, leaderboard, progress);
+  analytics = new GamificationAnalyticsService(prisma);
 }, 30_000);
 
 afterAll(async () => {
@@ -282,6 +285,34 @@ describe('gamification against a real database', () => {
     const idsOnA = boardA.top.map((r) => r.studentId);
     expect(idsOnA).toContain(a);
     expect(idsOnA).not.toContain(b);
+  });
+
+  it('reports engagement for one academy without counting another’s', async () => {
+    if (!guard()) return;
+    const mine = `tenant-${randomUUID().slice(0, 8)}`;
+    const theirs = `tenant-${randomUUID().slice(0, 8)}`;
+    const a = await makeStudent();
+    const b = await makeStudent();
+
+    await engine.recordOrThrow({
+      studentId: a, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${a}:an-1`,
+      tenantId: mine, entityType: 'lesson', entityId: 'an-1',
+    });
+    for (const n of [1, 2]) {
+      await engine.recordOrThrow({
+        studentId: b, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${b}:an-${n}`,
+        tenantId: theirs, entityType: 'lesson', entityId: `an-${n}`,
+      });
+    }
+
+    const view = await analytics.overview(mine);
+    expect(view.activeLearners.month).toBe(1); // not 2
+    expect(view.last30Days.lessonsCompleted).toBe(1); // not 3
+    // And the shape a brand-new academy gets is three honest "no cohort" rows,
+    // never an empty list the interface would render as a bare heading.
+    const fresh = await analytics.overview(`tenant-${randomUUID().slice(0, 8)}`);
+    expect(fresh.retention.map((r) => r.day)).toEqual([1, 7, 30]);
+    expect(fresh.retention.every((r) => r.eligible === 0)).toBe(true);
   });
 
   it('spends coins atomically — two taps cannot buy one balance twice', async () => {

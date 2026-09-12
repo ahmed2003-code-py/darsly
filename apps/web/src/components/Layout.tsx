@@ -48,6 +48,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },
   { to: '/admin/wallet', icon: 'account_balance_wallet', labelKey: 'nav.adminWallet' },
   { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },
+  { to: '/admin/gamification', icon: 'trophy', labelKey: 'nav.adminGamification' },
   { to: '/admin/devices', icon: 'smartphone', labelKey: 'nav.adminDevices' },
   { to: '/admin/security', icon: 'gpp_maybe', labelKey: 'nav.adminSecurity' },
 ];

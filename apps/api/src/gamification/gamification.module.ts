@@ -1,7 +1,10 @@
 import { Global, Module } from '@nestjs/common';
+import { AcademyModule } from '../academy/academy.module';
 import { ProgressModule } from '../progress/progress.module';
 import { AchievementsService } from './achievements.service';
 import { GamificationConfigService } from './gamification.config.service';
+import { AdminGamificationController, TeacherGamificationController } from './gamification-admin.controller';
+import { GamificationAnalyticsService } from './gamification-analytics.service';
 import { GamificationController } from './gamification.controller';
 import { GamificationService } from './gamification.service';
 import { LeaderboardService } from './leaderboard.service';
@@ -16,8 +19,9 @@ import { StudentGamificationService } from './student-gamification.service';
  */
 @Global()
 @Module({
-  imports: [ProgressModule],
-  controllers: [GamificationController],
+  // AcademyModule supplies the membership/permission guards behind @AcademyStaff.
+  imports: [ProgressModule, AcademyModule],
+  controllers: [GamificationController, TeacherGamificationController, AdminGamificationController],
   providers: [
     GamificationService,
     GamificationConfigService,
@@ -25,6 +29,7 @@ import { StudentGamificationService } from './student-gamification.service';
     MissionsService,
     LeaderboardService,
     StudentGamificationService,
+    GamificationAnalyticsService,
   ],
   exports: [GamificationService, GamificationConfigService, LeaderboardService, AchievementsService, MissionsService],
 })

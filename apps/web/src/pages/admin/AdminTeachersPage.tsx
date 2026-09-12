@@ -58,8 +58,12 @@ export default function AdminTeachersPage() {
           {data.map((tp: any) => (
             <article key={tp.id} className="card flex flex-col p-5">
               <div className="mb-3 flex items-center gap-3">
-                <span className="grid h-12 w-12 place-items-center rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
-                  {tp.user.fullName?.trim()?.charAt(0)}
+                <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
+                  {tp.user.avatarUrl ? (
+                    <img src={tp.user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    tp.user.fullName?.trim()?.charAt(0)
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-heading font-bold">{tp.user.fullName}</p>
@@ -67,10 +71,18 @@ export default function AdminTeachersPage() {
                 </div>
                 <Badge tone={TONE[tp.status]}>{t(`admin.status.${tp.status}`)}</Badge>
               </div>
-              <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{tp.bio || '—'}</p>
-              <p className="mb-4 flex items-center gap-3 text-xs text-outline">
-                <span>{tp.subject ? (ar ? tp.subject.nameAr : tp.subject.nameEn) : '—'}</span>
-                <span>· {t('admin.coursesCount', { count: tp._count.courses })}</span>
+              {/* A field with nothing in it is left out rather than filled with
+                  a dash. An em-dash floating on its own line is the interface
+                  admitting it has nothing to say while still charging a row for
+                  saying it. */}
+              {tp.bio ? (
+                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{tp.bio}</p>
+              ) : (
+                <div className="flex-1" />
+              )}
+              <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-outline">
+                {tp.subject && <span>{ar ? tp.subject.nameAr : tp.subject.nameEn} ·</span>}
+                <span>{t('admin.coursesCount', { count: tp._count.courses })}</span>
               </p>
               <div className="flex flex-wrap gap-2 border-t border-outline-variant/50 pt-4">
                 {tp.status !== 'APPROVED' && (

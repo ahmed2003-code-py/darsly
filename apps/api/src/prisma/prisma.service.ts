@@ -48,6 +48,12 @@ const SOFT_DELETE_MODELS = new Set([
   'ChatThread',
   'ChatMessage',
   'Notification',
+  // The studio's admin overview aggregates every AI job on the platform with
+  // no academy filter, so jobs from removed academies kept their cost and
+  // their failures in the totals.
+  'AiJob',
+  'AcademySiteSnapshot',
+  'AcademyProfileFacts',
 ]);
 
 const READ_ACTIONS = new Set([

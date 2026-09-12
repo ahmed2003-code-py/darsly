@@ -1258,7 +1258,34 @@
     "statusH": "Status",
     "attempts": "Attempts",
     "cost": "Cost",
-    "rerun": "Rerun"
+    "rerun": "Rerun",
+    "jobStatus": {
+      "QUEUED": "Queued",
+      "RUNNING": "Running",
+      "SUCCEEDED": "Succeeded",
+      "FAILED": "Failed",
+      "CANCELED": "Canceled"
+    },
+    "jobError": {
+      "noFacts": "Not enough teacher details to generate a site — the bio and subjects need filling in first",
+      "academyMissing": "Academy not found",
+      "disabled": "The AI feature is switched off in platform settings",
+      "noKey": "The OpenAI key is not configured on the server",
+      "emptyOutput": "The AI returned an empty response",
+      "truncated": "The response was cut off before it finished (token budget)",
+      "badJson": "The response came back in an invalid format",
+      "noDraft": "There is no draft to edit",
+      "draftInvalid": "The current draft is no longer valid",
+      "sectionMissing": "That section is not in the draft",
+      "sectionLocked": "That section cannot be regenerated",
+      "validation": "The AI response did not match the required shape",
+      "refused": "The AI refused the request",
+      "upstream": {
+        "rate": "The AI service is rate-limiting us ({{status}}) — try again shortly",
+        "down": "The AI service is down right now ({{status}}) — a rerun will work once it is back",
+        "request": "The AI service rejected the request ({{status}}) — this is a platform bug, not missing teacher data"
+      }
+    }
   },
   "academy": {
     "none": "Academy",

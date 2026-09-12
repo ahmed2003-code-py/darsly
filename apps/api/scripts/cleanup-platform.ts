@@ -83,6 +83,20 @@ async function main() {
     () => prisma.academySite.count({ where: { ...live, academyId: { not: keepTenantId } } }),
     () => prisma.academySite.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
 
+  await step('academy profile facts (other academies)',
+    () => prisma.academyProfileFacts.count({ where: { ...live, academyId: { not: keepTenantId } } }),
+    () => prisma.academyProfileFacts.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+
+  await step('site snapshots (other academies)',
+    () => prisma.academySiteSnapshot.count({ where: { ...live, academyId: { not: keepTenantId } } }),
+    () => prisma.academySiteSnapshot.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+
+  // The studio's admin overview counts every job on the platform with no
+  // academy filter, so a removed academy's failures stayed in the totals.
+  await step('AI jobs (other academies)',
+    () => prisma.aiJob.count({ where: { ...live, academyId: { not: keepTenantId } } }),
+    () => prisma.aiJob.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+
   await step('academies (other)',
     () => prisma.academy.count({ where: { ...live, id: { not: keepTenantId } } }),
     () => prisma.academy.updateMany({ where: { ...live, id: { not: keepTenantId } }, data: { deletedAt: NOW } }));

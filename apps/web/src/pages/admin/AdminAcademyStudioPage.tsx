@@ -180,7 +180,9 @@ function UsageDashboard() {
           <p className="mb-2 text-sm text-on-surface-variant">{t('adminStudio.byStatus')}</p>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(u.byStatus).map(([s, n]) => (
-              <Badge key={s} tone={s === 'FAILED' ? 'error' : s === 'SUCCEEDED' ? 'teal' : 'neutral'}>{s}: {n}</Badge>
+              <Badge key={s} tone={s === 'FAILED' ? 'error' : s === 'SUCCEEDED' ? 'teal' : 'neutral'}>
+                {t([`adminStudio.jobStatus.${s}`, s])}: {n}
+              </Badge>
             ))}
           </div>
         </div>
@@ -189,32 +191,60 @@ function UsageDashboard() {
       <div className="card">
         <h3 className="mb-3 font-heading font-bold">{t('adminStudio.recent')}</h3>
         <ErrorNote error={rerun.error} />
-        <div className="overflow-x-auto">
+        {/* Five columns scan well on a desktop and not at all on a phone: the
+            two that matter — what it cost and the button that retries it —
+            are the ones that fall off the edge. So the phone gets the same
+            facts stacked, and the table starts at `sm`. */}
+        <ul className="divide-y divide-outline-variant sm:hidden">
+          {u.recentJobs.map((j) => (
+            <li key={j.id} className="py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={j.status === 'FAILED' ? 'error' : j.status === 'SUCCEEDED' ? 'teal' : 'neutral'}>
+                  {t([`adminStudio.jobStatus.${j.status}`, j.status])}
+                </Badge>
+                <span className="text-sm text-on-surface-variant">{dateShort(j.createdAt)}</span>
+              </div>
+              {j.error && <JobError error={j.error} />}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-on-surface-variant">
+                <span className="tabular-nums">{t('adminStudio.attempts')}: {j.attempts}</span>
+                <span className="tabular-nums" dir="ltr">{usd(j.costCents)}</span>
+                {j.status === 'FAILED' && <RerunButton id={j.id} rerun={rerun} />}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-start text-on-surface-variant">
-                <th className="p-2 text-start">{t('adminStudio.date')}</th>
-                <th className="p-2 text-start">{t('adminStudio.statusH')}</th>
-                <th className="p-2 text-start">{t('adminStudio.attempts')}</th>
-                <th className="p-2 text-start">{t('adminStudio.cost')}</th>
+                <th className="whitespace-nowrap p-2 text-start">{t('adminStudio.date')}</th>
+                <th className="whitespace-nowrap p-2 text-start">{t('adminStudio.statusH')}</th>
+                <th className="whitespace-nowrap p-2 text-start">{t('adminStudio.attempts')}</th>
+                <th className="whitespace-nowrap p-2 text-start">{t('adminStudio.cost')}</th>
                 <th className="p-2 text-start"></th>
               </tr>
             </thead>
             <tbody>
               {u.recentJobs.map((j) => (
-                <tr key={j.id} className="border-t border-outline-variant">
-                  <td className="p-2 whitespace-nowrap">{dateShort(j.createdAt)}</td>
+                <tr key={j.id} className="border-t border-outline-variant align-top">
+                  <td className="whitespace-nowrap p-2">{dateShort(j.createdAt)}</td>
                   <td className="p-2">
-                    <Badge tone={j.status === 'FAILED' ? 'error' : j.status === 'SUCCEEDED' ? 'teal' : 'neutral'}>{j.status}</Badge>
-                    {j.error && <span className="ms-2 text-xs text-error">{j.error}</span>}
+                    <Badge tone={j.status === 'FAILED' ? 'error' : j.status === 'SUCCEEDED' ? 'teal' : 'neutral'}>
+                      {t([`adminStudio.jobStatus.${j.status}`, j.status])}
+                    </Badge>
+                    {/* On its own line: an English failure reason set beside an
+                        Arabic badge wraps into the next column and reads as
+                        neither language. */}
+                    {j.error && <JobError error={j.error} />}
                   </td>
-                  <td className="p-2 tabular-nums">{j.attempts}</td>
-                  <td className="p-2 tabular-nums">{usd(j.costCents)}</td>
+                  <td className="whitespace-nowrap p-2 tabular-nums">{j.attempts}</td>
+                  {/* A dollar amount is Latin script inside an RTL row; without
+                      an explicit direction the "$" drifts and the number clips. */}
+                  <td className="whitespace-nowrap p-2 tabular-nums" dir="ltr" style={{ textAlign: 'start' }}>
+                    {usd(j.costCents)}
+                  </td>
                   <td className="p-2">
-                    {j.status === 'FAILED' && (
-                      <button className="text-sm font-bold text-primary hover:underline" disabled={rerun.isPending}
-                        onClick={() => rerun.mutate(j.id)}>{t('adminStudio.rerun')}</button>
-                    )}
+                    {j.status === 'FAILED' && <RerunButton id={j.id} rerun={rerun} />}
                   </td>
                 </tr>
               ))}
@@ -223,5 +253,73 @@ function UsageDashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Shared by the phone list and the table so a retry behaves the same in both. */
+function RerunButton({ id, rerun }: { id: string; rerun: { mutate: (id: string) => void; isPending: boolean } }) {
+  const { t } = useTranslation();
+  return (
+    <button className="whitespace-nowrap text-sm font-bold text-primary hover:underline" disabled={rerun.isPending}
+      onClick={() => rerun.mutate(id)}>{t('adminStudio.rerun')}</button>
+  );
+}
+
+/**
+ * Why a generation failed, in the reader's language where we know it.
+ *
+ * The generator's terminal errors are a closed set; the retryable ones carry a
+ * validation detail appended to them and are matched by prefix. Anything
+ * unrecognised still renders — left-to-right so an English sentence reads as
+ * one rather than wrapping backwards out of an Arabic cell.
+ */
+const JOB_ERROR_KEY: Record<string, string> = {
+  'Not enough profile facts to generate a site': 'noFacts',
+  'No profile facts to regenerate from': 'noFacts',
+  'Academy not found': 'academyMissing',
+  'AI feature is disabled (AI_ACADEMY_ENABLED)': 'disabled',
+  'OPENAI_API_KEY is not configured': 'noKey',
+  'AI returned empty output': 'emptyOutput',
+  'AI response was truncated (token budget)': 'truncated',
+  'Structured output was not valid JSON': 'badJson',
+  'There is no draft to edit': 'noDraft',
+  'Current draft is no longer valid': 'draftInvalid',
+  'Section not found in the current draft': 'sectionMissing',
+  'This section cannot be regenerated': 'sectionLocked',
+};
+const JOB_ERROR_PREFIX: [string, string][] = [
+  ['AI output failed validation', 'validation'],
+  ['AI composition failed validation', 'validation'],
+  ['AI plan failed validation', 'validation'],
+  ['Assembled document invalid', 'validation'],
+  ['Regenerated section invalid', 'validation'],
+  ['AI refused the request', 'refused'],
+];
+
+function JobError({ error }: { error: string }) {
+  const { t } = useTranslation();
+  const trimmed = error.trim();
+  // The upstream failure is the one an admin actually acts on, and the action
+  // depends entirely on the status: 429 means wait, 5xx means their outage,
+  // anything else means our request was wrong. So the sentence is translated
+  // but the code is kept rather than flattened into "something went wrong".
+  const upstream = /^OpenAI request failed(?: \((\d{3})\))?/.exec(trimmed);
+  if (upstream) {
+    const status = Number(upstream[1] ?? 0);
+    const kind = status === 429 ? 'rate' : status >= 500 ? 'down' : 'request';
+    return (
+      <p className="mt-1 text-xs leading-relaxed text-error">
+        {t(`adminStudio.jobError.upstream.${kind}`, { status: upstream[1] ?? '—' })}
+      </p>
+    );
+  }
+  const exact = JOB_ERROR_KEY[trimmed];
+  const prefixed = exact ? null : JOB_ERROR_PREFIX.find(([p]) => trimmed.startsWith(p))?.[1];
+  const key = exact ?? prefixed;
+  if (key) return <p className="mt-1 text-xs leading-relaxed text-error">{t(`adminStudio.jobError.${key}`)}</p>;
+  return (
+    <p className="mt-1 text-xs leading-relaxed text-error" dir="ltr" style={{ textAlign: 'start' }}>
+      {error}
+    </p>
   );
 }

@@ -195,8 +195,12 @@ export class UploadsController {
       where: { id, lesson: { unit: { course: { tenantId: user.tenantId } } } },
     });
     if (!attachment) throw new NotFoundException('Attachment not found');
+    // The row soft-deletes, so the file stays: a teacher who removes the wrong
+    // handout gets it back by clearing `deletedAt`, the same way a removed
+    // lesson keeps its video. Unlinking here would leave the delete soft in
+    // name only — hidden, unrecoverable, and still holding a row that points
+    // at nothing.
     await this.prisma.attachment.delete({ where: { id } });
-    fs.unlink(path.join(STORAGE_ROOT, attachment.storageKey), () => undefined);
     return { id, deleted: true };
   }
 
@@ -208,13 +212,23 @@ export class UploadsController {
     @Param('id') id: string,
     @Res() res: Response,
   ) {
-    const attachment = await this.prisma.attachment.findUnique({
+    // `findFirst`, not `findUnique`: the soft-delete filter only runs on the
+    // former, and this route is reachable by anyone holding the id. Looked up
+    // by primary key it would keep serving a file the teacher had removed.
+    const attachment = await this.prisma.attachment.findFirst({
       where: { id },
       include: { lesson: { include: { unit: { include: { course: true } } } } },
     });
     if (!attachment) throw new NotFoundException('Attachment not found');
 
+    // Nested includes are not filtered either, so the parents are checked by
+    // hand. Removing a lesson leaves its attachments' own rows untouched; with
+    // no check here, every handout under a deleted lesson stays downloadable
+    // to anyone who kept the link.
     const course = attachment.lesson.unit.course;
+    if (attachment.lesson.deletedAt || attachment.lesson.unit.deletedAt || course.deletedAt) {
+      throw new NotFoundException('Attachment not found');
+    }
     let allowed =
       user.role === Role.SUPER_ADMIN ||
       user.tenantId === course.tenantId ||

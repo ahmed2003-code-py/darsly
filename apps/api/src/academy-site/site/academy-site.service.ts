@@ -559,9 +559,15 @@ export class AcademySiteService {
       select: { id: true },
     });
     if (keep.length < SNAPSHOT_KEEP) return;
-    await this.prisma.academySiteSnapshot.deleteMany({
-      where: { siteId, id: { notIn: keep.map((s) => s.id) } },
-    });
+    // The one place a row is really removed. This is retention, not deletion:
+    // every publish writes a full copy of the site document, so stamping
+    // `deletedAt` here would leave the table growing without bound and quietly
+    // undo the only thing this function exists to do. Raw SQL because the
+    // soft-delete middleware rewrites `deleteMany` on this model.
+    await this.prisma.$executeRaw`
+      DELETE FROM "AcademySiteSnapshot"
+      WHERE "siteId" = ${siteId} AND "id" <> ALL(${keep.map((s) => s.id)}::text[])
+    `;
   }
 
   private log(actorUserId: string, action: string, entityId: string, meta: Record<string, unknown>) {

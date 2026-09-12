@@ -169,7 +169,16 @@ export class AcademyMediaService {
     });
     for (const m of stale) {
       if (m.storageKey) await this.storage.delete(m.storageKey).catch(() => undefined);
-      await this.prisma.academyMedia.delete({ where: { id: m.id } }).catch(() => undefined);
+    }
+    // A real delete, not a soft one. The file is already gone from storage by
+    // this point, so a surviving row could never be restored — it would only
+    // be a permanent pointer to nothing, and the retention window it was
+    // waiting out would never actually free anything. Raw SQL because the
+    // soft-delete middleware rewrites `delete` on this model.
+    if (stale.length) {
+      await this.prisma.$executeRaw`
+        DELETE FROM "AcademyMedia" WHERE "id" = ANY(${stale.map((m) => m.id)}::text[])
+      `;
     }
     return stale.length;
   }

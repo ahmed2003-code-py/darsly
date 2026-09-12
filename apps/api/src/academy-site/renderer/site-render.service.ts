@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ContentProfile } from '../pipeline/content-profile';
 import { SiteBrainService } from '../pipeline/site-brain.service';
-import { RENDERER_COMPOSITION, SiteDocument } from '../schema/site-document';
+import { RENDERER_COMPOSITION, RENDERER_FIXED, SiteDocument } from '../schema/site-document';
 import { composeSite } from './compose/compile';
+import { renderFixedSite } from './fixed/fixed-template';
 import { compileSite } from './site-compiler';
 import { RenderMedia } from './types';
 
@@ -48,6 +49,9 @@ export class SiteRenderService {
     );
     const renderCtx = { ...ctx, media: (id: string) => map.get(id) };
 
+    if (doc.renderer?.version === RENDERER_FIXED) {
+      return renderFixedSite(doc, renderCtx);
+    }
     if (usesComposition(doc)) {
       return composeSite(this.brain.compose(doc, profile), renderCtx);
     }

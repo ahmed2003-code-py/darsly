@@ -15,7 +15,10 @@ interface Block {
   heading?: LT;
   body?: LT;
   buttonLabel?: LT;
+  text?: LT;
+  attribution?: LT;
   items?: any[];
+  steps?: any[];
   [k: string]: unknown;
 }
 interface SiteDoc {
@@ -26,8 +29,9 @@ interface SiteDoc {
 }
 const EMPTY_LT: LT = { ar: '', en: '' };
 const BLOCK_ICON: Record<string, string> = {
-  hero: 'wallpaper', about: 'info', stats: 'bar_chart', faq: 'quiz', cta: 'ads_click',
-  courses: 'menu_book', reviews: 'reviews', gallery: 'photo_library', contact: 'call',
+  hero: 'wallpaper', about: 'info', toolkit: 'sell', credentials: 'workspace_premium',
+  stats: 'bar_chart', process: 'route', faq: 'quiz', cta: 'ads_click',
+  courses: 'menu_book', reviews: 'reviews', gallery: 'photo_library', contact: 'call', quote: 'format_quote',
 };
 
 function LocalizedInput({ label, value, multiline, onChange }: {
@@ -145,6 +149,28 @@ export default function EditorTab({ onNext }: { onNext?: () => void }) {
           {b.body && <LocalizedInput label={t('studio.editor.body')} value={b.body} multiline onChange={(v) => patchBlock(i, { body: v })} />}
           {b.ctaLabel && <LocalizedInput label={t('studio.editor.ctaBtn')} value={b.ctaLabel} onChange={(v) => patchBlock(i, { ctaLabel: v })} />}
           {b.buttonLabel && <LocalizedInput label={t('studio.editor.btn')} value={b.buttonLabel} onChange={(v) => patchBlock(i, { buttonLabel: v })} />}
+          {b.text && <LocalizedInput label={t('studio.editor.body')} value={b.text} multiline onChange={(v) => patchBlock(i, { text: v })} />}
+          {b.attribution && <LocalizedInput label={t('studio.editor.attribution')} value={b.attribution} onChange={(v) => patchBlock(i, { attribution: v })} />}
+
+          {b.type === 'process' && Array.isArray(b.steps) && (
+            <div className="space-y-4">
+              {b.steps.map((s: any, si: number) => (
+                <div key={si} className="rounded-xl border border-outline-variant p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-on-surface-variant">{t('studio.editor.step', { n: si + 1 })}</span>
+                    <button type="button" className="text-error" aria-label={t('studio.publish.delete')}
+                      onClick={() => patchBlock(i, { steps: b.steps!.filter((_, x) => x !== si) })}>
+                      <span className="material-symbols-outlined text-[20px]">delete</span>
+                    </button>
+                  </div>
+                  <LocalizedInput label={t('studio.editor.title2')} value={s.title}
+                    onChange={(v) => { const next = structuredClone(doc); (next.blocks[i].steps as any[])[si] = { ...(next.blocks[i].steps as any[])[si], title: v }; setDoc(next); }} />
+                  <LocalizedInput label={t('studio.editor.body')} value={s.body} multiline
+                    onChange={(v) => { const next = structuredClone(doc); (next.blocks[i].steps as any[])[si] = { ...(next.blocks[i].steps as any[])[si], body: v }; setDoc(next); }} />
+                </div>
+              ))}
+            </div>
+          )}
 
           {b.type === 'faq' && Array.isArray(b.items) && (
             <div className="space-y-4">

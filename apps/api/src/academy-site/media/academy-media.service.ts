@@ -20,6 +20,12 @@ const KIND_MAX_COUNT: Partial<Record<AcademyMediaKind, number>> = {
   PROMO: 6,
 };
 
+// Kinds a video upload is meaningful for. LOGO/COVER/AVATAR are single still
+// images by design; GALLERY is a mixed reel of photos and clips, same as the
+// hand-authored reference page it now always renders as.
+const VIDEO_MIME = /^video\/mp4$/;
+const VIDEO_CAPABLE: Partial<Record<AcademyMediaKind, true>> = { GALLERY: true, PROMO: true };
+
 const STUCK_MINUTES = 30;
 const REJECTED_RETENTION_DAYS = 7;
 
@@ -33,8 +39,8 @@ export class AcademyMediaService {
     private readonly processor: AcademyMediaProcessor,
   ) {}
 
-  private key(academyId: string, mediaId: string, kind: AcademyMediaKind): string {
-    const ext = kind === 'PROMO' ? 'mp4' : 'webp';
+  private key(academyId: string, mediaId: string, isVideo: boolean): string {
+    const ext = isVideo ? 'mp4' : 'webp';
     return `academy-media/${academyId}/${mediaId}.${ext}`;
   }
 
@@ -68,9 +74,16 @@ export class AcademyMediaService {
       );
     }
 
-    // Process (cheap, in-memory) so a bad file never leaves a stored object.
-    // PROMO is video — stored as-is, not re-encoded through the image pipeline.
-    const processed = kind === 'PROMO'
+    // Which pipeline runs is decided by what was actually uploaded, not by
+    // `kind` alone — a GALLERY slot takes photos and clips, same mix the
+    // reference page's own gallery does, and only PROMO/GALLERY accept video
+    // at all. Video stored as-is; PROMO's old dedicated branch is now just the
+    // "always video" case of the same check.
+    const isVideo = VIDEO_MIME.test(file.mimetype);
+    if (isVideo && !VIDEO_CAPABLE[kind]) {
+      throw new BadRequestException(`${kind.toLowerCase()} does not accept video`);
+    }
+    const processed = isVideo
       ? await this.processor.processVideo(file.buffer, file.mimetype)
       : await this.processor.process(file.buffer, file.mimetype, kind);
 
@@ -78,7 +91,7 @@ export class AcademyMediaService {
       data: { academyId, kind, status: 'PROCESSING', mimeType: processed.mimeType },
     });
     try {
-      const storageKey = this.key(academyId, media.id, kind);
+      const storageKey = this.key(academyId, media.id, isVideo);
       await this.storage.put(storageKey, processed.data, {
         contentType: processed.mimeType,
         cacheControl: 'public, max-age=31536000, immutable',

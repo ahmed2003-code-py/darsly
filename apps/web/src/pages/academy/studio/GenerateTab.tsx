@@ -15,45 +15,27 @@ interface Job {
 }
 
 /**
- * The four directions, shown rather than described.
+ * The one design choice left in the Studio: a brand colour pair.
  *
- * A teacher choosing between four sentences is guessing. Each card carries the
- * direction's actual palette and sets its name in the typeface that direction
- * uses, so the choice is made by eye — which is how anyone actually picks a
- * look, and the only honest preview of what the generator will build.
- *
- * These swatches mirror `vibe-profiles.ts` on the server. They are a sample of
- * the territory, not the exact palette: the designer composes its own colours
- * inside the direction each time.
+ * Every academy's page is the same fixed layout — same sections, same
+ * animations — so there is nothing left to pick between except colour. These
+ * mirror `pipeline/color-palettes.ts` on the server exactly.
  */
-const VIBES = [
-  {
-    key: 'trusted', icon: 'volunteer_activism',
-    paper: '#FDFAF5', ink: '#241C16', brand: '#C2592F', accent: '#0F766E',
-    face: 'Georgia, "Times New Roman", serif', tracking: '0em', weight: 700, radius: '999px',
-  },
-  {
-    key: 'academic', icon: 'school',
-    paper: '#FBFBF9', ink: '#0E1520', brand: '#1D4ED8', accent: '#16457C',
-    face: 'Georgia, "Times New Roman", serif', tracking: '0em', weight: 600, radius: '2px',
-  },
-  {
-    key: 'premium', icon: 'diamond',
-    paper: '#0B0B10', ink: '#EDEAE3', brand: '#C8A96A', accent: '#B08D57',
-    face: 'Georgia, "Times New Roman", serif', tracking: '0.01em', weight: 500, radius: '4px',
-  },
-  {
-    key: 'energetic', icon: 'bolt',
-    paper: '#0B0714', ink: '#F2F5FF', brand: '#FB3B6C', accent: '#22D3EE',
-    face: '"Arial Narrow", Impact, system-ui, sans-serif', tracking: '-0.03em', weight: 800, radius: '14px',
-  },
+const PALETTES = [
+  { key: 'royal', primary: '#2f5fe0', accent: '#7c3aed' },
+  { key: 'teal', primary: '#0d9488', accent: '#0891b2' },
+  { key: 'sunset', primary: '#ea580c', accent: '#db2777' },
+  { key: 'forest', primary: '#059669', accent: '#16a34a' },
+  { key: 'berry', primary: '#a21caf', accent: '#e11d48' },
+  { key: 'amber', primary: '#d97706', accent: '#ca8a04' },
+  { key: 'sky', primary: '#2563eb', accent: '#0ea5e9' },
+  { key: 'slate', primary: '#475569', accent: '#2563eb' },
 ] as const;
 
 export default function GenerateTab({ onDone }: { onDone?: () => void }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const [vibe, setVibe] = useState<(typeof VIBES)[number]['key']>('trusted');
-  const [stylePrompt, setStylePrompt] = useState('');
+  const [paletteKey, setPaletteKey] = useState<(typeof PALETTES)[number]['key']>('royal');
   const [jobId, setJobId] = useState<string | null>(null);
 
   const job = useQuery<Job>({
@@ -77,8 +59,7 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
   const generate = useMutation({
     mutationFn: async () =>
       (await api.post('/academy/site/generate', {
-        vibe,
-        stylePrompt: stylePrompt.trim() || undefined,
+        paletteKey,
         lang: i18n.language === 'en' ? 'en' : 'ar',
       })).data as Job,
     onSuccess: (j) => setJobId(j.id),
@@ -137,62 +118,31 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
       <h2 className="mb-1 font-heading text-xl font-bold">{t('studio.generate.title')}</h2>
       <p className="mb-5 text-sm text-on-surface-variant">{t('studio.generate.hint')}</p>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
-        {VIBES.map((v) => {
-          const on = vibe === v.key;
+      <span className="mb-2 block text-sm font-semibold text-on-surface-variant">{t('studio.generate.paletteLabel')}</span>
+      <div className="mb-6 grid grid-cols-4 gap-3 sm:grid-cols-8">
+        {PALETTES.map((p) => {
+          const on = paletteKey === p.key;
           return (
             <button
-              key={v.key}
+              key={p.key}
               type="button"
-              onClick={() => setVibe(v.key)}
+              onClick={() => setPaletteKey(p.key)}
               aria-pressed={on}
-              className={`group overflow-hidden rounded-xl border text-start transition-[border-color,box-shadow,transform] duration-200 ease-premium ${
-                on
-                  ? 'border-primary shadow-glow'
-                  : 'border-outline-variant hover:-translate-y-0.5 hover:border-accent-300'
+              aria-label={t(`studio.generate.palettes.${p.key}`)}
+              title={t(`studio.generate.palettes.${p.key}`)}
+              className={`group flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
+                on ? 'border-primary shadow-glow' : 'border-outline-variant hover:-translate-y-0.5 hover:border-accent-300'
               }`}
             >
-              {/* The direction, drawn in its own colours and its own typeface. */}
               <span
-                className="relative flex h-24 items-center justify-between gap-3 px-5"
-                style={{ background: v.paper }}
-              >
-                <span
-                  className="text-xl leading-tight"
-                  style={{ color: v.ink, fontFamily: v.face, fontWeight: v.weight, letterSpacing: v.tracking }}
-                >
-                  {t(`studio.generate.vibes.${v.key}`)}
-                </span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  <i className="block h-7 w-7" style={{ background: v.brand, borderRadius: v.radius }} />
-                  <i className="block h-7 w-7" style={{ background: v.accent, borderRadius: v.radius }} />
-                </span>
-                {on && (
-                  <span
-                    className="absolute bottom-0 inset-x-0 h-1"
-                    style={{ background: `linear-gradient(90deg, ${v.brand}, ${v.accent})` }}
-                  />
-                )}
-              </span>
-              <span className="flex items-start gap-2.5 bg-surface-container-lowest p-4">
-                <span className={`material-symbols-outlined text-[20px] ${on ? 'text-primary' : 'text-outline'}`}>
-                  {on ? 'check_circle' : v.icon}
-                </span>
-                <span className="text-sm leading-relaxed text-on-surface-variant">
-                  {t(`studio.generate.vibes.${v.key}D`)}
-                </span>
-              </span>
+                className="h-10 w-full rounded-lg"
+                style={{ background: `linear-gradient(135deg, ${p.primary}, ${p.accent})` }}
+              />
+              {on && <span className="material-symbols-outlined text-[16px] text-primary">check_circle</span>}
             </button>
           );
         })}
       </div>
-
-      <label className="mb-5 block">
-        <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('studio.generate.styleLabel')}</span>
-        <textarea className="input min-h-[80px]" value={stylePrompt} maxLength={600}
-          onChange={(e) => setStylePrompt(e.target.value)} placeholder={t('studio.generate.stylePh')} />
-        <span className="mt-1 block text-xs text-outline">{t('studio.generate.styleHint')}</span>
-      </label>
 
       {failed && (
         <div className="mb-4 rounded-xl border border-error/30 bg-error-container/30 p-3 text-sm text-error">

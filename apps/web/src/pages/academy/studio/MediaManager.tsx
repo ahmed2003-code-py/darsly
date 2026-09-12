@@ -6,7 +6,9 @@ import { ErrorNote, Spinner } from '../../../components/ui';
 import type { Media, MediaKind } from './types';
 
 const ACCEPT = 'image/png,image/jpeg,image/webp';
+const ACCEPT_GALLERY = 'image/png,image/jpeg,image/webp,video/mp4';
 const mediaSrc = (m: Media) => (m.url ? `${apiOrigin()}${m.url}` : '');
+const isVideo = (m: Media) => (m.mimeType ?? '').startsWith('video/');
 
 export default function MediaManager({ onNext }: { onNext?: () => void }) {
   const { t } = useTranslation();
@@ -96,7 +98,11 @@ function Thumb({ item, onRemove }: { item: Media; onRemove: (id: string) => void
   return (
     <div className="group relative overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
       {item.status === 'READY' && item.url ? (
-        <img src={mediaSrc(item)} alt="" className="h-32 w-full object-cover" loading="lazy" />
+        isVideo(item) ? (
+          <video src={mediaSrc(item)} className="h-32 w-full object-cover" muted playsInline preload="metadata" />
+        ) : (
+          <img src={mediaSrc(item)} alt="" className="h-32 w-full object-cover" loading="lazy" />
+        )
       ) : (
         <div className="grid h-32 w-full place-items-center"><StatusChip item={item} /></div>
       )}
@@ -108,8 +114,8 @@ function Thumb({ item, onRemove }: { item: Media; onRemove: (id: string) => void
   );
 }
 
-function UploadButton({ label, onFiles, busy, multiple }: {
-  label: string; onFiles: (files: File[]) => void; busy: boolean; multiple?: boolean;
+function UploadButton({ label, onFiles, busy, multiple, accept }: {
+  label: string; onFiles: (files: File[]) => void; busy: boolean; multiple?: boolean; accept?: string;
 }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLInputElement>(null);
@@ -119,7 +125,7 @@ function UploadButton({ label, onFiles, busy, multiple }: {
         <span className="material-symbols-outlined text-[20px]">upload</span>
         {busy ? t('studio.media.uploading') : label}
       </button>
-      <input ref={ref} type="file" accept={ACCEPT} multiple={multiple} className="hidden"
+      <input ref={ref} type="file" accept={accept ?? ACCEPT} multiple={multiple} className="hidden"
         onChange={(e) => { onFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
     </>
   );
@@ -153,7 +159,9 @@ function GallerySlot({ items, onUpload, onRemove, busy }: {
     <div className="card">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-heading font-bold">{t('studio.media.gallery')} <span className="text-sm font-normal text-on-surface-variant">({items.length}/12)</span></h3>
-        {items.length < 12 && <UploadButton label={t('studio.media.add')} onFiles={onUpload} busy={busy} multiple />}
+        {items.length < 12 && (
+          <UploadButton label={t('studio.media.add')} onFiles={onUpload} busy={busy} multiple accept={ACCEPT_GALLERY} />
+        )}
       </div>
       {items.length === 0 ? (
         <p className="text-sm text-on-surface-variant">{t('studio.media.empty')}</p>

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { AiJob, AiJobType } from '@prisma/client';
-import { AcademySiteConfig } from '../academy-site.config';
 import { AiJobHandler, AiJobResult } from '../jobs/ai-job.handler';
 import { AiJobService } from '../jobs/ai-job.service';
 import { AcademySiteService } from '../site/academy-site.service';
@@ -15,15 +14,14 @@ export class SiteGenerateHandler implements AiJobHandler {
     private readonly generator: SiteGeneratorService,
     private readonly site: AcademySiteService,
     private readonly jobs: AiJobService,
-    private readonly config: AcademySiteConfig,
   ) {}
 
   async handle(job: AiJob): Promise<AiJobResult> {
     const input = job.input as
-      | { vibe?: string; stylePrompt?: string; lang?: 'ar' | 'en'; regenerateSectionId?: string }
+      | { paletteKey?: string; lang?: 'ar' | 'en'; regenerateSectionId?: string }
       | null;
 
-    // Per-section regeneration: rewrite one section, keep the frozen design.
+    // Per-section regeneration: rewrite one section, keep the rest untouched.
     if (input?.regenerateSectionId) {
       await this.jobs.setStage(job.id, 'section');
       const { doc, costCents } = await this.generator.regenerateSection(job.academyId, input.regenerateSectionId);
@@ -32,17 +30,10 @@ export class SiteGenerateHandler implements AiJobHandler {
     }
 
     await this.jobs.setStage(job.id, 'copy');
-    // Which pipeline designs the page is a runtime switch, not a deploy: a bad
-    // composition release can be turned off without touching the code, and
-    // pages already published are unaffected either way because each document
-    // is rendered by the engine it was designed against.
-    const build = this.config.compositionEnabled
-      ? this.generator.buildComposedDraft.bind(this.generator)
-      : this.generator.buildDraft.bind(this.generator);
-    const { doc, costCents } = await build(
+    // Every academy gets the same fixed page; the only input left is colour.
+    const { doc, costCents } = await this.generator.buildFixedDraft(
       job.academyId,
-      input?.vibe ?? undefined,
-      input?.stylePrompt ?? undefined,
+      input?.paletteKey ?? undefined,
       input?.lang ?? undefined,
     );
     await this.jobs.setStage(job.id, 'assemble');

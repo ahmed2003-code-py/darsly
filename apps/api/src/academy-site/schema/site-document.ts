@@ -288,6 +288,8 @@ export const siteSeoSchema = z.object({
 /** The renderer generation a document was designed against. */
 export const RENDERER_LEGACY = 1;
 export const RENDERER_COMPOSITION = 2;
+/** The single fixed template — every academy's page, colour aside. */
+export const RENDERER_FIXED = 3;
 
 export const siteDocumentSchema = z.object({
   version: z.literal(1),

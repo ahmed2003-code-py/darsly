@@ -39,5 +39,6 @@ export interface Media {
   url: string | null;
   width: number | null;
   height: number | null;
+  mimeType: string | null;
   rejectReason: string | null;
 }

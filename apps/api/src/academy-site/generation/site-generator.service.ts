@@ -14,7 +14,7 @@ import { AI_COPY_SCHEMA_NAME, aiCopyJsonSchema } from './ai-copy.jsonschema';
 import { ContentSignals, systemPlanPrompt, userPlanPrompt } from './plan-prompt';
 import { PLANNING_SCHEMA_NAME, planningJsonSchema } from './planning.jsonschema';
 import { Archetype, parseSitePlan } from './planning.schema';
-import { composedCopyPrompt, systemPrompt, userPrompt } from './prompt';
+import { composedCopyPrompt, fixedCopyPrompt, systemPrompt, userPrompt } from './prompt';
 import { SECTION_SPECS, regenUserPrompt } from './regen';
 import { ContentProfile } from '../pipeline/content-profile';
 import { guessArchetype } from '../pipeline/archetype-profiles';
@@ -24,6 +24,10 @@ import { COMPOSITION_SCHEMA_NAME, compositionJsonSchema } from './composition.js
 import { parseComposition } from './composition.schema';
 import { systemComposePrompt, userComposePrompt } from './compose-prompt';
 import { assembleComposition, fallbackSections } from './compose-assembler';
+import { assembleFixed } from './fixed-assembler';
+import { FIXED_COPY_SCHEMA_NAME, fixedCopyJsonSchema } from './fixed-copy.jsonschema';
+import { parseFixedCopy } from './fixed-copy.schema';
+import { resolvePalette } from '../pipeline/color-palettes';
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -165,6 +169,56 @@ export class SiteGeneratorService {
       throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
     }
     return { doc: res.data!, costCents: planCall.costCents + copyCall.costCents };
+  }
+
+  /**
+   * The fixed-template pipeline.
+   *
+   * There is no design call: every academy gets the reference page's structure,
+   * sections and animations unchanged, and the only choice left is a colour
+   * pair picked from a curated list (see `pipeline/color-palettes.ts`). One
+   * model call writes the copy for the page's fixed slots; assembly is a
+   * straight, deterministic mapping from that copy into the fixed block order.
+   */
+  async buildFixedDraft(
+    academyId: string,
+    paletteKey?: string,
+    lang?: 'ar' | 'en',
+  ): Promise<{ doc: SiteDocument; costCents: number }> {
+    const { academy, facts, media, lists } = await this.extract(academyId);
+    const palette = resolvePalette(paletteKey);
+
+    const completion = await this.ai.completeStructured<unknown>({
+      system: systemPrompt(),
+      messages: [{ role: 'user', content: fixedCopyPrompt(facts, academy.name) }],
+      maxTokens: 4000,
+      schemaName: FIXED_COPY_SCHEMA_NAME,
+      schema: fixedCopyJsonSchema,
+    });
+    const parsed = parseFixedCopy(completion.data);
+    if (parsed.error) {
+      throw new AiJobError(`AI output failed validation: ${parsed.error}`, 'RETRYABLE');
+    }
+    const copy = parsed.data!;
+
+    const doc = assembleFixed({
+      copy,
+      primary: palette.primary,
+      accent: palette.accent,
+      logoId: media.logoId,
+      coverId: media.coverId,
+      galleryIds: media.galleryIds,
+      toolkit: this.pickItems(copy.highlights, lists.rawSubjects, { min: 2, maxLen: 60, cap: 6 }),
+      credentials: this.pickItems(copy.credentials, lists.rawAchievements, { min: 2, maxLen: 200, cap: 6 }),
+      socials: this.normalizeSocials(facts.socials),
+      defaultLang: lang,
+    });
+
+    const res = parseSiteDocument(doc);
+    if (!res.success) {
+      throw new AiJobError(`Assembled document invalid: ${res.errors?.join('; ')}`, 'RETRYABLE');
+    }
+    return { doc: res.data!, costCents: completion.costCents };
   }
 
   /** Load and normalise everything the pipeline reasons about. */

@@ -1068,14 +1068,14 @@
       "saved": "Saved"
     },
     "media": {
-      "title": "Academy images",
-      "hint": "Logo, cover image and a gallery. Supported: PNG / JPEG / WebP (up to 10MB).",
+      "title": "Academy photos & video",
+      "hint": "Logo, cover image, and a gallery of photos and clips. Supported: PNG / JPEG / WebP for photos, MP4 for video (up to 25MB).",
       "logo": "Logo",
       "cover": "Cover image",
-      "gallery": "Gallery",
+      "gallery": "Gallery (photos & video)",
       "upload": "Upload",
       "replace": "Replace",
-      "add": "Add image",
+      "add": "Add photo or video",
       "uploading": "Uploading…",
       "noImage": "No image uploaded yet.",
       "empty": "Gallery is empty.",
@@ -1084,10 +1084,8 @@
     },
     "generate": {
       "title": "Generate the page with AI",
-      "hint": "Pick the style that fits your academy, and the AI will write your page content from your details.",
-      "styleLabel": "Describe the look and colors you want (optional)",
-      "stylePh": "e.g. modern bold design with navy and gold, premium professional feel…",
-      "styleHint": "The AI picks colors and style from your description. Leave empty to use your academy's colors.",
+      "hint": "Pick your academy's colour, and the AI will write your page content from your details in one consistent design.",
+      "paletteLabel": "Brand colour",
       "generating": "Generating your page…",
       "queued": "Queued…",
       "working": "Working…",
@@ -1104,15 +1102,15 @@
       "generateBtn": "Generate page",
       "retryBtn": "Try again",
       "starting": "Starting…",
-      "vibes": {
-        "trusted": "Warm & trusted",
-        "trustedD": "Warm and close — light paper, round edges, room to breathe. For the parent choosing for their child.",
-        "academic": "Academic",
-        "academicD": "Ordered and quiet — sharp edges, hairlines, clear structure. The syllabus does the persuading.",
-        "premium": "Premium",
-        "premiumD": "Dark and spare — gold on near-black, wide margins, slow motion. Luxury by subtraction.",
-        "energetic": "Energetic",
-        "energeticD": "Loud and fast — saturated colour, heavy type, numbers up front. For a student with a deadline."
+      "palettes": {
+        "royal": "Blue & violet",
+        "teal": "Teal & cyan",
+        "sunset": "Orange & pink",
+        "forest": "Emerald & green",
+        "berry": "Fuchsia & rose",
+        "amber": "Amber & gold",
+        "sky": "Blue & sky",
+        "slate": "Slate & blue"
       }
     },
     "editor": {
@@ -1143,14 +1141,21 @@
       "blocks": {
         "hero": "Hero",
         "about": "About",
+        "toolkit": "Toolkit tags",
+        "credentials": "Credentials",
         "stats": "Stats",
+        "process": "How it works",
         "faq": "FAQ",
         "cta": "Call to action",
         "courses": "Courses",
         "reviews": "Reviews",
         "gallery": "Gallery",
-        "contact": "Contact"
-      }
+        "contact": "Contact",
+        "quote": "Quote"
+      },
+      "step": "Step {{n}}",
+      "title2": "Title",
+      "attribution": "Attribution"
     },
     "preview": {
       "title": "Page preview",

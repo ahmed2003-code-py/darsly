@@ -50,8 +50,7 @@ export class AcademyGenerateController {
   @ApiOperation({ summary: '[staff] Queue AI site generation for this academy' })
   async generate(@CurrentAcademy() ctx: AcademyContext, @Body() dto: GenerateSiteDto) {
     const job = await this.jobs.enqueue(ctx.academyId, 'SITE_GENERATE', {
-      vibe: dto.vibe ?? null,
-      stylePrompt: dto.stylePrompt ?? null,
+      paletteKey: dto.paletteKey ?? null,
       lang: dto.lang ?? null,
     });
     return jobView(job);

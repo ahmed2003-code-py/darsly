@@ -1,6 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * Only people who are still here.
+ *
+ * Progress and quiz attempts have no `deletedAt` of their own and are reached
+ * through the teacher's own lessons, so removing a student leaves their watch
+ * history reachable and counted. A reset academy then reports hundreds of views
+ * and a pass rate built entirely from accounts that no longer exist.
+ */
+const LIVE_STUDENT = { student: { deletedAt: null } } as const;
+
 /** Aggregated teaching KPIs for the teacher analytics dashboard. */
 @Injectable()
 export class AnalyticsService {
@@ -22,7 +32,11 @@ export class AnalyticsService {
       }),
       this.prisma.review.aggregate({ where: { tenantId }, _avg: { rating: true }, _count: true }),
       this.prisma.quizAttempt.findMany({
-        where: { quiz: { lesson: { unit: { course: { tenantId } } } }, passed: { not: null } },
+        where: {
+          quiz: { lesson: { unit: { course: { tenantId } } } },
+          passed: { not: null },
+          ...LIVE_STUDENT,
+        },
         select: { passed: true },
       }),
     ]);
@@ -53,7 +67,7 @@ export class AnalyticsService {
         where: {
           completedAt: { not: null },
           lesson: { unit: { course: { tenantId } } },
-          student: { enrollments: { some: { tenantId, status: 'ACTIVE' } } },
+          student: { deletedAt: null, enrollments: { some: { tenantId, status: 'ACTIVE', deletedAt: null } } },
         },
       }),
     ]);
@@ -96,7 +110,7 @@ export class AnalyticsService {
   private async topLessons(tenantId: string) {
     const rows = await this.prisma.lessonProgress.groupBy({
       by: ['lessonId'],
-      where: { lesson: { unit: { course: { tenantId } } } },
+      where: { lesson: { unit: { course: { tenantId } } }, ...LIVE_STUDENT },
       _sum: { viewCount: true },
       orderBy: { _sum: { viewCount: 'desc' } },
       take: 5,

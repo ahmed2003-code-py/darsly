@@ -6,6 +6,11 @@ import { imageToDataUrl } from '../lib/image';
 import { egp } from '../lib/format';
 import { ErrorNote, Field, Modal } from './ui';
 
+/** The structured part of a rejected payment, when the server sent one. */
+function faultOf(err: unknown): { code?: string; balanceCents?: number; requiredCents?: number } | null {
+  return (err as { response?: { data?: { code?: string } } } | null)?.response?.data ?? null;
+}
+
 const METHOD_ICON: Record<string, string> = {
   INSTAPAY: 'account_balance', VODAFONE_CASH: 'smartphone', BANK_TRANSFER: 'account_balance', OTHER: 'payments',
 };
@@ -55,6 +60,11 @@ export default function PaymentModal({
   const walletApplied = useWallet ? Math.min(balance, total) : 0;
   const cashDue = total - walletApplied;
 
+  // A second click must not become a second purchase. React only repaints the
+  // disabled state on the next frame, so a fast double-click gets two calls
+  // through — the first buys the course, the second is refused for a balance
+  // the first one just spent.
+  const buying = useRef(false);
   const payWithWallet = useMutation({
     mutationFn: async () => (await api.post('/payments/from-wallet', { courseId, couponCode })).data,
     onSuccess: () => {
@@ -65,7 +75,26 @@ export default function PaymentModal({
       qc.invalidateQueries({ queryKey: ['wallet'] });
       onClose();
     },
+    onError: (err) => {
+      // Already owning the course is not a failure worth arguing with: the
+      // student wanted in, and they are in. This is what a double-click looks
+      // like from the second request's side, so treat it as the success it
+      // already was and let the unlocked page say so.
+      if (faultOf(err)?.code === 'ALREADY_ENROLLED') {
+        qc.invalidateQueries({ queryKey: ['course', courseId] });
+        qc.invalidateQueries({ queryKey: ['my-enrollments'] });
+        onClose();
+      }
+    },
+    onSettled: () => {
+      buying.current = false;
+      // Whatever happened, the balance on screen is now a guess. Re-read it so
+      // the next attempt is argued from the real number.
+      qc.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
+
+  const fault = faultOf(payWithWallet.error);
 
   const submit = useMutation({
     mutationFn: async () =>
@@ -127,11 +156,28 @@ export default function PaymentModal({
                 <button
                   className="btn-primary w-full"
                   disabled={payWithWallet.isPending}
-                  onClick={() => payWithWallet.mutate()}
+                  onClick={() => {
+                    if (buying.current || payWithWallet.isPending) return;
+                    buying.current = true;
+                    payWithWallet.mutate();
+                  }}
                 >
                   {payWithWallet.isPending ? t('common.saving') : t('pay.payNow', { amount: egp(total) })}
                 </button>
-                <ErrorNote error={payWithWallet.error} />
+                {fault?.code === 'INSUFFICIENT_BALANCE' ? (
+                  // The server knows the real balance; the screen was showing a
+                  // number from before this purchase started. Saying only "not
+                  // enough" next to a balance that covers the price reads as the
+                  // platform contradicting itself.
+                  <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
+                    {t('pay.shortBalance', {
+                      balance: egp(fault.balanceCents ?? 0),
+                      required: egp(fault.requiredCents ?? total),
+                    })}
+                  </p>
+                ) : (
+                  <ErrorNote error={payWithWallet.error} />
+                )}
                 <p className="mt-2 text-xs text-outline">{t('pay.walletInstant')}</p>
               </div>
             )}

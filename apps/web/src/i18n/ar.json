@@ -472,7 +472,6 @@
       "noMatch": "لا يوجد طالب مطابق لبحثك",
       "students": "طالب",
       "courseCount": "الدورات: {{count}}",
-      "totalPaid": "إجمالي المدفوع",
       "expand": "عرض الكورسات",
       "collapse": "إخفاء الكورسات",
       "activeCount": "{{count}} نشط",
@@ -496,7 +495,8 @@
       "expandAll": "افتح الكل",
       "collapseAll": "اقفل الكل",
       "whatsapp": "مراسلة على واتساب",
-      "call": "اتصال"
+      "call": "اتصال",
+      "totalEarned": "إجمالي أرباحك"
     },
     "coupons": {
       "title": "كوبونات الخصم",
@@ -971,7 +971,8 @@
     "walletInstant": "هيتخصم من رصيدك والدورة هتتفتح على طول — من غير تحويل ولا انتظار.",
     "fromWalletLine": "من محفظتك",
     "amountDueAfterWallet": "المطلوب تحويله",
-    "useWalletToggle": "استخدم رصيد محفظتك في الدفع"
+    "useWalletToggle": "استخدم رصيد محفظتك في الدفع",
+    "shortBalance": "رصيدك دلوقتي {{balance}} والدورة دي محتاجة {{required}} — اشحن المحفظة وكمّل."
   },
   "tpay": {
     "title": "مراجعة الدفعات",

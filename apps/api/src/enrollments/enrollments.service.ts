@@ -315,7 +315,16 @@ export class EnrollmentsService {
           },
         },
         course: { select: { id: true, title: true, priceCents: true, pricingModel: true } },
-        payments: { orderBy: { createdAt: 'desc' }, take: 1 },
+        // `netCents` and never `amountCents`: what the student handed over
+        // includes the platform's service fee, which is added on top of the
+        // price the teacher set. Showing the gross here labels the fee as the
+        // teacher's income in their own students list, so every total they read
+        // is larger than the money that will ever reach them.
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, status: true, netCents: true, createdAt: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });

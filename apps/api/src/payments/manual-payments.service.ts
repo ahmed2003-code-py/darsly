@@ -178,12 +178,25 @@ export class ManualPaymentsService {
    */
   async payFromWallet(userId: string, dto: { courseId: string; couponCode?: string }) {
     const student = await this.studentOf(userId);
-    const balance = await this.ledger.walletBalance(student.id);
     const course = await this.prisma.course.findFirst({
       where: { id: dto.courseId, status: 'PUBLISHED' },
       select: { id: true, priceCents: true },
     });
     if (!course) throw new NotFoundException('Course not found');
+
+    // Owning it already is checked before the balance is, because the two
+    // failures look identical from here and only one of them is true. A second
+    // click on the pay button lands after the first has debited the wallet, so
+    // a balance-first order answers "you cannot afford this" to someone who has
+    // just bought it — alarming, and wrong about both facts.
+    const enrolled = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
+    });
+    if (enrolled?.status === 'ACTIVE' && !enrolled.deletedAt &&
+        (!enrolled.expiresAt || enrolled.expiresAt > new Date())) {
+      throw new ConflictException({ message: 'Already enrolled', code: 'ALREADY_ENROLLED' });
+    }
+    const balance = await this.ledger.walletBalance(student.id);
 
     // A cheap pre-check so the common failure is a clean error rather than a
     // rolled-back enrolment. The authoritative check is still in the ledger.

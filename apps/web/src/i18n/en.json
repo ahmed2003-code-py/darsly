@@ -472,7 +472,6 @@
       "noMatch": "No student matches your search",
       "students": "students",
       "courseCount": "Courses: {{count}}",
-      "totalPaid": "Total paid",
       "expand": "Show courses",
       "collapse": "Hide courses",
       "activeCount": "{{count}} active",
@@ -496,7 +495,8 @@
       "expandAll": "Expand all",
       "collapseAll": "Collapse all",
       "whatsapp": "Message on WhatsApp",
-      "call": "Call"
+      "call": "Call",
+      "totalEarned": "Your earnings"
     },
     "coupons": {
       "title": "Discount coupons",
@@ -971,7 +971,8 @@
     "walletInstant": "Deducted from your balance and the course opens immediately — no transfer, no waiting.",
     "fromWalletLine": "From your wallet",
     "amountDueAfterWallet": "Amount to transfer",
-    "useWalletToggle": "Use my wallet balance for this"
+    "useWalletToggle": "Use my wallet balance for this",
+    "shortBalance": "Your balance is {{balance}} and this course needs {{required}} — top up and try again."
   },
   "tpay": {
     "title": "Verify payments",

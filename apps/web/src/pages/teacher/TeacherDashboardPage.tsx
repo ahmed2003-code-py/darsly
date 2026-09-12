@@ -14,7 +14,7 @@ interface Enrollment {
   createdAt: string;
   student: { id: string; user: { fullName: string; avatarUrl?: string | null } };
   course: { id: string; title: string };
-  payments?: { amountCents: number }[];
+  payments?: { netCents: number | null }[];
 }
 
 /** One row per student, however many courses they bought. */
@@ -78,7 +78,9 @@ export default function TeacherDashboardPage() {
     // their latest enrolment and every later one only adds to their totals.
     for (const e of enrollments) {
       const existing = byStudent.get(e.student.id);
-      const paid = e.payments?.[0]?.amountCents ?? 0;
+      // The teacher's share, not the total the student paid — the service fee
+      // on top of it is the platform's, and never reaches this academy.
+      const paid = e.payments?.[0]?.netCents ?? 0;
       if (!existing) {
         byStudent.set(e.student.id, {
           studentId: e.student.id,

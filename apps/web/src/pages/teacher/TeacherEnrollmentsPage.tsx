@@ -26,7 +26,7 @@ interface Enrollment {
     user: { fullName: string; phone: string | null; avatarUrl: string | null };
     grade?: { nameAr?: string; nameEn?: string } | null;
   };
-  payments?: { amountCents: number; status: string }[];
+  payments?: { netCents: number | null; status: string }[];
 }
 
 /** One student, with everything they have bought from this academy. */
@@ -38,14 +38,20 @@ interface StudentGroup {
   enrollments: Enrollment[];
   activeCount: number;
   pendingCount: number;
-  paidCents: number;
+  earnedCentsTotal: number;
   lastEnrolledAt: number;
 }
 
-/** What a student actually paid, which is not the list price after a coupon. */
-function paidCents(enrollment: Enrollment): number {
+/**
+ * What this enrolment earned the teacher.
+ *
+ * Not the list price (a coupon may have cut it) and not what the student
+ * handed over (the platform's service fee rides on top of the price, and is
+ * never the teacher's money).
+ */
+function earnedCents(enrollment: Enrollment): number {
   const settled = enrollment.payments?.find((p) => p.status === 'PAID');
-  return settled?.amountCents ?? 0;
+  return settled?.netCents ?? 0;
 }
 
 /**
@@ -70,7 +76,7 @@ function groupByStudent(rows: Enrollment[]): StudentGroup[] {
         enrollments: [],
         activeCount: 0,
         pendingCount: 0,
-        paidCents: 0,
+        earnedCentsTotal: 0,
         lastEnrolledAt: 0,
       };
       groups.set(id, group);
@@ -78,7 +84,7 @@ function groupByStudent(rows: Enrollment[]): StudentGroup[] {
     group.enrollments.push(row);
     if (row.status === 'ACTIVE') group.activeCount++;
     if (row.status === 'PENDING_APPROVAL') group.pendingCount++;
-    group.paidCents += paidCents(row);
+    group.earnedCentsTotal += earnedCents(row);
     group.lastEnrolledAt = Math.max(group.lastEnrolledAt, new Date(row.createdAt).getTime());
   }
   for (const group of groups.values()) {
@@ -182,12 +188,12 @@ export default function TeacherEnrollmentsPage() {
       : grouped;
     const sorted = [...filtered];
     if (sort === 'name') sorted.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sort === 'spend') sorted.sort((a, b) => b.paidCents - a.paidCents);
+    else if (sort === 'spend') sorted.sort((a, b) => b.earnedCentsTotal - a.earnedCentsTotal);
     else sorted.sort((a, b) => b.lastEnrolledAt - a.lastEnrolledAt);
     return sorted;
   }, [all, tab, search, sort]);
 
-  const totalPaid = groups.reduce((sum, g) => sum + g.paidCents, 0);
+  const totalEarned = groups.reduce((sum, g) => sum + g.earnedCentsTotal, 0);
   const visibleEnrollments = groups.reduce((sum, g) => sum + g.enrollments.length, 0);
   const allExpanded = groups.length > 0 && groups.every((g) => open[g.studentId]);
 
@@ -306,8 +312,8 @@ export default function TeacherEnrollmentsPage() {
             />
             <SummaryChip
               icon="payments"
-              value={egp(totalPaid)}
-              label={t('teacher.students.totalPaid')}
+              value={egp(totalEarned)}
+              label={t('teacher.students.totalEarned')}
             />
             <button
               onClick={toggleAll}
@@ -377,7 +383,7 @@ export default function TeacherEnrollmentsPage() {
                       </span>
 
                       <span className="shrink-0 text-end">
-                        <span className="block text-sm font-bold">{egp(group.paidCents)}</span>
+                        <span className="block text-sm font-bold">{egp(group.earnedCentsTotal)}</span>
                         <span className="block text-xs text-outline">
                           {t('teacher.students.courseCount', { count: group.enrollments.length })}
                         </span>
@@ -440,7 +446,7 @@ export default function TeacherEnrollmentsPage() {
                             </span>
                           </span>
                           <span className="text-sm font-bold">
-                            {egp(paidCents(e) || e.course.priceCents)}
+                            {egp(earnedCents(e) || e.course.priceCents)}
                           </span>
                           <Badge tone={STATUS_TONE[e.status] ?? 'neutral'}>
                             {t(`teacher.students.status.${e.status}`, e.status)}

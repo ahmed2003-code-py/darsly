@@ -453,7 +453,10 @@
       "newUnitName": "القسم {{n}}",
       "newLessonName": "الدرس {{n}}",
       "countSummary": "{{lessons}} درس · {{time}}",
-      "unsaved": "فيه تعديلات لسه متحفظتش"
+      "unsaved": "فيه تعديلات لسه متحفظتش",
+      "fold": "اطوي القسم",
+      "unfold": "افتح القسم",
+      "lessonsMetaMissing": "{{count}} درس · {{missing}} لسه من غير فيديو"
     },
     "students": {
       "title": "طلابي",

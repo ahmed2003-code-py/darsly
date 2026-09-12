@@ -453,7 +453,10 @@
       "newUnitName": "Section {{n}}",
       "newLessonName": "Lesson {{n}}",
       "countSummary": "{{lessons}} lessons · {{time}}",
-      "unsaved": "You have unsaved changes"
+      "unsaved": "You have unsaved changes",
+      "fold": "Fold this section",
+      "unfold": "Open this section",
+      "lessonsMetaMissing": "{{count}} lessons · {{missing}} still without video"
     },
     "students": {
       "title": "My students",

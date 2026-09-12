@@ -39,6 +39,36 @@ export default function CourseBuilderPage() {
     setParams(next, { replace: true });
   };
   const [renaming, setRenaming] = useState<string | null>(null);
+  /**
+   * Which sections are folded away.
+   *
+   * A nine-lesson course ran four screens deep, and every section repeated its
+   * own add row and import link whether or not anyone was looking at it. Folded
+   * sections turn that into a table of contents a teacher can actually read,
+   * and the choice is remembered so their shape survives a reload.
+   */
+  const foldKey = `darsly.builderFolded.${id}`;
+  const [folded, setFolded] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(foldKey);
+      return new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const toggleFold = (unitId: string) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(unitId)) next.delete(unitId);
+      else next.add(unitId);
+      try {
+        localStorage.setItem(foldKey, JSON.stringify([...next]));
+      } catch {
+        // Not remembered, still folded — this view honours the click either way.
+      }
+      return next;
+    });
+
   const [videoPct, setVideoPct] = useState<number | null>(null);
   // Which lesson the upload belongs to. Without it the bar followed whichever
   // lesson happened to be open, so opening a second one while a video uploaded
@@ -856,14 +886,22 @@ export default function CourseBuilderPage() {
           Sections are opt-in: lessons can sit right here with no section at
           all, or be grouped into named ones below — both at once, even. */}
       <div className="card mb-5 p-5">
-        <div className="mb-4 flex items-center gap-3">
-          <p className="font-heading text-lg font-bold">{t('teacher.builder.directLessons')}</p>
-          {defaultUnit?.lessons.length > 0 && (
+        {/* The heading earns its line only once there is something under it.
+            On a course built entirely out of sections this block was a title,
+            a count of nothing, and two rows of chrome. */}
+        {defaultUnit?.lessons.length > 0 && (
+          <div className="mb-4 flex items-center gap-3">
+            <p className="font-heading text-lg font-bold">{t('teacher.builder.directLessons')}</p>
             <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
-              {t('teacher.builder.lessonsMeta', { count: defaultUnit.lessons.length })}
+              {(() => {
+                const missing = defaultUnit.lessons.filter((x: any) => !x.videoAsset && x.type === 'VIDEO').length;
+                return missing
+                  ? t('teacher.builder.lessonsMetaMissing', { count: defaultUnit.lessons.length, missing })
+                  : t('teacher.builder.lessonsMeta', { count: defaultUnit.lessons.length });
+              })()}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {defaultUnit?.lessons.length > 0 && (
           <ul className="mb-3 space-y-2">
@@ -908,6 +946,19 @@ export default function CourseBuilderPage() {
           {sections.map((u: any, ui: number) => (
             <div key={u.id} className="card p-5">
               <div className="group/unit mb-4 flex items-center gap-3">
+                {/* A button, not the whole header: the title beside it is
+                    click-to-rename, and one strip that both folds and edits is
+                    a strip that does the wrong one half the time. */}
+                <button
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-on-surface-variant transition hover:bg-surface-container-high"
+                  aria-expanded={!folded.has(u.id)}
+                  title={t(folded.has(u.id) ? 'teacher.builder.unfold' : 'teacher.builder.fold')}
+                  onClick={() => toggleFold(u.id)}
+                >
+                  <span className={`material-symbols-outlined text-[20px] transition-transform ${folded.has(u.id) ? '-rotate-90' : ''}`}>
+                    expand_more
+                  </span>
+                </button>
                 <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
                 <InlineName
                   value={u.title}
@@ -920,7 +971,14 @@ export default function CourseBuilderPage() {
                   className="font-heading text-lg font-bold"
                 />
                 <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
-                  {t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
+                  {/* What is left to do, not just how much there is. A count of
+                      lessons says nothing about whether the course is ready. */}
+                  {(() => {
+                    const missing = u.lessons.filter((x: any) => !x.videoAsset && x.type === 'VIDEO').length;
+                    return missing
+                      ? t('teacher.builder.lessonsMetaMissing', { count: u.lessons.length, missing })
+                      : t('teacher.builder.lessonsMeta', { count: u.lessons.length });
+                  })()}
                 </span>
                 <button
                   title={t('common.delete')}
@@ -931,6 +989,8 @@ export default function CourseBuilderPage() {
                 </button>
               </div>
 
+              {!folded.has(u.id) && (
+              <>
               <ul className="space-y-2">
                 {u.lessons.map((l: any, li: number) => (
                   <LessonRow
@@ -966,6 +1026,8 @@ export default function CourseBuilderPage() {
                 <span className="material-symbols-outlined text-base">smart_display</span>
                 {t('teacher.builder.importYoutubeBtn')}
               </button>
+              </>
+              )}
             </div>
           ))}
         </div>

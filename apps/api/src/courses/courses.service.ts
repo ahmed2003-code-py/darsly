@@ -7,7 +7,7 @@ import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { VideoProcessingService } from '../video/video-processing.service';
-import { YoutubeImportService } from '../video/youtube-import.service';
+import { VideoSource, YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
 import { viewerGrade } from '../catalog/stage.util';
@@ -525,17 +525,17 @@ export class CoursesService {
       retried?: boolean;
     }> = [];
     for (const url of dto.urls) {
-      const videoId = this.youtubeImport.resolveVideoId(url);
-      if (!videoId) {
+      const source = this.youtubeImport.resolveSource(url);
+      if (!source) {
         results.push({ url, error: 'INVALID_URL' });
         continue;
       }
 
       let meta;
       try {
-        meta = await this.youtubeImport.fetchMetadata(videoId);
+        meta = await this.youtubeImport.fetchMetadata(source);
       } catch (err: any) {
-        this.logger.warn(`YouTube metadata fetch failed for ${videoId}: ${err.message}`);
+        this.logger.warn(`${source.platform} metadata fetch failed for ${source.id}: ${err.message}`);
         // Surfaced to the caller (truncated) rather than logged only — yt-dlp's
         // own message usually says WHY (age-restricted, region-locked, a bot
         // check), which is worth more to whoever is looking at this than a
@@ -566,8 +566,8 @@ export class CoursesService {
             data: { status: 'UPLOADING' },
           });
           results.push({ url, lesson: lessonOnly, retried: true });
-          void this.downloadAndProcessYoutube(videoAsset.id, videoId).catch((err) =>
-            this.logger.error(`YouTube import retry ${videoId} (asset ${videoAsset.id}) failed: ${err.message}`),
+          void this.downloadAndProcessYoutube(videoAsset.id, source).catch((err) =>
+            this.logger.error(`${source.platform} import retry ${source.id} (asset ${videoAsset.id}) failed: ${err.message}`),
           );
         } else {
           results.push({ url, lesson: lessonOnly });
@@ -589,17 +589,17 @@ export class CoursesService {
       results.push({ url, lesson });
 
       // Off the request thread — the caller doesn't wait for a download.
-      void this.downloadAndProcessYoutube(asset.id, videoId).catch((err) =>
-        this.logger.error(`YouTube import ${videoId} (asset ${asset.id}) failed: ${err.message}`),
+      void this.downloadAndProcessYoutube(asset.id, source).catch((err) =>
+        this.logger.error(`${source.platform} import ${source.id} (asset ${asset.id}) failed: ${err.message}`),
       );
     }
     return { results };
   }
 
-  private async downloadAndProcessYoutube(assetId: string, videoId: string): Promise<void> {
+  private async downloadAndProcessYoutube(assetId: string, source: VideoSource): Promise<void> {
     const tmp = this.youtubeImport.tempPath(assetId);
     try {
-      await this.youtubeImport.download(videoId, tmp);
+      await this.youtubeImport.download(source, tmp);
       const sourceKey = `source/${assetId}.mp4`;
       const stat = await fs.promises.stat(tmp);
       await this.storage.put(sourceKey, fs.createReadStream(tmp), { contentType: 'video/mp4' });

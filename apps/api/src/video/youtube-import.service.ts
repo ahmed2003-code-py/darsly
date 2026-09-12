@@ -15,7 +15,23 @@ const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 /** Matches the manual-upload cap in uploads.controller.ts. */
 const MAX_FILESIZE = '2G';
 const YT_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
-const YT_HOSTS = new Set(['www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com']);
+const YT_HOSTS = new Set([
+  'www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com',
+  'www.youtube-nocookie.com', 'youtube-nocookie.com',
+]);
+const FB_HOSTS = new Set([
+  'www.facebook.com', 'facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch',
+]);
+const FB_VIDEO_ID = /^\d{5,25}$/;
+
+/** Where a link came from, and the one URL we will hand to yt-dlp for it. */
+export interface VideoSource {
+  platform: 'youtube' | 'facebook';
+  /** Rebuilt from the extracted id — never the string the teacher pasted. */
+  url: string;
+  /** For logs and de-duplication. */
+  id: string;
+}
 
 /**
  * Client order decides the quality ceiling, not just whether an import works.
@@ -53,10 +69,16 @@ const COOKIES_CACHE_MS = 5 * 60_000;
  *
  * yt-dlp is a generic extractor for hundreds of sites and, left unchecked, is
  * an SSRF vector — a teacher could hand it a URL that hits an internal
- * address. `resolveVideoId` is the only thing standing between a user string
- * and a shelled-out process: it accepts nothing but a real YouTube hostname,
- * and everything downstream re-derives a canonical `watch?v=` URL from the
- * extracted 11-char id rather than ever touching the original string again.
+ * address. `resolveSource` is the only thing standing between a user string
+ * and a shelled-out process, and the rule that makes it safe is not the host
+ * check but what comes after it: an id is extracted, and the URL handed to the
+ * process is rebuilt from that id against a fixed template. The string the
+ * teacher pasted never reaches the command line, whatever it contained.
+ *
+ * That rule is why a short link like `fb.watch/xxxx` is refused rather than
+ * followed. Resolving it means a request to an address we have not checked,
+ * which is the exact thing this guard exists to prevent — so it is turned away
+ * with a message asking for the full link instead.
  */
 @Injectable()
 export class YoutubeImportService {
@@ -103,28 +125,69 @@ export class YoutubeImportService {
     return this.cookiesPath ? ['--cookies', this.cookiesPath] : [];
   }
 
-  /** A real YouTube video id, or null for anything else — including lookalike hosts. */
-  resolveVideoId(raw: string): string | null {
+  /**
+   * A video we can fetch, or null for anything else — including lookalike hosts.
+   *
+   * Deliberately forgiving about the shape and strict about the destination.
+   * People paste what their browser or a share sheet gave them: a link with no
+   * protocol, one wrapped in angle brackets by a chat app, one with a trailing
+   * full stop, a bare video id copied out of a URL bar. None of those are
+   * mistakes worth an error, and every one of them used to be one.
+   */
+  resolveSource(raw: string): VideoSource | null {
+    // Chat clients wrap links; people paste with a trailing comma or bracket.
+    const cleaned = String(raw ?? '')
+      .trim()
+      .replace(/^[<("']+|[>)"',.؛،]+$/g, '')
+      .trim();
+    if (!cleaned) return null;
+
+    // A bare id, which is what you get copying the `v=` value out of the bar.
+    if (YT_VIDEO_ID.test(cleaned)) return this.youtube(cleaned);
+
     let u: URL;
     try {
-      u = new URL(raw.trim());
+      // No protocol is the single most common paste. It is not ambiguous —
+      // there is nothing else "youtube.com/watch?v=..." could mean.
+      u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(cleaned) ? cleaned : `https://${cleaned}`);
     } catch {
       return null;
     }
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
     const host = u.hostname.toLowerCase();
-    if (!YT_HOSTS.has(host)) return null;
 
-    if (host === 'youtu.be') {
-      const id = u.pathname.slice(1).split('/')[0];
-      return YT_VIDEO_ID.test(id) ? id : null;
+    if (YT_HOSTS.has(host)) {
+      if (host === 'youtu.be') {
+        const id = u.pathname.slice(1).split('/')[0];
+        return YT_VIDEO_ID.test(id) ? this.youtube(id) : null;
+      }
+      if (u.pathname === '/watch' || u.pathname === '/watch/') {
+        const id = u.searchParams.get('v');
+        return id && YT_VIDEO_ID.test(id) ? this.youtube(id) : null;
+      }
+      const m = u.pathname.match(/^\/(?:shorts|embed|live|v|watch)\/([A-Za-z0-9_-]{11})/);
+      return m ? this.youtube(m[1]) : null;
     }
-    if (u.pathname === '/watch') {
-      const id = u.searchParams.get('v');
-      return id && YT_VIDEO_ID.test(id) ? id : null;
+
+    if (FB_HOSTS.has(host)) {
+      // A short link would have to be followed to learn what it points at, and
+      // following an unchecked address is the thing this guard exists to stop.
+      if (host === 'fb.watch') return null;
+      const byQuery = u.searchParams.get('v');
+      if (byQuery && FB_VIDEO_ID.test(byQuery)) return this.facebook(byQuery);
+      // /<page>/videos/<id>, /reel/<id>, /videos/<id>
+      const m = u.pathname.match(/\/(?:videos|reel)\/(?:[^/]+\/)?(\d{5,25})/);
+      return m ? this.facebook(m[1]) : null;
     }
-    const m = u.pathname.match(/^\/(?:shorts|embed|live)\/([A-Za-z0-9_-]{11})/);
-    return m ? m[1] : null;
+    return null;
+  }
+
+  private youtube(id: string): VideoSource {
+    return { platform: 'youtube', id, url: `https://www.youtube.com/watch?v=${id}` };
+  }
+
+  private facebook(id: string): VideoSource {
+    return { platform: 'facebook', id, url: `https://www.facebook.com/watch/?v=${id}` };
   }
 
   /**
@@ -152,7 +215,7 @@ export class YoutubeImportService {
     }
   }
 
-  async fetchMetadata(videoId: string): Promise<YoutubeMeta> {
+  async fetchMetadata(source: VideoSource): Promise<YoutubeMeta> {
     const out = await this.withCookieFallback(
       (cookies) => [
         ...PLAYER_CLIENT_ARGS,
@@ -168,7 +231,7 @@ export class YoutubeImportService {
         // the whole import.
         '--ignore-no-formats-error',
         '--dump-json', '--skip-download', '--no-warnings', '--no-playlist',
-        this.canonicalUrl(videoId),
+        source.url,
       ],
       METADATA_TIMEOUT_MS,
     );
@@ -190,7 +253,7 @@ export class YoutubeImportService {
    * VideoAsset FAILED, and the teacher uses the replace-video upload — which
    * has no quality ceiling at all.
    */
-  async download(videoId: string, destPath: string): Promise<void> {
+  async download(source: VideoSource, destPath: string): Promise<void> {
     await this.withCookieFallback(
       (cookies) => [
         ...PLAYER_CLIENT_ARGS,
@@ -209,7 +272,7 @@ export class YoutubeImportService {
         // attempt left behind.
         '--force-overwrites',
         '-o', destPath,
-        this.canonicalUrl(videoId),
+        source.url,
       ],
       DOWNLOAD_TIMEOUT_MS,
     );
@@ -220,9 +283,7 @@ export class YoutubeImportService {
     return path.join(os.tmpdir(), `darsly-yt-${assetId}.mp4`);
   }
 
-  private canonicalUrl(videoId: string): string {
-    return `https://www.youtube.com/watch?v=${videoId}`;
-  }
+
 
   private run(args: string[], timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {

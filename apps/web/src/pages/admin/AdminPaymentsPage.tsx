@@ -103,16 +103,26 @@ export default function AdminPaymentsPage() {
             ) : (
               <ul className="divide-y divide-outline-variant/40">
                 {events.slice(0, 20).map((e: any) => (
-                  <li key={e.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${EVENT_TONE[e.status] ?? 'bg-surface-container-high text-outline'}`}>
+                  <li key={e.id} className="flex items-start gap-3 px-4 py-3 text-sm">
+                    <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ${EVENT_TONE[e.status] ?? 'bg-surface-container-high text-outline'}`}>
                       <span className="material-symbols-outlined text-base">{EVENT_ICON[e.status] ?? 'bolt'}</span>
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate">
-                        <span className="font-bold">{egp(e.amountCents)}</span> · {paymentMethodLabel(e.provider)}
-                        {e.reference && <span className="text-outline" dir="ltr"> · #{e.reference}</span>}
+                      {/* Amount and method wrap rather than truncate: a clipped
+                          amount is worse than a second line. The reference is
+                          LTR because it is a number, inside an RTL sentence. */}
+                      <p className="flex flex-wrap items-center gap-x-1.5">
+                        <span className="font-bold">{egp(e.amountCents)}</span>
+                        <span className="text-outline">·</span>
+                        <span>{paymentMethodLabel(e.provider)}</span>
+                        {e.reference && (
+                          <>
+                            <span className="text-outline">·</span>
+                            <span className="text-outline" dir="ltr">#{e.reference}</span>
+                          </>
+                        )}
                       </p>
-                      {e.note && <p className="truncate text-xs text-outline">{e.note}</p>}
+                      {e.note && <EventNote note={e.note} />}
                     </div>
                     <Badge tone={e.status === 'MATCHED' ? 'teal' : e.status === 'UNMATCHED' || e.status === 'AMBIGUOUS' ? 'warn' : 'neutral'}>
                       {t(`apay.eventStatus.${e.status}`)}
@@ -167,5 +177,36 @@ export default function AdminPaymentsPage() {
         <button className="btn-primary mt-2 w-full" disabled={addAccount.isPending || !form.label.trim() || !form.handle.trim()} onClick={() => addAccount.mutate()}>{t('common.save')}</button>
       </Modal>
     </div>
+  );
+}
+
+/**
+ * Why the matcher decided what it decided.
+ *
+ * The engine emits a fixed set of English diagnostics. Translated here rather
+ * than at the source because they are also read from logs and tests, and an
+ * unrecognised one still renders — left-to-right and wrapped, so a new string
+ * reads as an English sentence instead of a clipped fragment of one.
+ */
+const NOTE_KEY: Record<string, string> = {
+  'no pending/unsettled payment or wallet top-up with this amount/method in the time window': 'noMatch',
+  'no sender reference — auto-verify disabled without a transfer identity; needs manual review': 'noReference',
+  'multiple payments share this reference': 'sharedReference',
+  'matched by amount+time (reference differed)': 'matchedByAmount',
+  'several amount matches, none by reference': 'severalMatches',
+  'reconciled when the payment was submitted (transfer arrived first)': 'reconciledPayment',
+  'reconciled when the top-up was submitted (transfer arrived first)': 'reconciledTopup',
+};
+
+function EventNote({ note }: { note: string }) {
+  const { t } = useTranslation();
+  const key = NOTE_KEY[note.trim()];
+  if (key) {
+    return <p className="mt-0.5 text-xs leading-relaxed text-outline">{t(`apay.eventNote.${key}`)}</p>;
+  }
+  return (
+    <p className="mt-0.5 text-xs leading-relaxed text-outline" dir="ltr" style={{ textAlign: 'start' }}>
+      {note}
+    </p>
   );
 }

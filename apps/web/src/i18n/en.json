@@ -1013,6 +1013,15 @@
       "UNMATCHED": "Unmatched",
       "AMBIGUOUS": "Ambiguous",
       "DUPLICATE": "Duplicate"
+    },
+    "eventNote": {
+      "noMatch": "No pending payment or wallet top-up with this amount and method in the time window",
+      "noReference": "No sender reference — auto-verify is disabled without a transfer identity; needs manual review",
+      "sharedReference": "Multiple payments share this reference",
+      "matchedByAmount": "Matched by amount and time (reference differed)",
+      "severalMatches": "Several payments match the amount, none by reference",
+      "reconciledPayment": "Reconciled when the payment was submitted (the transfer arrived first)",
+      "reconciledTopup": "Reconciled when the top-up was submitted (the transfer arrived first)"
     }
   },
   "studio": {

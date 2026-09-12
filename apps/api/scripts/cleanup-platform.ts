@@ -87,6 +87,17 @@ async function main() {
     () => prisma.academy.count({ where: { ...live, id: { not: keepTenantId } } }),
     () => prisma.academy.updateMany({ where: { ...live, id: { not: keepTenantId } }, data: { deletedAt: NOW } }));
 
+  await step('academy media (other academies)',
+    () => prisma.academyMedia.count({ where: { ...live, academyId: { not: keepTenantId } } }),
+    () => prisma.academyMedia.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+
+  // Transfer notifications the Android listener forwarded. The admin lists
+  // every one of these regardless of who it belongs to — which is why they
+  // survived the first pass and kept filling the payments screen.
+  await step('payment events (all)',
+    () => prisma.paymentEvent.count({ where: live }),
+    () => prisma.paymentEvent.updateMany({ where: live, data: { deletedAt: NOW } }));
+
   // ── Everything every student ever did ───────────────────────────────────
   await step('certificates (all)',
     () => prisma.certificate.count({ where: live }),

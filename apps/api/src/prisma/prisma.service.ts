@@ -35,6 +35,13 @@ const SOFT_DELETE_MODELS = new Set([
   'PayoutRequest',
   'AcademySite',
   'AcademyMembership',
+  // Reachable without going through a removed parent, which is the test for
+  // whether a row needs to be hideable in its own right: the admin lists every
+  // PaymentEvent regardless of who it belongs to, and academy media is served
+  // publicly by id. Everything else in the schema is only ever read through a
+  // user, academy or lesson that is already hidden.
+  'PaymentEvent',
+  'AcademyMedia',
 ]);
 
 const READ_ACTIONS = new Set([

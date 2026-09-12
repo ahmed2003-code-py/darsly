@@ -180,8 +180,15 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
               className="ms-1 flex items-center gap-2 rounded-full p-1 transition hover:bg-surface-container-low"
               onClick={() => setMenuOpen((v) => !v)}
             >
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-fixed font-heading font-bold text-primary">
-                {initial}
+              {/* The photo when there is one. An initial identifies an account;
+                  a face identifies a person, and this is the one place the
+                  teacher sees themselves on every screen. */}
+              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-primary">
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initial
+                )}
               </span>
             </button>
             {menuOpen && (

@@ -75,4 +75,26 @@
     <string name="enroll_status_network_error">تعذّر الاتصال بالخادم. تحقّق من الإنترنت وحاول مجددًا.</string>
     <string name="enroll_status_rate_limited">محاولات كثيرة. انتظر قليلًا ثم حاول مجددًا.</string>
     <string name="enroll_status_server_error">حدث خطأ في الخادم. حاول مجددًا بعد قليل.</string>
+
+    <!-- Connection status strip + message detail -->
+    <string name="link_connected">متصل بالسيرفر</string>
+    <string name="link_pending">في انتظار الإرسال</string>
+    <string name="link_not_enrolled">التطبيق غير مربوط</string>
+    <string name="link_not_enrolled_hint">اربط الجهاز بكود التفعيل من لوحة التحكم</string>
+    <string name="link_pending_hint">%1$d رسالة لسه ما اتبعتتش</string>
+    <string name="link_last_sync">آخر إرسال ناجح: %1$s</string>
+    <string name="link_waiting_first">مستني أول رسالة تحويل</string>
+    <string name="inbox_tap_hint">اضغط للتفاصيل</string>
+    <string name="detail_from">من: %1$s</string>
+    <string name="detail_content">نص الرسالة</string>
+    <string name="detail_journey">مسار الرسالة</string>
+    <string name="detail_step_received">وصلت على الموبايل</string>
+    <string name="detail_step_classified">التصنيف</string>
+    <string name="detail_step_sent">الإرسال للسيرفر</string>
+    <string name="detail_step_verdict">رد السيرفر</string>
+    <string name="detail_unclassified">مش رسالة تحويل — مش هتتبعت</string>
+    <string name="detail_never_sent">مش هتتبعت للسيرفر</string>
+    <string name="detail_queued">في الطابور (محاولات: %1$d)</string>
+    <string name="detail_awaiting">لسه مفيش رد</string>
+    <string name="detail_payload">اللي بيتبعت للسيرفر</string>
 </resources>

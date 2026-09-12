@@ -71,4 +71,26 @@
     <string name="enroll_status_network_error">Could not reach the server. Check your connection and try again.</string>
     <string name="enroll_status_rate_limited">Too many attempts. Please wait and try again.</string>
     <string name="enroll_status_server_error">Server error. Please try again shortly.</string>
+
+    <!-- Connection status strip + message detail -->
+    <string name="link_connected">Connected</string>
+    <string name="link_pending">Waiting to send</string>
+    <string name="link_not_enrolled">Not linked</string>
+    <string name="link_not_enrolled_hint">Link this phone with an enrollment code from the dashboard</string>
+    <string name="link_pending_hint">%1$d message(s) not sent yet</string>
+    <string name="link_last_sync">Last accepted: %1$s</string>
+    <string name="link_waiting_first">Waiting for the first transfer message</string>
+    <string name="inbox_tap_hint">Tap for details</string>
+    <string name="detail_from">From: %1$s</string>
+    <string name="detail_content">Message body</string>
+    <string name="detail_journey">What happened to it</string>
+    <string name="detail_step_received">Arrived on this phone</string>
+    <string name="detail_step_classified">Classified as</string>
+    <string name="detail_step_sent">Sent to the server</string>
+    <string name="detail_step_verdict">Server verdict</string>
+    <string name="detail_unclassified">Not a transfer message — never sent</string>
+    <string name="detail_never_sent">Never sent</string>
+    <string name="detail_queued">Queued (attempts: %1$d)</string>
+    <string name="detail_awaiting">No verdict yet</string>
+    <string name="detail_payload">What gets sent to the server</string>
 </resources>

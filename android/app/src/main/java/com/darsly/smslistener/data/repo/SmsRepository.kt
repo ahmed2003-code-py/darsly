@@ -53,6 +53,8 @@ class SmsRepository(
 
     fun observeUnsyncedCount(): Flow<Int> = messages.observeUnsyncedCount()
 
+    fun observeLastSyncedAt(): Flow<Long?> = messages.observeLastSyncedAt()
+
     /**
      * Store an incoming SMS and, if a rule says it is payment-relevant, queue it.
      * Returns true when it was newly queued for upload.

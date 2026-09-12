@@ -28,6 +28,14 @@ interface SmsMessageDao {
     @Query("SELECT COUNT(*) FROM sms_messages WHERE syncStatus IN ('PENDING', 'FAILED')")
     fun observeUnsyncedCount(): Flow<Int>
 
+    /**
+     * When the backend last acknowledged anything — the only evidence the phone
+     * has that the link actually works, since nothing else records a successful
+     * round trip. Null until the first message syncs.
+     */
+    @Query("SELECT MAX(lastAttemptAt) FROM sms_messages WHERE syncStatus = 'SYNCED'")
+    fun observeLastSyncedAt(): Flow<Long?>
+
     @Query("SELECT * FROM sms_messages WHERE messageHash = :messageHash")
     suspend fun find(messageHash: String): SmsMessageEntity?
 

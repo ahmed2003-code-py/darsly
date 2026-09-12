@@ -21,6 +21,11 @@ export default function PaymentModal({
   const [proof, setProof] = useState<string | null>(null);
   const [proofName, setProofName] = useState('');
   const [done, setDone] = useState(false);
+  // Off by default, every time the modal opens — a balance is the student's
+  // money, and spending any of it toward this purchase is their call to make
+  // each time, not something the platform decides for them because it happens
+  // to be sitting there.
+  const [useWallet, setUseWallet] = useState(false);
 
   const { data: accounts } = useQuery({
     queryKey: ['payment-accounts'],
@@ -45,6 +50,10 @@ export default function PaymentModal({
     enabled: open,
   });
   const balance = wallet?.balanceCents ?? 0;
+  // What the checkbox below actually authorises — zero unless the student has
+  // ticked it, and never more than the price itself.
+  const walletApplied = useWallet ? Math.min(balance, total) : 0;
+  const cashDue = total - walletApplied;
 
   const payWithWallet = useMutation({
     mutationFn: async () => (await api.post('/payments/from-wallet', { courseId, couponCode })).data,
@@ -60,7 +69,9 @@ export default function PaymentModal({
 
   const submit = useMutation({
     mutationFn: async () =>
-      (await api.post('/payments', { courseId, method, proofImageUrl: proof, reference: reference.trim() || undefined, couponCode })).data,
+      (await api.post('/payments', {
+        courseId, method, proofImageUrl: proof, reference: reference.trim() || undefined, couponCode, useWallet,
+      })).data,
     onSuccess: () => {
       setDone(true);
       qc.invalidateQueries({ queryKey: ['course', courseId] });
@@ -85,53 +96,52 @@ export default function PaymentModal({
         </div>
       ) : (
         <>
-        {/* Money already on the platform beats a transfer the student has to
-            make and then wait to be confirmed, so it is offered first — and
-            only when it would actually work, which is the only case where
-            showing it is a shortcut rather than a tease. */}
-        {balance >= total ? (
-          <div className="mb-5 rounded-2xl border border-primary/40 bg-primary-fixed/40 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary">
-                  <span className="material-symbols-outlined">account_balance_wallet</span>
+        {/* A balance is the student's money — it goes toward this purchase
+            only if they tick this, never because it happens to be sitting
+            there or happens to cover the price. Unticked is the default and
+            changes nothing below. */}
+        {balance > 0 && (
+          <div className="mb-5 rounded-2xl border border-outline-variant/60 p-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={useWallet}
+                onChange={(e) => setUseWallet(e.target.checked)}
+                className="mt-1 h-4 w-4 shrink-0 accent-primary"
+              />
+              <span className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-fixed text-primary">
+                  <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
                 </span>
-                <div>
-                  <p className="font-heading font-bold">{t('pay.payFromWallet')}</p>
-                  <p className="text-xs text-on-surface-variant">
+                <span>
+                  <span className="block font-heading font-bold">{t('pay.useWalletToggle')}</span>
+                  <span className="block text-xs text-on-surface-variant">
                     {t('pay.walletBalance', { amount: egp(balance) })}
-                  </p>
-                </div>
+                  </span>
+                </span>
+              </span>
+            </label>
+
+            {useWallet && cashDue === 0 && (
+              <div className="mt-3 border-t border-outline-variant/40 pt-3">
+                <button
+                  className="btn-primary w-full"
+                  disabled={payWithWallet.isPending}
+                  onClick={() => payWithWallet.mutate()}
+                >
+                  {payWithWallet.isPending ? t('common.saving') : t('pay.payNow', { amount: egp(total) })}
+                </button>
+                <ErrorNote error={payWithWallet.error} />
+                <p className="mt-2 text-xs text-outline">{t('pay.walletInstant')}</p>
               </div>
-              <button
-                className="btn-primary"
-                disabled={payWithWallet.isPending}
-                onClick={() => payWithWallet.mutate()}
-              >
-                {payWithWallet.isPending ? t('common.saving') : t('pay.payNow', { amount: egp(total) })}
-              </button>
-            </div>
-            <ErrorNote error={payWithWallet.error} />
-            <p className="mt-2 text-xs text-outline">{t('pay.walletInstant')}</p>
+            )}
           </div>
-        ) : (
-          // A balance too small to cover the whole price still isn't nothing:
-          // it comes off the total automatically, and the transfer below is
-          // only ever for what's left — the server applies the same
-          // subtraction, this is just telling the student it will.
-          balance > 0 && (
-            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary-fixed/20 p-3">
-              <span className="material-symbols-outlined shrink-0 text-primary">account_balance_wallet</span>
-              <p className="text-sm text-on-surface-variant">
-                {t('pay.walletApplied', { amount: egp(balance) })}
-              </p>
-            </div>
-          )
         )}
-        {/* Once the wallet button above covers the whole price, a transfer
-            form asking for proof of a 0 ج.م transfer is pure confusion, not a
-            second option — nothing here is worth showing. */}
-        {balance < total && (
+        {/* Once the checkbox above covers the whole price, a transfer form
+            asking for proof of a 0 ج.م transfer is pure confusion, not a
+            second option — nothing here is worth showing. Unticked, or
+            ticked but only partial, the form is exactly what it always was. */}
+        {cashDue > 0 && (
         <div className="grid gap-5 sm:grid-cols-2">
           {/* Where to send */}
           <div>
@@ -142,7 +152,7 @@ export default function PaymentModal({
               {/* One price. The platform fee is already inside it — a student is
                   buying a course, not paying two parties, and the split is not
                   theirs to see. A coupon discount IS shown: they earned it. */}
-              {((quote && quote.discountCents > 0) || (balance > 0 && balance < total)) && (
+              {((quote && quote.discountCents > 0) || walletApplied > 0) && (
                 <div className="mb-2 space-y-1 border-b border-outline-variant pb-2 text-sm">
                   {quote && quote.discountCents > 0 && (
                     <>
@@ -156,20 +166,20 @@ export default function PaymentModal({
                       </div>
                     </>
                   )}
-                  {balance > 0 && balance < total && (
+                  {walletApplied > 0 && (
                     <div className="flex justify-between font-semibold text-primary">
                       <span>{t('pay.fromWalletLine')}</span>
-                      <span className="tabular-nums">−{egp(balance)}</span>
+                      <span className="tabular-nums">−{egp(walletApplied)}</span>
                     </div>
                   )}
                 </div>
               )}
               <div className="flex items-center justify-between">
                 <span className="text-xs text-outline">
-                  {balance > 0 && balance < total ? t('pay.amountDueAfterWallet') : t('pay.amountDue')}
+                  {walletApplied > 0 ? t('pay.amountDueAfterWallet') : t('pay.amountDue')}
                 </span>
                 <span className="font-heading text-2xl font-bold tracking-tight text-primary tabular-nums">
-                  {egp(balance > 0 ? Math.max(0, total - balance) : total)}
+                  {egp(cashDue)}
                 </span>
               </div>
             </div>

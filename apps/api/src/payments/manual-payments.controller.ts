@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
@@ -26,6 +26,9 @@ class SubmitPaymentDto {
   @IsOptional() @IsString() @MaxLength(LIMITS.PROOF_DATA_URL) proofImageUrl?: string;
   @IsOptional() @IsString() @MaxLength(120) reference?: string;
   @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
+  // Explicit opt-in — a balance is never spent toward a purchase the student
+  // didn't ask it to be.
+  @IsOptional() @IsBoolean() useWallet?: boolean;
 }
 class PayFromWalletDto {
   @IsId() courseId: string;

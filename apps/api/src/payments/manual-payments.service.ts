@@ -24,6 +24,13 @@ export interface SubmitPaymentDto {
   proofImageUrl?: string;
   reference?: string;
   couponCode?: string;
+  /**
+   * The student opting to put their wallet balance toward this purchase — off
+   * by default. It is their money; a balance sitting there is never spent
+   * without them asking for it, whether that would cover the whole price or
+   * only part of it.
+   */
+  useWallet?: boolean;
 }
 
 @Injectable()
@@ -61,15 +68,16 @@ export class ManualPaymentsService {
 
     const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
 
-    // A wallet balance applies itself toward any transfer-based purchase —
-    // the student is never asked to move money they already have on the
-    // platform. `method: WALLET` (from payFromWallet) is the pre-existing,
-    // separate 100%-from-balance path and is left out of this: it settles in
-    // the same request rather than waiting on a transfer, so there is nothing
-    // here for it to reserve.
+    // A wallet contribution is never automatic — it's the student's money and
+    // their call whether it goes toward this purchase or stays put for
+    // something else, so it applies only when they explicitly ask for it via
+    // `useWallet`. `method: WALLET` (from payFromWallet) is a separate,
+    // already-explicit 100%-from-balance path — its own button — and is left
+    // out of this entirely.
     const isWalletMethod = dto.method === 'WALLET';
-    const balance = isWalletMethod ? 0 : await this.ledger.walletBalance(student.id);
-    const walletCents = isWalletMethod ? 0 : Math.min(balance, totalCents);
+    const wantsWallet = !isWalletMethod && dto.useWallet === true;
+    const balance = wantsWallet ? await this.ledger.walletBalance(student.id) : 0;
+    const walletCents = wantsWallet ? Math.min(balance, totalCents) : 0;
     const cashDueCents = totalCents - walletCents;
 
     // A screenshot only makes sense for money that actually has to move — not
@@ -119,7 +127,7 @@ export class ManualPaymentsService {
         select: { id: true, status: true, amountCents: true, walletCents: true, enrollmentId: true, createdAt: true },
       });
 
-      if (!isWalletMethod && walletCents > 0) {
+      if (wantsWallet && walletCents > 0) {
         // Re-checked here, inside the same transaction that just created the
         // payment: a balance read a moment ago and a balance read now can
         // differ if another submit landed in between.
@@ -135,7 +143,7 @@ export class ManualPaymentsService {
 
     // The wallet covered it entirely — there is no transfer to wait for, so
     // this settles immediately exactly like a dedicated WALLET payment would.
-    if (!isWalletMethod && cashDueCents === 0) {
+    if (wantsWallet && cashDueCents === 0) {
       await this.applyVerification(
         { id: payment.id, status: payment.status, courseId: course.id, enrollmentId: payment.enrollmentId, studentId: student.id, couponId: couponId ?? null },
         'system',

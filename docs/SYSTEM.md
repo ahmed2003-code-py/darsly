@@ -44,9 +44,19 @@ darsly/
   وكل استعلام في الـAPI متقيّد بالـtenant.
 - **الفلوس بالقرش (piasters)**: كل المبالغ `Int` بالقرش (1 جنيه = 100 قرش) — عشان
   نتجنّب أخطاء الكسور العشرية (float drift).
-- **Soft delete**: الموديولات دي مبتتمسحش فعلياً؛ بيتحط فيها `deletedAt` وبتختفي من
-  كل القراءات تلقائياً عن طريق Prisma middleware:
-  `Course, CourseUnit, Lesson, Attachment, VideoNote, Coupon, PayoutMethodSaved, LiveSession`.
+- **Soft delete**: ٣٢ موديل مبيتمسحش فعلياً؛ بيتحط فيه `deletedAt` وبيختفي من
+  كل القراءات تلقائياً عن طريق Prisma middleware. القايمة الكاملة في
+  `SOFT_DELETE_MODELS` جوّه [`prisma.service.ts`](../apps/api/src/prisma/prisma.service.ts)
+  وبتغطّي: المحتوى (`Course, CourseUnit, Lesson, Attachment, VideoNote`)،
+  الحسابات (`User, TeacherProfile, StudentProfile`)،
+  الفلوس (`Payment, Invoice, LedgerTransaction, LedgerEntry, WalletTransaction,
+  WalletTopup, PayoutRequest, PayoutMethodSaved, PaymentEvent`)، الأكاديمية
+  (`Academy, AcademySite, AcademySiteSnapshot, AcademyProfileFacts, AcademyMedia,
+  AcademyMembership, AiJob`)، والتفاعل (`Enrollment, Review, Certificate,
+  ChatThread, ChatMessage, Notification, Coupon, LiveSession`).
+  القاعدة اللي بتحدّد إن صف محتاج `deletedAt` بتاعه: **هل ممكن نوصله من غير ما
+  نعدّي على أب متخفي أصلاً؟** (قوايم الأدمن، روابط الملفات العامّة، والـnested
+  includes جوّه استعلام حساب باقي — كلها بتوصل من غير الأب).
 
 ### الجداول مجمّعة حسب المجال
 
@@ -366,8 +376,22 @@ payouts, coupons, live, quizzes/assignments (تصحيح), security, chat.
 ### 4.5 الحذف الناعم (Soft delete) الآمن
 Prisma middleware واحد (`prisma.service.ts`) بيحوّل `delete → update deletedAt`
 ويفلتر القراءات. **مهم**: مسارات الوصول الحسّاسة (تشغيل الفيديو، الاختبارات،
-التقييمات) بتستخدم `findFirst({deletedAt:null})` + فحص الوحدة/الكورس الأب يدوياً —
-عشان الدرس المحذوف ما يفضلش شغّال.
+التقييمات، تحميل المرفقات) بتستخدم `findFirst({deletedAt:null})` + فحص الوحدة/الكورس
+الأب يدوياً — عشان الدرس المحذوف ما يفضلش شغّال.
+
+**تلات فجوات في الـmiddleware لازم تتعامل معاها بإيدك:**
+
+1. **`findUnique` مش مفلتر** — بقصد، عشان الـcompound-unique lookups تفضل شغّالة.
+   يعني أي راوت بيجيب صف بالـid الخام لازم يستخدم `findFirst` بدلها، وإلا هيفضل
+   بيقدّم محتوى متمسوح لأي حد معاه اللينك.
+2. **الـnested includes مش مفلترة** — `include: { lesson: { ... } }` بيرجّع الدرس
+   حتى لو متمسوح. الأب بيتفحص بإيدك (`lesson.deletedAt`, `unit.deletedAt`,
+   `course.deletedAt`).
+3. **مهام التنظيف (retention) لازم تمسح بجد** — الـmiddleware بيحوّل أي `delete`
+   على الموديلات دي لـupdate، وده بيفضّي معنى أي job بيمسح عشان يفضي مساحة.
+   `gcSnapshots` (بيسيب آخر ٥ نسخ من الموقع) و`purgeRejected` (بيمسح الميديا
+   المرفوضة بعد مدة) بيستخدموا `$executeRaw` عمداً: الملف نفسه اتمسح من الـstorage،
+   فالصف اللي فاضل مش قابل للاسترجاع أصلاً — هيبقى بس مؤشّر على لا حاجة.
 
 ### 4.6 حماية الفيديو (DRM خفيف)
 - HLS مشفّر AES-128 + مفاتيح بتتبدّل دورياً، بتتقدّم بس لجلسة حيّة موقّعة.

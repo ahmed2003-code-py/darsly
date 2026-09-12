@@ -31,8 +31,14 @@ data class EnrollUiState(
     val canSubmit: Boolean get() = !busy && code.length == CODE_LENGTH
 
     companion object {
-        /** Two groups of four, e.g. K7QM-3XPD. */
-        const val CODE_LENGTH = 8
+        /**
+         * Six digits, e.g. 418207 — matches the length the admin's "أجهزة
+         * الاستقبال" page generates. This used to be 8 (a mixed-case
+         * K7QM-3XPD format from an earlier alphabet); a phone still holding
+         * that build rejected every code the current backend and admin page
+         * produce, since neither side knew about the other's length.
+         */
+        const val CODE_LENGTH = 6
     }
 }
 
@@ -50,9 +56,9 @@ class VerifyViewModel(application: Application) : AndroidViewModel(application) 
     val state: StateFlow<EnrollUiState> = _state.asStateFlow()
 
     fun onCodeChange(value: String) {
-        // Accept it however it is typed — spaces, dashes, lower case.
-        val cleaned = value.uppercase()
-            .filter { it.isLetterOrDigit() }
+        // Accept it however it is typed — spaces, a dash, anything but a digit.
+        val cleaned = value
+            .filter { it.isDigit() }
             .take(EnrollUiState.CODE_LENGTH)
         _state.update {
             it.copy(

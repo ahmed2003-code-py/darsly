@@ -36,6 +36,9 @@ class FakeSmsMessageDao : SmsMessageDao {
     override fun observeRecent(limit: Int): Flow<List<SmsMessageEntity>> =
         revision.map { rows.values.sortedByDescending { row -> row.receivedAt }.take(limit) }
 
+    override fun observeLastSyncedAt(): Flow<Long?> =
+        revision.map { rows.values.filter { row -> row.syncStatus == SyncStatus.SYNCED }.maxOfOrNull { row -> row.lastAttemptAt ?: 0L } }
+
     override suspend fun pending(limit: Int): List<SmsMessageEntity> =
         rows.values
             .filter { it.syncStatus == SyncStatus.PENDING }

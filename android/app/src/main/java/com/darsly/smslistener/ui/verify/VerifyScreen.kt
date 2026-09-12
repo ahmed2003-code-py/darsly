@@ -20,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,7 +59,7 @@ fun VerifyScreen(viewModel: VerifyViewModel = viewModel()) {
             value = state.code,
             onValueChange = viewModel::onCodeChange,
             label = { Text(stringResource(R.string.enroll_code_label)) },
-            placeholder = { Text("K7QM3XPD") },
+            placeholder = { Text("418207") },
             singleLine = true,
             enabled = !state.busy,
             isError = state.status == EnrollStatus.INVALID_CODE,
@@ -68,10 +67,7 @@ fun VerifyScreen(viewModel: VerifyViewModel = viewModel()) {
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 4.sp,
             ),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Text,
-                capitalization = KeyboardCapitalization.Characters,
-            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )
 

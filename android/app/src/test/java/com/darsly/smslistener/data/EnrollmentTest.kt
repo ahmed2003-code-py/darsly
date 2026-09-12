@@ -51,7 +51,7 @@ class EnrollmentTest {
         )
         server.enqueue(json("""[]""")) // GET /device/sms-rules
 
-        val outcome = devices.enroll("K7QM3XPD")
+        val outcome = devices.enroll("418207")
 
         assertTrue(outcome is ApiOutcome.Success)
         assertEquals("access-1", session.accessToken())
@@ -62,7 +62,7 @@ class EnrollmentTest {
         val request = server.takeRequest()
         assertEquals("/api/v1/device/auth/enroll", request.path)
         val body = request.body.readUtf8()
-        assertTrue(body.contains("K7QM3XPD"))
+        assertTrue(body.contains("418207"))
         assertTrue(body.contains("Pixel 7"))
         // Nothing in the request lets the handset choose its own identity.
         assertFalse(body.contains("phone"))
@@ -76,7 +76,7 @@ class EnrollmentTest {
     fun `a wrong or expired code leaves the device unregistered`() = runTest {
         server.enqueue(MockResponse().setResponseCode(400).setBody("""{"message":"Invalid or expired enrollment code"}"""))
 
-        val outcome = devices.enroll("AAAABBBB")
+        val outcome = devices.enroll("000000")
 
         assertEquals(ApiError.INVALID_CODE, (outcome as ApiOutcome.Failure).error)
         assertNull(session.accessToken())
@@ -87,7 +87,7 @@ class EnrollmentTest {
     fun `rate limiting is reported distinctly so the user is told to wait`() = runTest {
         server.enqueue(MockResponse().setResponseCode(429))
 
-        val outcome = devices.enroll("K7QM3XPD")
+        val outcome = devices.enroll("418207")
 
         assertEquals(ApiError.RATE_LIMITED, (outcome as ApiOutcome.Failure).error)
     }
@@ -96,7 +96,7 @@ class EnrollmentTest {
     fun `no connectivity surfaces as a network error, not a bad code`() = runTest {
         server.shutdown()
 
-        val outcome = devices.enroll("K7QM3XPD")
+        val outcome = devices.enroll("418207")
 
         assertEquals(ApiError.NETWORK, (outcome as ApiOutcome.Failure).error)
         assertFalse(devices.isRegistered())
@@ -107,7 +107,7 @@ class EnrollmentTest {
         server.enqueue(json("""{"accessToken":"a","refreshToken":"r","deviceId":"d","phone":"+201002589923"}"""))
         server.enqueue(MockResponse().setResponseCode(500))
 
-        val outcome = devices.enroll("K7QM3XPD")
+        val outcome = devices.enroll("418207")
 
         assertTrue(outcome is ApiOutcome.Success)
         assertTrue(devices.isRegistered())

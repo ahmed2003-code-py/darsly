@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 export interface UpsertLiveDto {
   title: string;
@@ -18,6 +19,7 @@ export class LiveService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly gamification: GamificationService,
   ) {}
 
   // ── Teacher ────────────────────────────────────────────────────────────────
@@ -193,6 +195,21 @@ export class LiveService {
     if (Date.now() > closesAt) {
       throw new BadRequestException({ message: 'Session has ended', code: 'ENDED' });
     }
+
+    // Attendance, as far as the platform can honestly verify it: this student
+    // booked the session and asked for the link inside the window it was
+    // running. Keyed on the session, so opening the link twice is one
+    // attendance.
+    await this.gamification.record({
+      studentId: student.id,
+      type: 'LIVE_ATTENDED',
+      key: `LIVE_ATTENDED:${student.id}:${sessionId}`,
+      tenantId: s.tenantId,
+      entityType: 'liveSession',
+      entityId: sessionId,
+      meta: { title: s.title },
+    });
+
     return { joinUrl: s.joinUrl ?? null, title: s.title };
   }
 

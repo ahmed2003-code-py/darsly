@@ -1,12 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 @Injectable()
 export class ReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly gamification: GamificationService,
   ) {}
 
   private async studentOf(userId: string) {
@@ -71,6 +73,19 @@ export class ReviewsService {
         comment: dto.comment ?? '',
       },
       update: { rating: dto.rating, comment: dto.comment ?? '' },
+    });
+
+    // Paid for writing a review, never for what it says. The reward is keyed on
+    // the course, so editing a review later cannot be farmed — and a one-star
+    // review earns exactly what a five-star one does.
+    await this.gamification.record({
+      studentId: student.id,
+      type: 'REVIEW_SUBMITTED',
+      key: `REVIEW_SUBMITTED:${student.id}:${course.id}`,
+      tenantId: course.tenantId,
+      courseId: course.id,
+      entityType: 'review',
+      entityId: review.id,
     });
 
     // Notify the teacher of a brand-new review.

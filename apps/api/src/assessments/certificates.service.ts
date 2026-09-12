@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 /**
  * Issues a completion certificate once a student has completed every lesson in
@@ -13,6 +14,7 @@ export class CertificatesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly gamification: GamificationService,
   ) {}
 
   private serialFor(offset: number): string {
@@ -77,6 +79,32 @@ export class CertificatesService {
     if (existing) return existing;
 
     const cert = await this.createWithSerial(studentId, courseId);
+
+    // Finishing a course is the biggest single thing a student does here, and
+    // it is two events: the work, and the credential for it.
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { tenantId: true },
+    });
+    await this.gamification.record({
+      studentId,
+      type: 'COURSE_COMPLETED',
+      key: `COURSE_COMPLETED:${studentId}:${courseId}`,
+      tenantId: course?.tenantId,
+      courseId,
+      entityType: 'course',
+      entityId: courseId,
+    });
+    await this.gamification.record({
+      studentId,
+      type: 'CERTIFICATE_EARNED',
+      key: `CERTIFICATE_EARNED:${studentId}:${cert.id}`,
+      tenantId: course?.tenantId,
+      courseId,
+      entityType: 'certificate',
+      entityId: cert.id,
+      meta: { serial: cert.serial },
+    });
 
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },

@@ -12,6 +12,8 @@ import { CertificatesService } from '../assessments/certificates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProgressService } from '../progress/progress.service';
+import { GamificationService } from '../gamification/gamification.service';
+import { GamificationOutcome } from '../gamification/gamification.types';
 
 export interface DeviceCtx {
   ip?: string;
@@ -24,6 +26,7 @@ export class PlaybackService {
     private readonly prisma: PrismaService,
     @Inject(DRM_PROVIDER) private readonly drm: IDrmProvider,
     private readonly progress: ProgressService,
+    private readonly gamification: GamificationService,
     private readonly notifications: NotificationsService,
     private readonly certificates: CertificatesService,
   ) {}
@@ -334,10 +337,11 @@ export class PlaybackService {
     // Only the student's own player writes their progress. Staff in the tenant
     // may end or flag a session, but must never be able to complete a lesson —
     // and so a course, and so a certificate — on a student's behalf.
+    let gamification: GamificationOutcome | undefined;
     if (body.watchedPct != null && user.role === Role.STUDENT) {
       const lesson = await this.prisma.lesson.findUnique({
         where: { id: session.lessonId },
-        select: { durationSec: true },
+        select: { durationSec: true, unit: { select: { courseId: true } } },
       });
       const durationSec = lesson?.durationSec ?? 0;
       const elapsedSec = Math.max(0, (Date.now() - session.startedAt.getTime()) / 1000);
@@ -359,12 +363,32 @@ export class PlaybackService {
       // Finishing a lesson may complete the whole course → issue a certificate.
       if (justCompleted) {
         await this.certificates.checkByLesson(session.studentId, session.lessonId);
+        // The heartbeat keeps reporting ≥90% for the rest of the session, so
+        // this runs many times per lesson — and pays once, because the key is
+        // the lesson, not the request.
+        gamification = await this.gamification.record({
+          studentId: session.studentId,
+          type: 'LESSON_COMPLETED',
+          key: `LESSON_COMPLETED:${session.studentId}:${session.lessonId}`,
+          tenantId: session.tenantId,
+          courseId: lesson?.unit.courseId,
+          entityType: 'lesson',
+          entityId: session.lessonId,
+          meta: { watchedPct: effectivePct },
+        });
+        if (gamification.awarded) {
+          await this.gamification.noteStudySession(session.studentId);
+          await this.gamification.checkUnitCompletion(session.studentId, session.lessonId);
+        }
       }
     }
 
     // Learning activity rolls the daily streak (same-day is a no-op).
-    await this.progress.touchActivity(session.studentId);
-    return { ok: true };
+    const streak = await this.progress.touchActivity(session.studentId);
+    if (streak?.rolled) await this.gamification.checkStreakMilestone(session.studentId, streak.currentStreak);
+    // Only present on the heartbeat that actually earned something, so the
+    // player can celebrate in the same round trip instead of polling for it.
+    return gamification?.awarded ? { ok: true, gamification } : { ok: true };
   }
 
   /** Client-side hardening signal (devtools open, etc.) → SecurityEvent. */

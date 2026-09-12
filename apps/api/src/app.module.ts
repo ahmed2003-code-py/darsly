@@ -39,6 +39,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { AcademyModule } from './academy/academy.module';
 import { AcademySiteModule } from './academy-site/academy-site.module';
 import { DeviceModule } from './device/device.module';
+import { GamificationModule } from './gamification/gamification.module';
 
 // Single-service deploys: when the web app has been built into apps/web/dist,
 // the API serves it too (SPA fallback included). API routes stay under /api.
@@ -66,6 +67,7 @@ const webDist = join(__dirname, '..', '..', 'web', 'dist');
     ChatModule,
     RealtimeModule,
     ProgressModule,
+    GamificationModule,
     PaymentsModule,
     WalletModule,
     PayoutsModule,

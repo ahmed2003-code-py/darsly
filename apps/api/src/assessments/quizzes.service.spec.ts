@@ -26,13 +26,24 @@ function makeCtx(questions = QUESTIONS) {
       update: jest.fn((args: any) => Promise.resolve({ id: args.where.id, ...args.data })),
     },
     lessonProgress: { upsert: jest.fn().mockResolvedValue({}) },
+    // scopeOf() resolves the academy/course an award belongs to.
+    lesson: {
+      findUnique: jest.fn().mockResolvedValue({ unit: { courseId: 'c1', course: { tenantId: 't1' } } }),
+      update: jest.fn().mockResolvedValue({}),
+    },
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1' }) },
   };
   const access: any = { requireStudentAccess: jest.fn().mockResolvedValue({ studentId: 's1' }) };
   const notifications: any = { create: jest.fn().mockResolvedValue({}) };
   const certificates: any = { checkByLesson: jest.fn().mockResolvedValue(null) };
-  const svc = new QuizzesService(prisma, access, notifications, certificates);
-  return { svc, prisma, created, notifications, certificates };
+  const gamification: any = {
+    record: jest.fn().mockResolvedValue({ awarded: false, xp: 0, coins: 0, totalXp: 0, level: 1, leveledUp: false, achievements: [], missions: [] }),
+    checkUnitCompletion: jest.fn().mockResolvedValue({ awarded: false }),
+    noteStudySession: jest.fn().mockResolvedValue(undefined),
+    checkStreakMilestone: jest.fn().mockResolvedValue({ awarded: false }),
+  };
+  const svc = new QuizzesService(prisma, access, notifications, certificates, gamification);
+  return { svc, prisma, created, notifications, certificates, gamification };
 }
 
 describe('QuizzesService', () => {

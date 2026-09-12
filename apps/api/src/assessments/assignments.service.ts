@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LessonAccessService } from './lesson-access.service';
 import { CertificatesService } from './certificates.service';
+import { GamificationService } from '../gamification/gamification.service';
 import {
   GradeSubmissionDto,
   SubmitAssignmentDto,
@@ -16,6 +17,7 @@ export class AssignmentsService {
     private readonly access: LessonAccessService,
     private readonly notifications: NotificationsService,
     private readonly certificates: CertificatesService,
+    private readonly gamification: GamificationService,
   ) {}
 
   // ── Teacher authoring ──────────────────────────────────────────────────────
@@ -69,6 +71,21 @@ export class AssignmentsService {
       where: { id: submissionId },
       data: { score: dto.score, feedback: dto.feedback ?? '', gradedAt: new Date() },
     });
+
+    // A bonus for excellent work — 85% or better of the assignment's own
+    // maximum, so it means the same thing whether the teacher marks out of 10
+    // or out of 100.
+    if (submission.assignment.maxScore > 0 && dto.score / submission.assignment.maxScore >= 0.85) {
+      await this.gamification.record({
+        studentId: submission.studentId,
+        type: 'ASSIGNMENT_GRADED_HIGH',
+        key: `ASSIGNMENT_HIGH:${submission.studentId}:${submission.assignmentId}`,
+        tenantId,
+        entityType: 'assignment',
+        entityId: submission.assignmentId,
+        meta: { score: dto.score, maxScore: submission.assignment.maxScore },
+      });
+    }
 
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: submission.studentId },
@@ -126,6 +143,30 @@ export class AssignmentsService {
       update: { watchedPct: 100, completedAt: new Date() },
     });
     await this.certificates.checkByLesson(studentId, lessonId);
+
+    const scope = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { unit: { select: { courseId: true, course: { select: { tenantId: true } } } } },
+    });
+    await this.gamification.record({
+      studentId,
+      type: 'ASSIGNMENT_SUBMITTED',
+      key: `ASSIGNMENT_SUBMITTED:${studentId}:${assignment.id}`,
+      tenantId: scope?.unit.course.tenantId,
+      courseId: scope?.unit.courseId,
+      entityType: 'assignment',
+      entityId: assignment.id,
+    });
+    await this.gamification.record({
+      studentId,
+      type: 'LESSON_COMPLETED',
+      key: `LESSON_COMPLETED:${studentId}:${lessonId}`,
+      tenantId: scope?.unit.course.tenantId,
+      courseId: scope?.unit.courseId,
+      entityType: 'lesson',
+      entityId: lessonId,
+    });
+    await this.gamification.checkUnitCompletion(studentId, lessonId);
     return submission;
   }
 }

@@ -14,9 +14,16 @@ function makeCtx(totalLessons: number, completedLessons: number, existing: any =
       create: jest.fn((args: any) => Promise.resolve({ id: 'c1', ...args.data, course: { title: 'Algebra' } })),
     },
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1' }) },
+    course: { findUnique: jest.fn().mockResolvedValue({ tenantId: 't1' }) },
   };
   const notifications: any = { create: jest.fn().mockResolvedValue({}) };
-  return { svc: new CertificatesService(prisma, notifications), prisma, notifications };
+  const gamification: any = {
+    record: jest.fn().mockResolvedValue({ awarded: false, xp: 0, coins: 0, totalXp: 0, level: 1, leveledUp: false, achievements: [], missions: [] }),
+    checkUnitCompletion: jest.fn().mockResolvedValue({ awarded: false }),
+    noteStudySession: jest.fn().mockResolvedValue(undefined),
+    checkStreakMilestone: jest.fn().mockResolvedValue({ awarded: false }),
+  };
+  return { svc: new CertificatesService(prisma, notifications, gamification), prisma, notifications, gamification };
 }
 
 describe('CertificatesService', () => {

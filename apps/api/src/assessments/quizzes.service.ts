@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LessonAccessService } from './lesson-access.service';
 import { CertificatesService } from './certificates.service';
+import { GamificationService } from '../gamification/gamification.service';
+import { GamificationOutcome } from '../gamification/gamification.types';
 import {
   GradeAttemptDto,
   SetQuizQuestionsDto,
@@ -17,6 +19,7 @@ export class QuizzesService {
     private readonly access: LessonAccessService,
     private readonly notifications: NotificationsService,
     private readonly certificates: CertificatesService,
+    private readonly gamification: GamificationService,
   ) {}
 
   // ── Teacher authoring ──────────────────────────────────────────────────────
@@ -120,6 +123,14 @@ export class QuizzesService {
     });
     await this.notifyGraded(attempt.studentId, attempt.quiz.lesson.title, scorePct, passed);
     if (passed) await this.markLessonComplete(attempt.studentId, attempt.quiz.lessonId);
+    await this.awardQuiz({
+      studentId: attempt.studentId,
+      lessonId: attempt.quiz.lessonId,
+      quizId: attempt.quizId,
+      attemptId,
+      scorePct,
+      passed,
+    });
     return updated;
   }
 
@@ -221,6 +232,12 @@ export class QuizzesService {
 
     if (passed) await this.markLessonComplete(studentId, lessonId);
 
+    // Points for the work, before the result is assembled — the response
+    // carries them so the result screen can show what the attempt earned.
+    const gamification = needsManual
+      ? undefined
+      : await this.awardQuiz({ studentId, lessonId, quizId: quiz.id, attemptId: attempt.id, scorePct: autoPct, passed: !!passed });
+
     // Only reveal the answer key once the student has passed or exhausted their
     // attempts — otherwise a failed attempt would hand out every correct answer
     // to be replayed on the next submission.
@@ -233,6 +250,7 @@ export class QuizzesService {
       attemptId: attempt.id,
       scorePct,
       passed,
+      gamification,
       needsManualGrading: needsManual,
       passingScore: quiz.passingScore,
       revealed: reveal,
@@ -285,5 +303,93 @@ export class QuizzesService {
       update: { watchedPct: 100, completedAt: new Date() },
     });
     await this.certificates.checkByLesson(studentId, lessonId);
+    const scope = await this.scopeOf(lessonId);
+    await this.gamification.record({
+      studentId,
+      type: 'LESSON_COMPLETED',
+      key: `LESSON_COMPLETED:${studentId}:${lessonId}`,
+      tenantId: scope?.tenantId,
+      courseId: scope?.courseId,
+      entityType: 'lesson',
+      entityId: lessonId,
+    });
+    await this.gamification.checkUnitCompletion(studentId, lessonId);
+  }
+
+  /** Which academy and course a lesson belongs to — for scoping the award. */
+  private async scopeOf(lessonId: string): Promise<{ tenantId: string; courseId: string } | null> {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { unit: { select: { courseId: true, course: { select: { tenantId: true } } } } },
+    });
+    return lesson ? { tenantId: lesson.unit.course.tenantId, courseId: lesson.unit.courseId } : null;
+  }
+
+  /**
+   * What an attempt earns.
+   *
+   * Three separate events, deliberately: finishing a quiz is worth something
+   * every time (capped daily, so a student cannot sit the same quiz twenty
+   * times for points), while passing it and acing it are worth something *once*
+   * — keyed on the quiz, not the attempt.
+   */
+  private async awardQuiz(input: {
+    studentId: string;
+    lessonId: string;
+    quizId: string;
+    attemptId: string;
+    scorePct: number;
+    passed: boolean;
+  }): Promise<GamificationOutcome | undefined> {
+    const scope = await this.scopeOf(input.lessonId);
+    const base = {
+      studentId: input.studentId,
+      tenantId: scope?.tenantId,
+      courseId: scope?.courseId,
+      entityType: 'quiz',
+    };
+    let last = await this.gamification.record({
+      ...base,
+      type: 'QUIZ_COMPLETED',
+      key: `QUIZ_COMPLETED:${input.studentId}:${input.attemptId}`,
+      entityId: input.attemptId,
+      meta: { scorePct: input.scorePct, quizId: input.quizId },
+    });
+    if (input.passed) {
+      const passedOutcome = await this.gamification.record({
+        ...base,
+        type: 'QUIZ_PASSED',
+        key: `QUIZ_PASSED:${input.studentId}:${input.quizId}`,
+        entityId: input.quizId,
+        meta: { scorePct: input.scorePct },
+      });
+      if (passedOutcome.awarded) last = this.merge(last, passedOutcome);
+    }
+    if (input.scorePct >= 100) {
+      const perfect = await this.gamification.record({
+        ...base,
+        type: 'QUIZ_PERFECT',
+        key: `QUIZ_PERFECT:${input.studentId}:${input.quizId}`,
+        entityId: input.quizId,
+      });
+      if (perfect.awarded) last = this.merge(last, perfect);
+    }
+    return last.awarded ? last : undefined;
+  }
+
+  /** Fold several awards from one submission into a single thing to celebrate. */
+  private merge(a: GamificationOutcome, b: GamificationOutcome): GamificationOutcome {
+    return {
+      awarded: a.awarded || b.awarded,
+      xp: a.xp + b.xp,
+      coins: a.coins + b.coins,
+      totalXp: Math.max(a.totalXp, b.totalXp),
+      level: Math.max(a.level, b.level),
+      leveledUp: a.leveledUp || b.leveledUp,
+      levelNameAr: b.levelNameAr ?? a.levelNameAr,
+      levelNameEn: b.levelNameEn ?? a.levelNameEn,
+      achievements: [...a.achievements, ...b.achievements],
+      missions: [...a.missions, ...b.missions],
+    };
   }
 }

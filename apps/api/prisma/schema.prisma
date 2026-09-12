@@ -297,6 +297,15 @@ model StudentProfile {
   savedCourses     SavedCourse[]
   walletTxns       WalletTransaction[]
   walletTopups     WalletTopup[]
+
+  // Gamification (additive — a student without a row is simply at zero).
+  gamification    StudentGamification?
+  gamificationLog GamificationEvent[]
+  achievements    StudentAchievement[]
+  titles          StudentTitle[]
+  missions        StudentMission[]
+  leaderboard     LeaderboardEntry[]
+  redemptions     RewardRedemption[]
 }
 
 // A student's saved / wishlisted course.
@@ -429,11 +438,11 @@ model BundleItem {
 }
 
 model CourseUnit {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   courseId  String
-  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
   title     String
-  sortOrder Int    @default(0)
+  sortOrder Int     @default(0)
   // The one unit a course may have for lessons added with no section at all —
   // never rendered as a section itself, just a flat list above the named ones.
   isDefault Boolean @default(false)
@@ -452,14 +461,14 @@ enum LessonType {
 }
 
 model Lesson {
-  id        String     @id @default(cuid())
-  unitId    String
-  unit      CourseUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  title     String
+  id          String     @id @default(cuid())
+  unitId      String
+  unit        CourseUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  title       String
   // What the lesson covers, shown to the student above the player.
   description String?
-  type      LessonType @default(VIDEO)
-  sortOrder Int        @default(0)
+  type        LessonType @default(VIDEO)
+  sortOrder   Int        @default(0)
 
   videoAssetId String?     @unique
   videoAsset   VideoAsset? @relation(fields: [videoAssetId], references: [id])
@@ -716,7 +725,7 @@ model Payment {
   // an actual transfer must cover, and what the matching engine looks for. Zero
   // for a course paid entirely by transfer; equal to amountCents for `method:
   // WALLET` (paid entirely from the balance, no transfer at all).
-  walletCents Int @default(0)
+  walletCents Int           @default(0)
   currency    String        @default("EGP")
   status      PaymentStatus @default(PENDING)
   gateway     String        @default("manual") // manual proof-based; paymob/fawry/stripe later
@@ -1498,4 +1507,297 @@ model DeviceEnrollmentCode {
   createdAt          DateTime  @default(now())
 
   @@index([expiresAt, consumedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gamification
+//
+// One engine behind every meaningful learning action: XP, coins, levels,
+// achievements, missions and leaderboards. Three rules hold it together.
+//
+//  1. **One ledger.** `GamificationEvent` is the single, append-only record of
+//     everything that ever awarded (or spent) XP and coins. Balances are
+//     denormalised onto `StudentGamification` for cheap reads, but the ledger
+//     is the truth, and every row is traceable to the learning action that
+//     caused it.
+//  2. **Idempotent by construction.** Every event carries a unique key derived
+//     from what happened, not from when it was reported. A heartbeat that
+//     re-reports a finished lesson, a retried request, a double-submitted quiz
+//     — all collapse to one award, at the database level.
+//  3. **Coins are not money.** They live here, in their own ledger, counted in
+//     whole coins. The real-money wallet (`WalletTransaction`, piasters) is a
+//     different table in a different module and the two never meet.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Per-student aggregate: the numbers the profile and dashboard read.
+/// Derived from the ledger, kept current inside the same transaction.
+model StudentGamification {
+  id        String         @id @default(cuid())
+  studentId String         @unique
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  xp    Int @default(0)
+  level Int @default(1)
+
+  /// Spendable balance, and the lifetime totals behind it.
+  coins       Int @default(0)
+  coinsEarned Int @default(0)
+  coinsSpent  Int @default(0)
+
+  /// Counters the achievement engine evaluates against. Denormalised so
+  /// unlocking never fans out into a dozen count() queries per event.
+  lessonsCompleted  Int @default(0)
+  quizzesPassed     Int @default(0)
+  perfectQuizzes    Int @default(0)
+  coursesCompleted  Int @default(0)
+  assignmentsDone   Int @default(0)
+  liveAttended      Int @default(0)
+  reviewsWritten    Int @default(0)
+  missionsCompleted Int @default(0)
+  earlyBirdSessions Int @default(0)
+  nightOwlSessions  Int @default(0)
+  weekendSessions   Int @default(0)
+
+  /// Streak protection. The streak itself stays on StudentProfile — this is
+  /// only the inventory and the record of the last day a freeze was spent.
+  streakFreezes Int       @default(0)
+  freezeUsedOn  DateTime?
+
+  /// The title the student chose to display beside their name.
+  activeTitle   String?
+  bestRank      Int?
+  lastLevelUpAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// The append-only ledger. Also the audit trail and the anti-abuse record.
+model GamificationEvent {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  /// Academy the action belonged to. Null for platform-level events (daily
+  /// login, level-up). Leaderboards scope on this.
+  tenantId String?
+  courseId String?
+
+  type       String
+  entityType String?
+  entityId   String?
+
+  xpAwarded    Int @default(0)
+  /// Signed: positive when earned, negative when spent in the reward store.
+  coinsAwarded Int @default(0)
+
+  /// Derived from the action, never from the request. Two reports of the same
+  /// completion produce the same key and therefore one award.
+  idempotencyKey String @unique
+
+  meta      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([studentId, createdAt])
+  @@index([studentId, type])
+  @@index([tenantId, createdAt])
+  @@index([type, createdAt])
+}
+
+/// What each event is worth. Seeded with defaults; editable by an admin so the
+/// economy can be tuned without a deploy.
+model XpRule {
+  id    String @id @default(cuid())
+  event String @unique
+
+  xp    Int @default(0)
+  coins Int @default(0)
+
+  /// Anti-farming. `dailyCap` is the most XP this event may produce for one
+  /// student in a day (0 = uncapped); `perEntityLimit` how many times it may
+  /// ever pay out for the same entity (0 = unlimited).
+  dailyCap       Int @default(0)
+  perEntityLimit Int @default(1)
+
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+/// Level thresholds. Configurable, so the curve can be retuned later.
+model LevelTier {
+  level  Int    @id
+  minXp  Int
+  nameAr String
+  nameEn String
+  icon   String @default("military_tech")
+
+  /// Paid once, on arrival.
+  coinReward Int @default(0)
+}
+
+/// Achievement definitions, evaluated against a named counter so new ones can
+/// be added as data rather than code.
+model Achievement {
+  id       String @id @default(cuid())
+  key      String @unique
+  category String
+
+  icon    String
+  titleAr String
+  titleEn String
+  descAr  String
+  descEn  String
+
+  /// A field of StudentGamification, or one of the derived metrics the
+  /// evaluator knows (certificates, streakBest, enrollments, level…).
+  metric    String
+  threshold Int
+
+  xpReward   Int     @default(0)
+  coinReward Int     @default(0)
+  /// Unlocks this title when earned.
+  titleKey   String?
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  students StudentAchievement[]
+}
+
+model StudentAchievement {
+  id            String         @id @default(cuid())
+  studentId     String
+  student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement    @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  unlockedAt    DateTime       @default(now())
+
+  @@unique([studentId, achievementId])
+  @@index([studentId, unlockedAt])
+}
+
+/// Display titles. Separate from achievements: an achievement is a thing you
+/// did, a title is a thing you wear.
+model Title {
+  key       String @id
+  labelAr   String
+  labelEn   String
+  icon      String @default("workspace_premium")
+  sortOrder Int    @default(0)
+
+  students StudentTitle[]
+}
+
+model StudentTitle {
+  id         String         @id @default(cuid())
+  studentId  String
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  titleKey   String
+  title      Title          @relation(fields: [titleKey], references: [key], onDelete: Cascade)
+  unlockedAt DateTime       @default(now())
+
+  @@unique([studentId, titleKey])
+}
+
+/// A mission or quest assigned to one student for one period. Generated lazily
+/// on first read of the day/week, from the courses that student is actually
+/// enrolled in — so no scheduler, and no missions for content they don't have.
+model StudentMission {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  /// 'DAILY' | 'WEEKLY'
+  kind      String
+  /// The period this belongs to: '2026-09-12' for a day, '2026-W37' for a week.
+  periodKey String
+  /// Template id — what the mission asks for.
+  template  String
+
+  target   Int
+  progress Int @default(0)
+
+  xpReward   Int @default(0)
+  coinReward Int @default(0)
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([studentId, periodKey, template])
+  @@index([studentId, kind, periodKey])
+}
+
+/// Incrementally maintained leaderboard totals — written in the same
+/// transaction as the award, so a board never has to be recomputed from the
+/// full ledger to be read.
+model LeaderboardEntry {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  /// 'GLOBAL' | 'ACADEMY' | 'COURSE'
+  scope     String
+  /// '' for global, else the tenant or course id.
+  scopeId   String
+  /// 'WEEKLY' | 'MONTHLY' | 'ALLTIME'
+  period    String
+  /// '2026-W37' | '2026-09' | 'all'
+  periodKey String
+
+  xp        Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, scopeId, period, periodKey, studentId])
+  @@index([scope, scopeId, period, periodKey, xp(sort: Desc)])
+}
+
+/// What coins can buy. Tenant-scoped rewards belong to one academy; a null
+/// tenant is a platform-wide reward.
+model Reward {
+  id       String  @id @default(cuid())
+  key      String  @unique
+  tenantId String?
+
+  category String
+  /// What redeeming actually does: STREAK_FREEZE | XP_BOOST | COSMETIC | TITLE | REAL
+  kind     String
+
+  icon    String
+  titleAr String
+  titleEn String
+  descAr  String @default("")
+  descEn  String @default("")
+
+  costCoins     Int
+  /// Extra parameters for the effect (multiplier, duration, title key…).
+  payload       Json    @default("{}")
+  /// Null = unlimited.
+  stock         Int?
+  /// A real-world reward never fulfils itself; an admin has to act.
+  needsApproval Boolean @default(false)
+
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  redemptions RewardRedemption[]
+
+  @@index([tenantId, isActive])
+}
+
+model RewardRedemption {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  rewardId  String
+  reward    Reward         @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  costCoins Int
+  /// FULFILLED for instant effects, PENDING when an admin must act.
+  status    String   @default("FULFILLED")
+  meta      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
 }

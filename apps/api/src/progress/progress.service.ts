@@ -81,18 +81,38 @@ export class ProgressService {
 
   /**
    * Record learning activity and roll the daily streak. Called from playback
-   * heartbeats. Same-day = no-op; consecutive day = +1; a gap resets to 1.
+   * heartbeats. Same-day = no-op; consecutive day = +1; a gap resets to 1 —
+   * unless the student holds a streak freeze, which covers exactly one missed
+   * day and is spent doing so.
+   *
+   * This remains the only place in the product that counts streak days. The
+   * gamification engine reads the result and rewards milestones; it does not
+   * keep a second streak of its own.
    */
-  async touchActivity(studentId: string) {
+  async touchActivity(studentId: string): Promise<{ rolled: boolean; currentStreak: number; freezeUsed: boolean } | null> {
     const student = await this.prisma.studentProfile.findUnique({ where: { id: studentId } });
-    if (!student) return;
+    if (!student) return null;
     const today = startOfDay(new Date());
     const last = student.lastActivityDate ? startOfDay(student.lastActivityDate) : null;
-    if (last && last.getTime() === today.getTime()) return; // already counted today
+    if (last && last.getTime() === today.getTime()) {
+      return { rolled: false, currentStreak: student.currentStreak, freezeUsed: false }; // already counted today
+    }
 
     const yesterday = new Date(today.getTime() - 86_400_000);
-    const nextStreak =
-      last && last.getTime() === yesterday.getTime() ? student.currentStreak + 1 : 1;
+    let nextStreak: number;
+    let freezeUsed = false;
+
+    if (last && last.getTime() === yesterday.getTime()) {
+      nextStreak = student.currentStreak + 1;
+    } else if (last && student.currentStreak > 0 && daysBetween(last, today) === 2) {
+      // Exactly one day missed: what a freeze is for. Anything longer is a
+      // break, and pretending otherwise would make the number meaningless.
+      freezeUsed = await this.spendStreakFreeze(studentId);
+      nextStreak = freezeUsed ? student.currentStreak + 1 : 1;
+    } else {
+      nextStreak = 1;
+    }
+
     await this.prisma.studentProfile.update({
       where: { id: studentId },
       data: {
@@ -101,6 +121,22 @@ export class ProgressService {
         lastActivityDate: new Date(),
       },
     });
+    return { rolled: true, currentStreak: nextStreak, freezeUsed };
+  }
+
+  /**
+   * Spend one freeze, if there is one.
+   *
+   * Read as a direct table write rather than through the gamification service:
+   * that module already depends on this one, and a streak is not worth a
+   * circular import.
+   */
+  private async spendStreakFreeze(studentId: string): Promise<boolean> {
+    const res = await this.prisma.studentGamification.updateMany({
+      where: { studentId, streakFreezes: { gt: 0 } },
+      data: { streakFreezes: { decrement: 1 }, freezeUsedOn: new Date() },
+    });
+    return res.count > 0;
   }
 
   async setWeeklyGoal(userId: string, goal: number) {
@@ -118,6 +154,10 @@ function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
+}
+/** Whole days between two midnights. */
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
 function startOfWeek(): Date {
   const x = startOfDay(new Date());

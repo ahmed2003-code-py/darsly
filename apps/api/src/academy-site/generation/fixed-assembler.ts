@@ -62,7 +62,7 @@ export function assembleFixed(input: AssembleFixedInput): SiteDocument {
   }
 
   // Live — resolved at render/hydration time, never frozen into the document.
-  blocks.push({ type: 'courses', id: randomUUID(), heading: bilingual('الكورسات', 'Courses'), mode: 'auto', limit: 12 });
+  blocks.push({ type: 'courses', id: randomUUID(), heading: bilingual('الدورات', 'Courses'), mode: 'auto', limit: 12 });
 
   if (galleryIds.length) {
     blocks.push({

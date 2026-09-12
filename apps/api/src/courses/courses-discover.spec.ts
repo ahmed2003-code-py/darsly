@@ -1,3 +1,4 @@
+import { AcademyMediaService } from '../academy-site/media/academy-media.service';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
@@ -6,11 +7,12 @@ import { VideoProcessingService } from '../video/video-processing.service';
 import { YoutubeImportService } from '../video/youtube-import.service';
 import { CoursesService } from './courses.service';
 
-// Discovery never touches storage, transcoding or YouTube import — stand-ins
-// are enough to satisfy the constructor.
+// Discovery never touches storage, transcoding, YouTube import or media —
+// stand-ins are enough to satisfy the constructor.
 const noStorage = {} as unknown as StorageProvider;
 const noVideoProcessing = {} as unknown as VideoProcessingService;
 const noYoutubeImport = {} as unknown as YoutubeImportService;
+const noMedia = {} as unknown as AcademyMediaService;
 
 /**
  * Course discovery.
@@ -48,7 +50,7 @@ function build(rows: unknown[] = [], total = rows.length) {
   // Nothing is hidden here: exclusivity has its own suite, and letting it
   // return anything would make every assertion below depend on it.
   const openToEveryone = { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService;
-  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport), prisma, calls };
+  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport, noMedia), prisma, calls };
 }
 
 const course = (over: Record<string, unknown> = {}) => ({
@@ -258,6 +260,7 @@ describe('prices carry the platform fee', () => {
       noStorage,
       noVideoProcessing,
       noYoutubeImport,
+      noMedia,
     );
     await service.discover({});
     // The card and the checkout must agree, and the academy's own price must not
@@ -295,6 +298,7 @@ describe('a student is not shown the catalogues of their teacher\'s rivals', () 
       noStorage,
       noVideoProcessing,
       noYoutubeImport,
+      noMedia,
     );
     return { service, calls };
   }

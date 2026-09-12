@@ -69,7 +69,7 @@ export function renderFixedSite(doc: SiteDocument, ctx: RenderContext): string {
   const navLinks: string[] = [];
   if (about) navLinks.push(navLink('about', 'نبذة'));
   if (credentials) navLinks.push(navLink('credentials', 'الإنجازات'));
-  navLinks.push('<a href="#courses" data-section="courses" id="navCoursesLink" hidden>الكورسات</a>');
+  navLinks.push('<a href="#courses" data-section="courses" id="navCoursesLink" hidden>الدورات</a>');
   if (gallery && galleryMedia.length) navLinks.push(navLink('gallery', 'المعرض'));
   if (process || faq) navLinks.push(navLink('journey', 'الرحلة'));
 
@@ -263,8 +263,8 @@ function coursesSection(): string {
   return `<section class="section courses-hidden" id="courses">
   <div class="wrap">
     <div class="section-head center reveal">
-      <span class="eyebrow">الكورسات</span>
-      <h2>الكورسات المتاحة دلوقتي</h2>
+      <span class="eyebrow">الدورات</span>
+      <h2>الدورات المتاحة دلوقتي</h2>
     </div>
     <div class="course-grid stagger" id="courseGrid"></div>
   </div>

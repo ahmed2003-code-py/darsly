@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
-import { api } from '../../lib/api';
+import { api, apiOrigin } from '../../lib/api';
 import { dateShort, duration, egp } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { useAuthStore } from '../../stores/auth';
@@ -246,8 +246,22 @@ export default function CourseDetailPage() {
         {/* Enroll card */}
         <aside className="h-fit w-full shrink-0 lg:sticky lg:top-8 lg:w-96">
           <div className="card overflow-hidden p-0">
+            {/* The teacher's pitch plays where the cover used to sit: right
+                above the price, which is the moment it has to do its work.
+                The cover becomes its poster, so nothing is lost. */}
             <div className="h-44 bg-surface-container-high">
-              {course.thumbnailUrl && <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />}
+              {course.introVideoUrl ? (
+                <video
+                  src={apiOrigin() + course.introVideoUrl}
+                  poster={course.thumbnailUrl ?? undefined}
+                  controls
+                  playsInline
+                  preload="none"
+                  className="h-full w-full bg-black object-contain"
+                />
+              ) : (
+                course.thumbnailUrl && <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+              )}
             </div>
             <div className="p-6">
               <p className="text-sm text-outline">{t('course.priceLabel')}</p>

@@ -76,7 +76,7 @@ const COURSE_TEMPLATES = [
 
 const FIRST = ['محمد', 'أحمد', 'سارة', 'مريم', 'يوسف', 'عمر', 'ليلى', 'نور', 'حسن', 'فاطمة', 'خالد', 'هبة', 'كريم', 'دينا', 'طارق', 'رنا', 'سيف', 'ملك', 'زياد', 'جنى'];
 const LAST = ['المصري', 'عبدالله', 'حسن', 'إبراهيم', 'سالم', 'فتحي', 'رشدي', 'عادل', 'مصطفى', 'يوسف', 'كمال', 'شعبان', 'زكي', 'نبيل', 'فوزي'];
-const REVIEW_COMMENTS = ['شرح ممتاز وواضح', 'استفدت كتير من الكورس', 'أفضل مدرّس', 'المحتوى منظّم جداً', 'أسلوب رائع في التبسيط'];
+const REVIEW_COMMENTS = ['شرح ممتاز وواضح', 'استفدت كتير من الدورة', 'أفضل مدرّس', 'المحتوى منظّم جداً', 'أسلوب رائع في التبسيط'];
 
 interface SeedQuestion {
   type: 'MCQ' | 'TRUE_FALSE' | 'SHORT_ANSWER';
@@ -220,7 +220,7 @@ export async function seedDatabase(prisma: Db, log: (m: string) => void = () => 
     for (let ci = 0; ci < COURSE_TEMPLATES.length; ci++) {
       const CT = COURSE_TEMPLATES[ci];
       const course = await prisma.course.create({
-        data: { tenantId: academy.id, title: `${subjName} — ${CT.suffix}`, description: `كورس ${CT.suffix} في ${subjName} مع ${T.name}. محتوى منظّم بالفيديو والاختبارات والواجبات.`, subjectId: subjects[T.subject], grades: { create: [{ gradeId: grades[(ti + ci) % grades.length] }] }, status: 'PUBLISHED', pricingModel: CT.model as any, priceCents: CT.price, thumbnailUrl: cover, defaultViewsCap: 3 },
+        data: { tenantId: academy.id, title: `${subjName} — ${CT.suffix}`, description: `دورة ${CT.suffix} في ${subjName} مع ${T.name}. محتوى منظّم بالفيديو والاختبارات والواجبات.`, subjectId: subjects[T.subject], grades: { create: [{ gradeId: grades[(ti + ci) % grades.length] }] }, status: 'PUBLISHED', pricingModel: CT.model as any, priceCents: CT.price, thumbnailUrl: cover, defaultViewsCap: 3 },
       });
 
       const lessonIds: string[] = [];

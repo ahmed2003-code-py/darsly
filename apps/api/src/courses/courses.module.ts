@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AcademyModule } from '../academy/academy.module';
+import { AcademySiteModule } from '../academy-site/academy-site.module';
 import { AuditModule } from '../audit/audit.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { VideoModule } from '../video/video.module';
@@ -9,7 +10,7 @@ import { TeacherCoursesController } from './teacher-courses.controller';
 import { StudentPriceService } from '../payments/student-price.service';
 
 @Module({
-  imports: [AuditModule, AcademyModule, CatalogModule, VideoModule],
+  imports: [AuditModule, AcademyModule, AcademySiteModule, CatalogModule, VideoModule],
   controllers: [TeacherCoursesController, PublicCoursesController],
   providers: [StudentPriceService, CoursesService],
   exports: [CoursesService],

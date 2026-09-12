@@ -1,5 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsString, MaxLength } from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy, RequirePermission } from '../academy/academy-context';
@@ -24,6 +38,11 @@ import {
 class SetThumbnailDto {
   @IsString() @MaxLength(LIMITS.IMAGE_DATA_URL) dataUrl: string;
 }
+
+const INTRO_VIDEO_MIME = /^video\/mp4$/;
+// Kept in step with KIND_MAX_VIDEO_BYTES.COURSE_INTRO in AcademyMediaService,
+// which produces the message the teacher actually reads.
+const INTRO_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 
 /**
  * Academy content-management API. Academy-aware: the active academy is resolved
@@ -109,6 +128,55 @@ export class TeacherCoursesController {
   ) {
     validateImageDataUrl(dto.dataUrl, 600 * 1024); // ~600 KB after decode
     return this.courses.update(ctx.academyId, id, { thumbnailUrl: dto.dataUrl });
+  }
+
+  @Post('courses/:id/intro-video')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: '[teacher] Upload the course intro clip (multipart: file, MP4)' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: INTRO_VIDEO_MAX_BYTES },
+      fileFilter: (_req, file, cb) =>
+        INTRO_VIDEO_MIME.test(file.mimetype)
+          ? cb(null, true)
+          : cb(new BadRequestException('Only MP4 video is accepted'), false),
+    }),
+  )
+  async setIntroVideo(
+    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    if (!file) throw new BadRequestException('file is required');
+    const result = await this.courses.setIntroVideo(ctx.academyId, id, {
+      buffer: file.buffer,
+      mimetype: file.mimetype,
+    });
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'course.intro_video.set',
+      entity: 'Course',
+      entityId: id,
+      meta: { bytes: file.size },
+    });
+    return result;
+  }
+
+  @Delete('courses/:id/intro-video')
+  @ApiOperation({ summary: '[teacher] Remove the course intro clip' })
+  async removeIntroVideo(
+    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
+    const result = await this.courses.removeIntroVideo(ctx.academyId, id);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'course.intro_video.remove',
+      entity: 'Course',
+      entityId: id,
+    });
+    return result;
   }
 
   @Patch('courses/:id/bundle')

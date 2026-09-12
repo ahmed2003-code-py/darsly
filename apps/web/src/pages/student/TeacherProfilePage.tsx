@@ -61,16 +61,24 @@ export default function TeacherProfilePage() {
           </div>
         </div>
 
+        {/* A play button that plays nothing is worse than no play button: it
+            promised an intro video every teacher was told they had not
+            uploaded. It shows up only when there is something to play. */}
         <div className="relative flex min-h-56 items-center justify-center overflow-hidden rounded-xl bg-inverse-surface shadow-modal">
-          {teacher.avatarUrl && (
-            <img src={teacher.avatarUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+          {teacher.introVideoUrl ? (
+            <video
+              src={teacher.introVideoUrl}
+              poster={teacher.avatarUrl ?? undefined}
+              controls
+              playsInline
+              preload="none"
+              className="h-full max-h-96 w-full bg-black object-contain"
+            />
+          ) : (
+            teacher.avatarUrl && (
+              <img src={teacher.avatarUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            )
           )}
-          <div className="relative flex flex-col items-center gap-2 text-inverse-on-surface">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-container shadow-modal">
-              <span className="material-symbols-outlined text-4xl text-on-primary">play_arrow</span>
-            </span>
-            <p className="text-sm">{t('teacherProfile.introVideo')}</p>
-          </div>
         </div>
       </section>
 

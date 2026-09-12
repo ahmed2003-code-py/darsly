@@ -78,6 +78,10 @@ export default function CourseBuilderPage() {
   // render behind on whether a file is currently going up.
   const uploadingRef = useRef(false);
   const [filePct, setFilePct] = useState<number | null>(null);
+  // The course's own intro clip, which is marketing rather than a lesson and so
+  // has its own upload, its own progress, and its own errors.
+  const [introPct, setIntroPct] = useState<number | null>(null);
+  const [introError, setIntroError] = useState<unknown>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
   // Lesson-settings drafts (per selected lesson)
@@ -99,6 +103,7 @@ export default function CourseBuilderPage() {
   const videoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const thumbInput = useRef<HTMLInputElement>(null);
+  const introInput = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -383,6 +388,51 @@ export default function CourseBuilderPage() {
       setUploadingLessonId(null);
     }
   }
+
+  /**
+   * Upload the course's intro clip.
+   *
+   * It goes up whole rather than through the lesson pipeline: it is a public
+   * MP4 a visitor watches before they have paid for anything, so there is
+   * nothing to encrypt and nothing to gate. Progress is reported because the
+   * file is large enough that silence reads as a hang.
+   */
+  const INTRO_MAX_MB = 50;
+  async function uploadIntro(file: File) {
+    // Checked here as well as on the server, because the server can only answer
+    // after the whole file has gone up — and being told a 200 MB clip is too
+    // big once it has finished uploading is the worst possible time to hear it.
+    if (file.type !== 'video/mp4') {
+      setIntroError(new Error(t('teacher.builder.introFormatErr')));
+      return;
+    }
+    if (file.size > INTRO_MAX_MB * 1024 * 1024) {
+      setIntroError(new Error(t('teacher.builder.introSizeErr', { mb: INTRO_MAX_MB })));
+      return;
+    }
+    setIntroError(null);
+    setIntroPct(0);
+    uploadingRef.current = true;
+    const onPct = throttledPct(setIntroPct);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.post(`/teacher/courses/${id}/intro-video`, fd, {
+        onUploadProgress: (e) => onPct(e, file.size),
+      });
+      invalidate();
+    } catch (err) {
+      setIntroError(err);
+    } finally {
+      uploadingRef.current = false;
+      setIntroPct(null);
+    }
+  }
+
+  const removeIntro = useMutation({
+    mutationFn: async () => (await api.delete(`/teacher/courses/${id}/intro-video`)).data,
+    onSuccess: invalidate,
+  });
 
   async function uploadAttachment(file: File) {
     const lessonId = selectedLessonId;
@@ -904,6 +954,75 @@ export default function CourseBuilderPage() {
         </button>
       )}
       <ErrorNote error={thumbUpload.error} />
+
+      {/*
+        Course intro clip.
+
+        The teacher's own pitch for the course, and the one piece of it a
+        visitor can watch before paying — so it is stored and served as a plain
+        public MP4, not through the protected lesson pipeline.
+      */}
+      <input ref={introInput} type="file" accept="video/mp4" className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) uploadIntro(f);
+        }} />
+      {course.introVideoUrl ? (
+        <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
+          <video
+            src={apiOrigin() + course.introVideoUrl}
+            controls
+            playsInline
+            className="h-44 w-full bg-black object-contain sm:h-56"
+          />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface-container-lowest px-4 py-3">
+            <p className="me-auto font-heading font-bold">{t('teacher.builder.introVideo')}</p>
+            <button
+              className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline disabled:opacity-50"
+              disabled={introPct !== null}
+              onClick={() => introInput.current?.click()}
+            >
+              <span className="material-symbols-outlined text-base">autorenew</span>
+              {introPct !== null ? t('teacher.builder.uploading', { pct: introPct }) : t('teacher.builder.replaceIntro')}
+            </button>
+            <button
+              className="flex items-center gap-1.5 text-sm font-bold text-error hover:underline disabled:opacity-50"
+              disabled={removeIntro.isPending || introPct !== null}
+              onClick={() => window.confirm(t('teacher.builder.removeIntroConfirm')) && removeIntro.mutate()}
+            >
+              <span className="material-symbols-outlined text-base">delete</span>
+              {t('common.delete')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="group mb-5 flex w-full items-center gap-4 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low/40 p-4 text-start transition hover:border-primary hover:bg-primary-fixed/20 disabled:opacity-70"
+          disabled={introPct !== null}
+          onClick={() => introInput.current?.click()}
+        >
+          <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-primary">
+            <span className="material-symbols-outlined text-[26px]">
+              {introPct !== null ? 'hourglass' : 'movie'}
+            </span>
+          </span>
+          <span className="min-w-0">
+            <span className="block font-heading font-bold">
+              {introPct !== null
+                ? t('teacher.builder.uploading', { pct: introPct })
+                : t('teacher.builder.addIntro')}
+            </span>
+            <span className="mt-0.5 block text-sm text-on-surface-variant">{t('teacher.builder.addIntroHint')}</span>
+          </span>
+        </button>
+      )}
+      {introPct !== null && (
+        <div className="-mt-3 mb-5 h-1.5 overflow-hidden rounded-full bg-surface-container-high">
+          <div className="h-full bg-primary transition-all" style={{ width: `${introPct}%` }} />
+        </div>
+      )}
+      <ErrorNote error={introError ?? removeIntro.error} />
 
       {/* Summary strip — what used to be the pricing card in the side column. */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 py-3">

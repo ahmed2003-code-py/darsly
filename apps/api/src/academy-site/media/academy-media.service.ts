@@ -20,13 +20,26 @@ const KIND_MAX_COUNT: Partial<Record<AcademyMediaKind, number>> = {
   AVATAR: 1,
   GALLERY: 12,
   PROMO: 6,
+  // One per course, plus the ones left behind by re-recording. The cap is a
+  // runaway guard, not an editorial limit like GALLERY's.
+  COURSE_INTRO: 200,
 };
 
 // Kinds a video upload is meaningful for. LOGO/COVER/AVATAR are single still
 // images by design; GALLERY is a mixed reel of photos and clips, same as the
 // hand-authored reference page it now always renders as.
 const VIDEO_MIME = /^video\/mp4$/;
-const VIDEO_CAPABLE: Partial<Record<AcademyMediaKind, true>> = { GALLERY: true, PROMO: true };
+const VIDEO_CAPABLE: Partial<Record<AcademyMediaKind, true>> = {
+  GALLERY: true,
+  PROMO: true,
+  COURSE_INTRO: true,
+};
+
+// A course's intro clip is the one a teacher records on a phone rather than
+// picks from a reel, so it gets more headroom than a gallery highlight.
+const KIND_MAX_VIDEO_BYTES: Partial<Record<AcademyMediaKind, number>> = {
+  COURSE_INTRO: 50 * 1024 * 1024,
+};
 
 const STUCK_MINUTES = 30;
 const REJECTED_RETENTION_DAYS = 7;
@@ -86,7 +99,7 @@ export class AcademyMediaService {
       throw new BadRequestException(`${kind.toLowerCase()} does not accept video`);
     }
     const processed = isVideo
-      ? await this.processor.processVideo(file.buffer, file.mimetype)
+      ? await this.processor.processVideo(file.buffer, file.mimetype, KIND_MAX_VIDEO_BYTES[kind])
       : await this.processor.process(file.buffer, file.mimetype, kind);
 
     const media = await this.prisma.academyMedia.create({

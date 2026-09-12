@@ -427,6 +427,14 @@ model Course {
   title        String
   description  String      @default("")
   thumbnailUrl String?
+  /// A short clip the teacher records to sell the course. It is marketing, not
+  /// a lesson: stored as a plain public MP4 like the cover image, so a visitor
+  /// who is not logged in can watch it. Lesson video goes through the
+  /// encrypted-HLS pipeline instead and never through here.
+  introVideoUrl     String?
+  /// The AcademyMedia row behind introVideoUrl, kept so replacing or removing
+  /// the clip can delete the stored object instead of orphaning it.
+  introVideoMediaId String?
   subjectId    String?
   subject      Subject?    @relation(fields: [subjectId], references: [id])
   /// The exact years this course is for. A teacher picks from the years inside
@@ -1354,6 +1362,9 @@ enum AcademyMediaKind {
   GALLERY
   PROMO
   AVATAR
+  /// A course's own intro clip. Academy-scoped like every other media row —
+  /// the course points at it — so one teacher's clips never leave their tenant.
+  COURSE_INTRO
 }
 
 enum AcademyMediaStatus {

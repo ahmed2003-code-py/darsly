@@ -39,6 +39,7 @@ const KIND_MAX_DIM: Record<AcademyMediaKind, number> = {
   COVER: 1920,
   GALLERY: 1600,
   PROMO: 1920, // unused by image processing — PROMO is video, see processVideo()
+  COURSE_INTRO: 1920, // same: a course intro is video, see processVideo()
 };
 
 const ACCEPTED_INPUT = /^image\/(png|jpe?g|webp)$/;
@@ -65,12 +66,16 @@ export class AcademyMediaProcessor {
    * pipeline (`TranscodeService`); a probe failure is non-fatal, since it is only
    * used for a layout hint.
    */
-  async processVideo(input: Buffer, mimeType: string): Promise<ProcessedVideo> {
+  async processVideo(
+    input: Buffer,
+    mimeType: string,
+    maxBytes: number = MAX_VIDEO_BYTES,
+  ): Promise<ProcessedVideo> {
     if (!ACCEPTED_VIDEO.test(mimeType)) {
       throw new BadRequestException('Only MP4 video is accepted');
     }
-    if (input.length > MAX_VIDEO_BYTES) {
-      throw new BadRequestException(`Video is too large (max ${MAX_VIDEO_BYTES / (1024 * 1024)}MB)`);
+    if (input.length > maxBytes) {
+      throw new BadRequestException(`Video is too large (max ${Math.round(maxBytes / (1024 * 1024))}MB)`);
     }
     const contentHash = createHash('sha256').update(input).digest('hex');
     const dims = await this.probeDimensions(input);

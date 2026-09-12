@@ -5,6 +5,7 @@ import { JwtPayload, Role } from '@darsly/shared-types';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { AcademyMediaService } from '../academy-site/media/academy-media.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { VideoProcessingService } from '../video/video-processing.service';
 import { VideoSource, YoutubeImportService } from '../video/youtube-import.service';
@@ -41,6 +42,7 @@ export class CoursesService {
     private readonly storage: StorageProvider,
     private readonly videoProcessing: VideoProcessingService,
     private readonly youtubeImport: YoutubeImportService,
+    private readonly media: AcademyMediaService,
   ) {}
 
   /**
@@ -333,6 +335,73 @@ export class CoursesService {
       },
       include: COURSE_REACH,
     });
+  }
+
+  /**
+   * The clip a teacher records to sell the course.
+   *
+   * This is marketing, so it is stored the way the cover image is — a plain
+   * public MP4 anyone can watch, including a visitor who is not signed in.
+   * Lesson video goes the other way, through encrypted HLS with a per-session
+   * key, and the two must never be confused: what is uploaded here is meant to
+   * be seen by people who have not paid.
+   */
+  async setIntroVideo(
+    tenantId: string,
+    courseId: string,
+    file: { buffer: Buffer; mimetype: string },
+  ) {
+    await this.assertCourse(tenantId, courseId);
+    const media = await this.media.upload(tenantId, 'COURSE_INTRO', file);
+    const course = await this.prisma.course.findUniqueOrThrow({
+      where: { id: courseId },
+      select: { introVideoMediaId: true },
+    });
+    const updated = await this.prisma.course.update({
+      where: { id: courseId },
+      data: { introVideoUrl: media.url, introVideoMediaId: media.id },
+      select: { id: true, introVideoUrl: true, introVideoMediaId: true },
+    });
+    // Re-recording replaces the clip; the old file has no other reader, so it
+    // goes rather than sitting in storage forever.
+    await this.dropIntroMedia(tenantId, course.introVideoMediaId, media.id);
+    return updated;
+  }
+
+  async removeIntroVideo(tenantId: string, courseId: string) {
+    await this.assertCourse(tenantId, courseId);
+    const course = await this.prisma.course.findUniqueOrThrow({
+      where: { id: courseId },
+      select: { introVideoMediaId: true },
+    });
+    const updated = await this.prisma.course.update({
+      where: { id: courseId },
+      data: { introVideoUrl: null, introVideoMediaId: null },
+      select: { id: true, introVideoUrl: true, introVideoMediaId: true },
+    });
+    await this.dropIntroMedia(tenantId, course.introVideoMediaId, null);
+    return updated;
+  }
+
+  /**
+   * Delete the media row a course has stopped pointing at.
+   *
+   * Identical uploads are deduplicated into one row, so two courses can share a
+   * clip; the check keeps a delete from pulling the video out from under the
+   * other course. Best-effort: the course field is already cleared, and failing
+   * to tidy storage must not fail the request.
+   */
+  private async dropIntroMedia(tenantId: string, mediaId: string | null, keep: string | null) {
+    if (!mediaId || mediaId === keep) return;
+    try {
+      const stillUsed = await this.prisma.course.count({
+        where: { introVideoMediaId: mediaId },
+      });
+      if (stillUsed > 0) return;
+      await this.media.remove(tenantId, mediaId);
+    } catch (err) {
+      this.logger.warn(`could not remove intro clip ${mediaId}: ${String(err)}`);
+    }
   }
 
   async update(tenantId: string, courseId: string, dto: UpdateCourseDto) {
@@ -801,6 +870,7 @@ export class CoursesService {
       title: course.title,
       description: course.description,
       thumbnailUrl: course.thumbnailUrl,
+      introVideoUrl: course.introVideoUrl,
       status: course.status,
       subject: course.subject,
       grades: course.grades.map((g) => g.grade),

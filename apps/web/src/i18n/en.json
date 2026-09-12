@@ -462,7 +462,14 @@
       "curriculum": "Course curriculum",
       "needsVideo": "No video yet",
       "addCover": "Add a course cover",
-      "addCoverHint": "This is the picture students see in the catalogue — pick a clear one."
+      "addCoverHint": "This is the picture students see in the catalogue — pick a clear one.",
+      "introVideo": "Intro video",
+      "addIntro": "Add an intro video",
+      "addIntroHint": "A short clip saying what this course is about — anyone can watch it before enrolling. MP4, up to 50MB.",
+      "replaceIntro": "Replace video",
+      "removeIntroConfirm": "Remove the intro video?",
+      "introFormatErr": "The video must be an MP4.",
+      "introSizeErr": "That video is too large — {{mb}}MB is the limit. Trim or compress it first."
     },
     "students": {
       "title": "My students",

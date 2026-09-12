@@ -461,7 +461,8 @@
       "titleLabel": "Lesson name",
       "curriculum": "Course curriculum",
       "needsVideo": "No video yet",
-      "addCover": "Add a course cover"
+      "addCover": "Add a course cover",
+      "addCoverHint": "This is the picture students see in the catalogue — pick a clear one."
     },
     "students": {
       "title": "My students",

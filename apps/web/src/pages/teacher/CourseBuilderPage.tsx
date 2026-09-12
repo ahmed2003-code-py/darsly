@@ -886,12 +886,21 @@ export default function CourseBuilderPage() {
         </div>
       ) : (
         <button
-          className="mb-5 flex w-full items-center gap-2 rounded-xl border border-dashed border-outline-variant/70 px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
+          className="group mb-5 flex w-full items-center gap-4 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low/40 p-4 text-start transition hover:border-primary hover:bg-primary-fixed/20"
           disabled={thumbUpload.isPending}
           onClick={() => thumbInput.current?.click()}
         >
-          <span className="material-symbols-outlined text-[20px]">{thumbUpload.isPending ? 'hourglass' : 'add_photo_alternate'}</span>
-          {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.addCover')}
+          <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-primary">
+            <span className="material-symbols-outlined text-[26px]">
+              {thumbUpload.isPending ? 'hourglass' : 'add_photo_alternate'}
+            </span>
+          </span>
+          <span className="min-w-0">
+            <span className="block font-heading font-bold">
+              {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.addCover')}
+            </span>
+            <span className="mt-0.5 block text-sm text-on-surface-variant">{t('teacher.builder.addCoverHint')}</span>
+          </span>
         </button>
       )}
       <ErrorNote error={thumbUpload.error} />
@@ -925,8 +934,8 @@ export default function CourseBuilderPage() {
         add box, the import link — is a single quiet control where it belongs.
       */}
       <div className="card mb-5 overflow-hidden p-0">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-          <p className="font-heading font-bold">{t('teacher.builder.curriculum')}</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 sm:px-5">
+          <p className="font-heading text-lg font-bold">{t('teacher.builder.curriculum')}</p>
           <span className="text-sm text-on-surface-variant">
             {missingVideo > 0
               ? t('teacher.builder.lessonsMetaMissing', { count: lessons.length, missing: missingVideo })
@@ -973,7 +982,7 @@ export default function CourseBuilderPage() {
           const shut = folded.has(u.id);
           return (
             <div key={u.id} className="border-t-4 border-outline-variant/25">
-              <div className="group/unit flex items-center gap-2 bg-surface-container-low/40 px-2 py-2 sm:px-3">
+              <div className="group/unit flex min-h-[3.5rem] items-center gap-2 bg-surface-container-high/60 px-2 py-2 sm:px-3">
                 <button
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-on-surface-variant transition hover:bg-surface-container-high"
                   aria-expanded={!shut}
@@ -993,13 +1002,13 @@ export default function CourseBuilderPage() {
                     setRenaming(null);
                     if (title && title !== u.title) renameUnit.mutate({ unitId: u.id, title });
                   }}
-                  className="min-w-0 flex-1 font-heading font-bold"
+                  className="min-w-0 flex-1 font-heading text-lg font-bold"
                 />
                 {/* The name is what a teacher navigates by, so it keeps the
                     width. The count is detail, and on a phone it was crowding
                     "الفصل الأول: الطفولة" down to "الفصل…" — while the same
                     figure for the whole course sits at the top of this list. */}
-                <span className="ms-auto hidden shrink-0 text-xs text-on-surface-variant sm:inline">
+                <span className="ms-auto hidden shrink-0 text-sm text-on-surface-variant sm:inline">
                   {gap
                     ? t('teacher.builder.lessonsMetaMissing', { count: u.lessons.length, missing: gap })
                     : t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
@@ -1044,7 +1053,7 @@ export default function CourseBuilderPage() {
         })}
 
         <button
-          className="flex w-full items-center justify-center gap-1.5 border-t border-outline-variant/40 py-3 text-sm font-bold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary"
+          className="flex w-full items-center justify-center gap-1.5 border-t border-outline-variant/40 py-4 font-bold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary"
           disabled={addUnit.isPending}
           onClick={() => addSection(() => addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })))}
         >
@@ -1269,7 +1278,7 @@ function LessonRow({
   return (
     <li className="border-t border-outline-variant/40 first:border-t-0">
       <div
-        className={`group/lesson flex cursor-pointer items-center gap-3 px-4 py-2.5 transition sm:px-5 ${
+        className={`group/lesson flex min-h-[3.5rem] cursor-pointer items-center gap-3 px-4 py-2 transition sm:px-5 ${
           open ? 'bg-primary-fixed/40' : 'hover:bg-surface-container-low'
         }`}
         onClick={onToggle}
@@ -1277,33 +1286,35 @@ function LessonRow({
         {/* The icon carries the state, so the row does not need a second line
             to say "no video yet" — the thing a teacher scans for. */}
         <span
-          className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
             needsVideo
-              ? 'bg-surface-container-high text-outline'
+              ? 'bg-surface-container-high text-on-surface-variant'
               : 'bg-secondary-container text-on-secondary-container'
           }`}
           title={needsVideo ? t('teacher.builder.needsVideo') : undefined}
         >
-          <span className="material-symbols-outlined text-[18px]">
-            {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'add_circle'}
+          <span className="material-symbols-outlined text-[20px]">
+            {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'videocam_off'}
           </span>
         </span>
-        <span className="shrink-0 text-sm text-outline">{li + 1}</span>
+        <span className="w-5 shrink-0 text-sm tabular-nums text-on-surface-variant">{li + 1}</span>
         <span className="min-w-0 flex-1 truncate font-semibold" title={l.title}>{l.title}</span>
 
         {/* Everything after the name is optional detail, and drops off first
             when the row runs out of width. */}
         {processing && (
-          <span className="shrink-0 text-xs text-primary">{t('teacher.builder.videoProcessing')}</span>
+          <span className="shrink-0 text-sm font-semibold text-primary">{t('teacher.builder.videoProcessing')}</span>
         )}
         {l.isFreePreview && (
-          <span className="hidden shrink-0 text-xs text-secondary sm:inline">{t('teacher.builder.freePreview')}</span>
+          <span className="hidden shrink-0 rounded-full bg-secondary-container px-2 py-0.5 text-xs font-bold text-on-secondary-container sm:inline">
+            {t('teacher.builder.freePreview')}
+          </span>
         )}
         {(l.dripUnlockAt || l.dripAfterEnrollDays != null) && (
-          <span className="material-symbols-outlined hidden shrink-0 text-[16px] text-outline sm:inline" title="Drip">lock_clock</span>
+          <span className="material-symbols-outlined hidden shrink-0 text-[18px] text-on-surface-variant sm:inline" title="Drip">lock_clock</span>
         )}
         {l.durationSec > 0 && (
-          <span className="hidden shrink-0 text-xs tabular-nums text-outline sm:inline">{duration(l.durationSec)}</span>
+          <span className="hidden shrink-0 text-sm tabular-nums text-on-surface-variant sm:inline">{duration(l.durationSec)}</span>
         )}
 
         <button
@@ -1380,11 +1391,11 @@ function AddLessonRow({
   // more visual weight than the lessons it sat under — and it advertised an
   // action the teacher already knows is there.
   return (
-    <div className="flex items-center gap-2 transition">
-      <span className="material-symbols-outlined text-[20px] text-outline">add</span>
+    <div className="flex min-h-[3rem] items-center gap-3 transition">
+      <span className="material-symbols-outlined text-[22px] text-on-surface-variant">add</span>
       <input
         ref={ref}
-        className="min-w-0 flex-1 rounded-lg bg-transparent px-1 py-2 text-sm outline-none transition placeholder:text-outline focus:bg-surface-container-low"
+        className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-2.5 outline-none transition placeholder:text-on-surface-variant/70 focus:bg-surface-container-low"
         placeholder={placeholder}
         maxLength={200}
         value={value}

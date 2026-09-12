@@ -456,7 +456,9 @@
       "unsaved": "فيه تعديلات لسه متحفظتش",
       "fold": "اطوي القسم",
       "unfold": "افتح القسم",
-      "lessonsMetaMissing": "{{count}} درس · {{missing}} لسه من غير فيديو"
+      "lessonsMetaMissing": "{{count}} درس · {{missing}} لسه من غير فيديو",
+      "renameLesson": "غيّر اسم الدرس",
+      "titleLabel": "اسم الدرس"
     },
     "students": {
       "title": "طلابي",

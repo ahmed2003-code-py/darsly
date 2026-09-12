@@ -456,7 +456,9 @@
       "unsaved": "You have unsaved changes",
       "fold": "Fold this section",
       "unfold": "Open this section",
-      "lessonsMetaMissing": "{{count}} lessons · {{missing}} still without video"
+      "lessonsMetaMissing": "{{count}} lessons · {{missing}} still without video",
+      "renameLesson": "Rename lesson",
+      "titleLabel": "Lesson name"
     },
     "students": {
       "title": "My students",

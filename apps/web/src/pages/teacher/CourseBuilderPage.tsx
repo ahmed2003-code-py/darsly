@@ -82,6 +82,7 @@ export default function CourseBuilderPage() {
 
   // Lesson-settings drafts (per selected lesson)
   const [description, setDescription] = useState('');
+  const [title, setTitle] = useState('');
   const [drip, setDrip] = useState<'now' | 'date' | 'days'>('now');
   const [dripDate, setDripDate] = useState('');
   const [dripDays, setDripDays] = useState('');
@@ -313,11 +314,6 @@ export default function CourseBuilderPage() {
     },
   });
 
-  const renameLesson = useMutation({
-    mutationFn: async ({ lessonId, title }: { lessonId: string; title: string }) =>
-      (await api.patch(`/teacher/lessons/${lessonId}`, { title })).data,
-    onSuccess: invalidate,
-  });
   const removeLesson = useMutation({
     mutationFn: async (lessonId: string) => (await api.delete(`/teacher/lessons/${lessonId}`)).data,
     onSuccess: () => {
@@ -472,6 +468,10 @@ export default function CourseBuilderPage() {
     const src = draft ?? lesson;
     setFreePreview(!!src.isFreePreview);
     setDescription(src.description ?? '');
+    // Always the real name, never a draft's: renaming is saved with the panel,
+    // and a half-typed name left over from an unsaved visit would look like
+    // the lesson had already been renamed.
+    setTitle(lesson.title ?? '');
     if (draft) {
       setDrip(src.drip ?? 'now');
       setDripDate(src.dripDate ?? '');
@@ -495,6 +495,7 @@ export default function CourseBuilderPage() {
 
   function saveSettings() {
     saveLesson.mutate({
+      ...(title.trim() && title.trim() !== selected?.title ? { title: title.trim() } : {}),
       isFreePreview: freePreview,
       description: description.trim() || null,
       // durationSec is never sent from here — it is detected server-side from
@@ -567,6 +568,21 @@ export default function CourseBuilderPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Left: what the lesson is, and the video itself */}
         <div className="min-w-0 space-y-4">
+          {/* The name lives here rather than as a third button on the row. At
+              phone width those buttons left "الدرس ا…" of the title, and this
+              is where a teacher is already editing the lesson anyway. */}
+          <div>
+            <label className="mb-1.5 block text-sm font-bold" htmlFor="lesson-title">
+              {t('teacher.builder.titleLabel')}
+            </label>
+            <input
+              id="lesson-title"
+              className="input"
+              maxLength={200}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
           <div>
             <label className="mb-1.5 block text-sm font-bold">{t('teacher.builder.descLabel')}</label>
             <MarkdownEditor
@@ -912,12 +928,6 @@ export default function CourseBuilderPage() {
                 li={li}
                 open={selectedLessonId === l.id}
                 onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
-                editingTitle={renaming === `lesson:${l.id}`}
-                onEdit={() => setRenaming(`lesson:${l.id}`)}
-                onRename={(title) => {
-                  setRenaming(null);
-                  if (title && title !== l.title) renameLesson.mutate({ lessonId: l.id, title });
-                }}
                 onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
                 panel={lessonPanel}
                 t={t}
@@ -999,12 +1009,6 @@ export default function CourseBuilderPage() {
                     li={li}
                     open={selectedLessonId === l.id}
                     onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
-                    editingTitle={renaming === `lesson:${l.id}`}
-                    onEdit={() => setRenaming(`lesson:${l.id}`)}
-                    onRename={(title) => {
-                      setRenaming(null);
-                      if (title && title !== l.title) renameLesson.mutate({ lessonId: l.id, title });
-                    }}
                     onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
                     panel={lessonPanel}
                     t={t}
@@ -1243,15 +1247,12 @@ function VideoActions({
  * only where the list comes from differs.
  */
 function LessonRow({
-  l, li, open, onToggle, editingTitle, onEdit, onRename, onDelete, panel, t,
+  l, li, open, onToggle, onDelete, panel, t,
 }: {
   l: any;
   li: number;
   open: boolean;
   onToggle: () => void;
-  editingTitle: boolean;
-  onEdit: () => void;
-  onRename: (title: string) => void;
   onDelete: () => void;
   panel: ReactNode;
   t: (k: string, o?: any) => string;
@@ -1274,7 +1275,7 @@ function LessonRow({
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 font-bold">
             <span className="shrink-0 text-outline">{li + 1}.</span>
-            <InlineName value={l.title} editing={editingTitle} onEdit={onEdit} onDone={onRename} />
+            <span className="min-w-0 truncate" title={l.title}>{l.title}</span>
           </p>
           <p className="flex flex-wrap gap-2 text-xs text-outline">
             {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
@@ -1401,18 +1402,30 @@ function AddLessonRow({
  * click, type, Enter. Escape puts it back.
  */
 function InlineName({
-  value, editing, onEdit, onDone, className = '',
+  value, editing, onEdit, onDone, className = '', clickToEdit = true,
 }: {
   value: string;
   editing: boolean;
   onEdit: () => void;
   onDone: (title: string) => void;
   className?: string;
+  /**
+   * Whether clicking the name starts a rename.
+   *
+   * True for a section heading, which does nothing else. False inside a lesson
+   * row, where the whole row opens the lesson: there the name is the biggest
+   * thing to aim at, so a teacher reaching for the settings kept landing in a
+   * text field instead. Renaming there is its own button.
+   */
+  clickToEdit?: boolean;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value, editing]);
 
   if (!editing) {
+    if (!clickToEdit) {
+      return <span className={`min-w-0 truncate ${className}`} title={value}>{value}</span>;
+    }
     return (
       <button
         type="button"

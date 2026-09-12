@@ -10,7 +10,12 @@
  * The last applied theme is cached, and `bootTheme()` replays it before React
  * mounts. Without that the app would paint in platform indigo, resolve
  * `/academies/mine`, and repaint — a flash of the wrong brand on every load.
+ *
+ * This module answers "whose colours", never "light or dark". The second
+ * question belongs to the reader and lives in `colorMode.ts`.
  */
+
+import { resolveMode } from './colorMode';
 
 export interface AppTheme {
   mode: 'light' | 'dark';
@@ -18,7 +23,36 @@ export interface AppTheme {
   tokens: Record<string, string>;
 }
 
+/**
+ * The academy's colours at both ends, so switching costs nothing.
+ *
+ * Derived together on the server, where the contrast floors are enforced and
+ * tested. Fetching the other one on a tap would make the switch a round trip
+ * with a flash of the old palette in the middle.
+ */
+export interface AppThemes {
+  light: AppTheme;
+  dark: AppTheme;
+}
+
 const CACHE_KEY = 'darsly-theme';
+
+/**
+ * Accept either shape.
+ *
+ * A browser that cached the single-mode payload before this existed still has
+ * it, and a stale cache must not be the reason someone's console loses its
+ * colours on one load. It reads as the mode it was derived for.
+ */
+function pair(theme: unknown): AppThemes | null {
+  const t = theme as Partial<AppThemes> & Partial<AppTheme>;
+  if (!t || typeof t !== 'object') return null;
+  const light = clean(t.light);
+  const dark = clean(t.dark);
+  if (light && dark) return { light, dark };
+  const single = clean(theme);
+  return single ? { light: single, dark: single } : null;
+}
 
 /** Guard against anything but a `--c-*` name and an "R G B" triple. */
 function clean(theme: unknown): AppTheme | null {
@@ -59,19 +93,38 @@ export function hasServerTheme(): boolean {
  * we wearing a moment ago" — which is what a screen that has just lost its
  * session needs in order not to change colour in the user's face.
  */
-export function rememberedTheme(): AppTheme | null {
+export function rememberedTheme(): AppThemes | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? clean(JSON.parse(raw)) : null;
+    return raw ? pair(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
 }
 
-/** Paint the app in `theme`, or hand it back to the platform palette. */
+/**
+ * Repaint in the other end of the palette the app is already wearing.
+ *
+ * Called when the reader flips the switch. Without it, the mode attribute
+ * changes and the academy's inline properties — which beat the stylesheet —
+ * keep the old end on screen.
+ */
+export function repaintForMode(): void {
+  const both = rememberedTheme();
+  if (both) applyTheme(both);
+}
+
+/**
+ * Paint the app in `theme`, or hand it back to the platform palette.
+ *
+ * The pair is cached whole and the half matching the reader's current mode is
+ * written, so flipping the switch repaints from memory rather than from the
+ * network.
+ */
 export function applyTheme(theme: unknown): void {
   const root = document.documentElement;
-  const next = clean(theme);
+  const both = pair(theme);
+  const next = both?.[resolveMode()] ?? null;
 
   if (!next) {
     // Remove rather than overwrite: the platform values live in the stylesheet's
@@ -82,7 +135,6 @@ export function applyTheme(theme: unknown): void {
     // The server's block is another `:root`, so clearing the inline properties
     // alone would fall back to the academy rather than to the platform.
     serverTheme()?.remove();
-    root.removeAttribute('data-theme');
     localStorage.removeItem(CACHE_KEY);
     return;
   }
@@ -90,11 +142,12 @@ export function applyTheme(theme: unknown): void {
   for (const [name, value] of Object.entries(next.tokens)) {
     root.style.setProperty(name, value);
   }
-  // Drives the few effects that are not a flat colour, and tells the browser to
-  // render form controls and scrollbars to match.
-  root.setAttribute('data-theme', next.mode);
+  // `data-theme` is deliberately not written here. It says which end of the
+  // palette the reader asked for, and that is theirs to decide — see
+  // `colorMode.ts`. An academy that sets it too would take the switch away
+  // from the person using it the moment their colours loaded.
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(both));
   } catch {
     // A full or blocked storage costs the next load its head start, nothing more.
   }

@@ -159,6 +159,46 @@ function separateFromBrand(error: string, primary: string, background: string): 
 
 // ── the derivation ────────────────────────────────────────────────────────────
 
+/**
+ * The same academy, at the other end of the day.
+ *
+ * A published palette records one mode — whichever the teacher's page was built
+ * in — but the reader picks which one they want to sit in. Rather than a second
+ * derivation with its own rules, the page is re-seated at the requested end and
+ * put back through the one above: the brand hue is kept, the neutrals move, and
+ * every contrast floor is enforced by the same code that enforces them for the
+ * palette's native mode.
+ *
+ * The academy's own `surface` colours are dropped when the mode is flipped.
+ * They were chosen to sit a step away from a background that is no longer
+ * there, and carrying them across is how a dark page gets pale cards.
+ */
+export function deriveAppThemeFor(
+  input: BrandPalette | null | undefined,
+  want: 'light' | 'dark',
+): AppTheme {
+  const p = input ?? {};
+  const raw = hex(p.background, PLATFORM.background);
+  const native: 'light' | 'dark' = relLuminance(raw) < 0.35 ? 'dark' : 'light';
+  if (native === want) return deriveAppTheme(p);
+
+  // A trace of the brand in the neutral so the academy still reads as itself
+  // rather than as the platform wearing their button colour.
+  const primary = hex(p.primary, PLATFORM.primary);
+  return deriveAppTheme({
+    ...p,
+    surface: undefined,
+    surfaceAlt: undefined,
+    background: want === 'dark' ? mix('#101014', primary, 0.06) : mix('#F7F7F4', primary, 0.03),
+    ink: want === 'dark' ? '#EDEDF2' : PLATFORM.ink,
+  });
+}
+
+/** Both ends, so the client can switch without another round trip. */
+export function deriveAppThemes(input: BrandPalette | null | undefined) {
+  return { light: deriveAppThemeFor(input, 'light'), dark: deriveAppThemeFor(input, 'dark') };
+}
+
 export function deriveAppTheme(input: BrandPalette | null | undefined): AppTheme {
   const p = input ?? {};
   const primary = hex(p.primary, PLATFORM.primary);

@@ -83,11 +83,84 @@
     --c-on-brand-accent: 255 255 255;
   }
 
-  /* The handful of effects that are not a flat colour and so cannot ride on a
-     token. `data-theme` is set by the theme provider from the derived mode. */
+  /*
+   * The same system after dark.
+   *
+   * Not an inversion: "ink & paper" becomes ink on slate, warm neutrals kept
+   * warm, and nothing pushed to pure black. The roles are unchanged, so every
+   * screen follows without a single per-page edit — which is the whole reason
+   * the literals live here and nowhere else.
+   *
+   * Two roles genuinely flip rather than shift. The brand indigo is too dark to
+   * carry a filled button on a dark page, so `primary` is a lightened mix and
+   * `primary-hover` lightens further instead of darkening. And red loses white
+   * text at this lightness, so `on-error` is ink — a filled danger button reads
+   * as danger either way, which a 3:1 white-on-red would not.
+   *
+   * An academy's own palette still wins where it has one: those tokens arrive
+   * as inline properties and beat this block, and the API derives them for
+   * whichever mode is being worn.
+   */
   :root[data-theme='dark'] {
     --shimmer-alpha: 0.08;
     color-scheme: dark;
+
+    --c-primary: 110 91 211;
+    --c-on-primary: 255 255 255;
+    --c-primary-container: 42 35 80;
+    --c-on-primary-container: 215 209 244;
+    --c-inverse-primary: 74 50 201;
+    --c-primary-hover: 136 120 221;
+    --c-primary-fixed: 35 32 64;
+    --c-primary-fixed-dim: 44 40 80;
+    --c-on-primary-fixed: 222 217 246;
+    --c-on-primary-fixed-variant: 191 182 238;
+
+    --c-secondary: 201 200 210;
+    --c-on-secondary: 27 27 34;
+    --c-secondary-container: 35 32 64;
+    --c-on-secondary-container: 191 182 238;
+    --c-secondary-fixed: 35 32 64;
+    --c-secondary-fixed-dim: 44 40 80;
+    --c-on-secondary-fixed: 222 217 246;
+    --c-on-secondary-fixed-variant: 191 182 238;
+
+    --c-tertiary: 185 184 194;
+    --c-on-tertiary: 27 27 34;
+    --c-tertiary-container: 43 43 51;
+    --c-on-tertiary-container: 214 213 222;
+
+    --c-error: 229 103 90;
+    --c-on-error: 27 27 34;
+    --c-error-container: 58 26 22;
+    --c-on-error-container: 245 184 176;
+
+    --c-surface: 19 19 24;
+    --c-surface-dim: 15 15 19;
+    --c-surface-bright: 42 42 51;
+    --c-surface-container-lowest: 14 14 18;
+    --c-surface-container-low: 26 26 32;
+    --c-surface-container: 30 30 37;
+    --c-surface-container-high: 38 38 46;
+    --c-surface-container-highest: 47 47 56;
+    --c-surface-variant: 38 38 46;
+    --c-surface-tint: 110 91 211;
+    --c-on-surface: 237 237 242;
+    --c-on-surface-variant: 169 168 180;
+    --c-inverse-surface: 237 237 242;
+    --c-inverse-on-surface: 27 27 34;
+
+    --c-outline: 110 109 122;
+    /* Hairlines are an alpha of this, so on a dark page they have to be drawn
+       in light — the same rule with the ink swapped, not a second rule. */
+    --c-line: 235 235 245;
+    --c-shadow: 0 0 0;
+
+    --c-background: 19 19 24;
+    --c-on-background: 237 237 242;
+
+    --c-brand-accent: 110 91 211;
+    --c-on-brand-accent: 255 255 255;
   }
 
   html {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { setLanguage } from '../i18n';
+import ColorModeToggle from './ColorModeToggle';
 import { api } from '../lib/api';
 import { notificationLook, timeAgo } from '../lib/notificationLook';
 import { notificationRoute } from '../lib/notificationRoute';
@@ -101,6 +102,10 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
         </form>
 
         <div className="flex items-center gap-1">
+          {/* Light or dark — the same switch the public academy page carries,
+              so the choice a visitor made out there is still theirs in here. */}
+          <ColorModeToggle />
+
           {/* Language */}
           <button
             className="grid h-10 w-10 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low"

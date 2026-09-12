@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AcademyRole } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
-import { deriveAppTheme, paletteFromBrandTokens } from '../branding/app-theme';
+import { deriveAppThemes, paletteFromBrandTokens } from '../branding/app-theme';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcademyContext } from './academy-context';
@@ -58,7 +58,7 @@ export class AcademyService {
           // so the contrast floors are enforced in one tested place. Derived on
           // read, not frozen at publish, so sharpening the rules improves every
           // academy rather than only the ones that publish again.
-          appTheme: deriveAppTheme(
+          appTheme: deriveAppThemes(
             paletteFromBrandTokens(m.academy.brandTokens, m.academy.colorPrimary, m.academy.colorAccent),
           ),
         },
@@ -122,7 +122,7 @@ export class AcademyService {
           colorPrimary: a.colorPrimary,
           colorAccent: a.colorAccent,
           brandTokens: a.brandTokens ?? null,
-          appTheme: deriveAppTheme(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
+          appTheme: deriveAppThemes(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
         },
       }));
   }
@@ -143,7 +143,7 @@ export class AcademyService {
     // moment they decide to join reads as having left the teacher's site.
     return {
       ...a,
-      appTheme: deriveAppTheme(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
+      appTheme: deriveAppThemes(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
     };
   }
 

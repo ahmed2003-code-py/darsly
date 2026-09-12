@@ -1692,5 +1692,9 @@
     "PREPARATORY": "Preparatory",
     "SECONDARY": "Secondary",
     "BACCALAUREATE": "Baccalaureate"
+  },
+  "colorMode": {
+    "light": "Light mode",
+    "dark": "Dark mode"
   }
 }

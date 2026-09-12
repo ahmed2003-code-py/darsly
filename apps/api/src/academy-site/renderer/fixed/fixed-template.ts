@@ -84,9 +84,13 @@ export function renderFixedSite(doc: SiteDocument, ctx: RenderContext): string {
 <script>
 (function(){
   try{
-    var saved=localStorage.getItem(${JSON.stringify(slug + '-theme')});
+    /* One key for the whole platform, so turning this page dark and then
+       signing in does not hand the reader a white console. The old per-academy
+       key is still read once, so nobody loses a choice they already made. */
+    var saved=localStorage.getItem('darsly-color-mode')
+      ||localStorage.getItem(${JSON.stringify(slug + '-theme')});
     var wantsDark=saved?saved==='dark':(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
-    if(wantsDark)document.documentElement.setAttribute('data-theme','dark');
+    document.documentElement.setAttribute('data-theme',wantsDark?'dark':'light');
   }catch(e){}
 })();
 </script>
@@ -618,23 +622,25 @@ footer{padding:44px 24px;text-align:center;color:var(--muted);font-size:.9rem}
 }
 
 function clientScript(slug: string): string {
-  const themeKey = JSON.stringify(slug + '-theme');
   const coursesUrl = JSON.stringify(`/api/v1/a/${slug}/courses`);
   return `
 (function(){
   var root=document.documentElement;
   var btn=document.getElementById('themeToggle');
   var iconUse=document.getElementById('themeIconUse');
-  var KEY=${themeKey};
+  var KEY='darsly-color-mode';
   function sync(){
     iconUse.setAttribute('href', root.getAttribute('data-theme')==='dark' ? '#i-sun' : '#i-moon');
   }
   sync();
   btn.addEventListener('click',function(){
-    var next = root.getAttribute('data-theme')==='dark' ? null : 'dark';
-    if(next) root.setAttribute('data-theme','dark'); else root.removeAttribute('data-theme');
+    var dark = root.getAttribute('data-theme')!=='dark';
+    /* Always written, both ways: an academy whose own palette is dark needs a
+       reader to be able to ask for the light end of it, which removing the
+       attribute cannot express. */
+    root.setAttribute('data-theme', dark ? 'dark' : 'light');
     sync();
-    try{ localStorage.setItem(KEY, next ? 'dark' : 'light'); }catch(e){}
+    try{ localStorage.setItem(KEY, dark ? 'dark' : 'light'); }catch(e){}
   });
 })();
 

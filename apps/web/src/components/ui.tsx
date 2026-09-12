@@ -199,6 +199,7 @@ const ERROR_CODES: Record<string, string> = {
   MEDIA_NOT_READY: 'err.mediaNotReady',
   HTML_LOCKED: 'err.htmlLocked',
   NO_HAND_AUTHORED_HTML: 'err.noHandAuthored',
+  ENROLLMENT_ACTIVE: 'err.enrollmentActive',
 };
 
 export function ErrorNote({ error }: { error: unknown }) {

@@ -100,7 +100,7 @@ export class ManualPaymentsService {
       const enr = enrollment
         ? await tx.enrollment.update({
             where: { id: enrollment.id },
-            data: { status: 'PENDING_PAYMENT', approvedAt: null, revokedReason: null },
+            data: { status: 'PENDING_PAYMENT', approvedAt: null, revokedReason: null, hiddenAt: null },
           })
         : await tx.enrollment.create({
             data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, status: 'PENDING_PAYMENT' },

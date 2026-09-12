@@ -71,7 +71,7 @@ export class XPayService {
       const enrollment = existing
         ? await tx.enrollment.update({
             where: { id: existing.id },
-            data: { status: 'PENDING_PAYMENT' },
+            data: { status: 'PENDING_PAYMENT', hiddenAt: null },
           })
         : await tx.enrollment.create({
             data: {

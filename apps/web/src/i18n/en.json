@@ -285,7 +285,9 @@
       "REVOKED": "Revoked"
     },
     "progress": "Progress",
-    "viewCertificate": "View certificate"
+    "viewCertificate": "View certificate",
+    "remove": "Remove from my list",
+    "removeConfirm": "Remove this course from your list? The enrolment has already ended, and enrolling again brings it back."
   },
   "teacher": {
     "overviewTitle": "Dashboard",
@@ -1716,6 +1718,7 @@
   "err": {
     "mediaNotReady": "{{count}} image(s) on this page are missing or still processing — remove or re-upload them, then publish.",
     "htmlLocked": "This page is hand-authored, so publishing cannot change it — hand it to the studio first.",
-    "noHandAuthored": "There is no hand-authored page kept for this academy."
+    "noHandAuthored": "There is no hand-authored page kept for this academy.",
+    "enrollmentActive": "A course you are still enrolled in, or whose payment is still being checked, cannot be removed."
   }
 }

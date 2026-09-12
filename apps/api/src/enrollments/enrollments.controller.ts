@@ -72,6 +72,22 @@ export class EnrollmentsController {
     return this.enrollments.myEnrollments(user.sub);
   }
 
+  @Post('enrollments/:id/hide')
+  @Roles(Role.STUDENT)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({ summary: '[student] Take a revoked/rejected/expired enrolment off my list' })
+  async hide(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    const result = await this.enrollments.hideFromShelf(user.sub, id);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'enrollment.hide',
+      entity: 'Enrollment',
+      entityId: id,
+    });
+    return result;
+  }
+
   // ── Teacher approval queue ───────────────────────────────────────────────
 
   @Get('teacher/enrollments')

@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
-import { Badge, CardGridSkeleton, EmptyState, PageHeader, ProgressBar } from '../../components/ui';
+import { Badge, CardGridSkeleton, EmptyState, ErrorNote, PageHeader, ProgressBar } from '../../components/ui';
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
   ACTIVE: 'teal',
@@ -13,12 +13,22 @@ const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
   EXPIRED: 'neutral',
 };
 
+// A dead enrolment has nothing left to do, so the student can take it off their
+// list. One they are using, or one whose payment is still being checked, stays.
+const REMOVABLE = ['REVOKED', 'REJECTED', 'EXPIRED'];
+
 export default function MyCoursesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['my-enrollments'],
     queryFn: async () => (await api.get('/enrollments/mine')).data,
+  });
+
+  const hide = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/enrollments/${id}/hide`)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-enrollments'] }),
   });
 
   return (
@@ -35,6 +45,8 @@ export default function MyCoursesPage() {
           </div>
         </div>
       ) : (
+        <>
+        <ErrorNote error={hide.error} />
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((e: any) => (
             <Link key={e.id} to={`/course/${e.course.id}`} className="card flex flex-col overflow-hidden p-0 transition hover:shadow-modal">
@@ -45,6 +57,21 @@ export default function MyCoursesPage() {
                 <span className="absolute start-3 top-3">
                   <Badge tone={STATUS_TONE[e.status] ?? 'neutral'}>{t(`myCourses.status.${e.status}`)}</Badge>
                 </span>
+                {REMOVABLE.includes(e.status) && (
+                  <button
+                    title={t('myCourses.remove')}
+                    aria-label={t('myCourses.remove')}
+                    disabled={hide.isPending}
+                    className="absolute end-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-surface-container-lowest/90 text-outline shadow-card backdrop-blur transition hover:bg-error-container hover:text-on-error-container disabled:opacity-50"
+                    onClick={(ev) => {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      if (window.confirm(t('myCourses.removeConfirm'))) hide.mutate(e.id);
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                )}
               </div>
               <div className="flex flex-1 flex-col p-5">
                 <h3 className="mb-1 font-heading text-lg font-bold">{e.course.title}</h3>
@@ -84,6 +111,7 @@ export default function MyCoursesPage() {
             </Link>
           ))}
         </div>
+        </>
       )}
     </div>
   );

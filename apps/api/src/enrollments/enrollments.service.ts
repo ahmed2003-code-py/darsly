@@ -166,6 +166,9 @@ export class EnrollmentsService {
       approvedAt: new Date(),
       expiresAt: this.expiryFor(course),
       revokedReason: null,
+      // Coming back is a fresh start: if they had taken the old, dead enrolment
+      // off their list, the new one is not carrying that with it.
+      hiddenAt: null,
     };
     // A coupon that made the course free is still a use of that coupon — taken
     // in the same transaction as the enrolment, so a one-use code cannot enrol
@@ -203,10 +206,54 @@ export class EnrollmentsService {
       : null;
   }
 
+  /**
+   * Statuses a student is allowed to take off their own shelf.
+   *
+   * A dead enrolment has nothing left to do: there is no access to use, no
+   * payment in flight, and nothing the student can act on. An ACTIVE one they
+   * paid for stays, and so does one whose payment is still being checked —
+   * hiding either would turn a question about their money into a support
+   * ticket.
+   */
+  private static readonly HIDEABLE = ['REVOKED', 'REJECTED', 'EXPIRED'] as const;
+
+  /**
+   * Take a dead enrolment off the student's own shelf.
+   *
+   * Nothing is deleted. The row stays exactly where it was for the teacher,
+   * the payment history and the ledger — it is the record that money changed
+   * hands, and a student tidying their list is not a reason to lose it.
+   */
+  async hideFromShelf(userId: string, enrollmentId: string) {
+    const student = await this.studentProfileOf(userId);
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, studentId: student.id },
+      select: { id: true, status: true },
+    });
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+    if (!EnrollmentsService.HIDEABLE.includes(enrollment.status as never)) {
+      throw new BadRequestException({
+        message: 'Only a revoked, rejected or expired enrolment can be removed from your list',
+        code: 'ENROLLMENT_ACTIVE',
+      });
+    }
+    await this.prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: { hiddenAt: new Date() },
+    });
+    return { id: enrollment.id, hidden: true };
+  }
+
   async myEnrollments(userId: string) {
     const student = await this.studentProfileOf(userId);
     const enrollments = await this.prisma.enrollment.findMany({
-      where: { studentId: student.id },
+      // Hidden means hidden *and still dead*. Enrolling again — free, paid, or
+      // as part of a bundle — moves the status out of that set and the course
+      // is back on the shelf, without any of those paths knowing this exists.
+      where: {
+        studentId: student.id,
+        NOT: { hiddenAt: { not: null }, status: { in: [...EnrollmentsService.HIDEABLE] } },
+      },
       include: {
         course: {
           include: {

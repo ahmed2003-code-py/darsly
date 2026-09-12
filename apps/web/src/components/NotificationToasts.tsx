@@ -17,16 +17,20 @@ interface Toast {
 }
 
 const VISIBLE_MS = 9_000;
-/** Opening to a wall of cards is its own kind of missing the point. */
-const MAX_ON_OPEN = 3;
 
 /**
- * The in-app half of notifications: a stack of cards that appears when
- * something arrives while you're looking at the page, and again for whatever
- * you missed the moment you open the app.
+ * The in-app half of notifications: a card that appears when something arrives
+ * while you are looking at the page.
+ *
+ * Live arrivals only, on purpose. This used to replay your unread items on
+ * every page load, which meant three cards shouting the same old news at every
+ * refresh — and because dismissing a toast does not mark anything read (it
+ * should not; "not now" is not "seen"), they came back for ever. A toast is
+ * about *recency*; unread state belongs to the bell, which already carries a
+ * count and the full history.
  *
  * The OS notification in `useWebNotifications` covers the other half — the tab
- * you're not looking at — and the two deliberately never both fire: that one
+ * you are not looking at — and the two deliberately never both fire: that one
  * bails while the page is visible, this one only runs while it is.
  */
 export default function NotificationToasts() {
@@ -34,7 +38,6 @@ export default function NotificationToasts() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const role = useAuthStore((s) => s.user?.role);
-  const token = useAuthStore((s) => s.accessToken);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Record<string, number>>({});
 
@@ -66,25 +69,6 @@ export default function NotificationToasts() {
       socket.off(RealtimeEvents.NOTIFICATION, onNotification);
     };
   }, [push, role]);
-
-  // ...and what arrived while you were gone. Once per load, unread only.
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    api
-      .get('/notifications')
-      .then(({ data }) => {
-        if (cancelled) return;
-        const unread = (data?.items ?? []).filter((n: any) => !n.readAt).slice(0, MAX_ON_OPEN);
-        unread.reverse().forEach((n: any) =>
-          push({ id: `n-${n.id}`, notifId: n.id, title: n.title, body: n.body ?? '', to: notificationRoute(n, role) }),
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [token, role, push]);
 
   useEffect(() => () => Object.values(timers.current).forEach((x) => window.clearTimeout(x)), []);
 

@@ -1612,5 +1612,11 @@
     "fulfil": "Mark delivered",
     "noPending": "No pending requests.",
     "capHint": "0 = no cap"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutes": "{{count}}m ago",
+    "hours": "{{count}}h ago",
+    "days": "{{count}}d ago"
   }
 }

@@ -1612,5 +1612,11 @@
     "fulfil": "تم التسليم",
     "noPending": "مفيش طلبات منتظرة.",
     "capHint": "٠ = بدون حد"
+  },
+  "time": {
+    "justNow": "الآن",
+    "minutes": "منذ {{count}} دقيقة",
+    "hours": "منذ {{count}} ساعة",
+    "days": "منذ {{count}} يوم"
   }
 }

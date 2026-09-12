@@ -1142,7 +1142,9 @@ model ChatThread {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  messages ChatMessage[]
+  messages  ChatMessage[]
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   @@index([tenantId, updatedAt])
   @@index([studentId, updatedAt])
@@ -1157,6 +1159,8 @@ model ChatMessage {
   body      String
   readAt    DateTime?
   createdAt DateTime   @default(now())
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   @@index([threadId, createdAt])
 }
@@ -1199,6 +1203,8 @@ model Notification {
   meta      Json             @default("{}")
   readAt    DateTime?
   createdAt DateTime         @default(now())
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   @@index([userId, readAt, createdAt])
 }

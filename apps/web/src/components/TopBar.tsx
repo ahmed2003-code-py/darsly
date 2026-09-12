@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { setLanguage } from '../i18n';
 import { api } from '../lib/api';
-import { dateShort } from '../lib/format';
+import { notificationLook, timeAgo } from '../lib/notificationLook';
 import { notificationRoute } from '../lib/notificationRoute';
 import { useNotificationPermission } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
@@ -152,22 +152,32 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
                   {!notif?.items?.length ? (
                     <p className="px-4 py-8 text-center text-sm text-outline">{t('topbar.noNotifications')}</p>
                   ) : (
-                    notif.items.map((n: any) => (
-                      <button
-                        key={n.id}
-                        onClick={() => void openNotif(n)}
-                        className={`flex w-full gap-3 border-b border-outline-variant/30 px-4 py-3 text-start transition hover:bg-surface-container-low ${
-                          n.readAt ? '' : 'bg-primary-fixed/30'
-                        }`}
-                      >
-                        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${n.readAt ? 'bg-transparent' : 'bg-primary'}`} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-bold text-sm">{n.title}</span>
-                          <span className="block text-xs text-on-surface-variant line-clamp-2">{n.body}</span>
-                          <span className="mt-1 block text-[11px] text-outline">{dateShort(n.createdAt)}</span>
-                        </span>
-                      </button>
-                    ))
+                    notif.items.map((n: any) => {
+                      const look = notificationLook(n);
+                      return (
+                        <button
+                          key={n.id}
+                          onClick={() => void openNotif(n)}
+                          className={`flex w-full gap-3 border-b border-outline-variant/30 px-4 py-3 text-start transition hover:bg-surface-container-low ${
+                            n.readAt ? '' : 'bg-primary-fixed/30'
+                          }`}
+                        >
+                          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${look.tone}`}>
+                            <span className="material-symbols-outlined text-[20px]">{look.icon}</span>
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                              <span className="min-w-0 flex-1 truncate text-sm font-bold">{n.title}</span>
+                              {!n.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                            </span>
+                            <span className="block text-xs text-on-surface-variant line-clamp-2">{n.body}</span>
+                            <span className="mt-1 block text-[11px] text-outline">
+                              {timeAgo(n.createdAt, t, i18n.language)}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>

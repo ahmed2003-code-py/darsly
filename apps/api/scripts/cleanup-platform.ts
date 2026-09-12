@@ -98,6 +98,22 @@ async function main() {
     () => prisma.paymentEvent.count({ where: live }),
     () => prisma.paymentEvent.updateMany({ where: live, data: { deletedAt: NOW } }));
 
+  // Conversations and notices. Both are listed for a kept teacher and join to
+  // the other person through a nested include the read filter never reaches,
+  // so a removed student's chat stayed in the inbox and their notices stayed in
+  // the bell. After a reset there is no history worth keeping here anyway.
+  await step('chat messages (all)',
+    () => prisma.chatMessage.count({ where: live }),
+    () => prisma.chatMessage.updateMany({ where: live, data: { deletedAt: NOW } }));
+
+  await step('chat threads (all)',
+    () => prisma.chatThread.count({ where: live }),
+    () => prisma.chatThread.updateMany({ where: live, data: { deletedAt: NOW } }));
+
+  await step('notifications (all)',
+    () => prisma.notification.count({ where: live }),
+    () => prisma.notification.updateMany({ where: live, data: { deletedAt: NOW } }));
+
   // ── Everything every student ever did ───────────────────────────────────
   await step('certificates (all)',
     () => prisma.certificate.count({ where: live }),

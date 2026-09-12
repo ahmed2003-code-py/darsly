@@ -42,6 +42,12 @@ const SOFT_DELETE_MODELS = new Set([
   // user, academy or lesson that is already hidden.
   'PaymentEvent',
   'AcademyMedia',
+  // A thread is listed for the teacher and joins to the student through a
+  // nested include, which the read filter does not reach — so removing a
+  // student left their conversation sitting in the teacher's inbox.
+  'ChatThread',
+  'ChatMessage',
+  'Notification',
 ]);
 
 const READ_ACTIONS = new Set([

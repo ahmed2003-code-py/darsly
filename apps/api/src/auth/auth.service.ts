@@ -66,6 +66,7 @@ export class AuthService {
     const phone = normalizeEgyptianPhone(dto.phone);
     await this.assertPhoneFree(phone);
     const username = await this.usernameFor(dto.username, email);
+    await this.assertGradeExists(dto.gradeId);
 
     const user = await this.prisma.user.create({
       data: {
@@ -75,7 +76,7 @@ export class AuthService {
         username,
         fullName: dto.fullName.trim(),
         passwordHash: await argon2.hash(dto.password),
-        studentProfile: { create: {} },
+        studentProfile: { create: { gradeId: dto.gradeId } },
       },
       include: { teacherProfile: true, studentProfile: true },
     });
@@ -107,6 +108,7 @@ export class AuthService {
 
     const slug = await this.uniqueSlug(dto.email, dto.fullName);
     const fullName = dto.fullName.trim();
+    await this.assertSubjectExists(dto.subjectId);
     // Create the teacher AND provision their own Academy + OWNER membership in one
     // transaction. Without the academy, every @AcademyStaff console route (courses,
     // lessons, quizzes, wallet…) 404s — the teacher can't build anything.
@@ -397,6 +399,21 @@ export class AuthService {
         });
       }
     }
+  }
+
+  /**
+   * Checked here rather than left to the foreign key. A bad id would otherwise
+   * surface as a database error with a 500 next to it, which tells the person
+   * signing up nothing and tells us it was their fault.
+   */
+  private async assertGradeExists(gradeId: string) {
+    const grade = await this.prisma.gradeLevel.findFirst({ where: { id: gradeId, isActive: true } });
+    if (!grade) throw new BadRequestException({ message: 'Pick the year you are in', code: 'UNKNOWN_GRADE' });
+  }
+
+  private async assertSubjectExists(subjectId: string) {
+    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, isActive: true } });
+    if (!subject) throw new BadRequestException({ message: 'Pick the subject you teach', code: 'UNKNOWN_SUBJECT' });
   }
 
   private async assertEmailFree(email: string) {

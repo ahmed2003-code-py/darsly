@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
@@ -29,6 +29,9 @@ class DiscoverTeachersDto implements DiscoverTeachersQuery {
   @IsOptional() @IsString() @MaxLength(120) q?: string;
   @IsOptionalId() subjectId?: string;
   @IsOptionalId() gradeId?: string;
+  /** Look outside my own year. Without it a signed-in student sees theirs. */
+  @IsOptional() @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  allStages?: boolean;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) priceMinCents?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) priceMaxCents?: number;

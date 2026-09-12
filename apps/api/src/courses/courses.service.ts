@@ -10,7 +10,7 @@ import { VideoProcessingService } from '../video/video-processing.service';
 import { YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
-import { stageOfGrade } from '../catalog/stage.util';
+import { viewerStage } from '../catalog/stage.util';
 import {
   CreateCourseDto,
   CreateLessonDto,
@@ -60,7 +60,7 @@ export class CoursesService {
     // it. Empty for everyone else, and the clause is only added when it has
     // something in it — `notIn: []` is not a filter worth generating.
     const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
-    const stage = await stageOfGrade(this.prisma, query.gradeId);
+    const stage = await viewerStage(this.prisma, query, viewerUserId);
 
     const priceFilter: Prisma.IntFilter = {};
     if (query.free) priceFilter.equals = 0;

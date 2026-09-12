@@ -17,6 +17,8 @@ describe('student registration', () => {
     fullName: 'أحمد محمود',
     password: 'Passw0rd1',
     phone: '01012345678',
+    // Required: it is what every listing the student sees is filtered by.
+    gradeId: 'clx123gradeid',
   };
 
   it('accepts a complete signup', () => {

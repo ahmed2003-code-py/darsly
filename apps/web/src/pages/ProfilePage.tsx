@@ -12,6 +12,7 @@ import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../components/ui';
 import { Role } from '@darsly/shared-types';
 import { GAMIFICATION_KEY, useGamification, useLocalized } from '../lib/gamification';
 import { LevelCard } from '../components/gamification/LevelCard';
+import GradeSelect from '../components/GradeSelect';
 
 /** A titled block, so the page reads as a set of decisions rather than a form. */
 function Section({
@@ -101,13 +102,24 @@ export default function ProfilePage() {
   const { user, setUser, clear } = useAuthStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
+  // Kept alongside the name rather than buried: moving up a year is the one
+  // edit a student actually comes here to make, and it changes every listing
+  // they see afterwards.
+  const [gradeId, setGradeId] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-profile'],
     queryFn: async () => (await api.get('/me/profile')).data,
   });
+  const isStudent = data?.role === 'STUDENT';
+  const { data: grades } = useQuery({
+    queryKey: ['grades'],
+    queryFn: async () => (await api.get('/catalog/grades')).data,
+    enabled: isStudent,
+  });
   useEffect(() => {
     if (data?.fullName) setName(data.fullName);
+    if (data?.studentProfile?.gradeId) setGradeId(data.studentProfile.gradeId);
   }, [data]);
 
   const syncUser = (patch: Record<string, unknown>) => {
@@ -127,8 +139,17 @@ export default function ProfilePage() {
     onSuccess: () => syncUser({ avatarUrl: null }),
   });
   const saveName = useMutation({
-    mutationFn: async () => (await api.patch('/me/profile', { fullName: name.trim() })).data,
-    onSuccess: (d) => syncUser({ fullName: d.fullName }),
+    mutationFn: async () =>
+      (await api.patch('/me/profile', {
+        fullName: name.trim(),
+        ...(isStudent && gradeId ? { gradeId } : {}),
+      })).data,
+    onSuccess: (d) => {
+      syncUser({ fullName: d.fullName });
+      // Every listing is filtered by the year, so they all have to be re-asked.
+      qc.invalidateQueries({ queryKey: ['discover-courses'] });
+      qc.invalidateQueries({ queryKey: ['discover-teachers'] });
+    },
   });
 
   // Changed right here, against the current password — the emailed link it
@@ -243,10 +264,19 @@ export default function ProfilePage() {
             <Field label={t('profile.fullName')}>
               <input className="input" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
+            {isStudent && (
+              <Field label={t('auth.grade')} hint={t('profile.gradeHint')}>
+                <GradeSelect value={gradeId} onChange={setGradeId} grades={grades} />
+              </Field>
+            )}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 className="btn-primary w-full sm:w-auto"
-                disabled={saveName.isPending || !name.trim() || name.trim() === data?.fullName}
+                disabled={
+                  saveName.isPending ||
+                  !name.trim() ||
+                  (name.trim() === data?.fullName && gradeId === (data?.studentProfile?.gradeId ?? ''))
+                }
                 onClick={() => saveName.mutate()}
               >
                 {saveName.isPending ? t('common.saving') : t('common.save')}

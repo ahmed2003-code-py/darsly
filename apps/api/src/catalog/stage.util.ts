@@ -20,3 +20,26 @@ export async function stageOfGrade(
   });
   return grade?.stage ?? null;
 }
+
+/**
+ * The band to filter a marketplace by for this viewer.
+ *
+ * An explicit filter wins, then the student's own year, then nothing. A student
+ * who never asked still gets their own year's teachers and courses rather than
+ * every teacher on the platform, most of whom teach years they are not in —
+ * and passing `allStages` is how they say they want to look further.
+ */
+export async function viewerStage(
+  prisma: PrismaService,
+  query: { gradeId?: string; allStages?: boolean },
+  viewerUserId?: string,
+): Promise<EducationStage | null> {
+  if (query.allStages) return null;
+  if (query.gradeId) return stageOfGrade(prisma, query.gradeId);
+  if (!viewerUserId) return null;
+  const student = await prisma.studentProfile.findFirst({
+    where: { userId: viewerUserId },
+    select: { grade: { select: { stage: true } } },
+  });
+  return student?.grade?.stage ?? null;
+}

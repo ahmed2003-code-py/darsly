@@ -755,7 +755,7 @@
     "loginAcademySubtitle": "Sign in to continue your journey with {{name}}.",
     "email": "Email",
     "identifier": "Email or phone number",
-    "identifierPh": "name@example.com or 01xxxxxxxxx",
+    "identifierPh": "name@example.com / 01xxxxxxxxx",
     "password": "Password",
     "newPassword": "New password",
     "forgot": "Forgot password?",
@@ -825,7 +825,11 @@
     "stages": "The stages you teach",
     "stagesHint": "You can pick more than one.",
     "subjectRequired": "Pick the subject you teach.",
-    "stagesRequired": "Pick at least one stage."
+    "stagesRequired": "Pick at least one stage.",
+    "grade": "Your year",
+    "gradePh": "Pick your year",
+    "gradeHint": "We will show you the teachers and courses for your year — you can change it later from your profile.",
+    "gradeRequired": "Pick your year."
   },
   "live": {
     "title": "Live sessions",
@@ -955,7 +959,8 @@
     "logoutConfirm": "Sign out of this device?",
     "roleSTUDENT": "Student",
     "roleTEACHER": "Teacher",
-    "roleSUPER_ADMIN": "Platform admin"
+    "roleSUPER_ADMIN": "Platform admin",
+    "gradeHint": "Moved up a year? Change it here — your account and everything you finished stay exactly as they are."
   },
   "pay": {
     "title": "Complete payment",

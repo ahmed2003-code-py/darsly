@@ -37,6 +37,11 @@ export class DiscoverCoursesDto {
   @IsOptionalId()
   gradeId?: string;
 
+  /** Look outside my own year. Without it a signed-in student sees theirs. */
+  @IsOptional()
+  @Transform(toBool)
+  allStages?: boolean;
+
   @ApiPropertyOptional({ description: 'Teaching language of the teacher (ar / en).' })
   @IsOptional()
   @IsString()

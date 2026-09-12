@@ -84,6 +84,14 @@ export class RegisterStudentDto {
   @Matches(USERNAME_REGEX, { message: USERNAME_MSG })
   username?: string;
 
+  // Asked at sign-up because it decides what the whole app shows them. Without
+  // it a student's first screen is every teacher on the platform, most of whom
+  // teach years they are not in.
+  @ApiProperty({ example: 'clx123gradeid' })
+  @IsString()
+  @IsNotEmpty({ message: 'Pick the year you are in' })
+  gradeId: string;
+
   @ApiPropertyOptional({ example: 'Chrome on Android' })
   @IsOptional()
   @IsString()

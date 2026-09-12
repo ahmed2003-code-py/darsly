@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Module, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Module, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
@@ -17,6 +17,14 @@ class AvatarDto {
 }
 class UpdateMeDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) fullName?: string;
+  /**
+   * A student moves up a year and keeps the account: the same courses finished,
+   * the same streak, the same teachers — pointed at the next year's catalogue.
+   * Changing it is deliberately free of consequence; enrolments already bought
+   * are not touched, because a course paid for in one year does not stop being
+   * theirs in the next.
+   */
+  @IsOptional() @IsString() @MaxLength(LIMITS.ID) gradeId?: string;
 }
 
 @ApiTags('profile')
@@ -30,14 +38,27 @@ class ProfileController {
   async me(@CurrentUser() u: JwtPayload) {
     const user = await this.prisma.user.findUnique({
       where: { id: u.sub },
-      select: { id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true, createdAt: true },
+      select: {
+        id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true, createdAt: true,
+        studentProfile: { select: { gradeId: true, grade: { select: { id: true, nameAr: true, nameEn: true, stage: true } } } },
+      },
     });
     return user;
   }
 
   @Patch('profile')
-  @ApiOperation({ summary: 'Update my display name' })
+  @ApiOperation({ summary: 'Update my display name, or the year I am in' })
   async update(@CurrentUser() u: JwtPayload, @Body() dto: UpdateMeDto) {
+    if (dto.gradeId) {
+      const grade = await this.prisma.gradeLevel.findFirst({ where: { id: dto.gradeId, isActive: true } });
+      if (!grade) throw new BadRequestException({ message: 'Pick the year you are in', code: 'UNKNOWN_GRADE' });
+      // Only a student has a year; anyone else asking for one is ignored rather
+      // than refused, since nothing about their account changes either way.
+      await this.prisma.studentProfile.updateMany({
+        where: { userId: u.sub },
+        data: { gradeId: dto.gradeId },
+      });
+    }
     return this.prisma.user.update({
       where: { id: u.sub },
       data: { ...(dto.fullName ? { fullName: dto.fullName.trim() } : {}) },

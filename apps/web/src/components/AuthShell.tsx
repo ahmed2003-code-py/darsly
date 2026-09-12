@@ -133,7 +133,10 @@ export default function AuthShell({
       </aside>
 
       {/* Form panel */}
-      <main className="relative flex flex-col justify-center overflow-hidden bg-surface px-6 py-10 sm:px-12">
+      {/* Centred beside the brand panel, but top-aligned on a phone: a short
+          form centred in a tall screen leaves half of it empty above the
+          fields, which reads as a page that failed to load. */}
+      <main className="relative flex flex-col overflow-hidden bg-surface px-6 py-10 sm:px-12 lg:justify-center">
         {/* a whisper of the brand colour behind the card, so the two halves feel like one page */}
         <span className="pointer-events-none absolute -end-32 -top-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
         <span className="pointer-events-none absolute -bottom-32 -start-32 h-80 w-80 rounded-full bg-accent-300/20 blur-3xl" />
@@ -281,10 +284,15 @@ export function AuthField({
         {label}
         {optional && <span className="text-xs font-normal text-outline">{t('common.optional')}</span>}
       </span>
-      <span className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-200 ease-premium focus-within:-translate-y-px focus-within:border-accent-500 focus-within:shadow-glow focus-within:ring-4 focus-within:ring-accent-500/10">
-        <span className="material-symbols-outlined ps-3 text-[20px] text-outline transition-colors duration-200 group-focus-within:text-primary">{icon}</span>
+      {/* `dir` sits on the row, not just the input. An email or a phone number
+          is written left-to-right inside an Arabic page, and with only the
+          input flipped the icon stayed on the page's side while the text began
+          on the other — a leading icon with a field's width between it and the
+          first character, and the reveal button crowded against the text. */}
+      <span dir={dir} className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-200 ease-premium focus-within:-translate-y-px focus-within:border-accent-500 focus-within:shadow-glow focus-within:ring-4 focus-within:ring-accent-500/10">
+        <span className="material-symbols-outlined shrink-0 ps-3 text-[20px] text-outline transition-colors duration-200 group-focus-within:text-primary">{icon}</span>
         <input
-          className="w-full bg-transparent px-3 py-2.5 outline-none placeholder:text-outline/70"
+          className="w-full min-w-0 bg-transparent px-3 py-2.5 outline-none placeholder:text-outline/70"
           type={type}
           dir={dir}
           value={value}
@@ -299,7 +307,7 @@ export function AuthField({
           required={!optional}
         />
         {reveal && (
-          <button type="button" className="pe-3 text-outline transition-colors hover:text-primary" onClick={onReveal} tabIndex={-1}>
+          <button type="button" className="shrink-0 pe-3 text-outline transition-colors hover:text-primary" onClick={onReveal} tabIndex={-1}>
             <span className="material-symbols-outlined text-xl">{revealed ? 'visibility_off' : 'visibility'}</span>
           </button>
         )}

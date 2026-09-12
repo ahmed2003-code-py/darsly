@@ -36,8 +36,10 @@ function build(rows: unknown[] = [], total = rows.length) {
       }),
     },
     review: { groupBy: jest.fn().mockResolvedValue([]) },
-    // A student filters by their own year; the service resolves it to the band
-    // courses are actually filed under.
+    // A student filters by their own year, and a signed-in one who filters by
+    // nothing still gets their own — both resolve to the band courses are
+    // actually filed under. No profile here, so only an explicit filter counts.
+    studentProfile: { findFirst: jest.fn().mockResolvedValue(null) },
     gradeLevel: { findUnique: jest.fn().mockResolvedValue({ stage: 'SECONDARY' }) },
   } as unknown as PrismaService;
   const price = {
@@ -105,6 +107,27 @@ describe('every filter resolves in the database', () => {
     expect(await whereFor({ subjectId: 's1', teacherId: 't9' })).toMatchObject({
       subjectId: 's1', tenantId: 't9',
     });
+  });
+
+  it('shows a signed-in student their own year without being asked', async () => {
+    const { service, prisma } = build();
+    (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ grade: { stage: 'PREPARATORY' } });
+    await service.discover({}, 'user-1');
+    const where = (prisma.course.findMany as jest.Mock).mock.calls[0][0].where;
+    expect(where.OR).toEqual([{ stages: { has: 'PREPARATORY' } }, { stages: { isEmpty: true } }]);
+  });
+
+  it('lets a student ask to look outside their own year', async () => {
+    const { service, prisma } = build();
+    (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ grade: { stage: 'PREPARATORY' } });
+    await service.discover({ allStages: true }, 'user-1');
+    expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].where).not.toHaveProperty('OR');
+  });
+
+  it('narrows nothing for a visitor who is not signed in', async () => {
+    const { service, prisma } = build();
+    await service.discover({});
+    expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].where).not.toHaveProperty('OR');
   });
 
   it("answers a year filter with that year's stage", async () => {
@@ -224,6 +247,8 @@ describe('prices carry the platform fee', () => {
     const prisma = {
       course: { count: jest.fn().mockResolvedValue(1), findMany: jest.fn().mockResolvedValue([course()]) },
       review: { groupBy: jest.fn().mockResolvedValue([]) },
+      studentProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+      gradeLevel: { findUnique: jest.fn().mockResolvedValue({ stage: 'SECONDARY' }) },
     } as unknown as PrismaService;
     const service = new CoursesService(
       prisma,
@@ -259,6 +284,8 @@ describe('a student is not shown the catalogues of their teacher\'s rivals', () 
         }),
       },
       review: { groupBy: jest.fn().mockResolvedValue([]) },
+    studentProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+    gradeLevel: { findUnique: jest.fn().mockResolvedValue({ stage: 'SECONDARY' }) },
     } as unknown as PrismaService;
     const service = new CoursesService(
       prisma,

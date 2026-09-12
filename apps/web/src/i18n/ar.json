@@ -755,7 +755,7 @@
     "loginAcademySubtitle": "سجّل دخولك لمتابعة رحلتك مع {{name}}.",
     "email": "البريد الإلكتروني",
     "identifier": "الإيميل أو رقم الموبايل",
-    "identifierPh": "name@example.com أو 01xxxxxxxxx",
+    "identifierPh": "name@example.com / 01xxxxxxxxx",
     "password": "كلمة المرور",
     "newPassword": "كلمة المرور الجديدة",
     "forgot": "نسيت كلمة المرور؟",
@@ -825,7 +825,11 @@
     "stages": "المراحل اللي بتدرّسلها",
     "stagesHint": "تقدر تختار أكتر من مرحلة.",
     "subjectRequired": "اختار المادة اللي بتدرّسها.",
-    "stagesRequired": "اختار مرحلة واحدة على الأقل."
+    "stagesRequired": "اختار مرحلة واحدة على الأقل.",
+    "grade": "سنتك الدراسية",
+    "gradePh": "اختار سنتك",
+    "gradeHint": "هنعرضلك المدرسين والدورات بتاعت سنتك بس — تقدر تغيّرها بعدين من حسابك.",
+    "gradeRequired": "اختار سنتك الدراسية."
   },
   "live": {
     "title": "الجلسات المباشرة",
@@ -955,7 +959,8 @@
     "logoutConfirm": "تسجيل الخروج من هذا الجهاز؟",
     "roleSTUDENT": "طالب",
     "roleTEACHER": "مدرّس",
-    "roleSUPER_ADMIN": "مدير المنصّة"
+    "roleSUPER_ADMIN": "مدير المنصّة",
+    "gradeHint": "لو خلّصت السنة ودخلت اللي بعديها، غيّرها من هنا — حسابك وكل اللي خلّصته بيفضل زي ما هو."
   },
   "pay": {
     "title": "إتمام الدفع",

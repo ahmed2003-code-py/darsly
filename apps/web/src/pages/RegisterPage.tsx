@@ -10,12 +10,10 @@ import { arrivalAcademy } from '../lib/arrival';
 import { useAcademyBranding } from '../lib/academy';
 import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
+import GradeSelect from '../components/GradeSelect';
+import { STAGES, type Stage } from '../lib/stages';
 
 type Role = 'student' | 'teacher';
-
-/** Mirrors `EducationStage` on the API. */
-const STAGES = ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE'] as const;
-type Stage = (typeof STAGES)[number];
 
 export default function RegisterPage() {
   const { t } = useTranslation();
@@ -49,6 +47,14 @@ export default function RegisterPage() {
   // build courses no student will ever be shown.
   const [subjectId, setSubjectId] = useState('');
   const [stages, setStages] = useState<Stage[]>([]);
+  // A student's year decides what the whole app shows them, so it is asked for
+  // here rather than left to a settings page they would have no reason to open.
+  const [gradeId, setGradeId] = useState('');
+  const { data: grades } = useQuery({
+    queryKey: ['grades'],
+    queryFn: async () => (await api.get('/catalog/grades')).data,
+    enabled: role === 'student',
+  });
   const { data: subjects } = useQuery({
     queryKey: ['subjects'],
     queryFn: async () => (await api.get('/catalog/subjects')).data,
@@ -63,8 +69,10 @@ export default function RegisterPage() {
     setBusy(true);
     try {
       if (role === 'student') {
+        if (!gradeId) throw new Error(t('auth.gradeRequired'));
         const { data } = await api.post('/auth/register/student', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
+          gradeId,
           deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
         });
         setTokens(data.accessToken, data.refreshToken);
@@ -157,6 +165,18 @@ export default function RegisterPage() {
         <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.password')}
           placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
           reveal revealed={show} onReveal={() => setShow((s) => !s)} hint={t('auth.passwordHint')} />
+
+        {role === 'student' && (
+          <label className="mb-4 block">
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+              {t('auth.grade')}
+            </span>
+            {/* Grouped by stage: fifteen years in one flat list is a scroll, and
+                the groups are how a student thinks about which one is theirs. */}
+            <GradeSelect value={gradeId} onChange={setGradeId} grades={grades} />
+            <span className="mt-1.5 block text-xs text-outline">{t('auth.gradeHint')}</span>
+          </label>
+        )}
 
         {role === 'teacher' && (
           <>

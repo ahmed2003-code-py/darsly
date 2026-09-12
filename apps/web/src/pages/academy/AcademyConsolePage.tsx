@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
 import { useOwnedAcademy } from '../../lib/academy';
 import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../../components/ui';
+import { STAGES } from '../../lib/stages';
 
 const TABS = ['branding', 'members'] as const;
 
@@ -382,8 +383,6 @@ export function MembersTab({ slug }: { slug: string }) {
  * teacher's, and a marketplace that lets one person be the maths teacher and
  * the chemistry teacher stops being searchable.
  */
-const STAGES = ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE'] as const;
-
 function WhatITeach() {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();

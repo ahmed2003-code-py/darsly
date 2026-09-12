@@ -34,8 +34,10 @@ class StartSessionDto {
 class HeartbeatDto {
   @IsInt() @Min(0) @Max(86_400) positionSec: number;
   // A closed set: `seek` drives the scrub-anomaly detector, and an unrecognised
-  // verb used to be counted as telemetry all the same.
-  @IsIn(['play', 'pause', 'seek', 'hb']) type: string;
+  // verb used to be counted as telemetry all the same. `ended` is the browser's
+  // own end-of-playback signal — `pause` is NOT fired when a video finishes
+  // naturally, so without it the last heartbeat of a lesson never arrives.
+  @IsIn(['play', 'pause', 'seek', 'hb', 'ended']) type: string;
   @IsOptional() @IsInt() @Min(0) @Max(100) watchedPct?: number;
 }
 class ReportEventDto {

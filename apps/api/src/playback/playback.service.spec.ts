@@ -187,4 +187,104 @@ describe('PlaybackService', () => {
       );
     });
   });
+
+  /**
+   * The rule that was broken in production: watch time was measured from
+   * `session.startedAt`, so a student who resumed or scrubbed restarted from a
+   * ceiling of zero. Real rows sat at position 200 of a 201-second lesson,
+   * recorded as 22% watched, never completed, never paid.
+   */
+  describe('watch credit', () => {
+    function watching(over: Partial<any> = {}) {
+      const prisma = makePrisma();
+      prisma.playbackSession.findUnique.mockResolvedValue({
+        id: 'ps1', studentId: 's1', tenantId: 't1', lessonId: 'l1', ip: '1.1.1.1', events: [],
+        startedAt: new Date(Date.now() - 20_000),
+        lastBeatAt: new Date(Date.now() - 10_000),
+        lastPosSec: 100,
+        ...over,
+      });
+      prisma.studentProfile.findUnique.mockResolvedValue({ id: 's1' });
+      prisma.playbackSession.update.mockResolvedValue({});
+      prisma.lessonProgress.updateMany.mockResolvedValue({ count: 1 });
+      prisma.lesson.findUnique.mockResolvedValue({
+        durationSec: 200, unit: { courseId: 'c1' }, videoAsset: { durationSec: 200 },
+      });
+      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock);
+      return { svc, prisma };
+    }
+    const progressWrite = (prisma: any) => prisma.lessonProgress.updateMany.mock.calls.at(-1)[0].data;
+
+    it('credits the content watched since the previous beat', async () => {
+      const { svc, prisma } = watching();
+      prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 100 });
+      // 10 seconds of real time, 10 seconds of content advanced.
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 110, type: 'hb', watchedPct: 55 }, {});
+      expect(progressWrite(prisma).watchedSec).toBe(110);
+      expect(progressWrite(prisma).watchedPct).toBe(55);
+    });
+
+    it('credits nothing for seeking to the end', async () => {
+      const { svc, prisma } = watching();
+      prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 20 });
+      // Playhead jumps 100 seconds, but only 10 seconds of real time passed.
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 200, type: 'seek', watchedPct: 100 }, {});
+      const data = progressWrite(prisma);
+      // 10s real time × 2.5 max rate = 25s creditable, not the 100s claimed.
+      expect(data.watchedSec).toBe(45);
+      expect(data.completedAt).toBeUndefined();
+    });
+
+    it('ignores a forged watchedPct entirely', async () => {
+      const { svc, prisma } = watching();
+      prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 0 });
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 101, type: 'hb', watchedPct: 100 }, {});
+      // One second of content advanced is one second credited, whatever the
+      // client claims about the percentage.
+      expect(progressWrite(prisma).watchedSec).toBe(1);
+      expect(progressWrite(prisma).completedAt).toBeUndefined();
+    });
+
+    it('accumulates across sessions, so a resumed lesson can finish', async () => {
+      // A fresh session — the ceiling that used to reset and make completion
+      // unreachable — carrying 170 of 200 seconds already earned earlier.
+      const { svc, prisma } = watching({ startedAt: new Date(), lastBeatAt: new Date(Date.now() - 8_000), lastPosSec: 170 });
+      prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 170 });
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 180, type: 'hb', watchedPct: 90 }, {});
+      const data = progressWrite(prisma);
+      expect(data.watchedSec).toBe(180); // 170 + 10
+      expect(data.completedAt).toBeInstanceOf(Date); // 180/200 = 90%
+      expect(gamificationMock.record).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'LESSON_COMPLETED', key: 'LESSON_COMPLETED:s1:l1' }),
+      );
+    });
+
+    it('completes on a genuine end-of-video at the kinder bar', async () => {
+      const { svc, prisma } = watching({ lastBeatAt: new Date(Date.now() - 5_000), lastPosSec: 145 });
+      prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 145 });
+      // 150/200 = 75%: short of the 90% rule, past the 70% end-of-video bar.
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 150, type: 'ended', watchedPct: 100 }, {});
+      expect(progressWrite(prisma).completedAt).toBeInstanceOf(Date);
+    });
+
+    it('still refuses an `ended` that was never watched', async () => {
+      const { svc, prisma } = watching({ lastBeatAt: new Date(Date.now() - 2_000), lastPosSec: 0 });
+      prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 0 });
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 200, type: 'ended', watchedPct: 100 }, {});
+      const data = progressWrite(prisma);
+      expect(data.watchedSec).toBe(5); // 2s of real time, nothing more
+      expect(data.completedAt).toBeUndefined();
+    });
+
+    it('falls back to the video asset when the lesson has no duration', async () => {
+      const { svc, prisma } = watching({ lastBeatAt: new Date(Date.now() - 10_000), lastPosSec: 170 });
+      prisma.lesson.findUnique.mockResolvedValue({
+        durationSec: 0, unit: { courseId: 'c1' }, videoAsset: { durationSec: 200 },
+      });
+      prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 175 });
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 180, type: 'hb', watchedPct: 90 }, {});
+      // Without the fallback this lesson could never complete at all.
+      expect(progressWrite(prisma).completedAt).toBeInstanceOf(Date);
+    });
+  });
 });

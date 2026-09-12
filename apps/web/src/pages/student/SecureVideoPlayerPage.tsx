@@ -458,6 +458,10 @@ export default function SecureVideoPlayerPage() {
                     }
                   }}
                   onPlay={() => { setIsPlaying(true); heartbeat('play'); }}
+                  // The browser does not fire `pause` when playback ends on its
+                  // own, so without this the final seconds of every lesson were
+                  // never reported and the lesson never completed.
+                  onEnded={() => { setIsPlaying(false); heartbeat('ended'); }}
                   onPause={() => { setIsPlaying(false); heartbeat('pause'); }}
                   onSeeked={() => heartbeat('seek')}
                   onTimeUpdate={(e) => { setCurrentTime(e.currentTarget.currentTime); heartbeat('hb'); }}

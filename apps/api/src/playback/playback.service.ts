@@ -15,6 +15,13 @@ import { ProgressService } from '../progress/progress.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { GamificationOutcome } from '../gamification/gamification.types';
 
+/** Content-seconds creditable per second of real time (2x playback + jitter). */
+const MAX_PLAYBACK_RATE = 2.5;
+/** Share of a lesson that must be genuinely consumed to complete it. */
+const WATCHED_COMPLETE_PCT = 90;
+/** The kinder bar applied when the player reports the video actually ended. */
+const ENDED_COMPLETE_PCT = 70;
+
 export interface DeviceCtx {
   ip?: string;
   userAgent?: string;
@@ -324,16 +331,34 @@ export class PlaybackService {
       });
     }
 
+    // The beat marker rides along with the telemetry write — heartbeats are the
+    // highest-frequency write in the product, and this is every 9 seconds per
+    // watching student.
+    const beatAt = new Date();
     await this.prisma.playbackSession.update({
       where: { id: sessionId },
-      data: { events: events.slice(-500) },
+      data: {
+        events: events.slice(-500),
+        lastBeatAt: beatAt,
+        lastPosSec: Math.round(body.positionSec),
+      },
     });
 
     // Persist watch progress. The client-reported watchedPct is NEVER trusted for
-    // completion: a forged "100% one second in" would otherwise mint a certificate
-    // with zero viewing. We cap it by what the wall-clock elapsed since the session
-    // opened makes physically possible (allowing up to ~2x playback + a startup
-    // grace), so completion can only be reached after genuinely spending the time.
+    // Progress is credited, not reported.
+    //
+    // The client says where the playhead is; the server decides how much of
+    // that counts. Each heartbeat may credit only as much content as the real
+    // time since the previous heartbeat allows, so seeking to the end credits
+    // nothing and a forged position credits nothing either.
+    //
+    // Crucially the total accumulates on the LessonProgress row, across every
+    // session. The previous rule measured against `session.startedAt`, which
+    // meant a student who resumed a lesson — or scrubbed at all — restarted
+    // from a ceiling of zero and could never reach completion: production had
+    // rows sitting at position 200 of a 201-second lesson, recorded as 22%
+    // watched and never completed.
+    //
     // Only the student's own player writes their progress. Staff in the tenant
     // may end or flag a session, but must never be able to complete a lesson —
     // and so a course, and so a certificate — on a student's behalf.
@@ -341,21 +366,49 @@ export class PlaybackService {
     if (body.watchedPct != null && user.role === Role.STUDENT) {
       const lesson = await this.prisma.lesson.findUnique({
         where: { id: session.lessonId },
-        select: { durationSec: true, unit: { select: { courseId: true } } },
+        select: {
+          durationSec: true,
+          unit: { select: { courseId: true } },
+          videoAsset: { select: { durationSec: true } },
+        },
       });
-      const durationSec = lesson?.durationSec ?? 0;
-      const elapsedSec = Math.max(0, (Date.now() - session.startedAt.getTime()) / 1000);
-      // Max content-seconds a viewer could plausibly have watched by now.
-      const maxPlausibleSec = elapsedSec * 2 + 15;
-      const clientPct = Math.max(0, Math.min(100, Math.round(body.watchedPct)));
-      const capPct =
-        durationSec > 0 ? Math.min(100, Math.floor((maxPlausibleSec / durationSec) * 100)) : 0;
-      const effectivePct = Math.min(clientPct, capPct);
-      const justCompleted = durationSec > 0 && effectivePct >= 90;
+      // Some lessons carry a duration only on the video asset; without this
+      // fallback those lessons can never complete at all.
+      const durationSec = lesson?.durationSec || lesson?.videoAsset?.durationSec || 0;
+      const position = Math.round(body.positionSec);
+
+      const progress = await this.prisma.lessonProgress.findUnique({
+        where: { studentId_lessonId: { studentId: session.studentId, lessonId: session.lessonId } },
+        select: { watchedSec: true },
+      });
+
+      const sinceLastBeatSec = session.lastBeatAt
+        ? (beatAt.getTime() - session.lastBeatAt.getTime()) / 1000
+        : 0;
+      const advancedSec = Math.max(0, position - session.lastPosSec);
+      // At most MAX_RATE seconds of content per second of real time — enough
+      // for 2x playback plus jitter, and no constant grace, so spamming
+      // heartbeats earns nothing that waiting would not have earned anyway.
+      const credited = Math.min(advancedSec, Math.max(0, sinceLastBeatSec) * MAX_PLAYBACK_RATE);
+      const watchedSec = Math.min(
+        durationSec || Number.MAX_SAFE_INTEGER,
+        (progress?.watchedSec ?? 0) + Math.floor(credited),
+      );
+
+      const effectivePct =
+        durationSec > 0 ? Math.min(100, Math.floor((watchedSec / durationSec) * 100)) : 0;
+      // Reaching the true end of the video is itself evidence, so an `ended`
+      // event completes on a lower bar — a few seconds lost to buffering
+      // should not cost a student the lesson they just sat through.
+      const threshold = body.type === 'ended' ? ENDED_COMPLETE_PCT : WATCHED_COMPLETE_PCT;
+      const justCompleted = durationSec > 0 && effectivePct >= threshold;
+
       await this.prisma.lessonProgress.updateMany({
         where: { studentId: session.studentId, lessonId: session.lessonId },
         data: {
-          lastPositionSec: Math.round(body.positionSec),
+          lastPositionSec: position,
+          watchedSec,
+          // Monotonic: scrubbing backwards must not walk a progress bar back.
           watchedPct: effectivePct,
           ...(justCompleted ? { completedAt: new Date() } : {}),
         },

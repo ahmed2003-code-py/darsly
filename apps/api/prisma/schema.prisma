@@ -586,6 +586,11 @@ model LessonProgress {
 
   lastPositionSec Int       @default(0)
   watchedPct      Int       @default(0)
+  /// Content-seconds this student has actually consumed of this lesson,
+  /// accumulated across every session. Progress is cumulative; a single
+  /// session's elapsed time is not, which is why completion used to be
+  /// unreachable for anyone who resumed or scrubbed.
+  watchedSec      Int       @default(0)
   viewCount       Int       @default(0)
   completedAt     DateTime?
   // when this student's lesson access window opened (for accessWindowDays)
@@ -638,13 +643,18 @@ model PlaybackSession {
   deviceSessionId String?
   deviceSession   DeviceSession? @relation(fields: [deviceSessionId], references: [id])
 
-  ip        String?
-  userAgent String?
-  country   String?
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
+  ip         String?
+  userAgent  String?
+  country    String?
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+  /// The previous heartbeat, so each one can credit only the real time and the
+  /// real position advance since the last — which is what stops a seek to the
+  /// end from counting as having watched it.
+  lastBeatAt DateTime?
+  lastPosSec Int       @default(0)
   // compacted playback telemetry: [{t, type: play|pause|seek|hb, pos}]
-  events    Json      @default("[]")
+  events     Json      @default("[]")
 
   @@index([tenantId, startedAt])
   @@index([studentId, lessonId])

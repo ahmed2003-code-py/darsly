@@ -105,7 +105,13 @@ export class MissionsService {
     for (const t of templates) {
       // Backfill progress already made in this period, so a student who did
       // their lesson before opening the app is not asked to do it again.
-      const progress = await this.priorProgress(studentId, t, periodKey);
+      // Clamped one short of the target on purpose. Backfilled work is real,
+      // but a mission that appears as "2/2" and still is not done reads as
+      // broken — and paying it out on a GET would make reading the dashboard
+      // award XP. Leaving exactly one step means the next lesson both completes
+      // it and pays it, through the normal path.
+      const prior = await this.priorProgress(studentId, t, periodKey);
+      const progress = Math.min(prior, Math.max(0, t.target - 1));
       const row = await this.prisma.studentMission
         .create({
           data: {
@@ -114,7 +120,7 @@ export class MissionsService {
             periodKey,
             template: t.id,
             target: t.target,
-            progress: Math.min(progress, t.target),
+            progress,
             xpReward: t.xp,
             coinReward: t.coins,
             // Backfilled progress does not retro-pay the mission; it only
@@ -183,7 +189,8 @@ export class MissionsService {
 
     const completed: CompletedMission[] = [];
     for (const m of open) {
-      const progress = m.progress + 1;
+      // Never past the target: a mission reading 3/2 is a bug the student can see.
+      const progress = Math.min(m.target, m.progress + 1);
       const done = progress >= m.target;
       // Conditional update: two events arriving together cannot both see the
       // mission as incomplete and both claim the completion.

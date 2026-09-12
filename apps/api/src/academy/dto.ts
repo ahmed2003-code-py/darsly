@@ -32,7 +32,6 @@ export class UpdateAcademyDto {
   @IsOptional() @IsString() @Matches(HEX, { message: 'colorPrimary must be a #RRGGBB hex' }) colorPrimary?: string;
   @IsOptional() @IsString() @Matches(HEX, { message: 'colorAccent must be a #RRGGBB hex' }) colorAccent?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
-  @IsOptional() @IsBoolean() requiresEnrollmentApproval?: boolean;
   @IsOptional() @IsInt() @Min(1) @Max(10) maxConcurrentSessions?: number;
 }
 

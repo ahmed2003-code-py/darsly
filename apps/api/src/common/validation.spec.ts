@@ -66,9 +66,14 @@ describe('length and size caps', () => {
     expect(failures(CreateCourseDto, payload)).toContain('description');
   });
 
-  it('rejects an id-shaped field carrying an essay', () => {
-    const payload = { title: 'A valid title', subjectId: 'x'.repeat(LIMITS.ID + 1) };
-    expect(failures(CreateCourseDto, payload)).toContain('subjectId');
+  it('rejects a course aimed at a stage that is not a stage', () => {
+    const payload = { title: 'A valid title', stages: ['NOT_A_STAGE'] };
+    expect(failures(CreateCourseDto, payload)).toContain('stages');
+  });
+
+  it('rejects a course aimed at more stages than exist', () => {
+    const payload = { title: 'A valid title', stages: ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE', 'PRIMARY'] };
+    expect(failures(CreateCourseDto, payload)).toContain('stages');
   });
 
   it('rejects a reorder request with an unbounded id list', () => {

@@ -85,7 +85,7 @@ export class AnalyticsService {
       grossCents,
       activeStudents,
       totalEnrollments: enrollments.length,
-      pendingEnrollments: enrollments.filter((e) => e.status === 'PENDING_APPROVAL').length,
+      pendingEnrollments: enrollments.filter((e) => e.status === 'PENDING_PAYMENT').length,
       completionRatePct,
       quizPassRatePct,
       avgRating: reviews._avg.rating ? Math.round(reviews._avg.rating * 10) / 10 : null,

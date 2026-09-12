@@ -27,7 +27,7 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 
 /** Enrolments that count as "I study with this teacher". */
-const COMMITTED = ['ACTIVE', 'PENDING_APPROVAL'] as const;
+const COMMITTED = ['ACTIVE', 'PENDING_PAYMENT'] as const;
 
 @Injectable()
 export class SubjectExclusivityService {

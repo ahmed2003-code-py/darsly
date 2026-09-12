@@ -10,6 +10,7 @@ import { VideoProcessingService } from '../video/video-processing.service';
 import { YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
+import { stageOfGrade } from '../catalog/stage.util';
 import {
   CreateCourseDto,
   CreateLessonDto,
@@ -59,6 +60,7 @@ export class CoursesService {
     // it. Empty for everyone else, and the clause is only added when it has
     // something in it — `notIn: []` is not a filter worth generating.
     const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
+    const stage = await stageOfGrade(this.prisma, query.gradeId);
 
     const priceFilter: Prisma.IntFilter = {};
     if (query.free) priceFilter.equals = 0;
@@ -89,7 +91,10 @@ export class CoursesService {
           ? { tenantId: query.teacherId }
           : {}),
       ...(query.subjectId ? { subjectId: query.subjectId } : {}),
-      ...(query.gradeId ? { gradeId: query.gradeId } : {}),
+      // A student filters by their own year; a course is offered to a band. The
+      // year is resolved to its band here so the two still meet, and a course
+      // with no band set is not hidden — it was never narrowed, not excluded.
+      ...(stage ? { OR: [{ stages: { has: stage } }, { stages: { isEmpty: true } }] } : {}),
       ...(Object.keys(priceFilter).length ? { priceCents: priceFilter } : {}),
       ...(query.hasPreview
         ? { units: { some: { deletedAt: null, lessons: { some: { deletedAt: null, isFreePreview: true } } } } }
@@ -274,10 +279,38 @@ export class CoursesService {
     );
   }
 
-  create(tenantId: string, dto: CreateCourseDto) {
+  /**
+   * What this teacher is allowed to aim a course at.
+   *
+   * The subject is theirs, full stop — they chose it when they signed up and a
+   * course is not the place to change it. The stages are the ones they signed
+   * up for, and a course left unnarrowed goes to all of them rather than to
+   * none, because an empty list in the form means "I didn't pick", not "nobody".
+   */
+  private async reachOf(tenantId: string, wanted?: string[]) {
+    const teacher = await this.prisma.teacherProfile.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { subjectId: true, stages: true },
+    });
+    const allowed = teacher.stages;
+    const asked = wanted?.length ? wanted : allowed;
+    const outside = asked.filter((st) => !allowed.includes(st as never));
+    if (outside.length) {
+      throw new BadRequestException({
+        message: 'You did not sign up to teach that stage',
+        code: 'STAGE_NOT_YOURS',
+        stages: outside,
+      });
+    }
+    return { subjectId: teacher.subjectId, stages: asked as never[] };
+  }
+
+  async create(tenantId: string, dto: CreateCourseDto) {
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
+    const { stages, ...rest } = dto;
+    const reach = await this.reachOf(tenantId, stages);
     return this.prisma.course.create({
-      data: { ...dto, tenantId },
+      data: { ...rest, ...reach, tenantId },
       include: { subject: true, grade: true },
     });
   }
@@ -298,9 +331,13 @@ export class CoursesService {
       }
     }
 
+    const { stages, ...rest } = dto;
+    // Only re-checked when the teacher actually changed it, so an edit that
+    // touches the title alone never has to restate where the course is aimed.
+    const reach = stages ? await this.reachOf(tenantId, stages) : {};
     return this.prisma.course.update({
       where: { id: courseId },
-      data: dto,
+      data: { ...rest, ...reach },
       include: { subject: true, grade: true },
     });
   }
@@ -733,7 +770,6 @@ export class CoursesService {
       // number. The academy sees its own price through the teacher endpoints.
       priceCents: await this.studentPrice.displayPrice(course.tenantId, course.priceCents),
       currency: course.currency,
-      requiresEnrollmentApproval: course.requiresEnrollmentApproval,
       studentsCount: course._count.enrollments,
       avgRating: rating._avg.rating ? Math.round(rating._avg.rating * 10) / 10 : null,
       reviewsCount: rating._count,

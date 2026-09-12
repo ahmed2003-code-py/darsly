@@ -77,7 +77,6 @@ export class AdminService {
         status,
         language: updated.language,
         maxConcurrentSessions: updated.maxConcurrentSessions,
-        autoApproveEnrollments: updated.autoApproveEnrollments,
         commissionPercent: updated.commissionPercent,
       },
       teacher.user.fullName,

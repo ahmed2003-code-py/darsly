@@ -51,7 +51,7 @@ export class EnrollmentsController {
   @Post('enrollments')
   @Roles(Role.STUDENT)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[student] Enroll/subscribe (auto-approves or queues per course policy)' })
+  @ApiOperation({ summary: '[student] Enroll in a free course, or quote a paid one' })
   async enroll(@CurrentUser() user: JwtPayload, @Body() dto: EnrollDto) {
     const enrollment = await this.enrollments.enroll(user.sub, dto.courseId, dto.couponCode);
     await this.audit.log({
@@ -79,40 +79,6 @@ export class EnrollmentsController {
   @ApiOperation({ summary: '[academy] List enrollments (filter by status)' })
   teacherList(@CurrentAcademy() ctx: AcademyContext, @Query() query: TeacherEnrollmentsQuery) {
     return this.enrollments.teacherList(ctx.academyId, query.status);
-  }
-
-  @Patch('teacher/enrollments/:id/approve')
-  @AcademyStaff('student.manage')
-  @ApiOperation({ summary: '[academy] Approve a pending enrollment' })
-  async approve(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    const enrollment = await this.enrollments.approve(ctx.academyId, id);
-    await this.audit.log({
-      actorUserId: user.sub,
-      action: 'enrollment.approve',
-      entity: 'Enrollment',
-      entityId: id,
-    });
-    return enrollment;
-  }
-
-  @Patch('teacher/enrollments/:id/reject')
-  @AcademyStaff('student.manage')
-  @ApiOperation({ summary: '[academy] Reject a pending enrollment' })
-  async reject(
-    @CurrentUser() user: JwtPayload,
-    @CurrentAcademy() ctx: AcademyContext,
-    @Param('id') id: string,
-    @Body() dto: ModerateDto,
-  ) {
-    const enrollment = await this.enrollments.reject(ctx.academyId, id, dto.reason);
-    await this.audit.log({
-      actorUserId: user.sub,
-      action: 'enrollment.reject',
-      entity: 'Enrollment',
-      entityId: id,
-      meta: { reason: dto.reason },
-    });
-    return enrollment;
   }
 
   @Patch('teacher/enrollments/:id/revoke')

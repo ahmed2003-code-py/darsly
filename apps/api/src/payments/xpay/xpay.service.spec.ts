@@ -300,7 +300,7 @@ describe('a failed checkout leaves nothing behind', () => {
     // would take away a record this checkout did not create.
     const { service, deleted } = buildStart({
       createFails: true,
-      existing: { id: 'enr_1', status: 'PENDING_APPROVAL', expiresAt: null },
+      existing: { id: 'enr_1', status: 'PENDING_PAYMENT', expiresAt: null },
     });
     await expect(service.startCheckout('u1', 'c_1')).rejects.toThrow();
     // The payment goes; the enrolment is put back rather than removed.

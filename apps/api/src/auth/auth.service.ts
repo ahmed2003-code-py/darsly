@@ -119,7 +119,15 @@ export class AuthService {
           username,
           fullName,
           passwordHash: await argon2.hash(dto.password),
-          teacherProfile: { create: { slug, bio: dto.bio ?? '', status: TeacherStatus.PENDING } },
+          teacherProfile: {
+            create: {
+              slug,
+              bio: dto.bio ?? '',
+              status: TeacherStatus.PENDING,
+              subjectId: dto.subjectId,
+              stages: dto.stages,
+            },
+          },
         },
         include: { teacherProfile: true },
       });
@@ -133,7 +141,6 @@ export class AuthService {
           status: tp.status,
           language: tp.language,
           maxConcurrentSessions: tp.maxConcurrentSessions,
-          autoApproveEnrollments: tp.autoApproveEnrollments,
           commissionPercent: tp.commissionPercent,
         },
         fullName,

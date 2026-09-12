@@ -88,7 +88,7 @@ export class AcademyService {
     if (!student) return [];
 
     const rows = await this.prisma.enrollment.findMany({
-      where: { studentId: student.id, status: { in: ['ACTIVE', 'PENDING_APPROVAL'] } },
+      where: { studentId: student.id, status: { in: ['ACTIVE', 'PENDING_PAYMENT'] } },
       select: { tenantId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -249,7 +249,7 @@ export class AcademyService {
       select: {
         id: true, slug: true, name: true, tagline: true, status: true,
         logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true,
-        language: true, currency: true, requiresEnrollmentApproval: true,
+        language: true, currency: true,
         maxConcurrentSessions: true, feeType: true, feeValue: true,
       },
     });
@@ -368,7 +368,6 @@ export class AcademyService {
         ...(dto.colorPrimary !== undefined ? { colorPrimary: dto.colorPrimary } : {}),
         ...(dto.colorAccent !== undefined ? { colorAccent: dto.colorAccent } : {}),
         ...(dto.language !== undefined ? { language: dto.language } : {}),
-        ...(dto.requiresEnrollmentApproval !== undefined ? { requiresEnrollmentApproval: dto.requiresEnrollmentApproval } : {}),
         ...(dto.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: dto.maxConcurrentSessions } : {}),
       },
       select: { id: true, slug: true, name: true, colorPrimary: true },

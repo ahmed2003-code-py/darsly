@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
+import { stageOfGrade } from '../catalog/stage.util';
 
 export interface DiscoverTeachersQuery {
   q?: string;
@@ -35,12 +36,13 @@ export class TeachersService {
     // A student already studying a subject is not shown the other teachers of
     // it — see SubjectExclusivityService for why the rule is drawn this way.
     const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
+    const stage = await stageOfGrade(this.prisma as never, query.gradeId);
     const where: Prisma.TeacherProfileWhereInput = {
       status: 'APPROVED',
       user: { isActive: true },
       ...(hidden.length ? { id: { notIn: hidden } } : {}),
       ...(query.subjectId ? { subjectId: query.subjectId } : {}),
-      ...(query.gradeId ? { grades: { some: { gradeId: query.gradeId } } } : {}),
+      ...(stage ? { stages: { has: stage } } : {}),
       ...(query.language ? { language: query.language } : {}),
       ...(query.q
         ? {
@@ -226,3 +228,4 @@ export class TeachersService {
     };
   }
 }
+

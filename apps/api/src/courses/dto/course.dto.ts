@@ -8,6 +8,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -18,6 +19,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { IsOptionalId, IsPage, IsPageSize, LIMITS } from '../../common/validation';
+import { EDUCATION_STAGES, type EducationStageValue } from '../../auth/dto/auth.dto';
 
 /** ~10 years — anything longer is effectively "forever", which is `undefined`. */
 const MAX_WINDOW_DAYS = 3_650;
@@ -32,12 +34,19 @@ export class CreateCourseDto {
   // `validateThumbnailUrl` in the service — this cap just stops an oversized
   // string from being decoded at all.
   @IsOptional() @IsString() @MaxLength(LIMITS.IMAGE_DATA_URL) thumbnailUrl?: string;
-  @IsOptionalId() subjectId?: string;
-  @IsOptionalId() gradeId?: string;
+  // Subject and stages are not taken from the request. The subject is whatever
+  // the teacher signed up to teach, and the stages are checked against the ones
+  // they signed up for — a course cannot be aimed somewhere its author does not
+  // teach, however the form is driven.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @ArrayUnique()
+  @IsIn(EDUCATION_STAGES, { each: true })
+  stages?: EducationStageValue[];
   @IsOptional() @IsEnum(CoursePricingModel) pricingModel?: CoursePricingModel;
   /** integer piasters (1 EGP = 100) */
   @IsOptional() @IsInt() @Min(0) @Max(MAX_PRICE_CENTS) priceCents?: number;
-  @IsOptional() @IsBoolean() requiresEnrollmentApproval?: boolean;
   @IsOptional() @IsInt() @Min(1) @Max(MAX_WINDOW_DAYS) accessWindowDays?: number;
   @IsOptional() @IsInt() @Min(1) @Max(10_000) defaultViewsCap?: number;
 }

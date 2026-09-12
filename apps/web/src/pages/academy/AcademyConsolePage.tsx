@@ -72,7 +72,7 @@ export function BrandingTab({ slug }: { slug: string }) {
       // would still cost the uniqueness queries.
       ...(form.slug && form.slug !== slug ? { slug: form.slug } : {}),
       colorPrimary: form.colorPrimary, colorAccent: form.colorPrimary,
-      language: form.language, requiresEnrollmentApproval: form.requiresEnrollmentApproval,
+      language: form.language,
       maxConcurrentSessions: Number(form.maxConcurrentSessions),
     })).data,
     onSuccess: () => {
@@ -127,10 +127,8 @@ export function BrandingTab({ slug }: { slug: string }) {
           </div>
         </div>
 
-        <label className="mb-4 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={!!form.requiresEnrollmentApproval} onChange={(e) => set('requiresEnrollmentApproval', e.target.checked)} />
-          {t('academy.requireReview')}
-        </label>
+        <WhatITeach />
+
         <Field label={t('academy.maxDevices')}>
           <input type="number" min={1} max={10} className="input w-28" value={form.maxConcurrentSessions} onChange={(e) => set('maxConcurrentSessions', e.target.value)} />
         </Field>
@@ -371,6 +369,90 @@ export function MembersTab({ slug }: { slug: string }) {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The two answers every course is filed under.
+ *
+ * Asked at sign-up, but editable here because a teacher who added a stage — or
+ * who signed up before the question existed — would otherwise be unable to aim
+ * a course anywhere. The subject stays a single choice: an academy is one
+ * teacher's, and a marketplace that lets one person be the maths teacher and
+ * the chemistry teacher stops being searchable.
+ */
+const STAGES = ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE'] as const;
+
+function WhatITeach() {
+  const { t, i18n } = useTranslation();
+  const qc = useQueryClient();
+  const ar = i18n.language !== 'en';
+  const { data: profile } = useQuery({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+  });
+  const { data: subjects } = useQuery({
+    queryKey: ['subjects'],
+    queryFn: async () => (await api.get('/catalog/subjects')).data,
+  });
+  const [draft, setDraft] = useState<{ subjectId: string; stages: string[] } | null>(null);
+  useEffect(() => {
+    if (profile && !draft) setDraft({ subjectId: profile.subjectId ?? '', stages: profile.stages ?? [] });
+  }, [profile]); // eslint-disable-line
+
+  const save = useMutation({
+    mutationFn: async () =>
+      (await api.patch('/teacher/profile', {
+        subjectId: draft!.subjectId || undefined,
+        stages: draft!.stages,
+      })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-profile'] }),
+  });
+  if (!draft) return null;
+
+  const toggle = (st: string) =>
+    setDraft({
+      ...draft,
+      stages: draft.stages.includes(st) ? draft.stages.filter((x) => x !== st) : [...draft.stages, st],
+    });
+
+  return (
+    <div className="mb-4 rounded-xl border border-outline-variant p-4">
+      <p className="mb-3 font-heading font-bold">{t('academy.teachTitle')}</p>
+      <Field label={t('auth.subject')}>
+        <select className="input py-2" value={draft.subjectId}
+          onChange={(e) => setDraft({ ...draft, subjectId: e.target.value })}>
+          <option value="">{t('auth.subjectPh')}</option>
+          {(subjects ?? []).map((sub: { id: string; nameAr: string; nameEn: string }) => (
+            <option key={sub.id} value={sub.id}>{ar ? sub.nameAr : sub.nameEn}</option>
+          ))}
+        </select>
+      </Field>
+      <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('auth.stages')}</span>
+      <div className="flex flex-wrap gap-2">
+        {STAGES.map((st) => {
+          const on = draft.stages.includes(st);
+          return (
+            <button key={st} type="button" aria-pressed={on} onClick={() => toggle(st)}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                on ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant text-on-surface-variant hover:border-outline'
+              }`}>
+              {t(`stage.${st}`)}
+            </button>
+          );
+        })}
+      </div>
+      {/* Narrowing does not retarget courses already aimed at a stage — their
+          students keep the access they were sold. */}
+      <p className="mt-1.5 text-xs text-outline">{t('academy.teachHint')}</p>
+      <div className="mt-3 flex items-center gap-3">
+        <button className="btn-secondary px-4 py-2 text-sm" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? t('academy.saving') : t('academy.save')}
+        </button>
+        {save.isSuccess && <span className="text-sm text-primary">{t('academy.saved')}</span>}
+      </div>
+      <ErrorNote error={save.error} />
     </div>
   );
 }

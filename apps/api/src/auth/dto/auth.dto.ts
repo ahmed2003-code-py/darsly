@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  ArrayUnique,
+  IsArray,
   IsEmail,
   IsIn,
   IsNotEmpty,
@@ -10,6 +14,10 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+
+/** Kept in step with the `EducationStage` enum in the schema. */
+export const EDUCATION_STAGES = ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE'] as const;
+export type EducationStageValue = (typeof EDUCATION_STAGES)[number];
 
 // Egyptian mobile numbers: 010/011/012/015 + 8 digits, with optional +20/20/0020 prefix.
 export const EGY_PHONE_REGEX = /^(\+20|0020|20|0)?1[0125][0-9]{8}$/;
@@ -112,6 +120,22 @@ export class RegisterTeacherDto {
   @IsString()
   @MaxLength(600)
   bio?: string;
+
+  // Asked for at sign-up rather than left to a settings page nobody visits.
+  // Every course this teacher creates is offered inside these answers, so a
+  // blank profile would leave them unable to publish anything findable.
+  @ApiProperty({ example: 'clx123subjectid' })
+  @IsString()
+  @IsNotEmpty({ message: 'Pick the subject you teach' })
+  subjectId: string;
+
+  @ApiProperty({ example: ['SECONDARY', 'BACCALAUREATE'], enum: EDUCATION_STAGES, isArray: true })
+  @IsArray()
+  @ArrayNotEmpty({ message: 'Pick at least one stage you teach' })
+  @ArrayMaxSize(4)
+  @ArrayUnique()
+  @IsIn(EDUCATION_STAGES, { each: true })
+  stages: EducationStageValue[];
 }
 
 export class ChangePasswordDto {

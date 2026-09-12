@@ -36,6 +36,9 @@ function build(rows: unknown[] = [], total = rows.length) {
       }),
     },
     review: { groupBy: jest.fn().mockResolvedValue([]) },
+    // A student filters by their own year; the service resolves it to the band
+    // courses are actually filed under.
+    gradeLevel: { findUnique: jest.fn().mockResolvedValue({ stage: 'SECONDARY' }) },
   } as unknown as PrismaService;
   const price = {
     applyToMany: jest.fn(async (items: unknown[]) => items),
@@ -98,10 +101,17 @@ describe('every filter resolves in the database', () => {
     return calls.where as Record<string, unknown>;
   };
 
-  it('filters subject, grade and teacher', async () => {
-    expect(await whereFor({ subjectId: 's1', gradeId: 'g1', teacherId: 't9' })).toMatchObject({
-      subjectId: 's1', gradeId: 'g1', tenantId: 't9',
+  it('filters subject and teacher directly', async () => {
+    expect(await whereFor({ subjectId: 's1', teacherId: 't9' })).toMatchObject({
+      subjectId: 's1', tenantId: 't9',
     });
+  });
+
+  it("answers a year filter with that year's stage", async () => {
+    const where = await whereFor({ gradeId: 'g1' });
+    // A course narrowed to the band matches, and so does one that was never
+    // narrowed — an empty list means "not yet decided", not "for nobody".
+    expect(where.OR).toEqual([{ stages: { has: 'SECONDARY' } }, { stages: { isEmpty: true } }]);
   });
 
   it('filters teaching language through the teacher', async () => {

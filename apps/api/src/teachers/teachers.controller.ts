@@ -21,6 +21,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { IsOptionalId } from '../common/validation';
+import { EDUCATION_STAGES, type EducationStageValue } from '../auth/dto/auth.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscoverTeachersQuery, TeachersService } from './teachers.service';
 
@@ -43,8 +44,8 @@ class UpdateMyTeacherProfileDto {
   @IsOptional() @IsUrl({ require_tld: false }) @MaxLength(500) introVideoUrl?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptionalId() subjectId?: string;
-  @IsOptional() @IsArray() @ArrayMaxSize(50) @ArrayUnique() @IsString({ each: true }) gradeIds?: string[];
-  @IsOptional() @IsBoolean() autoApproveEnrollments?: boolean;
+  @IsOptional() @IsArray() @ArrayMaxSize(4) @ArrayUnique() @IsIn(EDUCATION_STAGES, { each: true })
+  stages?: EducationStageValue[];
 }
 
 @ApiTags('teachers')
@@ -82,7 +83,6 @@ export class TeachersController {
       include: {
         user: { select: { fullName: true, avatarUrl: true, email: true, phone: true } },
         subject: true,
-        grades: { include: { grade: true } },
       },
     });
   }
@@ -90,23 +90,16 @@ export class TeachersController {
   @Patch('teacher/profile')
   @Roles(Role.TEACHER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[teacher] Update my public profile (bio, intro video, subject, grades)' })
+  @ApiOperation({ summary: '[teacher] Update my public profile (bio, intro video, subject, stages)' })
   async updateMyProfile(@Body() dto: UpdateMyTeacherProfileDto, @CurrentUser() user: JwtPayload) {
-    const { gradeIds, ...fields } = dto;
+    // Narrowing the stages leaves existing courses aimed where they were: a
+    // course already sold to a stage is not un-sold by a later edit to the
+    // profile, and pulling it out from under its students would be worse than
+    // the inconsistency.
     const profile = await this.prisma.teacherProfile.update({
       where: { id: user.tenantId },
-      data: {
-        ...fields,
-        ...(gradeIds
-          ? {
-              grades: {
-                deleteMany: {},
-                create: gradeIds.map((gradeId) => ({ gradeId })),
-              },
-            }
-          : {}),
-      },
-      include: { subject: true, grades: { include: { grade: true } } },
+      data: dto,
+      include: { subject: true },
     });
     await this.audit.log({
       actorUserId: user.sub,

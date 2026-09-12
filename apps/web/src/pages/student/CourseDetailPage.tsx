@@ -91,7 +91,7 @@ export default function CourseDetailPage() {
   const priced = quote.data;
 
   const statusBanner =
-    enrollmentStatus === 'PENDING_APPROVAL'
+    enrollmentStatus === 'PENDING_PAYMENT'
       ? { tone: 'warn', icon: 'hourglass_top', text: t('course.statusPending') }
       : enrollmentStatus === 'ACTIVE' && course.viewer.hasAccess
         ? { tone: 'teal', icon: 'check_circle', text: t('course.statusActive') }

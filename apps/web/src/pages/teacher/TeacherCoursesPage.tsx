@@ -12,21 +12,17 @@ interface CourseForm {
   id?: string;
   title: string;
   description: string;
-  subjectId: string;
-  gradeId: string;
+  stages: string[];
   pricingModel: string;
   priceEgp: string;
-  requiresEnrollmentApproval: boolean;
 }
 
 const EMPTY_FORM: CourseForm = {
   title: '',
   description: '',
-  subjectId: '',
-  gradeId: '',
+  stages: [],
   pricingModel: 'ONE_TIME',
   priceEgp: '',
-  requiresEnrollmentApproval: true,
 };
 
 const TABS = ['ALL', 'PUBLISHED', 'DRAFT', 'ARCHIVED'] as const;
@@ -104,14 +100,15 @@ export default function TeacherCoursesPage() {
   }, [all, tab, search, sort]);
 
   const totalStudents = all.reduce((sum, c) => sum + (c._count?.enrollments ?? 0), 0);
-  const { data: subjects } = useQuery({
-    queryKey: ['subjects'],
-    queryFn: async () => (await api.get('/catalog/subjects')).data,
+  // The teacher's own answers from sign-up. A course is filed under the subject
+  // they teach and aimed inside the stages they teach, so the form states the
+  // first and offers only the second rather than reprinting the whole catalogue
+  // and letting them file a course somewhere they do not work.
+  const { data: profile } = useQuery({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
   });
-  const { data: grades } = useQuery({
-    queryKey: ['grades'],
-    queryFn: async () => (await api.get('/catalog/grades')).data,
-  });
+  const myStages: string[] = profile?.stages ?? [];
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['teacher-courses'] });
 
@@ -120,11 +117,9 @@ export default function TeacherCoursesPage() {
       const payload = {
         title: f.title,
         description: f.description,
-        subjectId: f.subjectId || undefined,
-        gradeId: f.gradeId || undefined,
+        stages: f.stages,
         pricingModel: f.pricingModel,
         priceCents: Math.round(Number(f.priceEgp || 0) * 100),
-        requiresEnrollmentApproval: f.requiresEnrollmentApproval,
       };
       return f.id
         ? (await api.patch(`/teacher/courses/${f.id}`, payload)).data
@@ -306,11 +301,9 @@ export default function TeacherCoursesPage() {
                       id: c.id,
                       title: c.title,
                       description: c.description,
-                      subjectId: c.subjectId ?? '',
-                      gradeId: c.gradeId ?? '',
+                      stages: c.stages ?? [],
                       pricingModel: c.pricingModel,
                       priceEgp: String(c.priceCents / 100),
-                      requiresEnrollmentApproval: c.requiresEnrollmentApproval,
                     })
                   }
                 >
@@ -391,33 +384,49 @@ export default function TeacherCoursesPage() {
 
             <section>
               <SectionLabel>{t('teacher.courses.form.sectionClassify')}</SectionLabel>
-              <div className="grid gap-x-4 sm:grid-cols-2">
-                <Field label={t('teacher.courses.form.subject')}>
-                  <select
-                    className="input py-2"
-                    value={form.subjectId}
-                    onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
-                  >
-                    <option value="">{t('teacher.courses.form.none')}</option>
-                    {(subjects ?? []).map((s: any) => (
-                      <option key={s.id} value={s.id}>{ar ? s.nameAr : s.nameEn}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label={t('teacher.courses.form.grade')}>
-                  <select
-                    className="input py-2"
-                    value={form.gradeId}
-                    onChange={(e) => setForm({ ...form, gradeId: e.target.value })}
-                  >
-                    <option value="">{t('teacher.courses.form.none')}</option>
-                    {(grades ?? []).map((g: any) => (
-                      <option key={g.id} value={g.id}>{ar ? g.nameAr : g.nameEn}</option>
-                    ))}
-                  </select>
-                </Field>
+              {/* Stated, not asked. The subject was settled at sign-up and a
+                  course is not the place to reopen it. */}
+              <Field label={t('teacher.courses.form.subject')}>
+                <p className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-semibold">
+                  {profile?.subject
+                    ? ar ? profile.subject.nameAr : profile.subject.nameEn
+                    : t('teacher.courses.form.noSubject')}
+                </p>
+              </Field>
+
+              <div className="mb-4">
+                <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+                  {t('teacher.courses.form.stages')}
+                </span>
+                {myStages.length === 0 ? (
+                  <p className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm text-on-surface-variant">
+                    {t('teacher.courses.form.noStages')}
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {myStages.map((st) => {
+                      const on = form.stages.includes(st);
+                      return (
+                        <button key={st} type="button" aria-pressed={on}
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              stages: on ? form.stages.filter((x) => x !== st) : [...form.stages, st],
+                            })
+                          }
+                          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                            on
+                              ? 'border-primary bg-primary text-on-primary'
+                              : 'border-outline-variant text-on-surface-variant hover:border-outline'
+                          }`}>
+                          {t(`stage.${st}`)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="mt-1.5 text-xs text-outline">{t('teacher.courses.form.stagesHint')}</p>
               </div>
-              <p className="-mt-2 text-xs text-outline">{t('teacher.courses.form.classifyHint')}</p>
             </section>
 
             <section>
@@ -464,37 +473,6 @@ export default function TeacherCoursesPage() {
                   </div>
                 </Field>
               </div>
-            </section>
-
-            <section>
-              <SectionLabel>{t('teacher.courses.form.sectionAccess')}</SectionLabel>
-              {/* A whole tappable card rather than a bare checkbox: this is the
-                  switch that decides whether money must clear before a student
-                  gets in, so it deserves an explanation next to it. */}
-              <label
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
-                  form.requiresEnrollmentApproval
-                    ? 'border-primary/40 bg-primary-fixed/40'
-                    : 'border-outline-variant bg-surface-container-low hover:border-outline'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 accent-primary"
-                  checked={form.requiresEnrollmentApproval}
-                  onChange={(e) =>
-                    setForm({ ...form, requiresEnrollmentApproval: e.target.checked })
-                  }
-                />
-                <span>
-                  <span className="block text-sm font-semibold">
-                    {t('teacher.courses.form.requiresApproval')}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-on-surface-variant">
-                    {t('teacher.courses.form.requiresApprovalHint')}
-                  </span>
-                </span>
-              </label>
             </section>
 
             <ErrorNote error={save.error} />

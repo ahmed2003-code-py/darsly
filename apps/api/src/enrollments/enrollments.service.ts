@@ -150,14 +150,6 @@ export class EnrollmentsService {
     if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
       throw new ConflictException('Already enrolled in this course');
     }
-    // A request already waiting on the teacher is also a conflict. Without this a
-    // student could re-submit indefinitely, each attempt silently overwriting the
-    // pending row — so the teacher's queue kept moving and the student had no
-    // signal that their first request had gone through.
-    if (existing?.status === 'PENDING_APPROVAL') {
-      throw new ConflictException('An enrollment request for this course is already pending');
-    }
-
     const quote = await this.quote(courseId, couponCode);
 
     // Paid → must pay first (manual proof + verification).
@@ -165,24 +157,16 @@ export class EnrollmentsService {
       throw new BadRequestException({ message: 'Payment required', code: 'PAYMENT_REQUIRED', quote });
     }
 
-    // Free course. Approval still applies if the teacher asked for it: the flag
-    // is named requiresEnrollmentApproval, and a teacher running a private or
-    // invite-only cohort ticks it for exactly this case. Ignoring it because
-    // nothing was paid silently overrode a setting they had chosen.
-    const needsApproval = course.requiresEnrollmentApproval;
-    const data = needsApproval
-      ? {
-          status: 'PENDING_APPROVAL' as const,
-          approvedAt: null,
-          expiresAt: null,
-          revokedReason: null,
-        }
-      : {
-          status: 'ACTIVE' as const,
-          approvedAt: new Date(),
-          expiresAt: this.expiryFor(course),
-          revokedReason: null,
-        };
+    // Free course, so the student is in. There is no longer a queue in front of
+    // this: a teacher who wants to sell access prices the course, and one who
+    // wants it open leaves it free. Making them tick an extra box afterwards
+    // only produced a waiting room nobody was watching.
+    const data = {
+      status: 'ACTIVE' as const,
+      approvedAt: new Date(),
+      expiresAt: this.expiryFor(course),
+      revokedReason: null,
+    };
     // A coupon that made the course free is still a use of that coupon — taken
     // in the same transaction as the enrolment, so a one-use code cannot enrol
     // a whole class, and a failed enrolment gives the slot back.
@@ -195,24 +179,6 @@ export class EnrollmentsService {
           });
     });
 
-    if (needsApproval) {
-      // Nothing is unlocked yet — tell the student it is waiting, not granted.
-      await this.notifications.create({
-        userId,
-        type: 'ANNOUNCEMENT',
-        title: 'طلبك قيد المراجعة',
-        body: `تم إرسال طلب الالتحاق بـ«${course.title}» للمراجعة.`,
-        meta: { courseId },
-      });
-      // The teacher is the one who has to act on it, and nothing else tells
-      // them a request is waiting.
-      await this.notifyTeacher(
-        course,
-        'طلب التحاق جديد ⏳',
-        `${student.user.fullName} طلب الالتحاق بـ«${course.title}» وبانتظار موافقتك.`,
-      );
-      return { ...enrollment, quote };
-    }
     await this.notifyTeacher(
       course,
       'طالب جديد انضم 🎉',
@@ -341,104 +307,6 @@ export class EnrollmentsService {
     });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     return enrollment;
-  }
-
-  async approve(tenantId: string, id: string) {
-    const enrollment = await this.assertTenantEnrollment(tenantId, id);
-    if (enrollment.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException('Only pending enrollments can be approved');
-    }
-    // A paid course can only be activated by confirming a real payment — never
-    // by a bare "approve" click. Payments are normally verified from the
-    // payments queue; this endpoint is a safety-belted equivalent.
-    //
-    // Only a bank transfer can be vouched for here: staff saw the money. A card
-    // checkout is confirmed by the gateway's own webhook, and marking it PAID
-    // ahead of that made the webhook stand down — the student was in, and the
-    // teacher's earning was never booked.
-    const vouchable = enrollment.payments.filter((p) => p.gateway !== 'xpay');
-    if (enrollment.course.priceCents > 0 && vouchable.length === 0) {
-      throw new BadRequestException(
-        enrollment.payments.length
-          ? { message: 'This payment is being confirmed by the card provider — it activates on its own', code: 'AWAITING_GATEWAY' }
-          : { message: 'No pending payment to confirm — verify the payment from the payments queue', code: 'NO_PENDING_PAYMENT' },
-      );
-    }
-    const expiresAt = this.expiryFor(enrollment.course);
-
-    // Atomic: activation + payment confirmation. This is a teacher/owner
-    // self-action (@AcademyStaff('student.manage')), so — like a manual verify —
-    // the payment is marked PAID (student activated) but left pending settlement:
-    // the withdrawable ledger credit is deferred to an independent settlement (a
-    // trusted payment-event or an admin). The coupon slot was reserved at submit,
-    // so it is NOT incremented here.
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const flip = await tx.enrollment.updateMany({
-        where: { id, status: 'PENDING_APPROVAL' },
-        data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt },
-      });
-      if (flip.count === 0) return null; // another caller handled it
-
-      for (const payment of vouchable) {
-        await tx.payment.updateMany({
-          where: { id: payment.id, status: 'PENDING' },
-          data: { status: 'PAID', paidAt: new Date() },
-        });
-      }
-      return tx.enrollment.findUnique({ where: { id } });
-    });
-    if (!updated) throw new BadRequestException('Only pending enrollments can be approved');
-
-    for (const payment of vouchable) await this.ledger.ensureInvoice(payment.id);
-    await activateBundleChildren(this.prisma, enrollment.course, updated.studentId, updated.expiresAt);
-    await this.notifications.create({
-      userId: enrollment.student.user.id,
-      type: 'ENROLLMENT_APPROVED',
-      title: 'تمت الموافقة على التحاقك',
-      body: `وافق المعلم على التحاقك بدورة «${enrollment.course.title}»`,
-      meta: { courseId: enrollment.courseId },
-    });
-    return updated;
-  }
-
-  async reject(tenantId: string, id: string, reason?: string) {
-    const enrollment = await this.assertTenantEnrollment(tenantId, id);
-    if (enrollment.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException('Only pending enrollments can be rejected');
-    }
-    // Fail the pending payments AND release each coupon slot they reserved at
-    // submit time (a rejected enrollment must not permanently consume a use).
-    const updated = await this.prisma.$transaction(async (tx) => {
-      // Conditional, so an approve that landed a moment ago is not overwritten —
-      // that left a PAID payment under a REJECTED enrolment.
-      const flip = await tx.enrollment.updateMany({
-        where: { id, status: 'PENDING_APPROVAL' },
-        data: { status: 'REJECTED', revokedReason: reason ?? null },
-      });
-      if (flip.count === 0) throw new BadRequestException('Only pending enrollments can be rejected');
-      const enr = await tx.enrollment.findUniqueOrThrow({ where: { id } });
-      await tx.payment.updateMany({
-        where: { enrollmentId: id, status: 'PENDING' },
-        data: { status: 'FAILED' },
-      });
-      for (const p of enrollment.payments) {
-        if (p.couponId) {
-          await tx.coupon.updateMany({
-            where: { id: p.couponId, usedCount: { gt: 0 } },
-            data: { usedCount: { decrement: 1 } },
-          });
-        }
-      }
-      return enr;
-    });
-    await this.notifications.create({
-      userId: enrollment.student.user.id,
-      type: 'ANNOUNCEMENT',
-      title: 'تم رفض طلب الالتحاق',
-      body: `عذراً، رُفض طلب التحاقك بدورة «${enrollment.course.title}»${reason ? ` — ${reason}` : ''}`,
-      meta: { courseId: enrollment.courseId },
-    });
-    return updated;
   }
 
   async revoke(tenantId: string, id: string, reason?: string) {

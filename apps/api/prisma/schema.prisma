@@ -114,7 +114,6 @@ model Academy {
   language                   String  @default("ar")
   currency                   String  @default("EGP")
   maxConcurrentSessions      Int     @default(2)
-  requiresEnrollmentApproval Boolean @default(true)
 
   // Revenue: additive platform service fee the STUDENT pays on top of the price.
   feeType  FeeType @default(PERCENT)
@@ -245,6 +244,9 @@ model TeacherProfile {
   bio                    String        @default("")
   subjectId              String?
   subject                Subject?      @relation(fields: [subjectId], references: [id])
+  /// The bands this teacher teaches, chosen when they sign up. Every course
+  /// they create is offered to some subset of these and never outside them.
+  stages                 EducationStage[]
   introVideoUrl          String?
   // Language of instruction ("ar" | "en") — a discovery filter.
   language               String        @default("ar")
@@ -252,7 +254,6 @@ model TeacherProfile {
   verifiedAt             DateTime?
   // Platform cut, percent 0–100; set per-teacher by super admin.
   commissionPercent      Int           @default(20)
-  autoApproveEnrollments Boolean       @default(false)
   // Teacher-Security defaults applied to their students
   maxConcurrentSessions  Int           @default(2)
   settings               Json          @default("{}")
@@ -344,6 +345,20 @@ model Subject {
   interests StudentInterest[]
 }
 
+/// The bands a teacher teaches and a course targets.
+///
+/// Coarser than `GradeLevel` on purpose: a teacher signs up saying "I teach
+/// secondary", not "I teach secondary years one, two and three", and a course
+/// is offered to a band rather than to a single year. A student still picks
+/// their own year, and `GradeLevel.stage` is what joins the two.
+enum EducationStage {
+  PRIMARY
+  PREPARATORY
+  SECONDARY
+  /// Egypt's new upper-secondary track, which runs alongside the old one.
+  BACCALAUREATE
+}
+
 model GradeLevel {
   id        String  @id @default(cuid())
   nameAr    String
@@ -352,6 +367,9 @@ model GradeLevel {
   code      String  @unique
   sortOrder Int     @default(0)
   isActive  Boolean @default(true)
+  /// Which band this year belongs to, so a course offered to a stage reaches
+  /// every student sitting in one of its years.
+  stage     EducationStage?
 
   students StudentProfile[]
   courses  Course[]
@@ -402,6 +420,9 @@ model Course {
   subject      Subject?    @relation(fields: [subjectId], references: [id])
   gradeId      String?
   grade        GradeLevel? @relation(fields: [gradeId], references: [id])
+  /// Which of the teacher's bands this course is for. Empty means every band
+  /// they teach — a course that was never narrowed rather than one for nobody.
+  stages       EducationStage[]
 
   status       CourseStatus       @default(DRAFT)
   pricingModel CoursePricingModel @default(ONE_TIME)
@@ -410,7 +431,6 @@ model Course {
   currency     String             @default("EGP")
 
   // Access rules (Teacher-Security suite B)
-  requiresEnrollmentApproval Boolean @default(true)
   // lesson access expires N days after unlock; null = never
   accessWindowDays           Int?
   // max plays per lesson per student; null = unlimited
@@ -556,7 +576,10 @@ model Attachment {
 // ─────────────────────────── Enrollment & Progress ─────────────────────────
 
 enum EnrollmentStatus {
-  PENDING_APPROVAL
+  /// A payment has been submitted and is waiting to be confirmed. This is the
+  /// platform checking that money arrived — not a teacher deciding whether to
+  /// let someone in. That queue is gone: a free course enrols on the spot.
+  PENDING_PAYMENT
   ACTIVE
   REJECTED
   EXPIRED
@@ -571,7 +594,10 @@ model Enrollment {
   course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   tenantId  String // denormalized for tenant-scoped queries
 
-  status        EnrollmentStatus @default(PENDING_APPROVAL)
+  /// No default: access is granted by a code path that decided to grant it,
+  /// never by a row that forgot to say. There is no waiting room any more —
+  /// a free course enrols on the spot and a paid one on a confirmed payment.
+  status        EnrollmentStatus
   approvedAt    DateTime?
   // subscription/window end; null = lifetime
   expiresAt     DateTime?

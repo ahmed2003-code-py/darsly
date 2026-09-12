@@ -5,12 +5,12 @@ import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
 import { Badge, EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
 
-const TABS = ['ALL', 'PENDING_APPROVAL', 'ACTIVE'] as const;
+const TABS = ['ALL', 'PENDING_PAYMENT', 'ACTIVE'] as const;
 const SORTS = ['recent', 'name', 'spend'] as const;
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
   ACTIVE: 'teal',
-  PENDING_APPROVAL: 'warn',
+  PENDING_PAYMENT: 'warn',
   REJECTED: 'error',
   REVOKED: 'error',
   EXPIRED: 'neutral',
@@ -83,7 +83,7 @@ function groupByStudent(rows: Enrollment[]): StudentGroup[] {
     }
     group.enrollments.push(row);
     if (row.status === 'ACTIVE') group.activeCount++;
-    if (row.status === 'PENDING_APPROVAL') group.pendingCount++;
+    if (row.status === 'PENDING_PAYMENT') group.pendingCount++;
     group.earnedCentsTotal += earnedCents(row);
     group.lastEnrolledAt = Math.max(group.lastEnrolledAt, new Date(row.createdAt).getTime());
   }
@@ -165,7 +165,7 @@ export default function TeacherEnrollmentsPage() {
     new Set(all.filter(predicate).map((e) => e.student?.id)).size;
   const counts = {
     ALL: studentsWhere(() => true),
-    PENDING_APPROVAL: studentsWhere((e) => e.status === 'PENDING_APPROVAL'),
+    PENDING_PAYMENT: studentsWhere((e) => e.status === 'PENDING_PAYMENT'),
     ACTIVE: studentsWhere((e) => e.status === 'ACTIVE'),
   };
 
@@ -211,7 +211,7 @@ export default function TeacherEnrollmentsPage() {
           {TABS.map((value) => {
             const selected = tab === value;
             const count = counts[value];
-            const waiting = value === 'PENDING_APPROVAL' && count > 0;
+            const waiting = value === 'PENDING_PAYMENT' && count > 0;
             return (
               <button
                 key={value}
@@ -451,7 +451,7 @@ export default function TeacherEnrollmentsPage() {
                           <Badge tone={STATUS_TONE[e.status] ?? 'neutral'}>
                             {t(`teacher.students.status.${e.status}`, e.status)}
                           </Badge>
-                          {e.status === 'PENDING_APPROVAL' && (
+                          {e.status === 'PENDING_PAYMENT' && (
                             // Read-only. Activation follows the transfer itself — the
                             // listener confirms it against the wallet SMS, and only a
                             // platform admin resolves what cannot be matched. A teacher

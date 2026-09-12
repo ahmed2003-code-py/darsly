@@ -18,7 +18,6 @@ export interface TeacherForProvision {
   status: string; // TeacherStatus
   language?: string;
   maxConcurrentSessions?: number;
-  autoApproveEnrollments?: boolean;
   commissionPercent?: number;
 }
 
@@ -46,8 +45,6 @@ export async function provisionTeacherAcademy(
       ownerUserId: teacher.userId,
       language: teacher.language ?? 'ar',
       maxConcurrentSessions: teacher.maxConcurrentSessions ?? 2,
-      requiresEnrollmentApproval:
-        teacher.autoApproveEnrollments != null ? !teacher.autoApproveEnrollments : true,
       feeType: 'PERCENT',
       feeValue: teacher.commissionPercent ?? 20,
     },

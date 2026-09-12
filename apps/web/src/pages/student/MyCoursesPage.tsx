@@ -7,7 +7,7 @@ import { Badge, CardGridSkeleton, EmptyState, PageHeader, ProgressBar } from '..
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
   ACTIVE: 'teal',
-  PENDING_APPROVAL: 'warn',
+  PENDING_PAYMENT: 'warn',
   REJECTED: 'error',
   REVOKED: 'error',
   EXPIRED: 'neutral',

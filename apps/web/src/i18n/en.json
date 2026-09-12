@@ -278,7 +278,7 @@
     "browse": "Discover teachers",
     "expiresAt": "Expires {{date}}",
     "status": {
-      "PENDING_APPROVAL": "Pending approval",
+      "PENDING_PAYMENT": "Awaiting payment",
       "ACTIVE": "Active",
       "REJECTED": "Rejected",
       "EXPIRED": "Expired",
@@ -350,7 +350,11 @@
         "priceFree": "Free",
         "perMonthSuffix": "/month",
         "requiresApprovalHint": "Enrollment activates only once the transfer is confirmed. Keep this on for paid courses.",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "stages": "Stages this course is for",
+        "stagesHint": "You can pick more than one. Left empty, it goes to every stage you teach.",
+        "noSubject": "No subject chosen yet — set it from your profile.",
+        "noStages": "No stages chosen yet — set them from your profile."
       },
       "status": {
         "DRAFT": "Draft",
@@ -452,7 +456,7 @@
       "title": "My students",
       "subtitle": "Enrollment requests and student subscriptions",
       "tabs": {
-        "PENDING_APPROVAL": "Pending approval",
+        "PENDING_PAYMENT": "Pending approval",
         "ACTIVE": "Active",
         "ALL": "All"
       },
@@ -484,7 +488,7 @@
       "noPhone": "No phone",
       "status": {
         "ACTIVE": "Active",
-        "PENDING_APPROVAL": "Pending",
+        "PENDING_PAYMENT": "Awaiting payment",
         "REJECTED": "Rejected",
         "REVOKED": "Revoked",
         "EXPIRED": "Expired"
@@ -815,7 +819,13 @@
       "rateLimited": "Too many attempts. Please try again shortly.",
       "generic": "Something went wrong, please try again."
     },
-    "platformTagline": "The learning-academy platform"
+    "platformTagline": "The learning-academy platform",
+    "subject": "The subject you teach",
+    "subjectPh": "Pick a subject",
+    "stages": "The stages you teach",
+    "stagesHint": "You can pick more than one.",
+    "subjectRequired": "Pick the subject you teach.",
+    "stagesRequired": "Pick at least one stage."
   },
   "live": {
     "title": "Live sessions",
@@ -1328,7 +1338,9 @@
     "linkTaken": "Already taken — pick another",
     "linkReserved": "This word is reserved by the platform",
     "linkInvalid": "At least 3 characters: letters, numbers and single hyphens",
-    "linkSuggestions": "Free alternatives:"
+    "linkSuggestions": "Free alternatives:",
+    "teachTitle": "What you teach",
+    "teachHint": "Every course you publish is filed under these. Removing a stage leaves courses already aimed at it exactly where they are."
   },
   "method": {
     "INSTAPAY": "InstaPay",
@@ -1656,5 +1668,11 @@
     "preview": "Preview",
     "edit": "Edit",
     "previewEmpty": "Write something and it will appear here the way readers will see it."
+  },
+  "stage": {
+    "PRIMARY": "Primary",
+    "PREPARATORY": "Preparatory",
+    "SECONDARY": "Secondary",
+    "BACCALAUREATE": "Baccalaureate"
   }
 }

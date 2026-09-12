@@ -89,7 +89,7 @@ export class ManualPaymentsService {
     }
 
     // Atomic: reserve the coupon slot (FIX: no longer at verify time — that let
-    // many submits share a maxUses:1 coupon), upsert the PENDING_APPROVAL
+    // many submits share a maxUses:1 coupon), upsert the PENDING_PAYMENT
     // enrolment, create the PENDING payment, and reserve its wallet portion (if
     // any) out of the student's spendable balance — together. Any failure
     // (incl. the coupon being exhausted, or the balance moving under a
@@ -100,10 +100,10 @@ export class ManualPaymentsService {
       const enr = enrollment
         ? await tx.enrollment.update({
             where: { id: enrollment.id },
-            data: { status: 'PENDING_APPROVAL', approvedAt: null, revokedReason: null },
+            data: { status: 'PENDING_PAYMENT', approvedAt: null, revokedReason: null },
           })
         : await tx.enrollment.create({
-            data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, status: 'PENDING_APPROVAL' },
+            data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, status: 'PENDING_PAYMENT' },
           });
 
       const created = await tx.payment.create({
@@ -337,7 +337,7 @@ export class ManualPaymentsService {
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
     // Move the payment AND its pending enrollment out of the review state together,
-    // so a rejected payment can never leave a PENDING_APPROVAL enrollment that a
+    // so a rejected payment can never leave a PENDING_PAYMENT enrollment that a
     // stray "approve" action could later activate for free.
     await this.prisma.$transaction(async (tx) => {
       const flip = await tx.payment.updateMany({
@@ -359,7 +359,7 @@ export class ManualPaymentsService {
       }
       if (payment.enrollmentId) {
         await tx.enrollment.updateMany({
-          where: { id: payment.enrollmentId, status: 'PENDING_APPROVAL' },
+          where: { id: payment.enrollmentId, status: 'PENDING_PAYMENT' },
           data: { status: 'REJECTED', revokedReason: reason?.trim() || 'payment rejected' },
         });
       }

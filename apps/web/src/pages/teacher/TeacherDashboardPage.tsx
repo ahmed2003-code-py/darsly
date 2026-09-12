@@ -62,7 +62,7 @@ export default function TeacherDashboardPage() {
   const published = courses?.filter((c: any) => c.status === 'PUBLISHED').length ?? 0;
   const drafts = totalCourses - published;
   const activeEnrollments = enrollments?.filter((e) => e.status === 'ACTIVE') ?? [];
-  const pending = enrollments?.filter((e) => e.status === 'PENDING_APPROVAL').length ?? 0;
+  const pending = enrollments?.filter((e) => e.status === 'PENDING_PAYMENT').length ?? 0;
   const revenue = wallet?.netCents ?? 0;
 
   // People, not enrolments. This card said "active students" while counting
@@ -89,12 +89,12 @@ export default function TeacherDashboardPage() {
           latest: e,
           courseCount: 1,
           paidCents: paid,
-          awaiting: e.status === 'PENDING_APPROVAL',
+          awaiting: e.status === 'PENDING_PAYMENT',
         });
       } else {
         existing.courseCount += 1;
         existing.paidCents += paid;
-        existing.awaiting ||= e.status === 'PENDING_APPROVAL';
+        existing.awaiting ||= e.status === 'PENDING_PAYMENT';
       }
     }
     return [...byStudent.values()];
@@ -269,7 +269,7 @@ export default function TeacherDashboardPage() {
                   </div>
                   <div className="shrink-0 text-end">
                     <Badge tone={s.awaiting ? 'warn' : s.latest.status === 'ACTIVE' ? 'teal' : 'neutral'}>
-                      {t(`myCourses.status.${s.awaiting ? 'PENDING_APPROVAL' : s.latest.status}`)}
+                      {t(`myCourses.status.${s.awaiting ? 'PENDING_PAYMENT' : s.latest.status}`)}
                     </Badge>
                     <p className="mt-1 text-xs text-outline">
                       {dateShort(s.latest.createdAt)}

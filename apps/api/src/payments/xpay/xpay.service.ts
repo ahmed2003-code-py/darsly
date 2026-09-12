@@ -71,14 +71,14 @@ export class XPayService {
       const enrollment = existing
         ? await tx.enrollment.update({
             where: { id: existing.id },
-            data: { status: 'PENDING_APPROVAL' },
+            data: { status: 'PENDING_PAYMENT' },
           })
         : await tx.enrollment.create({
             data: {
               studentId: student.id,
               courseId,
               tenantId: course.tenantId,
-              status: 'PENDING_APPROVAL',
+              status: 'PENDING_PAYMENT',
             },
           });
 

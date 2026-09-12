@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { m } from 'framer-motion';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,10 @@ import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 
 type Role = 'student' | 'teacher';
+
+/** Mirrors `EducationStage` on the API. */
+const STAGES = ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE'] as const;
+type Stage = (typeof STAGES)[number];
 
 export default function RegisterPage() {
   const { t } = useTranslation();
@@ -39,6 +44,18 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingDone, setPendingDone] = useState(false);
+  // Asked here rather than in a settings page afterwards: everything a teacher
+  // publishes is filed under these two answers, so a profile without them can
+  // build courses no student will ever be shown.
+  const [subjectId, setSubjectId] = useState('');
+  const [stages, setStages] = useState<Stage[]>([]);
+  const { data: subjects } = useQuery({
+    queryKey: ['subjects'],
+    queryFn: async () => (await api.get('/catalog/subjects')).data,
+    enabled: role === 'teacher',
+  });
+  const toggleStage = (st: Stage) =>
+    setStages((cur) => (cur.includes(st) ? cur.filter((x) => x !== st) : [...cur, st]));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -54,8 +71,13 @@ export default function RegisterPage() {
         setUser(data.user);
         navigate(destination, { replace: true });
       } else {
+        // Caught here so the answer is a sentence under the field rather than a
+        // validation error from a round trip that created nothing.
+        if (!subjectId) throw new Error(t('auth.subjectRequired'));
+        if (!stages.length) throw new Error(t('auth.stagesRequired'));
         await api.post('/auth/register/teacher', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
+          subjectId, stages,
         });
         setPendingDone(true);
       }
@@ -135,6 +157,46 @@ export default function RegisterPage() {
         <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.password')}
           placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
           reveal revealed={show} onReveal={() => setShow((s) => !s)} hint={t('auth.passwordHint')} />
+
+        {role === 'teacher' && (
+          <>
+            <label className="mb-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+                {t('auth.subject')}
+              </span>
+              <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                <option value="">{t('auth.subjectPh')}</option>
+                {(subjects ?? []).map((sub: { id: string; nameAr: string; nameEn: string }) => (
+                  <option key={sub.id} value={sub.id}>{sub.nameAr}</option>
+                ))}
+              </select>
+            </label>
+
+            {/* Toggles rather than a multi-select: picking more than one is the
+                normal case here, and a native multi-select hides that you can. */}
+            <div className="mb-4">
+              <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+                {t('auth.stages')}
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {STAGES.map((st) => {
+                  const on = stages.includes(st);
+                  return (
+                    <button key={st} type="button" onClick={() => toggleStage(st)} aria-pressed={on}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                        on
+                          ? 'border-primary bg-primary text-on-primary'
+                          : 'border-outline-variant text-on-surface-variant hover:border-outline'
+                      }`}>
+                      {t(`stage.${st}`)}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="mt-1.5 block text-xs text-outline">{t('auth.stagesHint')}</span>
+            </div>
+          </>
+        )}
 
         <div className="mt-6">
           <AuthSubmit busy={busy}>{busy ? t('auth.creating') : t('auth.createBtn')}</AuthSubmit>

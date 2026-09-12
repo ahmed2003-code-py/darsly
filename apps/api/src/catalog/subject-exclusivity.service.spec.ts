@@ -110,7 +110,7 @@ describe('a student studying a subject stops seeing its other teachers', () => {
 describe('what counts as studying with someone', () => {
   it('counts an enrolment awaiting the teacher approval', async () => {
     // The student has asked, and often paid. The choice is made.
-    const { service } = build({ ...WORLD, enrolments: [{ tenantId: 'mine_ar', status: 'PENDING_APPROVAL' }] });
+    const { service } = build({ ...WORLD, enrolments: [{ tenantId: 'mine_ar', status: 'PENDING_PAYMENT' }] });
     expect(await service.hiddenTeacherIds('u1')).toContain('rival_ar');
   });
 

@@ -34,5 +34,9 @@ export function authErrorText(err: any, t: TFunction): string {
   const msg = data?.message;
   if (Array.isArray(msg)) return String(msg[0]);
   if (typeof msg === 'string') return msg;
+  // A failure the form raised itself, before any request went out. It already
+  // carries the sentence meant for the reader, so keep it instead of replacing
+  // it with "something went wrong".
+  if (!err?.response && typeof err?.message === 'string' && err.message) return err.message;
   return t('auth.err.generic');
 }

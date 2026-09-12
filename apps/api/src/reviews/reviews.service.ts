@@ -34,7 +34,7 @@ export class ReviewsService {
     if (!course) throw new NotFoundException('Course not found');
 
     // Allowlist (not denylist): only a currently-ACTIVE, non-lapsed enrollment may
-    // review. A REVOKED / REJECTED / EXPIRED / PENDING_APPROVAL enrollment cannot —
+    // review. A REVOKED / REJECTED / EXPIRED / PENDING_PAYMENT enrollment cannot —
     // this closes the retaliation/manipulation vector where a refunded or removed
     // student kept posting and editing reviews.
     const enrollment = await this.prisma.enrollment.findUnique({

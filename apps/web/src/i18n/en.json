@@ -960,7 +960,9 @@
     "roleSTUDENT": "Student",
     "roleTEACHER": "Teacher",
     "roleSUPER_ADMIN": "Platform admin",
-    "gradeHint": "Moved up a year? Change it here — your account and everything you finished stay exactly as they are."
+    "gradeHint": "Moved up a year? Change it here — your account and everything you finished stay exactly as they are.",
+    "sectionTeaching": "What you teach",
+    "teachingHint": "The subject and stages every course you publish is filed under."
   },
   "pay": {
     "title": "Complete payment",

@@ -13,6 +13,7 @@ import { Role } from '@darsly/shared-types';
 import { GAMIFICATION_KEY, useGamification, useLocalized } from '../lib/gamification';
 import { LevelCard } from '../components/gamification/LevelCard';
 import GradeSelect from '../components/GradeSelect';
+import { STAGES } from '../lib/stages';
 
 /** A titled block, so the page reads as a set of decisions rather than a form. */
 function Section({
@@ -289,12 +290,22 @@ export default function ProfilePage() {
           </div>
         </section>
 
+        {/* Everything that is not the identity card shares the wide column.
+            Left as siblings of the two-column grid they were auto-placed one
+            per cell, so the settings block wrapped underneath the 22rem
+            identity card and had to squeeze its own two columns into it. */}
+        <div className="space-y-4 sm:space-y-5">
         {/* The learning half of a profile. A student's identity here is what
             they have learned, not only what their account settings say. */}
         <LearningSection />
 
-        {/* Everything that is settings rather than identity. Two-up once there
-            is room for it — these blocks are three rows each, not articles. */}
+        {/* A teacher's equivalent of the year above: the two answers every
+            course they publish is filed under. It lives here because this is
+            where the course form sends them looking for it. */}
+        <TeachingSection role={data?.role} />
+
+        {/* Two-up once there is room for it — these blocks are three rows
+            each, not articles. */}
         <div className="grid gap-4 sm:gap-5 xl:grid-cols-2">
         <Section icon="badge" title={t('profile.sectionAccount')}>
           <ReadOnlyRow
@@ -382,6 +393,7 @@ export default function ProfilePage() {
           </div>
         </Section>
         </div>
+        </div>
       </div>
     </div>
   );
@@ -448,5 +460,95 @@ function LearningSection() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What a teacher teaches: one subject, and the stages they take.
+ *
+ * Answered at sign-up, but every account created before the question existed
+ * has neither — and without them the course form has nothing to file a course
+ * under and refuses to aim it anywhere. So it is editable, and it is here
+ * rather than in the academy console because the subject and the stages belong
+ * to the person, not to the academy's branding.
+ */
+function TeachingSection({ role }: { role?: string }) {
+  const { t, i18n } = useTranslation();
+  const qc = useQueryClient();
+  const ar = i18n.language !== 'en';
+  const isTeacher = role === 'TEACHER';
+  const { data: profile } = useQuery({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+    enabled: isTeacher,
+  });
+  const { data: subjects } = useQuery({
+    queryKey: ['subjects'],
+    queryFn: async () => (await api.get('/catalog/subjects')).data,
+    enabled: isTeacher,
+  });
+  const [draft, setDraft] = useState<{ subjectId: string; stages: string[] } | null>(null);
+  useEffect(() => {
+    if (profile && !draft) setDraft({ subjectId: profile.subjectId ?? '', stages: profile.stages ?? [] });
+  }, [profile]); // eslint-disable-line
+
+  const save = useMutation({
+    mutationFn: async () =>
+      (await api.patch('/teacher/profile', {
+        subjectId: draft!.subjectId || undefined,
+        stages: draft!.stages,
+      })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teacher-profile'] });
+      qc.invalidateQueries({ queryKey: ['teacher-courses'] });
+    },
+  });
+  if (!isTeacher || !draft) return null;
+
+  const toggle = (st: string) =>
+    setDraft({
+      ...draft,
+      stages: draft.stages.includes(st) ? draft.stages.filter((x) => x !== st) : [...draft.stages, st],
+    });
+  const unchanged =
+    draft.subjectId === (profile?.subjectId ?? '') &&
+    draft.stages.length === (profile?.stages?.length ?? 0) &&
+    draft.stages.every((s: string) => (profile?.stages ?? []).includes(s));
+
+  return (
+    <Section icon="school" title={t('profile.sectionTeaching')} hint={t('profile.teachingHint')}>
+      <Field label={t('auth.subject')}>
+        <select className="input py-2" value={draft.subjectId}
+          onChange={(e) => setDraft({ ...draft, subjectId: e.target.value })}>
+          <option value="">{t('auth.subjectPh')}</option>
+          {(subjects ?? []).map((sub: { id: string; nameAr: string; nameEn: string }) => (
+            <option key={sub.id} value={sub.id}>{ar ? sub.nameAr : sub.nameEn}</option>
+          ))}
+        </select>
+      </Field>
+      <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('auth.stages')}</span>
+      <div className="flex flex-wrap gap-2">
+        {STAGES.map((st) => {
+          const on = draft.stages.includes(st);
+          return (
+            <button key={st} type="button" aria-pressed={on} onClick={() => toggle(st)}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                on ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant text-on-surface-variant hover:border-outline'
+              }`}>
+              {t(`stage.${st}`)}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-xs text-outline">{t('academy.teachHint')}</p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button className="btn-primary w-full sm:w-auto" disabled={save.isPending || unchanged}
+          onClick={() => save.mutate()}>
+          {save.isPending ? t('common.saving') : t('common.save')}
+        </button>
+        {save.isSuccess && <span className="text-sm font-semibold text-primary">{t('common.saved')}</span>}
+      </div>
+      <ErrorNote error={save.error} />
+    </Section>
   );
 }

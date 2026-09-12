@@ -608,7 +608,18 @@ export class AcademySiteService {
         where: { academyId, id: { in: ids }, status: 'READY' },
       });
       if (ready !== ids.length) {
-        throw new BadRequestException('Some images are still processing or were removed — fix them before publishing');
+        // Which ones, not just that there are some. A teacher told only that
+        // "some images" are wrong has no way to find them on a page of twelve.
+        const live = await this.prisma.academyMedia.findMany({
+          where: { academyId, id: { in: ids }, status: 'READY' },
+          select: { id: true },
+        });
+        const missing = ids.filter((id) => !live.some((m) => m.id === id));
+        throw new BadRequestException({
+          message: 'Some images on this page are still processing or were removed',
+          code: 'MEDIA_NOT_READY',
+          mediaIds: missing,
+        });
       }
     }
     // High-stakes claims must be admin-verified before going public. Phase-1
@@ -665,6 +676,35 @@ function collectMediaIds(doc: SiteDocument): string[] {
     if (b.type === 'gallery') b.mediaIds.forEach((id) => ids.add(id));
   }
   return [...ids];
+}
+
+/**
+ * Take a removed image out of the page that still points at it.
+ *
+ * A document referencing media that no longer exists cannot be published, and
+ * the refusal arrives at publish time — long after the delete that caused it,
+ * with nothing connecting the two. So the delete cleans up after itself.
+ *
+ * Every field here is optional in the schema, which is what makes this safe:
+ * a hero without a cover is a hero, not an invalid document.
+ */
+export function stripMediaId(doc: SiteDocument, mediaId: string): boolean {
+  let changed = false;
+  if (doc.theme.logoMediaId === mediaId) {
+    delete (doc.theme as { logoMediaId?: string }).logoMediaId;
+    changed = true;
+  }
+  for (const b of doc.blocks as SiteBlock[]) {
+    if ((b.type === 'hero' || b.type === 'about') && b.mediaId === mediaId) {
+      delete (b as { mediaId?: string }).mediaId;
+      changed = true;
+    }
+    if (b.type === 'gallery' && b.mediaIds.includes(mediaId)) {
+      b.mediaIds = b.mediaIds.filter((id) => id !== mediaId);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function documentReferencesClaims(doc: SiteDocument): boolean {

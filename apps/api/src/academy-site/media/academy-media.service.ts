@@ -10,6 +10,8 @@ import { AcademyMedia, AcademyMediaKind } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageProvider } from '../../storage/storage.provider';
 import { AcademyMediaProcessor } from './academy-media.processor';
+import { parseSiteDocument } from '../schema/site-document';
+import { stripMediaId } from '../site/academy-site.service';
 
 // Max non-REJECTED media per kind. GALLERY and PROMO are the repeatable kinds.
 const KIND_MAX_COUNT: Partial<Record<AcademyMediaKind, number>> = {
@@ -138,7 +140,38 @@ export class AcademyMediaService {
       await this.storage.delete(media.storageKey).catch(() => undefined);
     }
     await this.prisma.academyMedia.delete({ where: { id: media.id } });
+    await this.forgetInDraft(academyId, media.id);
     return { id, deleted: true };
+  }
+
+  /**
+   * Take the deleted image out of the page that points at it.
+   *
+   * A site document naming media that no longer exists cannot be published, and
+   * the refusal lands at publish time — days later, on a screen with nothing to
+   * connect it to the delete that caused it. Cleaning up here is the difference
+   * between an image disappearing and a page quietly becoming unpublishable.
+   *
+   * Best-effort on purpose: the image is already gone either way, and a failure
+   * to tidy the draft must not turn a successful delete into an error.
+   */
+  private async forgetInDraft(academyId: string, mediaId: string): Promise<void> {
+    try {
+      const site = await this.prisma.academySite.findUnique({
+        where: { academyId },
+        select: { id: true, draftDoc: true },
+      });
+      if (!site?.draftDoc) return;
+      const parsed = parseSiteDocument(site.draftDoc);
+      if (!parsed.success) return;
+      if (!stripMediaId(parsed.data!, mediaId)) return;
+      await this.prisma.academySite.update({
+        where: { id: site.id },
+        data: { draftDoc: parsed.data! as unknown as object },
+      });
+    } catch (err) {
+      this.logger.warn(`could not take ${mediaId} out of the draft: ${String(err)}`);
+    }
   }
 
   /** Public read for the streaming route: only READY media is exposed. */

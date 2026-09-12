@@ -1,4 +1,5 @@
 import { m } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { ReactNode } from 'react';
 import { Reveal } from './motion';
 import i18n from '../i18n';
@@ -186,12 +187,28 @@ export function ProgressBar({ pct }: { pct: number; tone?: 'accent' | 'primary' 
   );
 }
 
+/**
+ * Server refusals the reader can act on, in their own language.
+ *
+ * Most API errors are already written for a person and pass straight through.
+ * These are the ones where the server knows something the sentence cannot
+ * carry — a count, a list — so the copy lives here and the payload supplies
+ * the detail.
+ */
+const ERROR_CODES: Record<string, string> = {
+  MEDIA_NOT_READY: 'err.mediaNotReady',
+  HTML_LOCKED: 'err.htmlLocked',
+  NO_HAND_AUTHORED_HTML: 'err.noHandAuthored',
+};
+
 export function ErrorNote({ error }: { error: unknown }) {
+  const { t } = useTranslation();
   if (!error) return null;
-  const message =
-    (error as any)?.response?.data?.message?.toString?.() ??
-    (error as any)?.message ??
-    String(error);
+  const data = (error as any)?.response?.data;
+  const key = data?.code ? ERROR_CODES[data.code] : undefined;
+  const message = key
+    ? t(key, { count: Array.isArray(data.mediaIds) ? data.mediaIds.length : 0 })
+    : data?.message?.toString?.() ?? (error as any)?.message ?? String(error);
   return (
     <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
       {message}

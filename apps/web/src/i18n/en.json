@@ -1696,5 +1696,10 @@
   "colorMode": {
     "light": "Light mode",
     "dark": "Dark mode"
+  },
+  "err": {
+    "mediaNotReady": "{{count}} image(s) on this page are missing or still processing — remove or re-upload them, then publish.",
+    "htmlLocked": "This page is hand-authored, so publishing cannot change it — hand it to the studio first.",
+    "noHandAuthored": "There is no hand-authored page kept for this academy."
   }
 }

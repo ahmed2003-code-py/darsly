@@ -42,9 +42,29 @@ export class EnrollmentsService {
   ) {}
 
   private async studentProfileOf(userId: string) {
-    const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      include: { user: { select: { fullName: true } } },
+    });
     if (!student) throw new BadRequestException('No student profile for this account');
     return student;
+  }
+
+  /**
+   * Tell the course's teacher something happened on it. Best-effort: a
+   * notification that fails must never take the enrolment down with it — the
+   * student's place in the course is the part that matters.
+   */
+  private async notifyTeacher(
+    course: { id: string; teacher?: { user?: { id: string } | null } | null },
+    title: string,
+    body: string,
+  ) {
+    const teacherUserId = course.teacher?.user?.id;
+    if (!teacherUserId) return;
+    await this.notifications
+      .create({ userId: teacherUserId, type: 'ANNOUNCEMENT', title, body, meta: { courseId: course.id, audience: 'teacher' } })
+      .catch(() => undefined);
   }
 
   private async resolveCoupon(course: Course, code: string): Promise<Coupon> {
@@ -184,8 +204,20 @@ export class EnrollmentsService {
         body: `تم إرسال طلب الالتحاق بـ«${course.title}» للمراجعة.`,
         meta: { courseId },
       });
+      // The teacher is the one who has to act on it, and nothing else tells
+      // them a request is waiting.
+      await this.notifyTeacher(
+        course,
+        'طلب التحاق جديد ⏳',
+        `${student.user.fullName} طلب الالتحاق بـ«${course.title}» وبانتظار موافقتك.`,
+      );
       return { ...enrollment, quote };
     }
+    await this.notifyTeacher(
+      course,
+      'طالب جديد انضم 🎉',
+      `${student.user.fullName} انضم إلى دورة «${course.title}».`,
+    );
 
     await activateBundleChildren(this.prisma, course, enrollment.studentId, enrollment.expiresAt);
     await this.notifications.create({

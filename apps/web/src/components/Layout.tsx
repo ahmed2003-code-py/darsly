@@ -1,10 +1,11 @@
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { useRealtime } from '../lib/useRealtime';
 import { useWebNotifications } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
+import NotificationToasts from './NotificationToasts';
 import TopBar from './TopBar';
 
 interface NavItem {
@@ -72,8 +73,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const [drawer, setDrawer] = useState(false);
+  const navigate = useNavigate();
   useRealtime(); // live bell + chat list on every authenticated page
-  useWebNotifications(); // ...and the same events as OS notifications when the tab is away
+  useWebNotifications(navigate); // ...and as OS notifications, clickable, when the tab is away
   const nav =
     user?.role === Role.SUPER_ADMIN ? ADMIN_NAV : user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
   // Ordered by the tab list, not by where they happen to sit in the sidebar,
@@ -176,6 +178,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onToggleSidebar={() => setDrawer(true)} />
+        <NotificationToasts />
         {/* The bar is fixed, so the page has to end above it — including the
             home-indicator strip on phones that have one. */}
         <main className="min-w-0 flex-1 pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0">{children}</main>

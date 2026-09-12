@@ -6,6 +6,7 @@ import { Role } from '@darsly/shared-types';
 import { setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { dateShort } from '../lib/format';
+import { notificationRoute } from '../lib/notificationRoute';
 import { useNotificationPermission } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
 
@@ -50,11 +51,16 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
     await api.patch('/notifications/read-all');
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
   }
-  async function openNotif(id: string, read: boolean) {
-    if (!read) {
-      await api.patch(`/notifications/${id}/read`);
+  /** Mark it read and go where it points — a notification you can't follow is
+   *  just a label. */
+  async function openNotif(n: { id: string; readAt?: string | null; type?: string; meta?: Record<string, unknown> }) {
+    setBellOpen(false);
+    if (!n.readAt) {
+      await api.patch(`/notifications/${n.id}/read`).catch(() => undefined);
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     }
+    const to = notificationRoute(n, user?.role);
+    if (to) navigate(to);
   }
 
   async function logout() {
@@ -149,7 +155,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
                     notif.items.map((n: any) => (
                       <button
                         key={n.id}
-                        onClick={() => openNotif(n.id, !!n.readAt)}
+                        onClick={() => void openNotif(n)}
                         className={`flex w-full gap-3 border-b border-outline-variant/30 px-4 py-3 text-start transition hover:bg-surface-container-low ${
                           n.readAt ? '' : 'bg-primary-fixed/30'
                         }`}

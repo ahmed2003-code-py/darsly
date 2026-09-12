@@ -53,7 +53,7 @@ function build(rows: unknown[] = [], total = rows.length) {
 
 const course = (over: Record<string, unknown> = {}) => ({
   id: 'c1', tenantId: 't1', title: 'test', description: '', thumbnailUrl: null,
-  subject: null, grade: null, pricingModel: 'ONE_TIME', priceCents: 10000, currency: 'EGP',
+  subject: null, grades: [], pricingModel: 'ONE_TIME', priceCents: 10000, currency: 'EGP',
   createdAt: new Date(0),
   units: [{ lessons: [{ durationSec: 600, isFreePreview: true }] }],
   _count: { enrollments: 3 },
@@ -111,15 +111,16 @@ describe('every filter resolves in the database', () => {
 
   it('shows a signed-in student their own year without being asked', async () => {
     const { service, prisma } = build();
-    (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ grade: { stage: 'PREPARATORY' } });
+    (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ gradeId: 'prep-2' });
     await service.discover({}, 'user-1');
     const where = (prisma.course.findMany as jest.Mock).mock.calls[0][0].where;
-    expect(where.OR).toEqual([{ stages: { has: 'PREPARATORY' } }, { stages: { isEmpty: true } }]);
+    // Their year, and courses that named no year at all.
+    expect(where.OR).toEqual([{ grades: { some: { gradeId: 'prep-2' } } }, { grades: { none: {} } }]);
   });
 
   it('lets a student ask to look outside their own year', async () => {
     const { service, prisma } = build();
-    (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ grade: { stage: 'PREPARATORY' } });
+    (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ gradeId: 'prep-2' });
     await service.discover({ allStages: true }, 'user-1');
     expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].where).not.toHaveProperty('OR');
   });
@@ -130,11 +131,11 @@ describe('every filter resolves in the database', () => {
     expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].where).not.toHaveProperty('OR');
   });
 
-  it("answers a year filter with that year's stage", async () => {
+  it('filters by the exact year asked for', async () => {
     const where = await whereFor({ gradeId: 'g1' });
-    // A course narrowed to the band matches, and so does one that was never
-    // narrowed — an empty list means "not yet decided", not "for nobody".
-    expect(where.OR).toEqual([{ stages: { has: 'SECONDARY' } }, { stages: { isEmpty: true } }]);
+    // The year itself, and courses that were never narrowed — an empty list
+    // means "not yet decided", not "for nobody".
+    expect(where.OR).toEqual([{ grades: { some: { gradeId: 'g1' } } }, { grades: { none: {} } }]);
   });
 
   it('filters teaching language through the teacher', async () => {

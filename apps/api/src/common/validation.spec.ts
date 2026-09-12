@@ -68,14 +68,14 @@ describe('length and size caps', () => {
     expect(failures(CreateCourseDto, payload)).toContain('description');
   });
 
-  it('rejects a course aimed at a stage that is not a stage', () => {
-    const payload = { title: 'A valid title', stages: ['NOT_A_STAGE'] };
-    expect(failures(CreateCourseDto, payload)).toContain('stages');
+  it('rejects a course aimed at a year id carrying an essay', () => {
+    const payload = { title: 'A valid title', gradeIds: ['x'.repeat(LIMITS.ID + 1)] };
+    expect(failures(CreateCourseDto, payload)).toContain('gradeIds');
   });
 
-  it('rejects a course aimed at more stages than exist', () => {
-    const payload = { title: 'A valid title', stages: ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE', 'PRIMARY'] };
-    expect(failures(CreateCourseDto, payload)).toContain('stages');
+  it('rejects a course that names the same year twice', () => {
+    const payload = { title: 'A valid title', gradeIds: ['g1', 'g1'] };
+    expect(failures(CreateCourseDto, payload)).toContain('gradeIds');
   });
 
   it('rejects a reorder request with an unbounded id list', () => {

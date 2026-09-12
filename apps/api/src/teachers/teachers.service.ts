@@ -148,7 +148,7 @@ export class TeachersService {
           where: { status: 'PUBLISHED', deletedAt: null },
           include: {
             subject: true,
-            grade: true,
+            grades: { include: { grade: true } },
             units: {
               where: { deletedAt: null },
               include: { lessons: { where: { deletedAt: null }, select: { durationSec: true, isFreePreview: true } } },
@@ -187,7 +187,7 @@ export class TeachersService {
           description: c.description,
           thumbnailUrl: c.thumbnailUrl,
           subject: c.subject,
-          grade: c.grade,
+          grades: c.grades.map((g) => g.grade),
           pricingModel: c.pricingModel,
           priceCents: c.priceCents,
           currency: c.currency,

@@ -10,7 +10,7 @@ import { VideoProcessingService } from '../video/video-processing.service';
 import { YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
-import { viewerStage } from '../catalog/stage.util';
+import { viewerGrade } from '../catalog/stage.util';
 import {
   CreateCourseDto,
   CreateLessonDto,
@@ -21,6 +21,9 @@ import {
   UpdateLessonDto,
   UpsertUnitDto,
 } from './dto/course.dto';
+
+/** Every read of a course answers with the same shape for where it is aimed. */
+const COURSE_REACH = { subject: true, grades: { include: { grade: true } } } as const;
 
 // Decoded-bytes cap for a thumbnail data-URL. Sized just above the DTO's
 // 900_000-char limit (~675 KB decoded) so validation never rejects a payload the
@@ -60,7 +63,7 @@ export class CoursesService {
     // it. Empty for everyone else, and the clause is only added when it has
     // something in it — `notIn: []` is not a filter worth generating.
     const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
-    const stage = await viewerStage(this.prisma, query, viewerUserId);
+    const gradeId = await viewerGrade(this.prisma, query, viewerUserId);
 
     const priceFilter: Prisma.IntFilter = {};
     if (query.free) priceFilter.equals = 0;
@@ -91,10 +94,13 @@ export class CoursesService {
           ? { tenantId: query.teacherId }
           : {}),
       ...(query.subjectId ? { subjectId: query.subjectId } : {}),
-      // A student filters by their own year; a course is offered to a band. The
-      // year is resolved to its band here so the two still meet, and a course
-      // with no band set is not hidden — it was never narrowed, not excluded.
-      ...(stage ? { OR: [{ stages: { has: stage } }, { stages: { isEmpty: true } }] } : {}),
+      // The whole point of asking a student their year: a course names the
+      // years it is for, and a second-baccalaureate student is shown those and
+      // not the rest of the band. A course that named no year is still shown —
+      // it was never narrowed, which is not the same as being for nobody.
+      ...(gradeId
+        ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
+        : {}),
       ...(Object.keys(priceFilter).length ? { priceCents: priceFilter } : {}),
       ...(query.hasPreview
         ? { units: { some: { deletedAt: null, lessons: { some: { deletedAt: null, isFreePreview: true } } } } }
@@ -129,7 +135,7 @@ export class CoursesService {
         take: pageSize,
         include: {
           subject: true,
-          grade: true,
+          grades: { include: { grade: true } },
           teacher: {
             select: {
               id: true, slug: true, language: true, verifiedAt: true,
@@ -167,7 +173,7 @@ export class CoursesService {
           description: c.description,
           thumbnailUrl: c.thumbnailUrl,
           subject: c.subject,
-          grade: c.grade,
+          grades: c.grades.map((g) => g.grade),
           pricingModel: c.pricingModel,
           priceCents: c.priceCents,
           currency: c.currency,
@@ -240,7 +246,7 @@ export class CoursesService {
       where: { tenantId },
       include: {
         subject: true,
-        grade: true,
+        grades: { include: { grade: true } },
         units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
         _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
       },
@@ -253,7 +259,7 @@ export class CoursesService {
       where: { id: courseId, tenantId },
       include: {
         subject: true,
-        grade: true,
+        grades: { include: { grade: true } },
         units: {
           where: { deletedAt: null },
           orderBy: { sortOrder: 'asc' },
@@ -292,26 +298,40 @@ export class CoursesService {
       where: { id: tenantId },
       select: { subjectId: true, stages: true },
     });
-    const allowed = teacher.stages;
-    const asked = wanted?.length ? wanted : allowed;
-    const outside = asked.filter((st) => !allowed.includes(st as never));
+    // The years inside the stages this teacher signed up for. Asked for once
+    // and used both to default and to check, so the form's options and the
+    // rule behind them can never drift apart.
+    const mine = teacher.stages.length
+      ? await this.prisma.gradeLevel.findMany({
+          where: { isActive: true, stage: { in: teacher.stages } },
+          select: { id: true },
+        })
+      : [];
+    const allowed = new Set(mine.map((g) => g.id));
+    const asked = wanted?.length ? wanted : [...allowed];
+    const outside = asked.filter((id) => !allowed.has(id));
     if (outside.length) {
       throw new BadRequestException({
-        message: 'You did not sign up to teach that stage',
-        code: 'STAGE_NOT_YOURS',
-        stages: outside,
+        message: 'You did not sign up to teach that year',
+        code: 'GRADE_NOT_YOURS',
+        gradeIds: outside,
       });
     }
-    return { subjectId: teacher.subjectId, stages: asked as never[] };
+    return { subjectId: teacher.subjectId, gradeIds: asked };
   }
 
   async create(tenantId: string, dto: CreateCourseDto) {
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
-    const { stages, ...rest } = dto;
-    const reach = await this.reachOf(tenantId, stages);
+    const { gradeIds, ...rest } = dto;
+    const { subjectId, gradeIds: years } = await this.reachOf(tenantId, gradeIds);
     return this.prisma.course.create({
-      data: { ...rest, ...reach, tenantId },
-      include: { subject: true, grade: true },
+      data: {
+        ...rest,
+        subjectId,
+        tenantId,
+        grades: { create: years.map((gradeId) => ({ gradeId })) },
+      },
+      include: COURSE_REACH,
     });
   }
 
@@ -331,14 +351,24 @@ export class CoursesService {
       }
     }
 
-    const { stages, ...rest } = dto;
+    const { gradeIds, ...rest } = dto;
     // Only re-checked when the teacher actually changed it, so an edit that
     // touches the title alone never has to restate where the course is aimed.
-    const reach = stages ? await this.reachOf(tenantId, stages) : {};
+    const reach = gradeIds ? await this.reachOf(tenantId, gradeIds) : null;
     return this.prisma.course.update({
       where: { id: courseId },
-      data: { ...rest, ...reach },
-      include: { subject: true, grade: true },
+      data: {
+        ...rest,
+        ...(reach
+          ? {
+              subjectId: reach.subjectId,
+              // Replaced wholesale: the list the teacher just submitted is the
+              // list, and diffing it would only be a slower way to say so.
+              grades: { deleteMany: {}, create: reach.gradeIds.map((gradeId) => ({ gradeId })) },
+            }
+          : {}),
+      },
+      include: COURSE_REACH,
     });
   }
 
@@ -697,7 +727,7 @@ export class CoursesService {
       },
       include: {
         subject: true,
-        grade: true,
+        grades: { include: { grade: true } },
         teacher: {
           include: { user: { select: { fullName: true, avatarUrl: true } } },
         },
@@ -764,7 +794,7 @@ export class CoursesService {
       thumbnailUrl: course.thumbnailUrl,
       status: course.status,
       subject: course.subject,
-      grade: course.grade,
+      grades: course.grades.map((g) => g.grade),
       pricingModel: course.pricingModel,
       // Fee-inclusive: this is a student-facing payload, and the student pays one
       // number. The academy sees its own price through the teacher endpoints.

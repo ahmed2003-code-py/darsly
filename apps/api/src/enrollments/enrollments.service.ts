@@ -211,7 +211,7 @@ export class EnrollmentsService {
         course: {
           include: {
             subject: true,
-            grade: true,
+            grades: { include: { grade: true } },
             teacher: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
             units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
           },
@@ -256,7 +256,7 @@ export class EnrollmentsService {
           title: e.course.title,
           thumbnailUrl: e.course.thumbnailUrl,
           subject: e.course.subject,
-          grade: e.course.grade,
+          grades: e.course.grades.map((g) => g.grade),
           pricingModel: e.course.pricingModel,
           priceCents: e.course.priceCents,
           lessonsCount,

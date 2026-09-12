@@ -372,8 +372,19 @@ model GradeLevel {
   stage     EducationStage?
 
   students StudentProfile[]
-  courses  Course[]
+  courses  CourseGrade[]
   teachers TeacherGrade[]
+}
+
+/// Which years a course is offered to.
+model CourseGrade {
+  courseId String
+  gradeId  String
+  course   Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  grade    GradeLevel @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, gradeId])
+  @@index([gradeId])
 }
 
 model TeacherGrade {
@@ -418,11 +429,12 @@ model Course {
   thumbnailUrl String?
   subjectId    String?
   subject      Subject?    @relation(fields: [subjectId], references: [id])
-  gradeId      String?
-  grade        GradeLevel? @relation(fields: [gradeId], references: [id])
-  /// Which of the teacher's bands this course is for. Empty means every band
-  /// they teach — a course that was never narrowed rather than one for nobody.
-  stages       EducationStage[]
+  /// The exact years this course is for. A teacher picks from the years inside
+  /// the stages they teach, so "second baccalaureate" reaches those students
+  /// and nobody else — a listing full of courses for other years is the thing
+  /// this replaces. Empty means every year they teach: never narrowed, which
+  /// is not the same as for nobody.
+  grades       CourseGrade[]
 
   status       CourseStatus       @default(DRAFT)
   pricingModel CoursePricingModel @default(ONE_TIME)
@@ -452,7 +464,7 @@ model Course {
   savedBy       SavedCourse[]
 
   @@index([tenantId, status])
-  @@index([subjectId, gradeId, status])
+  @@index([subjectId, status])
 }
 
 // A BUNDLE-priced course contains other courses.

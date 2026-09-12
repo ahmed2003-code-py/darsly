@@ -354,7 +354,9 @@
         "stages": "Stages this course is for",
         "stagesHint": "You can pick more than one. Left empty, it goes to every stage you teach.",
         "noSubject": "No subject chosen yet — set it from your profile.",
-        "noStages": "No stages chosen yet — set them from your profile."
+        "noStages": "No stages chosen yet — set them from your profile.",
+        "years": "Years this course is for",
+        "yearsHint": "Pick the years this course is for. Left empty, it goes to every year you teach."
       },
       "status": {
         "DRAFT": "Draft",

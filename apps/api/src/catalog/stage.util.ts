@@ -43,3 +43,26 @@ export async function viewerStage(
   });
   return student?.grade?.stage ?? null;
 }
+
+/**
+ * The exact year to filter a course listing by for this viewer.
+ *
+ * The stage is the right grain for choosing a teacher — you pick a person who
+ * teaches secondary — but the wrong one for choosing a course, where a
+ * second-year student has no use for the first year's material. So teachers
+ * are matched on the band and courses on the year.
+ */
+export async function viewerGrade(
+  prisma: PrismaService,
+  query: { gradeId?: string; allStages?: boolean },
+  viewerUserId?: string,
+): Promise<string | null> {
+  if (query.allStages) return null;
+  if (query.gradeId) return query.gradeId;
+  if (!viewerUserId) return null;
+  const student = await prisma.studentProfile.findFirst({
+    where: { userId: viewerUserId },
+    select: { gradeId: true },
+  });
+  return student?.gradeId ?? null;
+}

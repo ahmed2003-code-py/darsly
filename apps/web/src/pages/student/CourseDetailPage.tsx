@@ -115,7 +115,9 @@ export default function CourseDetailPage() {
           <div className="card mb-6 p-8">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-outline">
               {course.subject && <Badge>{course.subject.nameAr}</Badge>}
-              {course.grade && <Badge tone="neutral">{course.grade.nameAr}</Badge>}
+              {(course.grades ?? []).map((g: { id: string; nameAr: string }) => (
+                <Badge key={g.id} tone="neutral">{g.nameAr}</Badge>
+              ))}
               {course.status !== 'PUBLISHED' && <Badge tone="warn">{t(`teacher.courses.status.${course.status}`)}</Badge>}
             </div>
             <h1 className="mb-3 font-heading text-3xl font-extrabold">{course.title}</h1>

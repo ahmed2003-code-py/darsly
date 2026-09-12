@@ -6,13 +6,14 @@ import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { stripMarkdown } from '../../lib/markdown';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
+import { STAGES, type Grade } from '../../lib/stages';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
 
 interface CourseForm {
   id?: string;
   title: string;
   description: string;
-  stages: string[];
+  gradeIds: string[];
   pricingModel: string;
   priceEgp: string;
 }
@@ -20,7 +21,7 @@ interface CourseForm {
 const EMPTY_FORM: CourseForm = {
   title: '',
   description: '',
-  stages: [],
+  gradeIds: [],
   pricingModel: 'ONE_TIME',
   priceEgp: '',
 };
@@ -109,6 +110,12 @@ export default function TeacherCoursesPage() {
     queryFn: async () => (await api.get('/teacher/profile')).data,
   });
   const myStages: string[] = profile?.stages ?? [];
+  // The years inside those stages — the exact set a course may be aimed at.
+  const { data: grades } = useQuery({
+    queryKey: ['grades'],
+    queryFn: async () => (await api.get('/catalog/grades')).data,
+  });
+  const myYears: Grade[] = (grades ?? []).filter((g: Grade) => g.stage && myStages.includes(g.stage));
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['teacher-courses'] });
 
@@ -117,7 +124,7 @@ export default function TeacherCoursesPage() {
       const payload = {
         title: f.title,
         description: f.description,
-        stages: f.stages,
+        gradeIds: f.gradeIds,
         pricingModel: f.pricingModel,
         priceCents: Math.round(Number(f.priceEgp || 0) * 100),
       };
@@ -267,7 +274,9 @@ export default function TeacherCoursesPage() {
                 <Badge tone={STATUS_TONE[c.status]}>{t(`teacher.courses.status.${c.status}`)}</Badge>
                 <span className="text-xs text-outline">
                   {c.subject ? (ar ? c.subject.nameAr : c.subject.nameEn) : ''}
-                  {c.grade ? ` · ${ar ? c.grade.nameAr : c.grade.nameEn}` : ''}
+                  {(c.grades ?? []).length
+                    ? ` · ${c.grades.map((g: Grade) => (ar ? g.nameAr : g.nameEn)).join('، ')}`
+                    : ''}
                 </span>
               </div>
               <h3 className="mb-1 font-heading text-lg font-bold">{c.title}</h3>
@@ -301,7 +310,7 @@ export default function TeacherCoursesPage() {
                       id: c.id,
                       title: c.title,
                       description: c.description,
-                      stages: c.stages ?? [],
+                      gradeIds: (c.grades ?? []).map((g: { id: string }) => g.id),
                       pricingModel: c.pricingModel,
                       priceEgp: String(c.priceCents / 100),
                     })
@@ -394,38 +403,51 @@ export default function TeacherCoursesPage() {
                 </p>
               </Field>
 
+              {/* The exact years, grouped under their stage. A second-year
+                  course shown to first-years is the noise this removes, so the
+                  choice has to be at year level even though the teacher signed
+                  up by stage. */}
               <div className="mb-4">
                 <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
-                  {t('teacher.courses.form.stages')}
+                  {t('teacher.courses.form.years')}
                 </span>
-                {myStages.length === 0 ? (
+                {myYears.length === 0 ? (
                   <p className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm text-on-surface-variant">
                     {t('teacher.courses.form.noStages')}
                   </p>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {myStages.map((st) => {
-                      const on = form.stages.includes(st);
-                      return (
-                        <button key={st} type="button" aria-pressed={on}
-                          onClick={() =>
-                            setForm({
-                              ...form,
-                              stages: on ? form.stages.filter((x) => x !== st) : [...form.stages, st],
-                            })
-                          }
-                          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                            on
-                              ? 'border-primary bg-primary text-on-primary'
-                              : 'border-outline-variant text-on-surface-variant hover:border-outline'
-                          }`}>
-                          {t(`stage.${st}`)}
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    {STAGES.filter((st) => myYears.some((g) => g.stage === st)).map((st) => (
+                      <div key={st}>
+                        <span className="mb-1.5 block text-xs font-semibold text-outline">{t(`stage.${st}`)}</span>
+                        <div className="flex flex-wrap gap-2">
+                          {myYears.filter((g) => g.stage === st).map((g) => {
+                            const on = form.gradeIds.includes(g.id);
+                            return (
+                              <button key={g.id} type="button" aria-pressed={on}
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    gradeIds: on
+                                      ? form.gradeIds.filter((x) => x !== g.id)
+                                      : [...form.gradeIds, g.id],
+                                  })
+                                }
+                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                  on
+                                    ? 'border-primary bg-primary text-on-primary'
+                                    : 'border-outline-variant text-on-surface-variant hover:border-outline'
+                                }`}>
+                                {ar ? g.nameAr : g.nameEn}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
-                <p className="mt-1.5 text-xs text-outline">{t('teacher.courses.form.stagesHint')}</p>
+                <p className="mt-1.5 text-xs text-outline">{t('teacher.courses.form.yearsHint')}</p>
               </div>
             </section>
 

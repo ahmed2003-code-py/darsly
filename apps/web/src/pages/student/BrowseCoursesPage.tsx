@@ -27,7 +27,7 @@ interface Course {
   description: string;
   thumbnailUrl: string | null;
   subject: { id: string; nameAr: string; nameEn: string } | null;
-  grade: { id: string; nameAr: string; nameEn: string } | null;
+  grades?: { id: string; nameAr: string; nameEn: string }[];
   pricingModel: 'ONE_TIME' | 'MONTHLY_SUBSCRIPTION';
   priceCents: number;
   lessonsCount: number;
@@ -236,7 +236,9 @@ function CourseCard({
       <div className="flex flex-1 flex-col gap-2 px-4 pb-4">
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-on-surface-variant">
           {c.subject && <span className="rounded-md bg-primary-fixed px-2 py-0.5 font-semibold text-on-primary-fixed-variant">{name(c.subject)}</span>}
-          {c.grade && <span className="rounded-md bg-surface-container px-2 py-0.5">{name(c.grade)}</span>}
+          {(c.grades ?? []).map((g) => (
+            <span key={g.id} className="rounded-md bg-surface-container px-2 py-0.5">{name(g)}</span>
+          ))}
         </div>
 
         <h3 className="line-clamp-2 font-heading text-base font-bold leading-snug">{c.title}</h3>

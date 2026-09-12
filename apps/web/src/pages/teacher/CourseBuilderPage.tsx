@@ -8,6 +8,7 @@ import { api, apiOrigin } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
 import { Badge, ErrorNote, Modal, ProgressBar, Spinner } from '../../components/ui';
+import { MarkdownEditor } from '../../components/MarkdownEditor';
 
 /**
  * Course builder — the curriculum is the page, and a lesson opens in place.
@@ -443,12 +444,12 @@ export default function CourseBuilderPage() {
         <div className="min-w-0 space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-bold">{t('teacher.builder.descLabel')}</label>
-            <textarea
-              className="input min-h-20"
+            <MarkdownEditor
+              id="lesson-description"
+              minHeight="min-h-20"
               maxLength={1000}
-              placeholder={t('teacher.builder.descPh')}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
             />
           </div>
 

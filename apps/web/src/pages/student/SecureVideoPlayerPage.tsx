@@ -11,6 +11,7 @@ import { duration } from '../../lib/format';
 import { useObscureAndDevtools, useNoCopyGuards } from '../../lib/player-hardening';
 import { useAuthStore } from '../../stores/auth';
 import { GAMIFICATION_KEY, GamificationOutcome } from '../../lib/gamification';
+import { Markdown } from '../../lib/markdown';
 import { RewardBurst } from '../../components/gamification/RewardBurst';
 
 type Tab = 'notes' | 'attachments' | 'qa';
@@ -348,7 +349,7 @@ export default function SecureVideoPlayerPage() {
           </Link>
           <h1 className="font-heading text-2xl font-extrabold">{current?.title}</h1>
           {current?.description && (
-            <p className="mt-1 max-w-2xl text-sm text-on-surface-variant" dir="auto">{current.description}</p>
+            <Markdown className="mt-1 max-w-2xl text-sm text-on-surface-variant">{current.description}</Markdown>
           )}
         </div>
         <div className="flex items-center gap-2">

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
+import { stripMarkdown } from '../../lib/markdown';
+import { MarkdownEditor } from '../../components/MarkdownEditor';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
 
 interface CourseForm {
@@ -274,7 +276,7 @@ export default function TeacherCoursesPage() {
                 </span>
               </div>
               <h3 className="mb-1 font-heading text-lg font-bold">{c.title}</h3>
-              <p className="mb-4 line-clamp-2 flex-1 text-sm text-on-surface-variant">{c.description}</p>
+              <p className="mb-4 line-clamp-2 flex-1 text-sm text-on-surface-variant">{stripMarkdown(c.description)}</p>
               <div className="mb-4 flex items-center gap-4 text-sm text-on-surface-variant">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-base">smart_display</span>
@@ -378,11 +380,11 @@ export default function TeacherCoursesPage() {
                 label={t('teacher.courses.form.description')}
                 hint={t('teacher.courses.form.descriptionHint')}
               >
-                <textarea
-                  className="input min-h-24"
+                <MarkdownEditor
+                  id="course-description"
                   maxLength={600}
                   value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  onChange={(v) => setForm({ ...form, description: v })}
                 />
               </Field>
             </section>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { stripMarkdown } from '../../lib/markdown';
 import { Badge, EmptyState, PageHeader, Spinner } from '../../components/ui';
 
 const TABS = ['PENDING', 'APPROVED', 'ALL'] as const;
@@ -76,7 +77,7 @@ export default function AdminTeachersPage() {
                   admitting it has nothing to say while still charging a row for
                   saying it. */}
               {tp.bio ? (
-                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{tp.bio}</p>
+                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{stripMarkdown(tp.bio)}</p>
               ) : (
                 <div className="flex-1" />
               )}

@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../../lib/api';
 import { dateShort, duration, egp } from '../../lib/format';
+import { Markdown } from '../../lib/markdown';
 import { useAuthStore } from '../../stores/auth';
 import { Badge, EmptyState, ErrorNote, Skeleton } from '../../components/ui';
 import ReviewModal from '../../components/ReviewModal';
@@ -118,7 +119,7 @@ export default function CourseDetailPage() {
               {course.status !== 'PUBLISHED' && <Badge tone="warn">{t(`teacher.courses.status.${course.status}`)}</Badge>}
             </div>
             <h1 className="mb-3 font-heading text-3xl font-extrabold">{course.title}</h1>
-            <p className="mb-4 leading-relaxed text-on-surface-variant">{course.description}</p>
+            <Markdown className="mb-4 text-on-surface-variant">{course.description}</Markdown>
             <div className="flex flex-wrap items-center gap-5 text-sm text-on-surface-variant">
               <Link to={`/t/${course.teacher.slug}`} className="flex items-center gap-2 font-bold text-primary hover:underline">
                 <span className="material-symbols-outlined">person</span>

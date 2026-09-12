@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { duration, egp } from '../../lib/format';
+import { Markdown, stripMarkdown } from '../../lib/markdown';
 import { Badge, EmptyState, Skeleton, Stars } from '../../components/ui';
 
 /** Public teacher profile per the teacher_profile design: hero with intro
@@ -47,7 +48,7 @@ export default function TeacherProfilePage() {
               ? ` — ${teacher.grades.map((g: any) => (ar ? g.nameAr : g.nameEn)).join(t('common.listSeparator'))}`
               : ''}
           </p>
-          <p className="mb-6 leading-relaxed text-on-surface-variant">{teacher.bio}</p>
+          <Markdown className="mb-6 text-on-surface-variant">{teacher.bio}</Markdown>
           <div className="flex flex-wrap gap-3">
             <span className="flex items-center gap-2 rounded-lg bg-primary-fixed/60 px-4 py-2 font-bold text-on-primary-fixed-variant">
               <span className="material-symbols-outlined">group</span>
@@ -95,7 +96,7 @@ export default function TeacherProfilePage() {
               </div>
               <div className="flex flex-1 flex-col p-5">
                 <h3 className="mb-1 font-heading text-lg font-bold">{c.title}</h3>
-                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{c.description}</p>
+                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{stripMarkdown(c.description)}</p>
                 <div className="mb-3 flex items-center gap-4 text-xs text-outline">
                   <span className="flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">smart_display</span>

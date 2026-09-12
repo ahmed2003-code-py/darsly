@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
+import { stripMarkdown } from '../../lib/markdown';
 import { CardGridSkeleton, EmptyState, Stars } from '../../components/ui';
 import { Stagger, StaggerItem } from '../../components/motion';
 import Pager from '../../components/Pager';
@@ -292,7 +293,7 @@ function TeacherCard({
       )}
 
       {tc.bio && (
-        <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-on-surface-variant">{tc.bio}</p>
+        <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-on-surface-variant">{stripMarkdown(tc.bio)}</p>
       )}
 
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">

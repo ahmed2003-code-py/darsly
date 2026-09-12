@@ -1645,5 +1645,15 @@
     "minutes": "{{count}}m ago",
     "hours": "{{count}}h ago",
     "days": "{{count}}d ago"
+  },
+  "markdown": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "bullet": "Bulleted list",
+    "number": "Numbered list",
+    "heading": "Subheading",
+    "preview": "Preview",
+    "edit": "Edit",
+    "previewEmpty": "Write something and it will appear here the way readers will see it."
   }
 }

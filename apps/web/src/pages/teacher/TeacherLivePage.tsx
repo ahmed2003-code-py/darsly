@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
+import { Markdown } from '../../lib/markdown';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
 
 function when(iso: string) {
@@ -69,7 +70,7 @@ export default function TeacherLivePage() {
                   <h3 className="font-heading text-lg font-bold">{s.title}</h3>
                   <Badge tone={past ? 'neutral' : 'teal'}>{past ? t('live.ended') : t('live.upcoming')}</Badge>
                 </div>
-                {s.description && <p className="text-sm text-on-surface-variant" dir="auto">{s.description}</p>}
+                {s.description && <Markdown className="text-sm text-on-surface-variant">{s.description}</Markdown>}
                 <div className="flex flex-wrap items-center gap-4 text-xs text-outline">
                   <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">event</span>{when(s.startsAt)}</span>
                   <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">schedule</span>{t('live.minutes', { count: s.durationMin })}</span>

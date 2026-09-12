@@ -20,6 +20,7 @@ const STUDENT_NAV: NavItem[] = [
   { to: '/courses', icon: 'auto_stories', labelKey: 'nav.browse' },
   { to: '/discover', icon: 'travel_explore', labelKey: 'nav.discover' },
   { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
+  { to: '/learning', icon: 'trophy', labelKey: 'nav.learning' },
   { to: '/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
   { to: '/saved', icon: 'favorite', labelKey: 'nav.saved' },
   { to: '/live', icon: 'sensors', labelKey: 'nav.live' },
@@ -59,7 +60,7 @@ const ADMIN_NAV: NavItem[] = [
  * builder, an admin's queue, and now the wallet each of them checks.
  */
 const BOTTOM_TABS: Record<string, string[]> = {
-  [Role.STUDENT]: ['/', '/my-courses', '/courses', '/messages', '/wallet'],
+  [Role.STUDENT]: ['/', '/my-courses', '/learning', '/messages', '/wallet'],
   [Role.TEACHER]: ['/teacher', '/teacher/courses', '/teacher/students', '/messages', '/teacher/wallet'],
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
 };

@@ -10,6 +10,8 @@ import { api, apiOrigin } from '../../lib/api';
 import { duration } from '../../lib/format';
 import { useObscureAndDevtools, useNoCopyGuards } from '../../lib/player-hardening';
 import { useAuthStore } from '../../stores/auth';
+import { GAMIFICATION_KEY, GamificationOutcome } from '../../lib/gamification';
+import { RewardBurst } from '../../components/gamification/RewardBurst';
 
 type Tab = 'notes' | 'attachments' | 'qa';
 
@@ -18,6 +20,7 @@ export default function SecureVideoPlayerPage() {
   const { courseId, lessonId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [reward, setReward] = useState<GamificationOutcome | null>(null);
   const user = useAuthStore((s) => s.user);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -284,6 +287,16 @@ export default function SecureVideoPlayerPage() {
         positionSec: Math.floor(v.currentTime),
         type,
         watchedPct: Math.round(watchedPct),
+      })
+      // The heartbeat that crosses the completion threshold comes back with
+      // what it earned, so finishing a lesson is celebrated in the same round
+      // trip instead of after a refetch.
+      .then((res) => {
+        if (res.data?.gamification?.awarded) {
+          setReward(res.data.gamification);
+          queryClient.invalidateQueries({ queryKey: GAMIFICATION_KEY });
+          queryClient.invalidateQueries({ queryKey: ['progress-summary'] });
+        }
       })
       .catch(() => {});
   }
@@ -583,6 +596,9 @@ export default function SecureVideoPlayerPage() {
             <span className="material-symbols-outlined text-sm">shield</span>
             {t('player.watermarkNote')}
           </p>
+
+          {/* What finishing this lesson earned — floats, never blocks. */}
+          <RewardBurst outcome={reward} onDone={() => setReward(null)} />
 
           {/* Next lesson */}
           {nextLesson && (

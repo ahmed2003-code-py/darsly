@@ -103,7 +103,8 @@
     "studio": "Academy Studio",
     "adminStudio": "Academy Studio",
     "browse": "Browse courses",
-    "adminDevices": "Listener devices"
+    "adminDevices": "Listener devices",
+    "learning": "Learning Center"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1385,5 +1386,166 @@
     "smsCount": "{{count}} messages",
     "revoke": "Revoke",
     "revokeConfirm": "Revoke this device? It will need a new code to work again."
+  },
+  "gamification": {
+    "title": "Learning Center",
+    "subtitle": "Your level, achievements and rank — all in one place.",
+    "level": "Level",
+    "levelShort": "Level {{n}}",
+    "xp": "XP",
+    "xpFull": "Experience points",
+    "xpToNext": "{{count}} XP to the next level",
+    "maxLevel": "Top level reached",
+    "coins": "coins",
+    "coinsFull": "Darsly Coins",
+    "coinsHint": "Coins unlock in-platform rewards only — they are not money and cannot be withdrawn.",
+    "rank": "Rank",
+    "rankShort": "#{{n}}",
+    "bestRank": "Best rank: #{{n}}",
+    "streak": "Streak",
+    "streakDays": "{{count}}-day streak",
+    "streakAtRisk": "Your streak is at risk — finish one lesson today to keep it.",
+    "streakFreezes": "Freezes available: {{count}}",
+    "weeklyGoal": "Weekly goal",
+    "tabs": {
+      "overview": "Overview",
+      "achievements": "Achievements",
+      "leaderboard": "Leaderboard",
+      "missions": "Missions",
+      "rewards": "Rewards",
+      "activity": "History"
+    },
+    "missions": {
+      "title": "Today's missions",
+      "weekly": "This week's quests",
+      "empty": "No missions yet — start a course and they'll appear.",
+      "done": "Done",
+      "reward": "+{{xp}} XP · +{{coins}} coins",
+      "allDone": "Every mission done today 🎉",
+      "templates": {
+        "DAILY_ONE_LESSON": "Complete 1 lesson",
+        "DAILY_TWO_LESSONS": "Complete 2 lessons",
+        "DAILY_PASS_QUIZ": "Pass a quiz",
+        "DAILY_STRONG_QUIZ": "Score 100% on a quiz",
+        "DAILY_ASSIGNMENT": "Submit an assignment",
+        "DAILY_LIVE": "Attend a live session",
+        "WEEKLY_FIVE_LESSONS": "Complete 5 lessons this week",
+        "WEEKLY_THREE_QUIZZES": "Pass 3 quizzes",
+        "WEEKLY_FINISH_UNIT": "Finish a whole unit",
+        "WEEKLY_PERFECT_QUIZ": "Score 100% on a quiz"
+      }
+    },
+    "achievements": {
+      "title": "Achievements",
+      "earnedOf": "{{earned}} of {{total}}",
+      "locked": "Locked",
+      "unlocked": "Unlocked",
+      "categories": {
+        "LEARNING": "Learning",
+        "PERFORMANCE": "Performance",
+        "CONSISTENCY": "Consistency",
+        "COMPETITION": "Competition",
+        "EXPLORATION": "Exploration",
+        "SPECIAL": "Special"
+      }
+    },
+    "leaderboard": {
+      "title": "Leaderboard",
+      "scope": {
+        "GLOBAL": "All of Darsly",
+        "ACADEMY": "My academy",
+        "COURSE": "This course"
+      },
+      "period": {
+        "WEEKLY": "This week",
+        "MONTHLY": "This month",
+        "ALLTIME": "All time"
+      },
+      "you": "You",
+      "empty": "Nobody on this board yet — finish a lesson and take first place.",
+      "toNext": "{{count}} XP to pass the student above you.",
+      "division": "Division",
+      "divisions": {
+        "BRONZE": "Bronze",
+        "SILVER": "Silver",
+        "GOLD": "Gold",
+        "PLATINUM": "Platinum",
+        "DIAMOND": "Diamond",
+        "MASTER": "Master"
+      },
+      "resetsWeekly": "The weekly board resets every Saturday — every week is a fresh chance."
+    },
+    "rewards": {
+      "title": "Reward store",
+      "balance": "Balance: {{count}} coins",
+      "buy": "Redeem",
+      "buying": "Redeeming…",
+      "cant": "Not enough",
+      "owned": "Done",
+      "pending": "Waiting for admin approval",
+      "success": "Redeemed 🎉",
+      "categories": {
+        "LEARNING": "Learning",
+        "PROFILE": "Profile",
+        "PROGRESS": "Progress",
+        "REAL": "Real prizes"
+      }
+    },
+    "titles": {
+      "title": "Titles",
+      "active": "Active title",
+      "none": "No title",
+      "pick": "Pick your title"
+    },
+    "activity": {
+      "title": "XP history",
+      "empty": "No activity yet."
+    },
+    "events": {
+      "LESSON_COMPLETED": "Completed a lesson",
+      "QUIZ_COMPLETED": "Finished a quiz",
+      "QUIZ_PASSED": "Passed a quiz",
+      "QUIZ_PERFECT": "Perfect quiz score",
+      "UNIT_COMPLETED": "Finished a unit",
+      "COURSE_COMPLETED": "Completed a course",
+      "CERTIFICATE_EARNED": "Earned a certificate",
+      "ASSIGNMENT_SUBMITTED": "Submitted an assignment",
+      "ASSIGNMENT_GRADED_HIGH": "Excellent assignment grade",
+      "LIVE_ATTENDED": "Attended a live session",
+      "DAILY_LOGIN": "Daily check-in",
+      "STREAK_MILESTONE": "Streak milestone",
+      "MISSION_COMPLETED": "Completed a mission",
+      "WEEKLY_QUEST_COMPLETED": "Completed a weekly quest",
+      "REVIEW_SUBMITTED": "Wrote a review",
+      "CHALLENGE_WON": "Won a challenge",
+      "LEVEL_UP": "Levelled up",
+      "ACHIEVEMENT_UNLOCKED": "Achievement unlocked",
+      "REWARD_REDEEMED": "Redeemed a reward"
+    },
+    "celebrate": {
+      "lessonDone": "Lesson complete 🎉",
+      "quizDone": "Your result",
+      "levelUp": "You reached level {{n}}!",
+      "levelUpBody": "{{name}} — keep going.",
+      "achievement": "Achievement unlocked!",
+      "mission": "Mission complete!",
+      "next": "Next lesson",
+      "keepGoing": "Continue"
+    },
+    "stats": {
+      "title": "Your numbers",
+      "lessons": "lessons done",
+      "quizzes": "quizzes passed",
+      "perfect": "perfect scores",
+      "courses": "courses done",
+      "certificates": "certificates",
+      "assignments": "assignments",
+      "live": "live sessions",
+      "accuracy": "quiz accuracy"
+    },
+    "cta": {
+      "open": "Open Learning Center",
+      "viewAll": "View all"
+    }
   }
 }

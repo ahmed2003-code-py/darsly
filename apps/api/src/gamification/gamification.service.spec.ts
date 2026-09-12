@@ -20,7 +20,7 @@ const TIERS = [
   { level: 3, minXp: 500, nameAr: 'دارس', nameEn: 'Learner', icon: 'menu_book', coinReward: 50 },
 ];
 
-function makeCtx(opts: { agg?: any; priorSameEntity?: number; xpSpentToday?: number } = {}) {
+function makeCtx(opts: { agg?: any; priorSameEntity?: number; xpSpentToday?: number; notifiedToday?: number } = {}) {
   const agg = opts.agg ?? { studentId: 's1', xp: 0, level: 1, coins: 0, bestRank: null };
   const created: any[] = [];
 
@@ -61,6 +61,8 @@ function makeCtx(opts: { agg?: any; priorSameEntity?: number; xpSpentToday?: num
       upsert: jest.fn().mockResolvedValue({ ...agg }),
     },
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1' }) },
+    // Gamification alerts are capped per day; the count is how that is enforced.
+    notification: { count: jest.fn().mockResolvedValue(opts.notifiedToday ?? 0) },
     rewardRedemption: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
     lesson: { findUnique: jest.fn() },
     lessonProgress: { count: jest.fn() },
@@ -174,6 +176,27 @@ describe('GamificationService', () => {
       expect.objectContaining({ where: { studentId: 's1', level: { lt: 2 } } }),
     );
     expect(notifications.create).toHaveBeenCalled();
+  });
+
+  it('stays quiet once the day’s alert budget is spent', async () => {
+    // Crossing a second tier in one sitting should not mean a second alert.
+    const { svc, notifications } = makeCtx({
+      agg: { studentId: 's1', xp: 90, level: 1, coins: 0 },
+      notifiedToday: 2,
+    });
+    const out = await svc.recordOrThrow(lessonEvent());
+    expect(out.leveledUp).toBe(true); // the promotion still happens…
+    expect(notifications.create).not.toHaveBeenCalled(); // …it is just not announced again
+  });
+
+  it('does not notify for each achievement — those are celebrated in the interface', async () => {
+    const { svc, achievements, notifications } = makeCtx();
+    achievements.evaluate.mockResolvedValueOnce([
+      { key: 'first_lesson', icon: 'star', titleAr: 'أول درس', titleEn: 'First lesson', xpReward: 0, coinReward: 0, titleKey: null },
+    ]);
+    const out = await svc.recordOrThrow(lessonEvent());
+    expect(out.achievements).toHaveLength(1);
+    expect(notifications.create).not.toHaveBeenCalled();
   });
 
   it('does not promote when the tier is unchanged', async () => {

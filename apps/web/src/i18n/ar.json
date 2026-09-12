@@ -103,7 +103,8 @@
     "studio": "استوديو الأكاديمية",
     "adminStudio": "استوديو الأكاديميات",
     "browse": "تصفّح الدورات",
-    "adminDevices": "أجهزة الاستقبال"
+    "adminDevices": "أجهزة الاستقبال",
+    "learning": "مركز التعلّم"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -1385,5 +1386,166 @@
     "smsCount": "{{count}} رسالة",
     "revoke": "اقطع الجهاز",
     "revokeConfirm": "متأكد إنك عايز تقطع الجهاز ده؟ هيحتاج كود جديد عشان يشتغل تاني."
+  },
+  "gamification": {
+    "title": "مركز التعلّم",
+    "subtitle": "مستواك وإنجازاتك وترتيبك، في مكان واحد.",
+    "level": "المستوى",
+    "levelShort": "مستوى {{n}}",
+    "xp": "نقطة",
+    "xpFull": "نقاط الخبرة",
+    "xpToNext": "{{count}} نقطة للمستوى التالي",
+    "maxLevel": "وصلت لأعلى مستوى",
+    "coins": "عملة",
+    "coinsFull": "عملات درسلي",
+    "coinsHint": "عملات للمكافآت داخل المنصّة فقط — مش فلوس حقيقية ومش قابلة للسحب.",
+    "rank": "الترتيب",
+    "rankShort": "#{{n}}",
+    "bestRank": "أفضل ترتيب: #{{n}}",
+    "streak": "سلسلة المواظبة",
+    "streakDays": "{{count}} يوم متتالي",
+    "streakAtRisk": "سلسلتك في خطر — أكمل درسًا النهاردة عشان تحافظ عليها.",
+    "streakFreezes": "تجميد متاح: {{count}}",
+    "weeklyGoal": "هدف الأسبوع",
+    "tabs": {
+      "overview": "نظرة عامة",
+      "achievements": "الإنجازات",
+      "leaderboard": "الصدارة",
+      "missions": "المهام",
+      "rewards": "المكافآت",
+      "activity": "السجل"
+    },
+    "missions": {
+      "title": "مهام النهاردة",
+      "weekly": "تحدّيات الأسبوع",
+      "empty": "مفيش مهام دلوقتي — ابدأ كورس عشان تظهرلك.",
+      "done": "تمّت",
+      "reward": "+{{xp}} نقطة · +{{coins}} عملة",
+      "allDone": "خلّصت مهام النهاردة كلها 🎉",
+      "templates": {
+        "DAILY_ONE_LESSON": "أكمل درسًا واحدًا",
+        "DAILY_TWO_LESSONS": "أكمل درسين",
+        "DAILY_PASS_QUIZ": "انجح في اختبار",
+        "DAILY_STRONG_QUIZ": "خُد الدرجة النهائية في اختبار",
+        "DAILY_ASSIGNMENT": "سلّم واجبًا",
+        "DAILY_LIVE": "احضر جلسة مباشرة",
+        "WEEKLY_FIVE_LESSONS": "أكمل ٥ دروس الأسبوع ده",
+        "WEEKLY_THREE_QUIZZES": "انجح في ٣ اختبارات",
+        "WEEKLY_FINISH_UNIT": "أنهِ وحدة كاملة",
+        "WEEKLY_PERFECT_QUIZ": "درجة نهائية في اختبار"
+      }
+    },
+    "achievements": {
+      "title": "الإنجازات",
+      "earnedOf": "{{earned}} من {{total}}",
+      "locked": "لسه مقفول",
+      "unlocked": "مفتوح",
+      "categories": {
+        "LEARNING": "تعلّم",
+        "PERFORMANCE": "أداء",
+        "CONSISTENCY": "مواظبة",
+        "COMPETITION": "منافسة",
+        "EXPLORATION": "استكشاف",
+        "SPECIAL": "مميّز"
+      }
+    },
+    "leaderboard": {
+      "title": "لوحة الصدارة",
+      "scope": {
+        "GLOBAL": "كل درسلي",
+        "ACADEMY": "أكاديميتي",
+        "COURSE": "الكورس"
+      },
+      "period": {
+        "WEEKLY": "الأسبوع",
+        "MONTHLY": "الشهر",
+        "ALLTIME": "الكل"
+      },
+      "you": "أنت",
+      "empty": "لسه مفيش حد في اللوحة دي — ابدأ أول درس وكن الأول.",
+      "toNext": "ناقصك {{count}} نقطة عشان توصل للمركز اللي فوقك.",
+      "division": "الدرجة",
+      "divisions": {
+        "BRONZE": "برونزي",
+        "SILVER": "فضي",
+        "GOLD": "ذهبي",
+        "PLATINUM": "بلاتيني",
+        "DIAMOND": "ماسي",
+        "MASTER": "أسطوري"
+      },
+      "resetsWeekly": "الترتيب الأسبوعي بيتصفّر كل سبت — كل أسبوع فرصة جديدة."
+    },
+    "rewards": {
+      "title": "متجر المكافآت",
+      "balance": "رصيدك: {{count}} عملة",
+      "buy": "استبدال",
+      "buying": "جارٍ…",
+      "cant": "مش كفاية",
+      "owned": "تم",
+      "pending": "في انتظار موافقة الإدارة",
+      "success": "تم الاستبدال 🎉",
+      "categories": {
+        "LEARNING": "تعلّم",
+        "PROFILE": "الملف الشخصي",
+        "PROGRESS": "التقدّم",
+        "REAL": "جوائز حقيقية"
+      }
+    },
+    "titles": {
+      "title": "الألقاب",
+      "active": "اللقب الحالي",
+      "none": "بدون لقب",
+      "pick": "اختر لقبك"
+    },
+    "activity": {
+      "title": "سجل النقاط",
+      "empty": "لسه مفيش نشاط."
+    },
+    "events": {
+      "LESSON_COMPLETED": "أكملت درسًا",
+      "QUIZ_COMPLETED": "أنهيت اختبارًا",
+      "QUIZ_PASSED": "نجحت في اختبار",
+      "QUIZ_PERFECT": "درجة نهائية في اختبار",
+      "UNIT_COMPLETED": "أنهيت وحدة",
+      "COURSE_COMPLETED": "أنهيت كورسًا",
+      "CERTIFICATE_EARNED": "حصلت على شهادة",
+      "ASSIGNMENT_SUBMITTED": "سلّمت واجبًا",
+      "ASSIGNMENT_GRADED_HIGH": "تقدير ممتاز في واجب",
+      "LIVE_ATTENDED": "حضرت جلسة مباشرة",
+      "DAILY_LOGIN": "دخول يومي",
+      "STREAK_MILESTONE": "وصلت لمحطة مواظبة",
+      "MISSION_COMPLETED": "أنهيت مهمة",
+      "WEEKLY_QUEST_COMPLETED": "أنهيت تحدّي الأسبوع",
+      "REVIEW_SUBMITTED": "كتبت تقييمًا",
+      "CHALLENGE_WON": "كسبت تحدّي",
+      "LEVEL_UP": "ترقية مستوى",
+      "ACHIEVEMENT_UNLOCKED": "إنجاز جديد",
+      "REWARD_REDEEMED": "استبدلت مكافأة"
+    },
+    "celebrate": {
+      "lessonDone": "خلّصت الدرس 🎉",
+      "quizDone": "نتيجتك جاهزة",
+      "levelUp": "وصلت للمستوى {{n}}!",
+      "levelUpBody": "{{name}} — استمر كده.",
+      "achievement": "إنجاز جديد!",
+      "mission": "مهمة خلصت!",
+      "next": "الدرس اللي بعده",
+      "keepGoing": "كمّل"
+    },
+    "stats": {
+      "title": "أرقامك",
+      "lessons": "درس مكتمل",
+      "quizzes": "اختبار ناجح",
+      "perfect": "درجة نهائية",
+      "courses": "كورس مكتمل",
+      "certificates": "شهادة",
+      "assignments": "واجب",
+      "live": "جلسة مباشرة",
+      "accuracy": "دقة الاختبارات"
+    },
+    "cta": {
+      "open": "افتح مركز التعلّم",
+      "viewAll": "شوف الكل"
+    }
   }
 }

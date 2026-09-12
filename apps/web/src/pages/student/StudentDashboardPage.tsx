@@ -4,14 +4,24 @@ import { Link } from 'react-router-dom';
 import type { ContinueWatchingItem, StudentProgressSummary } from '@darsly/shared-types';
 import { api } from '../../lib/api';
 import { duration } from '../../lib/format';
+import { useGamification, useLocalized } from '../../lib/gamification';
 import { useAuthStore } from '../../stores/auth';
 import { ProgressBar, Skeleton } from '../../components/ui';
 import { Reveal, Stagger, StaggerItem } from '../../components/motion';
+import { LevelCard, StreakAtRisk } from '../../components/gamification/LevelCard';
+import { LeaderboardPanel } from '../../components/gamification/LeaderboardPanel';
+import { MissionList } from '../../components/gamification/MissionList';
 
-/** Student home per the student_dashboard design: welcome + continue-watching
- *  rail + weekly progress ring + streak. */
+/**
+ * Student home, arranged around the loop rather than around the data model.
+ *
+ * In three seconds it should answer: where am I, what do I do next, and what
+ * happens if I do it. So the order is standing (level, streak, goal) → the
+ * single resume action → today's missions → the board → everything else.
+ */
 export default function StudentDashboardPage() {
   const { t } = useTranslation();
+  const L = useLocalized();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -19,10 +29,7 @@ export default function StudentDashboardPage() {
     queryKey: ['progress-summary'],
     queryFn: async () => (await api.get('/progress/summary')).data,
   });
-  const { data: badges } = useQuery<any[]>({
-    queryKey: ['my-badges'],
-    queryFn: async () => (await api.get('/me/badges')).data,
-  });
+  const { data: g } = useGamification();
   const { data: watching, isLoading } = useQuery<ContinueWatchingItem[]>({
     queryKey: ['continue-watching'],
     queryFn: async () => (await api.get('/progress/continue-watching')).data,
@@ -41,122 +48,127 @@ export default function StudentDashboardPage() {
 
   const pct = summary?.weeklyGoalPct ?? 0;
   const ringDeg = (pct / 100) * 360;
+  const resume = watching?.[0];
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
-      {/* Welcome banner — flat, editorial, start-accented */}
-      <Reveal className="mb-8 flex flex-wrap items-center justify-between gap-4 border-s-2 border-primary ps-5">
-        <div>
-          <h1 className="display text-on-surface">
-            {t('dashboardStudent.greeting', { name: user?.fullName?.split(' ')[0] ?? '' })}
-          </h1>
-          <p className="mt-1 text-on-surface-variant">{t('dashboardStudent.subtitle')}</p>
-        </div>
-        {summary && (
-          <div className="flex items-center gap-2 rounded-full border border-amber-600/15 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
-            <span className="material-symbols-outlined text-[20px]">local_fire_department</span>
-            {t('dashboardStudent.streak', { count: summary.currentStreak })}
-          </div>
-        )}
+      <Reveal className="mb-6 border-s-2 border-primary ps-5">
+        <h1 className="display text-on-surface">
+          {t('dashboardStudent.greeting', { name: user?.fullName?.split(' ')[0] ?? '' })}
+        </h1>
+        <p className="mt-1 text-on-surface-variant">{t('dashboardStudent.subtitle')}</p>
       </Reveal>
 
-      {/* Achievement badges */}
-      {badges && badges.length > 0 && (
-        <div className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-heading text-xl font-extrabold">{t('badges.title')}</h2>
-            <span className="text-sm text-outline">{t('badges.earnedOf', { earned: badges.filter((b) => b.earned).length, total: badges.length })}</span>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {badges.map((b) => (
-              <div
-                key={b.key}
-                title={t([`badges.items.${b.key}.desc`, b.desc])}
-                className={`flex min-w-[8.5rem] flex-col items-center gap-1.5 rounded-xl border p-4 text-center transition ${
-                  b.earned ? 'border-accent-300 bg-primary-fixed/50' : 'border-outline-variant bg-surface-container-low opacity-70'
-                }`}
-              >
-                <span className={`grid h-12 w-12 place-items-center rounded-full ${b.earned ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-outline'}`}>
-                  <span className="material-symbols-outlined" style={b.earned ? { fontVariationSettings: "'FILL' 1" } : undefined}>{b.earned ? b.icon : 'lock'}</span>
-                </span>
-                <span className="text-sm font-semibold">{t([`badges.items.${b.key}.title`, b.title])}</span>
-                {!b.earned && b.goal > 1 && (
-                  <span className="font-mono text-xs text-outline">{b.progress}/{b.goal}</span>
-                )}
-                {b.earned && <span className="text-[10px] font-bold uppercase tracking-wide text-primary">{t('badges.unlocked')}</span>}
-              </div>
-            ))}
-          </div>
+      {g && (
+        <div className="mb-6 space-y-4">
+          <StreakAtRisk g={g} />
+          <LevelCard g={g} />
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Continue watching */}
-        <section className="lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-heading text-2xl font-extrabold">{t('dashboardStudent.continueWatching')}</h2>
-            <Link to="/my-courses" className="text-sm font-bold text-primary hover:underline">
-              {t('dashboardStudent.viewAll')}
-            </Link>
-          </div>
-
-          {isLoading ? (
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Skeleton className="h-64 rounded-xl" />
-              <Skeleton className="h-64 rounded-xl" />
-            </div>
-          ) : !watching?.length ? (
-            <div className="card flex flex-col items-center gap-3 py-12 text-center">
-              <span className="material-symbols-outlined text-5xl text-outline-variant">play_circle</span>
-              <p className="font-bold text-on-surface-variant">{t('dashboardStudent.noContinue')}</p>
-              <Link to="/discover" className="btn-primary mt-2">{t('dashboardStudent.browse')}</Link>
-            </div>
-          ) : (
-            <Stagger className="grid gap-5 sm:grid-cols-2">
-              {watching.map((w) => (
-                <StaggerItem key={w.lessonId}>
-                <Link
-                  to={`/learn/${w.courseId}/${w.lessonId}`}
-                  className="card card-hover flex h-full flex-col overflow-hidden p-0"
-                >
-                  <div className="relative h-36 bg-surface-container-high">
-                    {w.thumbnailUrl && <img src={w.thumbnailUrl} alt="" className="h-full w-full object-cover" />}
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      <span className="grid h-12 w-12 place-items-center rounded-full bg-on-surface/60 text-surface backdrop-blur">
-                        <span className="material-symbols-outlined text-3xl">play_arrow</span>
-                      </span>
-                    </span>
-                    <span className="absolute bottom-2 end-2 rounded-md bg-on-surface/70 px-2 py-0.5 text-xs font-bold text-surface">
-                      {w.watchedPct}%
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col p-4">
-                    <p className="truncate text-xs text-primary">{w.courseTitle}</p>
-                    <h3 className="mb-1 truncate font-heading font-bold">{w.lessonTitle}</h3>
-                    <p className="mb-3 text-xs text-outline">{w.teacherName}</p>
-                    <div className="mt-auto">
-                      <ProgressBar pct={w.watchedPct} />
-                      <p className="mt-1 text-xs text-outline">
-                        {duration(Math.max(0, w.durationSec - w.lastPositionSec))} · {t('dashboardStudent.resume')}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-                </StaggerItem>
-              ))}
-            </Stagger>
+        <section className="space-y-6 lg:col-span-2">
+          {/* The one action the page exists to offer. */}
+          {resume && (
+            <Reveal>
+              <Link
+                to={`/learn/${resume.courseId}/${resume.lessonId}`}
+                className="card card-hover flex items-center gap-4 overflow-hidden"
+              >
+                <span className="relative hidden h-20 w-32 shrink-0 overflow-hidden rounded-xl bg-surface-container-high sm:block">
+                  {resume.thumbnailUrl && <img src={resume.thumbnailUrl} alt="" className="h-full w-full object-cover" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs text-primary">{t('dashboardStudent.continueWatching')}</span>
+                  <span className="block truncate font-heading text-lg font-extrabold">{resume.lessonTitle}</span>
+                  <span className="mt-1.5 block">
+                    <ProgressBar pct={resume.watchedPct} />
+                  </span>
+                  <span className="mt-1 block text-xs text-outline">
+                    {duration(Math.max(0, resume.durationSec - resume.lastPositionSec))} · {resume.courseTitle}
+                  </span>
+                </span>
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-on-primary">
+                  <span className="material-symbols-outlined text-3xl">play_arrow</span>
+                </span>
+              </Link>
+            </Reveal>
           )}
+
+          {g && g.missions.length > 0 && <MissionList missions={g.missions} kind="DAILY" />}
+
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-heading text-xl font-extrabold">{t('dashboardStudent.continueWatching')}</h2>
+              <Link to="/my-courses" className="text-sm font-bold text-primary hover:underline">
+                {t('dashboardStudent.viewAll')}
+              </Link>
+            </div>
+
+            {isLoading ? (
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Skeleton className="h-64 rounded-xl" />
+                <Skeleton className="h-64 rounded-xl" />
+              </div>
+            ) : !watching?.length ? (
+              <div className="card flex flex-col items-center gap-3 py-12 text-center">
+                <span className="material-symbols-outlined text-5xl text-outline-variant">play_circle</span>
+                <p className="font-bold text-on-surface-variant">{t('dashboardStudent.noContinue')}</p>
+                <Link to="/discover" className="btn-primary mt-2">{t('dashboardStudent.browse')}</Link>
+              </div>
+            ) : (
+              <Stagger className="grid gap-5 sm:grid-cols-2">
+                {watching.slice(resume ? 1 : 0).map((w) => (
+                  <StaggerItem key={w.lessonId}>
+                    <Link to={`/learn/${w.courseId}/${w.lessonId}`} className="card card-hover flex h-full flex-col overflow-hidden p-0">
+                      <div className="relative h-36 bg-surface-container-high">
+                        {w.thumbnailUrl && <img src={w.thumbnailUrl} alt="" className="h-full w-full object-cover" />}
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <span className="grid h-12 w-12 place-items-center rounded-full bg-on-surface/60 text-surface backdrop-blur">
+                            <span className="material-symbols-outlined text-3xl">play_arrow</span>
+                          </span>
+                        </span>
+                        <span className="absolute bottom-2 end-2 rounded-md bg-on-surface/70 px-2 py-0.5 text-xs font-bold text-surface">
+                          {w.watchedPct}%
+                        </span>
+                      </div>
+                      <div className="flex flex-1 flex-col p-4">
+                        <p className="truncate text-xs text-primary">{w.courseTitle}</p>
+                        <h3 className="mb-1 truncate font-heading font-bold">{w.lessonTitle}</h3>
+                        <p className="mb-3 text-xs text-outline">{w.teacherName}</p>
+                        <div className="mt-auto">
+                          <ProgressBar pct={w.watchedPct} />
+                          <p className="mt-1 text-xs text-outline">
+                            {duration(Math.max(0, w.durationSec - w.lastPositionSec))} · {t('dashboardStudent.resume')}
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                  </StaggerItem>
+                ))}
+                {watching.length === 1 && resume && (
+                  <Link to="/discover" className="card card-hover flex items-center justify-center gap-2 font-bold text-primary">
+                    <span className="material-symbols-outlined">travel_explore</span>
+                    {t('dashboardStudent.quickDiscover')}
+                  </Link>
+                )}
+              </Stagger>
+            )}
+          </div>
         </section>
 
-        {/* Weekly progress + stats */}
         <aside className="space-y-5">
           <div className="card">
-            <h2 className="mb-4 text-center font-heading text-xl font-extrabold">
+            <h2 className="mb-4 text-center font-heading text-lg font-extrabold">
               {t('dashboardStudent.weeklyProgress')}
             </h2>
-            <div className="mx-auto grid h-40 w-40 place-items-center rounded-full"
-              style={{ background: `conic-gradient(#4A32C9 ${ringDeg}deg, #E6E5DE ${ringDeg}deg)` }}>
-              <div className="grid h-32 w-32 place-items-center rounded-full bg-surface-container-lowest text-center">
+            <div
+              className="mx-auto grid h-36 w-36 place-items-center rounded-full"
+              style={{
+                background: `conic-gradient(rgb(var(--c-primary)) ${ringDeg}deg, rgb(var(--c-surface-container-high)) ${ringDeg}deg)`,
+              }}
+            >
+              <div className="grid h-28 w-28 place-items-center rounded-full bg-surface-container-lowest text-center">
                 <div>
                   <p className="font-heading text-3xl font-extrabold text-primary">{pct}%</p>
                   <p className="text-xs text-on-surface-variant">{t('dashboardStudent.weeklyGoal')}</p>
@@ -177,27 +189,31 @@ export default function StudentDashboardPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="card text-center">
-              <p className="font-heading text-3xl font-extrabold text-accent">{summary?.currentStreak ?? 0}</p>
-              <p className="text-xs text-on-surface-variant">{t('dashboardStudent.streakLabel')}</p>
-              <p className="mt-1 text-[11px] text-outline">
-                {t('dashboardStudent.longest', { count: summary?.longestStreak ?? 0 })}
-              </p>
-            </div>
-            <div className="card text-center">
-              <p className="font-heading text-3xl font-extrabold text-primary">{summary?.totalLessonsCompleted ?? 0}</p>
-              <p className="text-xs text-on-surface-variant">{t('dashboardStudent.completed')}</p>
-              <p className="mt-1 text-[11px] text-outline">
-                {summary?.activeCourses ?? 0} {t('dashboardStudent.activeCourses')}
-              </p>
-            </div>
-          </div>
+          <LeaderboardPanel scope="GLOBAL" compact />
 
-          <Link to="/discover" className="card card-hover flex items-center justify-center gap-2 font-bold text-primary">
-            <span className="material-symbols-outlined">travel_explore</span>
-            {t('dashboardStudent.quickDiscover')}
-          </Link>
+          {g && g.achievements.recent.length > 0 && (
+            <Link to="/learning" className="card card-hover">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-heading text-lg font-extrabold">{t('gamification.achievements.title')}</h2>
+                <span className="text-xs text-outline">
+                  {t('gamification.achievements.earnedOf', { earned: g.achievements.earned, total: g.achievements.total })}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                {g.achievements.recent.slice(0, 4).map((a) => (
+                  <span
+                    key={a.key}
+                    title={L({ ar: a.titleAr, en: a.titleEn })}
+                    className="grid h-11 w-11 place-items-center rounded-full bg-primary-fixed text-primary"
+                  >
+                    <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      {a.icon}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </Link>
+          )}
         </aside>
       </div>
     </div>

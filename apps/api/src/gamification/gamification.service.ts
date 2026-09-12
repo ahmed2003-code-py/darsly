@@ -37,6 +37,9 @@ import {
  *    from the action itself, so retries, duplicated heartbeats and
  *    double-submits collapse to one.
  */
+/** At most this many gamification alerts a day, however good the day was. */
+const DAILY_NOTIFICATION_CAP = 2;
+
 @Injectable()
 export class GamificationService {
   private readonly logger = new Logger(GamificationService.name);
@@ -232,16 +235,12 @@ export class GamificationService {
           coinsOverride: a.coinReward,
         });
       }
-      await this.notifications
-        .create({
-          userId: await this.userIdOf(studentId),
-          type: 'ANNOUNCEMENT',
-          title: `🏆 ${a.titleAr}`,
-          body: 'فتحت إنجازًا جديدًا في ملفك.',
-          meta: { kind: 'achievement', key: a.key, icon: a.icon, xp: a.xpReward, coins: a.coinReward },
-        })
-        .catch(() => undefined);
     }
+    // Deliberately no notification per achievement. The interface already
+    // celebrates these the moment they happen, and a student who finishes six
+    // lessons in a sitting would otherwise collect six alerts for something
+    // they just watched appear on screen. Notifications are for what happens
+    // while nobody is looking.
     return unlocked;
   }
 
@@ -272,15 +271,11 @@ export class GamificationService {
       });
     }
 
-    await this.notifications
-      .create({
-        userId: await this.userIdOf(agg.studentId),
-        type: 'ANNOUNCEMENT',
-        title: `🎉 وصلت للمستوى ${tier.level} — ${tier.nameAr}`,
-        body: tier.coinReward > 0 ? `كسبت ${tier.coinReward} عملة مع الترقية.` : 'استمر، أنت في طريقك.',
-        meta: { kind: 'level_up', level: tier.level, icon: tier.icon, coins: tier.coinReward },
-      })
-      .catch(() => undefined);
+    await this.notify(agg.studentId, {
+      title: `🎉 وصلت للمستوى ${tier.level} — ${tier.nameAr}`,
+      body: tier.coinReward > 0 ? `كسبت ${tier.coinReward} عملة مع الترقية.` : 'استمر، أنت في طريقك.',
+      meta: { kind: 'level_up', level: tier.level, icon: tier.icon, coins: tier.coinReward },
+    });
 
     const updated = await this.prisma.studentGamification.findUnique({ where: { studentId: agg.studentId } });
     return updated ? { agg: updated, level: tier.level, nameAr: tier.nameAr, nameEn: tier.nameEn } : null;
@@ -306,15 +301,11 @@ export class GamificationService {
       meta: { streak },
     });
     if (outcome.awarded) {
-      await this.notifications
-        .create({
-          userId: await this.userIdOf(studentId),
-          type: 'ANNOUNCEMENT',
-          title: `🔥 ${streak} يوم متتالي!`,
-          body: `مواظبتك وصّلتك لـ ${streak} يوم — كسبت ${outcome.xp} نقطة.`,
-          meta: { kind: 'streak', streak },
-        })
-        .catch(() => undefined);
+      await this.notify(studentId, {
+        title: `🔥 ${streak} يوم متتالي!`,
+        body: `مواظبتك وصّلتك لـ ${streak} يوم — كسبت ${outcome.xp} نقطة.`,
+        meta: { kind: 'streak', streak },
+      });
     }
     return outcome;
   }
@@ -407,6 +398,43 @@ export class GamificationService {
       create: { studentId },
       update: {},
     });
+  }
+
+  /**
+   * Send a gamification notification, or don't.
+   *
+   * Two rules keep this from becoming noise. Only genuinely rare events reach
+   * it at all — a level-up happens about ten times in a student's life, a
+   * streak milestone seven — and even those are capped per day, so a student
+   * who crosses three tiers in one sitting is congratulated once, not three
+   * times. The cap is counted from the notifications themselves, so it holds
+   * across restarts and across instances.
+   */
+  private async notify(
+    studentId: string,
+    input: { title: string; body: string; meta: Record<string, unknown> },
+  ): Promise<void> {
+    const userId = await this.userIdOf(studentId);
+    if (!userId) return;
+    try {
+      const todayCount = await this.prisma.notification.count({
+        where: {
+          userId,
+          createdAt: { gte: startOfCairoDay() },
+          meta: { path: ['gamified'], equals: true },
+        },
+      });
+      if (todayCount >= DAILY_NOTIFICATION_CAP) return;
+      await this.notifications.create({
+        userId,
+        type: 'ANNOUNCEMENT',
+        title: input.title,
+        body: input.body,
+        meta: { ...input.meta, gamified: true },
+      });
+    } catch {
+      // A missed congratulation is never worth failing a lesson over.
+    }
   }
 
   private async userIdOf(studentId: string): Promise<string> {

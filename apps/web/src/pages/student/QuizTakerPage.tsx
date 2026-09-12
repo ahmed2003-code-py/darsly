@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { GAMIFICATION_KEY } from '../../lib/gamification';
+import { RewardSummary } from '../../components/gamification/RewardBurst';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
 
 export default function QuizTakerPage() {
@@ -22,6 +24,10 @@ export default function QuizTakerPage() {
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['quiz', lessonId] });
+      if (data?.gamification?.awarded) {
+        qc.invalidateQueries({ queryKey: GAMIFICATION_KEY });
+        qc.invalidateQueries({ queryKey: ['progress-summary'] });
+      }
     },
   });
 
@@ -63,6 +69,15 @@ export default function QuizTakerPage() {
               <p className="mt-1 font-bold">{result.passed ? t('assess.take.passed') : t('assess.take.failed')}</p>
             </>
           )}
+        </div>
+      )}
+
+      {/* What the attempt earned. Shown for a failed attempt too — finishing a
+          quiz is work, and the page should say so rather than only rewarding
+          the students who already knew the answers. */}
+      {done && result.gamification?.awarded && (
+        <div className="mb-6">
+          <RewardSummary outcome={result.gamification} />
         </div>
       )}
 

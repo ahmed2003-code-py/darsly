@@ -31,6 +31,7 @@ const LiveSessionsPage = lazy(() => import('./pages/student/LiveSessionsPage'));
 const SavedCoursesPage = lazy(() => import('./pages/student/SavedCoursesPage'));
 const LessonRouter = lazy(() => import('./pages/student/LessonRouter'));
 const WalletPage = lazy(() => import('./pages/student/WalletPage'));
+const LearningCenterPage = lazy(() => import('./pages/student/LearningCenterPage'));
 const AdminWalletPage = lazy(() => import('./pages/admin/AdminWalletPage'));
 const AdminDevicesPage = lazy(() => import('./pages/admin/AdminDevicesPage'));
 const StudentDashboardPage = lazy(() => import('./pages/student/StudentDashboardPage'));
@@ -104,6 +105,7 @@ export default function App() {
       <Route path="/live" element={<RequireAuth role={Role.STUDENT}><LiveSessionsPage /></RequireAuth>} />
       <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
       <Route path="/wallet" element={<RequireAuth role={Role.STUDENT}><WalletPage /></RequireAuth>} />
+      <Route path="/learning" element={<RequireAuth role={Role.STUDENT}><LearningCenterPage /></RequireAuth>} />
       <Route path="/certificate/:token" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />

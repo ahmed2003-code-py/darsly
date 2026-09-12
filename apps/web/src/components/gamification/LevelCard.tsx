@@ -1,0 +1,103 @@
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+import { compactNum, GamificationSnapshot, useLocalized } from '../../lib/gamification';
+
+/**
+ * The one block that answers "how am I doing?" — level, progress to the next
+ * one, streak, rank and coins. It is the top of the dashboard and the top of
+ * the learning centre, so it is written once and used in both.
+ */
+export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: boolean }) {
+  const { t } = useTranslation();
+  const L = useLocalized();
+  const levelName = L({ ar: g.level.nameAr, en: g.level.nameEn });
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-4">
+        <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-primary-fixed">
+          <span className="material-symbols-outlined text-[30px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+            {g.level.icon}
+          </span>
+          <span className="absolute -bottom-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-surface-container-lowest bg-primary px-1 font-heading text-xs font-extrabold text-on-primary">
+            {g.level.level}
+          </span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-heading text-lg font-extrabold leading-tight">{levelName}</p>
+          <p className="text-sm text-on-surface-variant">
+            {compactNum(g.xp)} {t('gamification.xp')}
+            {g.activeTitle && <span className="text-primary"> · {g.activeTitle}</span>}
+          </p>
+        </div>
+        {!compact && (
+          <Link to="/learning" className="btn-ghost hidden py-2 text-sm sm:inline-flex">
+            {t('gamification.cta.open')}
+          </Link>
+        )}
+      </div>
+
+      {/* Progress to the next level. At the top tier the bar reads full rather
+          than pretending there is more to climb. */}
+      <div className="mt-4">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-high">
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-500 ease-premium"
+            style={{ width: `${g.level.pct}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-xs text-outline">
+          {g.level.nextLevel
+            ? t('gamification.xpToNext', { count: g.level.xpForNext })
+            : t('gamification.maxLevel')}
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2 border-t border-outline-variant/50 pt-4 text-center">
+        <Stat icon="local_fire_department" value={g.streak.current} label={t('gamification.streak')} tone="amber" />
+        <Stat icon="leaderboard" value={`#${g.rank.weekly}`} label={t('gamification.rank')} />
+        <Stat icon="toll" value={compactNum(g.coins)} label={t('gamification.coins')} tone="amber" />
+      </div>
+    </div>
+  );
+}
+
+function Stat({ icon, value, label, tone }: { icon: string; value: string | number; label: string; tone?: 'amber' }) {
+  return (
+    <div>
+      <span
+        className={`material-symbols-outlined text-[20px] ${tone === 'amber' ? 'text-amber-600' : 'text-primary'}`}
+        style={{ fontVariationSettings: "'FILL' 1" }}
+      >
+        {icon}
+      </span>
+      <p className="font-heading text-lg font-extrabold leading-none">{value}</p>
+      <p className="mt-0.5 text-[11px] text-outline">{label}</p>
+    </div>
+  );
+}
+
+/**
+ * The streak warning.
+ *
+ * Shown only when there is a real streak and nothing has counted toward it
+ * today — never as a permanent nag, and never invented to create urgency where
+ * none exists.
+ */
+export function StreakAtRisk({ g }: { g: GamificationSnapshot }) {
+  const { t } = useTranslation();
+  if (!g.streak.atRisk) return null;
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-amber-600/20 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+        local_fire_department
+      </span>
+      <span className="flex-1 font-semibold">{t('gamification.streakAtRisk')}</span>
+      {g.streak.freezes > 0 && (
+        <span className="hidden shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold sm:block">
+          {t('gamification.streakFreezes', { count: g.streak.freezes })}
+        </span>
+      )}
+    </div>
+  );
+}

@@ -9,6 +9,9 @@ import { imageToDataUrl } from '../lib/image';
 import { setLanguage } from '../i18n';
 import { useAuthStore } from '../stores/auth';
 import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../components/ui';
+import { Role } from '@darsly/shared-types';
+import { GAMIFICATION_KEY, useGamification, useLocalized } from '../lib/gamification';
+import { LevelCard } from '../components/gamification/LevelCard';
 
 /** A titled block, so the page reads as a set of decisions rather than a form. */
 function Section({
@@ -256,6 +259,10 @@ export default function ProfilePage() {
           </div>
         </section>
 
+        {/* The learning half of a profile. A student's identity here is what
+            they have learned, not only what their account settings say. */}
+        <LearningSection />
+
         {/* Everything that is settings rather than identity. Two-up once there
             is room for it — these blocks are three rows each, not articles. */}
         <div className="grid gap-4 sm:gap-5 xl:grid-cols-2">
@@ -346,6 +353,70 @@ export default function ProfilePage() {
         </Section>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Level, streak and title, for students only.
+ *
+ * Teachers and admins have no gamification profile — rendering an empty level
+ * card for them would be worse than rendering nothing.
+ */
+function LearningSection() {
+  const { t } = useTranslation();
+  const L = useLocalized();
+  const qc = useQueryClient();
+  const role = useAuthStore((s) => s.user?.role);
+  const isStudent = role === Role.STUDENT;
+  const { data: g } = useGamification(isStudent);
+
+  const setTitle = useMutation({
+    mutationFn: async (titleKey: string | null) =>
+      (await api.post('/student/gamification/title', { titleKey })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: GAMIFICATION_KEY }),
+  });
+
+  if (!isStudent || !g) return null;
+
+  return (
+    <div className="mb-4 space-y-4 sm:mb-5">
+      <LevelCard g={g} />
+
+      {g.titles.length > 0 && (
+        <div className="card">
+          <h2 className="mb-1 font-heading font-extrabold">{t('gamification.titles.title')}</h2>
+          <p className="mb-3 text-sm text-on-surface-variant">{t('gamification.titles.pick')}</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setTitle.mutate(null)}
+              className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                !g.activeTitle ? 'border-primary bg-primary-fixed text-primary' : 'border-outline-variant text-on-surface-variant'
+              }`}
+            >
+              {t('gamification.titles.none')}
+            </button>
+            {g.titles.map((ti) => {
+              const label = L({ ar: ti.labelAr, en: ti.labelEn });
+              const on = g.activeTitle === label || g.activeTitle === ti.key;
+              return (
+                <button
+                  key={ti.key}
+                  type="button"
+                  onClick={() => setTitle.mutate(ti.key)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                    on ? 'border-primary bg-primary-fixed text-primary' : 'border-outline-variant text-on-surface-variant'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">{ti.icon}</span>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

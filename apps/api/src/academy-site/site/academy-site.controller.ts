@@ -77,6 +77,13 @@ export class AcademySiteController {
     return this.site.rollback(ctx.academyId, dto.snapshotId, ctx.userId);
   }
 
+  @Post('html/unlock')
+  @AcademyStaff('academy.manage')
+  @ApiOperation({ summary: '[staff] Hand a hand-authored page back to the studio and publish' })
+  unlockHtml(@CurrentAcademy() ctx: AcademyContext) {
+    return this.site.unlockHtml(ctx.academyId, ctx.userId);
+  }
+
   @Post('snapshots/:id/publish')
   @AcademyStaff('academy.manage')
   @ApiOperation({ summary: '[staff] Publish a specific version live' })

@@ -1234,7 +1234,11 @@
       },
       "designNote": "About this design",
       "blocking": "Fix these before publishing",
-      "suggestions": "{{n}} suggestion(s) to improve the page"
+      "suggestions": "{{n}} suggestion(s) to improve the page",
+      "lockedTitle": "This page is hand-authored",
+      "lockedHint": "The live page was written by hand, so publishing a version from the studio bumps the version and changes nothing on screen. Hand the page to the studio and it will publish your current version straight away.",
+      "unlockBtn": "Hand the page to the studio",
+      "confirmUnlock": "The hand-authored page will be replaced by the studio's current version and published straight away. Sure?"
     },
     "wizard": {
       "skip": "Skip",

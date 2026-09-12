@@ -76,7 +76,14 @@ export class AcademySiteService {
 
     return {
       status: site?.status ?? 'DRAFT',
-      hasDraft: !!site?.draftDoc,
+      // "There is something newer to push", not "a draft row exists". Every
+      // publish leaves the draft in place, so the second reading meant the
+      // banner never cleared — a teacher published, saw the same "you have
+      // unpublished changes" line, and concluded the button had done nothing.
+      hasDraft: !!site?.draftDoc && JSON.stringify(site.draftDoc) !== JSON.stringify(site.publishedDoc),
+      /// A hand-authored page stands in for the generated one, so nothing the
+      /// studio publishes can change how it looks. The studio has to say so.
+      htmlLocked: site?.htmlLocked ?? false,
       publishedAt: site?.publishedAt ?? null,
       version: site?.version ?? 0,
       moderationApproved: site?.moderationApproved ?? false,
@@ -256,6 +263,28 @@ export class AcademySiteService {
     const published = await this.compileAndPublish(site.id, academyId, parsed.data!);
     await this.log(actorUserId, 'site.publish', site.id, { version: published.version });
     return published;
+  }
+
+  /**
+   * Hand a hand-authored page back to the studio.
+   *
+   * While `htmlLocked` is set, publishing only bumps the version: there is no
+   * compiled markup to replace, because the live page is one someone wrote by
+   * hand. That is a reasonable thing to protect and an unreasonable thing to
+   * do silently — so it is undone on purpose, by the owner, and the current
+   * document is compiled and published straight away, which is the whole point
+   * of asking for it.
+   */
+  async unlockHtml(academyId: string, actorUserId: string): Promise<AcademySite> {
+    const site = await this.getOrCreate(academyId);
+    if (!site.htmlLocked) throw new ConflictException('This page is already built by the studio');
+    const doc = site.draftDoc ?? site.publishedDoc;
+    if (!doc) throw new BadRequestException('There is no page to build from yet — generate one first');
+    const parsed = parseSiteDocument(doc);
+    if (!parsed.success) throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
+    await this.prisma.academySite.update({ where: { id: site.id }, data: { htmlLocked: false } });
+    await this.log(actorUserId, 'site.html.unlock', site.id, {});
+    return this.publish(academyId, actorUserId);
   }
 
   async unpublish(academyId: string, actorUserId: string): Promise<AcademySite> {

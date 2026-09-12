@@ -72,6 +72,10 @@ export default function PublishTab({ slug }: { slug: string }) {
     mutationFn: async (snapshotId: string) => (await api.post('/academy/site/rollback', { snapshotId })).data,
     onSuccess: refresh,
   });
+  const unlock = useMutation({
+    mutationFn: async () => (await api.post('/academy/site/html/unlock')).data,
+    onSuccess: refresh,
+  });
   const removeSnap = useMutation({
     mutationFn: async (snapshotId: string) => (await api.delete(`/academy/site/snapshots/${snapshotId}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-snapshots'] }),
@@ -125,6 +129,27 @@ export default function PublishTab({ slug }: { slug: string }) {
             {ov.quality.warnings.map((w) => <li key={w}>{w}</li>)}
           </ul>
         </details>
+      )}
+
+      {/* The one thing that made publishing look broken. A hand-authored page
+          stands in for the generated one, so every publish bumped the version
+          and changed nothing on screen — with nothing anywhere saying why. */}
+      {ov?.htmlLocked && (
+        <div className="card border-s-4 border-s-amber-500 bg-amber-50/60">
+          <p className="mb-1 flex items-center gap-2 text-sm font-bold">
+            <span className="material-symbols-outlined text-[18px] text-amber-600">lock</span>
+            {t('studio.publish.lockedTitle')}
+          </p>
+          <p className="text-sm text-on-surface-variant">{t('studio.publish.lockedHint')}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button className="btn-primary" disabled={unlock.isPending}
+              onClick={() => { if (confirm(t('studio.publish.confirmUnlock'))) unlock.mutate(); }}>
+              <span className="material-symbols-outlined text-[18px]">lock_open</span>
+              {unlock.isPending ? t('studio.publish.publishing') : t('studio.publish.unlockBtn')}
+            </button>
+          </div>
+          <ErrorNote error={unlock.error} />
+        </div>
       )}
 
       {/* Status hero */}

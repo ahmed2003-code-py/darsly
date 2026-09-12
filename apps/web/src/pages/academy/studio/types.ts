@@ -16,6 +16,8 @@ export interface Facts {
 export type SiteStatus = 'DRAFT' | 'PENDING_MODERATION' | 'PUBLISHED' | 'REJECTED';
 
 export interface SiteOverview {
+  /** The live page was written by hand, so the studio cannot change how it looks. */
+  htmlLocked?: boolean;
   status: SiteStatus;
   hasDraft: boolean;
   publishedAt: string | null;

@@ -53,6 +53,8 @@ model User {
   // on the global role. Additive — existing tenantId relations are untouched.
   ownedAcademies     Academy[]           @relation("academyOwner")
   academyMemberships AcademyMembership[]
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt          DateTime?
 }
 
 // ─────────────────────────── Academy (Workspace) ───────────────────────────
@@ -165,6 +167,8 @@ model AcademyMembership {
   joinedAt    DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt   DateTime?
 
   @@unique([userId, academyId])
   @@index([academyId, role, status])
@@ -265,6 +269,8 @@ model TeacherProfile {
   liveSessions   LiveSession[]
   reviews        Review[]
   chatThreads    ChatThread[]
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt      DateTime?
 }
 
 model StudentProfile {
@@ -306,6 +312,8 @@ model StudentProfile {
   missions        StudentMission[]
   leaderboard     LeaderboardEntry[]
   redemptions     RewardRedemption[]
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt       DateTime?
 }
 
 // A student's saved / wishlisted course.
@@ -571,7 +579,9 @@ model Enrollment {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  payments Payment[]
+  payments  Payment[]
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   @@unique([studentId, courseId])
   @@index([tenantId, status])
@@ -761,6 +771,8 @@ model Payment {
 
   ledgerTransaction LedgerTransaction?
   invoice           Invoice?
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt         DateTime?
 
   @@index([tenantId, status, createdAt])
   @@index([studentId, status])
@@ -827,7 +839,9 @@ model LedgerTransaction {
   payout      PayoutRequest? @relation(fields: [payoutId], references: [id])
   createdAt   DateTime       @default(now())
 
-  entries LedgerEntry[]
+  entries   LedgerEntry[]
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 }
 
 enum LedgerDirection {
@@ -848,6 +862,8 @@ model LedgerEntry {
   amountCents   Int // always positive; direction carries the sign
   tenantId      String?
   createdAt     DateTime          @default(now())
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt     DateTime?
 
   @@index([account])
   @@index([tenantId])
@@ -882,6 +898,8 @@ model WalletTransaction {
   lessonId    String?
   ledgerTxnId String?
   createdAt   DateTime       @default(now())
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt   DateTime?
 
   @@index([studentId, createdAt])
 }
@@ -912,6 +930,8 @@ model WalletTopup {
   reviewedAt     DateTime?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt      DateTime?
 
   @@index([status, createdAt])
   @@index([studentId, createdAt])
@@ -983,17 +1003,21 @@ model PayoutRequest {
   createdAt   DateTime     @default(now())
 
   ledgerTransaction LedgerTransaction?
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt         DateTime?
 
   @@index([status, createdAt])
 }
 
 model Invoice {
-  id        String   @id @default(cuid())
-  paymentId String   @unique
-  payment   Payment  @relation(fields: [paymentId], references: [id])
-  serial    String   @unique // e.g. DRS-INV-2026-000042
+  id        String    @id @default(cuid())
+  paymentId String    @unique
+  payment   Payment   @relation(fields: [paymentId], references: [id])
+  serial    String    @unique // e.g. DRS-INV-2026-000042
   pdfKey    String? // storage key of the rendered RTL PDF
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 }
 
 // ─────────────────────────── Assessment ────────────────────────────────────
@@ -1089,8 +1113,10 @@ model Review {
   course    Course?        @relation(fields: [courseId], references: [id])
 
   rating    Int // 1–5
-  comment   String   @default("")
-  createdAt DateTime @default(now())
+  comment   String    @default("")
+  createdAt DateTime  @default(now())
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   @@unique([studentId, tenantId, courseId])
   @@index([tenantId])
@@ -1222,6 +1248,8 @@ model Certificate {
   verifyToken String?        @unique
   pdfKey      String?
   issuedAt    DateTime       @default(now())
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt   DateTime?
 
   @@unique([studentId, courseId])
 }
@@ -1332,6 +1360,8 @@ model AcademySite {
   updatedAt          DateTime          @updatedAt
 
   snapshots AcademySiteSnapshot[]
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
 
   @@index([status])
 }

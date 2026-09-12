@@ -77,8 +77,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (available && ids.users.length) {
-    // StudentProfile and everything hanging off it cascade from the user.
-    await prisma.user.deleteMany({ where: { id: { in: ids.users } } }).catch(() => undefined);
+    // A real delete, on purpose. `User` is a soft-delete model now, so
+    // `deleteMany` would only stamp `deletedAt` and leave every QA row in the
+    // database for ever. Raw SQL bypasses the middleware; the FK cascade takes
+    // StudentProfile and everything hanging off it.
+    await prisma
+      .$executeRawUnsafe(`DELETE FROM "User" WHERE id = ANY($1::text[])`, ids.users)
+      .catch(() => undefined);
   }
   await prisma.$disconnect().catch(() => undefined);
 });

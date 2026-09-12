@@ -11,6 +11,30 @@ const SOFT_DELETE_MODELS = new Set([
   'Coupon',
   'PayoutMethodSaved',
   'LiveSession',
+  // Academy carried the column from the start but was never wired in here, so
+  // deleting one was a hard delete despite the schema saying otherwise.
+  'Academy',
+  // Accounts and the records that hang off them. Removing a person from the
+  // platform must never destroy what they did — it hides them, reversibly.
+  'User',
+  'TeacherProfile',
+  'StudentProfile',
+  'Enrollment',
+  'Review',
+  'Certificate',
+  // Money. Balances aggregate over LedgerEntry, so the entry has to be
+  // filtered too or a removed academy would keep its balance.
+  'Payment',
+  'Invoice',
+  'LedgerTransaction',
+  'LedgerEntry',
+  'WalletTransaction',
+  // These three surface in admin queues — a pending top-up or an unmoderated
+  // site belonging to a removed academy would otherwise sit there forever.
+  'WalletTopup',
+  'PayoutRequest',
+  'AcademySite',
+  'AcademyMembership',
 ]);
 
 const READ_ACTIONS = new Set([

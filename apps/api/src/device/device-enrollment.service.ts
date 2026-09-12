@@ -23,9 +23,15 @@ import { DeviceTokenService, DeviceTokens } from './device-token.service';
 export class DeviceEnrollmentService {
   private readonly logger = new Logger(DeviceEnrollmentService.name);
 
-  /** Unambiguous alphabet: no O/0, I/1, or similar look-alikes to misread aloud. */
-  private static readonly ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  private static readonly GROUP = 4;
+  /**
+   * Digits only. A mixed-case alphabet was chosen to pack more entropy into
+   * fewer characters, but the code is typed on a phone keypad by someone
+   * reading it off a screen — and "is that a 5 or an S" costs more than the
+   * bits save. Six digits is a million codes against a 15-minute window and a
+   * 10-attempt cap, which is the real defence; the code is not a password.
+   */
+  private static readonly ALPHABET = '0123456789';
+  private static readonly GROUP = 3;
   private static readonly TTL_SECONDS = 15 * 60;
   /** Active codes are few and short-lived; bound the verify scan regardless. */
   private static readonly MAX_ACTIVE_SCAN = 20;
@@ -148,7 +154,7 @@ export class DeviceEnrollmentService {
     return { ok: true };
   }
 
-  /** e.g. "K7QM-3XPD" — grouped for reading aloud without mistakes. */
+  /** e.g. "418-207" — grouped for reading aloud without mistakes. */
   private generateCode(): string {
     const pick = () =>
       Array.from(

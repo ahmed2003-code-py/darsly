@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The night counterpart of the launch/window theme. Without it the app kept
+      a light window on a phone set to dark: Compose drew its dark surface, but
+      the window underneath stayed white.
+    -->
+    <style name="Theme.DarslySmsListener" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/surface</item>
+        <item name="android:windowBackground">@color/surface</item>
+    </style>
+</resources>

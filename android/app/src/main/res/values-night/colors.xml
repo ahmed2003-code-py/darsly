@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches DarkColors.background in ui/theme/Theme.kt: the window behind
+         Compose has to be the same shade, or the app flashes white on launch
+         and shows a pale rim behind the content on a dark phone. -->
+    <color name="surface">#101418</color>
+    <color name="brand_primary">#8AB4F8</color>
+</resources>

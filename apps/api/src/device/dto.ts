@@ -26,9 +26,12 @@ export class MintEnrollmentCodeDto {
 
 /** The handset redeems that code. It never chooses its own phone number. */
 export class DeviceEnrollDto {
-  @ApiProperty({ example: 'K7QM-3XPD' })
+  // The floor is 6 because that is the code's own length; the service
+  // normalises separators and case before comparing, so anything typed with or
+  // without the dash still lands inside this range.
+  @ApiProperty({ example: '418-207' })
   @IsString()
-  @Length(8, 20)
+  @Length(6, 20)
   code: string;
 
   @ApiPropertyOptional({ example: 'Pixel 7' })

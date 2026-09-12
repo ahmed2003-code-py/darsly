@@ -13,7 +13,7 @@ plugins {
 fun prop(name: String, fallback: String): String =
     (project.findProperty(name) as String?)?.trim().takeUnless { it.isNullOrEmpty() } ?: fallback
 
-val releaseBaseUrl = prop("darslyApiBaseUrl", "https://api.darsly.app/api/v1/")
+val releaseBaseUrl = prop("darslyApiBaseUrl", "https://darslyapi-production.up.railway.app/api/v1/")
 val debugBaseUrl = prop("darslyApiBaseUrlDebug", "http://10.0.2.2:4000/api/v1/")
 
 android {
@@ -40,8 +40,13 @@ android {
             // network_security_config.xml, which permits it for debug builds.
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // R8 takes the APK from ~11 MB to ~1.5 MB, which is the point of it,
+            // but an unreadable stack trace and a build that "looks too small to
+            // be the whole app" are both easier to settle with it off:
+            // -PdarslyMinify=false builds the same release — same production
+            // URL, same signing, same everything — just unshrunk.
+            isMinifyEnabled = prop("darslyMinify", "true").toBoolean()
+            isShrinkResources = isMinifyEnabled
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "API_BASE_URL", "\"$releaseBaseUrl\"")
         }

@@ -102,7 +102,8 @@
     "academy": "Academy",
     "studio": "Academy Studio",
     "adminStudio": "Academy Studio",
-    "browse": "Browse courses"
+    "browse": "Browse courses",
+    "adminDevices": "Listener devices"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1349,5 +1350,28 @@
     "all": "All",
     "close": "Close",
     "show": "Show results"
+  },
+  "adminDevices": {
+    "title": "Listener devices",
+    "subtitle": "Link the phone that receives transfer messages, or cut one off",
+    "newCode": "New enrollment code",
+    "phone": "Phone number",
+    "label": "Label (optional)",
+    "labelHint": "Front-desk phone",
+    "generate": "Generate code",
+    "generateAgain": "Generate a new one",
+    "codeFor": "Code for {{phone}}",
+    "expiresIn": "Expires in {{time}}",
+    "expired": "Code expired",
+    "copy": "Copy",
+    "copied": "Copied ✓",
+    "onceHint": "Shown once, usable once. If it is lost, generate another.",
+    "enrolled": "Enrolled devices",
+    "noDevices": "No devices enrolled",
+    "lastSeen": "Last seen: {{date}}",
+    "revokedAt": "Revoked on {{date}}",
+    "smsCount": "{{count}} messages",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke this device? It will need a new code to work again."
   }
 }

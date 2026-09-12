@@ -54,3 +54,42 @@ export function imageToDataUrl(
     img.src = url;
   });
 }
+
+/**
+ * The same resize, handed back as a file ready to upload.
+ *
+ * A photo off a modern phone is eight to twelve megapixels — several megabytes
+ * of detail nobody will ever see in a logo slot. Sending it whole means the
+ * teacher watches a progress bar for the time it takes to push all of it over
+ * a mobile connection, and the server then throws most of it away. Shrinking
+ * first turns that into a fraction of a second.
+ *
+ * Anything that is not an image — the gallery takes video too — comes back
+ * untouched, as does a file already small enough that re-encoding would cost
+ * quality for nothing.
+ */
+const SMALL_ENOUGH_BYTES = 400 * 1024;
+
+export async function imageForUpload(
+  file: File,
+  opts: { maxW: number; maxH: number; quality?: number } = { maxW: 2000, maxH: 2000 },
+): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  // An SVG is instructions, not pixels; drawing it to a canvas would rasterise
+  // a logo that was chosen precisely because it does not have a resolution.
+  if (file.type === 'image/svg+xml') return file;
+  if (file.size <= SMALL_ENOUGH_BYTES) return file;
+  try {
+    const dataUrl = await imageToDataUrl(file, opts);
+    const blob = await (await fetch(dataUrl)).blob();
+    // No gain is not worth a re-encode — a photo already well compressed can
+    // come out of the canvas larger than it went in.
+    if (blob.size >= file.size) return file;
+    const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.' + ext, { type: blob.type });
+  } catch {
+    // A file the canvas would not take is still a file the server might; let it
+    // decide rather than failing the upload here.
+    return file;
+  }
+}

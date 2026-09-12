@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, apiOrigin } from '../../../lib/api';
+import { imageForUpload } from '../../../lib/image';
 import { ErrorNote, Spinner } from '../../../components/ui';
 import type { Media, MediaKind } from './types';
 
@@ -25,7 +26,10 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
     mutationFn: async ({ kind, file }: { kind: MediaKind; file: File }) => {
       const fd = new FormData();
       fd.append('kind', kind);
-      fd.append('file', file);
+      // Shrunk here rather than sent whole. A phone photo is several megabytes
+      // of detail a logo slot will never show, and every one of them has to
+      // cross a mobile connection before the server discards most of it.
+      fd.append('file', await imageForUpload(file));
       return (await api.post('/academy/media', fd)).data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-media'] }),
@@ -37,7 +41,7 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
       for (const file of files) {
         const fd = new FormData();
         fd.append('kind', kind);
-        fd.append('file', file);
+        fd.append('file', await imageForUpload(file));
         await api.post('/academy/media', fd);
       }
     },
@@ -54,6 +58,10 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
   const media = list.data ?? [];
   const byKind = (k: MediaKind) => media.filter((m) => m.kind === k);
   const doUpload = (kind: MediaKind, file?: File) => file && upload.mutate({ kind, file });
+  // Which slot is actually busy. One shared `isPending` meant uploading a logo
+  // put every other slot into "uploading…" as well — three fields claiming to
+  // be doing something when one of them was.
+  const busyKind = upload.isPending ? upload.variables?.kind : undefined;
   const galleryCount = byKind('GALLERY').length;
   const doUploadGallery = (files: File[]) => {
     const room = Math.max(0, 12 - galleryCount);
@@ -70,11 +78,11 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
       </div>
 
       <SingleSlot title={t('studio.media.logo')} item={byKind('LOGO')[0]}
-        onUpload={(f) => doUpload('LOGO', f)} onRemove={(id) => remove.mutate(id)} busy={upload.isPending} />
+        onUpload={(f) => doUpload('LOGO', f)} onRemove={(id) => remove.mutate(id)} busy={busyKind === 'LOGO'} />
       <SingleSlot title={t('studio.media.cover')} item={byKind('COVER')[0]}
-        onUpload={(f) => doUpload('COVER', f)} onRemove={(id) => remove.mutate(id)} busy={upload.isPending} />
+        onUpload={(f) => doUpload('COVER', f)} onRemove={(id) => remove.mutate(id)} busy={busyKind === 'COVER'} />
       <GallerySlot items={byKind('GALLERY')}
-        onUpload={doUploadGallery} onRemove={(id) => remove.mutate(id)} busy={upload.isPending || uploadMany.isPending} />
+        onUpload={doUploadGallery} onRemove={(id) => remove.mutate(id)} busy={busyKind === 'GALLERY' || uploadMany.isPending} />
 
       {onNext && (
         <div className="flex justify-end">

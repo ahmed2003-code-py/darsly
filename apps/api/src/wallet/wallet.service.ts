@@ -152,8 +152,12 @@ export class WalletService {
    * against a double-approve race (conditional updateMany), and the ledger credit
    * + the WalletTransaction mirror commit with it. Idempotent by construction —
    * a second caller matches zero rows and no funds are added twice.
+   *
+   * `adminId` is null when the listener matched the transfer itself, which is
+   * the path a student's top-up normally takes: `reviewedById` then records
+   * that nobody reviewed it, rather than crediting a person who never looked.
    */
-  async approveTopup(adminId: string, id: string) {
+  async approveTopup(adminId: string | null, id: string) {
     const topup = await this.prisma.walletTopup.findUnique({ where: { id } });
     if (!topup) throw new NotFoundException('Top-up not found');
     if (topup.status !== 'PENDING') {

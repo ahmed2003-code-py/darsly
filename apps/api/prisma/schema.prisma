@@ -757,6 +757,10 @@ model PaymentEvent {
   deviceId         String?
   status           PaymentEventStatus @default(UNMATCHED)
   matchedPaymentId String?
+  // A transfer can settle a course payment OR a wallet top-up — the two live in
+  // different tables, so which one this event credited needs its own column to
+  // stay traceable. Exactly one of the two is ever set.
+  matchedTopupId   String?
   note             String? // why unmatched/ambiguous, or manual-match actor
   // Stable transfer identity (provider + normalized reference + amount). A replayed
   // notification collides on this unique key and is rejected as a DUPLICATE rather

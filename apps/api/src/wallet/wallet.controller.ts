@@ -5,6 +5,7 @@ import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { LIMITS } from '../common/validation';
+import { PaymentMatchingService } from '../payments/payment-matching.service';
 import { WalletService } from './wallet.service';
 
 class SubmitTopupDto {
@@ -21,7 +22,10 @@ class RejectDto {
 @ApiBearerAuth()
 @Controller()
 export class WalletController {
-  constructor(private readonly wallet: WalletService) {}
+  constructor(
+    private readonly wallet: WalletService,
+    private readonly matching: PaymentMatchingService,
+  ) {}
 
   // ── Student ─────────────────────────────────────────────────────────────────
 
@@ -35,8 +39,15 @@ export class WalletController {
   @Post('wallet/topups')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] Request a wallet top-up with a transfer proof' })
-  submitTopup(@CurrentUser() u: JwtPayload, @Body() dto: SubmitTopupDto) {
-    return this.wallet.submitTopup(u.sub, dto);
+  async submitTopup(@CurrentUser() u: JwtPayload, @Body() dto: SubmitTopupDto) {
+    const topup = await this.wallet.submitTopup(u.sub, dto);
+    // The transfer is nearly always already sitting here, filed UNMATCHED,
+    // because students send the money before they fill the form. Looking now is
+    // what turns "pending until an admin notices" into a credited balance.
+    // The wallet screen re-reads its status either way, so a failure here costs
+    // the student nothing beyond the wait they had before.
+    const reconciled = await this.matching.reconcileTopup(topup.id).catch(() => null);
+    return { ...topup, autoApproved: reconciled?.status === 'MATCHED' };
   }
 
   @Get('wallet/topups/mine')

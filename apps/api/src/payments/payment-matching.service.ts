@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseIdentities } from '../device/sms-parser';
 import { ManualPaymentsService } from './manual-payments.service';
+import { WalletService } from '../wallet/wallet.service';
 
 export interface PaymentEventDto {
   provider: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
@@ -53,6 +54,7 @@ export class PaymentMatchingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly manual: ManualPaymentsService,
+    private readonly wallet: WalletService,
   ) {}
 
   /**
@@ -101,7 +103,7 @@ export class PaymentMatchingService {
 
     // Candidates: PENDING payments to verify, OR self-verified (PAID + not yet
     // settled) payments to reconcile — both within the amount/method/time window.
-    const candidates = await this.prisma.payment.findMany({
+    const payments = await this.prisma.payment.findMany({
       where: {
         gateway: 'manual',
         amountCents: dto.amountCents,
@@ -113,7 +115,28 @@ export class PaymentMatchingService {
       select: { id: true, reference: true, status: true },
     });
 
-    let chosen: { id: string; status: string } | null = null;
+    // A wallet top-up is the same transfer with no course attached, so it
+    // competes for the same SMS on identical evidence. Pooling the two is what
+    // makes a top-up settle by itself instead of waiting on an admin — and
+    // pooling them is also what keeps a transfer that could be either from
+    // being credited twice.
+    const topups = await this.prisma.walletTopup.findMany({
+      where: {
+        status: 'PENDING',
+        amountCents: dto.amountCents,
+        method: dto.provider as any,
+        createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, reference: true },
+    });
+
+    const candidates: Array<{ kind: 'payment' | 'topup'; id: string; reference: string | null; status?: string }> = [
+      ...payments.map((p) => ({ kind: 'payment' as const, id: p.id, reference: p.reference, status: p.status })),
+      ...topups.map((t) => ({ kind: 'topup' as const, id: t.id, reference: t.reference })),
+    ];
+
+    let chosen: { kind: 'payment' | 'topup'; id: string; status?: string } | null = null;
     let status: 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS' = 'UNMATCHED';
     let note: string | undefined;
 
@@ -123,7 +146,7 @@ export class PaymentMatchingService {
 
     if (candidates.length === 0) {
       status = 'UNMATCHED';
-      note = 'no pending/unsettled payment with this amount/method in the time window';
+      note = 'no pending/unsettled payment or wallet top-up with this amount/method in the time window';
     } else {
       const refMatches = candidates.filter((c) =>
         identities.some((identity) => refExact(normRef(c.reference), identity)),
@@ -134,11 +157,17 @@ export class PaymentMatchingService {
       else { status = 'AMBIGUOUS'; note = 'several amount matches, none by reference'; }
     }
 
-    const r = await this.record(dto, occurredAt, dedupeKey, status, chosen?.id ?? null, note);
+    const r = await this.record(
+      dto, occurredAt, dedupeKey, status,
+      chosen?.kind === 'payment' ? chosen.id : null,
+      note,
+      chosen?.kind === 'topup' ? chosen.id : null,
+    );
     // Only act if we actually recorded a fresh MATCHED event (a concurrent replay
     // that lost the unique-index race returns created=false and does nothing).
     if (r.created && chosen && r.status === 'MATCHED') {
-      if (chosen.status === 'PENDING') await this.manual.systemVerify(chosen.id);
+      if (chosen.kind === 'topup') await this.wallet.approveTopup(null, chosen.id);
+      else if (chosen.status === 'PENDING') await this.manual.systemVerify(chosen.id);
       else await this.manual.settle(chosen.id, 'system'); // PAID+unsettled → settle
     }
     return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
@@ -207,10 +236,68 @@ export class PaymentMatchingService {
     return { status: 'MATCHED' as const, eventId: event.id };
   }
 
+  /**
+   * The top-up counterpart of [reconcilePayment]: a student almost always
+   * transfers first and fills the form after, so the SMS is already filed
+   * UNMATCHED by the time the top-up row exists. Without this the transfer sits
+   * there and the top-up waits on an admin — which is exactly how a paid 35 EGP
+   * top-up stayed pending.
+   *
+   * Same evidence and the same confidence bar as every other match: provider,
+   * amount, window, exactly one identity hit.
+   */
+  async reconcileTopup(topupId: string) {
+    const topup = await this.prisma.walletTopup.findUnique({
+      where: { id: topupId },
+      select: { id: true, status: true, method: true, amountCents: true, reference: true, createdAt: true },
+    });
+    if (!topup || topup.status !== 'PENDING') return { status: 'SKIPPED' as const };
+
+    const ref = normRef(topup.reference);
+    if (!ref) return { status: 'NO_REFERENCE' as const };
+
+    const events = await this.prisma.paymentEvent.findMany({
+      where: {
+        status: 'UNMATCHED',
+        matchedPaymentId: null,
+        matchedTopupId: null,
+        provider: topup.method as any,
+        amountCents: topup.amountCents,
+        occurredAt: {
+          gte: new Date(topup.createdAt.getTime() - WINDOW_BEFORE_MS),
+          lte: new Date(topup.createdAt.getTime() + WINDOW_AFTER_MS),
+        },
+      },
+      orderBy: { occurredAt: 'desc' },
+      take: 50,
+    });
+
+    const hits = events.filter((event) => {
+      const derived = parseIdentities(event.rawMessage ?? '').map(normRef).filter(Boolean);
+      const identities = derived.length ? derived : [normRef(event.reference)];
+      return identities.some((identity) => refExact(identity, ref));
+    });
+
+    if (hits.length === 0) return { status: 'UNMATCHED' as const };
+    if (hits.length > 1) return { status: 'AMBIGUOUS' as const };
+
+    const event = hits[0];
+    await this.prisma.paymentEvent.update({
+      where: { id: event.id },
+      data: {
+        status: 'MATCHED',
+        matchedTopupId: topup.id,
+        note: 'reconciled when the top-up was submitted (transfer arrived first)',
+      },
+    });
+    await this.wallet.approveTopup(null, topup.id);
+    return { status: 'MATCHED' as const, eventId: event.id };
+  }
+
   private async record(
     dto: PaymentEventDto, occurredAt: Date, dedupeKey: string | null,
     status: 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS' | 'DUPLICATE',
-    matchedPaymentId: string | null, note?: string,
+    matchedPaymentId: string | null, note?: string, matchedTopupId?: string | null,
   ) {
     try {
       const event = await this.prisma.paymentEvent.create({
@@ -223,6 +310,7 @@ export class PaymentMatchingService {
           deviceId: dto.deviceId ?? null,
           status,
           matchedPaymentId,
+          matchedTopupId: matchedTopupId ?? null,
           dedupeKey,
           note,
         },

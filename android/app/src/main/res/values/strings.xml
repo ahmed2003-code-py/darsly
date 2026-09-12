@@ -97,4 +97,5 @@
     <string name="detail_queued">في الطابور (محاولات: %1$d)</string>
     <string name="detail_awaiting">لسه مفيش رد</string>
     <string name="detail_payload">اللي بيتبعت للسيرفر</string>
+    <string name="settings_version">إصدار التطبيق</string>
 </resources>

@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.darsly.smslistener.BuildConfig
 import com.darsly.smslistener.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,6 +86,13 @@ fun SettingsScreen(
                 ),
             )
             InfoRow(stringResource(R.string.settings_pending_count), unsynced.toString())
+            // Which build is actually on the phone. Without it there is no way
+            // to tell a fresh install from the one it was meant to replace —
+            // every APK looks the same from the launcher.
+            InfoRow(
+                stringResource(R.string.settings_version),
+                "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            )
             OutlinedButton(
                 onClick = viewModel::syncNow,
                 modifier = Modifier.fillMaxWidth(),

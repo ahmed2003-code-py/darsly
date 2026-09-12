@@ -18,6 +18,8 @@ export type SiteStatus = 'DRAFT' | 'PENDING_MODERATION' | 'PUBLISHED' | 'REJECTE
 export interface SiteOverview {
   /** The live page was written by hand, so the studio cannot change how it looks. */
   htmlLocked?: boolean;
+  /** A hand-authored page is kept aside, so handing over can be undone. */
+  canRestoreHandAuthored?: boolean;
   status: SiteStatus;
   hasDraft: boolean;
   publishedAt: string | null;

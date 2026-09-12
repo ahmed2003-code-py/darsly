@@ -1400,6 +1400,11 @@ model AcademySite {
   publishedDoc       Json? // last approved Site Document
   publishedHtml      String? // compiled HTML served at /a/:slug (Postgres text)
   htmlLocked         Boolean           @default(false) // publishedHtml is hand-authored — publish/recompile must never regenerate it
+  /// The hand-authored page kept aside when the studio takes over, so handing
+  /// it back is reversible. Without this the handover was one-way: the compiled
+  /// markup overwrote the page someone had written, and there was nothing to
+  /// put back.
+  handAuthoredHtml String?
   moderationApproved Boolean           @default(false)
   moderatedById      String?
   moderationReason   String?

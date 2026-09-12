@@ -76,6 +76,10 @@ export default function PublishTab({ slug }: { slug: string }) {
     mutationFn: async () => (await api.post('/academy/site/html/unlock')).data,
     onSuccess: refresh,
   });
+  const relock = useMutation({
+    mutationFn: async () => (await api.post('/academy/site/html/relock')).data,
+    onSuccess: refresh,
+  });
   const removeSnap = useMutation({
     mutationFn: async (snapshotId: string) => (await api.delete(`/academy/site/snapshots/${snapshotId}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-snapshots'] }),
@@ -149,6 +153,27 @@ export default function PublishTab({ slug }: { slug: string }) {
             </button>
           </div>
           <ErrorNote error={unlock.error} />
+        </div>
+      )}
+
+      {/* The way back. Handing the page over used to be one-way, which made a
+          reversible-sounding button permanent — so the offer to undo it sits
+          next to the result of having done it. */}
+      {!ov?.htmlLocked && ov?.canRestoreHandAuthored && (
+        <div className="card border-s-4 border-s-outline">
+          <p className="mb-1 flex items-center gap-2 text-sm font-bold">
+            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">undo</span>
+            {t('studio.publish.restoreHandTitle')}
+          </p>
+          <p className="text-sm text-on-surface-variant">{t('studio.publish.restoreHandHint')}</p>
+          <div className="mt-3">
+            <button className="btn-secondary" disabled={relock.isPending}
+              onClick={() => { if (confirm(t('studio.publish.confirmRestoreHand'))) relock.mutate(); }}>
+              <span className="material-symbols-outlined text-[18px]">history</span>
+              {relock.isPending ? t('studio.publish.publishing') : t('studio.publish.restoreHandBtn')}
+            </button>
+          </div>
+          <ErrorNote error={relock.error} />
         </div>
       )}
 

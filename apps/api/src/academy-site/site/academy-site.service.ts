@@ -84,6 +84,8 @@ export class AcademySiteService {
       /// A hand-authored page stands in for the generated one, so nothing the
       /// studio publishes can change how it looks. The studio has to say so.
       htmlLocked: site?.htmlLocked ?? false,
+      /// Whether the hand-authored page is still there to go back to.
+      canRestoreHandAuthored: !!site?.handAuthoredHtml,
       publishedAt: site?.publishedAt ?? null,
       version: site?.version ?? 0,
       moderationApproved: site?.moderationApproved ?? false,
@@ -293,12 +295,49 @@ export class AcademySiteService {
     if (!parsed.success) throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
     await this.prisma.academySite.update({
       where: { id: site.id },
-      // The draft is what gets published, and a locked site may only have the
-      // published copy — carry it across so there is something to build from.
-      data: { htmlLocked: false, draftDoc: doc as unknown as object },
+      data: {
+        htmlLocked: false,
+        // The draft is what gets published, and a locked site may only have the
+        // published copy — carry it across so there is something to build from.
+        draftDoc: doc as unknown as object,
+        // Kept before the compiled markup lands on top of it, so this is a
+        // choice that can be undone. Only written the first time: handing over
+        // twice must not overwrite the original with the studio's own output.
+        ...(site.handAuthoredHtml ? {} : { handAuthoredHtml: site.publishedHtml }),
+      },
     });
     await this.log(actorUserId, 'site.html.unlock', site.id, {});
     return this.publish(academyId, actorUserId);
+  }
+
+  /**
+   * Put the hand-authored page back.
+   *
+   * The other half of `unlockHtml`. Handing the page to the studio used to be
+   * one-way — the compiled markup overwrote what someone had written and there
+   * was nothing left to restore — which made a reversible-sounding action
+   * permanent. The original is kept aside now, and this is what puts it back.
+   */
+  async relockHtml(academyId: string, actorUserId: string): Promise<AcademySite> {
+    const site = await this.getOrCreate(academyId);
+    if (!site.handAuthoredHtml) {
+      throw new ConflictException({
+        message: 'There is no hand-authored page kept for this academy',
+        code: 'NO_HAND_AUTHORED_HTML',
+      });
+    }
+    const updated = await this.prisma.academySite.update({
+      where: { id: site.id },
+      data: {
+        htmlLocked: true,
+        publishedHtml: site.handAuthoredHtml,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+        version: site.version + 1,
+      },
+    });
+    await this.log(actorUserId, 'site.html.relock', site.id, { version: updated.version });
+    return updated;
   }
 
   async unpublish(academyId: string, actorUserId: string): Promise<AcademySite> {

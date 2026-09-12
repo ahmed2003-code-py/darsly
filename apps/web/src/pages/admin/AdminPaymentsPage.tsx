@@ -189,6 +189,7 @@ export default function AdminPaymentsPage() {
  * reads as an English sentence instead of a clipped fragment of one.
  */
 const NOTE_KEY: Record<string, string> = {
+  // Current wording…
   'no pending/unsettled payment or wallet top-up with this amount/method in the time window': 'noMatch',
   'no sender reference — auto-verify disabled without a transfer identity; needs manual review': 'noReference',
   'multiple payments share this reference': 'sharedReference',
@@ -196,6 +197,14 @@ const NOTE_KEY: Record<string, string> = {
   'several amount matches, none by reference': 'severalMatches',
   'reconciled when the payment was submitted (transfer arrived first)': 'reconciledPayment',
   'reconciled when the top-up was submitted (transfer arrived first)': 'reconciledTopup',
+  // …and every wording the matcher has used before. A note is written into the
+  // row when the transfer arrives and stays there for ever, so rows outlive the
+  // sentence that produced them: mapping only the current strings leaves the
+  // oldest events — the ones most likely to still need a human — in English.
+  'no pending/unsettled payment with this amount/method in the time window': 'noMatch',
+  'no pending payment with this amount/method in the time window': 'noMatch',
+  'matched by amount+time (no reference)': 'matchedByAmount',
+  'several amount matches, no reference to disambiguate': 'severalMatches',
 };
 
 function EventNote({ note }: { note: string }) {

@@ -962,7 +962,11 @@
     "submittedBody": "Your payment is under review; access activates once confirmed.",
     "noAccounts": "No receiving accounts available right now.",
     "originalPrice": "Original price",
-    "discount": "Discount"
+    "discount": "Discount",
+    "payFromWallet": "Pay from your wallet",
+    "walletBalance": "Your balance: {{amount}}",
+    "payNow": "Pay {{amount}}",
+    "walletInstant": "Deducted from your balance and the course opens immediately — no transfer, no waiting."
   },
   "tpay": {
     "title": "Verify payments",

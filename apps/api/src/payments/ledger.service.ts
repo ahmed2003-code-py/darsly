@@ -107,14 +107,32 @@ export class LedgerService {
       net = payment.amountCents - fee;
     }
 
-    await db.ledgerTransaction.create({
+    // Where the money comes FROM depends on how it was paid. A transfer brings
+    // new cash into the platform; a wallet payment does not — that cash arrived
+    // when the wallet was topped up and has been sitting as a liability ever
+    // since. Debiting platform:cash again for a wallet purchase would invent
+    // money that was already counted once.
+    const fromWallet = payment.method === 'WALLET';
+    if (fromWallet) {
+      // Checked here, inside the settlement transaction, so a balance spent by a
+      // concurrent purchase fails this one rather than overdrawing the wallet.
+      const balance = await this.walletBalance(payment.studentId, db);
+      if (balance < payment.amountCents) {
+        throw new Error(`insufficient wallet balance for payment ${paymentId}`);
+      }
+    }
+
+    const txn = await db.ledgerTransaction.create({
       data: {
         description: `enrollment payment ${paymentId}`,
         paymentId,
         entries: {
           create: [
-            // platform:cash holds the full amount the student paid.
-            { account: 'platform:cash', direction: 'DEBIT', amountCents: payment.amountCents },
+            fromWallet
+              // The student's prepaid balance pays for it: the liability drops.
+              ? { account: this.walletAccount(payment.studentId), direction: 'DEBIT', amountCents: payment.amountCents }
+              // platform:cash holds the full amount the student paid.
+              : { account: 'platform:cash', direction: 'DEBIT', amountCents: payment.amountCents },
             // platform earnings (the service fee) — account name kept for continuity.
             { account: 'platform:commission', direction: 'CREDIT', amountCents: fee, tenantId: payment.tenantId },
             // the academy's withdrawable earning.
@@ -123,6 +141,22 @@ export class LedgerService {
         },
       },
     });
+
+    // The readable half of the same fact, so the purchase shows up in the
+    // student's own wallet history next to the top-up that funded it.
+    if (fromWallet) {
+      await db.walletTransaction.create({
+        data: {
+          studentId: payment.studentId,
+          kind: 'PURCHASE',
+          amountCents: -payment.amountCents,
+          description: 'شراء دورة',
+          courseId: payment.courseId,
+          paymentId,
+          ledgerTxnId: txn.id,
+        },
+      });
+    }
   }
 
   /** Money leaves the teacher's balance back to platform cash on payout completion. */

@@ -37,6 +37,27 @@ export default function PaymentModal({
   });
   const total = quote?.totalCents ?? amountCents;
 
+  // What the student already has on the platform. A balance that covers the
+  // total turns the whole transfer-and-wait dance into one button.
+  const { data: wallet } = useQuery({
+    queryKey: ['wallet'],
+    queryFn: async () => (await api.get('/wallet')).data,
+    enabled: open,
+  });
+  const balance = wallet?.balanceCents ?? 0;
+
+  const payWithWallet = useMutation({
+    mutationFn: async () => (await api.post('/payments/from-wallet', { courseId, couponCode })).data,
+    onSuccess: () => {
+      // Paid and enrolled in one step — there is nothing pending to wait for,
+      // so the course page should already show it unlocked behind this modal.
+      qc.invalidateQueries({ queryKey: ['course', courseId] });
+      qc.invalidateQueries({ queryKey: ['my-enrollments'] });
+      qc.invalidateQueries({ queryKey: ['wallet'] });
+      onClose();
+    },
+  });
+
   const submit = useMutation({
     mutationFn: async () =>
       (await api.post('/payments', { courseId, method, proofImageUrl: proof, reference: reference.trim() || undefined, couponCode })).data,
@@ -63,6 +84,37 @@ export default function PaymentModal({
           <button className="btn-primary mt-5" onClick={onClose}>{t('common.back')}</button>
         </div>
       ) : (
+        <>
+        {/* Money already on the platform beats a transfer the student has to
+            make and then wait to be confirmed, so it is offered first — and
+            only when it would actually work, which is the only case where
+            showing it is a shortcut rather than a tease. */}
+        {balance >= total && (
+          <div className="mb-5 rounded-2xl border border-primary/40 bg-primary-fixed/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary">
+                  <span className="material-symbols-outlined">account_balance_wallet</span>
+                </span>
+                <div>
+                  <p className="font-heading font-bold">{t('pay.payFromWallet')}</p>
+                  <p className="text-xs text-on-surface-variant">
+                    {t('pay.walletBalance', { amount: egp(balance) })}
+                  </p>
+                </div>
+              </div>
+              <button
+                className="btn-primary"
+                disabled={payWithWallet.isPending}
+                onClick={() => payWithWallet.mutate()}
+              >
+                {payWithWallet.isPending ? t('common.saving') : t('pay.payNow', { amount: egp(total) })}
+              </button>
+            </div>
+            <ErrorNote error={payWithWallet.error} />
+            <p className="mt-2 text-xs text-outline">{t('pay.walletInstant')}</p>
+          </div>
+        )}
         <div className="grid gap-5 sm:grid-cols-2">
           {/* Where to send */}
           <div>
@@ -136,6 +188,7 @@ export default function PaymentModal({
             </button>
           </div>
         </div>
+        </>
       )}
     </Modal>
   );

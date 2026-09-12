@@ -21,6 +21,10 @@ class SubmitPaymentDto {
   @IsOptional() @IsString() @MaxLength(120) reference?: string;
   @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
 }
+class PayFromWalletDto {
+  @IsId() courseId: string;
+  @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
+}
 class RejectDto {
   @IsOptional() @IsString() @MaxLength(300) reason?: string;
 }
@@ -50,6 +54,14 @@ export class ManualPaymentsController {
   }
 
   // ── Student ─────────────────────────────────────────────────────────────────
+
+  @Post('payments/from-wallet')
+  @ApiBearerAuth()
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Buy a course out of the wallet balance — no transfer, no review' })
+  payFromWallet(@CurrentUser() u: JwtPayload, @Body() dto: PayFromWalletDto) {
+    return this.payments.payFromWallet(u.sub, dto);
+  }
 
   @Post('payments')
   @ApiBearerAuth()

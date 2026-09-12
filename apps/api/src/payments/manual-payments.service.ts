@@ -19,8 +19,9 @@ const PROOF_MAX_BYTES = 1_200 * 1024; // ~1.2 MB screenshot
 
 export interface SubmitPaymentDto {
   courseId: string;
-  method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
-  proofImageUrl: string;
+  method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER' | 'WALLET';
+  /** Absent for WALLET — nothing was transferred, so there is nothing to prove. */
+  proofImageUrl?: string;
   reference?: string;
   couponCode?: string;
 }
@@ -36,7 +37,9 @@ export class ManualPaymentsService {
   // ── Student: submit a proof of payment ──────────────────────────────────────
 
   async submit(userId: string, dto: SubmitPaymentDto) {
-    validateImageDataUrl(dto.proofImageUrl, PROOF_MAX_BYTES);
+    // Nothing was transferred for a wallet payment, so there is no screenshot
+    // of a transfer to validate.
+    if (dto.method !== 'WALLET') validateImageDataUrl(dto.proofImageUrl ?? '', PROOF_MAX_BYTES);
     const student = await this.studentOf(userId);
     const course = await this.prisma.course.findFirst({
       where: { id: dto.courseId, status: 'PUBLISHED' },
@@ -89,7 +92,7 @@ export class ManualPaymentsService {
           currency: course.currency,
           gateway: 'manual',
           method: dto.method as any,
-          proofImageUrl: dto.proofImageUrl,
+          proofImageUrl: dto.proofImageUrl ?? '',
           reference: dto.reference?.trim() || null,
           couponId,
           status: 'PENDING',
@@ -98,7 +101,7 @@ export class ManualPaymentsService {
       });
     });
 
-    await this.notifications.create({
+    if (dto.method !== 'WALLET') await this.notifications.create({
       userId: course.teacher.user.id,
       type: 'ANNOUNCEMENT',
       title: 'دفعة جديدة بانتظار المراجعة 💳',
@@ -106,6 +109,50 @@ export class ManualPaymentsService {
       meta: { paymentId: payment.id, courseId: course.id },
     });
     return payment;
+  }
+
+  /**
+   * Buy a course out of the student's own balance. No transfer, no proof, no
+   * review: the money is already inside the platform, so the only question is
+   * whether there is enough of it — and that is answered inside the settlement
+   * transaction, where a balance spent by a concurrent purchase rolls this one
+   * back rather than overdrawing the wallet.
+   *
+   * Built on the same submit → verify path every other payment takes, so the
+   * coupon reservation, the enrolment upsert, the teacher's ledger credit and
+   * the invoice are all the ones that already work.
+   */
+  async payFromWallet(userId: string, dto: { courseId: string; couponCode?: string }) {
+    const student = await this.studentOf(userId);
+    const balance = await this.ledger.walletBalance(student.id);
+    const course = await this.prisma.course.findFirst({
+      where: { id: dto.courseId, status: 'PUBLISHED' },
+      select: { id: true, priceCents: true },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
+    // A cheap pre-check so the common failure is a clean error rather than a
+    // rolled-back enrolment. The authoritative check is still in the ledger.
+    const { totalCents } = await this.quote(
+      await this.prisma.course.findUniqueOrThrow({ where: { id: dto.courseId } }),
+      dto.couponCode,
+    );
+    if (balance < totalCents) {
+      throw new BadRequestException({
+        message: 'Wallet balance is not enough',
+        code: 'INSUFFICIENT_BALANCE',
+        balanceCents: balance,
+        requiredCents: totalCents,
+      });
+    }
+
+    const payment = await this.submit(userId, {
+      courseId: dto.courseId,
+      method: 'WALLET',
+      couponCode: dto.couponCode,
+    } as SubmitPaymentDto);
+    await this.systemVerify(payment.id);
+    return { ...payment, status: 'PAID', paidFromWallet: true };
   }
 
   // ── Verify / reject (teacher for own courses, admin for any) ────────────────

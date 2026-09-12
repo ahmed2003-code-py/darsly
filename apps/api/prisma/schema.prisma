@@ -689,6 +689,10 @@ enum PaymentMethod {
   VODAFONE_CASH
   BANK_TRANSFER
   OTHER
+  // Paid out of the student's own prepaid balance. No transfer happens: the
+  // money already entered the platform when the wallet was topped up, so
+  // settlement debits the student's wallet rather than platform cash.
+  WALLET
 }
 
 model Payment {

@@ -966,7 +966,10 @@
     "payFromWallet": "ادفع من محفظتك",
     "walletBalance": "رصيدك: {{amount}}",
     "payNow": "ادفع {{amount}}",
-    "walletInstant": "هيتخصم من رصيدك والدورة هتتفتح على طول — من غير تحويل ولا انتظار."
+    "walletInstant": "هيتخصم من رصيدك والدورة هتتفتح على طول — من غير تحويل ولا انتظار.",
+    "walletApplied": "هيتخصم {{amount}} من رصيد محفظتك تلقائيًا، والباقي بس اللي تحوّله",
+    "fromWalletLine": "من محفظتك",
+    "amountDueAfterWallet": "المطلوب تحويله"
   },
   "tpay": {
     "title": "مراجعة الدفعات",

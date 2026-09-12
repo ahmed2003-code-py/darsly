@@ -711,6 +711,12 @@ model Payment {
   amountCents Int
   feeCents    Int? // platform service fee portion of amountCents
   netCents    Int? // academy's earning portion of amountCents
+  // How much of amountCents was covered by the student's wallet balance, applied
+  // automatically at submit time — the rest (amountCents - walletCents) is what
+  // an actual transfer must cover, and what the matching engine looks for. Zero
+  // for a course paid entirely by transfer; equal to amountCents for `method:
+  // WALLET` (paid entirely from the balance, no transfer at all).
+  walletCents Int @default(0)
   currency    String        @default("EGP")
   status      PaymentStatus @default(PENDING)
   gateway     String        @default("manual") // manual proof-based; paymob/fawry/stripe later

@@ -37,6 +37,18 @@ export class LedgerService {
   }
 
   /**
+   * Where a wallet contribution toward a still-PENDING payment sits, once
+   * [reserveWalletPortion] takes it out of the student's spendable balance.
+   * Neither an asset nor a liability the platform reports anywhere — just a
+   * named holding pen so the same piasters can be released to the payment's
+   * real destination (commission + teacher) at settlement, or handed straight
+   * back to the student if the payment is rejected instead.
+   */
+  private paymentEscrowAccount(paymentId: string) {
+    return `payment:${paymentId}:wallet-hold`;
+  }
+
+  /**
    * A student's spendable wallet balance: credits − debits on their wallet
    * account. Derived from the ledger, never stored, so it can never drift.
    */
@@ -78,6 +90,65 @@ export class LedgerService {
   }
 
   /**
+   * Take part of a course's price out of the student's spendable balance the
+   * moment they submit a mixed wallet+transfer payment, before any transfer has
+   * happened. Without this, the same balance could fund a second concurrent
+   * purchase while the first is still PENDING and waiting on a transfer — the
+   * wallet would look untouched to both until one of them settled and
+   * silently overdrew it.
+   *
+   * Parked in the payment's own escrow account rather than spent outright:
+   * [recordPayment] releases it to commission/teacher on settlement, and
+   * [releaseWalletReservation] hands it straight back if the payment is
+   * rejected instead. Must run inside the same transaction that creates the
+   * PENDING payment row.
+   */
+  async reserveWalletPortion(
+    studentId: string,
+    paymentId: string,
+    amountCents: number,
+    db: Db,
+  ): Promise<void> {
+    if (amountCents <= 0) return;
+    await db.ledgerTransaction.create({
+      data: {
+        description: `wallet portion reserved for payment ${paymentId}`,
+        entries: {
+          create: [
+            { account: this.walletAccount(studentId), direction: 'DEBIT', amountCents },
+            { account: this.paymentEscrowAccount(paymentId), direction: 'CREDIT', amountCents },
+          ],
+        },
+      },
+    });
+  }
+
+  /**
+   * The reverse of [reserveWalletPortion]: a rejected payment never happened,
+   * so the balance it had set aside goes back to being spendable. Must run
+   * inside the same transaction that flips the payment to REJECTED.
+   */
+  async releaseWalletReservation(
+    studentId: string,
+    paymentId: string,
+    amountCents: number,
+    db: Db,
+  ): Promise<void> {
+    if (amountCents <= 0) return;
+    await db.ledgerTransaction.create({
+      data: {
+        description: `wallet portion released — payment ${paymentId} rejected`,
+        entries: {
+          create: [
+            { account: this.paymentEscrowAccount(paymentId), direction: 'DEBIT', amountCents },
+            { account: this.walletAccount(studentId), direction: 'CREDIT', amountCents },
+          ],
+        },
+      },
+    });
+  }
+
+  /**
    * Record a paid enrollment: cash in, split into platform commission and the
    * teacher's balance. Idempotent per payment (the LedgerTransaction.paymentId
    * unique constraint is the ultimate guard against double-credit). Pass the
@@ -107,18 +178,50 @@ export class LedgerService {
       net = payment.amountCents - fee;
     }
 
-    // Where the money comes FROM depends on how it was paid. A transfer brings
-    // new cash into the platform; a wallet payment does not — that cash arrived
-    // when the wallet was topped up and has been sitting as a liability ever
-    // since. Debiting platform:cash again for a wallet purchase would invent
-    // money that was already counted once.
-    const fromWallet = payment.method === 'WALLET';
-    if (fromWallet) {
+    // Where the money comes FROM depends on how it was paid, and a payment can
+    // draw on up to two sources at once:
+    //  - `method: WALLET` (paidFully): the ENTIRE amount was drawn from the
+    //    wallet at settlement time, checked against the live balance right here
+    //    (there is no PENDING period for this method — submit and settle happen
+    //    in the same request, so nothing needed reserving in advance).
+    //  - `walletCents > 0` on any other method (mixedWallet): part of the total
+    //    was reserved out of the wallet back at submit time (see
+    //    reserveWalletPortion) and is sitting in this payment's escrow account;
+    //    settlement releases it from there rather than touching the wallet
+    //    again. The rest (amountCents - walletCents) is the transfer that was
+    //    actually matched or verified — real new cash, debited from
+    //    platform:cash same as an ordinary transfer.
+    // Either way, a transfer brings new cash into the platform and a wallet
+    // contribution does not — debiting platform:cash for a wallet-funded
+    // portion would invent money that was already counted once, when the
+    // wallet was topped up.
+    const paidFully = payment.method === 'WALLET';
+    // Defensive, not just decorative: a caller that hands in a hand-built
+    // object (a unit test, or a future refactor) rather than a real Prisma row
+    // could omit this column entirely, and `amountCents - undefined` is NaN —
+    // which then survives every downstream check (`0 < NaN` is false) and
+    // quietly books a transaction with no debit side at all.
+    const walletCents = payment.walletCents ?? 0;
+    const mixedWallet = !paidFully && walletCents > 0;
+    if (paidFully) {
       // Checked here, inside the settlement transaction, so a balance spent by a
       // concurrent purchase fails this one rather than overdrawing the wallet.
       const balance = await this.walletBalance(payment.studentId, db);
       if (balance < payment.amountCents) {
         throw new Error(`insufficient wallet balance for payment ${paymentId}`);
+      }
+    }
+    const cashCents = paidFully ? 0 : payment.amountCents - walletCents;
+
+    const debitEntries: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
+    if (paidFully) {
+      debitEntries.push({ account: this.walletAccount(payment.studentId), direction: 'DEBIT', amountCents: payment.amountCents });
+    } else {
+      if (mixedWallet) {
+        debitEntries.push({ account: this.paymentEscrowAccount(paymentId), direction: 'DEBIT', amountCents: walletCents });
+      }
+      if (cashCents > 0) {
+        debitEntries.push({ account: 'platform:cash', direction: 'DEBIT', amountCents: cashCents });
       }
     }
 
@@ -128,11 +231,7 @@ export class LedgerService {
         paymentId,
         entries: {
           create: [
-            fromWallet
-              // The student's prepaid balance pays for it: the liability drops.
-              ? { account: this.walletAccount(payment.studentId), direction: 'DEBIT', amountCents: payment.amountCents }
-              // platform:cash holds the full amount the student paid.
-              : { account: 'platform:cash', direction: 'DEBIT', amountCents: payment.amountCents },
+            ...debitEntries,
             // platform earnings (the service fee) — account name kept for continuity.
             { account: 'platform:commission', direction: 'CREDIT', amountCents: fee, tenantId: payment.tenantId },
             // the academy's withdrawable earning.
@@ -143,13 +242,16 @@ export class LedgerService {
     });
 
     // The readable half of the same fact, so the purchase shows up in the
-    // student's own wallet history next to the top-up that funded it.
-    if (fromWallet) {
+    // student's own wallet history next to the top-up that funded it. Only the
+    // portion actually drawn from the wallet counts as wallet activity — a
+    // mixed payment's transferred remainder is not.
+    const walletPortionSpent = paidFully ? payment.amountCents : mixedWallet ? walletCents : 0;
+    if (walletPortionSpent > 0) {
       await db.walletTransaction.create({
         data: {
           studentId: payment.studentId,
           kind: 'PURCHASE',
-          amountCents: -payment.amountCents,
+          amountCents: -walletPortionSpent,
           description: 'شراء دورة',
           courseId: payment.courseId,
           paymentId,

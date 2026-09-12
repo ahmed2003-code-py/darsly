@@ -37,9 +37,6 @@ export class ManualPaymentsService {
   // ── Student: submit a proof of payment ──────────────────────────────────────
 
   async submit(userId: string, dto: SubmitPaymentDto) {
-    // Nothing was transferred for a wallet payment, so there is no screenshot
-    // of a transfer to validate.
-    if (dto.method !== 'WALLET') validateImageDataUrl(dto.proofImageUrl ?? '', PROOF_MAX_BYTES);
     const student = await this.studentOf(userId);
     const course = await this.prisma.course.findFirst({
       where: { id: dto.courseId, status: 'PUBLISHED' },
@@ -64,10 +61,31 @@ export class ManualPaymentsService {
 
     const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
 
+    // A wallet balance applies itself toward any transfer-based purchase —
+    // the student is never asked to move money they already have on the
+    // platform. `method: WALLET` (from payFromWallet) is the pre-existing,
+    // separate 100%-from-balance path and is left out of this: it settles in
+    // the same request rather than waiting on a transfer, so there is nothing
+    // here for it to reserve.
+    const isWalletMethod = dto.method === 'WALLET';
+    const balance = isWalletMethod ? 0 : await this.ledger.walletBalance(student.id);
+    const walletCents = isWalletMethod ? 0 : Math.min(balance, totalCents);
+    const cashDueCents = totalCents - walletCents;
+
+    // A screenshot only makes sense for money that actually has to move — not
+    // for the WALLET method (nothing is transferred at all) and not when the
+    // balance already covers the whole thing (same story, it just took a
+    // course-priced coincidence to get there instead of a dedicated button).
+    if (!isWalletMethod && cashDueCents > 0) {
+      validateImageDataUrl(dto.proofImageUrl ?? '', PROOF_MAX_BYTES);
+    }
+
     // Atomic: reserve the coupon slot (FIX: no longer at verify time — that let
     // many submits share a maxUses:1 coupon), upsert the PENDING_APPROVAL
-    // enrolment, and create the PENDING payment together. Any failure (incl. the
-    // coupon being exhausted by a concurrent submit) rolls the whole thing back.
+    // enrolment, create the PENDING payment, and reserve its wallet portion (if
+    // any) out of the student's spendable balance — together. Any failure
+    // (incl. the coupon being exhausted, or the balance moving under a
+    // concurrent submit) rolls the whole thing back.
     const payment = await this.prisma.$transaction(async (tx) => {
       if (couponId) await reserveCouponUse(tx, couponId, couponMaxUses);
 
@@ -80,13 +98,14 @@ export class ManualPaymentsService {
             data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, status: 'PENDING_APPROVAL' },
           });
 
-      return tx.payment.create({
+      const created = await tx.payment.create({
         data: {
           studentId: student.id,
           courseId: course.id,
           enrollmentId: enr.id,
           tenantId: course.tenantId,
           amountCents: totalCents,
+          walletCents,
           feeCents,
           netCents,
           currency: course.currency,
@@ -97,15 +116,42 @@ export class ManualPaymentsService {
           couponId,
           status: 'PENDING',
         },
-        select: { id: true, status: true, amountCents: true, createdAt: true },
+        select: { id: true, status: true, amountCents: true, walletCents: true, enrollmentId: true, createdAt: true },
       });
+
+      if (!isWalletMethod && walletCents > 0) {
+        // Re-checked here, inside the same transaction that just created the
+        // payment: a balance read a moment ago and a balance read now can
+        // differ if another submit landed in between.
+        const liveBalance = await this.ledger.walletBalance(student.id, tx);
+        if (liveBalance < walletCents) {
+          throw new ConflictException({ message: 'Wallet balance changed — try again', code: 'BALANCE_CHANGED' });
+        }
+        await this.ledger.reserveWalletPortion(student.id, created.id, walletCents, tx);
+      }
+
+      return created;
     });
 
-    if (dto.method !== 'WALLET') await this.notifications.create({
+    // The wallet covered it entirely — there is no transfer to wait for, so
+    // this settles immediately exactly like a dedicated WALLET payment would.
+    if (!isWalletMethod && cashDueCents === 0) {
+      await this.applyVerification(
+        { id: payment.id, status: payment.status, courseId: course.id, enrollmentId: payment.enrollmentId, studentId: student.id, couponId: couponId ?? null },
+        'system',
+        true,
+        true,
+      );
+      return { ...payment, status: 'PAID' };
+    }
+
+    if (!isWalletMethod) await this.notifications.create({
       userId: course.teacher.user.id,
       type: 'ANNOUNCEMENT',
       title: 'دفعة جديدة بانتظار المراجعة 💳',
-      body: `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}».`,
+      body: walletCents > 0
+        ? `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}» (جزء من الرصيد، والباقي تحويل).`
+        : `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}».`,
       meta: { paymentId: payment.id, courseId: course.id },
     });
     return payment;
@@ -283,6 +329,13 @@ export class ManualPaymentsService {
       // Release the coupon slot reserved at submit time so a rejected payment
       // never permanently consumes a use.
       await releaseCouponUse(tx, payment.couponId);
+      // Same idea for a wallet portion reserved at submit time (mixed
+      // wallet+transfer payments only — `method: WALLET` never reaches here
+      // pending, since it settles the moment it's submitted): hand it back
+      // rather than leaving it stuck in this payment's escrow account.
+      if (payment.walletCents > 0) {
+        await this.ledger.releaseWalletReservation(payment.studentId, payment.id, payment.walletCents, tx);
+      }
       if (payment.enrollmentId) {
         await tx.enrollment.updateMany({
           where: { id: payment.enrollmentId, status: 'PENDING_APPROVAL' },

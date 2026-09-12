@@ -966,7 +966,10 @@
     "payFromWallet": "Pay from your wallet",
     "walletBalance": "Your balance: {{amount}}",
     "payNow": "Pay {{amount}}",
-    "walletInstant": "Deducted from your balance and the course opens immediately — no transfer, no waiting."
+    "walletInstant": "Deducted from your balance and the course opens immediately — no transfer, no waiting.",
+    "walletApplied": "{{amount}} from your wallet balance applies automatically — only the rest needs a transfer",
+    "fromWalletLine": "From your wallet",
+    "amountDueAfterWallet": "Amount to transfer"
   },
   "tpay": {
     "title": "Verify payments",

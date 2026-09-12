@@ -89,7 +89,7 @@ export default function PaymentModal({
             make and then wait to be confirmed, so it is offered first — and
             only when it would actually work, which is the only case where
             showing it is a shortcut rather than a tease. */}
-        {balance >= total && (
+        {balance >= total ? (
           <div className="mb-5 rounded-2xl border border-primary/40 bg-primary-fixed/40 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -114,7 +114,24 @@ export default function PaymentModal({
             <ErrorNote error={payWithWallet.error} />
             <p className="mt-2 text-xs text-outline">{t('pay.walletInstant')}</p>
           </div>
+        ) : (
+          // A balance too small to cover the whole price still isn't nothing:
+          // it comes off the total automatically, and the transfer below is
+          // only ever for what's left — the server applies the same
+          // subtraction, this is just telling the student it will.
+          balance > 0 && (
+            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary-fixed/20 p-3">
+              <span className="material-symbols-outlined shrink-0 text-primary">account_balance_wallet</span>
+              <p className="text-sm text-on-surface-variant">
+                {t('pay.walletApplied', { amount: egp(balance) })}
+              </p>
+            </div>
+          )
         )}
+        {/* Once the wallet button above covers the whole price, a transfer
+            form asking for proof of a 0 ج.م transfer is pure confusion, not a
+            second option — nothing here is worth showing. */}
+        {balance < total && (
         <div className="grid gap-5 sm:grid-cols-2">
           {/* Where to send */}
           <div>
@@ -125,21 +142,35 @@ export default function PaymentModal({
               {/* One price. The platform fee is already inside it — a student is
                   buying a course, not paying two parties, and the split is not
                   theirs to see. A coupon discount IS shown: they earned it. */}
-              {quote && quote.discountCents > 0 && (
+              {((quote && quote.discountCents > 0) || (balance > 0 && balance < total)) && (
                 <div className="mb-2 space-y-1 border-b border-outline-variant pb-2 text-sm">
-                  <div className="flex justify-between text-on-surface-variant">
-                    <span>{t('pay.originalPrice')}</span>
-                    <span className="tabular-nums line-through">{egp(quote.basePriceCents)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-primary">
-                    <span>{t('pay.discount')}</span>
-                    <span className="tabular-nums">−{egp(quote.discountCents)}</span>
-                  </div>
+                  {quote && quote.discountCents > 0 && (
+                    <>
+                      <div className="flex justify-between text-on-surface-variant">
+                        <span>{t('pay.originalPrice')}</span>
+                        <span className="tabular-nums line-through">{egp(quote.basePriceCents)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-primary">
+                        <span>{t('pay.discount')}</span>
+                        <span className="tabular-nums">−{egp(quote.discountCents)}</span>
+                      </div>
+                    </>
+                  )}
+                  {balance > 0 && balance < total && (
+                    <div className="flex justify-between font-semibold text-primary">
+                      <span>{t('pay.fromWalletLine')}</span>
+                      <span className="tabular-nums">−{egp(balance)}</span>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-outline">{t('pay.amountDue')}</span>
-                <span className="font-heading text-2xl font-bold tracking-tight text-primary tabular-nums">{egp(total)}</span>
+                <span className="text-xs text-outline">
+                  {balance > 0 && balance < total ? t('pay.amountDueAfterWallet') : t('pay.amountDue')}
+                </span>
+                <span className="font-heading text-2xl font-bold tracking-tight text-primary tabular-nums">
+                  {egp(balance > 0 ? Math.max(0, total - balance) : total)}
+                </span>
               </div>
             </div>
             <div className="space-y-2">
@@ -188,6 +219,7 @@ export default function PaymentModal({
             </button>
           </div>
         </div>
+        )}
         </>
       )}
     </Modal>

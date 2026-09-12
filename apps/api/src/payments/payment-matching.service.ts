@@ -102,18 +102,23 @@ export class PaymentMatchingService {
     }
 
     // Candidates: PENDING payments to verify, OR self-verified (PAID + not yet
-    // settled) payments to reconcile — both within the amount/method/time window.
-    const payments = await this.prisma.payment.findMany({
-      where: {
-        gateway: 'manual',
-        amountCents: dto.amountCents,
-        method: dto.provider as any,
-        createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
-        OR: [{ status: 'PENDING' }, { status: 'PAID', settledAt: null }],
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, reference: true, status: true },
-    });
+    // settled) payments to reconcile — both within the method/time window. Not
+    // filtered by amount here: a payment with a wallet contribution is only
+    // waiting on (amountCents - walletCents), not the course's full price, and
+    // that subtraction can't be expressed in a plain equality filter — so it's
+    // applied just below instead, in JS, against this already narrow set.
+    const payments = (
+      await this.prisma.payment.findMany({
+        where: {
+          gateway: 'manual',
+          method: dto.provider as any,
+          createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
+          OR: [{ status: 'PENDING' }, { status: 'PAID', settledAt: null }],
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, reference: true, status: true, amountCents: true, walletCents: true },
+      })
+    ).filter((p) => p.amountCents - p.walletCents === dto.amountCents);
 
     // A wallet top-up is the same transfer with no course attached, so it
     // competes for the same SMS on identical evidence. Pooling the two is what
@@ -190,7 +195,7 @@ export class PaymentMatchingService {
   async reconcilePayment(paymentId: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      select: { id: true, status: true, method: true, amountCents: true, reference: true, createdAt: true },
+      select: { id: true, status: true, method: true, amountCents: true, walletCents: true, reference: true, createdAt: true },
     });
     if (!payment || payment.status !== 'PENDING') return { status: 'SKIPPED' as const };
 
@@ -199,12 +204,15 @@ export class PaymentMatchingService {
     // students' identical transfers apart. Same rule as the forward path.
     if (!ref) return { status: 'NO_REFERENCE' as const };
 
+    // A wallet contribution means the transfer this payment is actually
+    // waiting on is only the remainder, not the course's full price.
+    const cashDueCents = payment.amountCents - payment.walletCents;
     const events = await this.prisma.paymentEvent.findMany({
       where: {
         status: 'UNMATCHED',
         matchedPaymentId: null,
         provider: payment.method as any,
-        amountCents: payment.amountCents,
+        amountCents: cashDueCents,
         occurredAt: {
           gte: new Date(payment.createdAt.getTime() - WINDOW_BEFORE_MS),
           lte: new Date(payment.createdAt.getTime() + WINDOW_AFTER_MS),

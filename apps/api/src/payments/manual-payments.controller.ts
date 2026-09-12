@@ -17,7 +17,13 @@ class SubmitPaymentDto {
   @IsEnum(PaymentMethod) method: PaymentMethod;
   // A receipt photo as a base64 data URL. Bigger than the other image caps on
   // purpose: an unreadable receipt cannot be verified.
-  @IsString() @MaxLength(LIMITS.PROOF_DATA_URL) proofImageUrl: string;
+  //
+  // Optional at this layer because whether one is actually required depends
+  // on the student's wallet balance against the course price — something
+  // only the service can know, since it isn't in the request at all. It
+  // enforces the real requirement itself; this decorator only has to stop
+  // admitting a proof so large it wouldn't fit.
+  @IsOptional() @IsString() @MaxLength(LIMITS.PROOF_DATA_URL) proofImageUrl?: string;
   @IsOptional() @IsString() @MaxLength(120) reference?: string;
   @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
 }

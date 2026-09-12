@@ -458,7 +458,10 @@
       "unfold": "افتح القسم",
       "lessonsMetaMissing": "{{count}} درس · {{missing}} لسه من غير فيديو",
       "renameLesson": "غيّر اسم الدرس",
-      "titleLabel": "اسم الدرس"
+      "titleLabel": "اسم الدرس",
+      "curriculum": "منهج الكورس",
+      "needsVideo": "لسه من غير فيديو",
+      "addCover": "ضيف صورة للكورس"
     },
     "students": {
       "title": "طلابي",

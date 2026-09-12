@@ -148,6 +148,8 @@ export default function CourseBuilderPage() {
   const selectedVideoId: string | null = selectedVideo?.id ?? null;
   const videoReady = selectedVideo?.status === 'READY';
   const totalSec = lessons.reduce((s: number, l: any) => s + (l.durationSec ?? 0), 0);
+  /** What is left to do across the whole course, which is the teacher's question. */
+  const missingVideo = lessons.filter((l: any) => !l.videoAsset && l.type === 'VIDEO').length;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['teacher-course', id] });
@@ -858,28 +860,40 @@ export default function CourseBuilderPage() {
       </div>
       {publish.error && <PublishError error={publish.error} t={t} />}
 
-      {/* Course cover / thumbnail */}
-      <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
-        <div className="relative h-44 bg-surface-container-high sm:h-56">
-          {course.thumbnailUrl ? (
+      {/*
+        Course cover.
+        
+        A picture the teacher has chosen is worth showing at size. A picture
+        they have not is worth one line — the empty state used to take more
+        vertical room than three lessons, and pushed the thing the page is
+        actually for below the fold.
+      */}
+      <input ref={thumbInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+        onChange={(e) => e.target.files?.[0] && thumbUpload.mutate(e.target.files[0])} />
+      {course.thumbnailUrl ? (
+        <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
+          <div className="relative h-44 bg-surface-container-high sm:h-56">
             <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-outline">
-              <span className="material-symbols-outlined text-5xl">image</span>
-            </div>
-          )}
-          <input ref={thumbInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-            onChange={(e) => e.target.files?.[0] && thumbUpload.mutate(e.target.files[0])} />
-          <button
-            className="absolute end-3 bottom-3 flex items-center gap-1.5 rounded-xl bg-surface-container-lowest/90 px-3 py-2 text-sm font-bold text-primary shadow-card backdrop-blur transition hover:bg-surface-container-lowest"
-            disabled={thumbUpload.isPending}
-            onClick={() => thumbInput.current?.click()}
-          >
-            <span className="material-symbols-outlined text-base">{thumbUpload.isPending ? 'hourglass' : 'photo_camera'}</span>
-            {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.changeCover')}
-          </button>
+            <button
+              className="absolute end-3 bottom-3 flex items-center gap-1.5 rounded-xl bg-surface-container-lowest/90 px-3 py-2 text-sm font-bold text-primary shadow-card backdrop-blur transition hover:bg-surface-container-lowest"
+              disabled={thumbUpload.isPending}
+              onClick={() => thumbInput.current?.click()}
+            >
+              <span className="material-symbols-outlined text-base">{thumbUpload.isPending ? 'hourglass' : 'photo_camera'}</span>
+              {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.changeCover')}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <button
+          className="mb-5 flex w-full items-center gap-2 rounded-xl border border-dashed border-outline-variant/70 px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition hover:border-primary hover:text-primary"
+          disabled={thumbUpload.isPending}
+          onClick={() => thumbInput.current?.click()}
+        >
+          <span className="material-symbols-outlined text-[20px]">{thumbUpload.isPending ? 'hourglass' : 'add_photo_alternate'}</span>
+          {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.addCover')}
+        </button>
+      )}
       <ErrorNote error={thumbUpload.error} />
 
       {/* Summary strip — what used to be the pricing card in the side column. */}
@@ -898,29 +912,39 @@ export default function CourseBuilderPage() {
         </p>
       </div>
 
-      {/* Curriculum — full width, lessons open in place.
-          Sections are opt-in: lessons can sit right here with no section at
-          all, or be grouped into named ones below — both at once, even. */}
-      <div className="card mb-5 p-5">
-        {/* The heading earns its line only once there is something under it.
-            On a course built entirely out of sections this block was a title,
-            a count of nothing, and two rows of chrome. */}
-        {defaultUnit?.lessons.length > 0 && (
-          <div className="mb-4 flex items-center gap-3">
-            <p className="font-heading text-lg font-bold">{t('teacher.builder.directLessons')}</p>
-            <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
-              {(() => {
-                const missing = defaultUnit.lessons.filter((x: any) => !x.videoAsset && x.type === 'VIDEO').length;
-                return missing
-                  ? t('teacher.builder.lessonsMetaMissing', { count: defaultUnit.lessons.length, missing })
-                  : t('teacher.builder.lessonsMeta', { count: defaultUnit.lessons.length });
-              })()}
-            </span>
-          </div>
-        )}
+      {/*
+        The curriculum, as one list.
+        
+        This used to be a card per section holding a bordered box per lesson,
+        inside the page's own card — three nested borders to draw a list of
+        names, and every section carrying its own dashed add box and import
+        link. Nine lessons filled four screens and read as heavy as they were.
+        
+        One surface now, sections as headings inside it, lessons as rows with a
+        hairline between them. The chrome that was repeated per section — the
+        add box, the import link — is a single quiet control where it belongs.
+      */}
+      <div className="card mb-5 overflow-hidden p-0">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+          <p className="font-heading font-bold">{t('teacher.builder.curriculum')}</p>
+          <span className="text-sm text-on-surface-variant">
+            {missingVideo > 0
+              ? t('teacher.builder.lessonsMetaMissing', { count: lessons.length, missing: missingVideo })
+              : t('teacher.builder.lessonsMeta', { count: lessons.length })}
+          </span>
+          <button
+            className="ms-auto flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+            onClick={() => openImport(undefined)}
+          >
+            <span className="material-symbols-outlined text-base">smart_display</span>
+            {t('teacher.builder.importYoutubeBtn')}
+          </button>
+        </div>
 
+        {/* Lessons with no section of their own sit first, unlabelled — there
+            is nothing to call them that is not just "the course". */}
         {defaultUnit?.lessons.length > 0 && (
-          <ul className="mb-3 space-y-2">
+          <ul className="border-t border-outline-variant/40">
             {defaultUnit.lessons.map((l: any, li: number) => (
               <LessonRow
                 key={l.id}
@@ -935,37 +959,28 @@ export default function CourseBuilderPage() {
             ))}
           </ul>
         )}
+        <div className="border-t border-outline-variant/40 px-4 py-2 sm:px-5">
+          <AddLessonRow
+            busy={addLessonDirect.isPending}
+            placeholder={t('teacher.builder.lessonNamePh')}
+            label={t('teacher.builder.addLessonCta')}
+            onAdd={(title) => addLessonDirect.mutate(title)}
+          />
+        </div>
 
-        <AddLessonRow
-          busy={addLessonDirect.isPending}
-          placeholder={t('teacher.builder.lessonNamePh')}
-          label={t('teacher.builder.addLessonCta')}
-          onAdd={(title) => addLessonDirect.mutate(title)}
-        />
-        <button
-          className="mt-2 flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
-          onClick={() => openImport(undefined)}
-        >
-          <span className="material-symbols-outlined text-base">smart_display</span>
-          {t('teacher.builder.importYoutubeBtn')}
-        </button>
-      </div>
-
-      {sections.length > 0 && (
-        <div className="mb-5 space-y-5">
-          {sections.map((u: any, ui: number) => (
-            <div key={u.id} className="card p-5">
-              <div className="group/unit mb-4 flex items-center gap-3">
-                {/* A button, not the whole header: the title beside it is
-                    click-to-rename, and one strip that both folds and edits is
-                    a strip that does the wrong one half the time. */}
+        {sections.map((u: any, ui: number) => {
+          const gap = u.lessons.filter((x: any) => !x.videoAsset && x.type === 'VIDEO').length;
+          const shut = folded.has(u.id);
+          return (
+            <div key={u.id} className="border-t-4 border-outline-variant/25">
+              <div className="group/unit flex items-center gap-2 bg-surface-container-low/40 px-2 py-2 sm:px-3">
                 <button
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-on-surface-variant transition hover:bg-surface-container-high"
-                  aria-expanded={!folded.has(u.id)}
-                  title={t(folded.has(u.id) ? 'teacher.builder.unfold' : 'teacher.builder.fold')}
+                  aria-expanded={!shut}
+                  title={t(shut ? 'teacher.builder.unfold' : 'teacher.builder.fold')}
                   onClick={() => toggleFold(u.id)}
                 >
-                  <span className={`material-symbols-outlined text-[20px] transition-transform ${folded.has(u.id) ? '-rotate-90' : ''}`}>
+                  <span className={`material-symbols-outlined text-[20px] transition-transform ${shut ? '-rotate-90' : ''}`}>
                     expand_more
                   </span>
                 </button>
@@ -978,73 +993,65 @@ export default function CourseBuilderPage() {
                     setRenaming(null);
                     if (title && title !== u.title) renameUnit.mutate({ unitId: u.id, title });
                   }}
-                  className="font-heading text-lg font-bold"
+                  className="min-w-0 flex-1 font-heading font-bold"
                 />
-                <span className="ms-auto shrink-0 text-sm text-on-surface-variant">
-                  {/* What is left to do, not just how much there is. A count of
-                      lessons says nothing about whether the course is ready. */}
-                  {(() => {
-                    const missing = u.lessons.filter((x: any) => !x.videoAsset && x.type === 'VIDEO').length;
-                    return missing
-                      ? t('teacher.builder.lessonsMetaMissing', { count: u.lessons.length, missing })
-                      : t('teacher.builder.lessonsMeta', { count: u.lessons.length });
-                  })()}
+                {/* The name is what a teacher navigates by, so it keeps the
+                    width. The count is detail, and on a phone it was crowding
+                    "الفصل الأول: الطفولة" down to "الفصل…" — while the same
+                    figure for the whole course sits at the top of this list. */}
+                <span className="ms-auto hidden shrink-0 text-xs text-on-surface-variant sm:inline">
+                  {gap
+                    ? t('teacher.builder.lessonsMetaMissing', { count: u.lessons.length, missing: gap })
+                    : t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
                 </span>
                 <button
                   title={t('common.delete')}
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container sm:h-8 sm:w-8 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/unit:opacity-100"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/unit:opacity-100"
                   onClick={() => window.confirm(t('teacher.builder.deleteUnitConfirm')) && removeUnit.mutate(u.id)}
                 >
                   <span className="material-symbols-outlined text-[18px]">delete</span>
                 </button>
               </div>
 
-              {!folded.has(u.id) && (
-              <>
-              <ul className="space-y-2">
-                {u.lessons.map((l: any, li: number) => (
-                  <LessonRow
-                    key={l.id}
-                    l={l}
-                    li={li}
-                    open={selectedLessonId === l.id}
-                    onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
-                    onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
-                    panel={lessonPanel}
-                    t={t}
-                  />
-                ))}
-              </ul>
-
-              {/* Type a name, press Enter, keep going. */}
-              <AddLessonRow
-                busy={addLesson.isPending}
-                placeholder={t('teacher.builder.lessonNamePh')}
-                label={t('teacher.builder.addLessonCta')}
-                onAdd={(title) => addLesson.mutate({ unitId: u.id, title })}
-              />
-              <button
-                className="mt-2 flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
-                onClick={() => openImport(u.id)}
-              >
-                <span className="material-symbols-outlined text-base">smart_display</span>
-                {t('teacher.builder.importYoutubeBtn')}
-              </button>
-              </>
+              {!shut && (
+                <>
+                  <ul>
+                    {u.lessons.map((l: any, li: number) => (
+                      <LessonRow
+                        key={l.id}
+                        l={l}
+                        li={li}
+                        open={selectedLessonId === l.id}
+                        onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
+                        onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
+                        panel={lessonPanel}
+                        t={t}
+                      />
+                    ))}
+                  </ul>
+                  <div className="border-t border-outline-variant/40 px-4 py-2 sm:px-5">
+                    <AddLessonRow
+                      busy={addLesson.isPending}
+                      placeholder={t('teacher.builder.lessonNamePh')}
+                      label={t('teacher.builder.addLessonCta')}
+                      onAdd={(title) => addLesson.mutate({ unitId: u.id, title })}
+                    />
+                  </div>
+                </>
               )}
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
 
-      <button
-        className="btn-secondary w-full py-3"
-        disabled={addUnit.isPending}
-        onClick={() => addSection(() => addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })))}
-      >
-        <span className="material-symbols-outlined text-[20px]">add</span>
-        {t('teacher.builder.addUnit')}
-      </button>
+        <button
+          className="flex w-full items-center justify-center gap-1.5 border-t border-outline-variant/40 py-3 text-sm font-bold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary"
+          disabled={addUnit.isPending}
+          onClick={() => addSection(() => addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })))}
+        >
+          <span className="material-symbols-outlined text-[20px]">add</span>
+          {t('teacher.builder.addUnit')}
+        </button>
+      </div>
 
       {/* Publishing, always reachable — no reason to leave the page for it. */}
       <div className="card mt-6 flex flex-wrap items-center justify-between gap-4">
@@ -1257,52 +1264,52 @@ function LessonRow({
   panel: ReactNode;
   t: (k: string, o?: any) => string;
 }) {
+  const processing = l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status);
+  const needsVideo = l.type === 'VIDEO' && !l.videoAsset;
   return (
-    <li>
+    <li className="border-t border-outline-variant/40 first:border-t-0">
       <div
-        className={`group/lesson flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition ${
-          open
-            ? 'border-primary-container bg-primary-fixed/40'
-            : 'border-outline-variant/40 bg-surface-container-lowest hover:bg-surface-container-low'
+        className={`group/lesson flex cursor-pointer items-center gap-3 px-4 py-2.5 transition sm:px-5 ${
+          open ? 'bg-primary-fixed/40' : 'hover:bg-surface-container-low'
         }`}
         onClick={onToggle}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
-          <span className="material-symbols-outlined text-xl">
-            {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'draft'}
+        {/* The icon carries the state, so the row does not need a second line
+            to say "no video yet" — the thing a teacher scans for. */}
+        <span
+          className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
+            needsVideo
+              ? 'bg-surface-container-high text-outline'
+              : 'bg-secondary-container text-on-secondary-container'
+          }`}
+          title={needsVideo ? t('teacher.builder.needsVideo') : undefined}
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'add_circle'}
           </span>
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 font-bold">
-            <span className="shrink-0 text-outline">{li + 1}.</span>
-            <span className="min-w-0 truncate" title={l.title}>{l.title}</span>
-          </p>
-          <p className="flex flex-wrap gap-2 text-xs text-outline">
-            {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
-            {l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status) && (
-              <span className="text-primary">{t('teacher.builder.videoProcessing')}</span>
-            )}
-            {l.isFreePreview && <span className="text-secondary">{t('teacher.builder.freePreview')}</span>}
-            {(l.dripUnlockAt || l.dripAfterEnrollDays != null) && (
-              <span className="flex items-center gap-0.5">
-                <span className="material-symbols-outlined text-xs">lock_clock</span>
-                Drip
-              </span>
-            )}
-            {l.attachments?.length > 0 && <span>{t('course.attachmentsCount', { count: l.attachments.length })}</span>}
-          </p>
-        </div>
-        <span className={`material-symbols-outlined shrink-0 text-outline transition ${open ? 'rotate-180' : ''}`}>
-          expand_more
-        </span>
-        {/* Full-size tap target that is always visible on a touch screen. The
-            reveal-on-hover treatment below it is desktop-only for a reason:
-            a phone never hovers, so the button was invisible there while
-            still taking the tap — landing on a delete you couldn't see, or
-            missing it and toggling the row instead. */}
+        <span className="shrink-0 text-sm text-outline">{li + 1}</span>
+        <span className="min-w-0 flex-1 truncate font-semibold" title={l.title}>{l.title}</span>
+
+        {/* Everything after the name is optional detail, and drops off first
+            when the row runs out of width. */}
+        {processing && (
+          <span className="shrink-0 text-xs text-primary">{t('teacher.builder.videoProcessing')}</span>
+        )}
+        {l.isFreePreview && (
+          <span className="hidden shrink-0 text-xs text-secondary sm:inline">{t('teacher.builder.freePreview')}</span>
+        )}
+        {(l.dripUnlockAt || l.dripAfterEnrollDays != null) && (
+          <span className="material-symbols-outlined hidden shrink-0 text-[16px] text-outline sm:inline" title="Drip">lock_clock</span>
+        )}
+        {l.durationSec > 0 && (
+          <span className="hidden shrink-0 text-xs tabular-nums text-outline sm:inline">{duration(l.durationSec)}</span>
+        )}
+
         <button
           title={t('common.delete')}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container sm:h-8 sm:w-8 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/lesson:opacity-100"
+          aria-label={t('common.delete')}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/lesson:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
@@ -1310,6 +1317,9 @@ function LessonRow({
         >
           <span className="material-symbols-outlined text-[18px]">delete</span>
         </button>
+        <span className={`material-symbols-outlined shrink-0 text-[20px] text-outline transition ${open ? 'rotate-180' : ''}`}>
+          expand_more
+        </span>
       </div>
       {open && panel}
     </li>
@@ -1366,12 +1376,15 @@ function AddLessonRow({
     });
   };
 
+  // A quiet line, not a dashed box. Repeated once per section, the box was
+  // more visual weight than the lessons it sat under — and it advertised an
+  // action the teacher already knows is there.
   return (
-    <div className="mt-3 flex items-center gap-2 rounded-xl border-2 border-dashed border-outline-variant px-3 py-1.5 transition focus-within:border-primary">
-      <span className="material-symbols-outlined text-outline">add</span>
+    <div className="flex items-center gap-2 transition">
+      <span className="material-symbols-outlined text-[20px] text-outline">add</span>
       <input
         ref={ref}
-        className="min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-outline"
+        className="min-w-0 flex-1 rounded-lg bg-transparent px-1 py-2 text-sm outline-none transition placeholder:text-outline focus:bg-surface-container-low"
         placeholder={placeholder}
         maxLength={200}
         value={value}
@@ -1383,13 +1396,17 @@ function AddLessonRow({
           }
         }}
       />
-      <button
-        className="grid min-h-11 shrink-0 place-items-center rounded-lg px-4 text-sm font-bold text-primary transition hover:bg-primary-fixed disabled:opacity-40 sm:min-h-0 sm:px-3 sm:py-1.5"
-        disabled={!value.trim() || busy}
-        onClick={submit}
-      >
-        {label}
-      </button>
+      {/* Only once there is something to add: an always-visible button here is
+          a permanent call to action on a row that is already an invitation. */}
+      {value.trim() && (
+        <button
+          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-primary transition hover:bg-primary-fixed disabled:opacity-40"
+          disabled={busy}
+          onClick={submit}
+        >
+          {label}
+        </button>
+      )}
     </div>
   );
 }

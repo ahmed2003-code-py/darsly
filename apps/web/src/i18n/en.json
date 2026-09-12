@@ -458,7 +458,10 @@
       "unfold": "Open this section",
       "lessonsMetaMissing": "{{count}} lessons · {{missing}} still without video",
       "renameLesson": "Rename lesson",
-      "titleLabel": "Lesson name"
+      "titleLabel": "Lesson name",
+      "curriculum": "Course curriculum",
+      "needsVideo": "No video yet",
+      "addCover": "Add a course cover"
     },
     "students": {
       "title": "My students",

@@ -245,6 +245,15 @@ export class AcademySiteService {
   async publish(academyId: string, actorUserId: string): Promise<AcademySite> {
     const site = await this.getOrCreate(academyId);
     if (!site.draftDoc) throw new BadRequestException('There is no draft to publish');
+    // A locked page has no compiled markup to replace, so this used to bump the
+    // version and change nothing — a success that does nothing, which reads as
+    // a button that does nothing. Refuse, and name the way out.
+    if (site.htmlLocked) {
+      throw new ConflictException({
+        message: 'This page is hand-authored, so publishing cannot change it — hand it to the studio first',
+        code: 'HTML_LOCKED',
+      });
+    }
     const parsed = parseSiteDocument(site.draftDoc);
     if (!parsed.success) {
       throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
@@ -282,7 +291,12 @@ export class AcademySiteService {
     if (!doc) throw new BadRequestException('There is no page to build from yet — generate one first');
     const parsed = parseSiteDocument(doc);
     if (!parsed.success) throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
-    await this.prisma.academySite.update({ where: { id: site.id }, data: { htmlLocked: false } });
+    await this.prisma.academySite.update({
+      where: { id: site.id },
+      // The draft is what gets published, and a locked site may only have the
+      // published copy — carry it across so there is something to build from.
+      data: { htmlLocked: false, draftDoc: doc as unknown as object },
+    });
     await this.log(actorUserId, 'site.html.unlock', site.id, {});
     return this.publish(academyId, actorUserId);
   }

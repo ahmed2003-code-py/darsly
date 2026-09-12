@@ -176,7 +176,12 @@ export default function PublishTab({ slug }: { slug: string }) {
                 {ov?.publishedAt && <span className="text-on-surface-variant">· {dateShort(ov.publishedAt)}</span>}
               </div>
             )}
-            {isPublished && <p className="mt-2 text-xs text-on-surface-variant">{t('studio.publish.hasNewerDraft')}</p>}
+            {/* Only when there is one. Gated on `isPublished` alone, this told
+                every published academy it had unpushed changes forever, which
+                is the same sentence whether or not the publish just worked. */}
+            {isPublished && canPublish && (
+              <p className="mt-2 text-xs text-on-surface-variant">{t('studio.publish.hasNewerDraft')}</p>
+            )}
             {status === 'REJECTED' && ov?.moderationReason && (
               <p className="mt-3 text-sm text-error">{t('studio.publish.reason', { reason: ov.moderationReason })}</p>
             )}

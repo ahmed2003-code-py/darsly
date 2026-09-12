@@ -79,6 +79,12 @@ async function main() {
     () => prisma.liveSession.count({ where: { ...live, ...otherTenant } }),
     () => prisma.liveSession.updateMany({ where: { ...live, ...otherTenant }, data: { deletedAt: NOW } }));
 
+  // A snapshot names its site, not its academy, so it is scoped through the
+  // relation — and it goes before the site itself, like every other child here.
+  await step('site snapshots (other academies)',
+    () => prisma.academySiteSnapshot.count({ where: { ...live, site: { academyId: { not: keepTenantId } } } }),
+    () => prisma.academySiteSnapshot.updateMany({ where: { ...live, site: { academyId: { not: keepTenantId } } }, data: { deletedAt: NOW } }));
+
   await step('academy sites (other academies)',
     () => prisma.academySite.count({ where: { ...live, academyId: { not: keepTenantId } } }),
     () => prisma.academySite.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
@@ -86,10 +92,6 @@ async function main() {
   await step('academy profile facts (other academies)',
     () => prisma.academyProfileFacts.count({ where: { ...live, academyId: { not: keepTenantId } } }),
     () => prisma.academyProfileFacts.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
-
-  await step('site snapshots (other academies)',
-    () => prisma.academySiteSnapshot.count({ where: { ...live, academyId: { not: keepTenantId } } }),
-    () => prisma.academySiteSnapshot.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
 
   // The studio's admin overview counts every job on the platform with no
   // academy filter, so a removed academy's failures stayed in the totals.

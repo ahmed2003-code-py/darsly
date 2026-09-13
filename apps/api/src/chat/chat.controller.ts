@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -65,6 +66,12 @@ export class ChatController {
   @ApiOperation({ summary: 'Open (or find) the conversation with someone' })
   open(@CurrentUser() user: JwtPayload, @Body() dto: OpenThreadDto) {
     return this.chat.openThread(user, dto);
+  }
+
+  @Delete('threads/:id')
+  @ApiOperation({ summary: 'Take a conversation off my own list' })
+  clear(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.chat.clearThread(user, id);
   }
 
   @Get('threads/:id/messages')

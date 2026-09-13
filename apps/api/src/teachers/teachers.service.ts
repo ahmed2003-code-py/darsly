@@ -215,6 +215,9 @@ export class TeachersService {
       avatarUrl: teacher.user.avatarUrl,
       bio: teacher.bio,
       introVideoUrl: teacher.introVideoUrl,
+      // So the student's page never offers a message button that would be
+      // refused the moment it was pressed.
+      acceptsStudentMessages: teacher.acceptsStudentMessages,
       language: teacher.language,
       verified: !!teacher.verifiedAt,
       subject: teacher.subject,

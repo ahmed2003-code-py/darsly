@@ -369,12 +369,16 @@ export default function SecureVideoPlayerPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {user?.role === Role.STUDENT && course?.teacher && (
-            <button className="btn-ghost px-4 py-2 text-sm" onClick={askTeacher}>
-              <span className="material-symbols-outlined text-base">live_help</span>
-              {t('player.askTeacher')}
-            </button>
-          )}
+          {/* Hidden rather than shown and refused: a teacher who has closed
+              messaging is not someone this button can reach. */}
+          {user?.role === Role.STUDENT &&
+            course?.teacher &&
+            course.teacher.acceptsStudentMessages !== false && (
+              <button className="btn-ghost px-4 py-2 text-sm" onClick={askTeacher}>
+                <span className="material-symbols-outlined text-base">live_help</span>
+                {t('player.askTeacher')}
+              </button>
+            )}
           <Badge tone="teal">
             <span className="material-symbols-outlined text-sm">lock</span>
             {t('player.protected')}

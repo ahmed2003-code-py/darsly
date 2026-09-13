@@ -25,8 +25,13 @@ export function getSocket(): Socket | null {
   boundToken = token;
   socket = io(apiOrigin() || window.location.origin, {
     auth: { token },
-    transports: ['websocket'],
+    // Websocket first, but not websocket only: a phone on a carrier or a
+    // network that blocks the upgrade used to get no live delivery at all and
+    // no fallback, so messages simply did not arrive until the page reloaded.
+    transports: ['websocket', 'polling'],
     reconnection: true,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5000,
   });
   return socket;
 }

@@ -200,6 +200,7 @@ const ERROR_CODES: Record<string, string> = {
   HTML_LOCKED: 'err.htmlLocked',
   NO_HAND_AUTHORED_HTML: 'err.noHandAuthored',
   ENROLLMENT_ACTIVE: 'err.enrollmentActive',
+  MESSAGING_CLOSED: 'err.messagingClosed',
 };
 
 export function ErrorNote({ error }: { error: unknown }) {

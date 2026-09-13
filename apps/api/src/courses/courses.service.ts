@@ -887,6 +887,9 @@ export class CoursesService {
         slug: course.teacher.slug,
         fullName: course.teacher.user.fullName,
         avatarUrl: course.teacher.user.avatarUrl,
+        // The lesson player offers "ask the teacher" from here; it must not
+        // offer it to a teacher who has closed messaging.
+        acceptsStudentMessages: course.teacher.acceptsStudentMessages,
       },
       bundleCourses: course.bundleItems.map((b) => b.course),
       viewer: {

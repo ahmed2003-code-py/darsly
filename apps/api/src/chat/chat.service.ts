@@ -20,6 +20,8 @@ export const VOICE_MAX_SECONDS = 300;
 export const VOICE_MAX_BYTES = 10 * 1024 * 1024;
 /** What a browser's MediaRecorder actually produces, across the ones we serve. */
 const VOICE_MIME = /^audio\/(webm|ogg|mp4|mpeg|aac|wav)(;.*)?$/;
+/** What a voice note looks like in a list that can only show one line of text. */
+const VOICE_PREVIEW = '🎤 رسالة صوتية';
 
 /**
  * What every read of a message needs: who sent it, and enough of the message it
@@ -67,11 +69,29 @@ export class ChatService {
 
   // ── Threads ───────────────────────────────────────────────────────────────
 
+  /** Is this academy reachable by message at all? */
+  private async messagingOpen(tenantId: string): Promise<boolean> {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { id: tenantId },
+      select: { acceptsStudentMessages: true },
+    });
+    return teacher?.acceptsStudentMessages ?? false;
+  }
+
   async listThreads(user: JwtPayload): Promise<ChatThreadDto[]> {
+    // A teacher who has closed messaging is not shown a list of conversations
+    // nobody can add to.
+    if (user.role === Role.TEACHER && user.tenantId && !(await this.messagingOpen(user.tenantId))) {
+      return [];
+    }
     const where =
       user.role === Role.TEACHER
-        ? { tenantId: user.tenantId }
-        : { studentId: (await this.studentId(user.sub)) ?? '__none__' };
+        ? { tenantId: user.tenantId, hiddenForTeacherAt: null }
+        : {
+            studentId: (await this.studentId(user.sub)) ?? '__none__',
+            hiddenForStudentAt: null,
+            teacher: { acceptsStudentMessages: true },
+          };
 
     const threads = await this.prisma.chatThread.findMany({
       where,
@@ -96,14 +116,6 @@ export class ChatService {
         NOT: { sender: { id: user.sub } },
       },
     });
-    let lessonTitle: string | null = null;
-    if (thread.lessonId) {
-      const l = await this.prisma.lesson.findUnique({
-        where: { id: thread.lessonId },
-        select: { title: true },
-      });
-      lessonTitle = l?.title ?? null;
-    }
     const last = thread.messages?.[0];
     return {
       id: thread.id,
@@ -113,13 +125,30 @@ export class ChatService {
       counterpartName: counterpart.fullName,
       counterpartAvatarUrl: counterpart.avatarUrl ?? null,
       lessonId: thread.lessonId,
-      lessonTitle,
+      lessonTitle: null,
       videoTimestampSec: thread.videoTimestampSec,
-      lastMessage: last?.body ?? null,
+      // A voice note has no text, and an empty preview made a conversation full
+      // of them look like one nobody had written in yet.
+      lastMessage: last ? last.body || (last.audioKey ? VOICE_PREVIEW : null) : null,
       lastMessageAt: last?.createdAt?.toISOString() ?? null,
       unread,
       updatedAt: thread.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Take a conversation off your own list.
+   *
+   * Not a delete: the other person's copy is theirs, and the messages are the
+   * record of what was agreed about money and access. It comes back for you the
+   * moment either of you writes in it again.
+   */
+  async clearThread(user: JwtPayload, threadId: string) {
+    if (!(await this.canAccessThread(user, threadId))) throw new ForbiddenException('Not your thread');
+    const side =
+      user.role === Role.STUDENT ? { hiddenForStudentAt: new Date() } : { hiddenForTeacherAt: new Date() };
+    await this.prisma.chatThread.update({ where: { id: threadId }, data: side });
+    return { id: threadId, cleared: true };
   }
 
   async getMessages(user: JwtPayload, threadId: string): Promise<ChatMessageDto[]> {
@@ -198,6 +227,12 @@ export class ChatService {
         where: { studentId: sid, tenantId: payload.tenantId, status: 'ACTIVE' },
       });
       if (!enrolled) throw new ForbiddenException('You can only message teachers you are enrolled with');
+      if (!(await this.messagingOpen(payload.tenantId))) {
+        throw new ForbiddenException({
+          message: 'This teacher is not accepting messages',
+          code: 'MESSAGING_CLOSED',
+        });
+      }
       // One conversation per teacher, whatever prompted it. Asking from inside
       // a lesson used to open a second thread with the same person, which read
       // as two chats with one teacher; the lesson rides on the message instead.
@@ -216,6 +251,12 @@ export class ChatService {
     // teacher could say anything in it.
     const tenantId = user.tenantId;
     if (!tenantId) throw new BadRequestException('No academy on this account');
+    if (!(await this.messagingOpen(tenantId))) {
+      throw new ForbiddenException({
+        message: 'Messaging is switched off for this academy',
+        code: 'MESSAGING_CLOSED',
+      });
+    }
     if (!payload.studentId) throw new BadRequestException('studentId required to start a chat');
     // The same gate as the student's, read from the other side: they must share
     // an enrolment. Any status, including a revoked one — telling a student why
@@ -302,7 +343,7 @@ export class ChatService {
       include: MESSAGE_INCLUDE,
     });
 
-    await this.fanOut(saved, thread, user.sub, 'رسالة صوتية 🎤');
+    await this.fanOut(saved, thread, user.sub, VOICE_PREVIEW);
     return { message: this.toMessageDto(saved, user.sub), threadId };
   }
 
@@ -371,7 +412,9 @@ export class ChatService {
   ) {
     await this.prisma.chatThread.update({
       where: { id: thread.id },
-      data: { updatedAt: new Date() },
+      // Clearing the hide here is what makes "put away" self-correcting: there
+      // is something new to read, so it is back, for whoever had cleared it.
+      data: { updatedAt: new Date(), hiddenForTeacherAt: null, hiddenForStudentAt: null },
     });
     const recipientUserId = await this.recipientUserId(thread, senderUserId);
     this.realtime.emitToUser(senderUserId, RealtimeEvents.MESSAGE, this.toMessageDto(message, senderUserId));

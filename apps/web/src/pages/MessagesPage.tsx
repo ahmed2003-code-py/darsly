@@ -27,27 +27,52 @@ export default function MessagesPage() {
   const { data: threads, isLoading } = useQuery<ChatThreadDto[]>({
     queryKey: ['chat-threads'],
     queryFn: async () => (await api.get('/chat/threads')).data,
-    refetchInterval: 30_000,
+    // A conversation list that is a minute out of date reads as broken. Cheap
+    // enough to ask often, and the socket usually gets there first anyway.
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
   });
   const active = threads?.find((th) => th.id === activeId);
 
-  // Load messages when a thread is opened.
+  /**
+   * The open conversation, polled as well as pushed.
+   *
+   * The socket is the fast path, but it is not a guarantee: a phone that slept,
+   * a network that dropped the connection, a carrier that blocks the upgrade —
+   * all of them end with a page that quietly stops receiving. Asking every few
+   * seconds costs one small request and means a message always arrives.
+   */
+  const { data: fetched } = useQuery<ChatMessageDto[]>({
+    queryKey: ['chat-messages', activeId],
+    queryFn: async () => (await api.get(`/chat/threads/${activeId}/messages`)).data,
+    enabled: !!activeId,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
+  });
+
+  // Merge what the poll brought with what the socket pushed, newest wins per id.
+  useEffect(() => {
+    if (!fetched) return;
+    setMessages((prev) => {
+      const byId = new Map(fetched.map((m) => [m.id, m]));
+      for (const m of prev) if (!byId.has(m.id)) byId.set(m.id, m);
+      return [...byId.values()].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+    });
+  }, [fetched]);
+
   useEffect(() => {
     setReplyTo(null);
     if (!activeId) {
       setMessages([]);
       return;
     }
-    let cancelled = false;
-    api.get(`/chat/threads/${activeId}/messages`).then(({ data }) => {
-      if (!cancelled) setMessages(data);
-    });
     const socket = getSocket();
     socket?.emit(RealtimeEvents.JOIN_THREAD, activeId);
     queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
     return () => {
-      cancelled = true;
       socket?.emit(RealtimeEvents.LEAVE_THREAD, activeId);
     };
   }, [activeId, queryClient]);
@@ -122,6 +147,14 @@ export default function MessagesPage() {
 
   function onType() {
     if (activeId) getSocket()?.emit(RealtimeEvents.TYPING, activeId);
+  }
+
+  /** Take this conversation off my list. The other side keeps theirs. */
+  async function clearThread(id: string) {
+    if (!window.confirm(t('messages.clearConfirm'))) return;
+    await api.delete(`/chat/threads/${id}`);
+    if (id === activeId) setParams({});
+    queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
   }
 
   /** Group by day so a long conversation reads as days, not as one wall. */
@@ -207,12 +240,20 @@ export default function MessagesPage() {
                   <span className="material-symbols-outlined rtl:-scale-x-100">arrow_back</span>
                 </button>
                 <Avatar name={active.counterpartName} url={active.counterpartAvatarUrl} rem={2.5} />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate font-heading font-bold">{active.counterpartName}</p>
                   <p className="truncate text-xs text-on-surface-variant">
                     {peerTyping ? t('messages.typing') : ''}
                   </p>
                 </div>
+                <button
+                  onClick={() => void clearThread(active.id)}
+                  title={t('messages.clear')}
+                  aria-label={t('messages.clear')}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-outline transition hover:bg-error-container hover:text-on-error-container"
+                >
+                  <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
+                </button>
               </header>
 
               <div className="flex-1 space-y-1 overflow-y-auto bg-surface-container-low/40 px-3 py-4 sm:px-5">

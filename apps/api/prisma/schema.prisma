@@ -248,6 +248,10 @@ model TeacherProfile {
   /// they create is offered to some subset of these and never outside them.
   stages                 EducationStage[]
   introVideoUrl          String?
+  /// Whether this academy is reachable by message at all. Turning it off closes
+  /// the conversation in both directions: the student cannot write, the teacher
+  /// cannot either, and neither of them is shown a chat that goes nowhere.
+  acceptsStudentMessages Boolean       @default(true)
   // Language of instruction ("ar" | "en") — a discovery filter.
   language               String        @default("ar")
   status                 TeacherStatus @default(PENDING)
@@ -1196,6 +1200,13 @@ model ChatThread {
   videoTimestampSec Int?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+
+  /// Put away by one side, which is not the same as deleted. Cleared whenever
+  /// anyone writes in the thread, so a conversation someone cleared comes back
+  /// the moment there is something new in it — the same rule that lets a
+  /// re-enrolled course reappear without any code path remembering to undo it.
+  hiddenForTeacherAt DateTime?
+  hiddenForStudentAt DateTime?
 
   messages  ChatMessage[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.

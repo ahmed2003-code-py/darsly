@@ -179,6 +179,12 @@ export default function TeacherEnrollmentsPage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<(typeof SORTS)[number]>('recent');
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const { data: myProfile } = useQuery({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+    staleTime: 60_000,
+  });
+  const chatOpen = myProfile?.acceptsStudentMessages !== false;
 
   // One request for everything, filtered locally. Querying per tab meant the
   // pending count was unknowable from any other tab — so the badge that tells a
@@ -458,11 +464,15 @@ export default function TeacherEnrollmentsPage() {
                       <span className="ms-auto flex shrink-0 items-center gap-1">
                         {/* Filled, because it is the one that reaches them
                             inside the platform — where the lessons and the
-                            payment are. The other two are quiet on purpose. */}
-                        <MessageButton
-                          studentId={group.studentId}
-                          label={t('teacher.students.message')}
-                        />
+                            payment are. The other two are quiet on purpose.
+                            Gone entirely when the teacher has closed messaging,
+                            rather than offered and then refused. */}
+                        {chatOpen && (
+                          <MessageButton
+                            studentId={group.studentId}
+                            label={t('teacher.students.message')}
+                          />
+                        )}
                         {group.phone && (
                           <>
                             <ContactLink

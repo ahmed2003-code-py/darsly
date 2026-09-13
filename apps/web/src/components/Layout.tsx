@@ -1,7 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
+import { api } from '../lib/api';
 import { useRealtime } from '../lib/useRealtime';
 import { useWebNotifications } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
@@ -79,8 +81,18 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   useRealtime(); // live bell + chat list on every authenticated page
   useWebNotifications(navigate); // ...and as OS notifications, clickable, when the tab is away
-  const nav =
+  // A teacher who has closed messaging keeps no chat destination: the page
+  // would be an empty list they cannot add to.
+  const { data: teacherProfile } = useQuery({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+    enabled: user?.role === Role.TEACHER,
+    staleTime: 60_000,
+  });
+  const chatClosed = user?.role === Role.TEACHER && teacherProfile?.acceptsStudentMessages === false;
+  const baseNav =
     user?.role === Role.SUPER_ADMIN ? ADMIN_NAV : user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
+  const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;
   // Ordered by the tab list, not by where they happen to sit in the sidebar,
   // and drawn from the same entries so a renamed label can't drift between
   // the two navigations.

@@ -174,7 +174,10 @@
     "delivered": "Sent",
     "startHint": "Send the first message to start the conversation.",
     "deletedMessage": "This message was removed",
-    "unsupported": "Reload the page to see this message."
+    "unsupported": "Reload the page to see this message.",
+    "clear": "Clear this conversation",
+    "clearConfirm": "Remove this conversation from your list? The other person keeps theirs, and it comes back if either of you writes again.",
+    "closed": "This teacher is not accepting messages right now."
   },
   "discovery": {
     "title": "Discover Teachers",
@@ -1006,7 +1009,12 @@
     "roleSUPER_ADMIN": "Platform admin",
     "gradeHint": "Moved up a year? Change it here — your account and everything you finished stay exactly as they are.",
     "sectionTeaching": "What you teach",
-    "teachingHint": "The subject and stages every course you publish is filed under."
+    "teachingHint": "The subject and stages every course you publish is filed under.",
+    "sectionMessaging": "Messages",
+    "messagingHint": "Control whether students can reach you on the platform.",
+    "acceptMessages": "Accept messages from students",
+    "acceptMessagesOn": "Students can write to you, and you can write to them from My students.",
+    "acceptMessagesOff": "Chat is closed. Nobody can write to you and you cannot write to them. Existing conversations are kept, not deleted."
   },
   "pay": {
     "title": "Complete payment",
@@ -1742,6 +1750,7 @@
     "mediaNotReady": "{{count}} image(s) on this page are missing or still processing — remove or re-upload them, then publish.",
     "htmlLocked": "This page is hand-authored, so publishing cannot change it — hand it to the studio first.",
     "noHandAuthored": "There is no hand-authored page kept for this academy.",
-    "enrollmentActive": "A course you are still enrolled in, or whose payment is still being checked, cannot be removed."
+    "enrollmentActive": "A course you are still enrolled in, or whose payment is still being checked, cannot be removed.",
+    "messagingClosed": "Messaging is switched off for this academy."
   }
 }

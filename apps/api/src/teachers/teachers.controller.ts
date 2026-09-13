@@ -44,6 +44,7 @@ class DiscoverTeachersDto implements DiscoverTeachersQuery {
 
 class UpdateMyTeacherProfileDto {
   @IsOptional() @IsString() @MaxLength(2_000) bio?: string;
+  @IsOptional() @IsBoolean() acceptsStudentMessages?: boolean;
   @IsOptional() @IsUrl({ require_tld: false }) @MaxLength(500) introVideoUrl?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptionalId() subjectId?: string;

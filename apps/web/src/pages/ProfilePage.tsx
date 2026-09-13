@@ -303,6 +303,7 @@ export default function ProfilePage() {
             course they publish is filed under. It lives here because this is
             where the course form sends them looking for it. */}
         <TeachingSection role={data?.role} />
+        <MessagingSection role={data?.role} />
 
         {/* Two-up once there is room for it — these blocks are three rows
             each, not articles. */}
@@ -472,6 +473,66 @@ function LearningSection() {
  * rather than in the academy console because the subject and the stages belong
  * to the person, not to the academy's branding.
  */
+/**
+ * Whether this academy is reachable by message at all.
+ *
+ * A teacher who does not want to run a chat channel should not be handed one
+ * they have to ignore, and a student should not be offered a message button
+ * that goes nowhere. Turning it off closes both ends: the conversations
+ * disappear from the teacher's console, the button disappears from the student
+ * list, and a student can no longer start one.
+ */
+function MessagingSection({ role }: { role?: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const isTeacher = role === 'TEACHER';
+  const { data: profile } = useQuery({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+    enabled: isTeacher,
+  });
+  const save = useMutation({
+    mutationFn: async (accepts: boolean) =>
+      (await api.patch('/teacher/profile', { acceptsStudentMessages: accepts })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teacher-profile'] });
+      qc.invalidateQueries({ queryKey: ['chat-threads'] });
+    },
+  });
+  if (!isTeacher || !profile) return null;
+  const on = profile.acceptsStudentMessages !== false;
+
+  return (
+    <Section icon="forum" title={t('profile.sectionMessaging')} hint={t('profile.messagingHint')}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        disabled={save.isPending}
+        onClick={() => save.mutate(!on)}
+        className="flex w-full items-center gap-4 rounded-xl border border-outline-variant p-4 text-start transition hover:border-outline disabled:opacity-60"
+      >
+        <span
+          className={`relative h-6 w-11 shrink-0 rounded-full transition ${on ? 'bg-primary' : 'bg-surface-container-high'}`}
+        >
+          <span
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-surface-container-lowest shadow-card transition-[inset-inline-start] ${
+              on ? 'start-[1.375rem]' : 'start-0.5'
+            }`}
+          />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-bold">{t('profile.acceptMessages')}</span>
+          <span className="mt-0.5 block text-sm text-on-surface-variant">
+            {t(on ? 'profile.acceptMessagesOn' : 'profile.acceptMessagesOff')}
+          </span>
+        </span>
+      </button>
+      <ErrorNote error={save.error} />
+    </Section>
+  );
+}
+
 function TeachingSection({ role }: { role?: string }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();

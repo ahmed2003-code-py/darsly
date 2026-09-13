@@ -363,7 +363,7 @@ export default function TeacherEnrollmentsPage() {
                             {group.phone}
                           </span>
                         ) : (
-                          <span className="block text-xs text-outline/60">
+                          <span className="block text-xs text-outline">
                             {t('teacher.students.noPhone')}
                           </span>
                         )}
@@ -387,7 +387,7 @@ export default function TeacherEnrollmentsPage() {
                         <span className="block text-xs text-outline">
                           {t('teacher.students.courseCount', { count: group.enrollments.length })}
                         </span>
-                        <span className="hidden text-xs text-outline/70 sm:block">
+                        <span className="hidden text-xs text-outline sm:block">
                           {/* `lastEnrolledAt` is epoch ms, kept that way for the sort. */}
                           {t('teacher.students.lastEnrolled')}: {dateShort(new Date(group.lastEnrolledAt))}
                         </span>

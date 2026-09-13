@@ -21,6 +21,12 @@ const MAX_PLAYBACK_RATE = 2.5;
 const WATCHED_COMPLETE_PCT = 90;
 /** The kinder bar applied when the player reports the video actually ended. */
 const ENDED_COMPLETE_PCT = 70;
+/**
+ * Written into a session's own telemetry once it has raised a rapid-seek alert.
+ * It rides along with the events the heartbeat already loads and writes back,
+ * so "say this once per session" costs no extra query.
+ */
+const RAPID_SEEK_MARK = 'rapid-seek-flagged';
 
 export interface DeviceCtx {
   ip?: string;
@@ -320,10 +326,20 @@ export class PlaybackService {
     }
 
     // Rapid-seek: many seeks in a short window ⇒ likely scripted scraping.
-    const recentSeeks = events.filter(
-      (e) => e.type === 'seek' && Date.now() - e.t < 10_000,
-    ).length;
-    if (recentSeeks >= 8) {
+    //
+    // Two things kept this firing at ordinary students. The player used to
+    // report every `seeked` the browser raised — including hls.js nudging past
+    // a buffer hole on a weak connection, which is not the student touching
+    // anything — and one burst raised a fresh alert on every seek after the
+    // eighth, so a single drag of the bar filled the teacher's screen. Only
+    // deliberate seeks are reported now, the bar is higher, and a session says
+    // this at most once.
+    const alreadyFlagged = events.some((e) => e.type === RAPID_SEEK_MARK);
+    const recentSeeks = alreadyFlagged
+      ? 0
+      : events.filter((e) => e.type === 'seek' && Date.now() - e.t < 10_000).length;
+    if (recentSeeks >= 12) {
+      events.push({ t: Date.now(), type: RAPID_SEEK_MARK });
       await this.flag('RAPID_SEEK_ANOMALY', 'WARNING', {
         tenantId: session.tenantId,
         studentId: session.studentId,

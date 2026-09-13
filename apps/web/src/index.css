@@ -71,7 +71,11 @@
     --c-inverse-surface: 38 38 46;
     --c-inverse-on-surface: 244 243 239;
 
-    --c-outline: 135 134 143;
+    /* The quietest ink on the page — captions, hints, field help. It is still
+       text, so it clears 4.5:1 on every surface a card is drawn from; the
+       hierarchy below `on-surface-variant` comes from size and weight, not from
+       being too faint to read. */
+    --c-outline: 95 94 104;
     /* Hairlines and shadows are drawn as an alpha of these. */
     --c-line: 24 24 34;
     --c-shadow: 24 24 34;
@@ -150,7 +154,9 @@
     --c-inverse-surface: 237 237 242;
     --c-inverse-on-surface: 27 27 34;
 
-    --c-outline: 110 109 122;
+    /* Dark is where this went wrong: at 110 109 122 a hint sat at 2.9:1 on a
+       card and simply could not be read. Same rule as light, swapped. */
+    --c-outline: 155 154 167;
     /* Hairlines are an alpha of this, so on a dark page they have to be drawn
        in light — the same rule with the ink swapped, not a second rule. */
     --c-line: 235 235 245;
@@ -285,7 +291,7 @@
 
   /* ── Inputs ──────────────────────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2.5 text-on-surface placeholder:text-outline/70 transition-[border-color,box-shadow] duration-150 ease-premium
+    @apply w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2.5 text-on-surface placeholder:text-outline transition-[border-color,box-shadow] duration-150 ease-premium
       hover:border-outline/60 focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/10;
   }
   .pill {

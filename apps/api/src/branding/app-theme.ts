@@ -252,6 +252,15 @@ export function deriveAppTheme(input: BrandPalette | null | undefined): AppTheme
   const chip = tint(mode === 'dark' ? 0.18 : 0.1);
   const neutral = mix(ink, background, 0.22);
 
+  // Panels run both ways from the page: `raised` lifts away from the ink and
+  // `panel` leans into it. The quietest ink has to clear its floor on both ends,
+  // so it is seated against whichever it reads worst on.
+  const quietInk = mix(ink, background, 0.55);
+  const hardestPanel =
+    contrastRatio(quietInk, raised(0.03)) < contrastRatio(quietInk, panel(step * 2))
+      ? raised(0.03)
+      : panel(step * 2);
+
   const t: Record<string, string> = {
     // ── the brand ramp ────────────────────────────────────────────────────────
     // 600 is the primary action, matching the platform scale, so every existing
@@ -316,11 +325,19 @@ export function deriveAppTheme(input: BrandPalette | null | undefined): AppTheme
     'surface-container-highest': panel(step * 2),
     'surface-variant': surfaceContainer,
     'surface-tint': primary,
-    'on-surface-variant': legible(mix(ink, background, 0.4), background, FLOOR.muted),
+    // Secondary text — labels, subtitles, the role under a name — and it lives
+    // on panels too, so it is seated the same way the quietest ink is.
+    'on-surface-variant': legible(mix(ink, background, 0.4), hardestPanel, FLOOR.muted),
     'inverse-surface': mix(ink, background, 0.06),
     'inverse-on-surface': mix(background, ink, 0.04),
 
-    outline: legible(mix(ink, background, 0.5), background, FLOOR.nonText),
+    // `outline` is the quietest ink, not a border: hairlines are an alpha of
+    // `line`, and the console paints field hints, captions and helper text with
+    // this. Deriving it at the non-text floor of 3 is what left a hint on a
+    // branded dark page too faint to read, so it holds the text floor now, and
+    // holds it against whichever panel it reads worst on — a hint sits on a
+    // card, not on the page, and the cards run in both directions from it.
+    outline: legible(quietInk, hardestPanel, FLOOR.muted),
     // Hairlines and shadows are drawn with an alpha of these, so they are stored
     // as solids. `line` follows the ink, which flips them light on a dark
     // palette; shadow stays black, because a shadow tinted with light ink glows.

@@ -170,21 +170,48 @@ describe('PlaybackService', () => {
   });
 
   describe('heartbeat anomalies', () => {
-    it('flags rapid-seek scraping', async () => {
-      const prisma = makePrisma();
+    /** A session whose telemetry already holds `seeks` deliberate seeks, now. */
+    function sessionSeeking(prisma: any, seeks: number, extra: any[] = []) {
       const now = Date.now();
-      const events = Array.from({ length: 8 }, () => ({ t: now, type: 'seek', pos: 1 }));
+      const events = [
+        ...Array.from({ length: seeks }, () => ({ t: now, type: 'seek', pos: 1 })),
+        ...extra,
+      ];
       prisma.playbackSession.findUnique.mockResolvedValue({
         id: 'ps1', studentId: 's1', tenantId: 't1', lessonId: 'l1', ip: '1.1.1.1', events,
       });
       prisma.studentProfile.findUnique.mockResolvedValue({ id: 's1' });
       prisma.playbackSession.update.mockResolvedValue({});
       prisma.lessonProgress.updateMany.mockResolvedValue({});
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock);
+      return new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock);
+    }
+    const rapidSeek = expect.objectContaining({
+      data: expect.objectContaining({ type: 'RAPID_SEEK_ANOMALY' }),
+    });
+
+    it('flags rapid-seek scraping', async () => {
+      const prisma = makePrisma();
+      const svc = sessionSeeking(prisma, 12);
       await svc.heartbeat(studentUser, 'ps1', { positionSec: 5, type: 'seek' }, { ip: '1.1.1.1' });
-      expect(prisma.securityEvent.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ type: 'RAPID_SEEK_ANOMALY' }) }),
-      );
+      expect(prisma.securityEvent.create).toHaveBeenCalledWith(rapidSeek);
+    });
+
+    // A student skimming a lesson drags the bar a handful of times. That is
+    // what the old bar of eight caught, and it is not scraping.
+    it('leaves an ordinary burst of seeking alone', async () => {
+      const prisma = makePrisma();
+      const svc = sessionSeeking(prisma, 8);
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 5, type: 'seek' }, { ip: '1.1.1.1' });
+      expect(prisma.securityEvent.create).not.toHaveBeenCalledWith(rapidSeek);
+    });
+
+    // One burst is one alert. Every seek after the twelfth used to raise its
+    // own, so a single drag filled the teacher's security screen.
+    it('says it once per session', async () => {
+      const prisma = makePrisma();
+      const svc = sessionSeeking(prisma, 20, [{ t: Date.now(), type: 'rapid-seek-flagged' }]);
+      await svc.heartbeat(studentUser, 'ps1', { positionSec: 5, type: 'seek' }, { ip: '1.1.1.1' });
+      expect(prisma.securityEvent.create).not.toHaveBeenCalledWith(rapidSeek);
     });
   });
 

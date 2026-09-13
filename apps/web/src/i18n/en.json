@@ -670,7 +670,7 @@
       "MULTI_IP_PLAYBACK": "Multi-location playback",
       "SESSION_LIMIT_KICK": "Device limit exceeded",
       "DEVTOOLS_DETECTED": "DevTools opened",
-      "RAPID_SEEK_ANOMALY": "Rapid-seek anomaly",
+      "RAPID_SEEK_ANOMALY": "Rapid seeking inside a video",
       "VIEW_CAP_EXCEEDED": "View cap exceeded",
       "LEAK_TRACED": "Leak traced",
       "MANUAL_FLAG": "Manual flag"

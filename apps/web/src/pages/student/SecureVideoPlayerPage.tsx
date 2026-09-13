@@ -202,6 +202,18 @@ export default function SecureVideoPlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket]);
 
+  /**
+   * Did the student ask for this seek?
+   *
+   * The browser fires `seeked` for far more than a drag of the bar: hls.js
+   * nudges past buffer holes, recovers from stalls, and jumps to the resume
+   * position on load. Reporting all of those as seeks is what made a student on
+   * a weak connection look like a scraper to the anomaly detector. Set right
+   * before every seek the player performs on the student's behalf, and read
+   * once by the `seeked` handler.
+   */
+  const userSeek = useRef(false);
+
   // Keyboard shortcuts (ignored while typing in the notes box / inputs).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -216,8 +228,8 @@ export default function SecureVideoPlayerPage() {
           e.preventDefault();
           v.paused ? v.play().catch(() => {}) : v.pause();
           break;
-        case 'ArrowRight': e.preventDefault(); v.currentTime = Math.min(v.duration || 1e9, v.currentTime + 10); break;
-        case 'ArrowLeft': e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 10); break;
+        case 'ArrowRight': e.preventDefault(); userSeek.current = true; v.currentTime = Math.min(v.duration || 1e9, v.currentTime + 10); break;
+        case 'ArrowLeft': e.preventDefault(); userSeek.current = true; v.currentTime = Math.max(0, v.currentTime - 10); break;
         case 'ArrowUp': e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); break;
         case 'ArrowDown': e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); break;
         case 'm': v.muted = !v.muted; break;
@@ -304,6 +316,7 @@ export default function SecureVideoPlayerPage() {
 
   function seekTo(sec: number) {
     if (videoRef.current) {
+      userSeek.current = true;
       videoRef.current.currentTime = sec;
       videoRef.current.play().catch(() => {});
     }
@@ -311,7 +324,10 @@ export default function SecureVideoPlayerPage() {
 
   /** Dragging the scrubber moves the position without forcing playback to start. */
   function scrub(sec: number) {
-    if (videoRef.current) videoRef.current.currentTime = sec;
+    if (videoRef.current) {
+      userSeek.current = true;
+      videoRef.current.currentTime = sec;
+    }
   }
   function togglePlay() {
     const v = videoRef.current;
@@ -464,7 +480,11 @@ export default function SecureVideoPlayerPage() {
                   // never reported and the lesson never completed.
                   onEnded={() => { setIsPlaying(false); heartbeat('ended'); }}
                   onPause={() => { setIsPlaying(false); heartbeat('pause'); }}
-                  onSeeked={() => heartbeat('seek')}
+                  onSeeked={() => {
+                    const asked = userSeek.current;
+                    userSeek.current = false;
+                    heartbeat(asked ? 'seek' : 'hb');
+                  }}
                   onTimeUpdate={(e) => { setCurrentTime(e.currentTarget.currentTime); heartbeat('hb'); }}
                 />
                 <RovingWatermark payload={ticket.watermark} />

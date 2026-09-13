@@ -171,7 +171,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
     <label className="mb-4 block">
       <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-outline">{hint}</span>}
+      {hint && <span className="mt-1 block text-sm text-outline">{hint}</span>}
     </label>
   );
 }

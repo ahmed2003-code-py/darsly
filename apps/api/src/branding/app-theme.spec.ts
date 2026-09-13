@@ -69,8 +69,15 @@ describe('every surface that carries text stays readable', () => {
         expect(ratio(t, 'on-tertiary-container', 'tertiary-container')).toBeGreaterThanOrEqual(4.5);
       });
 
-      it('draws borders strongly enough to be seen', () => {
-        expect(ratio(t, 'outline', 'background')).toBeGreaterThanOrEqual(3);
+      // Not a border colour: the console writes field hints, captions and
+      // helper text in this, and at the old non-text floor of 3 a hint on a
+      // dark branded page could not be read.
+      it('keeps secondary text readable on every panel, not just the page', () => {
+        for (const ink of ['outline', 'on-surface-variant'] as const) {
+          expect(ratio(t, ink, 'background')).toBeGreaterThanOrEqual(4.5);
+          expect(ratio(t, ink, 'surface-container-lowest')).toBeGreaterThanOrEqual(4.5);
+          expect(ratio(t, ink, 'surface-container-highest')).toBeGreaterThanOrEqual(4.5);
+        }
       });
 
       it('separates panels from the page, so a card has an edge', () => {
@@ -205,7 +212,7 @@ describe('palettes that would break the console are repaired, not rejected', () 
   it('survives a palette of pure white on pure black', () => {
     const t = deriveAppTheme({ background: '#000000', ink: '#FFFFFF', primary: '#FFFFFF' });
     expect(ratio(t, 'on-primary', 'primary')).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(t, 'outline', 'background')).toBeGreaterThanOrEqual(3);
+    expect(ratio(t, 'outline', 'background')).toBeGreaterThanOrEqual(4.5);
   });
 
   it('falls back field by field rather than discarding the whole palette', () => {

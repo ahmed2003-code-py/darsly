@@ -670,7 +670,7 @@
       "MULTI_IP_PLAYBACK": "تشغيل من مواقع متعددة",
       "SESSION_LIMIT_KICK": "تجاوز حد الأجهزة",
       "DEVTOOLS_DETECTED": "فتح أدوات المطور",
-      "RAPID_SEEK_ANOMALY": "سحب سريع مشبوه",
+      "RAPID_SEEK_ANOMALY": "تنقّل سريع مشبوه داخل الفيديو",
       "VIEW_CAP_EXCEEDED": "تجاوز حد المشاهدات",
       "LEAK_TRACED": "تم تتبّع تسريب",
       "MANUAL_FLAG": "إبلاغ يدوي"

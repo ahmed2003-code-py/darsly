@@ -99,7 +99,7 @@ export function FilterBar({
             )}
           </button>
           <select
-            className="input h-12 w-auto min-w-[9rem]"
+            className="input h-12 w-auto min-w-0 sm:min-w-[9rem]"
             value={sort}
             onChange={(e) => onSort(e.target.value)}
             aria-label={sortLabel}

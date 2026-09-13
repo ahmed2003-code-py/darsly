@@ -73,7 +73,7 @@ export default function LearningCenterPage() {
       </div>
 
       {/* Tabs — horizontally scrollable on a phone, never wrapped into rows */}
-      <div className="mb-6 -mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+      <div className="scroll-x mb-6 -mx-6 px-6 sm:mx-0 sm:px-0">
         <div className="inline-flex min-w-full gap-1 rounded-full bg-surface-container-high p-1">
           {TABS.map((k) => (
             <button
@@ -145,7 +145,7 @@ function Overview({ g }: { g: ReturnType<typeof useGamification>['data'] & {} })
         {g.achievements.recent.length > 0 && (
           <section>
             <h2 className="mb-3 font-heading text-lg font-extrabold">{t('gamification.achievements.title')}</h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="scroll-x -mx-6 flex gap-3 px-6 pb-2 sm:mx-0 sm:px-0">
               {g.achievements.recent.map((a) => (
                 <div
                   key={a.key}

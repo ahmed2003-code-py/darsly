@@ -239,6 +239,59 @@
   *::-webkit-scrollbar { width: 8px; height: 8px; }
   *::-webkit-scrollbar-thumb { background: rgb(var(--c-line) / 0.16); border-radius: 999px; }
   *::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-line) / 0.28); }
+
+  /*
+   * Nothing widens the page.
+   *
+   * A grid track and a flex item both size to their content by default
+   * (`min-width: auto`), so one child that cannot get narrower — a card with
+   * its padding, a long label, a word that will not break — pushes its column
+   * past the viewport and clips whatever sits beside it. That is what cut the
+   * right-hand column off every two-up grid on a narrow phone, and it gets
+   * worse the larger the reader's system font is.
+   *
+   * Declared in the base layer so any `min-w-*` utility still overrides it:
+   * the horizontal scrollers say `min-w-full` and keep working.
+   */
+  .grid > *,
+  .flex > * {
+    min-width: 0;
+  }
+
+  /* The same rule for text: a long unbroken word — a URL, an Arabic title with
+     no spaces near the break — must wrap rather than decide the page width. */
+  h1, h2, h3, h4, p, li, dd, dt, figcaption, blockquote {
+    overflow-wrap: break-word;
+  }
+
+  /*
+   * Room to breathe is a luxury of a wide screen.
+   *
+   * The 24px a card carries everywhere is most of a phone's usable width once
+   * two of them sit side by side, and it is the padding — not the content —
+   * that decides how narrow a two-up grid can go. Reclaiming it below 26rem is
+   * what lets the second column survive a reader whose system font is large.
+   */
+  @media (max-width: 26rem) {
+    .card,
+    .studio-card {
+      padding: 0.875rem;
+    }
+  }
+
+  /* A strip that scrolls should look like one. Without an edge, a row cut off
+     mid-word reads as a broken layout rather than as more to swipe to. */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+  }
+  .scroll-x::-webkit-scrollbar { display: none; }
+  /* At a width where nothing is hidden, the fade would be a lie. */
+  @media (min-width: 40rem) {
+    .scroll-x { mask-image: none; }
+  }
 }
 
 @layer components {

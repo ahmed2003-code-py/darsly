@@ -251,7 +251,7 @@ export default function StudioPage() {
       <ProfileCard data={data} t={t} ar={ar} />
 
       {/* Tabs */}
-      <div className="mb-6 -mx-6 mt-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+      <div className="scroll-x mb-6 -mx-6 mt-6 px-6 sm:mx-0 sm:px-0">
         <div className="inline-flex min-w-full gap-1 rounded-full bg-surface-container-high p-1">
           {TABS.map((k) => (
             <button
@@ -718,7 +718,7 @@ function CategoryBar({
     (c) => (counts.get(c)?.length ?? 0) > 0,
   );
   return (
-    <div className="mb-5 -mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+    <div className="scroll-x mb-5 -mx-6 px-6 sm:mx-0 sm:px-0">
       <div className="inline-flex min-w-full items-center gap-2">
         {shown.map((c) => (
           <button

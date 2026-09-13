@@ -107,7 +107,11 @@ export function PageHeader({
         <h1 className="display text-on-surface">{title}</h1>
         {subtitle && <p className="mt-2 max-w-xl text-on-surface-variant">{subtitle}</p>}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {/* `shrink-0` keeps the action from being squashed beside the title, but on
+          a phone that same rule let a pair of buttons set the page width and push
+          everything else off the right edge. Below `sm` it takes the line it is
+          already wrapping onto, and its own contents wrap inside it. */}
+      {action && <div className="w-full shrink-0 sm:w-auto">{action}</div>}
     </Reveal>
   );
 }

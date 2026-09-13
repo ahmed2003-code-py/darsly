@@ -173,6 +173,12 @@
     @apply bg-background text-on-background;
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    /* Nothing may drag the page sideways. A phone is narrow enough that one
+       long word or a row that rounds up by two pixels turns the whole screen
+       into a horizontal scroller, and the student sees a page cut off down one
+       edge. `clip` rather than `hidden` on purpose: `hidden` would make this a
+       scroll container and break every sticky header under it. */
+    overflow-x: clip;
   }
   body {
     @apply font-body antialiased;
@@ -330,9 +336,26 @@
   }
 }
 
+/*
+ * Icons, and what they must not do before the icon font arrives.
+ *
+ * Every icon is a ligature — the element's text is literally `account_balance_wallet`
+ * — so until the font is downloaded the browser lays that word out in a normal
+ * typeface. A row of six icons in the bottom bar measured hundreds of pixels
+ * instead of a hundred and forty, pushed the page wider than the phone, and the
+ * student saw a screen cut off down the right edge until the font landed. Every
+ * glyph in this font is exactly one em wide, so the box is pinned to that: the
+ * word inside is clipped rather than allowed to decide the layout.
+ */
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   line-height: 1;
+  display: inline-block;
+  width: 1em;
+  overflow: hidden;
+  /* The clipped word would otherwise still be readable as a sliver of letters. */
+  text-indent: 0;
+  white-space: nowrap;
 }
 
 /* The player frame, in fullscreen.

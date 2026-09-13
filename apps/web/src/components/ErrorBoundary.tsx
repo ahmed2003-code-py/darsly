@@ -6,6 +6,8 @@ interface Props {
 }
 interface State {
   error: Error | null;
+  /** A reload is already on its way, so there is nothing to say. */
+  recovering: boolean;
 }
 
 /**
@@ -16,14 +18,17 @@ interface State {
  * shows a recoverable retry screen instead of a white screen.
  */
 export default class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, recovering: false };
 
   static getDerivedStateFromError(error: Error): State {
-    return { error };
+    // Deciding here rather than in componentDidCatch is the difference between
+    // a student seeing "something went wrong" and seeing nothing at all: this
+    // runs before the first paint, componentDidCatch runs after it.
+    return { error, recovering: isRecoverable(error) };
   }
 
   componentDidCatch(error: Error) {
-    if (isChunkLoadError(error) && !sessionStorage.getItem('chunk-reloaded')) {
+    if (isRecoverable(error)) {
       // Reload once (guarded so we never loop) to fetch the current build.
       sessionStorage.setItem('chunk-reloaded', '1');
       window.location.reload();
@@ -31,6 +36,11 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   render() {
+    // The page is already reloading. Showing an error for the half-second
+    // before it lands tells the student something broke when nothing did.
+    if (this.state.recovering) {
+      return <div className="grid min-h-screen place-items-center bg-surface" />;
+    }
     if (this.state.error) {
       return (
         <div dir="rtl" className="grid min-h-screen place-items-center bg-slate-50 p-6 text-center">
@@ -54,6 +64,17 @@ export default class ErrorBoundary extends Component<Props, State> {
       );
     }
     return this.props.children;
+  }
+}
+
+/** A missing chunk fixes itself on reload — but only once, or it is a loop. */
+function isRecoverable(error: Error): boolean {
+  try {
+    return isChunkLoadError(error) && !sessionStorage.getItem('chunk-reloaded');
+  } catch {
+    // Storage can throw in a private window; without the guard a reload could
+    // loop, so treat it as unrecoverable and show the retry screen instead.
+    return false;
   }
 }
 

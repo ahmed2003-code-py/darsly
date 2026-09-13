@@ -44,12 +44,35 @@ import { GamificationModule } from './gamification/gamification.module';
 // Single-service deploys: when the web app has been built into apps/web/dist,
 // the API serves it too (SPA fallback included). API routes stay under /api.
 const webDist = join(__dirname, '..', '..', 'web', 'dist');
+/** Vite writes every built asset as `name-<hash>.ext` under /assets. */
+const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env', '../../.env'] }),
     ...(existsSync(webDist)
-      ? [ServeStaticModule.forRoot({ rootPath: webDist, exclude: ['/api/(.*)'] })]
+      ? [
+          ServeStaticModule.forRoot({
+            rootPath: webDist,
+            exclude: ['/api/(.*)'],
+            serveStaticOptions: {
+              // Everything under /assets carries a content hash in its name, so
+              // the file at a given URL can never change: cache it for a year
+              // and a returning visitor fetches nothing. index.html is the
+              // opposite — it is the map to those names, and a stale copy is
+              // exactly how a phone ends up asking for a chunk a deploy has
+              // already replaced, which is what "something went wrong" was.
+              setHeaders(res, path) {
+                res.setHeader(
+                  'Cache-Control',
+                  HASHED_ASSET.test(path)
+                    ? 'public, max-age=31536000, immutable'
+                    : 'no-cache',
+                );
+              },
+            },
+          }),
+        ]
       : []),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,

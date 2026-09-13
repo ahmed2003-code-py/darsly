@@ -561,3 +561,84 @@ body {
   .studio-sheen::after { animation: none; opacity: 0; }
   .studio-card, .studio-btn, .studio-nav-item { transition: none; }
 }
+
+/*
+ * Backdrops.
+ *
+ * Every one of these is gradients on a fixed layer behind the page — no images,
+ * no files, no network. A theme weighs nothing extra, the pattern scrolls with
+ * nothing, and a student's choice can never point the browser at somebody
+ * else's artwork.
+ *
+ * All of them are drawn in the student's own accent at low alpha, so the
+ * pattern belongs to the theme rather than sitting on top of it, and no text
+ * contrast moves because of it.
+ */
+.studio-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+:root[data-s-pattern] .studio-backdrop { --p: rgb(var(--s-accent, var(--c-primary)) / 0.14); }
+
+/* Crosshatch — two sets of thin diagonals crossing. */
+:root[data-s-pattern='web'] .studio-backdrop {
+  background-image:
+    repeating-linear-gradient(45deg, var(--p) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(-45deg, var(--p) 0 1px, transparent 1px 34px);
+}
+
+/* Comic dots. */
+:root[data-s-pattern='halftone'] .studio-backdrop {
+  background-image: radial-gradient(var(--p) 1.5px, transparent 1.6px);
+  background-size: 18px 18px;
+}
+
+/* Mown stripes, the way a pitch is cut. */
+:root[data-s-pattern='pitch'] .studio-backdrop {
+  background-image: repeating-linear-gradient(90deg, var(--p) 0 60px, transparent 60px 120px);
+}
+
+/* Motion lines. */
+:root[data-s-pattern='speed'] .studio-backdrop {
+  background-image: repeating-linear-gradient(115deg, var(--p) 0 2px, transparent 2px 28px);
+}
+
+/* A technical grid. */
+:root[data-s-pattern='grid'] .studio-backdrop {
+  background-image:
+    linear-gradient(var(--p) 1px, transparent 1px),
+    linear-gradient(90deg, var(--p) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* A single soft light, drifting. */
+:root[data-s-pattern='glow'] .studio-backdrop {
+  background-image: radial-gradient(60% 45% at 70% 0%, var(--p), transparent 70%);
+  animation: studio-drift 18s ease-in-out infinite alternate;
+}
+
+/* Beams from a corner, turning very slowly. */
+:root[data-s-pattern='rays'] .studio-backdrop {
+  background-image: conic-gradient(from 200deg at 85% -10%, var(--p) 0 12deg, transparent 12deg 40deg);
+  animation: studio-turn 60s linear infinite;
+}
+
+@keyframes studio-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-4%, 3%, 0); }
+}
+@keyframes studio-turn {
+  from { transform: rotate(0deg) scale(1.6); }
+  to { transform: rotate(360deg) scale(1.6); }
+}
+
+/* The page has to sit above its own backdrop. */
+#root { position: relative; z-index: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-s-pattern='glow'] .studio-backdrop,
+  :root[data-s-pattern='rays'] .studio-backdrop { animation: none; }
+}

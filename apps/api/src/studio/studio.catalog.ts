@@ -41,7 +41,14 @@ const theme = (
   accentDark: string,
   costCoins: number,
   sortOrder: number,
-  extra: Partial<CatalogSeed> & { wash?: string; washDark?: string } = {},
+  extra: Partial<CatalogSeed> & {
+    wash?: string;
+    washDark?: string;
+    pattern?: string;
+    button?: string;
+    card?: string;
+    nav?: string;
+  } = {},
 ): CatalogSeed => ({
   key,
   category: 'THEME',
@@ -50,11 +57,17 @@ const theme = (
   nameEn,
   descAr,
   descEn,
+  // A theme brings its own shapes and its own backdrop, so picking one is a
+  // single decision instead of five.
   config: {
     accent,
     accentDark,
     ...(extra.wash ? { wash: extra.wash } : {}),
     ...(extra.washDark ? { washDark: extra.washDark } : {}),
+    ...(extra.pattern ? { pattern: extra.pattern } : {}),
+    ...(extra.button ? { button: extra.button } : {}),
+    ...(extra.card ? { card: extra.card } : {}),
+    ...(extra.nav ? { nav: extra.nav } : {}),
   },
   costCoins,
   sortOrder,
@@ -112,39 +125,65 @@ const style = (
 
 export const CATALOG: CatalogSeed[] = [
   // ── Themes ────────────────────────────────────────────────────────────────
-  // Each one is a place to study in, not a colour swap: an accent for both ends
-  // of the palette, and a wash that tints the ground under everything.
+  //
+  // One pick, one whole look: a colour for both ends of the palette, a wash
+  // under the page, a pattern drawn over it, and the shapes the buttons and
+  // cards take. Nothing here is a photograph and nothing is a licence — the
+  // loud ones borrow an energy, not a character, because the characters belong
+  // to the people who made them.
   theme('theme-paper', 'COMMON', 'ورق وحبر', 'Paper & Ink', 'مظهر درسلي الأساسي — هادي وواضح.',
     "Darsly's own look — calm and clear.", '#4a32c9', '#8d7bf0', 0, 10, { isStarter: true }),
+
   theme('theme-ocean', 'COMMON', 'عمق', 'Deep', 'أزرق ساكن بيريّح العين في المذاكرة الطويلة.',
     'A still blue that holds up over a long session.', '#0f6f9c', '#3fb3e0', 120, 20,
-    { wash: '#0f6f9c', washDark: '#0ea5e9' }),
-  theme('theme-forest', 'COMMON', 'ملعب', 'Pitch', 'أخضر العشب — لو الكورة مالياك.',
-    'Grass green, for anyone who lives on a pitch.', '#15803d', '#4ade80', 120, 30,
-    { wash: '#15803d', washDark: '#22c55e' }),
-  theme('theme-sunset', 'RARE', 'مغيب', 'Dusk', 'برتقالي دافي على حواف بنفسجية.',
-    'Warm orange over violet edges.', '#c2410c', '#fb923c', 250, 40,
-    { wash: '#7c2d12', washDark: '#f97316' }),
-  theme('theme-court', 'RARE', 'ملعب سلة', 'Court', 'برتقالي وأسود — إيقاع سريع.',
-    'Orange and black, played fast.', '#b45309', '#fbbf24', 250, 45,
-    { wash: '#451a03', washDark: '#f59e0b' }),
-  theme('theme-midnight', 'EPIC', 'آخر الليل', 'Midnight', 'أناقة داكنة لمحبّي المذاكرة بالليل.',
-    'Dark and quiet, for people who study late.', '#4338ca', '#a5b4fc', 500, 50,
-    { requiredLevel: 3, wash: '#312e81', washDark: '#4338ca' }),
-  theme('theme-cyber', 'EPIC', 'نيون', 'Neon', 'طاقة عالية وحواف حادّة.',
-    'High energy, sharp edges.', '#0d9488', '#2dd4bf', 500, 60,
-    { requiredLevel: 4, wash: '#042f2e', washDark: '#14b8a6' }),
-  // The colours of a certain wall-crawler, without his name on them: the
-  // character and the badge are somebody else's trademark, the palette is not.
-  theme('theme-web', 'EPIC', 'خيوط', 'Webline', 'أحمر وأزرق — لو بتحب أبطال الكوميكس.',
-    'Red over blue, for anyone raised on comics.', '#dc2626', '#f87171', 600, 65,
-    { requiredLevel: 4, wash: '#1e3a8a', washDark: '#1d4ed8' }),
+    { wash: '#0f6f9c', washDark: '#0ea5e9', pattern: 'glow', card: 'soft', button: 'rounded' }),
+
+  theme('theme-forest', 'COMMON', 'ملعب', 'Pitch', 'أخضر النجيلة وخطوط الملعب — لو الكورة مالياك.',
+    'Mown grass and touchlines, for anyone who lives on a pitch.', '#15803d', '#4ade80', 120, 30,
+    { wash: '#15803d', washDark: '#22c55e', pattern: 'pitch', card: 'soft', button: 'pill' }),
+
+  theme('theme-court', 'RARE', 'ملعب سلة', 'Court', 'برتقالي وأسود ونقط كوميكس — إيقاع سريع.',
+    'Orange, black and comic dots, played fast.', '#c2410c', '#fb923c', 250, 40,
+    { wash: '#431407', washDark: '#ea580c', pattern: 'halftone', card: 'elevated', button: 'sharp' }),
+
+  // The colours and the crosshatch of a certain wall-crawler, with no character
+  // and no badge anywhere near it. The palette is not the trademark.
+  theme('theme-web', 'EPIC', 'خيوط', 'Webline', 'أحمر على أزرق وشبكة خيوط — طاقة أبطال الكوميكس.',
+    'Red over blue with a web of lines. Comic-book energy, nobody else\'s name on it.',
+    '#dc2626', '#f87171', 600, 50,
+    { requiredLevel: 3, wash: '#1e3a8a', washDark: '#1d4ed8', pattern: 'web', card: 'elevated', button: 'sharp' }),
+
+  theme('theme-steel', 'EPIC', 'فولاذ', 'Steel', 'أزرق وأحمر وذهبي — شكل بطل كلاسيكي.',
+    'Blue, red and gold. The classic hero palette.', '#1d4ed8', '#60a5fa', 600, 55,
+    { requiredLevel: 4, wash: '#7f1d1d', washDark: '#1e40af', pattern: 'rays', card: 'elevated', button: 'elevated' }),
+
+  theme('theme-nocturne', 'EPIC', 'مدينة الليل', 'Nocturne', 'أسود وأصفر — ظلام المدينة.',
+    'Black and yellow, after dark.', '#ca8a04', '#facc15', 600, 60,
+    { requiredLevel: 4, wash: '#0c0a09', washDark: '#1c1917', pattern: 'speed', card: 'elevated', button: 'sharp' }),
+
+  theme('theme-cyber', 'EPIC', 'نيون', 'Neon', 'طاقة عالية وحواف حادّة وشبكة تقنية.',
+    'High energy, sharp edges, a technical grid.', '#0d9488', '#2dd4bf', 500, 70,
+    { requiredLevel: 3, wash: '#042f2e', washDark: '#14b8a6', pattern: 'grid', card: 'glass', button: 'sharp' }),
+
+  theme('theme-midnight', 'RARE', 'آخر الليل', 'Midnight', 'أناقة داكنة لمحبّي المذاكرة بالليل.',
+    'Dark and quiet, for people who study late.', '#4338ca', '#a5b4fc', 250, 80,
+    { wash: '#312e81', washDark: '#4338ca', pattern: 'glow', card: 'soft', button: 'rounded' }),
+
+  theme('theme-crimson', 'RARE', 'الأحمر', 'Crimson', 'أحمر وأبيض — ألوان الكلاسيكيات.',
+    'Red and white. Classic kit colours.', '#b91c1c', '#f87171', 250, 90,
+    { wash: '#7f1d1d', washDark: '#dc2626', pattern: 'pitch', card: 'soft', button: 'pill' }),
+
+  theme('theme-sky', 'RARE', 'السماوي', 'Sky', 'أزرق سماوي وأبيض.',
+    'Sky blue and white.', '#0369a1', '#38bdf8', 250, 95,
+    { wash: '#075985', washDark: '#0284c7', pattern: 'pitch', card: 'soft', button: 'pill' }),
+
   theme('theme-aurora', 'LEGENDARY', 'شفق', 'Aurora', 'ألوان متدرّجة هادية — أرقى مظهر في الاستوديو.',
-    'The most considered look in the Studio.', '#7c3aed', '#c4b5fd', 900, 70,
-    { requiredLevel: 6, wash: '#4c1d95', washDark: '#7c3aed' }),
+    'The most considered look in the Studio.', '#7c3aed', '#c4b5fd', 900, 100,
+    { requiredLevel: 6, wash: '#4c1d95', washDark: '#7c3aed', pattern: 'rays', card: 'glass', button: 'elevated' }),
+
   theme('theme-scholar', 'LEGENDARY', 'وسام', 'Laureate', 'بيتفتح لما تخلّص أول دورة كاملة.',
-    'Unlocked by finishing your first course.', '#92400e', '#fbbf24', 0, 80,
-    { requiredAchievement: 'first_course', wash: '#451a03', washDark: '#b45309' }),
+    'Unlocked by finishing your first course.', '#92400e', '#fbbf24', 0, 110,
+    { requiredAchievement: 'first_course', wash: '#451a03', washDark: '#b45309', pattern: 'rays', card: 'elevated', button: 'elevated' }),
 
   // ── Accents ───────────────────────────────────────────────────────────────
   accent('accent-default', 'COMMON', 'الأساسي', 'Default', '#4a32c9', 0, 10, { isStarter: true }),

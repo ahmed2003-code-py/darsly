@@ -1806,6 +1806,9 @@
     "emptyShop": "You have unlocked everything 🎉",
     "emptyCategory": "Nothing here yet",
     "emptyHint": "Finish lessons, earn coins, unlock new things.",
-    "customize": "Customise your Darsly"
+    "customize": "Customise your Darsly",
+    "moreOptions": "More options",
+    "lessOptions": "Keep it simple",
+    "themeHint": "A theme changes the colour, the background and the shape of everything at once."
   }
 }

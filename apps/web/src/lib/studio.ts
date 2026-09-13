@@ -30,6 +30,8 @@ export interface StudioStyles {
   frame: string | null;
   avatar: string | null;
   effect: string | null;
+  /** The backdrop the theme draws behind the page. */
+  pattern: string | null;
 }
 
 export interface StudioTheme {
@@ -114,6 +116,7 @@ function styles(input: unknown): StudioStyles {
     frame: typeof s.frame === 'string' && /^[a-z]+$/.test(s.frame) ? s.frame : null,
     avatar: typeof s.avatar === 'string' && /^[a-z]+$/.test(s.avatar) ? s.avatar : null,
     effect: typeof s.effect === 'string' && /^[a-z]+$/.test(s.effect) ? s.effect : null,
+    pattern: typeof s.pattern === 'string' && /^[a-z]+$/.test(s.pattern) ? s.pattern : null,
   };
 }
 
@@ -147,7 +150,7 @@ function paint(themes: StudioThemes | null): void {
   // back to whatever the academy (or the platform) put there.
   for (const name of BRAND_ALLOWED) root.style.removeProperty(name);
   if (!themes) {
-    for (const attr of ['button', 'card', 'nav', 'frame', 'avatar', 'effect']) {
+    for (const attr of ['button', 'card', 'nav', 'frame', 'avatar', 'effect', 'pattern']) {
       root.removeAttribute(`data-s-${attr}`);
     }
     return;
@@ -167,7 +170,9 @@ function paint(themes: StudioThemes | null): void {
   root.setAttribute('data-s-button', s.button);
   root.setAttribute('data-s-card', s.card);
   root.setAttribute('data-s-nav', s.nav);
-  for (const [attr, value] of [['frame', s.frame], ['avatar', s.avatar], ['effect', s.effect]] as const) {
+  for (const [attr, value] of [
+    ['frame', s.frame], ['avatar', s.avatar], ['effect', s.effect], ['pattern', s.pattern],
+  ] as const) {
     if (value) root.setAttribute(`data-s-${attr}`, value);
     else root.removeAttribute(`data-s-${attr}`);
   }

@@ -29,6 +29,8 @@ export interface StudioStyles {
   frame: string | null;
   avatar: string | null;
   effect: string | null;
+  /** The backdrop the theme draws behind the page. */
+  pattern: string | null;
 }
 
 export interface StudioTheme {
@@ -64,6 +66,17 @@ export const FRAME_STYLES = [
   'none', 'bronze', 'silver', 'gold', 'diamond', 'fire', 'lightning', 'scholar', 'legendary',
 ] as const;
 export const EFFECT_STYLES = ['none', 'glow', 'confetti'] as const;
+/**
+ * Backdrops, drawn entirely in CSS.
+ *
+ * No images and no files: a pattern is a name the stylesheet knows how to draw
+ * with gradients. That keeps the page fast, keeps every theme the same weight,
+ * and means a student's choice can never point the browser at somebody else's
+ * artwork.
+ */
+export const PATTERNS = [
+  'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays',
+] as const;
 export const AVATAR_STYLES = [
   'initial', 'orbit', 'wave', 'grid', 'bloom', 'prism',
 ] as const;
@@ -150,7 +163,13 @@ export function deriveWash(hex: string, mode: StudioMode): Record<string, string
   };
 }
 
-/** The accent a theme carries, per mode — and optionally a backdrop. */
+/**
+ * Everything a theme decides.
+ *
+ * One pick, one look. Choosing between six button shapes and five card shapes
+ * is a designer's job, not a student's — so a theme brings its own, and the
+ * separate slots stay only for anyone who wants to argue with it.
+ */
 export interface ThemeConfig {
   accent?: string;
   accentDark?: string;
@@ -158,6 +177,11 @@ export interface ThemeConfig {
    *  faint on purpose: a background is a mood, not a poster. */
   wash?: string;
   washDark?: string;
+  /** The pattern drawn over that wash. A name the stylesheet knows, never art. */
+  pattern?: string;
+  button?: string;
+  card?: string;
+  nav?: string;
 }
 
 /**
@@ -176,13 +200,17 @@ export function deriveStudioThemes(input: {
   avatar?: string | null;
   effect?: string | null;
 }): StudioThemes {
+  // The theme sets the shape of things; an explicitly equipped slot overrides
+  // it. Most students will never touch the slots, and should not have to.
+  const theme = input.themeConfig ?? {};
   const styles: StudioStyles = {
-    button: pick(input.button, BUTTON_STYLES, 'classic'),
-    card: pick(input.card, CARD_STYLES, 'minimal'),
-    nav: pick(input.nav, NAV_STYLES, 'classic'),
+    button: pick(input.button ?? theme.button, BUTTON_STYLES, 'classic'),
+    card: pick(input.card ?? theme.card, CARD_STYLES, 'minimal'),
+    nav: pick(input.nav ?? theme.nav, NAV_STYLES, 'classic'),
     frame: pickOrNull(input.frame, FRAME_STYLES),
     avatar: pickOrNull(input.avatar, AVATAR_STYLES),
     effect: pickOrNull(input.effect, EFFECT_STYLES),
+    pattern: pickOrNull(theme.pattern, PATTERNS),
   };
 
   // A colour the student picked beats the one their theme came with: it is the

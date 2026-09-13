@@ -23,11 +23,21 @@ import { CardGridSkeleton, ErrorNote, PageHeader, ProgressBar, Spinner } from '.
 type Tab = 'style' | 'collection' | 'shop';
 const TABS: Tab[] = ['style', 'collection', 'shop'];
 
-/** The order the categories are offered in — the ones that change the most first. */
+/**
+ * Three decisions, not eight.
+ *
+ * A theme now brings its own button and card and navigation shapes, so picking
+ * one is the whole look. The shape slots still exist for anyone who wants to
+ * argue with a theme, but they sit behind a disclosure rather than as four more
+ * things a fourteen-year-old has to have an opinion about.
+ */
 const CATEGORIES = [
   'THEME', 'ACCENT', 'BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'AVATAR', 'FRAME', 'EFFECT',
 ] as const;
 type Category = (typeof CATEGORIES)[number];
+
+const PRIMARY: Category[] = ['THEME', 'ACCENT', 'AVATAR', 'FRAME'];
+const ADVANCED: Category[] = ['BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'EFFECT'];
 
 const SLOT: Record<Category, string> = {
   THEME: 'themeKey',
@@ -78,6 +88,7 @@ export default function StudioPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('style');
   const [category, setCategory] = useState<Category>('THEME');
+  const [advanced, setAdvanced] = useState(false);
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<StudioItem | null>(null);
 
@@ -221,7 +232,18 @@ export default function StudioPage() {
 
       {tab === 'style' && (
         <>
-          <CategoryBar category={category} setCategory={setCategory} t={t} counts={byCategory} />
+          <CategoryBar
+            category={category}
+            setCategory={setCategory}
+            t={t}
+            counts={byCategory}
+            advanced={advanced}
+            toggleAdvanced={() => {
+              const next = !advanced;
+              setAdvanced(next);
+              if (!next && ADVANCED.includes(category)) setCategory('THEME');
+            }}
+          />
           {category === 'ACCENT' && (
             <AccentPicker
               current={data.equipped?.accentHex ?? null}
@@ -359,16 +381,23 @@ function CategoryBar({
   setCategory,
   t,
   counts,
+  advanced,
+  toggleAdvanced,
 }: {
   category: Category;
   setCategory: (c: Category) => void;
   t: any;
   counts: Map<Category, StudioItem[]>;
+  advanced: boolean;
+  toggleAdvanced: () => void;
 }) {
+  const shown = (advanced ? [...PRIMARY, ...ADVANCED] : PRIMARY).filter(
+    (c) => (counts.get(c)?.length ?? 0) > 0,
+  );
   return (
     <div className="mb-5 -mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
-      <div className="inline-flex min-w-full gap-2">
-        {CATEGORIES.filter((c) => (counts.get(c)?.length ?? 0) > 0).map((c) => (
+      <div className="inline-flex min-w-full items-center gap-2">
+        {shown.map((c) => (
           <button
             key={c}
             onClick={() => setCategory(c)}
@@ -381,6 +410,12 @@ function CategoryBar({
             {t(`myStudio.category.${c}`)}
           </button>
         ))}
+        <button
+          onClick={toggleAdvanced}
+          className="studio-btn whitespace-nowrap rounded-xl px-3 py-2 text-sm font-bold text-outline transition hover:text-on-surface"
+        >
+          {t(advanced ? 'myStudio.lessOptions' : 'myStudio.moreOptions')}
+        </button>
       </div>
     </div>
   );

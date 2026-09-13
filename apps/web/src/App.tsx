@@ -89,6 +89,10 @@ export default function App() {
     {/* Above the router on purpose: the academy's colours belong to the whole
         app, not to one branch of it, and switching route must not repaint. */}
     <BrandTheme />
+    {/* The student's backdrop. One fixed element behind everything, drawn in
+        CSS from a pattern name — so it costs nothing per route and there is no
+        image to load. */}
+    <div className="studio-backdrop" aria-hidden />
     <Suspense fallback={<div className="grid min-h-screen place-items-center"><Spinner /></div>}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />

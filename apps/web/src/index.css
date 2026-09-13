@@ -839,7 +839,7 @@ body {
   background:
     linear-gradient(rgb(var(--s-accent, var(--c-primary)) / 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgb(var(--s-accent, var(--c-primary)) / 0.05) 1px, transparent 1px),
-    radial-gradient(120% 90% at 50% 50%, transparent 45%, rgb(0 0 0 / 0.45) 100%);
+    radial-gradient(120% 90% at 50% 50%, transparent 45%, rgb(var(--c-background) / 0.65) 100%);
   background-size: 56px 56px, 56px 56px, 100% 100%;
   animation: none;
   width: auto;

@@ -47,7 +47,9 @@ const theme = (
     secondary?: string;
     secondaryDark?: string;
     gold?: string;
+    goldDark?: string;
     surfaces?: Record<string, string>;
+    surfacesLight?: Record<string, string>;
     pattern?: string;
     glow?: boolean;
     font?: string;
@@ -74,7 +76,9 @@ const theme = (
     ...(extra.secondary ? { secondary: extra.secondary } : {}),
     ...(extra.secondaryDark ? { secondaryDark: extra.secondaryDark } : {}),
     ...(extra.gold ? { gold: extra.gold } : {}),
+    ...(extra.goldDark ? { goldDark: extra.goldDark } : {}),
     ...(extra.surfaces ? { surfaces: extra.surfaces } : {}),
+    ...(extra.surfacesLight ? { surfacesLight: extra.surfacesLight } : {}),
     ...(extra.pattern ? { pattern: extra.pattern } : {}),
     ...(extra.glow ? { glow: true } : {}),
     ...(extra.font ? { font: extra.font } : {}),
@@ -182,8 +186,8 @@ export const CATALOG: CatalogSeed[] = [
     'LEGENDARY',
     'الملك المصري',
     'Egyptian King',
-    'ملعب ليلي بالكامل — أزرق داكن، أحمر مصري، وذهب لكل حاجة بتتكسب.',
-    'A night stadium end to end — deep navy, Egyptian crimson, and gold for everything earned.',
+    'ملعب كامل — ليل أزرق داكن أو نهار دافي، أحمر مصري، وذهب لكل حاجة بتتكسب.',
+    'A whole stadium — deep navy by night or warm chalk by day, Egyptian crimson, and gold for everything earned.',
     '#dc2626',
     '#ef4444',
     100,
@@ -191,14 +195,30 @@ export const CATALOG: CatalogSeed[] = [
     {
       secondary: '#ee9800',
       secondaryDark: '#ffb95f',
-      gold: '#ffb95f',
-      wash: '#0a0e16',
+      // Old gold on chalk, floodlit amber at night. The day value is picked to
+      // clear its floors untouched: a brighter gold gets darkened into olive,
+      // and a medal that looks olive is not a medal.
+      gold: '#a16207',
+      goldDark: '#ffb95f',
+      wash: '#f3efe6',
       washDark: '#0a0e16',
       surfaces: {
         background: '#0a0e16',
         surface: '#121722',
         ink: '#dfe2ee',
         line: '#aeb5c5',
+      },
+      // The same match in the afternoon.
+      //
+      // Warm chalk rather than white — a sunlit stand, not an office — and the
+      // night version's navy kept as the ink, so the two ends read as one skin
+      // rather than two themes. Everything that carries the identity is
+      // unchanged: the crimson, the gold, the pitch markings, the typeface.
+      surfacesLight: {
+        background: '#f6f2e9',
+        surface: '#ffffff',
+        ink: '#151b28',
+        line: '#5a6376',
       },
       pattern: 'stadium',
       glow: true,

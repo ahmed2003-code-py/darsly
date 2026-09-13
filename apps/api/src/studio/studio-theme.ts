@@ -151,7 +151,7 @@ export function deriveAccent(
   const floorOn = seat ?? ground;
   // Seated first: a colour that cannot be read on this ground is moved until it
   // can, rather than shipped and then apologised for.
-  const accent = legible(hex, floorOn, 3);
+  const accent = legible(hex, hardest(hex, [ground, floorOn]), 3);
   const onAccent = legible(relLuminance(accent) > 0.5 ? '#12121a' : '#ffffff', accent, ON_FILL_FLOOR);
   const hover = mode === 'dark' ? mix(accent, '#ffffff', 0.16) : mix(accent, '#000000', 0.14);
   const soft = mix(ground, accent, mode === 'dark' ? 0.22 : 0.12);
@@ -183,7 +183,7 @@ export function deriveSecondary(
 ): Record<string, string> {
   const ground = on ?? GROUND[mode];
   const floorOn = seat ?? ground;
-  const secondary = legible(hex, floorOn, 3);
+  const secondary = legible(hex, hardest(hex, [ground, floorOn]), 3);
   const onSecondary = legible(
     relLuminance(secondary) > 0.5 ? '#12121a' : '#ffffff',
     secondary,
@@ -212,7 +212,7 @@ export function deriveGold(
   seat?: string | null,
 ): Record<string, string> {
   const floorOn = seat ?? ground;
-  const gold = legible(hex, floorOn, 3);
+  const gold = legible(hex, hardest(hex, [ground, floorOn]), 3);
   const onGold = legible(relLuminance(gold) > 0.5 ? '#12121a' : '#ffffff', gold, ON_FILL_FLOOR);
   return {
     '--s-gold': triple(gold),
@@ -260,8 +260,11 @@ export interface ThemeConfig {
   /** The pattern drawn over that wash. A name the stylesheet knows, never art. */
   pattern?: string;
   /** What "earned" looks like: XP, coins, trophies, rank. A semantic, not a
-   *  third accent. */
+   *  third accent. Named for each ground the way the accent is: a gold bright
+   *  enough to glow at night goes brown on paper, and a gold that reads on
+   *  paper is invisible against navy. */
   gold?: string;
+  goldDark?: string;
   /** Ambient light behind the page — two soft orbs in the theme's own colours. */
   glow?: boolean;
   /** A typeface pairing, by name. The stylesheet owns what each name means and
@@ -285,6 +288,16 @@ export interface ThemeConfig {
    * back exactly, because the client only ever clears what it wrote.
    */
   surfaces?: SurfaceConfig;
+  /**
+   * The same skin, for a reader who prefers light.
+   *
+   * Not a concession and not a second theme: the identity is the accent, the
+   * gold, the pattern and the typeface, and all four carry across. Only the
+   * ground changes — a night match becomes an afternoon one. Left unset, a skin
+   * keeps its one ground at both ends, which is the right answer for a look
+   * that only makes sense in the dark.
+   */
+  surfacesLight?: SurfaceConfig;
 }
 
 /** The six colours a skin needs to own a page. */
@@ -345,47 +358,55 @@ export function deriveStudioThemes(input: {
   const washDark = safeHex(input.themeConfig?.washDark) ?? washLight;
   // A skin that brings its own ground owns both ends: it is a skin, not a
   // palette, and it looks the same whichever mode the reader prefers.
-  const surfaces = input.themeConfig?.surfaces
-    ? deriveSurfaces(input.themeConfig.surfaces)
-    : null;
-  const goldHex = safeHex(input.themeConfig?.gold);
-  // Seat every colour against the page it will actually be read on. Without
-  // this, a skin that lays down a near-black navy would still have its gold
-  // and its red measured against the platform's own ground — which is how
-  // you ship a label that misses its contrast floor on the only background
-  // it is ever drawn on.
-  const skinGround = input.themeConfig?.surfaces
-    ? surfaceGround(input.themeConfig.surfaces)
-    : null;
-  const skinSeat = input.themeConfig?.surfaces ? surfaceSeat(input.themeConfig.surfaces) : null;
+  const goldLight = safeHex(input.themeConfig?.gold);
+  const goldDark = safeHex(input.themeConfig?.goldDark) ?? goldLight;
 
-  return {
-    light: {
-      tokens: light
+  /**
+   * One end of the pair, ground and all.
+   *
+   * Each side is seated against the page it will actually be read on. Without
+   * that, a skin laying down near-black navy still had its gold and its red
+   * measured against the platform's ground — which is how you ship a label that
+   * misses its floor on the only background it is ever drawn on. And the mode
+   * follows the ground rather than the reader's setting, so a paper ground gets
+   * light-mode seating even when the switch says dark.
+   */
+  const side = (
+    cfg: SurfaceConfig | undefined,
+    accentHex: string | null,
+    washHex: string | null,
+    secHex: string | null,
+    goldHex: string | null,
+    fallbackMode: StudioMode,
+  ) => {
+    const surfaces = cfg ? deriveSurfaces(cfg) : null;
+    const ground = cfg ? surfaceGround(cfg) : null;
+    const seat = cfg ? surfaceSeat(cfg) : null;
+    const mode = ground ? groundMode(ground) : fallbackMode;
+    return {
+      tokens: accentHex
         ? {
-            ...deriveAccent(light, surfaces ? 'dark' : 'light', skinGround, skinSeat),
-            ...(washLight ? deriveWash(washLight, surfaces ? 'dark' : 'light', skinGround) : {}),
-            ...(secLight ? deriveSecondary(secLight, surfaces ? 'dark' : 'light', skinGround, skinSeat) : {}),
-            ...(goldHex ? deriveGold(goldHex, surfaces ? 'dark' : 'light', skinGround ?? GROUND.light, skinSeat) : {}),
+            ...deriveAccent(accentHex, mode, ground, seat),
+            ...(washHex ? deriveWash(washHex, mode, ground) : {}),
+            ...(secHex ? deriveSecondary(secHex, mode, ground, seat) : {}),
+            ...(goldHex ? deriveGold(goldHex, mode, ground ?? GROUND[fallbackMode], seat) : {}),
           }
         : {},
-      brand: light
-        ? { ...deriveBrand(light, surfaces ? 'dark' : 'light', skinGround, skinSeat), ...(surfaces ?? {}) }
+      brand: accentHex
+        ? { ...deriveBrand(accentHex, mode, ground, seat), ...(surfaces ?? {}) }
         : (surfaces ?? {}),
       styles,
-    },
-    dark: {
-      tokens: dark
-        ? {
-            ...deriveAccent(dark, 'dark', skinGround, skinSeat),
-            ...(washDark ? deriveWash(washDark, 'dark', skinGround) : {}),
-            ...(secDark ? deriveSecondary(secDark, 'dark', skinGround, skinSeat) : {}),
-            ...(goldHex ? deriveGold(goldHex, 'dark', skinGround ?? GROUND.dark, skinSeat) : {}),
-          }
-        : {},
-      brand: dark ? { ...deriveBrand(dark, 'dark', skinGround, skinSeat), ...(surfaces ?? {}) } : (surfaces ?? {}),
-      styles,
-    },
+    };
+  };
+
+  // A skin with one ground wears it at both ends — the right answer for a look
+  // that only makes sense in the dark. One that brings a second wears that.
+  const darkCfg = input.themeConfig?.surfaces;
+  const lightCfg = input.themeConfig?.surfacesLight ?? darkCfg;
+
+  return {
+    light: side(lightCfg, light, washLight, secLight, goldLight, 'light'),
+    dark: side(darkCfg, dark, washDark, secDark, goldDark, 'dark'),
     styles,
   };
 }
@@ -407,7 +428,7 @@ export function deriveBrand(
 ): Record<string, string> {
   const ground = on ?? GROUND[mode];
   const floorOn = seat ?? ground;
-  const primary = legible(hex, floorOn, 3);
+  const primary = legible(hex, hardest(hex, [ground, floorOn]), 3);
   const onPrimary = legible(relLuminance(primary) > 0.5 ? '#12121a' : '#ffffff', primary, ON_FILL_FLOOR);
   // Dark brightens on hover and light darkens: a darker hover on a dark page
   // disappears into it.
@@ -477,6 +498,32 @@ export function surfaceGround(cfg: SurfaceConfig): string {
  * text at 4.43:1 on a card, which is a floor missed by a hair on the surface
  * most of the product's text actually lives on.
  */
+/**
+ * Whether a ground reads as light or dark.
+ *
+ * The seating rules — which way a hover moves, how far a soft fill is mixed —
+ * follow the ground, not the reader's setting. A skin that lays down paper in
+ * "dark mode" still needs light-mode seating, or its hovers vanish into it.
+ */
+/**
+ * The surface a colour has the hardest time on.
+ *
+ * A skin has a range of surfaces, and which end is the hard one depends on the
+ * colour: a bright gold struggles against the lightest panel, a dark one
+ * against the deepest. Flooring against a fixed end therefore either leaves a
+ * colour illegible or crushes it for no reason — old gold came out olive-brown
+ * on a chalk ground because it was being held against a mid-grey it is never
+ * drawn on. So the binding constraint is found rather than assumed.
+ */
+function hardest(fg: string, grounds: (string | null | undefined)[]): string {
+  const real = grounds.filter((g): g is string => !!g);
+  return real.reduce((worst, g) => (contrastRatio(fg, g) < contrastRatio(fg, worst) ? g : worst));
+}
+
+export function groundMode(hex: string): StudioMode {
+  return relLuminance(hex) > 0.45 ? 'light' : 'dark';
+}
+
 export function surfaceSeat(cfg: SurfaceConfig): string {
   return mix(surfaceGround(cfg), safeHex(cfg.ink) ?? '#dfe2ee', 0.18);
 }
@@ -490,8 +537,13 @@ export function deriveSurfaces(cfg: SurfaceConfig): Record<string, string> {
   // Toward the ink, so this works whichever end the skin sits at.
   const panel = (w: number) => mix(background, ink, w);
   const body = legible(ink, background, 7);
-  const muted = legible(mix(ink, background, 0.34), panel(0.1), TEXT_FLOOR);
-  const quiet = legible(mix(ink, background, 0.52), panel(0.1), TEXT_FLOOR);
+  // Floored against the deepest panel, not a middling one. Text is read on
+  // cards more than on the page, and the deepest card is the worst case — on a
+  // paper ground the mid-panel floor left muted text at 3.95:1 on it. This is
+  // the same seat `surfaceSeat` hands the accent family, so the two agree.
+  const worst = panel(0.18);
+  const muted = legible(mix(ink, background, 0.34), worst, TEXT_FLOOR);
+  const quiet = legible(mix(ink, background, 0.52), worst, TEXT_FLOOR);
 
   return {
     '--c-background': triple(background),

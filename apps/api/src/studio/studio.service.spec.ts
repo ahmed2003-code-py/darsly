@@ -25,6 +25,13 @@ import { join } from 'path';
 
 const GROUND = { light: '#fdfdfb', dark: '#0e0e12' };
 
+/** Perceived lightness of a hex colour, for assertions about which way it moved. */
+const relLum = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (c: number) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+};
+
 function makePrisma(over: Record<string, any> = {}): any {
   const base: any = {
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ id: 's1' }) },
@@ -599,14 +606,20 @@ describe('Egyptian King', () => {
     expect(r + g + b).toBeLessThan(120); // and genuinely dark
   });
 
-  it('keeps body text readable on its own ground', () => {
-    const brand = deriveStudioThemes({ themeConfig: item!.config as any }).dark.brand;
-    const bg = fromTriple(brand['--c-background']);
-    // Long-form reading is held to AAA, the same floor the academy palette uses.
-    expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
-    // Secondary text and the quietest ink still clear the text floor.
-    expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
+  it('keeps body text readable on whichever ground it lays down', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const brand = deriveStudioThemes({ themeConfig: item!.config as any })[mode].brand;
+      const bg = fromTriple(brand['--c-background']);
+      // Long-form reading is held to AAA, the same floor the academy palette uses.
+      expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
+      // Secondary text and the quietest ink still clear the text floor.
+      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
+      // …and on a card, which is where most of that text actually sits.
+      const card = fromTriple(brand['--c-surface-container-highest']);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), card)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   /**
@@ -641,20 +654,86 @@ describe('Egyptian King', () => {
     }
   });
 
-  it('carries gold as a semantic, legible on its own ground', () => {
-    const t = deriveStudioThemes({ themeConfig: item!.config as any }).dark.tokens;
-    const brand = deriveStudioThemes({ themeConfig: item!.config as any }).dark.brand;
-    expect(t['--s-gold']).toBeDefined();
-    expect(contrastRatio(fromTriple(t['--s-gold-ink']), fromTriple(brand['--c-background']))).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(fromTriple(t['--s-on-gold']), fromTriple(t['--s-gold']))).toBeGreaterThanOrEqual(4.5);
+  /**
+   * A gold bright enough to glow against navy goes brown on paper, and one that
+   * reads on paper disappears at night. So it is named for each ground, and
+   * both have to still look like gold rather than like bronze or mustard.
+   */
+  it('carries a gold for each ground, and both still read as gold', () => {
+    const themes = deriveStudioThemes({ themeConfig: item!.config as any });
+    const day = fromTriple(themes.light.tokens['--s-gold']);
+    const night = fromTriple(themes.dark.tokens['--s-gold']);
+    expect(day).not.toBe(night);
+    expect(relLum(night)).toBeGreaterThan(relLum(day)); // brighter in the dark
+    for (const hex of [day, night]) {
+      const n = parseInt(hex.slice(1), 16);
+      const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      expect(r).toBeGreaterThan(g); // warm
+      expect(g).toBeGreaterThan(b); // …and yellow rather than red
+      expect(r - b).toBeGreaterThan(60); // genuinely gold, not a grey-brown
+    }
   });
 
-  // A skin is a skin in both modes: someone who chose light did not choose to
-  // see half a stadium.
-  it('looks the same whichever mode the reader prefers', () => {
+  it('carries gold as a semantic, legible on its own ground', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const { tokens: t, brand } = deriveStudioThemes({ themeConfig: item!.config as any })[mode];
+      expect(t['--s-gold']).toBeDefined();
+      // Gold as a label, on the page and on the deepest card.
+      for (const on of ['--c-background', '--c-surface-container-highest']) {
+        expect(contrastRatio(fromTriple(t['--s-gold-ink']), fromTriple(brand[on]))).toBeGreaterThanOrEqual(4.5);
+      }
+      // …and whatever sits on gold when gold is the fill.
+      expect(contrastRatio(fromTriple(t['--s-on-gold']), fromTriple(t['--s-gold']))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  /**
+   * Two grounds, one skin.
+   *
+   * Someone who chose light did not choose to see half a stadium, so the light
+   * end is a daytime match rather than the platform's greys — but it is still
+   * this skin: the crimson, the gold, the pitch markings and the typeface all
+   * carry across, and only the ground changes.
+   */
+  it('plays the same match by day as by night', () => {
     const themes = deriveStudioThemes({ themeConfig: item!.config as any });
-    expect(themes.light.brand['--c-background']).toBe(themes.dark.brand['--c-background']);
-    expect(themes.light.brand['--c-on-surface']).toBe(themes.dark.brand['--c-on-surface']);
+    const lightBg = fromTriple(themes.light.brand['--c-background']);
+    const darkBg = fromTriple(themes.dark.brand['--c-background']);
+
+    // Genuinely two grounds, and each one at its own end of the range.
+    expect(lightBg).not.toBe(darkBg);
+    expect(relLum(lightBg)).toBeGreaterThan(0.7);
+    expect(relLum(darkBg)).toBeLessThan(0.05);
+    // The ink flips with the ground rather than staying put.
+    expect(relLum(fromTriple(themes.light.brand['--c-on-surface']))).toBeLessThan(relLum(lightBg));
+    expect(relLum(fromTriple(themes.dark.brand['--c-on-surface']))).toBeGreaterThan(relLum(darkBg));
+
+    // And it is still the same skin at both ends: red that acts, gold that
+    // marks what was earned, and the same shapes and typeface.
+    for (const mode of ['light', 'dark'] as const) {
+      const [r, g, b] = themes[mode].brand['--c-primary'].split(' ').map(Number);
+      expect(r).toBeGreaterThan(g + 60);
+      expect(r).toBeGreaterThan(b + 60);
+      expect(themes[mode].tokens['--s-gold']).toBeDefined();
+    }
+    expect(themes.light.styles).toEqual(themes.dark.styles);
+    expect(themes.styles.pattern).toBe('stadium');
+    expect(themes.styles.font).toBe('display');
+  });
+
+  /**
+   * A ground is only half a mode. Hover moves toward white on a dark page and
+   * toward black on a light one, so the seating has to follow the ground the
+   * skin lays down rather than the switch the reader flipped.
+   */
+  it('seats each end for the ground it actually has', () => {
+    const themes = deriveStudioThemes({ themeConfig: item!.config as any });
+    const lightHover = relLum(fromTriple(themes.light.tokens['--s-accent-hover']));
+    const lightAccent = relLum(fromTriple(themes.light.tokens['--s-accent']));
+    const darkHover = relLum(fromTriple(themes.dark.tokens['--s-accent-hover']));
+    const darkAccent = relLum(fromTriple(themes.dark.tokens['--s-accent']));
+    expect(lightHover).toBeLessThan(lightAccent); // darkens on paper
+    expect(darkHover).toBeGreaterThan(darkAccent); // brightens at night
   });
 
   it('configures only values the theme engine knows how to read', () => {

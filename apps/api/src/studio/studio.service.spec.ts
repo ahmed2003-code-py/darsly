@@ -309,6 +309,54 @@ describe('studio theme derivation', () => {
     expect(themes.styles.nav).toBe('classic');
   });
 
+  /**
+   * A theme now asks for a typeface and a corner radius too. Both are names,
+   * and a name the stylesheet does not know is dropped rather than passed on —
+   * there is no way for a theme to hand the browser a font of its own.
+   */
+  it('drops a typeface or a radius it does not recognise', () => {
+    const themes = deriveStudioThemes({
+      themeConfig: {
+        accent: '#dc2626',
+        font: 'https://evil.example/font.css',
+        radius: '9999px; position: fixed',
+        pattern: 'url(x)',
+      },
+    });
+    expect(themes.styles.font).toBeNull();
+    expect(themes.styles.radius).toBeNull();
+    expect(themes.styles.pattern).toBeNull();
+  });
+
+  it('carries a recognised typeface, radius and pattern through', () => {
+    const themes = deriveStudioThemes({
+      themeConfig: {
+        accent: '#dc2626',
+        accentDark: '#f87171',
+        font: 'display',
+        radius: 'sharp',
+        pattern: 'web',
+        glow: true,
+      },
+    });
+    expect(themes.styles).toMatchObject({ font: 'display', radius: 'sharp', pattern: 'web', glow: true });
+  });
+
+  it('holds the second colour to the same floors as the first', () => {
+    for (const hex of ['#ffffff', '#ffff00', '#0284c7']) {
+      for (const mode of ['light', 'dark'] as const) {
+        const themes = deriveStudioThemes({
+          themeConfig: { accent: '#dc2626', accentDark: '#f87171', secondary: hex, secondaryDark: hex },
+        });
+        const t = themes[mode].tokens;
+        expect(contrastRatio(fromTriple(t['--s-secondary-ink']), GROUND[mode])).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(fromTriple(t['--s-on-secondary']), fromTriple(t['--s-secondary'])),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('reads a mixed colour as more specific than the theme it came with', () => {
     const themes = deriveStudioThemes({
       themeConfig: { accent: '#0f6f9c', accentDark: '#3fb3e0' },

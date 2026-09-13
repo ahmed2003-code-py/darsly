@@ -32,6 +32,9 @@ export interface StudioStyles {
   effect: string | null;
   /** The backdrop the theme draws behind the page. */
   pattern: string | null;
+  glow: boolean;
+  font: string | null;
+  radius: string | null;
 }
 
 export interface StudioTheme {
@@ -100,6 +103,32 @@ function brandTokens(input: unknown): Record<string, string> {
   return out;
 }
 
+/**
+ * The typefaces a theme may ask for, and where each one comes from.
+ *
+ * A closed map, not a URL the server sends: a theme names a pairing and this
+ * decides what to fetch. Nothing a student equips can point the browser at a
+ * font of its own. Fetched on first use rather than up front, so the themes
+ * nobody has equipped cost nothing.
+ */
+const FONTS: Record<string, string> = {
+  display: 'Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700',
+  tech: 'Space+Grotesk:wght@400;500;600;700&family=Chakra+Petch:wght@500;600;700',
+  round: 'Baloo+Bhaijaan+2:wght@400;500;600;700;800',
+};
+const RADII = ['default', 'sharp', 'soft', 'round'];
+const loadedFonts = new Set<string>();
+
+/** Pull a pairing in once, the first time a theme wearing it is painted. */
+function ensureFont(name: string | null): void {
+  if (!name || !FONTS[name] || loadedFonts.has(name)) return;
+  loadedFonts.add(name);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${FONTS[name]}&display=swap`;
+  document.head.appendChild(link);
+}
+
 const BUTTONS = ['classic', 'rounded', 'pill', 'sharp', 'soft', 'elevated'];
 const CARDS = ['minimal', 'soft', 'elevated', 'paper', 'glass'];
 const NAVS = ['classic', 'compact', 'floating'];
@@ -117,6 +146,9 @@ function styles(input: unknown): StudioStyles {
     avatar: typeof s.avatar === 'string' && /^[a-z]+$/.test(s.avatar) ? s.avatar : null,
     effect: typeof s.effect === 'string' && /^[a-z]+$/.test(s.effect) ? s.effect : null,
     pattern: typeof s.pattern === 'string' && /^[a-z]+$/.test(s.pattern) ? s.pattern : null,
+    glow: s.glow === true,
+    font: typeof s.font === 'string' && FONTS[s.font] ? s.font : null,
+    radius: typeof s.radius === 'string' && RADII.includes(s.radius) ? s.radius : null,
   };
 }
 
@@ -150,7 +182,7 @@ function paint(themes: StudioThemes | null): void {
   // back to whatever the academy (or the platform) put there.
   for (const name of BRAND_ALLOWED) root.style.removeProperty(name);
   if (!themes) {
-    for (const attr of ['button', 'card', 'nav', 'frame', 'avatar', 'effect', 'pattern']) {
+    for (const attr of ['button', 'card', 'nav', 'frame', 'avatar', 'effect', 'pattern', 'font', 'radius', 'glow']) {
       root.removeAttribute(`data-s-${attr}`);
     }
     return;
@@ -171,11 +203,15 @@ function paint(themes: StudioThemes | null): void {
   root.setAttribute('data-s-card', s.card);
   root.setAttribute('data-s-nav', s.nav);
   for (const [attr, value] of [
-    ['frame', s.frame], ['avatar', s.avatar], ['effect', s.effect], ['pattern', s.pattern],
+    ['frame', s.frame], ['avatar', s.avatar], ['effect', s.effect],
+    ['pattern', s.pattern], ['font', s.font], ['radius', s.radius],
   ] as const) {
     if (value) root.setAttribute(`data-s-${attr}`, value);
     else root.removeAttribute(`data-s-${attr}`);
   }
+  if (s.glow) root.setAttribute('data-s-glow', 'on');
+  else root.removeAttribute('data-s-glow');
+  ensureFont(s.font);
 }
 
 /** Apply and remember what the student has equipped. */

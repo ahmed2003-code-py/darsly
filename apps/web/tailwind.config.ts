@@ -122,6 +122,10 @@ export default {
         // purpose. Used only on the student's own surfaces; a course page, a
         // lesson and a teacher's profile keep the academy's colours.
         'student-accent': c2('s-accent', 'c-primary'),
+        'student-secondary': c2('s-secondary', 'c-secondary'),
+        'student-secondary-soft': c2('s-secondary-soft', 'c-secondary-container'),
+        'student-secondary-ink': c2('s-secondary-ink', 'c-secondary'),
+        'on-student-secondary': c2('s-on-secondary', 'c-on-secondary'),
         'student-accent-hover': c2('s-accent-hover', 'c-primary-hover'),
         'student-accent-soft': c2('s-accent-soft', 'c-primary-fixed'),
         'student-accent-border': c2('s-accent-border', 'c-primary-container'),

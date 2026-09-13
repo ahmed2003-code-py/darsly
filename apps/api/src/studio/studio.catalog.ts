@@ -44,7 +44,12 @@ const theme = (
   extra: Partial<CatalogSeed> & {
     wash?: string;
     washDark?: string;
+    secondary?: string;
+    secondaryDark?: string;
     pattern?: string;
+    glow?: boolean;
+    font?: string;
+    radius?: string;
     button?: string;
     card?: string;
     nav?: string;
@@ -64,7 +69,12 @@ const theme = (
     accentDark,
     ...(extra.wash ? { wash: extra.wash } : {}),
     ...(extra.washDark ? { washDark: extra.washDark } : {}),
+    ...(extra.secondary ? { secondary: extra.secondary } : {}),
+    ...(extra.secondaryDark ? { secondaryDark: extra.secondaryDark } : {}),
     ...(extra.pattern ? { pattern: extra.pattern } : {}),
+    ...(extra.glow ? { glow: true } : {}),
+    ...(extra.font ? { font: extra.font } : {}),
+    ...(extra.radius ? { radius: extra.radius } : {}),
     ...(extra.button ? { button: extra.button } : {}),
     ...(extra.card ? { card: extra.card } : {}),
     ...(extra.nav ? { nav: extra.nav } : {}),
@@ -140,30 +150,64 @@ export const CATALOG: CatalogSeed[] = [
 
   theme('theme-forest', 'COMMON', 'ملعب', 'Pitch', 'أخضر النجيلة وخطوط الملعب — لو الكورة مالياك.',
     'Mown grass and touchlines, for anyone who lives on a pitch.', '#15803d', '#4ade80', 120, 30,
-    { wash: '#15803d', washDark: '#22c55e', pattern: 'pitch', card: 'soft', button: 'pill' }),
+    {
+      wash: '#15803d', washDark: '#22c55e',
+      secondary: '#0f766e', secondaryDark: '#5eead4',
+      pattern: 'pitch', font: 'round', radius: 'round',
+      card: 'soft', button: 'pill',
+    }),
 
   theme('theme-court', 'RARE', 'ملعب سلة', 'Court', 'برتقالي وأسود ونقط كوميكس — إيقاع سريع.',
     'Orange, black and comic dots, played fast.', '#c2410c', '#fb923c', 250, 40,
-    { wash: '#431407', washDark: '#ea580c', pattern: 'halftone', card: 'elevated', button: 'sharp' }),
+    {
+      wash: '#431407', washDark: '#ea580c',
+      secondary: '#1c1917', secondaryDark: '#d6d3d1',
+      pattern: 'halftone', glow: true, font: 'display', radius: 'sharp',
+      card: 'elevated', button: 'sharp',
+    }),
 
   // The colours and the crosshatch of a certain wall-crawler, with no character
   // and no badge anywhere near it. The palette is not the trademark.
   theme('theme-web', 'EPIC', 'خيوط', 'Webline', 'أحمر على أزرق وشبكة خيوط — طاقة أبطال الكوميكس.',
     'Red over blue with a web of lines. Comic-book energy, nobody else\'s name on it.',
     '#dc2626', '#f87171', 600, 50,
-    { requiredLevel: 3, wash: '#1e3a8a', washDark: '#1d4ed8', pattern: 'web', card: 'elevated', button: 'sharp' }),
+    {
+      requiredLevel: 3,
+      wash: '#1e3a8a', washDark: '#1d4ed8',
+      secondary: '#0284c7', secondaryDark: '#38bdf8',
+      pattern: 'web', glow: true, font: 'display', radius: 'sharp',
+      card: 'elevated', button: 'sharp',
+    }),
 
   theme('theme-steel', 'EPIC', 'فولاذ', 'Steel', 'أزرق وأحمر وذهبي — شكل بطل كلاسيكي.',
     'Blue, red and gold. The classic hero palette.', '#1d4ed8', '#60a5fa', 600, 55,
-    { requiredLevel: 4, wash: '#7f1d1d', washDark: '#1e40af', pattern: 'rays', card: 'elevated', button: 'elevated' }),
+    {
+      requiredLevel: 4,
+      wash: '#7f1d1d', washDark: '#1e40af',
+      secondary: '#b45309', secondaryDark: '#fbbf24',
+      pattern: 'rays', glow: true, font: 'display', radius: 'sharp',
+      card: 'elevated', button: 'elevated',
+    }),
 
   theme('theme-nocturne', 'EPIC', 'مدينة الليل', 'Nocturne', 'أسود وأصفر — ظلام المدينة.',
     'Black and yellow, after dark.', '#ca8a04', '#facc15', 600, 60,
-    { requiredLevel: 4, wash: '#0c0a09', washDark: '#1c1917', pattern: 'speed', card: 'elevated', button: 'sharp' }),
+    {
+      requiredLevel: 4,
+      wash: '#0c0a09', washDark: '#1c1917',
+      secondary: '#525252', secondaryDark: '#a3a3a3',
+      pattern: 'speed', glow: true, font: 'display', radius: 'sharp',
+      card: 'elevated', button: 'sharp',
+    }),
 
   theme('theme-cyber', 'EPIC', 'نيون', 'Neon', 'طاقة عالية وحواف حادّة وشبكة تقنية.',
     'High energy, sharp edges, a technical grid.', '#0d9488', '#2dd4bf', 500, 70,
-    { requiredLevel: 3, wash: '#042f2e', washDark: '#14b8a6', pattern: 'grid', card: 'glass', button: 'sharp' }),
+    {
+      requiredLevel: 3,
+      wash: '#042f2e', washDark: '#14b8a6',
+      secondary: '#7c3aed', secondaryDark: '#a78bfa',
+      pattern: 'grid', glow: true, font: 'tech', radius: 'sharp',
+      card: 'glass', button: 'sharp',
+    }),
 
   theme('theme-midnight', 'RARE', 'آخر الليل', 'Midnight', 'أناقة داكنة لمحبّي المذاكرة بالليل.',
     'Dark and quiet, for people who study late.', '#4338ca', '#a5b4fc', 250, 80,
@@ -179,7 +223,13 @@ export const CATALOG: CatalogSeed[] = [
 
   theme('theme-aurora', 'LEGENDARY', 'شفق', 'Aurora', 'ألوان متدرّجة هادية — أرقى مظهر في الاستوديو.',
     'The most considered look in the Studio.', '#7c3aed', '#c4b5fd', 900, 100,
-    { requiredLevel: 6, wash: '#4c1d95', washDark: '#7c3aed', pattern: 'rays', card: 'glass', button: 'elevated' }),
+    {
+      requiredLevel: 6,
+      wash: '#4c1d95', washDark: '#7c3aed',
+      secondary: '#0d9488', secondaryDark: '#2dd4bf',
+      pattern: 'rays', glow: true, font: 'round', radius: 'round',
+      card: 'glass', button: 'elevated',
+    }),
 
   theme('theme-scholar', 'LEGENDARY', 'وسام', 'Laureate', 'بيتفتح لما تخلّص أول دورة كاملة.',
     'Unlocked by finishing your first course.', '#92400e', '#fbbf24', 0, 110,

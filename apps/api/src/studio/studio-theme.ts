@@ -31,6 +31,11 @@ export interface StudioStyles {
   effect: string | null;
   /** The backdrop the theme draws behind the page. */
   pattern: string | null;
+  /** Ambient light behind everything. */
+  glow: boolean;
+  /** The typeface pairing and the corner sharpness the theme asks for. */
+  font: string | null;
+  radius: string | null;
 }
 
 export interface StudioTheme {
@@ -77,6 +82,18 @@ export const EFFECT_STYLES = ['none', 'glow', 'confetti'] as const;
 export const PATTERNS = [
   'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays',
 ] as const;
+
+/**
+ * Typeface pairings a theme may ask for.
+ *
+ * A name, never a URL and never a family string: the stylesheet decides what
+ * each one is and the loader only ever fetches from the one list it knows. A
+ * theme cannot point the browser at a font of its own.
+ */
+export const FONTS = ['default', 'display', 'tech', 'round'] as const;
+
+/** How sharp the corners are, as a name. */
+export const RADII = ['default', 'sharp', 'soft', 'round'] as const;
 export const AVATAR_STYLES = [
   'initial', 'orbit', 'wave', 'grid', 'bloom', 'prism',
 ] as const;
@@ -147,6 +164,28 @@ export function deriveAccent(hex: string, mode: StudioMode): Record<string, stri
 }
 
 /**
+ * The theme's second colour.
+ *
+ * Seated and floored exactly like the first: a scheme is two colours that both
+ * work, not one that works and one that was picked to go with it.
+ */
+export function deriveSecondary(hex: string, mode: StudioMode): Record<string, string> {
+  const ground = GROUND[mode];
+  const secondary = legible(hex, ground, 3);
+  const onSecondary = legible(
+    relLuminance(secondary) > 0.5 ? '#12121a' : '#ffffff',
+    secondary,
+    ON_FILL_FLOOR,
+  );
+  return {
+    '--s-secondary': triple(secondary),
+    '--s-on-secondary': triple(onSecondary),
+    '--s-secondary-soft': triple(mix(ground, secondary, mode === 'dark' ? 0.22 : 0.12)),
+    '--s-secondary-ink': triple(legible(secondary, ground, TEXT_FLOOR)),
+  };
+}
+
+/**
  * The page a theme is read on.
  *
  * A theme that only changes buttons is a colour swap; changing the ground under
@@ -173,12 +212,23 @@ export function deriveWash(hex: string, mode: StudioMode): Record<string, string
 export interface ThemeConfig {
   accent?: string;
   accentDark?: string;
+  /** The second colour. A look with one colour is a tint; two make it a scheme —
+   *  the accent carries the action, this carries the supporting chips and rails. */
+  secondary?: string;
+  secondaryDark?: string;
   /** A second colour the page is washed with, behind everything else. Kept
    *  faint on purpose: a background is a mood, not a poster. */
   wash?: string;
   washDark?: string;
   /** The pattern drawn over that wash. A name the stylesheet knows, never art. */
   pattern?: string;
+  /** Ambient light behind the page — two soft orbs in the theme's own colours. */
+  glow?: boolean;
+  /** A typeface pairing, by name. The stylesheet owns what each name means and
+   *  the browser only ever fetches one it was asked for. */
+  font?: string;
+  /** How sharp the corners are. A look is as much a shape as a colour. */
+  radius?: string;
   button?: string;
   card?: string;
   nav?: string;
@@ -211,6 +261,9 @@ export function deriveStudioThemes(input: {
     avatar: pickOrNull(input.avatar, AVATAR_STYLES),
     effect: pickOrNull(input.effect, EFFECT_STYLES),
     pattern: pickOrNull(theme.pattern, PATTERNS),
+    glow: theme.glow === true,
+    font: pickOrNull(theme.font, FONTS),
+    radius: pickOrNull(theme.radius, RADII),
   };
 
   // A colour the student picked beats the one their theme came with: it is the
@@ -218,6 +271,10 @@ export function deriveStudioThemes(input: {
   const chosen = safeHex(input.accentHex);
   const light = chosen ?? safeHex(input.themeConfig?.accent);
   const dark = chosen ?? safeHex(input.themeConfig?.accentDark) ?? light;
+  // A colour the student mixed replaces the theme's accent but not its partner:
+  // the scheme keeps its shape, in their colour.
+  const secLight = safeHex(input.themeConfig?.secondary);
+  const secDark = safeHex(input.themeConfig?.secondaryDark) ?? secLight;
 
   const washLight = safeHex(input.themeConfig?.wash);
   const washDark = safeHex(input.themeConfig?.washDark) ?? washLight;
@@ -225,14 +282,22 @@ export function deriveStudioThemes(input: {
   return {
     light: {
       tokens: light
-        ? { ...deriveAccent(light, 'light'), ...(washLight ? deriveWash(washLight, 'light') : {}) }
+        ? {
+            ...deriveAccent(light, 'light'),
+            ...(washLight ? deriveWash(washLight, 'light') : {}),
+            ...(secLight ? deriveSecondary(secLight, 'light') : {}),
+          }
         : {},
       brand: light ? deriveBrand(light, 'light') : {},
       styles,
     },
     dark: {
       tokens: dark
-        ? { ...deriveAccent(dark, 'dark'), ...(washDark ? deriveWash(washDark, 'dark') : {}) }
+        ? {
+            ...deriveAccent(dark, 'dark'),
+            ...(washDark ? deriveWash(washDark, 'dark') : {}),
+            ...(secDark ? deriveSecondary(secDark, 'dark') : {}),
+          }
         : {},
       brand: dark ? deriveBrand(dark, 'dark') : {},
       styles,

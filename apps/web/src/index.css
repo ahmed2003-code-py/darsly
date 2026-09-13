@@ -642,3 +642,91 @@ body {
   :root[data-s-pattern='glow'] .studio-backdrop,
   :root[data-s-pattern='rays'] .studio-backdrop { animation: none; }
 }
+
+/*
+ * A theme is a typeface and a shape as much as a colour.
+ *
+ * Each name below is one the loader knows how to fetch, and the family stack
+ * always ends in the Arabic face the product ships with — an English display
+ * font has no Arabic glyphs, and a theme must never cost a student their own
+ * script. The fetch happens the first time a theme wearing it is painted, so
+ * the pairings nobody equips are never downloaded.
+ */
+:root[data-s-font='display'] {
+  --font-heading: 'Outfit', 'Space Grotesk', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-body: 'Outfit', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+}
+:root[data-s-font='tech'] {
+  --font-heading: 'Chakra Petch', 'Space Grotesk', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-body: 'Space Grotesk', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+}
+:root[data-s-font='round'] {
+  --font-heading: 'Baloo Bhaijaan 2', 'Rubik', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-body: 'Baloo Bhaijaan 2', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+}
+:root[data-s-font] .font-heading,
+:root[data-s-font] h1,
+:root[data-s-font] h2,
+:root[data-s-font] h3 {
+  font-family: var(--font-heading);
+}
+:root[data-s-font] body,
+:root[data-s-font] .font-body {
+  font-family: var(--font-body);
+}
+
+/* Corner sharpness, applied to the surfaces a student actually looks at rather
+   than to every element — a pill button inside a sharp card is a decision, not
+   an inconsistency. */
+:root[data-s-radius='sharp'] .studio-card,
+:root[data-s-radius='sharp'] .card { border-radius: 6px; }
+:root[data-s-radius='soft'] .studio-card,
+:root[data-s-radius='soft'] .card { border-radius: 18px; }
+:root[data-s-radius='round'] .studio-card,
+:root[data-s-radius='round'] .card { border-radius: 26px; }
+
+/*
+ * Ambient light.
+ *
+ * Two soft orbs in the theme's own two colours, far enough apart that the page
+ * sits between them. Blurred with a gradient rather than a filter: `blur()` on
+ * a full-screen layer costs a repaint on every scroll, and a radial gradient
+ * costs nothing.
+ */
+:root[data-s-glow] .studio-backdrop::before,
+:root[data-s-glow] .studio-backdrop::after {
+  content: '';
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 999px;
+  pointer-events: none;
+}
+:root[data-s-glow] .studio-backdrop::before {
+  top: -22vmax;
+  inset-inline-start: -18vmax;
+  background: radial-gradient(circle, rgb(var(--s-accent, var(--c-primary)) / 0.20), transparent 62%);
+  animation: studio-float-a 24s ease-in-out infinite alternate;
+}
+:root[data-s-glow] .studio-backdrop::after {
+  bottom: -26vmax;
+  inset-inline-end: -20vmax;
+  background: radial-gradient(
+    circle,
+    rgb(var(--s-secondary, var(--s-accent, var(--c-primary))) / 0.18),
+    transparent 62%
+  );
+  animation: studio-float-b 30s ease-in-out infinite alternate;
+}
+@keyframes studio-float-a {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(6vmax, 4vmax, 0); }
+}
+@keyframes studio-float-b {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-5vmax, -6vmax, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-s-glow] .studio-backdrop::before,
+  :root[data-s-glow] .studio-backdrop::after { animation: none; }
+}

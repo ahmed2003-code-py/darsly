@@ -143,6 +143,9 @@ function ensureFont(name: string | null): void {
 const BUTTONS = ['classic', 'rounded', 'pill', 'sharp', 'soft', 'elevated'];
 const CARDS = ['minimal', 'soft', 'elevated', 'paper', 'glass'];
 const NAVS = ['classic', 'compact', 'floating'];
+const PATTERNS = [
+  'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays', 'stadium',
+];
 
 /** A style is a name from a closed list, or the default. Never a value. */
 function styles(input: unknown): StudioStyles {
@@ -156,7 +159,7 @@ function styles(input: unknown): StudioStyles {
     frame: typeof s.frame === 'string' && /^[a-z]+$/.test(s.frame) ? s.frame : null,
     avatar: typeof s.avatar === 'string' && /^[a-z]+$/.test(s.avatar) ? s.avatar : null,
     effect: typeof s.effect === 'string' && /^[a-z]+$/.test(s.effect) ? s.effect : null,
-    pattern: typeof s.pattern === 'string' && /^[a-z]+$/.test(s.pattern) ? s.pattern : null,
+    pattern: typeof s.pattern === 'string' && PATTERNS.includes(s.pattern) ? s.pattern : null,
     glow: s.glow === true,
     font: typeof s.font === 'string' && FONTS[s.font] ? s.font : null,
     radius: typeof s.radius === 'string' && RADII.includes(s.radius) ? s.radius : null,

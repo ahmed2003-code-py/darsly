@@ -80,7 +80,7 @@ export const EFFECT_STYLES = ['none', 'glow', 'confetti'] as const;
  * artwork.
  */
 export const PATTERNS = [
-  'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays',
+  'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays', 'stadium',
 ] as const;
 
 /**

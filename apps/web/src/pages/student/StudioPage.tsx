@@ -172,6 +172,12 @@ export default function StudioPage() {
 
   const equippedKey = (cat: Category): string | null => data?.equipped?.[SLOT[cat]] ?? null;
 
+  // The premium theme nobody owns yet. One at most: a shop that features
+  // everything features nothing.
+  const featured = items.find(
+    (i) => i.category === 'THEME' && i.rarity === 'LEGENDARY' && !i.owned,
+  );
+
   /**
    * Try something on.
    *
@@ -265,6 +271,22 @@ export default function StudioPage() {
               if (!next && ADVANCED.includes(category)) setCategory('THEME');
             }}
           />
+          {/* A single premium theme deserves more than one cell of a grid. It
+              gets the width, a taller preview and the price in full — and it
+              stops being featured the moment it is owned, because then it is
+              just one of the things you have. */}
+          {category === 'THEME' && featured && (
+            <FeaturedTheme
+              item={featured}
+              coins={b.coins}
+              ar={ar}
+              t={t}
+              previewing={previewing === featured.key}
+              onPreview={() => preview(featured)}
+              onUnlock={() => setConfirming(featured)}
+              busy={unlock.isPending}
+            />
+          )}
           {category === 'THEME' && (data?.academyThemes?.length ?? 0) > 0 && (
             <AcademyThemes
               rows={data.academyThemes}
@@ -402,6 +424,112 @@ function Stat({ icon, value, label }: { icon: string; value: number; label: stri
       <span className="block font-heading text-lg font-extrabold tabular-nums">{value}</span>
       <span className="block text-xs text-on-surface-variant">{label}</span>
     </span>
+  );
+}
+
+/**
+ * One premium theme, given the room to sell itself.
+ *
+ * Everything on it comes from the server: the price, whether it can be bought,
+ * whether the level is high enough. The card draws those answers and computes
+ * none of them.
+ */
+function FeaturedTheme({
+  item,
+  coins,
+  ar,
+  t,
+  previewing,
+  onPreview,
+  onUnlock,
+  busy,
+}: {
+  item: StudioItem;
+  coins: number;
+  ar: boolean;
+  t: any;
+  previewing: boolean;
+  onPreview: () => void;
+  onUnlock: () => void;
+  busy: boolean;
+}) {
+  const cfg = item.config as { accent?: string; accentDark?: string; secondary?: string };
+  const locked = item.levelLocked || item.achievementLocked;
+  const enough = coins >= item.costCoins;
+
+  return (
+    <article className="studio-card studio-pop card mb-6 overflow-hidden p-0">
+      <div
+        className="studio-sheen relative h-36 sm:h-44"
+        style={{
+          background: `linear-gradient(135deg, ${cfg.accent ?? '#c8102e'} 0%, ${
+            cfg.accentDark ?? cfg.accent ?? '#c8102e'
+          } 55%, ${cfg.secondary ?? '#b8860b'} 100%)`,
+        }}
+      >
+        <span className="absolute end-3 top-3 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+          {t(`myStudio.rarity.${item.rarity}`)}
+        </span>
+      </div>
+
+      <div className="p-5">
+        <p className="font-heading text-xl font-extrabold">{ar ? item.name.ar : item.name.en}</p>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {ar ? item.description.ar : item.description.en}
+        </p>
+
+        {/* The three numbers somebody about to spend wants in front of them. */}
+        <dl className="mt-4 grid grid-cols-3 gap-3 rounded-xl bg-surface-container-low p-3 text-center">
+          <div>
+            <dt className="text-xs text-on-surface-variant">{t('myStudio.price')}</dt>
+            <dd className="font-heading font-extrabold tabular-nums">{item.costCoins}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-on-surface-variant">{t('myStudio.yourCoins')}</dt>
+            <dd className="font-heading font-extrabold tabular-nums">{coins}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-on-surface-variant">{t('myStudio.after')}</dt>
+            <dd
+              className={`font-heading font-extrabold tabular-nums ${enough ? '' : 'text-error'}`}
+            >
+              {coins - item.costCoins}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            onClick={onPreview}
+            className="studio-btn rounded-xl border border-outline-variant px-4 py-2.5 text-sm font-bold transition hover:border-outline"
+          >
+            {previewing ? t('myStudio.stopPreview') : t('myStudio.preview')}
+          </button>
+
+          {locked ? (
+            <span className="flex items-center gap-1.5 text-sm font-bold text-outline">
+              <span className="material-symbols-outlined text-[18px]">lock</span>
+              {item.levelLocked
+                ? t('myStudio.needLevel', { level: item.requiredLevel })
+                : t('myStudio.earned')}
+            </span>
+          ) : (
+            <button
+              disabled={busy || !enough}
+              onClick={onUnlock}
+              className="studio-btn flex items-center gap-1.5 rounded-xl bg-student-accent px-5 py-2.5 text-sm font-bold text-on-student-accent transition hover:bg-student-accent-hover disabled:opacity-60"
+            >
+              <span className="material-symbols-outlined text-[18px]">paid</span>
+              {t('myStudio.unlockFor', { coins: item.costCoins })}
+            </button>
+          )}
+        </div>
+
+        {!enough && !locked && (
+          <p className="mt-2 text-sm font-bold text-error">{t('myStudio.notEnough')}</p>
+        )}
+      </div>
+    </article>
   );
 }
 

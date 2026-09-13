@@ -421,36 +421,60 @@
  * academy's shapes and colours, because those screens belong to the teacher.
  */
 
-/* ── Buttons ─────────────────────────────────────────────────────────────── */
-:root[data-s-button='rounded'] .studio-btn { border-radius: 16px; }
-:root[data-s-button='pill'] .studio-btn { border-radius: 999px; }
-:root[data-s-button='sharp'] .studio-btn { border-radius: 4px; }
-:root[data-s-button='soft'] .studio-btn {
+/* ── Buttons ───────────────────────────────────────────────────────────────
+   Aimed at the shared button classes, not only the Studio's own. That is the
+   whole mechanism by which a theme reaches every screen: one selector, ninety
+   call sites, and no page anywhere asking which theme is active. */
+:root[data-s-button='rounded'] .studio-btn,
+:root[data-s-button='rounded'] .btn-primary,
+:root[data-s-button='rounded'] .btn-ghost { border-radius: 16px; }
+
+:root[data-s-button='pill'] .studio-btn,
+:root[data-s-button='pill'] .btn-primary,
+:root[data-s-button='pill'] .btn-ghost { border-radius: 999px; }
+
+:root[data-s-button='sharp'] .studio-btn,
+:root[data-s-button='sharp'] .btn-primary,
+:root[data-s-button='sharp'] .btn-ghost { border-radius: 4px; }
+
+:root[data-s-button='soft'] .studio-btn,
+:root[data-s-button='soft'] .btn-primary,
+:root[data-s-button='soft'] .btn-ghost {
   border-radius: 14px;
   font-weight: 600;
 }
-:root[data-s-button='elevated'] .studio-btn {
+:root[data-s-button='elevated'] .studio-btn,
+:root[data-s-button='elevated'] .btn-primary,
+:root[data-s-button='elevated'] .btn-ghost {
   border-radius: 14px;
   box-shadow: 0 6px 16px -6px rgb(var(--c-shadow) / 0.45);
 }
 
-/* ── Cards ───────────────────────────────────────────────────────────────── */
-:root[data-s-card='soft'] .studio-card {
+/* ── Cards ─────────────────────────────────────────────────────────────────
+   Same reasoning: `.card` is the surface a hundred and thirty screens are built
+   from, so theming it is what turns a Studio preference into a whole app. The
+   surface colour itself is never touched — only the shape and the shadow, so a
+   theme can never make a card unreadable. */
+:root[data-s-card='soft'] .studio-card,
+:root[data-s-card='soft'] .card {
   border-radius: 20px;
   background: rgb(var(--c-surface-container-low));
 }
-:root[data-s-card='elevated'] .studio-card {
+:root[data-s-card='elevated'] .studio-card,
+:root[data-s-card='elevated'] .card {
   box-shadow: 0 10px 28px -14px rgb(var(--c-shadow) / 0.5);
-  border-color: transparent;
+  border-color: rgb(var(--s-accent, var(--c-primary)) / 0.18);
 }
-:root[data-s-card='paper'] .studio-card {
+:root[data-s-card='paper'] .studio-card,
+:root[data-s-card='paper'] .card {
   border-radius: 8px;
   border-color: rgb(var(--c-line) / 0.18);
   box-shadow: none;
 }
 /* Used sparingly and never on a scrolling list: a blur per card is the fastest
    way to make a phone feel slow. */
-:root[data-s-card='glass'] .studio-card {
+:root[data-s-card='glass'] .studio-card,
+:root[data-s-card='glass'] .card {
   background: rgb(var(--c-surface-container-lowest) / 0.72);
   backdrop-filter: blur(10px);
   border-color: rgb(var(--c-line) / 0.16);
@@ -612,6 +636,32 @@ body {
     linear-gradient(var(--p) 1px, transparent 1px),
     linear-gradient(90deg, var(--p) 1px, transparent 1px);
   background-size: 40px 40px;
+}
+
+/*
+ * A marked-out pitch.
+ *
+ * Halfway line, centre circle and the two penalty boxes, drawn with gradients
+ * on the same fixed layer as every other pattern — so it costs one element and
+ * no network. Anchored to the viewport rather than the content, which is what
+ * makes it read as the ground the page is played on rather than decoration
+ * sliding past.
+ */
+:root[data-s-pattern='stadium'] .studio-backdrop {
+  background-image:
+    /* centre circle */
+    radial-gradient(circle at 50% 50%, transparent calc(11vmin - 1px), var(--p) 11vmin, transparent calc(11vmin + 1px)),
+    /* centre spot */
+    radial-gradient(circle at 50% 50%, var(--p) 0 0.5vmin, transparent 0.5vmin),
+    /* halfway line */
+    linear-gradient(to bottom, transparent calc(50% - 1px), var(--p) 50%, transparent calc(50% + 1px)),
+    /* penalty areas, top and bottom */
+    linear-gradient(to right, transparent 22%, var(--p) 22% calc(22% + 1px), transparent calc(22% + 1px) 78%, var(--p) 78% calc(78% + 1px), transparent calc(78% + 1px)),
+    /* touchlines */
+    linear-gradient(to right, var(--p) 0 1px, transparent 1px calc(100% - 1px), var(--p) calc(100% - 1px));
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 34%, 100% 100%;
+  background-position: center, center, center, center top, center;
 }
 
 /* A single soft light, drifting. */

@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationConfigService } from '../gamification/gamification.config.service';
 import { StudioService } from './studio.service';
+import { CATALOG } from './studio.catalog';
 import { BRAND_OVERRIDE_NAMES, deriveAccent, deriveBrand, deriveStudioThemes, safeHex } from './studio-theme';
 import { contrastRatio } from '../academy-site/renderer/color.util';
 
@@ -464,3 +465,89 @@ function fromTriple(triple: string): string {
   const [r, g, b] = triple.split(' ').map(Number);
   return `#${[r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
 }
+
+/**
+ * The first real item in the catalogue.
+ *
+ * Tested as data rather than as a screenshot: the price, the gate and the
+ * configuration are what the server actually enforces, and every value in
+ * `config` has to be one the theme engine recognises — an unknown name is
+ * dropped silently, so a typo here would ship a theme that quietly does less
+ * than it claims.
+ */
+describe('Egyptian King', () => {
+  const item = CATALOG.find((c) => c.key === 'theme-egyptian-king');
+
+  it('is in the catalogue, as a legendary theme', () => {
+    expect(item).toBeDefined();
+    expect(item!.category).toBe('THEME');
+    expect(item!.rarity).toBe('LEGENDARY');
+  });
+
+  // Priced against the economy that exists: a finished course pays 250 coins
+  // and the dearest reward on sale is 400, so this sits above both.
+  it('costs more than anything already on sale, and is still reachable', () => {
+    expect(item!.costCoins).toBe(750);
+    expect(item!.requiredLevel).toBe(3);
+    // Earned items carry no price; a bought one must not pretend to be earned.
+    expect(item!.requiredAchievement).toBeUndefined();
+    expect(item!.isStarter).toBeUndefined();
+  });
+
+  it('configures only values the theme engine knows how to read', () => {
+    const cfg = item!.config as Record<string, unknown>;
+    const themes = deriveStudioThemes({ themeConfig: cfg });
+    // Every one of these survived validation, which is the proof the names are
+    // right — an unrecognised name comes back null rather than throwing.
+    expect(themes.styles).toMatchObject({
+      pattern: 'stadium',
+      font: 'display',
+      radius: 'sharp',
+      card: 'elevated',
+      button: 'sharp',
+      glow: true,
+    });
+  });
+
+  it('carries a red action colour and a gold partner, both legible', () => {
+    const cfg = item!.config as Record<string, unknown>;
+    for (const mode of ['light', 'dark'] as const) {
+      const t = deriveStudioThemes({ themeConfig: cfg })[mode].tokens;
+      const [r, g, b] = t['--s-accent'].split(' ').map(Number);
+      expect(r).toBeGreaterThan(g);
+      expect(r).toBeGreaterThan(b);
+      // Gold is its own colour and is held to the same floors.
+      expect(contrastRatio(fromTriple(t['--s-secondary-ink']), GROUND[mode])).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(t['--s-on-accent']), fromTriple(t['--s-accent'])),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('restates the accent family so the look reaches every screen', () => {
+    const cfg = item!.config as Record<string, unknown>;
+    const brand = deriveStudioThemes({ themeConfig: cfg }).dark.brand;
+    expect(Object.keys(brand).length).toBeGreaterThan(20);
+    expect(brand['--c-primary']).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+    // …and still cannot reach a surface or the ink.
+    for (const forbidden of ['--c-background', '--c-surface', '--c-on-surface', '--c-error']) {
+      expect(Object.keys(brand)).not.toContain(forbidden);
+    }
+  });
+
+  /**
+   * The regression fixed in 1b63835, guarded as data.
+   *
+   * A student with no customisation must produce an empty theme, because the
+   * client removes only what it wrote — and if this produced tokens, it would
+   * be writing over an academy that had done nothing wrong.
+   */
+  it('writes nothing at all when a student has customised nothing', () => {
+    const themes = deriveStudioThemes({});
+    expect(Object.keys(themes.light.tokens)).toHaveLength(0);
+    expect(Object.keys(themes.light.brand)).toHaveLength(0);
+    expect(Object.keys(themes.dark.brand)).toHaveLength(0);
+    expect(themes.styles.pattern).toBeNull();
+    expect(themes.styles.font).toBeNull();
+  });
+});

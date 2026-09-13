@@ -56,6 +56,17 @@ const CACHE_KEY = 'darsly-studio';
 let equipped: StudioThemes | null = null;
 
 /**
+ * The brand names this module actually wrote, so it can take back its own and
+ * nothing else.
+ *
+ * Removing the whole allowlist instead cost an academy its colours: the theme
+ * layer writes `--c-primary` inline, this ran afterwards with nothing equipped,
+ * and every teacher and student fell back to platform indigo. A layer may only
+ * clear what it put there.
+ */
+let written: string[] = [];
+
+/**
  * Reject anything that is not a `--s-*` name and three numbers.
  *
  * These end up in a style attribute. A CSS variable is a small injection
@@ -178,9 +189,10 @@ function paint(themes: StudioThemes | null): void {
   for (const name of Array.from(root.style).filter((n) => n.startsWith('--s-'))) {
     root.style.removeProperty(name);
   }
-  // Written by this module and removable by it. Clearing them hands the app
-  // back to whatever the academy (or the platform) put there.
-  for (const name of BRAND_ALLOWED) root.style.removeProperty(name);
+  // Only what this module wrote. The academy's own tokens share these names and
+  // are not ours to remove.
+  for (const name of written) root.style.removeProperty(name);
+  written = [];
   if (!themes) {
     for (const attr of ['button', 'card', 'nav', 'frame', 'avatar', 'effect', 'pattern', 'font', 'radius', 'glow']) {
       root.removeAttribute(`data-s-${attr}`);
@@ -192,9 +204,11 @@ function paint(themes: StudioThemes | null): void {
     root.style.setProperty(name, value);
   }
   // This is what carries the choice out of the Studio: the logo tile, every
-  // primary button and every active row on every screen.
+  // primary button and every active row on every screen. Recorded as it goes,
+  // so the next paint takes back exactly this and leaves the academy's alone.
   for (const [name, value] of Object.entries(side.brand ?? {})) {
     root.style.setProperty(name, value);
+    written.push(name);
   }
   // Shape choices are attributes rather than variables: the stylesheet decides
   // what "pill" means, so a style name can never become a length or a colour.

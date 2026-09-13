@@ -138,7 +138,10 @@
     "searchPlaceholder": "Search for a teacher, subject, or skill...",
     "notifications": "Notifications",
     "markAllRead": "Mark all read",
-    "noNotifications": "No notifications yet"
+    "noNotifications": "No notifications yet",
+    "clearAll": "Clear all",
+    "clearAllConfirm": "Clear every notification?",
+    "dismiss": "Remove this notification"
   },
   "messages": {
     "title": "Messages",
@@ -170,7 +173,8 @@
     "read": "Read",
     "delivered": "Sent",
     "startHint": "Send the first message to start the conversation.",
-    "deletedMessage": "This message was removed"
+    "deletedMessage": "This message was removed",
+    "unsupported": "Reload the page to see this message."
   },
   "discovery": {
     "title": "Discover Teachers",

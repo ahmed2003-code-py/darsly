@@ -36,6 +36,7 @@ const MESSAGE_INCLUDE = {
       sender: { select: { fullName: true } },
     },
   },
+  lesson: { select: { id: true, title: true } },
 } as const;
 
 @Injectable()
@@ -155,6 +156,13 @@ export class ChatService {
       audio: m.audioKey
         ? { durationSec: m.audioDurationSec ?? 0, bytes: m.audioBytes ?? 0 }
         : null,
+      lesson: m.lesson
+        ? {
+            id: m.lesson.id,
+            title: m.lesson.title,
+            atSec: m.videoTimestampSec ?? null,
+          }
+        : null,
     };
   }
 
@@ -190,19 +198,15 @@ export class ChatService {
         where: { studentId: sid, tenantId: payload.tenantId, status: 'ACTIVE' },
       });
       if (!enrolled) throw new ForbiddenException('You can only message teachers you are enrolled with');
-      const type = payload.lessonId ? 'QA' : 'DM';
+      // One conversation per teacher, whatever prompted it. Asking from inside
+      // a lesson used to open a second thread with the same person, which read
+      // as two chats with one teacher; the lesson rides on the message instead.
       const existing = await this.prisma.chatThread.findFirst({
-        where: { tenantId: payload.tenantId, studentId: sid, type, lessonId: payload.lessonId ?? null },
+        where: { tenantId: payload.tenantId, studentId: sid, type: 'DM' },
       });
       if (existing) return existing;
       return this.prisma.chatThread.create({
-        data: {
-          tenantId: payload.tenantId,
-          studentId: sid,
-          type,
-          lessonId: payload.lessonId,
-          videoTimestampSec: payload.videoTimestampSec,
-        },
+        data: { tenantId: payload.tenantId, studentId: sid, type: 'DM' },
       });
     }
 
@@ -328,9 +332,24 @@ export class ChatService {
     // A reply only means anything inside its own conversation; quoting across
     // threads would leak one student's message into another's.
     const replyToId = await this.replyTarget(thread.id, payload.replyToId);
+    // Only a lesson that exists, so a bad id becomes a plain message rather
+    // than a chip pointing at nothing.
+    const lesson = payload.lessonId
+      ? await this.prisma.lesson.findUnique({
+          where: { id: payload.lessonId },
+          select: { id: true },
+        })
+      : null;
 
     const message = await this.prisma.chatMessage.create({
-      data: { threadId: thread.id, senderId: user.sub, body, replyToId },
+      data: {
+        threadId: thread.id,
+        senderId: user.sub,
+        body,
+        replyToId,
+        lessonId: lesson?.id,
+        videoTimestampSec: lesson ? payload.videoTimestampSec : null,
+      },
       include: MESSAGE_INCLUDE,
     });
     await this.fanOut(message, thread, user.sub, body.length > 80 ? body.slice(0, 80) + '…' : body);

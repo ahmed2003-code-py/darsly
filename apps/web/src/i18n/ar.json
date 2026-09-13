@@ -138,7 +138,10 @@
     "searchPlaceholder": "ابحث عن أستاذ، مادة، أو مهارة...",
     "notifications": "الإشعارات",
     "markAllRead": "تحديد الكل كمقروء",
-    "noNotifications": "لا توجد إشعارات بعد"
+    "noNotifications": "لا توجد إشعارات بعد",
+    "clearAll": "مسح الكل",
+    "clearAllConfirm": "تمسح كل الإشعارات؟",
+    "dismiss": "شيل الإشعار ده"
   },
   "messages": {
     "title": "الرسائل",
@@ -170,7 +173,8 @@
     "read": "اتقرت",
     "delivered": "اتبعتت",
     "startHint": "ابعت أول رسالة عشان تبدأ المحادثة.",
-    "deletedMessage": "الرسالة دي اتشالت"
+    "deletedMessage": "الرسالة دي اتشالت",
+    "unsupported": "الرسالة دي محتاجة تحدّث الصفحة عشان تظهر."
   },
   "discovery": {
     "title": "استكشف الأساتذة",

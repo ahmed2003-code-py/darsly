@@ -139,7 +139,7 @@ function MessageButton({ studentId, label }: { studentId: string; label: string 
         e.stopPropagation();
         open.mutate();
       }}
-      className="grid h-9 w-9 place-items-center rounded-full text-outline transition hover:bg-primary-fixed hover:text-primary disabled:opacity-50"
+      className="grid h-9 w-9 place-items-center rounded-full bg-primary-fixed text-primary transition hover:bg-primary hover:text-on-primary disabled:opacity-50"
     >
       <span className="material-symbols-outlined text-[20px]">
         {open.isPending ? 'hourglass' : 'forum'}
@@ -367,108 +367,119 @@ export default function TeacherEnrollmentsPage() {
                   key={group.studentId}
                   className="overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-low transition hover:border-primary/40"
                 >
-                  {/* The contact links sit beside the disclosure button rather
-                      than inside it: an anchor nested in a button is invalid,
-                      and tapping "call" must not also expand the card. */}
-                  <div className="flex items-center gap-2 p-4">
-                    <button
-                      onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
-                      aria-expanded={expanded}
-                      className="flex min-w-0 flex-1 items-center gap-4 text-start"
-                    >
-                      <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
-                        {group.avatarUrl ? (
-                          <img src={group.avatarUrl} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          (group.name.trim().charAt(0) || '?')
-                        )}
-                      </span>
+                  {/*
+                    Two lines, not one.
 
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-bold">
-                          <bdi>{group.name}</bdi>
+                    Everything used to share a single row — avatar, name, phone,
+                    badges, money, four buttons — and on a phone that left the
+                    name as one letter and the number sitting on top of the
+                    course count. Who they are is the first line; what they are
+                    worth and how to reach them is the second.
+
+                    The contact links sit beside the disclosure button rather
+                    than inside it: an anchor nested in a button is invalid, and
+                    tapping "call" must not also expand the card.
+                  */}
+                  <div className="p-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
+                        aria-expanded={expanded}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-start"
+                      >
+                        <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
+                          {group.avatarUrl ? (
+                            <img src={group.avatarUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            (group.name.trim().charAt(0) || '?')
+                          )}
                         </span>
-                        {/* The monospace/LTR treatment is for digits. Applying
-                            it to the "no phone" fallback made an absence look
-                            like a malformed number. */}
-                        {group.phone ? (
-                          <span className="block font-mono text-xs text-outline" dir="ltr">
-                            {group.phone}
-                          </span>
-                        ) : (
-                          <span className="block text-xs text-outline">
-                            {t('teacher.students.noPhone')}
-                          </span>
-                        )}
-                      </span>
 
-                      <span className="hidden shrink-0 flex-wrap items-center gap-2 sm:flex">
-                        {group.activeCount > 0 && (
-                          <Badge tone="teal">
-                            {t('teacher.students.activeCount', { count: group.activeCount })}
-                          </Badge>
-                        )}
-                        {group.pendingCount > 0 && (
-                          <Badge tone="warn">
-                            {t('teacher.students.pendingCount', { count: group.pendingCount })}
-                          </Badge>
-                        )}
-                      </span>
-
-                      <span className="shrink-0 text-end">
-                        <span className="block text-sm font-bold">{egp(group.earnedCentsTotal)}</span>
-                        <span className="block text-xs text-outline">
-                          {t('teacher.students.courseCount', { count: group.enrollments.length })}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-heading font-bold">
+                            <bdi>{group.name}</bdi>
+                          </span>
+                          {/* The monospace/LTR treatment is for digits. Applying
+                              it to the "no phone" fallback made an absence look
+                              like a malformed number. */}
+                          {group.phone ? (
+                            <span className="mt-0.5 block truncate font-mono text-xs text-on-surface-variant" dir="ltr">
+                              {group.phone}
+                            </span>
+                          ) : (
+                            <span className="mt-0.5 block text-xs text-on-surface-variant">
+                              {t('teacher.students.noPhone')}
+                            </span>
+                          )}
                         </span>
-                        <span className="hidden text-xs text-outline sm:block">
+
+                        {/* The date only earns its place where there is room. */}
+                        <span className="hidden shrink-0 text-end text-xs text-on-surface-variant lg:block">
                           {/* `lastEnrolledAt` is epoch ms, kept that way for the sort. */}
                           {t('teacher.students.lastEnrolled')}: {dateShort(new Date(group.lastEnrolledAt))}
                         </span>
-                      </span>
+                      </button>
 
-                    </button>
-
-                    <span className="flex shrink-0 items-center gap-1">
-                      {/* First, because it is the one that reaches them inside
-                          the platform — where the lessons and the payment are. */}
-                      <MessageButton
-                        studentId={group.studentId}
-                        label={t('teacher.students.message')}
-                      />
-                      {group.phone && (
-                        <>
-                          <ContactLink
-                            href={`https://wa.me/${group.phone.replace(/\D/g, '')}`}
-                            external
-                            icon="chat"
-                            label={t('teacher.students.whatsapp')}
-                          />
-                          <ContactLink
-                            href={`tel:${group.phone}`}
-                            icon="call"
-                            label={t('teacher.students.call')}
-                          />
-                        </>
-                      )}
-                    </span>
-
-                    {/* Its own control, placed last so the row always ends with
-                        the disclosure regardless of whether the contact icons
-                        are there. Labelled, because a lone chevron says nothing
-                        to a screen reader. */}
-                    <button
-                      onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
-                      aria-expanded={expanded}
-                      aria-label={t(expanded ? 'teacher.students.collapse' : 'teacher.students.expand')}
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-outline transition hover:bg-surface-container-high hover:text-on-surface"
-                    >
-                      <span
-                        className="material-symbols-outlined transition-transform"
-                        style={{ transform: expanded ? 'rotate(180deg)' : undefined }}
+                      {/* Labelled, because a lone chevron says nothing to a
+                          screen reader. */}
+                      <button
+                        onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
+                        aria-expanded={expanded}
+                        aria-label={t(expanded ? 'teacher.students.collapse' : 'teacher.students.expand')}
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-outline transition hover:bg-surface-container-high hover:text-on-surface"
                       >
-                        expand_more
+                        <span
+                          className="material-symbols-outlined transition-transform"
+                          style={{ transform: expanded ? 'rotate(180deg)' : undefined }}
+                        >
+                          expand_more
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* What they are worth, and how to reach them. Wraps rather
+                        than shrinks, so nothing ever lands on top of anything. */}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-outline-variant/50 pt-3">
+                      <span className="font-heading font-extrabold">{egp(group.earnedCentsTotal)}</span>
+                      <span className="text-sm text-on-surface-variant">
+                        {t('teacher.students.courseCount', { count: group.enrollments.length })}
                       </span>
-                    </button>
+                      {group.activeCount > 0 && (
+                        <Badge tone="teal">
+                          {t('teacher.students.activeCount', { count: group.activeCount })}
+                        </Badge>
+                      )}
+                      {group.pendingCount > 0 && (
+                        <Badge tone="warn">
+                          {t('teacher.students.pendingCount', { count: group.pendingCount })}
+                        </Badge>
+                      )}
+
+                      <span className="ms-auto flex shrink-0 items-center gap-1">
+                        {/* Filled, because it is the one that reaches them
+                            inside the platform — where the lessons and the
+                            payment are. The other two are quiet on purpose. */}
+                        <MessageButton
+                          studentId={group.studentId}
+                          label={t('teacher.students.message')}
+                        />
+                        {group.phone && (
+                          <>
+                            <ContactLink
+                              href={`https://wa.me/${group.phone.replace(/\D/g, '')}`}
+                              external
+                              icon="chat"
+                              label={t('teacher.students.whatsapp')}
+                            />
+                            <ContactLink
+                              href={`tel:${group.phone}`}
+                              icon="call"
+                              label={t('teacher.students.call')}
+                            />
+                          </>
+                        )}
+                      </span>
+                    </div>
                   </div>
 
                   {expanded && (

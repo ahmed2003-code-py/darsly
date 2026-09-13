@@ -171,7 +171,6 @@ export default function MessagesPage() {
                       </span>
                       <span className="mt-0.5 flex items-center gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm text-on-surface-variant">
-                          {th.type === 'QA' && <span className="text-primary">❓ </span>}
                           {th.lastMessage || t('messages.startHint')}
                         </span>
                         {th.unread > 0 && (
@@ -211,11 +210,7 @@ export default function MessagesPage() {
                 <div className="min-w-0">
                   <p className="truncate font-heading font-bold">{active.counterpartName}</p>
                   <p className="truncate text-xs text-on-surface-variant">
-                    {peerTyping
-                      ? t('messages.typing')
-                      : active.type === 'QA' && active.lessonTitle
-                        ? `${t('messages.qaBadge')} · ${active.lessonTitle}`
-                        : ''}
+                    {peerTyping ? t('messages.typing') : ''}
                   </p>
                 </div>
               </header>
@@ -361,10 +356,31 @@ function Bubble({
           </div>
         )}
 
+        {/* Which lesson the question is about. It used to be the whole reason
+            for a second conversation with the same teacher; it is a line on the
+            message now. */}
+        {m.lesson && (
+          <p
+            className={`mb-1.5 flex items-center gap-1 text-xs font-bold ${
+              m.mine ? 'text-on-primary/85' : 'text-primary'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[15px]">play_lesson</span>
+            <span className="truncate">{m.lesson.title}</span>
+            {m.lesson.atSec != null && <span dir="ltr">· {clock(m.lesson.atSec)}</span>}
+          </p>
+        )}
+
         {m.audio ? (
           <VoiceBubble id={m.id} seconds={m.audio.durationSec} mine={!!m.mine} t={t} />
-        ) : (
+        ) : m.body ? (
           <p className="whitespace-pre-wrap break-words text-sm">{m.body}</p>
+        ) : (
+          // A message this build does not know how to draw — a newer kind sent
+          // to an older tab. Saying so beats an empty bubble.
+          <p className={`text-sm italic ${m.mine ? 'text-on-primary/70' : 'text-outline'}`}>
+            {t('messages.unsupported')}
+          </p>
         )}
 
         {last && (

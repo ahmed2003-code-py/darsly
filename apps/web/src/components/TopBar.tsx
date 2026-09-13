@@ -52,6 +52,17 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
     await api.patch('/notifications/read-all');
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
   }
+
+  // Read is not the same as done with. Without these the bell only ever grew.
+  async function clearAll() {
+    if (!window.confirm(t('topbar.clearAllConfirm'))) return;
+    await api.delete('/notifications/all');
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  }
+  async function dismiss(id: string) {
+    await api.delete(`/notifications/${id}`);
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  }
   /** Mark it read and go where it points — a notification you can't follow is
    *  just a label. */
   async function openNotif(n: { id: string; readAt?: string | null; type?: string; meta?: Record<string, unknown> }) {
@@ -131,11 +142,16 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
             </button>
             {bellOpen && (
               <div className="absolute end-0 mt-2 w-80 overflow-hidden rounded-xl bg-surface-container-lowest shadow-modal">
-                <div className="flex items-center justify-between border-b border-outline-variant/40 px-4 py-3">
-                  <span className="font-heading font-bold">{t('topbar.notifications')}</span>
+                <div className="flex items-center gap-3 border-b border-outline-variant/40 px-4 py-3">
+                  <span className="me-auto font-heading font-bold">{t('topbar.notifications')}</span>
                   {notif?.unread > 0 && (
-                    <button className="text-xs text-primary hover:underline" onClick={markAllRead}>
+                    <button className="text-xs font-bold text-primary hover:underline" onClick={markAllRead}>
                       {t('topbar.markAllRead')}
+                    </button>
+                  )}
+                  {notif?.items?.length > 0 && (
+                    <button className="text-xs font-bold text-error hover:underline" onClick={clearAll}>
+                      {t('topbar.clearAll')}
                     </button>
                   )}
                 </div>
@@ -160,27 +176,42 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
                     notif.items.map((n: any) => {
                       const look = notificationLook(n);
                       return (
-                        <button
+                        // The row opens it; the bin beside it removes it. They
+                        // are siblings rather than nested, because a button
+                        // inside a button is not a thing a browser can do.
+                        <div
                           key={n.id}
-                          onClick={() => void openNotif(n)}
-                          className={`flex w-full gap-3 border-b border-outline-variant/30 px-4 py-3 text-start transition hover:bg-surface-container-low ${
+                          className={`group/notif flex items-start gap-1 border-b border-outline-variant/30 transition hover:bg-surface-container-low ${
                             n.readAt ? '' : 'bg-primary-fixed/30'
                           }`}
                         >
-                          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${look.tone}`}>
-                            <span className="material-symbols-outlined text-[20px]">{look.icon}</span>
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-1.5">
-                              <span className="min-w-0 flex-1 truncate text-sm font-bold">{n.title}</span>
-                              {!n.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                          <button
+                            onClick={() => void openNotif(n)}
+                            className="flex min-w-0 flex-1 gap-3 py-3 ps-4 text-start"
+                          >
+                            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${look.tone}`}>
+                              <span className="material-symbols-outlined text-[20px]">{look.icon}</span>
                             </span>
-                            <span className="block text-xs text-on-surface-variant line-clamp-2">{n.body}</span>
-                            <span className="mt-1 block text-[11px] text-outline">
-                              {timeAgo(n.createdAt, t, i18n.language)}
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1.5">
+                                <span className="min-w-0 flex-1 truncate text-sm font-bold">{n.title}</span>
+                                {!n.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                              </span>
+                              <span className="block text-xs text-on-surface-variant line-clamp-2">{n.body}</span>
+                              <span className="mt-1 block text-[11px] text-outline">
+                                {timeAgo(n.createdAt, t, i18n.language)}
+                              </span>
                             </span>
-                          </span>
-                        </button>
+                          </button>
+                          <button
+                            onClick={() => void dismiss(n.id)}
+                            title={t('topbar.dismiss')}
+                            aria-label={t('topbar.dismiss')}
+                            className="me-2 mt-3 grid h-8 w-8 shrink-0 place-items-center rounded-full text-outline transition hover:bg-error-container hover:text-on-error-container sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/notif:opacity-100"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">close</span>
+                          </button>
+                        </div>
                       );
                     })
                   )}

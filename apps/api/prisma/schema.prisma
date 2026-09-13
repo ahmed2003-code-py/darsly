@@ -542,6 +542,7 @@ model Lesson {
   quiz             Quiz?
   assignment       Assignment?
   playbackSessions PlaybackSession[]
+  chatMessages     ChatMessage[]
 
   @@index([unitId, sortOrder])
 }
@@ -1221,6 +1222,14 @@ model ChatMessage {
   replyTo   ChatMessage?  @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
   replies   ChatMessage[] @relation("ChatReply")
 
+  /// The lesson this message is about, and where in its video. A question asked
+  /// from inside a lesson used to open a whole second conversation with the same
+  /// teacher, which is two chats with one person; the context belongs to the
+  /// message, not to the room.
+  lessonId          String?
+  lesson            Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  videoTimestampSec Int?
+
   /// A voice note. The audio is private — it is a conversation between two
   /// people — so only the storage key lives here and the bytes are served by a
   /// route that checks the listener is in the thread. There is no public URL.
@@ -1234,6 +1243,7 @@ model ChatMessage {
   deletedAt DateTime?
 
   @@index([threadId, createdAt])
+  @@index([lessonId])
 }
 
 enum AnnouncementScope {

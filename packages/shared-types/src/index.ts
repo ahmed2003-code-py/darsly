@@ -218,6 +218,8 @@ export interface ChatMessageDto {
   replyTo?: ChatReplyToDto | null;
   /** A voice note: `body` is empty and the audio is fetched by message id. */
   audio?: { durationSec: number; bytes: number } | null;
+  /** Set when the message was written about a lesson, and where in its video. */
+  lesson?: { id: string; title: string; atSec: number | null } | null;
 }
 
 export interface ChatThreadDto {

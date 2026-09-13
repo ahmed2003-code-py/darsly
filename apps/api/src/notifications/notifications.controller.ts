@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
 import { IsOptional, IsBooleanString } from 'class-validator';
@@ -48,6 +48,27 @@ export class NotificationsController {
       where: { userId: user.sub, readAt: null },
       data: { readAt: new Date() },
     });
+    return { ok: true };
+  }
+
+  // Reading a notification is not the same as being done with it. Marking the
+  // list read left every old one sitting there, and the only way to get to the
+  // bottom of the bell was to scroll past months of them.
+
+  @Delete('all')
+  @ApiOperation({ summary: 'Clear my whole notification list' })
+  async clearAll(@CurrentUser() user: JwtPayload) {
+    // Soft-deleted by the Prisma middleware, so nothing is actually destroyed —
+    // it simply stops being this person's problem.
+    const { count } = await this.prisma.notification.deleteMany({ where: { userId: user.sub } });
+    return { ok: true, cleared: count };
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Remove one notification from my list' })
+  async remove(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    // Scoped by userId as well as id: an id alone is not a permission.
+    await this.prisma.notification.deleteMany({ where: { id, userId: user.sub } });
     return { ok: true };
   }
 }

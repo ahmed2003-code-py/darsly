@@ -68,6 +68,8 @@ interface StudioItem {
   purchasable: boolean;
   levelLocked: boolean;
   achievementLocked: boolean;
+  /** What the app would look like wearing this — derived on the server. */
+  preview?: unknown;
 }
 
 export default function StudioPage() {
@@ -513,7 +515,11 @@ function ItemCard({
 }) {
   const locked = item.levelLocked || item.achievementLocked;
   return (
-    <article className={`studio-card card flex flex-col p-4 ${equipped ? 'studio-active border-student-accent' : ''}`}>
+    <article
+      className={`studio-card studio-pop card flex flex-col p-4 ${
+        equipped ? 'studio-active border-student-accent' : ''
+      }`}
+    >
       <Swatch item={item} />
 
       <div className="mt-3 flex items-start gap-2">
@@ -585,10 +591,11 @@ function ItemCard({
 function Swatch({ item }: { item: StudioItem }) {
   const cfg = item.config as { accent?: string; accentDark?: string; hex?: string; style?: string };
   const colour = cfg.hex ?? cfg.accent ?? null;
+  const legendary = item.rarity === 'LEGENDARY';
   if (colour) {
     return (
       <span
-        className="block h-16 w-full rounded-xl"
+        className={`block h-16 w-full rounded-xl ${legendary ? 'studio-sheen' : ''}`}
         style={{ background: `linear-gradient(135deg, ${colour}, ${cfg.accentDark ?? colour})` }}
       />
     );
@@ -679,45 +686,12 @@ function UnlockDialog({
 }
 
 /**
- * The tokens for one item, as if it were the only thing equipped.
+ * The tokens for one item, as the server derived them.
  *
- * Built from what the server already sent: previewing must not be a request,
- * and the catalogue carries each item's own configuration for exactly this.
+ * Sent with the catalogue so trying something on is exactly what wearing it
+ * would look like — including the contrast corrections — while still being a
+ * local swap that writes nothing.
  */
 function previewTheme(data: any, item: StudioItem): unknown {
-  const base = data.theme as { light: any; dark: any; styles: any };
-  const cfg = item.config as { accent?: string; accentDark?: string; hex?: string; style?: string };
-
-  // A colour swaps the accent; a shape swaps one attribute. Nothing else moves,
-  // so a preview shows the one change and not a different app.
-  if (cfg.hex || cfg.accent) {
-    const light = { ...base.light, tokens: { ...base.light.tokens } };
-    const dark = { ...base.dark, tokens: { ...base.dark.tokens } };
-    const l = cfg.hex ?? cfg.accent!;
-    const d = cfg.hex ?? cfg.accentDark ?? cfg.accent!;
-    // Only the base accent is swapped locally; the derived variants stay the
-    // ones the server produced, so a preview can never be more legible than the
-    // real thing would be.
-    light.tokens['--s-accent'] = hexToTriple(l) ?? light.tokens['--s-accent'];
-    dark.tokens['--s-accent'] = hexToTriple(d) ?? dark.tokens['--s-accent'];
-    return { light, dark, styles: base.styles };
-  }
-
-  const slot =
-    item.category === 'BUTTON_STYLE' ? 'button'
-    : item.category === 'CARD_STYLE' ? 'card'
-    : item.category === 'NAV_STYLE' ? 'nav'
-    : item.category === 'FRAME' ? 'frame'
-    : item.category === 'AVATAR' ? 'avatar'
-    : item.category === 'EFFECT' ? 'effect'
-    : null;
-  if (!slot || !cfg.style) return base;
-  return { ...base, styles: { ...base.styles, [slot]: cfg.style } };
-}
-
-function hexToTriple(hex: string): string | null {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+  return item.preview ?? data.theme;
 }

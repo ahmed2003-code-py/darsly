@@ -217,7 +217,27 @@ export class StudioService implements OnModuleInit {
       purchasable: !owned && !gate,
       levelLocked: !owned && item.requiredLevel > level,
       achievementLocked: !owned && !!gate && !earned.has(gate),
+      // What the app would look like wearing this, derived here so trying
+      // something on is exact rather than an approximation — and so previewing
+      // stays a local swap that writes nothing.
+      preview: this.previewFor(item),
     };
+  }
+
+  /** One item, resolved as if it were the only thing equipped. */
+  private previewFor(item: CosmeticItem): StudioThemes {
+    const cfg = (item.config ?? {}) as Record<string, unknown>;
+    const style = typeof cfg.style === 'string' ? cfg.style : null;
+    return deriveStudioThemes({
+      themeConfig: item.category === 'THEME' ? (cfg as ThemeConfig) : null,
+      accentHex: item.category === 'ACCENT' ? safeHex(cfg.hex) : null,
+      button: item.category === 'BUTTON_STYLE' ? style : null,
+      card: item.category === 'CARD_STYLE' ? style : null,
+      nav: item.category === 'NAV_STYLE' ? style : null,
+      frame: item.category === 'FRAME' ? style : null,
+      avatar: item.category === 'AVATAR' ? style : null,
+      effect: item.category === 'EFFECT' ? style : null,
+    });
   }
 
   /** Resolve the worn set into tokens, on the server, where the floors are. */

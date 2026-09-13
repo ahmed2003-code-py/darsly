@@ -136,6 +136,7 @@ export function applyTheme(theme: unknown): void {
     // alone would fall back to the academy rather than to the platform.
     serverTheme()?.remove();
     localStorage.removeItem(CACHE_KEY);
+    announce();
     return;
   }
 
@@ -150,6 +151,22 @@ export function applyTheme(theme: unknown): void {
     localStorage.setItem(CACHE_KEY, JSON.stringify(both));
   } catch {
     // A full or blocked storage costs the next load its head start, nothing more.
+  }
+  announce();
+}
+
+/**
+ * Tell the student layer that the academy has just repainted.
+ *
+ * Clearing every inline `--c-*` above takes the student's brand tokens with it,
+ * and they have to go back on top. An event rather than a call, so neither
+ * module has to import the other.
+ */
+function announce(): void {
+  try {
+    window.dispatchEvent(new CustomEvent('darsly:academy-theme'));
+  } catch {
+    // An environment without CustomEvent simply does not have a student layer.
   }
 }
 

@@ -34,6 +34,19 @@ export interface StudioStyles {
 export interface StudioTheme {
   /** CSS custom property → "R G B". Only ever `--s-*`. */
   tokens: Record<string, string>;
+  /**
+   * The platform's own accent family, restated in the student's colour.
+   *
+   * This is the part that makes it *their* Darsly rather than a tinted corner
+   * of one: the logo tile, every primary button, every active state across the
+   * whole app. A closed allowlist of `--c-*` names, all of them derived here
+   * against the same contrast floors — a student still sends a colour, never a
+   * token, and can still reach nothing outside this list.
+   *
+   * The published academy page is a different document rendered by the server
+   * and never sees any of it, so a teacher's site stays a teacher's site.
+   */
+  brand: Record<string, string>;
   styles: StudioStyles;
 }
 
@@ -120,10 +133,31 @@ export function deriveAccent(hex: string, mode: StudioMode): Record<string, stri
   };
 }
 
-/** The accent a theme carries, per mode. */
+/**
+ * The page a theme is read on.
+ *
+ * A theme that only changes buttons is a colour swap; changing the ground under
+ * everything is what makes it feel like a different place. Mixed at a low
+ * weight against the platform ground so text contrast is untouched — the wash
+ * is a tint, not a new background, and nothing has to be re-seated because of it.
+ */
+export function deriveWash(hex: string, mode: StudioMode): Record<string, string> {
+  const ground = GROUND[mode];
+  const w = mode === 'dark' ? 0.14 : 0.07;
+  return {
+    '--s-wash': triple(mix(ground, hex, w)),
+    '--s-wash-strong': triple(mix(ground, hex, w * 2)),
+  };
+}
+
+/** The accent a theme carries, per mode — and optionally a backdrop. */
 export interface ThemeConfig {
   accent?: string;
   accentDark?: string;
+  /** A second colour the page is washed with, behind everything else. Kept
+   *  faint on purpose: a background is a mood, not a poster. */
+  wash?: string;
+  washDark?: string;
 }
 
 /**
@@ -157,12 +191,79 @@ export function deriveStudioThemes(input: {
   const light = chosen ?? safeHex(input.themeConfig?.accent);
   const dark = chosen ?? safeHex(input.themeConfig?.accentDark) ?? light;
 
+  const washLight = safeHex(input.themeConfig?.wash);
+  const washDark = safeHex(input.themeConfig?.washDark) ?? washLight;
+
   return {
-    light: { tokens: light ? deriveAccent(light, 'light') : {}, styles },
-    dark: { tokens: dark ? deriveAccent(dark, 'dark') : {}, styles },
+    light: {
+      tokens: light
+        ? { ...deriveAccent(light, 'light'), ...(washLight ? deriveWash(washLight, 'light') : {}) }
+        : {},
+      brand: light ? deriveBrand(light, 'light') : {},
+      styles,
+    },
+    dark: {
+      tokens: dark
+        ? { ...deriveAccent(dark, 'dark'), ...(washDark ? deriveWash(washDark, 'dark') : {}) }
+        : {},
+      brand: dark ? deriveBrand(dark, 'dark') : {},
+      styles,
+    },
     styles,
   };
 }
+
+/**
+ * The platform accent family, in the student's colour.
+ *
+ * Every name here is one the product already uses, so restating them is what
+ * carries a choice from the Studio out to the logo, the buttons and the active
+ * rows on every screen. The floors are the same ones `app-theme.ts` holds the
+ * academy palette to: text on a filled button clears 4.5:1, and the ramp is
+ * mixed rather than invented.
+ */
+export function deriveBrand(hex: string, mode: StudioMode): Record<string, string> {
+  const ground = GROUND[mode];
+  const primary = legible(hex, ground, 3);
+  const onPrimary = legible(relLuminance(primary) > 0.5 ? '#12121a' : '#ffffff', primary, ON_FILL_FLOOR);
+  // Dark brightens on hover and light darkens: a darker hover on a dark page
+  // disappears into it.
+  const hover = mode === 'dark' ? mix(primary, '#ffffff', 0.16) : mix(primary, '#000000', 0.14);
+  const fixed = mix(ground, primary, mode === 'dark' ? 0.2 : 0.12);
+  const container = mix(ground, primary, mode === 'dark' ? 0.28 : 0.18);
+  const onFixed = legible(primary, fixed, TEXT_FLOOR);
+
+  return {
+    '--c-primary': triple(primary),
+    '--c-on-primary': triple(onPrimary),
+    '--c-primary-hover': triple(hover),
+    '--c-primary-container': triple(container),
+    '--c-on-primary-container': triple(onPrimary),
+    '--c-primary-fixed': triple(fixed),
+    '--c-primary-fixed-dim': triple(mix(ground, primary, mode === 'dark' ? 0.26 : 0.18)),
+    '--c-on-primary-fixed': triple(onFixed),
+    '--c-on-primary-fixed-variant': triple(onFixed),
+    '--c-inverse-primary': triple(mix(primary, ground, 0.25)),
+    '--c-surface-tint': triple(primary),
+    '--c-brand-accent': triple(primary),
+    '--c-on-brand-accent': triple(onPrimary),
+    // The ramp buttons and rings are built from. 600 is the primary, matching
+    // the platform scale, so every existing `accent-600` keeps its meaning.
+    '--c-accent-50': triple(mix(primary, '#ffffff', 0.93)),
+    '--c-accent-100': triple(mix(primary, '#ffffff', 0.85)),
+    '--c-accent-200': triple(mix(primary, '#ffffff', 0.7)),
+    '--c-accent-300': triple(mix(primary, '#ffffff', 0.53)),
+    '--c-accent-400': triple(mix(primary, '#ffffff', 0.34)),
+    '--c-accent-500': triple(mix(primary, '#ffffff', 0.15)),
+    '--c-accent-600': triple(primary),
+    '--c-accent-700': triple(mix(primary, '#000000', 0.22)),
+    '--c-accent-800': triple(mix(primary, '#000000', 0.4)),
+    '--c-accent-900': triple(mix(primary, '#000000', 0.56)),
+  };
+}
+
+/** The only `--c-*` names a student's choice may ever reach. */
+export const BRAND_OVERRIDE_NAMES = Object.keys(deriveBrand('#4a32c9', 'light'));
 
 function pick<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)

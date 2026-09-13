@@ -34,6 +34,8 @@ export interface StudioStyles {
 
 export interface StudioTheme {
   tokens: Record<string, string>;
+  /** The platform accent family, restated in the student's colour. */
+  brand: Record<string, string>;
   styles: StudioStyles;
 }
 
@@ -64,7 +66,36 @@ function clean(theme: unknown): StudioTheme | null {
       tokens[name] = String(value);
     }
   }
-  return { tokens, styles: styles(t.styles) };
+  return { tokens, brand: brandTokens(t.brand), styles: styles(t.styles) };
+}
+
+/**
+ * The only `--c-*` names a student's choice may reach.
+ *
+ * An allowlist rather than a prefix check: `--c-*` is the namespace the whole
+ * product is built on, and a student restating their accent must not be able to
+ * reach the surfaces, the ink or the error colour through the same door.
+ */
+const BRAND_ALLOWED = new Set([
+  '--c-primary', '--c-on-primary', '--c-primary-hover',
+  '--c-primary-container', '--c-on-primary-container',
+  '--c-primary-fixed', '--c-primary-fixed-dim',
+  '--c-on-primary-fixed', '--c-on-primary-fixed-variant',
+  '--c-inverse-primary', '--c-surface-tint',
+  '--c-brand-accent', '--c-on-brand-accent',
+  '--c-accent-50', '--c-accent-100', '--c-accent-200', '--c-accent-300',
+  '--c-accent-400', '--c-accent-500', '--c-accent-600', '--c-accent-700',
+  '--c-accent-800', '--c-accent-900',
+]);
+
+function brandTokens(input: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries((input ?? {}) as Record<string, string>)) {
+    if (BRAND_ALLOWED.has(name) && /^\d{1,3} \d{1,3} \d{1,3}$/.test(String(value))) {
+      out[name] = String(value);
+    }
+  }
+  return out;
 }
 
 const BUTTONS = ['classic', 'rounded', 'pill', 'sharp', 'soft', 'elevated'];
@@ -86,6 +117,17 @@ function styles(input: unknown): StudioStyles {
   };
 }
 
+/**
+ * Repaint after the academy theme has written its own tokens.
+ *
+ * `applyTheme` clears every inline `--c-*` before writing the academy's, which
+ * would take the student's brand tokens with it. Rather than couple the two
+ * modules, the academy layer announces that it has painted and this listens.
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('darsly:academy-theme', () => paint(equipped));
+}
+
 function pair(input: unknown): StudioThemes | null {
   const t = input as Partial<StudioThemes> | null;
   if (!t || typeof t !== 'object') return null;
@@ -101,6 +143,9 @@ function paint(themes: StudioThemes | null): void {
   for (const name of Array.from(root.style).filter((n) => n.startsWith('--s-'))) {
     root.style.removeProperty(name);
   }
+  // Written by this module and removable by it. Clearing them hands the app
+  // back to whatever the academy (or the platform) put there.
+  for (const name of BRAND_ALLOWED) root.style.removeProperty(name);
   if (!themes) {
     for (const attr of ['button', 'card', 'nav', 'frame', 'avatar', 'effect']) {
       root.removeAttribute(`data-s-${attr}`);
@@ -109,6 +154,11 @@ function paint(themes: StudioThemes | null): void {
   }
   const side = themes[resolveMode()];
   for (const [name, value] of Object.entries(side.tokens)) {
+    root.style.setProperty(name, value);
+  }
+  // This is what carries the choice out of the Studio: the logo tile, every
+  // primary button and every active row on every screen.
+  for (const [name, value] of Object.entries(side.brand ?? {})) {
     root.style.setProperty(name, value);
   }
   // Shape choices are attributes rather than variables: the stylesheet decides

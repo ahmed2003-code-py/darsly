@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationConfigService } from '../gamification/gamification.config.service';
 import { StudioService } from './studio.service';
-import { deriveAccent, deriveStudioThemes, safeHex } from './studio-theme';
+import { BRAND_OVERRIDE_NAMES, deriveAccent, deriveBrand, deriveStudioThemes, safeHex } from './studio-theme';
 import { contrastRatio } from '../academy-site/renderer/color.util';
 
 /**
@@ -318,6 +318,56 @@ describe('studio theme derivation', () => {
     const [r, g, b] = themes.light.tokens['--s-accent'].split(' ').map(Number);
     expect(r).toBeGreaterThan(b);
     expect(r).toBeGreaterThan(g);
+  });
+
+  /**
+   * The student's colour now restates the platform accent family, so that it
+   * reaches the logo and every button. That is a bigger door than `--s-*`, and
+   * these are the hinges on it.
+   */
+  it('restates only the accent family, never a surface or the ink', () => {
+    const brand = deriveBrand('#7c3aed', 'light');
+    for (const name of Object.keys(brand)) {
+      expect(name).toMatch(/^--c-(primary|on-primary|inverse-primary|surface-tint|brand-accent|on-brand-accent|accent-)/);
+    }
+    // The things that would make the app unreadable are not reachable.
+    for (const forbidden of [
+      '--c-background', '--c-surface', '--c-on-surface', '--c-on-background',
+      '--c-error', '--c-outline', '--c-line', '--c-surface-container',
+    ]) {
+      expect(Object.keys(brand)).not.toContain(forbidden);
+    }
+  });
+
+  it('keeps text on a primary button readable whatever colour is chosen', () => {
+    for (const hex of ['#ffffff', '#000000', '#ffff00', '#7c3aed', '#15803d', '#dc2626']) {
+      for (const mode of ['light', 'dark'] as const) {
+        const brand = deriveBrand(hex, mode);
+        expect(
+          contrastRatio(fromTriple(brand['--c-on-primary']), fromTriple(brand['--c-primary'])),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it('emits every brand token as plain "R G B"', () => {
+    const brand = deriveBrand('#15803d', 'dark');
+    for (const value of Object.values(brand)) {
+      expect(value).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+    }
+    expect(BRAND_OVERRIDE_NAMES.length).toBe(Object.keys(brand).length);
+  });
+
+  /** A wash is a mood, not a new page: the ground must stay close to itself. */
+  it('tints the page without moving it far from the platform ground', () => {
+    const themes = deriveStudioThemes({
+      themeConfig: { accent: '#15803d', accentDark: '#4ade80', wash: '#15803d', washDark: '#22c55e' },
+    });
+    for (const mode of ['light', 'dark'] as const) {
+      const wash = fromTriple(themes[mode].tokens['--s-wash']);
+      const ground = mode === 'light' ? '#fdfdfb' : '#0e0e12';
+      expect(contrastRatio(wash, ground)).toBeLessThan(1.6);
+    }
   });
 
   it('accepts a hex colour and nothing else', () => {

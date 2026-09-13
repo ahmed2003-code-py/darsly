@@ -500,3 +500,64 @@
   :root[data-s-effect='glow'] .studio-active { box-shadow: none; }
   .studio-frame::after { box-shadow: none !important; }
 }
+
+/*
+ * The ground a theme is read on, and the movement it comes with.
+ *
+ * `--s-wash` is a tint of the platform ground, mixed on the server at a low
+ * weight, so no text contrast changes when a student picks a theme: the page
+ * takes on a mood without anything on it becoming harder to read.
+ */
+:root {
+  --s-motion: 1;
+}
+body {
+  background-color: rgb(var(--s-wash, var(--c-background)));
+  transition: background-color 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Equipping something should feel like something happened. Cheap transforms
+   and opacity only — nothing that forces a layout. */
+@keyframes studio-pop {
+  0% { transform: scale(0.94); opacity: 0; }
+  60% { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes studio-sheen {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+
+.studio-pop { animation: studio-pop 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* A slow sweep across a swatch, so the shop reads as alive rather than as a
+   grid of rectangles. Legendary only: everywhere would be noise. */
+.studio-sheen { position: relative; overflow: hidden; }
+.studio-sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.35) 50%, transparent 65%);
+  animation: studio-sheen 2.6s ease-in-out infinite;
+}
+
+/* The accent moving with the page rather than snapping to it. */
+:root { transition: none; }
+.studio-card,
+.studio-btn,
+.studio-nav-item {
+  transition:
+    background-color 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-radius 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Somebody who asked for less movement gets a still page, not a slower one. */
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
+  .studio-pop { animation: none; }
+  .studio-sheen::after { animation: none; opacity: 0; }
+  .studio-card, .studio-btn, .studio-nav-item { transition: none; }
+}

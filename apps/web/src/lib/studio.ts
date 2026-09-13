@@ -93,7 +93,8 @@ function clean(theme: unknown): StudioTheme | null {
  * reach the surfaces, the ink or the error colour through the same door.
  */
 const BRAND_ALLOWED = new Set([
-  '--c-primary', '--c-on-primary', '--c-primary-hover',
+  // The accent family.
+  '--c-primary', '--c-primary-text', '--c-on-primary', '--c-primary-hover',
   '--c-primary-container', '--c-on-primary-container',
   '--c-primary-fixed', '--c-primary-fixed-dim',
   '--c-on-primary-fixed', '--c-on-primary-fixed-variant',
@@ -102,6 +103,18 @@ const BRAND_ALLOWED = new Set([
   '--c-accent-50', '--c-accent-100', '--c-accent-200', '--c-accent-300',
   '--c-accent-400', '--c-accent-500', '--c-accent-600', '--c-accent-700',
   '--c-accent-800', '--c-accent-900',
+  // The ground, for a skin that brings one. This is what separates a skin from
+  // a tint: without it the platform's greys stay underneath and the result is
+  // the same app in a different colour. Every value is derived and floored on
+  // the server, and `written[]` means removing the skin puts the academy back
+  // exactly as it was.
+  '--c-background', '--c-on-background',
+  '--c-surface', '--c-surface-dim', '--c-surface-bright',
+  '--c-surface-container-lowest', '--c-surface-container-low',
+  '--c-surface-container', '--c-surface-container-high',
+  '--c-surface-container-highest', '--c-surface-variant',
+  '--c-on-surface', '--c-on-surface-variant', '--c-outline', '--c-line',
+  '--c-inverse-surface', '--c-inverse-on-surface', '--c-shadow',
 ]);
 
 function brandTokens(input: unknown): Record<string, string> {
@@ -186,8 +199,25 @@ function pair(input: unknown): StudioThemes | null {
   return { light, dark, styles: styles(t.styles ?? light.styles) };
 }
 
+/**
+ * Pages a personal look has no business on.
+ *
+ * A teacher's published portfolio is their shopfront, not the student's app.
+ * Somebody arriving at it — or a student browsing it — should see what the
+ * teacher published, so the student layer stands down for as long as that page
+ * is open and picks up again on the way out.
+ */
+let suspended = false;
+
+export function setStudioSuspended(on: boolean): void {
+  if (suspended === on) return;
+  suspended = on;
+  paint(equipped);
+}
+
 /** Write one end of the pair onto the root element. */
-function paint(themes: StudioThemes | null): void {
+function paint(input: StudioThemes | null): void {
+  const themes = suspended ? null : input;
   const root = document.documentElement;
   for (const name of Array.from(root.style).filter((n) => n.startsWith('--s-'))) {
     root.style.removeProperty(name);
@@ -229,6 +259,26 @@ function paint(themes: StudioThemes | null): void {
   if (s.glow) root.setAttribute('data-s-glow', 'on');
   else root.removeAttribute('data-s-glow');
   ensureFont(s.font);
+}
+
+/**
+ * The moment a skin goes on.
+ *
+ * One light crossing the screen and then gone. Appended and removed by this
+ * module rather than rendered by a page, so putting a skin on feels the same
+ * wherever it happens — and so no page has to know a skin was equipped.
+ */
+export function playActivation(): void {
+  try {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const el = document.createElement('div');
+    el.className = 's-activation';
+    el.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(el);
+    window.setTimeout(() => el.remove(), 1200);
+  } catch {
+    // A celebration that cannot run is not a reason for anything to fail.
+  }
 }
 
 /** Apply and remember what the student has equipped. */

@@ -139,7 +139,7 @@ function MessageButton({ studentId, label }: { studentId: string; label: string 
         e.stopPropagation();
         open.mutate();
       }}
-      className="grid h-9 w-9 place-items-center rounded-full bg-primary-fixed text-primary transition hover:bg-primary hover:text-on-primary disabled:opacity-50"
+      className="grid h-9 w-9 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed transition hover:bg-primary hover:text-on-primary disabled:opacity-50"
     >
       <span className="material-symbols-outlined text-[20px]">
         {open.isPending ? 'hourglass' : 'forum'}
@@ -165,7 +165,7 @@ function ContactLink({
       title={label}
       aria-label={label}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-      className="grid h-9 w-9 place-items-center rounded-full text-outline transition hover:bg-primary-fixed hover:text-primary"
+      className="grid h-9 w-9 place-items-center rounded-full text-outline transition hover:bg-primary-fixed hover:text-on-primary-fixed"
     >
       <span className="material-symbols-outlined text-[20px]">{icon}</span>
     </a>
@@ -356,7 +356,7 @@ export default function TeacherEnrollmentsPage() {
             />
             <button
               onClick={toggleAll}
-              className="ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-primary transition hover:bg-primary-fixed"
+              className="ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-on-primary-fixed transition hover:bg-primary-fixed"
             >
               <span className="material-symbols-outlined text-base">
                 {allExpanded ? 'unfold_less' : 'unfold_more'}
@@ -393,7 +393,7 @@ export default function TeacherEnrollmentsPage() {
                         aria-expanded={expanded}
                         className="flex min-w-0 flex-1 items-center gap-3 text-start"
                       >
-                        <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
+                        <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-on-primary-fixed">
                           {group.avatarUrl ? (
                             <img src={group.avatarUrl} alt="" className="h-full w-full object-cover" />
                           ) : (

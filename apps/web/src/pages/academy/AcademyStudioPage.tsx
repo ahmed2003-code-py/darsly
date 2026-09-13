@@ -175,7 +175,7 @@ export default function AcademyStudioPage() {
               </button>
               <button
                 onClick={() => setMode('wizard')}
-                className="flex h-full items-center gap-2 rounded-xl px-4 font-heading text-sm font-semibold text-primary transition-colors hover:bg-primary-fixed"
+                className="flex h-full items-center gap-2 rounded-xl px-4 font-heading text-sm font-semibold text-on-primary-fixed transition-colors hover:bg-primary-fixed"
               >
                 <span className="material-symbols-outlined text-[19px]">assistant_direction</span>
                 <span className="hidden md:inline">{t('studio.guided')}</span>

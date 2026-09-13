@@ -204,7 +204,7 @@ export default function StudentDashboardPage() {
                   <span
                     key={a.key}
                     title={L({ ar: a.titleAr, en: a.titleEn })}
-                    className="grid h-11 w-11 place-items-center rounded-full bg-primary-fixed text-primary"
+                    className="grid h-11 w-11 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed"
                   >
                     <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                       {a.icon}

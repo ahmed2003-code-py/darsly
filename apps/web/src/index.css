@@ -75,6 +75,14 @@
        text, so it clears 4.5:1 on every surface a card is drawn from; the
        hierarchy below `on-surface-variant` comes from size and weight, not from
        being too faint to read. */
+    /* What "earned" looks like before any skin declares its own. The amber the
+       gamification screens were hard-coding, promoted to a token so they can
+       stop. */
+    --c-gold: 180 83 9;
+    --c-gold-soft: 254 243 199;
+    --c-gold-ink: 146 64 14;
+    --c-on-gold: 255 255 255;
+
     --c-outline: 95 94 104;
     /* Hairlines and shadows are drawn as an alpha of these. */
     --c-line: 24 24 34;
@@ -156,6 +164,11 @@
 
     /* Dark is where this went wrong: at 110 109 122 a hint sat at 2.9:1 on a
        card and simply could not be read. Same rule as light, swapped. */
+    --c-gold: 251 191 36;
+    --c-gold-soft: 69 39 3;
+    --c-gold-ink: 252 211 77;
+    --c-on-gold: 28 25 23;
+
     --c-outline: 155 154 167;
     /* Hairlines are an alpha of this, so on a dark page they have to be drawn
        in light — the same rule with the ink swapped, not a second rule. */
@@ -601,7 +614,15 @@ body {
 .studio-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  /* Negative, not zero.
+   *
+   * A positioned element at `z-index: 0` paints AFTER the ordinary in-flow
+   * content around it, so at zero this sat on top of every card in the app and
+   * its vignette — an opaque wash in the page colour — quietly erased whatever
+   * text fell under the curve. Raising `#root` above it could not help: the
+   * backdrop lives inside `#root`, so it came along. Below the content of its
+   * own stacking context is the only place a backdrop belongs. */
+  z-index: -1;
   pointer-events: none;
   opacity: 0.55;
 }
@@ -685,8 +706,9 @@ body {
   to { transform: rotate(360deg) scale(1.6); }
 }
 
-/* The page has to sit above its own backdrop. */
-#root { position: relative; z-index: 1; }
+/* The stacking context the backdrop is placed behind. Without it, a negative
+   z-index would escape to the root and hide under the body's own background. */
+#root { position: relative; z-index: 0; isolation: isolate; }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-s-pattern='glow'] .studio-backdrop,
@@ -779,4 +801,144 @@ body {
 @media (prefers-reduced-motion: reduce) {
   :root[data-s-glow] .studio-backdrop::before,
   :root[data-s-glow] .studio-backdrop::after { animation: none; }
+}
+
+/*
+ * ── A skin's atmosphere ─────────────────────────────────────────────────────
+ *
+ * Layers, not a colour. The ground comes from the surface tokens the server
+ * derived; everything here sits between that ground and the content: floodlight
+ * from above, a tactical grid you can barely see, and a vignette that pushes
+ * the eye to the middle. All of it gradients on the one fixed backdrop element
+ * that already exists — no images, no second layer, nothing per route.
+ *
+ * Only ever on when a skin has declared its own ground, because on the
+ * platform's paper these would be smog.
+ */
+:root[data-s-pattern='stadium'] .studio-backdrop {
+  opacity: 1;
+}
+
+/* Floodlight: two banks, high and wide, the way a night ground is actually lit. */
+:root[data-s-pattern='stadium'] .studio-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(70% 42% at 22% -8%, rgb(var(--s-accent, var(--c-primary)) / 0.16), transparent 70%),
+    radial-gradient(64% 38% at 82% -6%, rgb(var(--s-gold, var(--c-gold)) / 0.13), transparent 70%),
+    radial-gradient(120% 80% at 50% 120%, rgb(var(--c-background)) 35%, transparent 75%);
+  animation: none;
+}
+
+/* The tactical grid, and the vignette that keeps it out of the way. */
+:root[data-s-pattern='stadium'] .studio-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgb(var(--s-accent, var(--c-primary)) / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--s-accent, var(--c-primary)) / 0.05) 1px, transparent 1px),
+    radial-gradient(120% 90% at 50% 50%, transparent 45%, rgb(0 0 0 / 0.45) 100%);
+  background-size: 56px 56px, 56px 56px, 100% 100%;
+  animation: none;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+}
+
+/*
+ * ── Motion primitives ───────────────────────────────────────────────────────
+ *
+ * Reusable, so a reward moment is a class rather than a bespoke animation per
+ * page. Transform and opacity only: both composite on the GPU and neither
+ * forces a layout, which is what keeps a celebration from costing a frame.
+ */
+@keyframes s-rise {
+  0% { transform: translateY(6px) scale(0.94); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translateY(-30px) scale(1); opacity: 0; }
+}
+@keyframes s-shine {
+  0% { transform: translateX(-130%) skewX(-18deg); }
+  100% { transform: translateX(260%) skewX(-18deg); }
+}
+@keyframes s-pop-in {
+  0% { transform: scale(0.5) rotate(-8deg); opacity: 0; }
+  55% { transform: scale(1.12) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes s-sweep {
+  0% { transform: translateX(-60%) skewX(-14deg); opacity: 0; }
+  35% { opacity: 1; }
+  100% { transform: translateX(160%) skewX(-14deg); opacity: 0; }
+}
+@keyframes s-arc {
+  0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(var(--s-arc-x, 60px), var(--s-arc-y, -70px)) scale(1); opacity: 0; }
+}
+
+/** A number floating up as it is earned. */
+.s-rise { animation: s-rise 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+/** Metal catching the light — for a balance that just changed. */
+.s-shine { position: relative; overflow: hidden; }
+.s-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 40%, rgb(255 255 255 / 0.45) 50%, transparent 60%);
+  animation: s-shine 900ms ease-out 1;
+}
+/** A trophy arriving. */
+.s-pop-in { animation: s-pop-in 480ms cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+/** A ball leaving the boot. */
+.s-arc { animation: s-arc 900ms cubic-bezier(0.25, 0.9, 0.35, 1) both; }
+
+/**
+ * The moment a skin is put on.
+ *
+ * One light crossing the screen, once. Long enough to feel deliberate, short
+ * enough that it never stands between somebody and what they were doing —
+ * pointer-events are off throughout and it removes itself.
+ */
+.s-activation {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+}
+.s-activation::before {
+  content: '';
+  position: absolute;
+  inset: -20% -60%;
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgb(var(--s-gold, var(--c-gold)) / 0.28) 48%,
+    rgb(var(--s-accent, var(--c-primary)) / 0.22) 54%,
+    transparent 66%
+  );
+  animation: s-sweep 1100ms cubic-bezier(0.3, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s-rise, .s-pop-in, .s-arc { animation: none; opacity: 1; transform: none; }
+  .s-shine::after { animation: none; opacity: 0; }
+  .s-activation { display: none; }
+}
+
+/*
+ * ── Card semantics ──────────────────────────────────────────────────────────
+ *
+ * A reward should not look like a lesson. One class each, on the shared card,
+ * so a page says what a surface means rather than how it should look.
+ */
+.card-gold {
+  border-color: rgb(var(--s-gold, var(--c-gold)) / 0.35);
+  box-shadow: 0 0 0 1px rgb(var(--s-gold, var(--c-gold)) / 0.1) inset;
+}
+.card-live {
+  border-color: rgb(var(--s-accent, var(--c-primary)) / 0.45);
 }

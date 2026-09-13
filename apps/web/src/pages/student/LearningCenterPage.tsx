@@ -166,7 +166,7 @@ function Overview({ g }: { g: ReturnType<typeof useGamification>['data'] & {} })
 
       <aside className="space-y-6">
         <div className="card text-center">
-          <span className="material-symbols-outlined text-[28px] text-amber-600" style={{ fontVariationSettings: "'FILL' 1" }}>
+          <span className="material-symbols-outlined text-[28px] text-student-gold-ink" style={{ fontVariationSettings: "'FILL' 1" }}>
             {g.rank.divisionIcon}
           </span>
           <p className="font-heading text-lg font-extrabold">
@@ -249,13 +249,13 @@ function RewardsTab() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {(data?.rewards ?? []).map((r) => (
           <div key={r.key} className="card flex flex-col">
-            <span className="mb-2 grid h-11 w-11 place-items-center rounded-full bg-primary-fixed text-primary">
+            <span className="mb-2 grid h-11 w-11 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed">
               <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>{r.icon}</span>
             </span>
             <p className="font-heading font-bold">{L({ ar: r.titleAr, en: r.titleEn })}</p>
             <p className="mt-0.5 flex-1 text-sm text-on-surface-variant">{L({ ar: r.descAr, en: r.descEn })}</p>
             <div className="mt-3 flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1 font-heading font-extrabold text-amber-600">
+              <span className="flex items-center gap-1 font-heading font-extrabold text-student-gold-ink">
                 <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>toll</span>
                 {r.costCoins}
               </span>
@@ -298,7 +298,7 @@ function ActivityTab() {
             {t([`gamification.events.${e.type}`, e.type])}
           </span>
           <span className="shrink-0 text-sm font-bold text-primary">{e.xp > 0 ? `+${e.xp}` : ''}</span>
-          <span className={`shrink-0 text-sm font-bold ${e.coins < 0 ? 'text-outline' : 'text-amber-600'}`}>
+          <span className={`shrink-0 text-sm font-bold ${e.coins < 0 ? 'text-outline' : 'text-student-gold-ink'}`}>
             {e.coins !== 0 ? (e.coins > 0 ? `+${e.coins}` : e.coins) : ''}
           </span>
         </div>

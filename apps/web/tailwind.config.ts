@@ -53,6 +53,9 @@ export default {
         accent, // full scale available as accent-50..900
 
         primary: c('primary'),
+        // Read as a label rather than painted as a fill. `textColor` below
+        // re-points `text-primary` at this; `bg-primary` is untouched.
+        'primary-text': `rgb(var(--c-primary-text, var(--c-primary)) / <alpha-value>)`,
         'on-primary': c('on-primary'),
         'primary-container': c('primary-container'),
         'on-primary-container': c('on-primary-container'),
@@ -126,11 +129,33 @@ export default {
         'student-secondary-soft': c2('s-secondary-soft', 'c-secondary-container'),
         'student-secondary-ink': c2('s-secondary-ink', 'c-secondary'),
         'on-student-secondary': c2('s-on-secondary', 'c-on-secondary'),
+
+        // Gold is a semantic, not a third accent: it means earned. XP, coins,
+        // trophies, rank and rewards read from it, so "this was won" has one
+        // colour across the app instead of an amber hard-coded per component.
+        // Falls back to the platform's amber, so nothing changes until a skin
+        // declares one.
+        'student-gold': c2('s-gold', 'c-gold'),
+        'student-gold-soft': c2('s-gold-soft', 'c-gold-soft'),
+        'student-gold-ink': c2('s-gold-ink', 'c-gold-ink'),
+        'on-student-gold': c2('s-on-gold', 'c-on-gold'),
         'student-accent-hover': c2('s-accent-hover', 'c-primary-hover'),
         'student-accent-soft': c2('s-accent-soft', 'c-primary-fixed'),
         'student-accent-border': c2('s-accent-border', 'c-primary-container'),
         'student-accent-ink': c2('s-accent-ink', 'c-primary'),
         'on-student-accent': c2('s-on-accent', 'c-on-primary'),
+      },
+      /**
+       * `text-primary` is a label, `bg-primary` is a fill, and they are not
+       * held to the same contrast floor. Re-pointing only the text utility
+       * keeps every `text-primary` in the app legible on a skin's own ground
+       * without washing out the colour the buttons are painted in. Everything
+       * else — borders, rings, fills — still reads `--c-primary`, and a theme
+       * that never sets `--c-primary-text` behaves exactly as it did.
+       */
+      textColor: {
+        primary: `rgb(var(--c-primary-text, var(--c-primary)) / <alpha-value>)`,
+        'student-accent-ink': `rgb(var(--s-accent-ink, var(--c-primary-text, var(--c-primary))) / <alpha-value>)`,
       },
       fontFamily: {
         // Distinctive Arabic-native pairing (not Tajawal/Inter defaults).

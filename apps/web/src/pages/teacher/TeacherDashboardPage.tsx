@@ -186,7 +186,7 @@ export default function TeacherDashboardPage() {
               <div className="flex items-start justify-between gap-3">
                 <span
                   className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
-                    s.urgent ? 'bg-amber-500/15 text-amber-600' : 'bg-primary-fixed text-primary'
+                    s.urgent ? 'bg-amber-500/15 text-amber-600' : 'bg-primary-fixed text-on-primary-fixed'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[24px]">{s.icon}</span>
@@ -246,7 +246,7 @@ export default function TeacherDashboardPage() {
                       className="h-11 w-11 shrink-0 rounded-full object-cover"
                     />
                   ) : (
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading font-bold text-primary">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
                       {s.name?.trim()?.charAt(0)}
                     </span>
                   )}

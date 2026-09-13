@@ -30,7 +30,7 @@ function Section({
   return (
     <section className="card">
       <div className="mb-4 flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-fixed text-primary">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-fixed text-on-primary-fixed">
           <span className="material-symbols-outlined text-xl">{icon}</span>
         </span>
         <div>
@@ -215,7 +215,7 @@ export default function ProfilePage() {
         <section className="card lg:sticky lg:top-8">
           <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-start">
             <div className="relative">
-              <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-primary-fixed text-3xl font-extrabold text-primary shadow-card">
+              <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-primary-fixed text-3xl font-extrabold text-on-primary-fixed shadow-card">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -435,7 +435,7 @@ function LearningSection() {
               type="button"
               onClick={() => setTitle.mutate(null)}
               className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                !g.activeTitle ? 'border-primary bg-primary-fixed text-primary' : 'border-outline-variant text-on-surface-variant'
+                !g.activeTitle ? 'border-primary bg-primary-fixed text-on-primary-fixed' : 'border-outline-variant text-on-surface-variant'
               }`}
             >
               {t('gamification.titles.none')}
@@ -449,7 +449,7 @@ function LearningSection() {
                   type="button"
                   onClick={() => setTitle.mutate(ti.key)}
                   className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                    on ? 'border-primary bg-primary-fixed text-primary' : 'border-outline-variant text-on-surface-variant'
+                    on ? 'border-primary bg-primary-fixed text-on-primary-fixed' : 'border-outline-variant text-on-surface-variant'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[18px]">{ti.icon}</span>

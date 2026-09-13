@@ -167,7 +167,7 @@ export class StudioService implements OnModuleInit {
         levelPct: progress.pct,
       },
       equipped: worn,
-      academyThemes: await this.academyThemes(studentId, worn.academyId),
+      academyThemes: await this.academyThemes(studentId, worn.academyId, worn.themeKey),
       items: items.map((item) => this.toItemDto(item, ownedIds, earned, progress.level.level)),
       theme: this.themeFor(items, worn),
     };
@@ -181,7 +181,11 @@ export class StudioService implements OnModuleInit {
    * real relationship with. Free, always owned, and the way back after trying
    * something on — "my teacher's look" as one tap rather than a reset.
    */
-  private async academyThemes(studentId: string, chosen: string | null) {
+  private async academyThemes(
+    studentId: string,
+    chosen: string | null,
+    wornThemeKey: string | null,
+  ) {
     const rows = await this.prisma.enrollment.findMany({
       where: { studentId, status: { in: ['ACTIVE', 'PENDING_PAYMENT'] } },
       select: { tenantId: true, createdAt: true },
@@ -214,7 +218,11 @@ export class StudioService implements OnModuleInit {
           // the branding layer — this is only what the card should look like.
           primary: palette?.primary ?? null,
           accent: palette?.accent ?? null,
-          equipped: chosen ? chosen === a.id : i === 0,
+          // The first teacher is what the app wears only while nothing else is
+          // on. With a bought theme worn, marking a teacher "in use" was both
+          // untrue and a dead end: the card showed a tick instead of a button,
+          // so the one tap back to a teacher's look was not on the page.
+          equipped: chosen ? chosen === a.id : !wornThemeKey && i === 0,
           // True for the one the app already wears with no choice made.
           isDefault: i === 0,
         };
@@ -398,7 +406,10 @@ export class StudioService implements OnModuleInit {
         if (!paid.count) {
           throw new BadRequestException({ message: 'Not enough coins', code: 'NOT_ENOUGH_COINS' });
         }
-        await tx.studentCosmetic.create({
+        // Ownership is what makes an unlock exactly-once: the row is unique on
+        // (student, item), so a replay or a second racing request dies here,
+        // inside the transaction, before anything is charged.
+        const owned = await tx.studentCosmetic.create({
           data: { studentId, itemId: item.id, source: 'PURCHASE', costCoins: item.costCoins },
         });
         await tx.gamificationEvent.create({
@@ -409,9 +420,12 @@ export class StudioService implements OnModuleInit {
             entityId: item.key,
             xpAwarded: 0,
             coinsAwarded: -item.costCoins,
-            // Derived from the pair, not from the request: a replayed unlock
-            // collides with the row the first one wrote.
-            idempotencyKey: `COSMETIC:${studentId}:${item.id}`,
+            // Keyed on the purchase, not on the pair. Keyed on the pair it was
+            // permanent: a refund deletes the ownership row but must not erase
+            // the ledger, so the dead key stayed behind and every later attempt
+            // to buy the same item again collided with it — the student was
+            // told "already owned" while owning nothing, with no way back.
+            idempotencyKey: `COSMETIC:${owned.id}`,
             meta: { key: item.key, category: item.category } as Prisma.InputJsonValue,
           },
         });

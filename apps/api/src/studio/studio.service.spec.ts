@@ -3,8 +3,17 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationConfigService } from '../gamification/gamification.config.service';
 import { StudioService } from './studio.service';
 import { CATALOG } from './studio.catalog';
-import { BRAND_OVERRIDE_NAMES, deriveAccent, deriveBrand, deriveStudioThemes, safeHex } from './studio-theme';
+import {
+  BRAND_OVERRIDE_NAMES,
+  deriveAccent,
+  deriveBrand,
+  deriveStudioThemes,
+  deriveSurfaces,
+  safeHex,
+} from './studio-theme';
 import { contrastRatio } from '../academy-site/renderer/color.util';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 /**
  * The rules that matter here are the ones about somebody else's money and
@@ -23,7 +32,7 @@ function makePrisma(over: Record<string, any> = {}): any {
     studentCosmetic: {
       findUnique: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockResolvedValue({ id: 'own1' }),
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     studentCustomization: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
@@ -100,10 +109,37 @@ describe('StudioService — unlocking', () => {
         data: expect.objectContaining({
           type: 'COSMETIC_UNLOCKED',
           coinsAwarded: -120,
-          idempotencyKey: 'COSMETIC:s1:i1',
+          idempotencyKey: 'COSMETIC:own1',
         }),
       }),
     );
+  });
+
+  /**
+   * A ledger is not erased, so it must not be a lock.
+   *
+   * Keying the spend on (student, item) made the first purchase permanent: a
+   * refund removes what the student owns but leaves the ledger row that records
+   * the spend, and every later attempt to buy the same item collided with that
+   * dead row. The student was told "already owned" while owning nothing, and
+   * there was no way out of it. The key belongs to the purchase.
+   */
+  it('can be bought again after a refund, because the ledger is not the lock', async () => {
+    const prisma = makePrisma();
+    prisma.cosmeticItem.findUnique.mockResolvedValue(item());
+    prisma.studentCosmetic.create.mockResolvedValue({ id: 'own2' });
+    await svc(prisma).unlock('u1', 'theme-ocean');
+    const first = prisma.gamificationEvent.create.mock.calls[0][0].data.idempotencyKey;
+
+    // The same student, the same item, a second time round.
+    prisma.gamificationEvent.create.mockClear();
+    prisma.studentCosmetic.create.mockResolvedValue({ id: 'own3' });
+    await svc(prisma).unlock('u1', 'theme-ocean');
+    const second = prisma.gamificationEvent.create.mock.calls[0][0].data.idempotencyKey;
+
+    expect(second).not.toBe(first);
+    // …and it still names something, so a genuine replay has a row to collide with.
+    expect(second).toMatch(/^COSMETIC:\w+$/);
   });
 
   it('refuses when the balance is short, and takes nothing', async () => {
@@ -241,6 +277,55 @@ describe('StudioService — wearing', () => {
     expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ update: { accentKey: 'accent-violet', accentHex: null } }),
     );
+  });
+});
+
+describe('StudioService — a teacher’s look as the way back', () => {
+  const withTeacher = () => {
+    const prisma = makePrisma();
+    prisma.enrollment.findMany.mockResolvedValue([{ tenantId: 'a1', createdAt: new Date() }]);
+    prisma.academy.findMany.mockResolvedValue([
+      { id: 'a1', name: 'Academy', colorPrimary: '#2f5fe0', colorAccent: '#7c3aed', brandTokens: null, owner: { fullName: 'Amr' } },
+    ]);
+    prisma.cosmeticItem.findMany.mockResolvedValue([]);
+    // `studentProfile.findUnique` stands in for two different reads here: the
+    // id lookup that authorises the call, and the profile the overview renders.
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 's1', currentStreak: 0, user: { fullName: 'Student', avatarUrl: null },
+    });
+    return prisma;
+  };
+
+  it('marks the first teacher in use while nothing else is worn', async () => {
+    const prisma = withTeacher();
+    const out = await svc(prisma).overview('u1');
+    expect(out.academyThemes[0].equipped).toBe(true);
+  });
+
+  /**
+   * The card shows a tick or a button, never both. Claiming a teacher's look
+   * was in use while a bought theme was on took the button off the page, and
+   * with it the one tap back to that teacher.
+   */
+  it('offers the way back while a bought theme is worn', async () => {
+    const prisma = withTeacher();
+    prisma.studentCustomization.findUnique.mockResolvedValue({
+      themeKey: 'theme-egyptian-king', academyId: null, accentKey: null, accentHex: null,
+      buttonKey: null, cardKey: null, navKey: null, avatarKey: null, frameKey: null, effectKey: null,
+    });
+    const out = await svc(prisma).overview('u1');
+    expect(out.equipped.themeKey).toBe('theme-egyptian-king');
+    expect(out.academyThemes[0].equipped).toBe(false);
+  });
+
+  it('marks the teacher in use once that teacher is chosen', async () => {
+    const prisma = withTeacher();
+    prisma.studentCustomization.findUnique.mockResolvedValue({
+      themeKey: null, academyId: 'a1', accentKey: null, accentHex: null,
+      buttonKey: null, cardKey: null, navKey: null, avatarKey: null, frameKey: null, effectKey: null,
+    });
+    const out = await svc(prisma).overview('u1');
+    expect(out.academyThemes[0].equipped).toBe(true);
   });
 });
 
@@ -434,10 +519,14 @@ describe('studio theme derivation', () => {
   });
 
   it('emits every brand token as plain "R G B"', () => {
-    const brand = deriveBrand('#15803d', 'dark');
+    const brand = { ...deriveBrand('#15803d', 'dark'), ...deriveSurfaces({ background: '#101018' }) };
     for (const value of Object.values(brand)) {
-      expect(value).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+      expect(value).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$|^0 0 0$/);
     }
+    // The client refuses any brand name it was not told about, so the two
+    // families the server can write have to be named there in full — and the
+    // allowlist must hold nothing beyond them.
+    for (const name of Object.keys(brand)) expect(BRAND_OVERRIDE_NAMES).toContain(name);
     expect(BRAND_OVERRIDE_NAMES.length).toBe(Object.keys(brand).length);
   });
 
@@ -484,14 +573,88 @@ describe('Egyptian King', () => {
     expect(item!.rarity).toBe('LEGENDARY');
   });
 
-  // Priced against the economy that exists: a finished course pays 250 coins
-  // and the dearest reward on sale is 400, so this sits above both.
-  it('costs more than anything already on sale, and is still reachable', () => {
-    expect(item!.costCoins).toBe(750);
-    expect(item!.requiredLevel).toBe(3);
+  // A hundred coins is ten lessons: the first skin's job is to be had, not
+  // saved for. No level gate for the same reason.
+  it('costs a hundred, and is gated on nothing', () => {
+    expect(item!.costCoins).toBe(100);
+    expect(item!.requiredLevel).toBeUndefined();
     // Earned items carry no price; a bought one must not pretend to be earned.
     expect(item!.requiredAchievement).toBeUndefined();
     expect(item!.isStarter).toBeUndefined();
+  });
+
+  /**
+   * The difference between a skin and a tint.
+   *
+   * A theme that only moves the accent leaves the platform's greys underneath,
+   * which is exactly the "it just looks red" failure. This one has to bring its
+   * own ground — and the ground has to be near-black navy, not red.
+   */
+  it('brings its own ground, and the ground is navy rather than red', () => {
+    const brand = deriveStudioThemes({ themeConfig: item!.config as any }).dark.brand;
+    expect(brand['--c-background']).toBeDefined();
+    expect(brand['--c-surface-container-lowest']).toBeDefined();
+    const [r, g, b] = brand['--c-background'].split(' ').map(Number);
+    expect(b).toBeGreaterThan(r); // cool, not warm
+    expect(r + g + b).toBeLessThan(120); // and genuinely dark
+  });
+
+  it('keeps body text readable on its own ground', () => {
+    const brand = deriveStudioThemes({ themeConfig: item!.config as any }).dark.brand;
+    const bg = fromTriple(brand['--c-background']);
+    // Long-form reading is held to AAA, the same floor the academy palette uses.
+    expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
+    // Secondary text and the quietest ink still clear the text floor.
+    expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * `text-primary` is read as text on well over a hundred screens, so a skin
+   * has to ship a brand colour that survives being read — without giving up the
+   * one it is painted in. At 3:1 this palette measured 3.71:1 as body text;
+   * pushed to 4.5:1 the button stopped being Egyptian red. Hence two tokens.
+   */
+  it('keeps the brand readable as a label and crimson as a fill', () => {
+    const themes = deriveStudioThemes({ themeConfig: item!.config as any });
+    for (const mode of ['light', 'dark'] as const) {
+      const brand = themes[mode].brand;
+      const card = fromTriple(brand['--c-surface-container-highest']);
+      // The label clears the text floor on the hardest surface in the skin…
+      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(brand['--c-primary-text']), fromTriple(brand['--c-background'])),
+      ).toBeGreaterThanOrEqual(4.5);
+      // …and the text on the soft fill built from the colour clears it too.
+      expect(
+        contrastRatio(fromTriple(brand['--c-on-primary-fixed']), fromTriple(brand['--c-primary-fixed'])),
+      ).toBeGreaterThanOrEqual(4.5);
+
+      // The fill stays the colour the theme asked for: still unmistakably red,
+      // and still dark enough to carry white text.
+      const [r, g, b] = brand['--c-primary'].split(' ').map(Number);
+      expect(r).toBeGreaterThan(g + 60);
+      expect(r).toBeGreaterThan(b + 60);
+      expect(
+        contrastRatio(fromTriple(brand['--c-on-primary']), fromTriple(brand['--c-primary'])),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('carries gold as a semantic, legible on its own ground', () => {
+    const t = deriveStudioThemes({ themeConfig: item!.config as any }).dark.tokens;
+    const brand = deriveStudioThemes({ themeConfig: item!.config as any }).dark.brand;
+    expect(t['--s-gold']).toBeDefined();
+    expect(contrastRatio(fromTriple(t['--s-gold-ink']), fromTriple(brand['--c-background']))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(fromTriple(t['--s-on-gold']), fromTriple(t['--s-gold']))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // A skin is a skin in both modes: someone who chose light did not choose to
+  // see half a stadium.
+  it('looks the same whichever mode the reader prefers', () => {
+    const themes = deriveStudioThemes({ themeConfig: item!.config as any });
+    expect(themes.light.brand['--c-background']).toBe(themes.dark.brand['--c-background']);
+    expect(themes.light.brand['--c-on-surface']).toBe(themes.dark.brand['--c-on-surface']);
   });
 
   it('configures only values the theme engine knows how to read', () => {
@@ -516,21 +679,27 @@ describe('Egyptian King', () => {
       const [r, g, b] = t['--s-accent'].split(' ').map(Number);
       expect(r).toBeGreaterThan(g);
       expect(r).toBeGreaterThan(b);
-      // Gold is its own colour and is held to the same floors.
-      expect(contrastRatio(fromTriple(t['--s-secondary-ink']), GROUND[mode])).toBeGreaterThanOrEqual(4.5);
+      // Gold is its own colour and is held to the same floors — against the
+      // ground this skin actually lays down, which is its own, not the app's.
+      const ground = fromTriple(deriveStudioThemes({ themeConfig: cfg })[mode].brand['--c-background']);
+      expect(contrastRatio(fromTriple(t['--s-secondary-ink']), ground)).toBeGreaterThanOrEqual(4.5);
       expect(
         contrastRatio(fromTriple(t['--s-on-accent']), fromTriple(t['--s-accent'])),
       ).toBeGreaterThanOrEqual(4.5);
     }
   });
 
-  it('restates the accent family so the look reaches every screen', () => {
+  it('restates the accent family and the ground, so the look reaches every screen', () => {
     const cfg = item!.config as Record<string, unknown>;
     const brand = deriveStudioThemes({ themeConfig: cfg }).dark.brand;
-    expect(Object.keys(brand).length).toBeGreaterThan(20);
-    expect(brand['--c-primary']).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
-    // …and still cannot reach a surface or the ink.
-    for (const forbidden of ['--c-background', '--c-surface', '--c-on-surface', '--c-error']) {
+    // A skin that only restated --s-* would stop at the student's own pages.
+    // These are the names every screen in the app reads, teachers' included.
+    for (const reached of ['--c-primary', '--c-background', '--c-surface', '--c-on-surface']) {
+      expect(brand[reached]).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+    }
+    // …and still cannot reach the colours that mean something. An error has to
+    // stay red-for-error, not red-for-Egypt.
+    for (const forbidden of ['--c-error', '--c-on-error', '--c-error-container', '--c-success']) {
       expect(Object.keys(brand)).not.toContain(forbidden);
     }
   });
@@ -542,6 +711,43 @@ describe('Egyptian King', () => {
    * client removes only what it wrote — and if this produced tokens, it would
    * be writing over an academy that had done nothing wrong.
    */
+  /**
+   * The ground is a bigger door than the accent was, so it has its own hinges:
+   * nothing outside the declared surface names is reachable through it.
+   */
+  it('cannot reach an error colour or a secondary through the ground', () => {
+    const names = Object.keys(deriveSurfaces({ background: '#0a0e16' }));
+    for (const forbidden of [
+      '--c-error', '--c-on-error', '--c-error-container',
+      '--c-secondary', '--c-tertiary', '--c-primary',
+    ]) {
+      expect(names).not.toContain(forbidden);
+    }
+    // And every name it does produce is one the client will accept.
+    for (const n of names) expect(BRAND_OVERRIDE_NAMES).toContain(n);
+  });
+
+  /**
+   * Two hand-kept lists, one on each side of the wire.
+   *
+   * The client refuses any brand name it was not told about — the guard that
+   * keeps a theme from reaching an error colour. That guard silently drops a
+   * token the server adds and the client has not heard of, so the two lists are
+   * compared here rather than trusted.
+   */
+  it('names every brand token the client is willing to accept', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const client = readFileSync(
+      join(__dirname, '../../../web/src/lib/studio.ts'),
+      'utf8',
+    );
+    const allowed = new Set(
+      (client.match(/const BRAND_ALLOWED[\s\S]*?\];/)?.[0] ?? '').match(/--[a-z0-9-]+/g) ?? [],
+    );
+    expect(allowed.size).toBeGreaterThan(20);
+    for (const name of BRAND_OVERRIDE_NAMES) expect([...allowed]).toContain(name);
+  });
+
   it('writes nothing at all when a student has customised nothing', () => {
     const themes = deriveStudioThemes({});
     expect(Object.keys(themes.light.tokens)).toHaveLength(0);

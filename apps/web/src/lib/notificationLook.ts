@@ -9,14 +9,14 @@ import type { TFunction } from 'i18next';
  * list instead of reading it.
  */
 const LOOK: Record<string, { icon: string; tone: string }> = {
-  CHAT_MESSAGE: { icon: 'forum', tone: 'bg-primary-fixed text-primary' },
+  CHAT_MESSAGE: { icon: 'forum', tone: 'bg-primary-fixed text-on-primary-fixed' },
   ENROLLMENT_APPROVED: { icon: 'how_to_reg', tone: 'bg-secondary-container text-on-secondary-container' },
-  NEW_LESSON: { icon: 'play_lesson', tone: 'bg-primary-fixed text-primary' },
-  QUIZ_GRADED: { icon: 'grading', tone: 'bg-primary-fixed text-primary' },
+  NEW_LESSON: { icon: 'play_lesson', tone: 'bg-primary-fixed text-on-primary-fixed' },
+  QUIZ_GRADED: { icon: 'grading', tone: 'bg-primary-fixed text-on-primary-fixed' },
   PAYOUT_STATUS: { icon: 'payments', tone: 'bg-secondary-container text-on-secondary-container' },
   SECURITY_ALERT: { icon: 'gpp_maybe', tone: 'bg-error-container text-on-error-container' },
-  LIVE_SESSION_REMINDER: { icon: 'sensors', tone: 'bg-primary-fixed text-primary' },
-  SUBSCRIPTION_RENEWAL: { icon: 'autorenew', tone: 'bg-primary-fixed text-primary' },
+  LIVE_SESSION_REMINDER: { icon: 'sensors', tone: 'bg-primary-fixed text-on-primary-fixed' },
+  SUBSCRIPTION_RENEWAL: { icon: 'autorenew', tone: 'bg-primary-fixed text-on-primary-fixed' },
   ANNOUNCEMENT: { icon: 'campaign', tone: 'bg-surface-container-high text-on-surface-variant' },
 };
 

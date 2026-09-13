@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
-import { applyStudio, previewStudio, rememberAcademy, restoreStudio } from '../../lib/studio';
+import {
+  applyStudio,
+  playActivation,
+  previewStudio,
+  rememberAcademy,
+  restoreStudio,
+} from '../../lib/studio';
 import { CardGridSkeleton, ErrorNote, PageHeader, ProgressBar, Spinner } from '../../components/ui';
 
 /**
@@ -54,7 +60,7 @@ const RARITY_TONE: Record<string, string> = {
   COMMON: 'bg-surface-container-high text-on-surface-variant',
   RARE: 'bg-secondary-container text-on-secondary-container',
   EPIC: 'bg-primary-fixed text-on-primary-fixed-variant',
-  LEGENDARY: 'bg-amber-500/20 text-amber-600 dark:text-amber-300',
+  LEGENDARY: 'bg-student-gold-soft text-student-gold-ink',
 };
 
 /** A palette to pick from, so choosing a colour is not a blank canvas. */
@@ -91,6 +97,7 @@ export default function StudioPage() {
   const [advanced, setAdvanced] = useState(false);
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<StudioItem | null>(null);
+  const [justBought, setJustBought] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['studio'],
@@ -120,14 +127,18 @@ export default function StudioPage() {
       // told, or it would keep repainting the academy over it.
       if (d.equipped?.academyId == null) rememberAcademy(null);
       after(d.theme);
+      playActivation();
     },
   });
   const unlock = useMutation({
     mutationFn: async (key: string) => (await api.post('/student/studio/unlock', { key })).data,
     onSuccess: (_d, key) => {
       setConfirming(null);
-      // Owned now — wear it, which is what somebody who just bought it wants.
-      equip.mutate(key);
+      // Owned, not worn. Two different things, and a student who just spent a
+      // hundred coins should be the one who decides the app changes.
+      setJustBought(key);
+      qc.invalidateQueries({ queryKey: ['studio'] });
+      qc.invalidateQueries({ queryKey: ['gamification'] });
     },
   });
   const accent = useMutation({
@@ -177,6 +188,7 @@ export default function StudioPage() {
   const featured = items.find(
     (i) => i.category === 'THEME' && i.rarity === 'LEGENDARY' && !i.owned,
   );
+  const gridItems = (byCategory.get(category) ?? []).filter((i) => i.key !== featured?.key);
 
   /**
    * Try something on.
@@ -303,8 +315,15 @@ export default function StudioPage() {
               t={t}
             />
           )}
+          {/* The featured theme is already on the page in full; leaving it in the
+              grid listed it twice, the second time under a heading about
+              teachers. A category whose only item is featured above is not an
+              empty category, so it says nothing rather than "nothing here". */}
+          {!(category === 'THEME' && featured && gridItems.length === 0) && (
           <ItemGrid
-            items={byCategory.get(category) ?? []}
+            items={gridItems}
+            heading={category === 'THEME' ? t('myStudio.storeThemes') : undefined}
+            hint={category === 'THEME' ? t('myStudio.storeThemesHint') : undefined}
             equippedKey={equippedKey(category)}
             previewing={previewing}
             ar={ar}
@@ -314,6 +333,7 @@ export default function StudioPage() {
             onUnlock={(item) => setConfirming(item)}
             busy={equip.isPending || unlock.isPending}
           />
+          )}
           <div className="mt-6">
             <button
               className="studio-btn rounded-xl border border-outline-variant px-5 py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-error hover:text-error"
@@ -360,6 +380,20 @@ export default function StudioPage() {
 
       <ErrorNote error={unlock.error ?? equip.error ?? accent.error ?? reset.error} />
 
+      {justBought && (
+        <BoughtDialog
+          item={items.find((i) => i.key === justBought)}
+          ar={ar}
+          t={t}
+          pending={equip.isPending}
+          onClose={() => setJustBought(null)}
+          onEquip={() => {
+            equip.mutate(justBought);
+            setJustBought(null);
+          }}
+        />
+      )}
+
       {confirming && (
         <UnlockDialog
           item={confirming}
@@ -402,7 +436,7 @@ function ProfileCard({ data, t, ar }: { data: any; t: any; ar: boolean }) {
       </div>
 
       <div className="mt-4">
-        <ProgressBar pct={b.levelPct ?? 0} />
+        <ProgressBar pct={b.levelPct ?? 0} tone="gold" />
         <p className="mt-1.5 text-sm text-on-surface-variant">
           {t('myStudio.toNext', { xp: Math.max(0, (b.xpForNext ?? 0) - (b.xpIntoLevel ?? 0)) })}
         </p>
@@ -420,10 +454,69 @@ function ProfileCard({ data, t, ar }: { data: any; t: any; ar: boolean }) {
 function Stat({ icon, value, label }: { icon: string; value: number; label: string }) {
   return (
     <span className="text-center">
-      <span className="material-symbols-outlined block text-[22px] text-student-accent-ink">{icon}</span>
+      <span className="material-symbols-outlined block text-[22px] text-student-gold-ink">{icon}</span>
       <span className="block font-heading text-lg font-extrabold tabular-nums">{value}</span>
       <span className="block text-xs text-on-surface-variant">{label}</span>
     </span>
+  );
+}
+
+/**
+ * Bought, and not yet worn.
+ *
+ * Purchase and activation are separate on purpose: owning something and having
+ * it on are different states, and a hundred coins is enough that the change
+ * should be the student's to make rather than a side effect.
+ */
+function BoughtDialog({
+  item,
+  ar,
+  t,
+  pending,
+  onClose,
+  onEquip,
+}: {
+  item?: StudioItem;
+  ar: boolean;
+  t: any;
+  pending: boolean;
+  onClose: () => void;
+  onEquip: () => void;
+}) {
+  if (!item) return null;
+  const cfg = item.config as { accent?: string; secondary?: string };
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true">
+      <div className="s-pop-in w-full max-w-sm rounded-2xl bg-surface-container-lowest p-6 text-center shadow-modal">
+        <span
+          className="s-shine mx-auto grid h-16 w-16 place-items-center rounded-full"
+          style={{
+            background: `linear-gradient(135deg, ${cfg.accent ?? '#dc2626'}, ${cfg.secondary ?? '#ffb95f'})`,
+          }}
+        >
+          <span className="material-symbols-outlined text-[30px] text-white">emoji_events</span>
+        </span>
+        <p className="mt-4 font-heading text-xl font-extrabold">{t('myStudio.bought')}</p>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {t('myStudio.boughtHint', { name: ar ? item.name.ar : item.name.en })}
+        </p>
+        <div className="mt-5 flex gap-2">
+          <button
+            className="studio-btn flex-1 rounded-xl border border-outline-variant px-4 py-2.5 font-bold"
+            onClick={onClose}
+          >
+            {t('myStudio.later')}
+          </button>
+          <button
+            className="studio-btn flex-1 rounded-xl bg-student-accent px-4 py-2.5 font-bold text-on-student-accent transition hover:bg-student-accent-hover disabled:opacity-60"
+            disabled={pending}
+            onClick={onEquip}
+          >
+            {t('myStudio.activateNow')}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -453,21 +546,30 @@ function FeaturedTheme({
   onUnlock: () => void;
   busy: boolean;
 }) {
-  const cfg = item.config as { accent?: string; accentDark?: string; secondary?: string };
+  const cfg = item.config as {
+    accent?: string;
+    accentDark?: string;
+    secondary?: string;
+    gold?: string;
+    pattern?: string;
+    surfaces?: { background?: string; surface?: string; ink?: string };
+  };
   const locked = item.levelLocked || item.achievementLocked;
   const enough = coins >= item.costCoins;
 
   return (
     <article className="studio-card studio-pop card mb-6 overflow-hidden p-0">
-      <div
-        className="studio-sheen relative h-36 sm:h-44"
-        style={{
-          background: `linear-gradient(135deg, ${cfg.accent ?? '#c8102e'} 0%, ${
-            cfg.accentDark ?? cfg.accent ?? '#c8102e'
-          } 55%, ${cfg.secondary ?? '#b8860b'} 100%)`,
-        }}
-      >
-        <span className="absolute end-3 top-3 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+      <div className="relative">
+        <ThemePreview
+          accent={cfg.accent ?? '#c8102e'}
+          accentDark={cfg.accentDark}
+          gold={cfg.gold ?? cfg.secondary}
+          surfaces={cfg.surfaces}
+          pattern={cfg.pattern}
+          tall
+          sheen
+        />
+        <span className="absolute end-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
           {t(`myStudio.rarity.${item.rarity}`)}
         </span>
       </div>
@@ -570,14 +672,7 @@ function AcademyThemes({
               row.equipped ? 'studio-active border-student-accent' : ''
             }`}
           >
-            <span
-              className="block h-16 w-full rounded-xl"
-              style={{
-                background: `linear-gradient(135deg, ${row.primary ?? '#4a32c9'}, ${
-                  row.accent ?? row.primary ?? '#4a32c9'
-                })`,
-              }}
-            />
+            <ThemePreview accent={row.primary ?? '#4a32c9'} accentDark={row.accent} />
             <p className="mt-3 truncate font-heading font-bold">
               {t('myStudio.teacherTheme', { name: row.teacherName })}
             </p>
@@ -701,6 +796,8 @@ function AccentPicker({
 
 function ItemGrid({
   items,
+  heading,
+  hint,
   equippedKey,
   equippedMap,
   previewing,
@@ -713,6 +810,8 @@ function ItemGrid({
   empty,
 }: {
   items: StudioItem[];
+  heading?: string;
+  hint?: string;
   equippedKey: string | null;
   equippedMap?: Record<string, string | null>;
   previewing: string | null;
@@ -724,16 +823,7 @@ function ItemGrid({
   busy: boolean;
   empty?: string;
 }) {
-  if (!items.length) {
-    return (
-      <div className="studio-card card p-10 text-center">
-        <span className="material-symbols-outlined text-4xl text-outline">palette</span>
-        <p className="mt-2 font-heading font-bold">{empty ?? t('myStudio.emptyCategory')}</p>
-        <p className="mt-1 text-sm text-on-surface-variant">{t('myStudio.emptyHint')}</p>
-      </div>
-    );
-  }
-  return (
+  const body = !items.length ? null : (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((item) => (
         <ItemCard
@@ -753,6 +843,25 @@ function ItemGrid({
       ))}
     </div>
   );
+  if (heading && body) {
+    return (
+      <div className="mb-5">
+        <p className="mb-1 font-heading font-bold">{heading}</p>
+        {hint && <p className="mb-3 text-sm text-on-surface-variant">{hint}</p>}
+        {body}
+      </div>
+    );
+  }
+  if (body) return body;
+  {
+    return (
+      <div className="studio-card card p-10 text-center">
+        <span className="material-symbols-outlined text-4xl text-outline">palette</span>
+        <p className="mt-2 font-heading font-bold">{empty ?? t('myStudio.emptyCategory')}</p>
+        <p className="mt-1 text-sm text-on-surface-variant">{t('myStudio.emptyHint')}</p>
+      </div>
+    );
+  }
 }
 
 function ItemCard({
@@ -851,20 +960,125 @@ function ItemCard({
 }
 
 /** What the item looks like, drawn from its own config rather than an image. */
+/**
+ * What the app looks like under a theme, in miniature.
+ *
+ * A gradient band only says "this one is red". It cannot say that the page
+ * becomes a night stadium, which is the part somebody is actually buying — and
+ * its absence is why a skin with its own ground still read as the same product
+ * in another colour. So the preview is the product: a ground, a bar, a card, a
+ * button and an earned value, each painted the way that theme paints it.
+ *
+ * Themes that bring no ground of their own are drawn on the platform's, which
+ * is exactly what they will look like: an accent, honestly advertised.
+ */
+function ThemePreview({
+  accent,
+  accentDark,
+  gold,
+  surfaces,
+  pattern,
+  tall,
+  sheen,
+}: {
+  accent: string;
+  accentDark?: string | null;
+  gold?: string | null;
+  surfaces?: { background?: string; surface?: string; ink?: string } | null;
+  pattern?: string | null;
+  tall?: boolean;
+  sheen?: boolean;
+}) {
+  const ground = surfaces?.background ?? null;
+  const panel = surfaces?.surface ?? null;
+  const ink = surfaces?.ink ?? null;
+  const value = gold ?? accentDark ?? accent;
+  // Without a ground of its own the mini sits on the page's, so the accent is
+  // shown doing the only job it actually does.
+  const bg = ground
+    ? `linear-gradient(160deg, ${ground} 0%, ${panel ?? ground} 100%)`
+    : `linear-gradient(135deg, ${accent}, ${accentDark ?? accent})`;
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`relative block w-full overflow-hidden rounded-xl ${
+        tall ? 'h-36 sm:h-44' : 'h-24'
+      } ${sheen ? 'studio-sheen' : ''}`}
+      style={{ background: bg }}
+    >
+      {/* The theme's own pattern, at the weight it is worn. */}
+      {pattern === 'stadium' && ground && (
+        <span
+          className="absolute inset-0"
+          style={{
+            backgroundImage: [
+              `radial-gradient(120% 70% at 50% -20%, ${value}22 0%, transparent 60%)`,
+              `linear-gradient(to right, ${ink ?? '#fff'}14 1px, transparent 1px)`,
+              `linear-gradient(to bottom, ${ink ?? '#fff'}0d 1px, transparent 1px)`,
+            ].join(','),
+            backgroundSize: '100% 100%, 28px 100%, 100% 28px',
+          }}
+        />
+      )}
+
+      <span className="absolute inset-0 flex flex-col gap-1.5 p-2.5">
+        {/* The bar: a mark and two rows, the shapes anyone recognises as an app. */}
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-md" style={{ background: accent }} />
+          <span className="h-1.5 w-8 rounded-full" style={{ background: ink ?? '#ffffff', opacity: 0.5 }} />
+          <span
+            className="ms-auto h-3 w-7 rounded-full"
+            style={{ background: value, opacity: 0.9 }}
+          />
+        </span>
+
+        {/* The card: where everything in this product is read. */}
+        <span
+          className="mt-auto flex flex-col gap-1.5 rounded-lg p-2"
+          style={{
+            background: panel ?? (ground ?? '#ffffff'),
+            border: `1px solid ${ink ?? '#ffffff'}1f`,
+          }}
+        >
+          <span className="h-1.5 w-2/3 rounded-full" style={{ background: ink ?? '#101010', opacity: 0.85 }} />
+          <span className="h-1.5 w-1/3 rounded-full" style={{ background: ink ?? '#101010', opacity: 0.4 }} />
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span className="h-3.5 w-12 rounded-md" style={{ background: accent }} />
+            <span className="h-3.5 w-8 rounded-md" style={{ background: value, opacity: 0.85 }} />
+          </span>
+        </span>
+      </span>
+    </span>
+  );
+}
+
 function Swatch({ item }: { item: StudioItem }) {
-  const cfg = item.config as { accent?: string; accentDark?: string; hex?: string; style?: string };
+  const cfg = item.config as {
+    accent?: string;
+    accentDark?: string;
+    gold?: string;
+    secondary?: string;
+    pattern?: string;
+    surfaces?: { background?: string; surface?: string; ink?: string };
+    hex?: string;
+    style?: string;
+  };
   const colour = cfg.hex ?? cfg.accent ?? null;
-  const legendary = item.rarity === 'LEGENDARY';
   if (colour) {
     return (
-      <span
-        className={`block h-16 w-full rounded-xl ${legendary ? 'studio-sheen' : ''}`}
-        style={{ background: `linear-gradient(135deg, ${colour}, ${cfg.accentDark ?? colour})` }}
+      <ThemePreview
+        accent={colour}
+        accentDark={cfg.accentDark}
+        gold={cfg.gold ?? cfg.secondary}
+        surfaces={cfg.surfaces}
+        pattern={cfg.pattern}
+        sheen={item.rarity === 'LEGENDARY'}
       />
     );
   }
   return (
-    <span className="grid h-16 w-full place-items-center rounded-xl bg-surface-container-high text-sm font-bold text-on-surface-variant">
+    <span className="grid h-24 w-full place-items-center rounded-xl bg-surface-container-high text-sm font-bold text-on-surface-variant">
       {cfg.style ?? '—'}
     </span>
   );

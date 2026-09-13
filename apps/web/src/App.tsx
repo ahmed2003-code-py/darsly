@@ -1,10 +1,11 @@
-import { ReactNode, Suspense } from 'react';
+import { ReactNode, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import BrandTheme from './components/BrandTheme';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { Spinner } from './components/ui';
+import { setStudioSuspended } from './lib/studio';
 import LoginPage from './pages/LoginPage';
 import { lazyPage } from './lib/lazyPage';
 import { loginUrlFor } from './lib/redirect';
@@ -83,12 +84,33 @@ function HomeRedirect() {
   );
 }
 
+/**
+ * Where the student's look reaches, and where it stops.
+ *
+ * It reaches everywhere the student goes — the nav, the logo, a teacher's
+ * profile, the messages — because that is the whole point of buying it. It
+ * stops at a published academy storefront: that page is the teacher's shopfront
+ * and the first thing a stranger sees of them, and it is not somebody else's
+ * to repaint. Held here rather than in the page so it is decided by the URL,
+ * which is what the rule is actually about.
+ */
+function StudioReach() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const isStorefront = /^\/a\//.test(pathname);
+    setStudioSuspended(isStorefront);
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
     {/* Above the router on purpose: the academy's colours belong to the whole
         app, not to one branch of it, and switching route must not repaint. */}
     <BrandTheme />
+    {/* The one place a personal look does not go. */}
+    <StudioReach />
     {/* The student's backdrop. One fixed element behind everything, drawn in
         CSS from a pattern name — so it costs nothing per route and there is no
         image to load. */}

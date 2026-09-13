@@ -176,11 +176,21 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-export function ProgressBar({ pct }: { pct: number; tone?: 'accent' | 'primary' }) {
+/**
+ * How far along something is.
+ *
+ * `tone="gold"` is for progress through a level: XP is drawn in one colour
+ * across the app, and a bar filling with it is the clearest statement of that.
+ * Everything else — a video part-watched, a file uploading — is the brand
+ * colour, because it is progress through a task rather than something earned.
+ */
+export function ProgressBar({ pct, tone }: { pct: number; tone?: 'accent' | 'primary' | 'gold' }) {
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container-high" dir="ltr">
       <div
-        className="h-full rounded-full bg-primary transition-[width] duration-500 ease-premium"
+        className={`h-full rounded-full transition-[width] duration-500 ease-premium ${
+          tone === 'gold' ? 'bg-student-gold' : 'bg-primary'
+        }`}
         style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
       />
     </div>

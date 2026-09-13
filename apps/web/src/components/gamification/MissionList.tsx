@@ -86,7 +86,7 @@ function MissionRow({ m }: { m: Mission }) {
                 {m.progress}/{m.target}
               </span>
             )}
-            <span className="block text-[11px] font-bold text-primary">+{m.xpReward}</span>
+            <span className="block text-[11px] font-bold text-student-gold-ink">+{m.xpReward}</span>
           </>
         )}
       </div>

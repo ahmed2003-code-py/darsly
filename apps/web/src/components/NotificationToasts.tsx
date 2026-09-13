@@ -92,7 +92,7 @@ export default function NotificationToasts() {
           className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest p-3 shadow-modal"
         >
           <button className="flex min-w-0 flex-1 items-start gap-3 text-start" onClick={() => void open(toast)}>
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-fixed text-primary">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed">
               <span className="material-symbols-outlined text-[20px]">notifications</span>
             </span>
             <span className="min-w-0 flex-1">

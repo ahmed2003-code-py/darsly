@@ -97,7 +97,7 @@ export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
                     {l.avatarUrl ? <img src={l.avatarUrl} alt="" className="h-full w-full object-cover" /> : l.name.trim().charAt(0)}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm font-bold">{l.name}</span>
-                  <span className="shrink-0 text-sm font-extrabold text-primary">{compactNum(l.xp)}</span>
+                  <span className="shrink-0 text-sm font-extrabold text-student-gold-ink">{compactNum(l.xp)}</span>
                 </div>
               ))}
             </div>

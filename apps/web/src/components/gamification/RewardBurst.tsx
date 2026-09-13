@@ -52,7 +52,7 @@ export function RewardBurst({
         >
           <div className="pointer-events-auto w-full max-w-sm rounded-3xl border border-outline-variant bg-surface-container-lowest p-4 shadow-modal">
             <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-fixed text-primary">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-student-gold-soft text-student-gold-ink">
                 <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
                   {outcome.leveledUp ? 'trending_up' : 'bolt'}
                 </span>
@@ -65,10 +65,10 @@ export function RewardBurst({
                 </p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                   {outcome.xp > 0 && (
-                    <span className="font-bold text-primary">+{outcome.xp} {t('gamification.xp')}</span>
+                    <span className="font-bold text-student-gold-ink">+{outcome.xp} {t('gamification.xp')}</span>
                   )}
                   {outcome.coins > 0 && (
-                    <span className="font-bold text-amber-600">+{outcome.coins} {t('gamification.coins')}</span>
+                    <span className="font-bold text-student-gold-ink">+{outcome.coins} {t('gamification.coins')}</span>
                   )}
                 </p>
                 {outcome.leveledUp && (
@@ -92,8 +92,8 @@ export function RewardBurst({
             {(outcome.achievements.length > 0 || outcome.missions.length > 0) && (
               <div className="mt-3 space-y-1.5 border-t border-outline-variant/50 pt-3">
                 {outcome.achievements.map((a) => (
-                  <div key={a.key} className="flex items-center gap-2 text-sm">
-                    <span className="material-symbols-outlined text-[18px] text-amber-600" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  <div key={a.key} className="s-pop-in flex items-center gap-2 text-sm">
+                    <span className="material-symbols-outlined text-[18px] text-student-gold-ink" style={{ fontVariationSettings: "'FILL' 1" }}>
                       {a.icon}
                     </span>
                     <span className="truncate font-semibold">{L({ ar: a.titleAr, en: a.titleEn })}</span>
@@ -108,7 +108,7 @@ export function RewardBurst({
                     <span className="truncate font-semibold">
                       {t([`gamification.missions.templates.${mi.template}`, mi.template])}
                     </span>
-                    <span className="ms-auto shrink-0 text-xs font-bold text-primary">+{mi.xpReward}</span>
+                    <span className="ms-auto shrink-0 text-xs font-bold text-student-gold-ink">+{mi.xpReward}</span>
                   </div>
                 ))}
               </div>
@@ -129,23 +129,26 @@ export function RewardSummary({ outcome }: { outcome: GamificationOutcome | null
   const L = useLocalized();
   if (!outcome?.awarded) return null;
 
+  // The shared motion primitives, not an animation written here: a reward moment
+  // should feel the same wherever it happens, and `prefers-reduced-motion` turns
+  // all of them off in one place.
   return (
-    <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
+    <div className="card-gold rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         {outcome.xp > 0 && (
-          <span className="flex items-center gap-1.5 font-heading text-lg font-extrabold text-primary">
+          <span className="s-rise flex items-center gap-1.5 font-heading text-lg font-extrabold text-student-gold-ink">
             <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
             +{outcome.xp} {t('gamification.xp')}
           </span>
         )}
         {outcome.coins > 0 && (
-          <span className="flex items-center gap-1.5 font-heading text-lg font-extrabold text-amber-600">
+          <span className="s-shine flex items-center gap-1.5 rounded-lg px-1 font-heading text-lg font-extrabold text-student-gold-ink">
             <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>toll</span>
             +{outcome.coins} {t('gamification.coins')}
           </span>
         )}
         {outcome.leveledUp && (
-          <span className="rounded-full bg-primary-fixed px-3 py-1 text-sm font-bold text-primary">
+          <span className="rounded-full bg-student-gold-soft px-3 py-1 text-sm font-bold text-student-gold-ink">
             {t('gamification.celebrate.levelUp', { n: outcome.level })}
           </span>
         )}
@@ -154,8 +157,8 @@ export function RewardSummary({ outcome }: { outcome: GamificationOutcome | null
       {(outcome.achievements.length > 0 || outcome.missions.length > 0) && (
         <div className="mt-3 space-y-1.5 border-t border-outline-variant/50 pt-3">
           {outcome.achievements.map((a) => (
-            <div key={a.key} className="flex items-center gap-2 text-sm">
-              <span className="material-symbols-outlined text-[18px] text-amber-600" style={{ fontVariationSettings: "'FILL' 1" }}>
+            <div key={a.key} className="s-pop-in flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-student-gold-ink" style={{ fontVariationSettings: "'FILL' 1" }}>
                 {a.icon}
               </span>
               <span className="font-semibold">{L({ ar: a.titleAr, en: a.titleEn })}</span>
@@ -170,7 +173,7 @@ export function RewardSummary({ outcome }: { outcome: GamificationOutcome | null
               <span className="font-semibold">
                 {t([`gamification.missions.templates.${mi.template}`, mi.template])}
               </span>
-              <span className="ms-auto text-xs font-bold text-primary">+{mi.xpReward}</span>
+              <span className="ms-auto text-xs font-bold text-student-gold-ink">+{mi.xpReward}</span>
             </div>
           ))}
         </div>

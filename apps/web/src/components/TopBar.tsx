@@ -163,7 +163,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
                 {supported && permission === 'default' && (
                   <button
                     onClick={() => void request()}
-                    className="flex w-full items-center gap-2 border-b border-outline-variant/40 bg-primary-fixed/40 px-4 py-3 text-start text-xs font-bold text-primary transition hover:bg-primary-fixed"
+                    className="flex w-full items-center gap-2 border-b border-outline-variant/40 bg-primary-fixed/40 px-4 py-3 text-start text-xs font-bold text-on-primary-fixed transition hover:bg-primary-fixed"
                   >
                     <span className="material-symbols-outlined text-[18px]">notifications_active</span>
                     {t('topbar.enablePush')}
@@ -229,7 +229,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
               {/* The photo when there is one. An initial identifies an account;
                   a face identifies a person, and this is the one place the
                   teacher sees themselves on every screen. */}
-              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-primary">
+              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
                 {user?.avatarUrl ? (
                   <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (

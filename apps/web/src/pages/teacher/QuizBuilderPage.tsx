@@ -93,7 +93,7 @@ export default function QuizBuilderPage() {
             <div key={i} className="card">
               <div className="mb-3 flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-fixed text-sm font-bold text-primary">{i + 1}</span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-fixed text-sm font-bold text-on-primary-fixed">{i + 1}</span>
                   <select className="input py-1.5 text-sm" value={q.type}
                     onChange={(e) => setQuestions((qs) => qs.map((qq, j) => (j === i ? blankQ(e.target.value as Q['type']) : qq)))}>
                     <option value="MCQ">{t('assess.q.mcq')}</option>

@@ -86,7 +86,7 @@ export function LeaderboardPanel({
       )}
 
       {data?.toNextRank != null && data.toNextRank > 0 && (
-        <p className="mt-3 rounded-lg bg-primary-fixed/60 px-3 py-2 text-center text-sm font-semibold text-primary">
+        <p className="mt-3 rounded-lg bg-primary-fixed/60 px-3 py-2 text-center text-sm font-semibold text-on-primary-fixed">
           {t('gamification.leaderboard.toNext', { count: data.toNextRank })}
         </p>
       )}
@@ -108,7 +108,7 @@ function Row({ r }: { r: LeaderboardRow }) {
     >
       <span
         className={`w-8 shrink-0 text-center font-heading font-extrabold ${
-          medal ? 'text-amber-600' : 'text-outline'
+          medal ? 'text-student-gold-ink' : 'text-outline'
         }`}
       >
         {r.rank}
@@ -126,7 +126,7 @@ function Row({ r }: { r: LeaderboardRow }) {
           {r.title ? ` · ${r.title}` : ''}
         </span>
       </span>
-      <span className="shrink-0 font-heading text-sm font-extrabold text-primary">{compactNum(r.xp)}</span>
+      <span className="shrink-0 font-heading text-sm font-extrabold text-student-gold-ink">{compactNum(r.xp)}</span>
     </div>
   );
 }

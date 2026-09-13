@@ -1813,6 +1813,12 @@
     "teacherThemes": "Your teachers' looks",
     "teacherThemesHint": "The academy colours of every teacher you study with. Free and always yours — tap one to go back to your teacher's look.",
     "teacherTheme": "{{name}}'s theme",
-    "unlockFor": "Unlock for {{coins}}"
+    "unlockFor": "Unlock for {{coins}}",
+    "bought": "Unlocked 🏆",
+    "boughtHint": "“{{name}}” is yours. Put it on now?",
+    "later": "Later",
+    "activateNow": "Activate now",
+    "storeThemes": "Store themes",
+    "storeThemesHint": "A whole look for the app — the page, the menus and the buttons all change."
   }
 }

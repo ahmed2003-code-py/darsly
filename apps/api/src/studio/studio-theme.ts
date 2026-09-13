@@ -141,17 +141,23 @@ const GROUND: Record<StudioMode, string> = { light: '#fdfdfb', dark: '#0e0e12' }
  * goes on top — all of it follows, because asking somebody to choose six
  * colours that work together is asking them to do a designer's job.
  */
-export function deriveAccent(hex: string, mode: StudioMode): Record<string, string> {
-  const ground = GROUND[mode];
+export function deriveAccent(
+  hex: string,
+  mode: StudioMode,
+  on?: string | null,
+  seat?: string | null,
+): Record<string, string> {
+  const ground = on ?? GROUND[mode];
+  const floorOn = seat ?? ground;
   // Seated first: a colour that cannot be read on this ground is moved until it
   // can, rather than shipped and then apologised for.
-  const accent = legible(hex, ground, 3);
+  const accent = legible(hex, floorOn, 3);
   const onAccent = legible(relLuminance(accent) > 0.5 ? '#12121a' : '#ffffff', accent, ON_FILL_FLOOR);
   const hover = mode === 'dark' ? mix(accent, '#ffffff', 0.16) : mix(accent, '#000000', 0.14);
   const soft = mix(ground, accent, mode === 'dark' ? 0.22 : 0.12);
   const border = mix(ground, accent, mode === 'dark' ? 0.4 : 0.32);
   // The accent used as text rather than as a fill has a harder job.
-  const ink = legible(accent, ground, TEXT_FLOOR);
+  const ink = legible(accent, floorOn, TEXT_FLOOR);
 
   return {
     '--s-accent': triple(accent),
@@ -169,9 +175,15 @@ export function deriveAccent(hex: string, mode: StudioMode): Record<string, stri
  * Seated and floored exactly like the first: a scheme is two colours that both
  * work, not one that works and one that was picked to go with it.
  */
-export function deriveSecondary(hex: string, mode: StudioMode): Record<string, string> {
-  const ground = GROUND[mode];
-  const secondary = legible(hex, ground, 3);
+export function deriveSecondary(
+  hex: string,
+  mode: StudioMode,
+  on?: string | null,
+  seat?: string | null,
+): Record<string, string> {
+  const ground = on ?? GROUND[mode];
+  const floorOn = seat ?? ground;
+  const secondary = legible(hex, floorOn, 3);
   const onSecondary = legible(
     relLuminance(secondary) > 0.5 ? '#12121a' : '#ffffff',
     secondary,
@@ -181,7 +193,32 @@ export function deriveSecondary(hex: string, mode: StudioMode): Record<string, s
     '--s-secondary': triple(secondary),
     '--s-on-secondary': triple(onSecondary),
     '--s-secondary-soft': triple(mix(ground, secondary, mode === 'dark' ? 0.22 : 0.12)),
-    '--s-secondary-ink': triple(legible(secondary, ground, TEXT_FLOOR)),
+    '--s-secondary-ink': triple(legible(secondary, floorOn, TEXT_FLOOR)),
+  };
+}
+
+/**
+ * Gold, meaning premium.
+ *
+ * Not a third accent: a semantic. XP, coins, trophies, rank, rewards and
+ * anything that marks an achievement read from this, so "this was earned" has
+ * one colour across the whole app rather than an amber hard-coded into each
+ * component that happened to need one.
+ */
+export function deriveGold(
+  hex: string,
+  mode: StudioMode,
+  ground: string,
+  seat?: string | null,
+): Record<string, string> {
+  const floorOn = seat ?? ground;
+  const gold = legible(hex, floorOn, 3);
+  const onGold = legible(relLuminance(gold) > 0.5 ? '#12121a' : '#ffffff', gold, ON_FILL_FLOOR);
+  return {
+    '--s-gold': triple(gold),
+    '--s-on-gold': triple(onGold),
+    '--s-gold-soft': triple(mix(ground, gold, mode === 'dark' ? 0.2 : 0.12)),
+    '--s-gold-ink': triple(legible(gold, floorOn, TEXT_FLOOR)),
   };
 }
 
@@ -193,8 +230,8 @@ export function deriveSecondary(hex: string, mode: StudioMode): Record<string, s
  * weight against the platform ground so text contrast is untouched — the wash
  * is a tint, not a new background, and nothing has to be re-seated because of it.
  */
-export function deriveWash(hex: string, mode: StudioMode): Record<string, string> {
-  const ground = GROUND[mode];
+export function deriveWash(hex: string, mode: StudioMode, on?: string | null): Record<string, string> {
+  const ground = on ?? GROUND[mode];
   const w = mode === 'dark' ? 0.14 : 0.07;
   return {
     '--s-wash': triple(mix(ground, hex, w)),
@@ -222,6 +259,9 @@ export interface ThemeConfig {
   washDark?: string;
   /** The pattern drawn over that wash. A name the stylesheet knows, never art. */
   pattern?: string;
+  /** What "earned" looks like: XP, coins, trophies, rank. A semantic, not a
+   *  third accent. */
+  gold?: string;
   /** Ambient light behind the page — two soft orbs in the theme's own colours. */
   glow?: boolean;
   /** A typeface pairing, by name. The stylesheet owns what each name means and
@@ -232,6 +272,31 @@ export interface ThemeConfig {
   button?: string;
   card?: string;
   nav?: string;
+  /**
+   * A whole ground of its own.
+   *
+   * The difference between a tint and a skin. Without this a theme is the
+   * platform's greys wearing a different accent — which is exactly the "it just
+   * looks red" failure. With it, the theme owns the page, the panels and the
+   * ink, and the app becomes somewhere else.
+   *
+   * Every value is still derived and floored on the server, and every name it
+   * produces is in the client's allowlist. Removing the theme puts the academy
+   * back exactly, because the client only ever clears what it wrote.
+   */
+  surfaces?: SurfaceConfig;
+}
+
+/** The six colours a skin needs to own a page. */
+export interface SurfaceConfig {
+  /** The page itself. */
+  background?: string;
+  /** The panels that sit on it. */
+  surface?: string;
+  /** Body text. */
+  ink?: string;
+  /** The accent the hairlines are drawn from. */
+  line?: string;
 }
 
 /**
@@ -278,28 +343,47 @@ export function deriveStudioThemes(input: {
 
   const washLight = safeHex(input.themeConfig?.wash);
   const washDark = safeHex(input.themeConfig?.washDark) ?? washLight;
+  // A skin that brings its own ground owns both ends: it is a skin, not a
+  // palette, and it looks the same whichever mode the reader prefers.
+  const surfaces = input.themeConfig?.surfaces
+    ? deriveSurfaces(input.themeConfig.surfaces)
+    : null;
+  const goldHex = safeHex(input.themeConfig?.gold);
+  // Seat every colour against the page it will actually be read on. Without
+  // this, a skin that lays down a near-black navy would still have its gold
+  // and its red measured against the platform's own ground — which is how
+  // you ship a label that misses its contrast floor on the only background
+  // it is ever drawn on.
+  const skinGround = input.themeConfig?.surfaces
+    ? surfaceGround(input.themeConfig.surfaces)
+    : null;
+  const skinSeat = input.themeConfig?.surfaces ? surfaceSeat(input.themeConfig.surfaces) : null;
 
   return {
     light: {
       tokens: light
         ? {
-            ...deriveAccent(light, 'light'),
-            ...(washLight ? deriveWash(washLight, 'light') : {}),
-            ...(secLight ? deriveSecondary(secLight, 'light') : {}),
+            ...deriveAccent(light, surfaces ? 'dark' : 'light', skinGround, skinSeat),
+            ...(washLight ? deriveWash(washLight, surfaces ? 'dark' : 'light', skinGround) : {}),
+            ...(secLight ? deriveSecondary(secLight, surfaces ? 'dark' : 'light', skinGround, skinSeat) : {}),
+            ...(goldHex ? deriveGold(goldHex, surfaces ? 'dark' : 'light', skinGround ?? GROUND.light, skinSeat) : {}),
           }
         : {},
-      brand: light ? deriveBrand(light, 'light') : {},
+      brand: light
+        ? { ...deriveBrand(light, surfaces ? 'dark' : 'light', skinGround, skinSeat), ...(surfaces ?? {}) }
+        : (surfaces ?? {}),
       styles,
     },
     dark: {
       tokens: dark
         ? {
-            ...deriveAccent(dark, 'dark'),
-            ...(washDark ? deriveWash(washDark, 'dark') : {}),
-            ...(secDark ? deriveSecondary(secDark, 'dark') : {}),
+            ...deriveAccent(dark, 'dark', skinGround, skinSeat),
+            ...(washDark ? deriveWash(washDark, 'dark', skinGround) : {}),
+            ...(secDark ? deriveSecondary(secDark, 'dark', skinGround, skinSeat) : {}),
+            ...(goldHex ? deriveGold(goldHex, 'dark', skinGround ?? GROUND.dark, skinSeat) : {}),
           }
         : {},
-      brand: dark ? deriveBrand(dark, 'dark') : {},
+      brand: dark ? { ...deriveBrand(dark, 'dark', skinGround, skinSeat), ...(surfaces ?? {}) } : (surfaces ?? {}),
       styles,
     },
     styles,
@@ -315,9 +399,15 @@ export function deriveStudioThemes(input: {
  * academy palette to: text on a filled button clears 4.5:1, and the ramp is
  * mixed rather than invented.
  */
-export function deriveBrand(hex: string, mode: StudioMode): Record<string, string> {
-  const ground = GROUND[mode];
-  const primary = legible(hex, ground, 3);
+export function deriveBrand(
+  hex: string,
+  mode: StudioMode,
+  on?: string | null,
+  seat?: string | null,
+): Record<string, string> {
+  const ground = on ?? GROUND[mode];
+  const floorOn = seat ?? ground;
+  const primary = legible(hex, floorOn, 3);
   const onPrimary = legible(relLuminance(primary) > 0.5 ? '#12121a' : '#ffffff', primary, ON_FILL_FLOOR);
   // Dark brightens on hover and light darkens: a darker hover on a dark page
   // disappears into it.
@@ -329,6 +419,16 @@ export function deriveBrand(hex: string, mode: StudioMode): Record<string, strin
   return {
     '--c-primary': triple(primary),
     '--c-on-primary': triple(onPrimary),
+    // The same colour, told it has to be read.
+    //
+    // A fill and a label have different jobs and different floors. Holding one
+    // colour to both is how a crimson button becomes salmon: pushed to 4.5:1
+    // against a near-black ground, #dc2626 walks all the way to #ea7d7d and the
+    // skin stops being Egyptian red. So the fill keeps the colour at 3:1 and
+    // `text-primary` reads this instead, which is the same hue moved only as
+    // far as legibility actually requires. On the platform's own grounds the
+    // two land on the same value, because indigo on paper already cleared it.
+    '--c-primary-text': triple(legible(primary, floorOn, TEXT_FLOOR)),
     '--c-primary-hover': triple(hover),
     '--c-primary-container': triple(container),
     '--c-on-primary-container': triple(onPrimary),
@@ -355,8 +455,71 @@ export function deriveBrand(hex: string, mode: StudioMode): Record<string, strin
   };
 }
 
+/**
+ * A skin's own ground.
+ *
+ * Panels step from the background toward the ink, the same rule `app-theme.ts`
+ * uses for an academy — one rule that is right in light and in dark, rather
+ * than a branch that can be wrong in one of them. Every token carrying text is
+ * pushed until it clears its floor, so a theme cannot ship an unreadable page
+ * however dramatic its palette.
+ */
+export function surfaceGround(cfg: SurfaceConfig): string {
+  return safeHex(cfg.background) ?? '#0a0e16';
+}
+
+/**
+ * The hardest surface in a skin to read a colour on.
+ *
+ * Panels always step from the background toward the ink, so the deepest step is
+ * the furthest from the background and the closest to a mid-tone — the worst
+ * case for anything drawn on top. Seating against the page alone left brand
+ * text at 4.43:1 on a card, which is a floor missed by a hair on the surface
+ * most of the product's text actually lives on.
+ */
+export function surfaceSeat(cfg: SurfaceConfig): string {
+  return mix(surfaceGround(cfg), safeHex(cfg.ink) ?? '#dfe2ee', 0.18);
+}
+
+export function deriveSurfaces(cfg: SurfaceConfig): Record<string, string> {
+  const background = surfaceGround(cfg);
+  const surface = safeHex(cfg.surface) ?? mix(background, '#ffffff', 0.05);
+  const ink = safeHex(cfg.ink) ?? '#dfe2ee';
+  const line = safeHex(cfg.line) ?? ink;
+
+  // Toward the ink, so this works whichever end the skin sits at.
+  const panel = (w: number) => mix(background, ink, w);
+  const body = legible(ink, background, 7);
+  const muted = legible(mix(ink, background, 0.34), panel(0.1), TEXT_FLOOR);
+  const quiet = legible(mix(ink, background, 0.52), panel(0.1), TEXT_FLOOR);
+
+  return {
+    '--c-background': triple(background),
+    '--c-on-background': triple(body),
+    '--c-surface': triple(background),
+    '--c-surface-dim': triple(mix(background, '#000000', 0.25)),
+    '--c-surface-bright': triple(panel(0.16)),
+    '--c-surface-container-lowest': triple(surface),
+    '--c-surface-container-low': triple(panel(0.05)),
+    '--c-surface-container': triple(panel(0.08)),
+    '--c-surface-container-high': triple(panel(0.13)),
+    '--c-surface-container-highest': triple(panel(0.18)),
+    '--c-surface-variant': triple(panel(0.08)),
+    '--c-on-surface': triple(body),
+    '--c-on-surface-variant': triple(muted),
+    '--c-outline': triple(quiet),
+    '--c-line': triple(line),
+    '--c-inverse-surface': triple(body),
+    '--c-inverse-on-surface': triple(background),
+    '--c-shadow': '0 0 0',
+  };
+}
+
 /** The only `--c-*` names a student's choice may ever reach. */
-export const BRAND_OVERRIDE_NAMES = Object.keys(deriveBrand('#4a32c9', 'light'));
+export const BRAND_OVERRIDE_NAMES = [
+  ...Object.keys(deriveBrand('#4a32c9', 'light')),
+  ...Object.keys(deriveSurfaces({})),
+];
 
 function pick<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)

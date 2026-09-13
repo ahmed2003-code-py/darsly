@@ -409,7 +409,7 @@ export default function SecureVideoPlayerPage() {
                             onClick={() => navigate(`/learn/${courseId}/${l.id}`)}
                             className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-sm transition ${
                               active
-                                ? 'bg-primary-fixed font-bold text-primary'
+                                ? 'bg-primary-fixed font-bold text-on-primary-fixed'
                                 : l.locked
                                   ? 'cursor-not-allowed text-outline'
                                   : 'text-on-surface-variant hover:bg-surface-container-low'
@@ -681,7 +681,7 @@ export default function SecureVideoPlayerPage() {
                 {(notes ?? []).map((n: any) => (
                   <li key={n.id} className="card flex items-start gap-3 py-3">
                     <button
-                      className="rounded-md bg-primary-fixed px-2 py-1 font-mono text-xs font-bold text-primary"
+                      className="rounded-md bg-primary-fixed px-2 py-1 font-mono text-xs font-bold text-on-primary-fixed"
                       dir="ltr"
                       onClick={() => seekTo(n.timestampSec)}
                     >

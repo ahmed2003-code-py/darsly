@@ -113,7 +113,7 @@ export default function WalletPage() {
             <ol className="space-y-4">
               {['how1', 'how2', 'how3'].map((k, i) => (
                 <li key={k} className="flex gap-3">
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading text-sm font-bold text-primary">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary-fixed font-heading text-sm font-bold text-on-primary-fixed">
                     {i + 1}
                   </span>
                   <p className="text-sm text-on-surface-variant">{t(`walletStudent.${k}`)}</p>

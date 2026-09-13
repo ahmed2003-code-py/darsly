@@ -97,7 +97,7 @@ export default function TeacherAnalyticsPage() {
             <ul className="space-y-2">
               {data.topLessons.map((l: any, i: number) => (
                 <li key={l.lessonId} className="flex items-center gap-3">
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-primary-fixed text-sm font-bold text-primary">{i + 1}</span>
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-primary-fixed text-sm font-bold text-on-primary-fixed">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate text-sm">{l.title}</span>
                   <span className="text-xs text-outline">{t('analytics.views', { count: l.views })}</span>
                 </li>

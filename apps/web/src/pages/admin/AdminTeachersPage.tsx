@@ -59,7 +59,7 @@ export default function AdminTeachersPage() {
           {data.map((tp: any) => (
             <article key={tp.id} className="card flex flex-col p-5">
               <div className="mb-3 flex items-center gap-3">
-                <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-primary">
+                <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-on-primary-fixed">
                   {tp.user.avatarUrl ? (
                     <img src={tp.user.avatarUrl} alt="" className="h-full w-full object-cover" />
                   ) : (

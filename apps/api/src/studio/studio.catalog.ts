@@ -46,6 +46,8 @@ const theme = (
     washDark?: string;
     secondary?: string;
     secondaryDark?: string;
+    gold?: string;
+    surfaces?: Record<string, string>;
     pattern?: string;
     glow?: boolean;
     font?: string;
@@ -71,6 +73,8 @@ const theme = (
     ...(extra.washDark ? { washDark: extra.washDark } : {}),
     ...(extra.secondary ? { secondary: extra.secondary } : {}),
     ...(extra.secondaryDark ? { secondaryDark: extra.secondaryDark } : {}),
+    ...(extra.gold ? { gold: extra.gold } : {}),
+    ...(extra.surfaces ? { surfaces: extra.surfaces } : {}),
     ...(extra.pattern ? { pattern: extra.pattern } : {}),
     ...(extra.glow ? { glow: true } : {}),
     ...(extra.font ? { font: extra.font } : {}),
@@ -154,40 +158,48 @@ const style = (
  */
 export const CATALOG: CatalogSeed[] = [
   /**
-   * Egyptian King — the first premium cosmetic.
+   * Egyptian King — a skin, not a palette.
    *
-   * A football look: Egyptian red carrying the action, gold carrying everything
-   * that marks an achievement, a deep navy ground with pitch markings drawn
-   * over it, and stadium light behind the page. The display pairing and the
-   * sharp corners are the rest of it — a theme is a typeface and a shape as
-   * much as a colour.
+   * The difference is the ground. A theme that only moves the accent leaves the
+   * platform's greys underneath and reads as "the same app in red"; this one
+   * brings its own near-black navy, its own panels and its own ink, so the app
+   * becomes a night stadium and the red is what happens in it.
+   *
+   * Three colours doing three jobs. Navy is the environment — most of what you
+   * see. Crimson is action: the thing to press, the thing that is live. Gold is
+   * earned — XP, coins, trophies, rank — and nothing else, which is what stops
+   * it becoming decoration.
    *
    * Nobody's name and nobody's badge is on it. The aesthetic is Egyptian
    * football; the players and the clubs belong to themselves.
    *
-   * Priced against the economy that already exists rather than picked: a
-   * finished course pays 250 coins and the dearest thing in the reward store is
-   * a title at 400, so 750 sits above everything on sale and lands at about
-   * three courses, or three weeks of steady work. Level 3 is the floor — around
-   * twenty-four lessons — so it is a goal rather than a wall.
+   * A hundred coins: ten lessons, or two days of steady work. Priced to be had
+   * rather than saved for, because the first skin's job is to show what a skin
+   * is. No level gate for the same reason.
    */
   theme(
     'theme-egyptian-king',
     'LEGENDARY',
     'الملك المصري',
     'Egyptian King',
-    'أحمر وذهبي وأرضية ملعب — تجربة درسلي بروح كرة القدم المصرية.',
-    'Red, gold and a marked-out pitch. Darsly with the feel of an Egyptian football night.',
-    '#c8102e',
-    '#f2555f',
-    750,
+    'ملعب ليلي بالكامل — أزرق داكن، أحمر مصري، وذهب لكل حاجة بتتكسب.',
+    'A night stadium end to end — deep navy, Egyptian crimson, and gold for everything earned.',
+    '#dc2626',
+    '#ef4444',
+    100,
     10,
     {
-      requiredLevel: 3,
-      secondary: '#b8860b',
-      secondaryDark: '#fbbf24',
-      wash: '#0b1326',
-      washDark: '#0b1326',
+      secondary: '#ee9800',
+      secondaryDark: '#ffb95f',
+      gold: '#ffb95f',
+      wash: '#0a0e16',
+      washDark: '#0a0e16',
+      surfaces: {
+        background: '#0a0e16',
+        surface: '#121722',
+        ink: '#dfe2ee',
+        line: '#aeb5c5',
+      },
       pattern: 'stadium',
       glow: true,
       font: 'display',

@@ -276,7 +276,7 @@ function AcademyAddressField({
                 key={s}
                 type="button"
                 onClick={() => onChange(s)}
-                className="rounded-lg border border-outline-variant px-2.5 py-1 font-mono text-xs text-primary transition hover:border-primary hover:bg-primary-fixed"
+                className="rounded-lg border border-outline-variant px-2.5 py-1 font-mono text-xs text-on-primary-fixed transition hover:border-primary hover:bg-primary-fixed"
                 dir="ltr"
               >
                 {s}
@@ -345,7 +345,7 @@ export function MembersTab({ slug }: { slug: string }) {
           <ul className="divide-y divide-outline-variant">
             {staff.map((m: any) => (
               <li key={m.id} className="flex flex-wrap items-center gap-3 p-4">
-                <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-primary">
+                <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
                   {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" /> : (m.fullName?.charAt(0) ?? '?')}
                 </span>
                 <div className="min-w-0 flex-1">

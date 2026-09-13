@@ -52,7 +52,7 @@ export function AchievementGrid({ rows, limit }: { rows: AchievementRow[]; limit
               </span>
 
               {a.earned ? (
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-student-gold-ink">
                   {t('gamification.achievements.unlocked')}
                 </span>
               ) : (

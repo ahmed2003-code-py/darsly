@@ -25,7 +25,7 @@ export default function AdminOverviewPage() {
   const money = [
     // The single filled accent moment on the page — the headline number.
     { label: t('admin.gross'), value: egp(data.grossCents), icon: 'trending_up', card: 'bg-primary text-on-primary border-transparent', iconBg: 'bg-white/15' },
-    { label: t('admin.commission'), value: egp(data.commissionCents), icon: 'account_balance', card: 'bg-surface-container-lowest text-on-surface', iconBg: 'bg-primary-fixed text-primary' },
+    { label: t('admin.commission'), value: egp(data.commissionCents), icon: 'account_balance', card: 'bg-surface-container-lowest text-on-surface', iconBg: 'bg-primary-fixed text-on-primary-fixed' },
   ];
   const counts = [
     { label: t('admin.students'), value: data.students, icon: 'school', to: undefined },
@@ -59,7 +59,7 @@ export default function AdminOverviewPage() {
         {counts.map((c) => {
           const inner = (
             <div className={`card card-hover flex items-center gap-4 ${c.highlight ? 'ring-2 ring-primary' : ''}`}>
-              <span className="grid h-12 w-12 place-items-center rounded-xl bg-primary-fixed text-primary">
+              <span className="grid h-12 w-12 place-items-center rounded-xl bg-primary-fixed text-on-primary-fixed">
                 <span className="material-symbols-outlined text-2xl">{c.icon}</span>
               </span>
               <div>

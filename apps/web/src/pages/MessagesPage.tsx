@@ -354,7 +354,7 @@ export default function MessagesPage() {
 function Avatar({ name, url, rem }: { name: string; url?: string | null; rem: number }) {
   return (
     <span
-      className="grid shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-primary"
+      className="grid shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed"
       style={{ height: `${rem}rem`, width: `${rem}rem` }}
     >
       {url ? (
@@ -524,7 +524,7 @@ function VoiceBubble({
         onClick={toggle}
         aria-label={t('messages.voiceNote')}
         className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${
-          mine ? 'bg-black/15 text-on-primary' : 'bg-primary-fixed text-primary'
+          mine ? 'bg-black/15 text-on-primary' : 'bg-primary-fixed text-on-primary-fixed'
         }`}
       >
         <span className="material-symbols-outlined text-[20px]">
@@ -683,7 +683,7 @@ function Composer({
         <button
           type="button"
           onClick={start}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary-fixed text-primary transition hover:bg-primary hover:text-on-primary"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed transition hover:bg-primary hover:text-on-primary"
           aria-label={t('messages.record')}
           title={t('messages.record')}
         >

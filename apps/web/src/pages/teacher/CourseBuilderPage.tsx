@@ -783,12 +783,12 @@ export default function CourseBuilderPage() {
             </p>
             <div className="mb-1 grid grid-cols-2 overflow-hidden rounded-lg border border-outline-variant/60">
               <button type="button"
-                className={`py-2 text-sm font-bold ${!freePreview ? 'bg-primary-fixed text-primary' : 'bg-surface-container-lowest text-on-surface-variant'}`}
+                className={`py-2 text-sm font-bold ${!freePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
                 onClick={() => setFreePreview(false)}>
                 {t('teacher.builder.paid')}
               </button>
               <button type="button"
-                className={`py-2 text-sm font-bold ${freePreview ? 'bg-primary-fixed text-primary' : 'bg-surface-container-lowest text-on-surface-variant'}`}
+                className={`py-2 text-sm font-bold ${freePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
                 onClick={() => setFreePreview(true)}>
                 {t('teacher.builder.freePreview')}
               </button>
@@ -940,7 +940,7 @@ export default function CourseBuilderPage() {
           disabled={thumbUpload.isPending}
           onClick={() => thumbInput.current?.click()}
         >
-          <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-primary">
+          <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-on-primary-fixed">
             <span className="material-symbols-outlined text-[26px]">
               {thumbUpload.isPending ? 'hourglass' : 'add_photo_alternate'}
             </span>
@@ -1002,7 +1002,7 @@ export default function CourseBuilderPage() {
           disabled={introPct !== null}
           onClick={() => introInput.current?.click()}
         >
-          <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-primary">
+          <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-on-primary-fixed">
             <span className="material-symbols-outlined text-[26px]">
               {introPct !== null ? 'hourglass' : 'movie'}
             </span>
@@ -1252,12 +1252,12 @@ export default function CourseBuilderPage() {
             </p>
             <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-outline-variant/60">
               <button type="button"
-                className={`py-2 text-sm font-bold ${!importFreePreview ? 'bg-primary-fixed text-primary' : 'bg-surface-container-lowest text-on-surface-variant'}`}
+                className={`py-2 text-sm font-bold ${!importFreePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
                 onClick={() => setImportFreePreview(false)}>
                 {t('teacher.builder.paid')}
               </button>
               <button type="button"
-                className={`py-2 text-sm font-bold ${importFreePreview ? 'bg-primary-fixed text-primary' : 'bg-surface-container-lowest text-on-surface-variant'}`}
+                className={`py-2 text-sm font-bold ${importFreePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
                 onClick={() => setImportFreePreview(true)}>
                 {t('teacher.builder.freePreview')}
               </button>
@@ -1530,7 +1530,7 @@ function AddLessonRow({
           a permanent call to action on a row that is already an invitation. */}
       {value.trim() && (
         <button
-          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-primary transition hover:bg-primary-fixed disabled:opacity-40"
+          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-on-primary-fixed transition hover:bg-primary-fixed disabled:opacity-40"
           disabled={busy}
           onClick={submit}
         >

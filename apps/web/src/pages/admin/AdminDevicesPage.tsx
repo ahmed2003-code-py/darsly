@@ -166,7 +166,7 @@ export default function AdminDevicesPage() {
             <div key={d.id} className="card flex flex-wrap items-center gap-4">
               <span
                 className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${
-                  d.revokedAt ? 'bg-error-container text-on-error-container' : 'bg-primary-fixed text-primary'
+                  d.revokedAt ? 'bg-error-container text-on-error-container' : 'bg-primary-fixed text-on-primary-fixed'
                 }`}
               >
                 <span className="material-symbols-outlined">smartphone</span>

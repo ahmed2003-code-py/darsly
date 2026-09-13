@@ -45,7 +45,7 @@ export default function QuizTakerPage() {
         <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.take.backCourse')}
       </Link>
       <div className="mb-6 flex items-center gap-3">
-        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed text-primary">
+        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed text-on-primary-fixed">
           <span className="material-symbols-outlined text-2xl">quiz</span>
         </span>
         <div>

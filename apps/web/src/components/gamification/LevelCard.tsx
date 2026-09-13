@@ -15,8 +15,8 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
   return (
     <div className="card">
       <div className="flex items-center gap-4">
-        <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-primary-fixed">
-          <span className="material-symbols-outlined text-[30px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
+        <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-student-gold-soft">
+          <span className="material-symbols-outlined text-[30px] text-student-gold-ink" style={{ fontVariationSettings: "'FILL' 1" }}>
             {g.level.icon}
           </span>
           <span className="absolute -bottom-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-surface-container-lowest bg-primary px-1 font-heading text-xs font-extrabold text-on-primary">
@@ -27,7 +27,7 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
           <p className="font-heading text-lg font-extrabold leading-tight">{levelName}</p>
           <p className="text-sm text-on-surface-variant">
             {compactNum(g.xp)} {t('gamification.xp')}
-            {g.activeTitle && <span className="text-primary"> · {g.activeTitle}</span>}
+            {g.activeTitle && <span className="text-student-gold-ink"> · {g.activeTitle}</span>}
           </p>
         </div>
         {!compact && (
@@ -42,7 +42,7 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
       <div className="mt-4">
         <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container-high">
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-500 ease-premium"
+            className="h-full rounded-full bg-student-gold transition-[width] duration-500 ease-premium"
             style={{ width: `${g.level.pct}%` }}
           />
         </div>
@@ -54,19 +54,19 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-outline-variant/50 pt-4 text-center">
-        <Stat icon="local_fire_department" value={g.streak.current} label={t('gamification.streak')} tone="amber" />
-        <Stat icon="leaderboard" value={`#${g.rank.weekly}`} label={t('gamification.rank')} />
-        <Stat icon="toll" value={compactNum(g.coins)} label={t('gamification.coins')} tone="amber" />
+        <Stat icon="local_fire_department" value={g.streak.current} label={t('gamification.streak')} tone="gold" />
+        <Stat icon="leaderboard" value={`#${g.rank.weekly}`} label={t('gamification.rank')} tone="gold" />
+        <Stat icon="toll" value={compactNum(g.coins)} label={t('gamification.coins')} tone="gold" />
       </div>
     </div>
   );
 }
 
-function Stat({ icon, value, label, tone }: { icon: string; value: string | number; label: string; tone?: 'amber' }) {
+function Stat({ icon, value, label, tone }: { icon: string; value: string | number; label: string; tone?: 'gold' }) {
   return (
     <div>
       <span
-        className={`material-symbols-outlined text-[20px] ${tone === 'amber' ? 'text-amber-600' : 'text-primary'}`}
+        className={`material-symbols-outlined text-[20px] ${tone === 'gold' ? 'text-student-gold-ink' : 'text-primary'}`}
         style={{ fontVariationSettings: "'FILL' 1" }}
       >
         {icon}
@@ -88,13 +88,13 @@ export function StreakAtRisk({ g }: { g: GamificationSnapshot }) {
   const { t } = useTranslation();
   if (!g.streak.atRisk) return null;
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-amber-600/20 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    <div className="flex items-center gap-3 rounded-xl border border-student-gold/25 bg-student-gold-soft px-4 py-3 text-sm text-student-gold-ink">
       <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
         local_fire_department
       </span>
       <span className="flex-1 font-semibold">{t('gamification.streakAtRisk')}</span>
       {g.streak.freezes > 0 && (
-        <span className="hidden shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold sm:block">
+        <span className="hidden shrink-0 rounded-full bg-student-gold-soft px-2.5 py-1 text-xs font-bold sm:block">
           {t('gamification.streakFreezes', { count: g.streak.freezes })}
         </span>
       )}

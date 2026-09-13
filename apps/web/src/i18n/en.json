@@ -176,7 +176,7 @@
     "deletedMessage": "This message was removed",
     "unsupported": "Reload the page to see this message.",
     "clear": "Clear this conversation",
-    "clearConfirm": "Remove this conversation from your list? The other person keeps theirs, and it comes back if either of you writes again.",
+    "clearConfirm": "Clear these messages for you? The other person keeps their copy, and anything sent from now on still arrives.",
     "closed": "This teacher is not accepting messages right now."
   },
   "discovery": {

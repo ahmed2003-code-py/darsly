@@ -50,12 +50,19 @@ export default function MessagesPage() {
     refetchOnWindowFocus: true,
   });
 
-  // Merge what the poll brought with what the socket pushed, newest wins per id.
+  // Merge what the poll brought with what the socket pushed. A local message is
+  // kept only while it is newer than anything the server just sent — otherwise
+  // clearing the conversation would be undone by whatever was still in memory.
   useEffect(() => {
     if (!fetched) return;
     setMessages((prev) => {
       const byId = new Map(fetched.map((m) => [m.id, m]));
-      for (const m of prev) if (!byId.has(m.id)) byId.set(m.id, m);
+      const newest = fetched.length
+        ? new Date(fetched[fetched.length - 1].createdAt).getTime()
+        : 0;
+      for (const m of prev) {
+        if (!byId.has(m.id) && new Date(m.createdAt).getTime() > newest) byId.set(m.id, m);
+      }
       return [...byId.values()].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
@@ -153,7 +160,13 @@ export default function MessagesPage() {
   async function clearThread(id: string) {
     if (!window.confirm(t('messages.clearConfirm'))) return;
     await api.delete(`/chat/threads/${id}`);
-    if (id === activeId) setParams({});
+    if (id === activeId) {
+      // Emptied on screen at the same moment it is emptied on the server, so
+      // there is no window where the cleared messages are still sitting there.
+      setMessages([]);
+      setParams({});
+    }
+    queryClient.invalidateQueries({ queryKey: ['chat-messages', id] });
     queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
   }
 

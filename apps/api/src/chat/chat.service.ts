@@ -86,10 +86,9 @@ export class ChatService {
     }
     const where =
       user.role === Role.TEACHER
-        ? { tenantId: user.tenantId, hiddenForTeacherAt: null }
+        ? { tenantId: user.tenantId }
         : {
             studentId: (await this.studentId(user.sub)) ?? '__none__',
-            hiddenForStudentAt: null,
             teacher: { acceptsStudentMessages: true },
           };
 
@@ -103,17 +102,34 @@ export class ChatService {
       },
     });
 
-    return Promise.all(threads.map((th) => this.toThreadDto(th, user)));
+    // A conversation someone cleared has nothing in it for them until the next
+    // message lands, and an empty conversation is not a row worth drawing.
+    const visible = threads.filter((th) => {
+      const from = this.clearedAt(th, user);
+      const last = th.messages?.[0];
+      return !!last && (!from || last.createdAt > from);
+    });
+    return Promise.all(visible.map((th) => this.toThreadDto(th, user)));
+  }
+
+  /** Where this viewer's copy of the conversation starts, if they cleared it. */
+  private clearedAt(
+    thread: { clearedForTeacherAt: Date | null; clearedForStudentAt: Date | null },
+    user: JwtPayload,
+  ): Date | null {
+    return user.role === Role.STUDENT ? thread.clearedForStudentAt : thread.clearedForTeacherAt;
   }
 
   private async toThreadDto(thread: any, user: JwtPayload): Promise<ChatThreadDto> {
     const isTeacher = user.role === Role.TEACHER;
     const counterpart = isTeacher ? thread.student.user : thread.teacher.user;
+    const from = this.clearedAt(thread, user);
     const unread = await this.prisma.chatMessage.count({
       where: {
         threadId: thread.id,
         readAt: null,
         NOT: { sender: { id: user.sub } },
+        ...(from ? { createdAt: { gt: from } } : {}),
       },
     });
     const last = thread.messages?.[0];
@@ -137,24 +153,32 @@ export class ChatService {
   }
 
   /**
-   * Take a conversation off your own list.
+   * Empty this conversation, for you.
    *
-   * Not a delete: the other person's copy is theirs, and the messages are the
-   * record of what was agreed about money and access. It comes back for you the
-   * moment either of you writes in it again.
+   * Not a delete: the other person's copy is untouched, and the messages stay
+   * as the record of what was agreed about money and access. It draws a line —
+   * from here you see only what is said next, so the conversation comes back
+   * when someone writes, carrying nothing that was cleared.
    */
   async clearThread(user: JwtPayload, threadId: string) {
     if (!(await this.canAccessThread(user, threadId))) throw new ForbiddenException('Not your thread');
     const side =
-      user.role === Role.STUDENT ? { hiddenForStudentAt: new Date() } : { hiddenForTeacherAt: new Date() };
+      user.role === Role.STUDENT
+        ? { clearedForStudentAt: new Date() }
+        : { clearedForTeacherAt: new Date() };
     await this.prisma.chatThread.update({ where: { id: threadId }, data: side });
     return { id: threadId, cleared: true };
   }
 
   async getMessages(user: JwtPayload, threadId: string): Promise<ChatMessageDto[]> {
     if (!(await this.canAccessThread(user, threadId))) throw new ForbiddenException('Not your thread');
+    const thread = await this.prisma.chatThread.findUniqueOrThrow({
+      where: { id: threadId },
+      select: { clearedForTeacherAt: true, clearedForStudentAt: true },
+    });
+    const from = this.clearedAt(thread, user);
     const messages = await this.prisma.chatMessage.findMany({
-      where: { threadId },
+      where: { threadId, ...(from ? { createdAt: { gt: from } } : {}) },
       orderBy: { createdAt: 'asc' },
       take: 200,
       include: MESSAGE_INCLUDE,
@@ -412,9 +436,7 @@ export class ChatService {
   ) {
     await this.prisma.chatThread.update({
       where: { id: thread.id },
-      // Clearing the hide here is what makes "put away" self-correcting: there
-      // is something new to read, so it is back, for whoever had cleared it.
-      data: { updatedAt: new Date(), hiddenForTeacherAt: null, hiddenForStudentAt: null },
+      data: { updatedAt: new Date() },
     });
     const recipientUserId = await this.recipientUserId(thread, senderUserId);
     this.realtime.emitToUser(senderUserId, RealtimeEvents.MESSAGE, this.toMessageDto(message, senderUserId));

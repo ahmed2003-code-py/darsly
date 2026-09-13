@@ -20,6 +20,26 @@ darsly/
 └── .env.example
 ```
 
+## Documentation
+
+Start with whichever question you actually have.
+
+| Doc | Answers |
+|---|---|
+| [NEXT-SESSION.md](./NEXT-SESSION.md) | **Where the project is right now** — what shipped, what is left, what to know before touching anything. Start here. |
+| [docs/SYSTEM.md](./docs/SYSTEM.md) | The complete technical reference: data layer, every backend module, the full API map, security in detail, the frontend. |
+| [docs/FEATURES.md](./docs/FEATURES.md) | What each role actually gets, in product terms rather than code terms. |
+| [docs/STUDIO.md](./docs/STUDIO.md) | Personalisation and theming — the two token layers, server-side colour derivation, the cosmetics economy. |
+| [docs/UI-CONVENTIONS.md](./docs/UI-CONVENTIONS.md) | The rules the interface is held to: tokens, contrast floors, responsive widths, RTL, motion, stacking. Read before writing a screen. |
+| [docs/GAMIFICATION.md](./docs/GAMIFICATION.md) | XP, coins, levels, achievements, missions, leaderboards — and why none of it can be farmed. |
+| [docs/ARCHITECTURE-ACADEMY.md](./docs/ARCHITECTURE-ACADEMY.md) | Multi-tenant academy architecture: bounded contexts, tenant isolation, the ledger, the revenue model. |
+| [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Running it locally, deploying to Railway, environment variables, and proving a deploy actually shipped. |
+| [docs/ACADEMY-COMPOSITION-PLAN.md](./docs/ACADEMY-COMPOSITION-PLAN.md) | The AI academy-site generator: the UI DSL, validation boundaries, quality gates. |
+| [docs/PLAN-Platform-Parity.md](./docs/PLAN-Platform-Parity.md) | The roadmap, phased and prioritised. |
+| [docs/REFERENCE-DrJosephAdel.md](./docs/REFERENCE-DrJosephAdel.md) · [docs/REFERENCE-EdNuva-TeacherFeatures.md](./docs/REFERENCE-EdNuva-TeacherFeatures.md) | Competitor teardowns the roadmap was drawn from. |
+| [docs/android-payment-listener.md](./docs/android-payment-listener.md) · [docs/android-sms-listener.md](./docs/android-sms-listener.md) · [android/README.md](./android/README.md) | The Android app that turns a payment SMS into a verified enrolment. |
+| [docs/email-setup.md](./docs/email-setup.md) | SMTP / Resend configuration. |
+
 ## One-command dev setup
 
 ```bash
@@ -103,10 +123,15 @@ in production.**
   defense). Device cap enforced at login: exceeding `MAX_CONCURRENT_SESSIONS_DEFAULT`
   kicks the oldest device. RBAC via global guards (`@Roles`, `@Public`); SUPER_ADMIN
   passes all role checks; every privileged mutation writes an `AuditLog` row.
-- **Design system:** tokens in `apps/web/tailwind.config.ts` are extracted verbatim
-  from the authoritative Stitch design export (indigo `#422EC7`/`#5B4CE0` +
-  teal `#2DD4BF`, layered off-white surfaces, 16/24px radii, indigo-tinted shadows,
-  Cairo headings + Tajawal body, RTL-first with sidebars on the right).
+- **Design system:** a hand-tuned "ink & paper" system in
+  `apps/web/tailwind.config.ts` — one accent (iris indigo `#4A32C9`), a warm
+  neutral scale (paper `#F7F7F4` / ink `#1B1B22`, never pure black or white),
+  a single 12px radius, and 1px hairlines instead of soft shadows. Rubik for
+  headings, IBM Plex Sans Arabic for body — both Arabic-native. RTL-first, with
+  sidebars on the right. **Every colour resolves through a CSS custom property**,
+  which is what lets an academy's published palette and a student's theme
+  repaint the app at runtime. See [docs/UI-CONVENTIONS.md](./docs/UI-CONVENTIONS.md)
+  and [docs/STUDIO.md](./docs/STUDIO.md).
 
 ## SECURITY — real barriers vs. deterrents (read this honestly)
 
@@ -158,6 +183,14 @@ the exact student and session.
 | 4 | Chat (Socket.io), notifications, progress tracking, student comfort | ✅ done & verified |
 | 5 | Double-entry ledger, wallet + invoices, payouts (teacher+admin), admin console (overview/approvals/payouts/security/audit), teacher security tab + Leak-Trace | ✅ done & verified |
 | 6 | Quizzes (MCQ/true-false/short-answer, auto + manual grading), assignments (submit + grade), course reviews, completion certificates (serial + public verify + printable view) | ✅ done & verified |
+| — | Live sessions + booking, teacher analytics, wishlist + badges, central soft-delete, route-level code-splitting | ✅ done & verified |
+| — | Multi-tenant academies, AI academy-site studio, whitelabel branding, team & permissions | ✅ done & verified |
+| — | Real card payments via XPay (a verified online payment lands on the same path a verified bank transfer does) | ✅ done & verified |
+| — | Gamification engine: XP, coins, levels, achievements, missions, leaderboards, Learning Centre | ✅ done & verified |
+| — | Student Studio: per-student theming on top of academy branding, server-derived colour, a cosmetics economy | ✅ done & verified |
+| — | Chat rework: teacher-initiated, replies, voice notes, one thread per pair, per-side clearing, a teacher opt-out switch | ✅ done & verified |
+
+Current state, and what is left, lives in [NEXT-SESSION.md](./NEXT-SESSION.md).
 
 ## Deployment (Railway — single service + Postgres)
 

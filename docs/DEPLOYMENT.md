@@ -1,7 +1,12 @@
 # درسلي — دليل النشر والتشغيل الكامل (Operator Guide)
 
-كل اللي محتاجه عشان تشغّل المشروع محلياً، تنشره على Railway، تخلّيه قابل
-للتثبيت على الموبايل، وتحلّ مشكلة الـmigration الحالية — بحيث الدنيا تبقى مستقرة ١٠٠٪.
+كل اللي محتاجه عشان تشغّل المشروع محلياً، تنشره على Railway، وتتأكد إن اللي نشرته
+وصل فعلاً.
+
+> **الإنتاج**: `https://darslyapi-production.up.railway.app` — خدمة واحدة بتخدم
+> الـweb على `/` والـAPI تحت `/api/v1`. الديبلوي auto على أي push لـ`main`.
+> **`darsly.app` مش مملوك**؛ والدومين `darsly.up.railway.app` بيرجّع
+> "Application not found" — متستخدمهوش للتحقق.
 
 ---
 
@@ -89,7 +94,41 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 ---
 
-## 4) 🚑 حلّ مشكلة الـMigration الحالية (P3009)
+## 4) الميجريشنز — القاعدة الأهم
+
+> **متطبّقش ميجريشن على قاعدة الإنتاج بإيدك.**
+
+الميجريشنز **مكتوبة بالإيد** في مجلدات، ومحميّة بـ`IF NOT EXISTS` و
+`DO $$ … EXCEPTION WHEN duplicate_object` عشان إعادة التطبيق تبقى آمنة. أمر
+الإقلاع (`sh scripts/start.sh`) بيعمل `migrate deploy` لوحده، ولو فشل بـP3009
+بيفكّ القفل ويعيد المحاولة. يعني **Redeploy لوحده كفاية**.
+
+تطبيق ميجريشن يدوي على الإنتاج قبل ما الكود يوصل هو اللي عمل انقطاع خدمة قبل
+كده — القاعدة اتعدّلت والكود القديم مابقاش يعرف يقراها.
+
+### ✅ التحقق بعد الديبلوي (مش اختياري)
+Railway بياخد وقت، والبناء ممكن يفشل من غير ما يقول. الطريقة الوحيدة اللي بتعتمد
+عليها: اعمل poll على الإنتاج لحد ما تشوف **string فريدة للتغيير نفسه**.
+
+```bash
+# مثال: انتظر لحد ما قاعدة CSS جديدة تظهر في البَندل المنشور
+for i in $(seq 1 60); do
+  css=$(curl -s https://darslyapi-production.up.railway.app/ \
+        | grep -o '/assets/index-[A-Za-z0-9_-]*\.css' | head -1)
+  curl -s "https://darslyapi-production.up.railway.app$css" | grep -q 'scroll-x' \
+    && { echo "SHIPPED $css"; break; }
+  sleep 20
+done
+```
+
+اختار string موجودة **في التغيير ده بس**. استخدام كلمة موجودة قبل كده بيديك
+نتيجة إيجابية كاذبة — وده حصل، واتقال إن حاجة اتنشرت وهي لأ.
+
+---
+
+## 4b) 📕 ملحق تاريخي — مشكلة P3009 (اتحلّت)
+
+> القسم ده متسيب للمرجع بس. الإصلاح التلقائي في `scripts/start.sh` بيغطيها.
 
 **الأعراض:** الـdeploy بيقف بـ
 `P3009 … migration 20260712190602_manual_payment_proof_accounts … failed`.
@@ -173,7 +212,9 @@ DATABASE_URL="<PUBLIC_URL>" npm run db:seed --workspace=@darsly/api
 - [ ] `OTP_DEV_MODE` = `false` أو مشيل (لو `true` في الإنتاج **الإقلاع بيفشل عمداً** — كان بيسرّب توكن إعادة تعيين كلمة السر).
 - [ ] `ALLOWED_ORIGINS` = الدومين العام الصحيح.
 - [ ] Volume دائم على `/data` و`STORAGE_LOCAL_PATH=/data/storage`.
-- [ ] مشكلة الـP3009 اتحلّت (قسم 4) والـdeploy أخضر.
+- [ ] الـdeploy أخضر، **ومتحقّق منه** بـstring فريدة (قسم 4).
+- [ ] `RESEND_API_KEY` مضبوط، ويفضّل الدومين يبقى verified — من غير كده الرسايل
+      بتتبعت من `onboarding@resend.dev` وبتوصل لصاحب الحساب بس.
 - [ ] حسابات الاستلام مضبوطة (الأدمن → الدفعات → حسابات الاستلام).
 - [ ] عمولة المنصة لكل مدرس مضبوطة (افتراضي 20%).
 - [ ] نسخ احتياطي دوري لقاعدة Postgres (Railway backups / cron `pg_dump`).
@@ -201,3 +242,12 @@ API="https://<your-domain>/api/v1" bash scripts/smoke-phase6.sh   # 20 فحص (�
 - **الفيديو المحمي**: `apps/api/src/{video,playback}/*`
 - **الـschema**: `apps/api/prisma/schema.prisma`
 - **متغيّرات الويب**: same-origin في الإنتاج، `VITE_API_URL` محلياً فقط عند الحاجة.
+- **الثيمات والتخصيص**: `apps/api/src/studio/*` — و[`STUDIO.md`](./STUDIO.md).
+- **قواعد الواجهة**: [`UI-CONVENTIONS.md`](./UI-CONVENTIONS.md).
+
+### ملاحظات تشغيل متفرّقة
+- الأعمال في الخلفية (transcode) **مفيهاش retry**: ديبلوي في نصّ التحويل بيضيّع
+  الشغلانة. اعمل الديبلوي وقت هادي، أو أعد رفع الفيديو بعده.
+- `yt-dlp` مش مثبّت على نسخة عمداً — بيتكسر لما المواقع تتغيّر، فالأحدث أضمن.
+- قاعدة الإنتاج بيتوصل لها عن طريق proxy، وسكربتات الصيانة المؤقتة بتتكتب في
+  `apps/api/scripts/_*.ts` **وبتتمسح بعد الاستخدام**.

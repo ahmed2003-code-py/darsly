@@ -4,7 +4,11 @@
 > خريطة الـAPI كاملة، الحماية بالتفصيل حرفياً، ونظام الفرونت (الصفحات، المكوّنات،
 > الديزاين توكنز، الأداء). اقرأه من فوق لتحت وهتفهم السستم كله.
 >
-> ملفات مكمّلة: [`DEPLOYMENT.md`](./DEPLOYMENT.md) (النشر)،
+> ملفات مكمّلة: [`FEATURES.md`](./FEATURES.md) (المميزات بالدور)،
+> [`STUDIO.md`](./STUDIO.md) (التخصيص والثيمات)،
+> [`UI-CONVENTIONS.md`](./UI-CONVENTIONS.md) (قواعد الواجهة)،
+> [`GAMIFICATION.md`](./GAMIFICATION.md) (XP والعملات)،
+> [`DEPLOYMENT.md`](./DEPLOYMENT.md) (النشر)،
 > [`android-payment-listener.md`](./android-payment-listener.md) (تطبيق استقبال الدفع).
 
 ---
@@ -130,9 +134,19 @@ teacher:<tenantId>:balance  — رصيد المدرّس القابل للسحب
 | Model | الغرض |
 |---|---|
 | `Review` | تقييم 1–5 (فريد لكل student+tenant+course) |
-| `ChatThread` → `ChatMessage` | شات مباشر (DM) أو سؤال/جواب مربوط بلحظة في الفيديو |
+| `ChatThread` → `ChatMessage` | محادثة واحدة لكل (مدرّس، طالب). الثريد شايل `clearedForTeacherAt` / `clearedForStudentAt` — خط زمني لكل طرف. الرسالة شايلة `replyToId` (رد)، و`lessonId` + `videoTimestampSec` (سؤال من جوه درس — سياق على الرسالة مش أوضة تانية)، و`audioKey` + مدة/حجم/نوع (رسالة صوتية، الصوت خاص ومفيش URL عام) |
 | `Announcement`, `Notification` | إعلانات (منصّة/مدرّس) + إشعارات لحظية بأنواع مختلفة |
 | `LiveSession` → `LiveBooking` | جلسات مباشرة + حجز مقاعد (بسعة اختيارية) |
+
+**التحفيز والتخصيص**
+| Model | الغرض |
+|---|---|
+| `StudentGamification`, `GamificationEvent`, `LevelTier`, `Achievement`, `StudentAchievement`, `StudentMission`, `LeaderboardEntry` | XP، عملات، مستويات، إنجازات، مهام، لوحة صدارة — [`GAMIFICATION.md`](./GAMIFICATION.md) |
+| `CosmeticItem` | عنصر في كتالوج الاستوديو. `config` مفردات مقفولة السيرفر بيعرف يقراها — مش CSS ولا HTML ولا حاجة المتصفّح بينفّذها |
+| `StudentCosmetic` | مين بيملك إيه. `@@unique([studentId, itemId])` فالشراء مرتين مستحيل على مستوى الداتابيز مش الكود |
+| `StudentCustomization` | اللي الطالب لابسه دلوقتي. صف واحد لكل طالب، خانة لكل فئة. `academyId` و`themeKey` متنافيين ببناء الكود |
+
+التفاصيل الكاملة: [`STUDIO.md`](./STUDIO.md).
 
 **عمليات المنصّة**
 | Model | الغرض |
@@ -144,10 +158,14 @@ teacher:<tenantId>:balance  — رصيد المدرّس القابل للسحب
 
 ## 2) الباك إند — الموديولات والمنطق
 
-الموديولات: `admin, analytics, assessments, audit, auth, catalog, chat, common,
-courses, enrollments, health, live, notifications, payments, payouts, playback,
-prisma, profile, progress, realtime, reviews, security, storage, student,
-teachers, uploads, video`.
+الموديولات (37): `academy, academy-site, admin, analytics, assessments, audit,
+auth, branding, catalog, chat, common, courses, device, enrollments, gamification,
+health, live, mail, notifications, payments, payouts, playback, prisma, profile,
+progress, realtime, reviews, security, storage, student, studio, teachers,
+uploads, video, wallet, xpay`.
+
+**الحجم النهاردة**: 32 كنترولر / 242 راوت، 79 موديل Prisma، 52 ميجريشن،
+684 اختبار وحدة في 39 ملف.
 
 ### 2.1 المصادقة (auth)
 `apps/api/src/auth/*`
@@ -242,8 +260,33 @@ payouts, live, coupons, quizzes... إلخ.
 - **الشات** عبر Socket.io (`chat.gateway.ts`): كل اتصال متحقّق بالـJWT في
   الـhandshake. الانضمام/الإرسال/الكتابة (typing) كلها متحقّقة بـ`canAccessThread`
   (يمنع دخول ثريد شخص تاني). DM بين الطالب والمدرّس متربوط باشتراك ACTIVE.
+- **محادثة واحدة لكل زوج**: السؤال من جوه درس كان بيفتح أوضة تانية مع نفس
+  المدرّس — يعني شاتين مع شخص واحد. السياق (الدرس + اللحظة) بقى على الرسالة.
+- **المدرّس يقدر يبدأ**: من صفحة الطلاب مباشرة، مش مستني الطالب يبعت.
+- **ردود** على رسالة بعينها، و**رسايل صوتية**. الصوت خاص: مفيش URL عام، والراوت
+  `GET chat/messages/:id/voice` بيتأكد إن السامع طرف في المحادثة (200 / 403 / 401
+  متحقّق منهم بالتنفيذ).
+- **مسح المحادثة خط زمني مش إخفاء**: اللي مسح بيشوف اللي بعد الخط بس، ونسخة
+  الطرف التاني زي ما هي. الرسايل سجل اللي اتفق عليه في الفلوس والوصول — واحد
+  بيرتّب عنده ماينفعش ياخدها من التاني.
+- **سويتش عند المدرّس** (`TeacherProfile.acceptsStudentMessages`): لو قافل،
+  المحادثة بتختفي من كونسول المدرّس وزرار الرسالة بيختفي من صفحة الطلاب، والطالب
+  مش بيقدر يبعت له أصلاً.
 - **الإشعارات**: أنواع (ENROLLMENT_APPROVED, CHAT_MESSAGE, QUIZ_GRADED,
-  PAYOUT_STATUS, SECURITY_ALERT, LIVE_SESSION_REMINDER...) بجرس لحظي.
+  PAYOUT_STATUS, SECURITY_ALERT, LIVE_SESSION_REMINDER...) بجرس لحظي، مع قراءة
+  الكل، ومسح واحد، ومسح الكل.
+
+### 2.10b استوديو الطالب (studio)
+`apps/api/src/studio/*` — تخصيص الطالب لنسخته من التطبيق.
+- `studio-theme.ts` هو **المكان الوحيد** اللي بيتحسب فيه لون. المتصفّح بيستلم
+  `"R G B"` جاهزة وبيحطها؛ مش بيخلط ولا بيقرر. ده حد أمني قد ما هو تصميمي.
+- حدود تباين إجبارية: نص أساسي 7:1، نص عادي 4.5:1، نص على تعبئة 4.5:1، غير النص 3:1.
+- الاقتصاد: السعر من الكتالوج مش من الطلب؛ الخصم `updateMany` بشرط الرصيد جوه
+  transaction (نفس الجملة هي الحارس وهي إشارة عدم الكفاية)؛ والملكية `@@unique`
+  هي اللي بتخلّي الشراء exactly-once.
+- **الـXP مابيتصرفش أبداً** — بيبوّب بس عن طريق `requiredLevel`.
+
+الوثيقة: [`STUDIO.md`](./STUDIO.md).
 
 ### 2.11 التحليلات والأدمن (analytics, admin, security, audit)
 - **تحليلات المدرّس** (`/teacher/analytics`): إيراد/اشتراكات متقيّدة بالـtenant.
@@ -319,8 +362,13 @@ GET  certificates/mine   GET certificates/verify/:serial   GET certificates/mine
 GET/POST/PATCH/DELETE teacher/live   GET teacher/live/:id/bookings
 GET  live/upcoming   POST live/:id/book   DELETE live/:id/book   GET live/:id/join
 GET/POST reviews   GET reviews/mine/:courseId
-GET  chat/threads  GET chat/threads/:id/messages  POST chat/messages
+GET/POST/DELETE chat/threads   GET chat/threads/:id/messages   POST chat/messages
+POST chat/threads/:id/voice    GET chat/messages/:id/voice
 GET  notifications   PATCH notifications/:id/read   PATCH notifications/read-all
+DELETE notifications/:id   DELETE notifications/all
+GET  student/studio   GET student/studio/theme
+POST student/studio/{unlock|equip|equip-academy|unequip|accent}
+DELETE student/studio/customization
 POST/DELETE courses/:id/save   GET me/saved   GET me/badges
 GET  progress/continue-watching   GET progress/summary   PATCH progress/weekly-goal
 GET/PATCH me/profile   POST me/avatar   DELETE me/avatar

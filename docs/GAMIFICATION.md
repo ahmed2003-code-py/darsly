@@ -137,6 +137,17 @@ requires a human to mark it delivered.
 Spending is one conditional write (`WHERE coins >= cost`), so two taps on a slow
 connection cannot buy the same thing twice on one balance.
 
+### The cosmetics sink
+
+The Student Studio is where most coins actually go. It is a **consumer of this
+engine, not a second one**: the same balance, the same ledger table, the same
+conditional debit, the same idempotency discipline. There is no second currency
+and no second XP system.
+
+One rule matters and is worth restating: **XP is never spent.** It is
+progression. A cosmetic may be gated behind `requiredLevel`, but unlocking it
+can never cost a student the level they earned. See [`STUDIO.md`](./STUDIO.md).
+
 ---
 
 ## 6. Periods, and the timezone
@@ -294,9 +305,16 @@ anti-collusion — and shipping a half-built battle mode would be worse than
 shipping a coherent system without one. The `CHALLENGE_WON` event type and its
 XP rule are seeded, so the engine is ready for them.
 
-**Not applicable**: dark mode. The platform has no dark theme; its theming axis
-is per-academy branding. All gamification UI uses theme tokens, so it follows
-academy colours today and would follow a dark palette the day one exists.
+**Since superseded**: this section used to say dark mode was not applicable.
+The platform now has a light/dark switch *and* a second theming axis on top of
+per-academy branding — the student's own. Every gamification surface follows
+both, because all of it reads theme tokens rather than literals.
+
+One consequence worth knowing: anything **earned** — XP, coins, rank, level
+progress, mission rewards, achievements — is drawn in the `student-gold`
+semantic rather than in the accent. That is what gives "this was earned" one
+colour across the whole app instead of an amber hard-coded into each component
+that happened to need one.
 
 ---
 
@@ -314,4 +332,4 @@ progression, achievement unlock-once, leaderboard ranking and personal position,
 **tenant isolation** on boards and analytics, atomic coin spending under two
 simultaneous redemptions, and the coins-never-touch-the-wallet guarantee.
 
-Full suite: `npx jest` — 589 tests.
+Full suite: `npx jest` — 684 tests across 39 files.

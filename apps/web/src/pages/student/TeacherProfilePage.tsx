@@ -36,7 +36,7 @@ export default function TeacherProfilePage() {
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
       {/* Hero */}
-      <section className="card mb-10 grid gap-8 bg-surface-container-low p-8 lg:grid-cols-2">
+      <section className="card mb-10 grid items-center gap-8 bg-surface-container-low p-8 lg:grid-cols-2">
         <div>
           <div className="mb-3 flex items-center gap-3">
             <h1 className="font-heading text-4xl font-extrabold">{teacher.fullName}</h1>
@@ -82,8 +82,8 @@ export default function TeacherProfilePage() {
         {/* A play button that plays nothing is worse than no play button: it
             promised an intro video every teacher was told they had not
             uploaded. It shows up only when there is something to play. */}
-        <div className="relative flex min-h-56 items-center justify-center overflow-hidden rounded-xl bg-inverse-surface shadow-modal">
-          {teacher.introVideoUrl ? (
+        {teacher.introVideoUrl ? (
+          <div className="relative flex min-h-56 items-center justify-center overflow-hidden rounded-xl bg-inverse-surface shadow-modal">
             <video
               src={teacher.introVideoUrl}
               poster={teacher.avatarUrl ?? undefined}
@@ -92,36 +92,23 @@ export default function TeacherProfilePage() {
               preload="none"
               className="h-full max-h-96 w-full bg-black object-contain"
             />
-          ) : (
-            teacher.avatarUrl && (
-              <>
-                {/* An avatar is stored as a square, and stretching one across a
-                    wide hero both crops the face and blows it up past the pixels
-                    it has — which is why this read as a blurry close-up. It is
-                    shown at its own size and its own shape instead, on a blurred
-                    copy of itself so the box still fills. Nothing is upscaled,
-                    so nothing is soft. */}
-                <img
-                  src={teacher.avatarUrl}
-                  alt=""
-                  aria-hidden="true"
-                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-2xl"
-                />
-                {/* A light photo hazes the whole panel on a dark theme. The scrim
-                    puts the portrait back in front of it. */}
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-0 bg-gradient-to-t from-inverse-surface/70 via-inverse-surface/20 to-inverse-surface/50"
-                />
-                <img
-                  src={teacher.avatarUrl}
-                  alt={teacher.fullName}
-                  className="relative m-6 aspect-square w-full max-w-[14rem] rounded-2xl object-cover shadow-modal ring-1 ring-white/15"
-                />
-              </>
-            )
-          )}
-        </div>
+          </div>
+        ) : (
+          teacher.avatarUrl && (
+            /* The photo, and nothing around it.
+             *
+             * It used to be stretched across a panel twice its width, which
+             * cropped the face and blew it up; then it sat on a blurred copy of
+             * itself, which read as a white frame somebody had added. A photo
+             * does not need a frame. It is capped at the size it was stored at,
+             * so it is never upscaled, and centred in the space it is given. */
+            <img
+              src={teacher.avatarUrl}
+              alt={teacher.fullName}
+              className="mx-auto w-full max-w-[16rem] self-center rounded-2xl object-cover"
+            />
+          )
+        )}
       </section>
 
       {/* Courses */}

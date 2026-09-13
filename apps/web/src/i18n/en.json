@@ -1154,7 +1154,8 @@
       "pickHint": "Pick what you teach — or write something the list does not have.",
       "stagesPickHint": "Press a stage to take all of its years, or pick them one at a time.",
       "other": "Something else?",
-      "otherPh": "Write it here"
+      "otherPh": "Write it here",
+      "stagesFromProfile": "These come from what you teach, on your account. To add a stage, change it there."
     },
     "media": {
       "title": "Academy photos & video",

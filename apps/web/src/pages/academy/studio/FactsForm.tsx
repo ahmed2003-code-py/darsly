@@ -30,7 +30,19 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
     queryFn: async () => (await api.get('/catalog/subjects')).data,
     staleTime: Infinity,
   });
-  const stageGroups = STAGES.map((st) => ({
+  // Only the stages this teacher actually takes.
+  //
+  // The form describes their academy, and offering a secondary teacher six
+  // primary years is six wrong answers to scroll past. What they teach is
+  // already declared on their account, so that is the list — and a teacher who
+  // declared nothing yet sees all of them rather than an empty control.
+  const { data: profile } = useQuery<{ stages?: string[] }>({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+    staleTime: 60_000,
+  });
+  const mine = profile?.stages?.length ? profile.stages : null;
+  const stageGroups = STAGES.filter((st) => !mine || mine.includes(st)).map((st) => ({
     label: t(`stage.${st}`),
     items: (grades ?? []).filter((g) => g.stage === st).map((g) => (ar ? g.nameAr : g.nameEn)),
   })).filter((g) => g.items.length > 0);
@@ -98,7 +110,10 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
         />
       </Field>
 
-      <Field label={t('studio.facts.stages')} hint={t('studio.facts.stagesPickHint')}>
+      <Field
+        label={t('studio.facts.stages')}
+        hint={mine ? t('studio.facts.stagesFromProfile') : t('studio.facts.stagesPickHint')}
+      >
         <StagePickList
           groups={stageGroups}
           value={form.stages}

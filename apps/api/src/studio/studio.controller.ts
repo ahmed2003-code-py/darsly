@@ -15,6 +15,10 @@ class KeyDto {
   @IsString() @MaxLength(64) @Matches(/^[a-z0-9-]+$/) key: string;
 }
 
+class AcademyDto {
+  @IsString() @MaxLength(64) @Matches(/^[a-zA-Z0-9_-]+$/) academyId: string;
+}
+
 class CategoryDto {
   @IsIn(CATEGORIES) category: CosmeticCategory;
 }
@@ -68,6 +72,13 @@ export class StudioController {
   @ApiOperation({ summary: '[student] Wear an owned cosmetic' })
   equip(@CurrentUser() user: JwtPayload, @Body() dto: KeyDto) {
     return this.studio.equip(user.sub, dto.key);
+  }
+
+  @Post('equip-academy')
+  @HttpCode(200)
+  @ApiOperation({ summary: "[student] Wear one of my teachers' academy colours" })
+  equipAcademy(@CurrentUser() user: JwtPayload, @Body() dto: AcademyDto) {
+    return this.studio.equipAcademy(user.sub, dto.academyId);
   }
 
   @Post('unequip')

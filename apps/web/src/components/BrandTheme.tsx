@@ -3,6 +3,7 @@ import { useLocation, useSearchParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { arrivalAcademy, clearArrival, rememberArrival } from '../lib/arrival';
 import { useAcademyBranding, useMyAcademies } from '../lib/academy';
+import { chosenAcademy } from '../lib/studio';
 import { applyTheme, hasServerTheme, rememberedTheme } from '../lib/theme';
 import { useAuthStore } from '../stores/auth';
 
@@ -42,6 +43,14 @@ export default function BrandTheme() {
   // the write below, so the branding query would stay disabled until some
   // unrelated re-render happened to pick it up.
   const [arrival, setArrival] = useState<string | null>(() => arrivalAcademy());
+  // Re-read when the Studio writes a new choice, so equipping a teacher's look
+  // repaints immediately rather than on the next load.
+  const [chosen, setChosen] = useState<string | null>(() => chosenAcademy());
+  useEffect(() => {
+    const onPick = () => setChosen(chosenAcademy());
+    window.addEventListener('darsly:studio-academy', onPick);
+    return () => window.removeEventListener('darsly:studio-academy', onPick);
+  }, []);
   useEffect(() => {
     const match = pathname.match(/^\/(?:a|t)\/([^/]+)/);
     // A hand-authored academy page (e.g. an AI-composed site opened outside the
@@ -89,13 +98,22 @@ export default function BrandTheme() {
     // `/me/academies` puts memberships first and then the academies the user
     // studies at, oldest enrolment first — so the first row is the teacher the
     // app belongs to, whether that is their own academy or the one they joined.
-    applyTheme(data[0]?.branding?.appTheme ?? null);
+    //
+    // A student who picked one of their teachers in the Studio overrides that:
+    // with three teachers, which one the app looks like should be their call
+    // rather than an accident of which they enrolled with first. A choice that
+    // no longer matches an academy they belong to is ignored, so leaving a
+    // teacher cannot leave the app wearing them.
+    const picked = chosen
+      ? data.find((a: { academyId: string }) => a.academyId === chosen)
+      : undefined;
+    applyTheme((picked ?? data[0])?.branding?.appTheme ?? null);
     // Where they came from has served its purpose once an account exists.
     if (data.length) {
       clearArrival();
       setArrival(null);
     }
-  }, [user, isAdmin, data, arrival, arrived, arrivalSettled]);
+  }, [user, isAdmin, data, arrival, arrived, arrivalSettled, chosen]);
 
   return null;
 }

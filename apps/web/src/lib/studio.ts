@@ -281,16 +281,49 @@ export function bootStudio(): void {
   }
 }
 
+/**
+ * The academy whose colours the student chose, if they chose one.
+ *
+ * Kept here rather than in the branding layer because it is a Studio decision;
+ * `BrandTheme` reads it to know which of a student's teachers the app should
+ * look like. Cached alongside the theme so it survives a reload.
+ */
+const ACADEMY_KEY = 'darsly-studio-academy';
+
+export function chosenAcademy(): string | null {
+  try {
+    return localStorage.getItem(ACADEMY_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberAcademy(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(ACADEMY_KEY, id);
+    else localStorage.removeItem(ACADEMY_KEY);
+  } catch {
+    // Losing the preference costs a repaint on the next load, nothing more.
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('darsly:studio-academy'));
+  } catch {
+    /* no CustomEvent, no listener */
+  }
+}
+
 /** Fetch and apply what this student is wearing. */
 export async function loadStudio(): Promise<void> {
   const { data } = await api.get('/student/studio/theme');
   applyStudio(data?.theme ?? null);
+  rememberAcademy(typeof data?.equipped?.academyId === 'string' ? data.equipped.academyId : null);
 }
 
 /** Forget it entirely — on sign-out, so the next account starts clean. */
 export function clearStudio(): void {
   equipped = null;
   paint(null);
+  rememberAcademy(null);
   try {
     localStorage.removeItem(CACHE_KEY);
   } catch {

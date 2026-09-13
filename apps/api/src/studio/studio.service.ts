@@ -9,6 +9,7 @@ import { CosmeticCategory, CosmeticItem, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationConfigService } from '../gamification/gamification.config.service';
+import { paletteFromBrandTokens } from '../branding/app-theme';
 import { CATALOG } from './studio.catalog';
 import { deriveStudioThemes, safeHex, StudioThemes, ThemeConfig } from './studio-theme';
 
@@ -48,6 +49,8 @@ const SLOT: Record<CosmeticCategory, keyof EquipSlots> = {
 };
 
 interface EquipSlots {
+  /** The academy whose colours are being worn, when that is the choice. */
+  academyId: string | null;
   themeKey: string | null;
   accentKey: string | null;
   buttonKey: string | null;
@@ -164,15 +167,84 @@ export class StudioService implements OnModuleInit {
         levelPct: progress.pct,
       },
       equipped: worn,
+      academyThemes: await this.academyThemes(studentId, worn.academyId),
       items: items.map((item) => this.toItemDto(item, ownedIds, earned, progress.level.level)),
       theme: this.themeFor(items, worn),
     };
+  }
+
+  /**
+   * The teachers whose look a student can wear.
+   *
+   * Not catalogue rows: these are the academies they actually study at, read
+   * fresh every time, so a student is only ever offered a palette they have a
+   * real relationship with. Free, always owned, and the way back after trying
+   * something on — "my teacher's look" as one tap rather than a reset.
+   */
+  private async academyThemes(studentId: string, chosen: string | null) {
+    const rows = await this.prisma.enrollment.findMany({
+      where: { studentId, status: { in: ['ACTIVE', 'PENDING_PAYMENT'] } },
+      select: { tenantId: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const ids = [...new Set(rows.map((r) => r.tenantId))];
+    if (!ids.length) return [];
+
+    const academies = await this.prisma.academy.findMany({
+      where: { id: { in: ids }, deletedAt: null, status: { not: 'ARCHIVED' } },
+      select: {
+        id: true, name: true, colorPrimary: true, colorAccent: true, brandTokens: true,
+        owner: { select: { fullName: true } },
+      },
+    });
+    const byId = new Map(academies.map((a) => [a.id, a]));
+
+    // The first enrolment stays first: it is the teacher who brought them here,
+    // and the one the app already wears when nothing has been chosen.
+    return ids
+      .map((id) => byId.get(id))
+      .filter((a): a is NonNullable<typeof a> => !!a)
+      .map((a, i) => {
+        const palette = paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent);
+        return {
+          academyId: a.id,
+          name: a.name,
+          teacherName: a.owner?.fullName ?? a.name,
+          // For the swatch. The real tokens are the academy's own, applied by
+          // the branding layer — this is only what the card should look like.
+          primary: palette?.primary ?? null,
+          accent: palette?.accent ?? null,
+          equipped: chosen ? chosen === a.id : i === 0,
+          // True for the one the app already wears with no choice made.
+          isDefault: i === 0,
+        };
+      });
+  }
+
+  /** Wear a teacher's colours, and stop wearing a bought theme. */
+  async equipAcademy(userId: string, academyId: string) {
+    const studentId = await this.studentIdOf(userId);
+    // The gate: a student may only wear the colours of an academy they actually
+    // study at. An id from a request is not a relationship.
+    const enrolled = await this.prisma.enrollment.findFirst({
+      where: { studentId, tenantId: academyId, status: { in: ['ACTIVE', 'PENDING_PAYMENT'] } },
+      select: { id: true },
+    });
+    if (!enrolled) throw new ForbiddenException({ message: 'Not your academy', code: 'NOT_ENROLLED' });
+
+    await this.prisma.studentCustomization.upsert({
+      where: { studentId },
+      update: { academyId, themeKey: null },
+      create: { studentId, academyId },
+    });
+    return this.theme(userId);
   }
 
   /** The equipped set, with the row created lazily on first read. */
   private async customizationOf(studentId: string): Promise<EquipSlots & { accentHex: string | null }> {
     const row = await this.prisma.studentCustomization.findUnique({ where: { studentId } });
     return {
+      academyId: row?.academyId ?? null,
       themeKey: row?.themeKey ?? null,
       accentKey: row?.accentKey ?? null,
       accentHex: row?.accentHex ?? null,
@@ -417,6 +489,8 @@ export class StudioService implements OnModuleInit {
 
     const slot = SLOT[item.category];
     const data: Record<string, unknown> = { [slot]: item.key };
+    // Two looks cannot be worn at once: choosing a theme releases the academy.
+    if (item.category === 'THEME') data.academyId = null;
     // Equipping an unlocked accent replaces a mixed one, rather than layering
     // two answers to the same question.
     if (item.category === 'ACCENT') data.accentHex = null;
@@ -475,6 +549,7 @@ export class StudioService implements OnModuleInit {
     await this.prisma.studentCustomization.upsert({
       where: { studentId },
       update: {
+        academyId: null,
         themeKey: null, accentKey: null, accentHex: null, buttonKey: null,
         cardKey: null, navKey: null, avatarKey: null, frameKey: null, effectKey: null,
       },

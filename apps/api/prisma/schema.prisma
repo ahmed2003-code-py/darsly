@@ -2056,6 +2056,17 @@ model StudentCustomization {
   studentId String         @unique
   student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
+  /// The academy whose colours this student chose to wear.
+  ///
+  /// A student with three teachers had no say in which one the app looked like —
+  /// it was whichever they enrolled with first. This is that say, and it is also
+  /// the way back: after trying a theme on, "my teacher's look" is one tap rather
+  /// than a reset of everything.
+  ///
+  /// Mutually exclusive with `themeKey` by construction: equipping either clears
+  /// the other, because wearing two looks at once is not a thing.
+  academyId String?
+
   themeKey  String?
   accentKey String?
   /// A colour the student picked rather than unlocked, as plain hex. The safe

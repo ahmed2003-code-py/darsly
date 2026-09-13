@@ -1809,6 +1809,9 @@
     "customize": "Customise your Darsly",
     "moreOptions": "More options",
     "lessOptions": "Keep it simple",
-    "themeHint": "A theme changes the colour, the background and the shape of everything at once."
+    "themeHint": "A theme changes the colour, the background and the shape of everything at once.",
+    "teacherThemes": "Your teachers' looks",
+    "teacherThemesHint": "The academy colours of every teacher you study with. Free and always yours — tap one to go back to your teacher's look.",
+    "teacherTheme": "{{name}}'s theme"
   }
 }

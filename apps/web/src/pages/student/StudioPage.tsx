@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
-import { applyStudio, previewStudio, restoreStudio } from '../../lib/studio';
+import { applyStudio, previewStudio, rememberAcademy, restoreStudio } from '../../lib/studio';
 import { CardGridSkeleton, ErrorNote, PageHeader, ProgressBar, Spinner } from '../../components/ui';
 
 /**
@@ -116,6 +116,9 @@ export default function StudioPage() {
     mutationFn: async (key: string) => (await api.post('/student/studio/equip', { key })).data,
     onSuccess: (d) => {
       setPreviewing(null);
+      // A bought theme replaces a teacher's look; the branding layer has to be
+      // told, or it would keep repainting the academy over it.
+      if (d.equipped?.academyId == null) rememberAcademy(null);
       after(d.theme);
     },
   });
@@ -131,10 +134,28 @@ export default function StudioPage() {
     mutationFn: async (hex: string) => (await api.post('/student/studio/accent', { hex })).data,
     onSuccess: (d) => after(d.theme),
   });
+  /**
+   * Wear a teacher's colours.
+   *
+   * The academy palette is painted by the branding layer, not by the Studio, so
+   * this records the choice and lets that layer repaint — which is why there is
+   * no theme to apply here.
+   */
+  const equipAcademy = useMutation({
+    mutationFn: async (academyId: string) =>
+      (await api.post('/student/studio/equip-academy', { academyId })).data,
+    onSuccess: (d, academyId) => {
+      setPreviewing(null);
+      rememberAcademy(academyId);
+      after(d.theme);
+    },
+  });
+
   const reset = useMutation({
     mutationFn: async () => (await api.delete('/student/studio/customization')).data,
     onSuccess: (d) => {
       setPreviewing(null);
+      rememberAcademy(null);
       after(d.theme);
     },
   });
@@ -244,6 +265,14 @@ export default function StudioPage() {
               if (!next && ADVANCED.includes(category)) setCategory('THEME');
             }}
           />
+          {category === 'THEME' && (data?.academyThemes?.length ?? 0) > 0 && (
+            <AcademyThemes
+              rows={data.academyThemes}
+              onEquip={(id) => equipAcademy.mutate(id)}
+              busy={equipAcademy.isPending}
+              t={t}
+            />
+          )}
           {category === 'ACCENT' && (
             <AccentPicker
               current={data.equipped?.accentHex ?? null}
@@ -373,6 +402,77 @@ function Stat({ icon, value, label }: { icon: string; value: number; label: stri
       <span className="block font-heading text-lg font-extrabold tabular-nums">{value}</span>
       <span className="block text-xs text-on-surface-variant">{label}</span>
     </span>
+  );
+}
+
+/**
+ * The teachers whose look a student can wear.
+ *
+ * Free and always theirs, so there is no price and no lock — and it is the way
+ * back after trying a theme on, which is the whole reason it is drawn first.
+ */
+function AcademyThemes({
+  rows,
+  onEquip,
+  busy,
+  t,
+}: {
+  rows: {
+    academyId: string;
+    name: string;
+    teacherName: string;
+    primary: string | null;
+    accent: string | null;
+    equipped: boolean;
+    isDefault: boolean;
+  }[];
+  onEquip: (id: string) => void;
+  busy: boolean;
+  t: any;
+}) {
+  return (
+    <div className="mb-5">
+      <p className="mb-1 font-heading font-bold">{t('myStudio.teacherThemes')}</p>
+      <p className="mb-3 text-sm text-on-surface-variant">{t('myStudio.teacherThemesHint')}</p>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {rows.map((row) => (
+          <article
+            key={row.academyId}
+            className={`studio-card card flex flex-col p-4 ${
+              row.equipped ? 'studio-active border-student-accent' : ''
+            }`}
+          >
+            <span
+              className="block h-16 w-full rounded-xl"
+              style={{
+                background: `linear-gradient(135deg, ${row.primary ?? '#4a32c9'}, ${
+                  row.accent ?? row.primary ?? '#4a32c9'
+                })`,
+              }}
+            />
+            <p className="mt-3 truncate font-heading font-bold">
+              {t('myStudio.teacherTheme', { name: row.teacherName })}
+            </p>
+            <p className="mt-1 truncate text-sm text-on-surface-variant">{row.name}</p>
+
+            {row.equipped ? (
+              <p className="mt-2 flex items-center gap-1 text-sm font-bold text-student-accent-ink">
+                <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                {t('myStudio.equipped')}
+              </p>
+            ) : (
+              <button
+                disabled={busy}
+                onClick={() => onEquip(row.academyId)}
+                className="studio-btn mt-3 self-start rounded-xl bg-student-accent px-4 py-2 text-sm font-bold text-on-student-accent transition hover:bg-student-accent-hover disabled:opacity-60"
+              >
+                {t('myStudio.equip')}
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 

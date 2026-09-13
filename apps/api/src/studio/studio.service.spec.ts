@@ -31,6 +31,8 @@ function makePrisma(over: Record<string, any> = {}): any {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     studentAchievement: { findMany: jest.fn().mockResolvedValue([]) },
+    enrollment: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+    academy: { findMany: jest.fn().mockResolvedValue([]) },
     gamificationEvent: { create: jest.fn().mockResolvedValue({}) },
   };
   const prisma: any = { ...base, ...over };
@@ -179,11 +181,43 @@ describe('StudioService — wearing', () => {
 
   it('equips an owned item into its own slot', async () => {
     const prisma = makePrisma();
+    prisma.cosmeticItem.findUnique.mockResolvedValue(item({ category: 'BUTTON_STYLE', key: 'button-pill' }));
+    prisma.studentCosmetic.findUnique.mockResolvedValue({ id: 'o1' });
+    await svc(prisma).equip('u1', 'button-pill');
+    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { buttonKey: 'button-pill' } }),
+    );
+  });
+
+  // Two looks cannot be worn at once, so choosing a theme has to let go of the
+  // teacher's colours rather than layer on top of them.
+  it('releases the teacher’s look when a bought theme is equipped', async () => {
+    const prisma = makePrisma();
     prisma.cosmeticItem.findUnique.mockResolvedValue(item());
     prisma.studentCosmetic.findUnique.mockResolvedValue({ id: 'o1' });
     await svc(prisma).equip('u1', 'theme-ocean');
     expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: { themeKey: 'theme-ocean' } }),
+      expect.objectContaining({ update: { themeKey: 'theme-ocean', academyId: null } }),
+    );
+  });
+
+  it('refuses a teacher’s look the student does not study with', async () => {
+    const prisma = makePrisma({
+      enrollment: { findFirst: jest.fn().mockResolvedValue(null) },
+    });
+    await expect(svc(prisma).equipAcademy('u1', 'someone-elses-academy')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.studentCustomization.upsert).not.toHaveBeenCalled();
+  });
+
+  it('wears a teacher’s look, and lets go of the bought theme', async () => {
+    const prisma = makePrisma({
+      enrollment: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) },
+    });
+    await svc(prisma).equipAcademy('u1', 'academy-1');
+    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { academyId: 'academy-1', themeKey: null } }),
     );
   });
 

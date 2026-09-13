@@ -149,7 +149,22 @@ export class TeachersService {
     const teacher = await this.prisma.teacherProfile.findFirst({
       where: { slug, status: 'APPROVED', user: { isActive: true } },
       include: {
-        user: { select: { fullName: true, avatarUrl: true } },
+        user: {
+          select: {
+            fullName: true,
+            avatarUrl: true,
+            // The teacher's own public page. Every approved teacher is
+            // provisioned an academy at registration, so this is the page they
+            // hand out — whether they have composed a site in the Studio or are
+            // still on the built-in storefront.
+            ownedAcademies: {
+              where: { deletedAt: null, status: { not: 'ARCHIVED' } },
+              select: { slug: true, name: true, site: { select: { status: true } } },
+              orderBy: { createdAt: 'asc' },
+              take: 1,
+            },
+          },
+        },
         subject: true,
         grades: { include: { grade: true } },
         courses: {
@@ -213,6 +228,15 @@ export class TeachersService {
       slug: teacher.slug,
       fullName: teacher.user.fullName,
       avatarUrl: teacher.user.avatarUrl,
+      academy: teacher.user.ownedAcademies[0]
+        ? {
+            slug: teacher.user.ownedAcademies[0].slug,
+            name: teacher.user.ownedAcademies[0].name,
+            // Composed in the Studio and live, as opposed to the built-in
+            // storefront. Both are a real page; this says which one they get.
+            sitePublished: teacher.user.ownedAcademies[0].site?.status === 'PUBLISHED',
+          }
+        : null,
       bio: teacher.bio,
       introVideoUrl: teacher.introVideoUrl,
       // So the student's page never offers a message button that would be

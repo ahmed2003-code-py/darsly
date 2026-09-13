@@ -59,6 +59,24 @@ export default function TeacherProfilePage() {
               {t('teacherProfile.ratingChip', { count: teacher.stats.reviewsCount })}
             </span>
           </div>
+
+          {/* The teacher's own page. Every approved teacher has one, so this is
+              always somewhere to go — the site they composed in the Studio if
+              they published one, and the built-in academy storefront if not.
+              It opens in a new tab because it is a different place, branded as
+              theirs, and losing this page to get there would be a bad trade. */}
+          {teacher.academy && (
+            <a
+              href={`/a/${encodeURIComponent(teacher.academy.slug)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary mt-6 inline-flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[20px]">storefront</span>
+              {t('teacherProfile.viewPortfolio')}
+              <span className="material-symbols-outlined text-[18px] opacity-70">open_in_new</span>
+            </a>
+          )}
         </div>
 
         {/* A play button that plays nothing is worse than no play button: it
@@ -76,7 +94,31 @@ export default function TeacherProfilePage() {
             />
           ) : (
             teacher.avatarUrl && (
-              <img src={teacher.avatarUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <>
+                {/* An avatar is stored as a square, and stretching one across a
+                    wide hero both crops the face and blows it up past the pixels
+                    it has — which is why this read as a blurry close-up. It is
+                    shown at its own size and its own shape instead, on a blurred
+                    copy of itself so the box still fills. Nothing is upscaled,
+                    so nothing is soft. */}
+                <img
+                  src={teacher.avatarUrl}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-2xl"
+                />
+                {/* A light photo hazes the whole panel on a dark theme. The scrim
+                    puts the portrait back in front of it. */}
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 bg-gradient-to-t from-inverse-surface/70 via-inverse-surface/20 to-inverse-surface/50"
+                />
+                <img
+                  src={teacher.avatarUrl}
+                  alt={teacher.fullName}
+                  className="relative m-6 aspect-square w-full max-w-[14rem] rounded-2xl object-cover shadow-modal ring-1 ring-white/15"
+                />
+              </>
             )
           )}
         </div>

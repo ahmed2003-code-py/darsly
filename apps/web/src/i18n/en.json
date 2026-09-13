@@ -230,7 +230,9 @@
     "freePreviewCount": "{{count}} free lessons",
     "viewCourse": "View details",
     "noCourses": "No published courses yet",
-    "introVideo": "Intro video"
+    "introVideo": "Intro video",
+    "viewPortfolio": "See their page",
+    "viewPortfolioHint": "The teacher's full page — every course, in their own style"
   },
   "course": {
     "curriculum": "Course curriculum",

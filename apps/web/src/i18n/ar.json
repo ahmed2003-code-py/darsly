@@ -230,7 +230,9 @@
     "freePreviewCount": "{{count}} درس مجاني",
     "viewCourse": "عرض التفاصيل",
     "noCourses": "لا توجد دورات منشورة بعد",
-    "introVideo": "الفيديو التعريفي"
+    "introVideo": "الفيديو التعريفي",
+    "viewPortfolio": "شوف صفحته",
+    "viewPortfolioHint": "صفحة الأستاذ الكاملة — كل دوراته وطريقته"
   },
   "course": {
     "curriculum": "منهج الدورة",

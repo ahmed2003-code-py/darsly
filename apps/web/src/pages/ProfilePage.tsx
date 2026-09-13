@@ -130,7 +130,7 @@ export default function ProfilePage() {
 
   const avatar = useMutation({
     mutationFn: async (file: File) => {
-      const dataUrl = await imageToDataUrl(file, { maxW: 256, maxH: 256, quality: 0.85, square: true });
+      const dataUrl = await imageToDataUrl(file, { maxW: 512, maxH: 512, quality: 0.85, square: true });
       return (await api.post('/me/avatar', { dataUrl })).data;
     },
     onSuccess: (d) => syncUser({ avatarUrl: d.avatarUrl }),

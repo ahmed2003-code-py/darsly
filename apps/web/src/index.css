@@ -407,3 +407,96 @@
   border-radius: 999px;
   background: transparent;
 }
+
+/*
+ * Student Studio — what a shape name means.
+ *
+ * A student equips "pill"; the stylesheet decides what pill is. Nothing a
+ * student sends is ever a length, a colour or a rule — it is a name from a
+ * closed list, matched here. That is the whole of why personalisation cannot
+ * corrupt the layout: there is no path from a preference to arbitrary CSS.
+ *
+ * Everything below is scoped to `.studio-*` classes, applied on the student's
+ * own surfaces. A course page, a lesson and a teacher's profile keep the
+ * academy's shapes and colours, because those screens belong to the teacher.
+ */
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+:root[data-s-button='rounded'] .studio-btn { border-radius: 16px; }
+:root[data-s-button='pill'] .studio-btn { border-radius: 999px; }
+:root[data-s-button='sharp'] .studio-btn { border-radius: 4px; }
+:root[data-s-button='soft'] .studio-btn {
+  border-radius: 14px;
+  font-weight: 600;
+}
+:root[data-s-button='elevated'] .studio-btn {
+  border-radius: 14px;
+  box-shadow: 0 6px 16px -6px rgb(var(--c-shadow) / 0.45);
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+:root[data-s-card='soft'] .studio-card {
+  border-radius: 20px;
+  background: rgb(var(--c-surface-container-low));
+}
+:root[data-s-card='elevated'] .studio-card {
+  box-shadow: 0 10px 28px -14px rgb(var(--c-shadow) / 0.5);
+  border-color: transparent;
+}
+:root[data-s-card='paper'] .studio-card {
+  border-radius: 8px;
+  border-color: rgb(var(--c-line) / 0.18);
+  box-shadow: none;
+}
+/* Used sparingly and never on a scrolling list: a blur per card is the fastest
+   way to make a phone feel slow. */
+:root[data-s-card='glass'] .studio-card {
+  background: rgb(var(--c-surface-container-lowest) / 0.72);
+  backdrop-filter: blur(10px);
+  border-color: rgb(var(--c-line) / 0.16);
+}
+
+/* ── Navigation ──────────────────────────────────────────────────────────── */
+:root[data-s-nav='compact'] .studio-nav-item { padding-block: 0.4rem; }
+:root[data-s-nav='floating'] .studio-nav-item { border-radius: 999px; }
+
+/* ── Effects ─────────────────────────────────────────────────────────────── */
+:root[data-s-effect='glow'] .studio-active {
+  box-shadow: 0 0 0 1px rgb(var(--s-accent, var(--c-primary)) / 0.35),
+    0 0 18px -4px rgb(var(--s-accent, var(--c-primary)) / 0.55);
+}
+
+/* ── Profile frames ──────────────────────────────────────────────────────── */
+.studio-frame { position: relative; }
+.studio-frame::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+:root[data-s-frame='bronze'] .studio-frame::after { border-color: #b06b2c; }
+:root[data-s-frame='silver'] .studio-frame::after { border-color: #9ca3af; }
+:root[data-s-frame='gold'] .studio-frame::after { border-color: #d4a017; }
+:root[data-s-frame='diamond'] .studio-frame::after {
+  border-color: #67e8f9;
+  box-shadow: 0 0 12px -2px #67e8f9;
+}
+:root[data-s-frame='fire'] .studio-frame::after {
+  border-color: #f97316;
+  box-shadow: 0 0 12px -2px #f97316;
+}
+:root[data-s-frame='lightning'] .studio-frame::after { border-color: #facc15; }
+:root[data-s-frame='scholar'] .studio-frame::after { border-color: #92400e; }
+:root[data-s-frame='legendary'] .studio-frame::after {
+  border-color: #a855f7;
+  box-shadow: 0 0 14px -2px #a855f7;
+}
+
+/* Somebody who asked for less movement gets less movement — the glow and the
+   frame shadows are decoration, and decoration is the first thing to go. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-s-effect='glow'] .studio-active { box-shadow: none; }
+  .studio-frame::after { box-shadow: none !important; }
+}

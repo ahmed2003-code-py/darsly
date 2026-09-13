@@ -15,6 +15,7 @@ import { LevelCard, StreakAtRisk } from '../../components/gamification/LevelCard
 import { MissionList } from '../../components/gamification/MissionList';
 import { ErrorNote, PageHeader, Skeleton } from '../../components/ui';
 import { Reveal } from '../../components/motion';
+import { Link } from 'react-router-dom';
 
 const TABS = ['overview', 'missions', 'achievements', 'leaderboard', 'rewards', 'activity'] as const;
 type Tab = (typeof TABS)[number];
@@ -54,6 +55,21 @@ export default function LearningCenterPage() {
       <div className="mb-6 space-y-4">
         <StreakAtRisk g={g} />
         <LevelCard g={g} compact />
+        {/* Where the loop closes: the XP on this screen is what the Studio
+            spends, so the way in belongs next to the number. */}
+        <Link
+          to="/studio"
+          className="studio-card flex items-center gap-3 rounded-2xl border border-student-accent-border bg-student-accent-soft px-4 py-3 transition hover:border-student-accent"
+        >
+          <span className="material-symbols-outlined text-student-accent-ink">palette</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-heading font-bold text-student-accent-ink">
+              {t('myStudio.customize')}
+            </span>
+            <span className="block text-sm text-on-surface-variant">{t('myStudio.subtitle')}</span>
+          </span>
+          <span className="material-symbols-outlined text-outline rtl:-scale-x-100">chevron_right</span>
+        </Link>
       </div>
 
       {/* Tabs — horizontally scrollable on a phone, never wrapped into rows */}

@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../lib/api';
+import { loadStudio } from '../lib/studio';
 import { useRealtime } from '../lib/useRealtime';
 import { useWebNotifications } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
@@ -23,6 +24,7 @@ const STUDENT_NAV: NavItem[] = [
   { to: '/discover', icon: 'travel_explore', labelKey: 'nav.discover' },
   { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
   { to: '/learning', icon: 'trophy', labelKey: 'nav.learning' },
+  { to: '/studio', icon: 'palette', labelKey: 'nav.myStudio' },
   { to: '/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
   { to: '/saved', icon: 'favorite', labelKey: 'nav.saved' },
   { to: '/live', icon: 'sensors', labelKey: 'nav.live' },
@@ -90,6 +92,13 @@ export default function Layout({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   });
   const chatClosed = user?.role === Role.TEACHER && teacherProfile?.acceptsStudentMessages === false;
+
+  // The student's own layer, fetched once the session is known. `bootStudio`
+  // has already replayed the cached copy, so this is a correction rather than
+  // the first paint.
+  useEffect(() => {
+    if (user?.role === Role.STUDENT) void loadStudio().catch(() => undefined);
+  }, [user?.role, user?.id]);
   const baseNav =
     user?.role === Role.SUPER_ADMIN ? ADMIN_NAV : user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
   const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;
@@ -130,9 +139,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             end={item.end}
             onClick={() => setDrawer(false)}
             className={({ isActive }) =>
-              `group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 font-heading text-sm font-semibold transition-colors duration-200 ease-premium ${
+              `studio-nav-item group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 font-heading text-sm font-semibold transition-colors duration-200 ease-premium ${
                 isActive
-                  ? 'bg-primary-fixed text-primary'
+                  ? 'studio-active bg-student-accent-soft text-student-accent-ink'
                   : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
               }`
             }
@@ -140,9 +149,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             {({ isActive }) => (
               <>
                 {isActive && (
-                  <span className="absolute inset-y-1.5 start-0 w-1 rounded-full bg-primary" aria-hidden />
+                  <span className="absolute inset-y-1.5 start-0 w-1 rounded-full bg-student-accent" aria-hidden />
                 )}
-                <span className={`material-symbols-outlined text-[20px] ${isActive ? 'text-primary' : 'text-outline group-hover:text-on-surface'}`}>
+                <span className={`material-symbols-outlined text-[20px] ${isActive ? 'text-student-accent-ink' : 'text-outline group-hover:text-on-surface'}`}>
                   {item.icon}
                 </span>
                 {t(item.labelKey)}
@@ -211,14 +220,14 @@ export default function Layout({ children }: { children: ReactNode }) {
                 end={item.end}
                 className={({ isActive }) =>
                   `flex min-h-[3.75rem] min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 px-1 pt-1.5 pb-1 transition-colors ${
-                    isActive ? 'text-primary' : 'text-on-surface-variant'
+                    isActive ? 'text-student-accent-ink' : 'text-on-surface-variant'
                   }`
                 }
               >
                 {({ isActive }) => (
                   <>
                     <span
-                      className={`material-symbols-outlined text-[22px] leading-none ${isActive ? 'text-primary' : 'text-outline'}`}
+                      className={`material-symbols-outlined text-[22px] leading-none ${isActive ? 'text-student-accent-ink' : 'text-outline'}`}
                       style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
                     >
                       {item.icon}

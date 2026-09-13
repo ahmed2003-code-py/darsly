@@ -21,6 +21,17 @@ import type { Config } from 'tailwindcss';
  */
 const c = (name: string) => `rgb(var(--c-${name}) / <alpha-value>)`;
 
+/**
+ * A student token, falling back to a platform one.
+ *
+ * The fallback is what makes the two layers coexist rather than compete: until
+ * a student equips something, `--s-accent` is unset and the variable resolves
+ * to whatever the academy (or the platform) already put in `--c-primary`. A
+ * student who customises nothing sees no change at all.
+ */
+const c2 = (name: string, fallback: string) =>
+  `rgb(var(--${name}, var(--${fallback})) / <alpha-value>)`;
+
 const accent = {
   50: c('accent-50'),
   100: c('accent-100'),
@@ -101,6 +112,21 @@ export default {
 
         background: c('background'),
         'on-background': c('on-background'),
+
+        // ── The student's own namespace ──────────────────────────────────────
+        // A teacher's academy writes the `--c-*` tokens above; a student's
+        // Studio can only ever reach these. Every one of them falls back to a
+        // platform token, so a student who has customised nothing sees exactly
+        // what they saw before, and an academy's colours are never overwritten
+        // by a personalisation — the two live in different namespaces on
+        // purpose. Used only on the student's own surfaces; a course page, a
+        // lesson and a teacher's profile keep the academy's colours.
+        'student-accent': c2('s-accent', 'c-primary'),
+        'student-accent-hover': c2('s-accent-hover', 'c-primary-hover'),
+        'student-accent-soft': c2('s-accent-soft', 'c-primary-fixed'),
+        'student-accent-border': c2('s-accent-border', 'c-primary-container'),
+        'student-accent-ink': c2('s-accent-ink', 'c-primary'),
+        'on-student-accent': c2('s-on-accent', 'c-on-primary'),
       },
       fontFamily: {
         // Distinctive Arabic-native pairing (not Tajawal/Inter defaults).

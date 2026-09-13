@@ -7,14 +7,19 @@ import App from './App';
 import './i18n';
 import './index.css';
 import { bootColorMode } from './lib/colorMode';
+import { bootStudio } from './lib/studio';
 import { bootTheme } from './lib/theme';
 
 // Replay the academy's colours before the first paint. Waiting for React and a
 // query to resolve would show the platform indigo first and then swap it, which
 // reads as the app loading someone else's brand.
-// Which end of the palette first, then whose palette it is.
+// Which end of the palette first, then whose palette it is, then what the
+// student made of it. In that order: the academy writes the tokens the app is
+// built on, and the student's own layer sits on top and only ever touches its
+// own namespace.
 bootColorMode();
 bootTheme();
+bootStudio();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },

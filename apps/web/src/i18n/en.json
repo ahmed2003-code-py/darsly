@@ -105,7 +105,8 @@
     "browse": "Browse courses",
     "adminDevices": "Listener devices",
     "learning": "Learning Center",
-    "adminGamification": "Gamification"
+    "adminGamification": "Gamification",
+    "myStudio": "My Studio"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1752,5 +1753,59 @@
     "noHandAuthored": "There is no hand-authored page kept for this academy.",
     "enrollmentActive": "A course you are still enrolled in, or whose payment is still being checked, cannot be removed.",
     "messagingClosed": "Messaging is switched off for this academy."
+  },
+  "myStudio": {
+    "title": "My Studio",
+    "subtitle": "Your Darsly. Make it yours.",
+    "tab": {
+      "style": "My style",
+      "collection": "Collection",
+      "shop": "Shop"
+    },
+    "category": {
+      "THEME": "Themes",
+      "ACCENT": "Colours",
+      "BUTTON_STYLE": "Buttons",
+      "CARD_STYLE": "Cards",
+      "NAV_STYLE": "Navigation",
+      "AVATAR": "Avatar",
+      "FRAME": "Frame",
+      "EFFECT": "Effects"
+    },
+    "rarity": {
+      "COMMON": "Common",
+      "RARE": "Rare",
+      "EPIC": "Epic",
+      "LEGENDARY": "Legendary"
+    },
+    "levelLine": "Level {{level}} — {{name}}",
+    "toNext": "{{xp}} XP to the next level",
+    "xp": "XP",
+    "coins": "Coins",
+    "streak": "Day streak",
+    "preview": "Preview",
+    "stopPreview": "Stop preview",
+    "previewing": "Just a preview — nothing is saved until you choose it.",
+    "exitPreview": "Back to mine",
+    "equip": "Use it",
+    "equipped": "In use",
+    "unlock": "Unlock",
+    "price": "Price",
+    "yourCoins": "Your coins",
+    "after": "After",
+    "notEnough": "Not enough coins yet. Finish more lessons to earn them.",
+    "needLevel": "Level {{level}}",
+    "earned": "Earned, not bought",
+    "myColour": "A colour of your own",
+    "myColourHint": "Pick one and we work out the rest so it stays readable.",
+    "pickColour": "Another colour",
+    "reset": "Back to default",
+    "resetHint": "Resets how it looks. Your collection, XP, coins and badges are untouched.",
+    "resetConfirm": "Go back to the default look? Everything you unlocked stays in your collection.",
+    "emptyCollection": "Your collection is empty",
+    "emptyShop": "You have unlocked everything 🎉",
+    "emptyCategory": "Nothing here yet",
+    "emptyHint": "Finish lessons, earn coins, unlock new things.",
+    "customize": "Customise your Darsly"
   }
 }

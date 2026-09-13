@@ -8,6 +8,7 @@ import {
   watchSystemMode,
   type ResolvedMode,
 } from '../lib/colorMode';
+import { repaintStudioForMode } from '../lib/studio';
 import { repaintForMode } from '../lib/theme';
 
 /**
@@ -33,6 +34,8 @@ export default function ColorModeToggle() {
     return watchSystemMode((m) => {
       setMode(m);
       repaintForMode();
+      // The student's own accent has a light and a dark end too.
+      repaintStudioForMode();
     });
   }, []);
 
@@ -46,6 +49,8 @@ export default function ColorModeToggle() {
         // properties and beat the stylesheet, so the other end has to be
         // written over them.
         repaintForMode();
+      // The student's own accent has a light and a dark end too.
+      repaintStudioForMode();
       }}
       title={t(`colorMode.${next}`)}
       aria-label={t(`colorMode.${next}`)}

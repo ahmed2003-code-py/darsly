@@ -40,6 +40,7 @@ import { AcademyModule } from './academy/academy.module';
 import { AcademySiteModule } from './academy-site/academy-site.module';
 import { DeviceModule } from './device/device.module';
 import { GamificationModule } from './gamification/gamification.module';
+import { StudioModule } from './studio/studio.module';
 
 // Single-service deploys: when the web app has been built into apps/web/dist,
 // the API serves it too (SPA fallback included). API routes stay under /api.
@@ -91,6 +92,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     RealtimeModule,
     ProgressModule,
     GamificationModule,
+    StudioModule,
     PaymentsModule,
     WalletModule,
     PayoutsModule,

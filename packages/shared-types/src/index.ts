@@ -195,6 +195,15 @@ export enum ChatThreadType {
   QA = 'QA',
 }
 
+/** The message a reply is answering, as much of it as the quote needs. */
+export interface ChatReplyToDto {
+  id: string;
+  senderName: string;
+  /** Empty when the quoted message is a voice note. */
+  body: string;
+  isVoice: boolean;
+}
+
 export interface ChatMessageDto {
   id: string;
   threadId: string;
@@ -205,6 +214,10 @@ export interface ChatMessageDto {
   readAt: string | null;
   createdAt: string;
   mine?: boolean;
+  /** Set when this message answers another one. */
+  replyTo?: ChatReplyToDto | null;
+  /** A voice note: `body` is empty and the audio is fetched by message id. */
+  audio?: { durationSec: number; bytes: number } | null;
 }
 
 export interface ChatThreadDto {
@@ -242,8 +255,12 @@ export const RealtimeEvents = {
 
 export interface SendMessagePayload {
   threadId?: string;
+  /** the message being answered */
+  replyToId?: string;
   /** when starting a new thread, the teacher tenant to message */
   tenantId?: string;
+  /** when a teacher starts the thread, the student they are writing to */
+  studentId?: string;
   body: string;
   /** Q&A pinned to a lesson moment */
   lessonId?: string;

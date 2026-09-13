@@ -1210,8 +1210,25 @@ model ChatMessage {
   thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   senderId  String
   sender    User       @relation(fields: [senderId], references: [id])
+  /// Empty only when the message is a voice note, which carries no text.
   body      String
   readAt    DateTime?
+
+  /// The message this one answers. Kept as a relation rather than a copied
+  /// snippet so an edit or a delete upstream is reflected, and self-referential
+  /// so a reply to a reply costs nothing extra.
+  replyToId String?
+  replyTo   ChatMessage?  @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("ChatReply")
+
+  /// A voice note. The audio is private — it is a conversation between two
+  /// people — so only the storage key lives here and the bytes are served by a
+  /// route that checks the listener is in the thread. There is no public URL.
+  audioKey         String?
+  audioDurationSec Int?
+  audioBytes       Int?
+  audioMimeType    String?
+
   createdAt DateTime   @default(now())
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?

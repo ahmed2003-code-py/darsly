@@ -152,7 +152,25 @@
     "qaBadge": "Lesson question",
     "atTimestamp": "at {{time}}",
     "today": "Today",
-    "you": "You"
+    "you": "You",
+    "yesterday": "Yesterday",
+    "reply": "Reply",
+    "replyingTo": "Replying to {{name}}",
+    "cancelReply": "Cancel reply",
+    "voiceNote": "Voice note",
+    "record": "Record a voice note",
+    "recording": "Recording…",
+    "stopAndSend": "Send",
+    "cancelRecording": "Cancel",
+    "micDenied": "The browser blocked the microphone. Allow it in your site settings.",
+    "micUnsupported": "This browser cannot record audio.",
+    "voiceTooLong": "That voice note is too long — five minutes is the limit.",
+    "voiceFailed": "The voice note did not send. Try again.",
+    "playbackFailed": "This message cannot be played.",
+    "read": "Read",
+    "delivered": "Sent",
+    "startHint": "Send the first message to start the conversation.",
+    "deletedMessage": "This message was removed"
   },
   "discovery": {
     "title": "Discover Teachers",
@@ -521,7 +539,8 @@
       "collapseAll": "Collapse all",
       "whatsapp": "Message on WhatsApp",
       "call": "Call",
-      "totalEarned": "Your earnings"
+      "totalEarned": "Your earnings",
+      "message": "Message on Darsly"
     },
     "coupons": {
       "title": "Discount coupons",

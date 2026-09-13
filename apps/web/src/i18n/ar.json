@@ -152,7 +152,25 @@
     "qaBadge": "سؤال عن درس",
     "atTimestamp": "عند الدقيقة {{time}}",
     "today": "اليوم",
-    "you": "أنت"
+    "you": "أنت",
+    "yesterday": "إمبارح",
+    "reply": "رد",
+    "replyingTo": "بترد على {{name}}",
+    "cancelReply": "إلغاء الرد",
+    "voiceNote": "رسالة صوتية",
+    "record": "سجّل رسالة صوتية",
+    "recording": "بيسجّل…",
+    "stopAndSend": "إرسال",
+    "cancelRecording": "إلغاء",
+    "micDenied": "المتصفح مسمحش بالميكروفون. افتح إعدادات الموقع وفعّل الميكروفون.",
+    "micUnsupported": "المتصفح ده مش بيدعم التسجيل الصوتي.",
+    "voiceTooLong": "الرسالة الصوتية أطول من اللازم — الحد ٥ دقايق.",
+    "voiceFailed": "الرسالة الصوتية مبعتتش. جرّب تاني.",
+    "playbackFailed": "مش قادر يشغّل الرسالة دي.",
+    "read": "اتقرت",
+    "delivered": "اتبعتت",
+    "startHint": "ابعت أول رسالة عشان تبدأ المحادثة.",
+    "deletedMessage": "الرسالة دي اتشالت"
   },
   "discovery": {
     "title": "استكشف الأساتذة",
@@ -521,7 +539,8 @@
       "collapseAll": "اقفل الكل",
       "whatsapp": "مراسلة على واتساب",
       "call": "اتصال",
-      "totalEarned": "إجمالي أرباحك"
+      "totalEarned": "إجمالي أرباحك",
+      "message": "مراسلة على درسلي"
     },
     "coupons": {
       "title": "كوبونات الخصم",

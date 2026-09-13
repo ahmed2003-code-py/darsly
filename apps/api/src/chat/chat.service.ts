@@ -10,9 +10,33 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { StorageProvider } from '../storage/storage.provider';
 
 /** Max stored chat message length — shared by the REST DTO and the socket path. */
 export const CHAT_MESSAGE_MAX_LEN = 4000;
+
+/** A voice note is a thought, not a lecture. */
+export const VOICE_MAX_SECONDS = 300;
+export const VOICE_MAX_BYTES = 10 * 1024 * 1024;
+/** What a browser's MediaRecorder actually produces, across the ones we serve. */
+const VOICE_MIME = /^audio\/(webm|ogg|mp4|mpeg|aac|wav)(;.*)?$/;
+
+/**
+ * What every read of a message needs: who sent it, and enough of the message it
+ * answers to draw the quote. One level deep on purpose — a quote of a quote is
+ * noise, and following the chain would be an unbounded join.
+ */
+const MESSAGE_INCLUDE = {
+  sender: { select: { id: true, fullName: true, role: true } },
+  replyTo: {
+    select: {
+      id: true,
+      body: true,
+      audioKey: true,
+      sender: { select: { fullName: true } },
+    },
+  },
+} as const;
 
 @Injectable()
 export class ChatService {
@@ -20,6 +44,7 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
     private readonly notifications: NotificationsService,
+    private readonly storage: StorageProvider,
   ) {}
 
   // ── Identity helpers ──────────────────────────────────────────────────────
@@ -102,7 +127,7 @@ export class ChatService {
       where: { threadId },
       orderBy: { createdAt: 'asc' },
       take: 200,
-      include: { sender: { select: { id: true, fullName: true, role: true } } },
+      include: MESSAGE_INCLUDE,
     });
     await this.markThreadRead(user, threadId);
     return messages.map((m) => this.toMessageDto(m, user.sub));
@@ -119,6 +144,17 @@ export class ChatService {
       readAt: m.readAt?.toISOString() ?? null,
       createdAt: m.createdAt.toISOString(),
       mine: m.senderId === viewerUserId,
+      replyTo: m.replyTo
+        ? {
+            id: m.replyTo.id,
+            senderName: m.replyTo.sender?.fullName ?? '',
+            body: m.replyTo.body,
+            isVoice: !!m.replyTo.audioKey,
+          }
+        : null,
+      audio: m.audioKey
+        ? { durationSec: m.audioDurationSec ?? 0, bytes: m.audioBytes ?? 0 }
+        : null,
     };
   }
 
@@ -170,7 +206,113 @@ export class ChatService {
       });
     }
 
-    throw new BadRequestException('Teachers reply within an existing thread');
+    // A teacher writing first. This used to be refused outright, which meant a
+    // teacher looking at a student in their console had no way to reach them
+    // except WhatsApp — the student had to open the conversation before the
+    // teacher could say anything in it.
+    const tenantId = user.tenantId;
+    if (!tenantId) throw new BadRequestException('No academy on this account');
+    if (!payload.studentId) throw new BadRequestException('studentId required to start a chat');
+    // The same gate as the student's, read from the other side: they must share
+    // an enrolment. Any status, including a revoked one — telling a student why
+    // their access ended is exactly the message this exists for.
+    const shares = await this.prisma.enrollment.findFirst({
+      where: { studentId: payload.studentId, tenantId },
+    });
+    if (!shares) throw new ForbiddenException('You can only message your own students');
+    const open = await this.prisma.chatThread.findFirst({
+      where: { tenantId, studentId: payload.studentId, type: 'DM', lessonId: null },
+    });
+    if (open) return open;
+    return this.prisma.chatThread.create({
+      data: { tenantId, studentId: payload.studentId, type: 'DM' },
+    });
+  }
+
+  /**
+   * Find the conversation with someone, opening it if it does not exist yet.
+   *
+   * Separate from sending because a deep link — the message button next to a
+   * student in the console — has to land in the conversation with the composer
+   * ready, not post something to get there.
+   */
+  async openThread(user: JwtPayload, payload: { studentId?: string; tenantId?: string }) {
+    const thread = await this.resolveThread(user, { ...payload, body: '' });
+    return { threadId: thread.id };
+  }
+
+  /** A reply is only valid inside its own thread; anything else is dropped. */
+  private async replyTarget(threadId: string, replyToId?: string): Promise<string | null> {
+    if (!replyToId) return null;
+    const target = await this.prisma.chatMessage.findFirst({
+      where: { id: replyToId, threadId },
+      select: { id: true },
+    });
+    return target?.id ?? null;
+  }
+
+  /**
+   * A voice note.
+   *
+   * The audio never becomes a public URL: it is one person talking to one other
+   * person, and a guessable link is not a permission. The bytes go to private
+   * storage and come back out through a route that checks the listener is in
+   * the thread — the same check every other read of this conversation makes.
+   */
+  async sendVoiceNote(
+    user: JwtPayload,
+    threadId: string,
+    file: { buffer: Buffer; mimetype: string },
+    durationSec: number,
+    replyToId?: string,
+  ) {
+    if (!(await this.canAccessThread(user, threadId))) throw new ForbiddenException('Not your thread');
+    if (!VOICE_MIME.test(file.mimetype)) {
+      throw new BadRequestException({ message: 'Unsupported audio format', code: 'VOICE_FORMAT' });
+    }
+    if (file.buffer.length > VOICE_MAX_BYTES) {
+      throw new BadRequestException({ message: 'Voice note is too long', code: 'VOICE_TOO_LONG' });
+    }
+    const seconds = Math.min(VOICE_MAX_SECONDS, Math.max(1, Math.round(durationSec || 0)));
+
+    const thread = await this.prisma.chatThread.findUniqueOrThrow({ where: { id: threadId } });
+    const replyTo = await this.replyTarget(threadId, replyToId);
+    const message = await this.prisma.chatMessage.create({
+      data: {
+        threadId,
+        senderId: user.sub,
+        body: '',
+        replyToId: replyTo,
+        audioDurationSec: seconds,
+        audioBytes: file.buffer.length,
+        audioMimeType: file.mimetype,
+        audioKey: '',
+      },
+      include: MESSAGE_INCLUDE,
+    });
+    const audioKey = `chat-voice/${threadId}/${message.id}`;
+    await this.storage.put(audioKey, file.buffer, { contentType: file.mimetype });
+    const saved = await this.prisma.chatMessage.update({
+      where: { id: message.id },
+      data: { audioKey },
+      include: MESSAGE_INCLUDE,
+    });
+
+    await this.fanOut(saved, thread, user.sub, 'رسالة صوتية 🎤');
+    return { message: this.toMessageDto(saved, user.sub), threadId };
+  }
+
+  /** The stored audio for a message, once the listener is shown to be in it. */
+  async voiceNote(user: JwtPayload, messageId: string) {
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, threadId: true, audioKey: true, audioMimeType: true, audioBytes: true },
+    });
+    if (!message?.audioKey) throw new NotFoundException('No voice note here');
+    if (!(await this.canAccessThread(user, message.threadId))) {
+      throw new ForbiddenException('Not your thread');
+    }
+    return message as { audioKey: string; audioMimeType: string | null; audioBytes: number | null };
   }
 
   async sendMessage(user: JwtPayload, payload: SendMessagePayload) {
@@ -183,34 +325,47 @@ export class ChatService {
       throw new BadRequestException({ message: 'Message too long', code: 'MESSAGE_TOO_LONG' });
     }
     const thread = await this.resolveThread(user, payload);
+    // A reply only means anything inside its own conversation; quoting across
+    // threads would leak one student's message into another's.
+    const replyToId = await this.replyTarget(thread.id, payload.replyToId);
 
     const message = await this.prisma.chatMessage.create({
-      data: { threadId: thread.id, senderId: user.sub, body },
-      include: { sender: { select: { id: true, fullName: true, role: true } } },
+      data: { threadId: thread.id, senderId: user.sub, body, replyToId },
+      include: MESSAGE_INCLUDE,
     });
+    await this.fanOut(message, thread, user.sub, body.length > 80 ? body.slice(0, 80) + '…' : body);
+    return { message: this.toMessageDto(message, user.sub), threadId: thread.id };
+  }
+
+  /**
+   * Deliver a new message and tell the other side about it.
+   *
+   * Sent to BOTH participants' personal rooms so it arrives live whether or not
+   * either is looking at the thread, and to every tab they have open. `mine` is
+   * per-viewer, so each side gets its own copy of the payload.
+   */
+  private async fanOut(
+    message: any,
+    thread: { id: string; tenantId: string; studentId: string },
+    senderUserId: string,
+    preview: string,
+  ) {
     await this.prisma.chatThread.update({
       where: { id: thread.id },
       data: { updatedAt: new Date() },
     });
-
-    // Realtime: deliver to BOTH participants' personal rooms so it arrives live
-    // whether or not they're actively viewing the thread (and to all their
-    // tabs). `mine` is per-viewer, so send a viewer-correct copy to each.
-    const recipientUserId = await this.recipientUserId(thread, user.sub);
-    this.realtime.emitToUser(user.sub, RealtimeEvents.MESSAGE, this.toMessageDto(message, user.sub));
-    if (recipientUserId) {
-      this.realtime.emitToUser(recipientUserId, RealtimeEvents.MESSAGE, this.toMessageDto(message, recipientUserId));
-      this.realtime.emitToUser(recipientUserId, RealtimeEvents.THREAD_UPDATED, { threadId: thread.id });
-      await this.notifications.create({
-        userId: recipientUserId,
-        type: 'CHAT_MESSAGE',
-        title: `رسالة جديدة من ${message.sender.fullName}`,
-        body: body.length > 80 ? body.slice(0, 80) + '…' : body,
-        meta: { threadId: thread.id },
-      });
-    }
-
-    return { message: this.toMessageDto(message, user.sub), threadId: thread.id };
+    const recipientUserId = await this.recipientUserId(thread, senderUserId);
+    this.realtime.emitToUser(senderUserId, RealtimeEvents.MESSAGE, this.toMessageDto(message, senderUserId));
+    if (!recipientUserId) return;
+    this.realtime.emitToUser(recipientUserId, RealtimeEvents.MESSAGE, this.toMessageDto(message, recipientUserId));
+    this.realtime.emitToUser(recipientUserId, RealtimeEvents.THREAD_UPDATED, { threadId: thread.id });
+    await this.notifications.create({
+      userId: recipientUserId,
+      type: 'CHAT_MESSAGE',
+      title: `رسالة جديدة من ${message.sender.fullName}`,
+      body: preview,
+      meta: { threadId: thread.id },
+    });
   }
 
   private async recipientUserId(thread: { tenantId: string; studentId: string }, senderUserId: string) {

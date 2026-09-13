@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
 import { Badge, EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
@@ -115,6 +116,38 @@ function SummaryChip({ icon, value, label }: { icon: string; value: string; labe
  * console — the number was already printed here, so the teacher was copying it
  * by hand into another app.
  */
+/**
+ * Open the conversation with this student on Darsly.
+ *
+ * The console knew who the student was and still sent the teacher to WhatsApp,
+ * because chat could only be started from the student's side — a teacher with
+ * something to say had to wait to be spoken to first.
+ */
+function MessageButton({ studentId, label }: { studentId: string; label: string }) {
+  const navigate = useNavigate();
+  const open = useMutation({
+    mutationFn: async () => (await api.post('/chat/threads', { studentId })).data,
+    onSuccess: (d) => navigate(`/messages?t=${d.threadId}`),
+  });
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={open.isPending}
+      onClick={(e) => {
+        e.stopPropagation();
+        open.mutate();
+      }}
+      className="grid h-9 w-9 place-items-center rounded-full text-outline transition hover:bg-primary-fixed hover:text-primary disabled:opacity-50"
+    >
+      <span className="material-symbols-outlined text-[20px]">
+        {open.isPending ? 'hourglass' : 'forum'}
+      </span>
+    </button>
+  );
+}
+
 function ContactLink({
   href,
   icon,
@@ -395,21 +428,29 @@ export default function TeacherEnrollmentsPage() {
 
                     </button>
 
-                    {group.phone && (
-                      <span className="flex shrink-0 items-center gap-1">
-                        <ContactLink
-                          href={`https://wa.me/${group.phone.replace(/\D/g, '')}`}
-                          external
-                          icon="chat"
-                          label={t('teacher.students.whatsapp')}
-                        />
-                        <ContactLink
-                          href={`tel:${group.phone}`}
-                          icon="call"
-                          label={t('teacher.students.call')}
-                        />
-                      </span>
-                    )}
+                    <span className="flex shrink-0 items-center gap-1">
+                      {/* First, because it is the one that reaches them inside
+                          the platform — where the lessons and the payment are. */}
+                      <MessageButton
+                        studentId={group.studentId}
+                        label={t('teacher.students.message')}
+                      />
+                      {group.phone && (
+                        <>
+                          <ContactLink
+                            href={`https://wa.me/${group.phone.replace(/\D/g, '')}`}
+                            external
+                            icon="chat"
+                            label={t('teacher.students.whatsapp')}
+                          />
+                          <ContactLink
+                            href={`tel:${group.phone}`}
+                            icon="call"
+                            label={t('teacher.students.call')}
+                          />
+                        </>
+                      )}
+                    </span>
 
                     {/* Its own control, placed last so the row always ends with
                         the disclosure regardless of whether the contact icons

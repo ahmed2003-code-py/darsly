@@ -1,7 +1,7 @@
 import { Role } from '@darsly/shared-types';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { clearStudio } from '../lib/studio';
+import { releaseStudio } from '../lib/studio';
 
 export interface AuthUser {
   id: string;
@@ -30,9 +30,13 @@ export const useAuthStore = create<AuthState>()(
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
       setUser: (user) => set({ user }),
       clear: () => {
-        // The next person to sign in on this device is not this one, and their
-        // Darsly should not open wearing somebody else's colours.
-        clearStudio();
+        // The look stays. Whoever just signed out is usually about to sign back
+        // in, and snapping their Darsly to their teacher's colours mid-glance is
+        // the one moment the app repaints while somebody is looking at it. A
+        // different account arriving is a different moment, and `claimStudio`
+        // drops the old look then — before that account's own is fetched, so
+        // nobody ever sees a stranger's colours.
+        releaseStudio();
         set({ accessToken: null, refreshToken: null, user: null });
       },
     }),

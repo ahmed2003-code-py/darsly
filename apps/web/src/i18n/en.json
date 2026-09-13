@@ -601,7 +601,8 @@
     "reload": "Reload",
     "default": "Default",
     "currencyShort": "EGP",
-    "optional": "optional"
+    "optional": "optional",
+    "add": "Add"
   },
   "wallet": {
     "title": "Wallet",
@@ -1149,7 +1150,11 @@
       "extraHint": "Paste any free text to help the AI.",
       "save": "Save details",
       "saving": "Saving…",
-      "saved": "Saved"
+      "saved": "Saved",
+      "pickHint": "Pick what you teach — or write something the list does not have.",
+      "stagesPickHint": "Press a stage to take all of its years, or pick them one at a time.",
+      "other": "Something else?",
+      "otherPh": "Write it here"
     },
     "media": {
       "title": "Academy photos & video",

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../lib/api';
-import { loadStudio } from '../lib/studio';
+import { claimStudio, loadStudio } from '../lib/studio';
 import { useRealtime } from '../lib/useRealtime';
 import { useWebNotifications } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
@@ -96,8 +96,16 @@ export default function Layout({ children }: { children: ReactNode }) {
   // The student's own layer, fetched once the session is known. `bootStudio`
   // has already replayed the cached copy, so this is a correction rather than
   // the first paint.
+  //
+  // Claiming the device happens for every role, not only for students: a look
+  // is kept across a sign-out so the person signing back in does not watch
+  // their app repaint, and it is somebody *else* arriving that must drop it. A
+  // teacher is somebody else. Before this, signing in as one on a device a
+  // student had used left the student's skin on the teacher's console.
   useEffect(() => {
-    if (user?.role === Role.STUDENT) void loadStudio().catch(() => undefined);
+    if (!user?.id) return;
+    if (user.role === Role.STUDENT) void loadStudio(user.id).catch(() => undefined);
+    else claimStudio(user.id);
   }, [user?.role, user?.id]);
   const baseNav =
     user?.role === Role.SUPER_ADMIN ? ADMIN_NAV : user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;

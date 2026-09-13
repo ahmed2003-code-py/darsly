@@ -51,6 +51,20 @@ export interface StudioThemes {
 }
 
 const CACHE_KEY = 'darsly-studio';
+/**
+ * Whose look the cached one is.
+ *
+ * Signing out is not the same moment as somebody else signing in, and the two
+ * want opposite things. The person who just signed out is usually about to sign
+ * back in, and repainting the screen out from under them — red to their
+ * teacher's blue, mid-glance — is the one moment the app changes colour while
+ * they are looking at it. A different account signing in is the moment that
+ * genuinely must not inherit a stranger's colours.
+ *
+ * So the look is kept on sign-out and released on arrival, and this is how the
+ * difference is told: the id it belongs to, remembered alongside it.
+ */
+const OWNER_KEY = 'darsly-studio-owner';
 
 /** What is equipped, as opposed to what is being tried on. */
 let equipped: StudioThemes | null = null;
@@ -365,20 +379,58 @@ export function rememberAcademy(id: string | null): void {
   }
 }
 
+function owner(): string | null {
+  try {
+    return localStorage.getItem(OWNER_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Somebody arrived. If it is not who the cached look belongs to, drop it before
+ * their own is fetched, so a stranger's colours are never on screen while the
+ * request is in flight.
+ */
+export function claimStudio(userId: string | null): void {
+  if (!userId) return;
+  if (owner() && owner() !== userId) clearStudio();
+  try {
+    localStorage.setItem(OWNER_KEY, userId);
+  } catch {
+    /* the worst case is one stale repaint on a device nobody shares */
+  }
+}
+
 /** Fetch and apply what this student is wearing. */
-export async function loadStudio(): Promise<void> {
+export async function loadStudio(userId?: string | null): Promise<void> {
+  claimStudio(userId ?? null);
   const { data } = await api.get('/student/studio/theme');
   applyStudio(data?.theme ?? null);
   rememberAcademy(typeof data?.equipped?.academyId === 'string' ? data.equipped.academyId : null);
 }
 
-/** Forget it entirely — on sign-out, so the next account starts clean. */
+/**
+ * Sign-out keeps the look.
+ *
+ * The academy layer already works this way — it holds the last palette so the
+ * sign-in screen does not flash — and the student layer clearing itself at the
+ * same moment is what made a red app turn into its teacher's the instant
+ * somebody signed out. It stays until a different account claims the device.
+ */
+export function releaseStudio(): void {
+  // Nothing is repainted and nothing is dropped: only the claim is given up,
+  // so the next arrival knows to check whose look this is.
+}
+
+/** Forget it entirely — a different account, or a reset. */
 export function clearStudio(): void {
   equipped = null;
   paint(null);
   rememberAcademy(null);
   try {
     localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(OWNER_KEY);
   } catch {
     /* nothing to clear */
   }

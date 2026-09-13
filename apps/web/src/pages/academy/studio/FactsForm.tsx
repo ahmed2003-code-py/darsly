@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { ErrorNote, Field, Spinner } from '../../../components/ui';
 import type { Facts, Social } from './types';
-import i18n from '../../../i18n';
+import { PickList, StagePickList } from './PickList';
+import { STAGES, type Grade } from '../../../lib/stages';
 
 export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const { data, isLoading, isError, error } = useQuery<Facts>({
     queryKey: ['studio-facts'],
@@ -16,6 +17,23 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
   });
   const [form, setForm] = useState<Facts | null>(null);
   const [saved, setSaved] = useState(false);
+  const ar = i18n.language === 'ar';
+  // The years and the subjects the platform already knows. Public endpoints,
+  // cached for the session — this form is opened repeatedly while composing.
+  const { data: grades } = useQuery<Grade[]>({
+    queryKey: ['grades'],
+    queryFn: async () => (await api.get('/catalog/grades')).data,
+    staleTime: Infinity,
+  });
+  const { data: subjects } = useQuery<{ id: string; nameAr: string; nameEn: string }[]>({
+    queryKey: ['subjects'],
+    queryFn: async () => (await api.get('/catalog/subjects')).data,
+    staleTime: Infinity,
+  });
+  const stageGroups = STAGES.map((st) => ({
+    label: t(`stage.${st}`),
+    items: (grades ?? []).filter((g) => g.stage === st).map((g) => (ar ? g.nameAr : g.nameEn)),
+  })).filter((g) => g.items.length > 0);
   useEffect(() => {
     if (data && !form) {
       setForm({
@@ -53,7 +71,6 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
   if (isLoading || !form) return isError ? <ErrorNote error={error} /> : <Spinner />;
 
   const set = (patch: Partial<Facts>) => setForm({ ...form, ...patch });
-  const csv = (arr: string[]) => arr.join(i18n.t('common.listSeparator'));
   const parseCsv = (s: string) => s.split(/[,،\n]/).map((x) => x.trim()).filter(Boolean);
 
   return (
@@ -71,14 +88,24 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
           onChange={(e) => set({ bio: e.target.value })} placeholder={t('studio.facts.bioPh')} />
       </Field>
 
-      <Field label={t('studio.facts.subjects')} hint={t('studio.facts.csvHint')}>
-        <input className="input" value={csv(form.subjects)}
-          onChange={(e) => set({ subjects: parseCsv(e.target.value) })} placeholder={t('studio.facts.subjectsPh')} />
+      <Field label={t('studio.facts.subjects')} hint={t('studio.facts.pickHint')}>
+        <PickList
+          options={(subjects ?? []).map((s) => (ar ? s.nameAr : s.nameEn))}
+          value={form.subjects}
+          onChange={(subjects) => set({ subjects })}
+          addLabel={t('studio.facts.other')}
+          addPlaceholder={t('studio.facts.otherPh')}
+        />
       </Field>
 
-      <Field label={t('studio.facts.stages')} hint={t('studio.facts.csvHint')}>
-        <input className="input" value={csv(form.stages)}
-          onChange={(e) => set({ stages: parseCsv(e.target.value) })} placeholder={t('studio.facts.stagesPh')} />
+      <Field label={t('studio.facts.stages')} hint={t('studio.facts.stagesPickHint')}>
+        <StagePickList
+          groups={stageGroups}
+          value={form.stages}
+          onChange={(stages) => set({ stages })}
+          addLabel={t('studio.facts.other')}
+          addPlaceholder={t('studio.facts.otherPh')}
+        />
       </Field>
 
       <Field label={t('studio.facts.achievements')} hint={t('studio.facts.achHint')}>

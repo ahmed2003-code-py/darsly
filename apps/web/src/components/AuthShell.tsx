@@ -290,7 +290,7 @@ export function AuthField({
           on the other — a leading icon with a field's width between it and the
           first character, and the reveal button crowded against the text. */}
       <span dir={dir} className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-200 ease-premium focus-within:-translate-y-px focus-within:border-accent-500 focus-within:shadow-glow focus-within:ring-4 focus-within:ring-accent-500/10">
-        <span className="material-symbols-outlined shrink-0 ps-3 text-[20px] text-outline transition-colors duration-200 group-focus-within:text-primary">{icon}</span>
+        <span className="ms-3 material-symbols-outlined shrink-0 text-[20px] text-outline transition-colors duration-200 group-focus-within:text-primary">{icon}</span>
         <input
           className="w-full min-w-0 bg-transparent px-3 py-2.5 outline-none placeholder:text-outline"
           type={type}

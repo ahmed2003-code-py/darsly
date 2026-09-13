@@ -418,6 +418,12 @@
   line-height: 1;
   display: inline-block;
   width: 1em;
+  /* `1em` is meant to be the glyph, not the glyph minus whatever padding the
+     element happens to carry. Under the project-wide `border-box` an icon with
+     `ps-3` had 12 of its 20 pixels taken by padding and the rest clipped by the
+     rule below — which is why the lock and the person on the sign-in form were
+     slivers with the text apparently sitting on top of them. */
+  box-sizing: content-box;
   overflow: hidden;
   /* The clipped word would otherwise still be readable as a sliver of letters. */
   text-indent: 0;

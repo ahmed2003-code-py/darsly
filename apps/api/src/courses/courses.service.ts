@@ -455,6 +455,26 @@ export class CoursesService {
       }
     }
 
+    // A placement test needs a test to place with. GATE is harmless without one
+    // — the gate reads both fields and opens when either is missing — but it is
+    // a state the teacher cannot see or act on, so it is refused now rather than
+    // stored to surprise them later, when naming an exam would silently shut the
+    // course behind it.
+    if (dto.examMode === 'GATE') {
+      const named =
+        dto.examLessonId ??
+        (await this.prisma.course.findUnique({
+          where: { id: courseId },
+          select: { examLessonId: true },
+        }))?.examLessonId;
+      if (!named) {
+        throw new BadRequestException({
+          message: 'Name the exam lesson before making it a gate',
+          code: 'NO_EXAM_TO_GATE',
+        });
+      }
+    }
+
     const { gradeIds, ...rest } = dto;
     // Only re-checked when the teacher actually changed it, so an edit that
     // touches the title alone never has to restate where the course is aimed.

@@ -51,6 +51,12 @@ export default function QuizBuilderPage() {
 
   const [passingScore, setPassingScore] = useState(50);
   const [remedialLessonId, setRemedialLessonId] = useState('');
+  // Held as text like `points` is, so the box can be emptied to retype it.
+  const [timeLimitMin, setTimeLimitMin] = useState('');
+  const [maxAttempts, setMaxAttempts] = useState('');
+  const [shuffle, setShuffle] = useState(false);
+  const [aiGrading, setAiGrading] = useState(false);
+  const [aiThresholdPct, setAiThresholdPct] = useState(60);
   const [questions, setQuestions] = useState<Q[]>([]);
   const [gradingId, setGradingId] = useState<string | null>(null);
 
@@ -74,6 +80,12 @@ export default function QuizBuilderPage() {
     if (data) {
       setPassingScore(data.passingScore ?? 50);
       setRemedialLessonId(data.remedialLessonId ?? '');
+      // Minutes in the UI, seconds on the wire — nobody sets an exam in seconds.
+      setTimeLimitMin(data.timeLimitSec ? String(Math.round(data.timeLimitSec / 60)) : '');
+      setMaxAttempts(data.maxAttempts != null ? String(data.maxAttempts) : '');
+      setShuffle(!!data.shuffleQuestions);
+      setAiGrading(!!data.aiGrading);
+      setAiThresholdPct(data.aiThresholdPct ?? 60);
       setQuestions(
         (data.questions ?? []).map((q: any) => ({
           type: q.type,
@@ -93,12 +105,17 @@ export default function QuizBuilderPage() {
     }
   }, [data]);
 
+  /**
+   * Written questions with no model answer, while automatic marking is asked
+   * for. Caught here so the teacher is told which question to go and fill in
+   * before anything is sent; the server refuses it too, as the backstop.
+   */
+  const unmarkable = aiGrading
+    ? questions.filter((q) => q.type === 'SHORT_ANSWER' && !q.modelAnswer.trim())
+    : [];
+
   const save = useMutation({
     mutationFn: async () => {
-      await api.put(`/teacher/lessons/${lessonId}/quiz`, {
-        passingScore,
-        remedialLessonId: remedialLessonId || null,
-      });
       // The score is typed, so it can be mid-edit or empty when Save is pressed.
       // One is the floor because a question worth nothing is not a question.
       const payload = questions.map((q) => ({
@@ -106,7 +123,25 @@ export default function QuizBuilderPage() {
         points: Math.max(1, Number(q.points) || 1),
         maxSelections: Math.max(1, Math.min(q.maxSelections, q.options.length || 1)),
       }));
-      return (await api.put(`/teacher/lessons/${lessonId}/quiz/questions`, { questions: payload })).data;
+      // Questions before settings, and the pending automatic-marking value goes
+      // with them: the model-answer rule has to be checked against the questions
+      // and the setting as they will be, not half of each.
+      const saved = (
+        await api.put(`/teacher/lessons/${lessonId}/quiz/questions`, { questions: payload, aiGrading })
+      ).data;
+      const minutes = Number(timeLimitMin);
+      const tries = Number(maxAttempts);
+      await api.put(`/teacher/lessons/${lessonId}/quiz`, {
+        passingScore,
+        remedialLessonId: remedialLessonId || null,
+        // Empty means no limit at all, which is not the same as a limit of zero.
+        timeLimitSec: timeLimitMin.trim() && minutes > 0 ? Math.round(minutes * 60) : null,
+        maxAttempts: maxAttempts.trim() && tries > 0 ? Math.min(50, Math.round(tries)) : null,
+        shuffleQuestions: shuffle,
+        aiGrading,
+        aiThresholdPct,
+      });
+      return saved;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tquiz', lessonId] }),
   });
@@ -293,7 +328,72 @@ export default function QuizBuilderPage() {
                 <span className="mt-1 block text-xs text-outline">{t('assess.builder.remedialHint')}</span>
               </label>
             )}
-            <button className="btn-primary mt-4 w-full" disabled={save.isPending || !questions.length} onClick={() => save.mutate()}>
+            {/* The three settings that were stored and never read: a time
+                limit nothing counted, a shuffle nothing shuffled, and an
+                attempt cap no teacher could reach. */}
+            <div className="mt-4 space-y-3 border-t border-outline-variant/50 pt-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold">{t('assess.q.timeLimit')}</span>
+                <input className="input" inputMode="numeric" placeholder={t('assess.q.noLimit')}
+                  value={timeLimitMin}
+                  onChange={(e) => setTimeLimitMin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                <span className="mt-1 block text-xs text-outline">{t('assess.q.timeLimitHint')}</span>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold">{t('assess.q.maxAttempts')}</span>
+                <input className="input" inputMode="numeric" placeholder={t('assess.q.unlimited')}
+                  value={maxAttempts}
+                  onChange={(e) => setMaxAttempts(e.target.value.replace(/\D/g, '').slice(0, 2))} />
+                <span className="mt-1 block text-xs text-outline">{t('assess.q.maxAttemptsHint')}</span>
+              </label>
+
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-0.5 accent-primary" checked={shuffle}
+                  onChange={(e) => setShuffle(e.target.checked)} />
+                <span>
+                  <span className="block font-bold">{t('assess.q.shuffle')}</span>
+                  <span className="block text-xs text-on-surface-variant">{t('assess.q.shuffleHint')}</span>
+                </span>
+              </label>
+            </div>
+
+            {/* Marking the written answers against the model answer, instead of
+                queueing every one of them for the teacher to read. */}
+            {questions.some((q) => q.type === 'SHORT_ANSWER') && (
+              <div className="mt-3 rounded-xl border border-outline-variant/60 p-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" className="mt-0.5 accent-primary" checked={aiGrading}
+                    onChange={(e) => setAiGrading(e.target.checked)} />
+                  <span>
+                    <span className="block font-bold">{t('assess.q.aiGrading')}</span>
+                    <span className="block text-xs text-on-surface-variant">{t('assess.q.aiGradingHint')}</span>
+                  </span>
+                </label>
+                {aiGrading && (
+                  <label className="mt-3 block">
+                    <span className="mb-1 block text-sm font-bold">
+                      {t('assess.q.aiThreshold', { pct: aiThresholdPct })}
+                    </span>
+                    <input type="range" min={30} max={95} step={5} className="w-full accent-primary"
+                      value={aiThresholdPct}
+                      onChange={(e) => setAiThresholdPct(Number(e.target.value))} />
+                    <span className="mt-1 block text-xs text-outline">{t('assess.q.aiThresholdHint')}</span>
+                  </label>
+                )}
+                {/* Named, so the teacher knows which question to go and fix
+                    rather than being told the paper is wrong somewhere. */}
+                {unmarkable.length > 0 && (
+                  <p className="mt-3 rounded-lg bg-error-container px-3 py-2 text-xs font-bold text-on-error-container">
+                    {t('assess.q.aiNeedsModelAnswer', { n: unmarkable.length })}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <button className="btn-primary mt-4 w-full"
+              disabled={save.isPending || !questions.length || unmarkable.length > 0}
+              onClick={() => save.mutate()}>
               {save.isPending ? t('common.saving') : t('assess.q.saveQuiz')}
             </button>
             {save.isSuccess && <p className="mt-2 text-center text-sm text-secondary">{t('common.saved')}</p>}

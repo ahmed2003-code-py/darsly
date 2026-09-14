@@ -425,6 +425,19 @@ enum CoursePricingModel {
   BUNDLE
 }
 
+/// What a course's exam is for.
+///
+/// Both are one named QUIZ lesson; they differ only in what failing costs you.
+/// A FINAL exam sits at the end and locks nothing — the student reaches it by
+/// working through the course, and passing it is what completes the course
+/// (and so earns the certificate, which already requires every lesson). A GATE
+/// exam is a placement test: until it is passed the course is shut except for
+/// the exam, its remedial lesson, and the free previews.
+enum CourseExamMode {
+  GATE
+  FINAL
+}
+
 model Course {
   id       String         @id @default(cuid())
   tenantId String
@@ -451,6 +464,10 @@ model Course {
   /// watch. A course that names none behaves exactly as it always did.
   examLessonId       String? @unique
   examLesson         Lesson? @relation("courseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
+  /// What the exam is for. A teacher writing their first course usually means a
+  /// final test of what was studied, not a door to get in — so FINAL is the
+  /// default and GATE is the deliberate choice.
+  examMode           CourseExamMode @default(FINAL)
   assignmentLessonId String? @unique
   assignmentLesson   Lesson? @relation("courseAssignment", fields: [assignmentLessonId], references: [id], onDelete: SetNull)
   /// The AcademyMedia row behind introVideoUrl, kept so replacing or removing
@@ -1117,9 +1134,24 @@ model Quiz {
   remedialLessonId String?
   remedialLesson   Lesson? @relation("quizRemedial", fields: [remedialLessonId], references: [id], onDelete: SetNull)
   passingScore     Int     @default(50) // percent
+  /// How long the student gets, in seconds, from opening the paper to sending
+  /// it. Enforced on the server against the attempt's own `startedAt`: a
+  /// countdown the client draws is a courtesy, not the rule.
   timeLimitSec     Int?
   shuffleQuestions Boolean @default(false)
   maxAttempts      Int? // null = unlimited; caps how many times a student may submit
+  /// Mark the written answers against the teacher's model answer instead of
+  /// queueing them for the teacher to read.
+  ///
+  /// Off unless the teacher asks for it, and it never marks an answer wrong on
+  /// its own account: anything it cannot judge — the feature disabled, a
+  /// missing model answer, a provider that failed — goes to the teacher exactly
+  /// as it did before.
+  aiGrading        Boolean @default(false)
+  /// How close to the model answer counts as right, as a percentage. Binary by
+  /// design: at or above this the question is full marks, below it is zero, and
+  /// the teacher can still regrade either way.
+  aiThresholdPct   Int     @default(60)
 
   questions QuizQuestion[]
   attempts  QuizAttempt[]
@@ -1173,6 +1205,14 @@ model QuizAttempt {
   gradedBy           String?
   startedAt          DateTime  @default(now())
   submittedAt        DateTime?
+  /// Set when the teacher gives the student their attempts back. The row stays
+  /// — it is the record of what was answered and when — but every count, pass
+  /// check and time limit ignores it, so a student who ran out of attempts on a
+  /// gated course is not locked out of a course they paid for with no way back.
+  voidedAt           DateTime?
+  /// Per-question verdicts from the AI marker, so a teacher regrading can see
+  /// what it judged and why: {questionId: {similarityPct, reason}}.
+  aiFeedback         Json?
 
   @@index([quizId, studentId])
 }

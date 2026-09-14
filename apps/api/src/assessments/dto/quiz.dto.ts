@@ -20,14 +20,32 @@ const MAX_QUESTIONS = 200;
 const MAX_OPTIONS = 20;
 /** A day — a longer limit is indistinguishable from no limit. */
 const MAX_TIME_LIMIT_SEC = 86_400;
+/** Half a minute: below this nobody can read the paper, let alone answer it. */
+const MIN_TIME_LIMIT_SEC = 30;
+/**
+ * How close to the model answer may count as right.
+ *
+ * The floor is not 0: a threshold low enough to pass any answer at all is not a
+ * marking scheme, it is marks for turning up, and a teacher who wants that has
+ * the feature switched off instead. The ceiling is not 100 either — demanding a
+ * perfect match would fail a correct answer in the student's own words, which
+ * is the thing this is for.
+ */
+const MIN_AI_THRESHOLD_PCT = 30;
+const MAX_AI_THRESHOLD_PCT = 95;
 
 export class UpsertQuizDto {
   @IsOptional() @IsInt() @Min(0) @Max(100) passingScore?: number;
   /** The lesson to send a student to when they do not pass. `null` clears it. */
   @IsOptionalId() remedialLessonId?: string | null;
-  @IsOptional() @IsInt() @Min(0) @Max(MAX_TIME_LIMIT_SEC) timeLimitSec?: number | null;
+  /** Seconds from opening the paper to sending it. `null` removes the limit. */
+  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) timeLimitSec?: number | null;
   @IsOptional() @IsBoolean() shuffleQuestions?: boolean;
+  /** How many times a student may sit it. `null` is unlimited. */
   @IsOptional() @IsInt() @Min(1) @Max(50) maxAttempts?: number | null;
+  /** Mark the written answers against the model answer instead of queueing them. */
+  @IsOptional() @IsBoolean() aiGrading?: boolean;
+  @IsOptional() @IsInt() @Min(MIN_AI_THRESHOLD_PCT) @Max(MAX_AI_THRESHOLD_PCT) aiThresholdPct?: number;
 }
 
 export class QuizOptionDto {
@@ -57,6 +75,17 @@ export class SetQuizQuestionsDto {
   @IsArray() @ArrayMaxSize(MAX_QUESTIONS)
   @ValidateNested({ each: true }) @Type(() => QuizQuestionDto)
   questions: QuizQuestionDto[];
+  /**
+   * The automatic-marking setting being saved alongside these questions.
+   *
+   * The builder saves the settings and the question set as two calls, so the
+   * rule "no written question without a model answer while automatic marking is
+   * on" has to be checked against what is about to be true rather than what is
+   * currently stored — otherwise switching it off in the same edit as adding a
+   * question is refused by the stored value, and cannot be saved at all.
+   * Omitted means "unchanged", and the stored value is used.
+   */
+  @IsOptional() @IsBoolean() aiGrading?: boolean;
 }
 
 export class SubmitAttemptDto {

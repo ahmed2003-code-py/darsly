@@ -47,6 +47,23 @@ export class QuizzesController {
     return this.quizzes.gradeAttempt(u.tenantId!, u.sub, attemptId, dto);
   }
 
+  /**
+   * Give one student their attempts back on this quiz.
+   *
+   * The way out of an attempt cap. Without it, capping attempts on a gated
+   * course could leave a paying student shut out of it permanently.
+   */
+  @Post('teacher/lessons/:lessonId/quiz/students/:studentId/reset-attempts')
+  @Roles(Role.TEACHER)
+  @ApiOperation({ summary: "[teacher] Void a student's attempts so they can sit it again" })
+  resetAttempts(
+    @CurrentUser() u: JwtPayload,
+    @Param('lessonId') lessonId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.quizzes.resetAttemptsFor(u.tenantId!, lessonId, studentId);
+  }
+
   // ── Student ────────────────────────────────────────────────────────────────
 
   @Get('lessons/:lessonId/quiz')

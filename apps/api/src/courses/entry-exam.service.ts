@@ -4,13 +4,20 @@ import { PrismaService } from '../prisma/prisma.service';
 /**
  * The exam a course puts in front of you before it lets you in.
  *
- * A teacher names one lesson as the course's exam. Until a student passes it,
- * the course is closed to them except for two things: the exam itself, and
- * whatever the exam sends them to watch when they do not pass. Everything else
- * says why it is shut rather than pretending not to exist.
+ * A teacher names one lesson as the course's exam and says what it is for. Only
+ * `examMode: GATE` — a placement test — closes the course: until the student
+ * passes it, the only things they can open are the exam itself and whatever the
+ * exam sends them to watch when they do not pass. Everything else says why it
+ * is shut rather than pretending not to exist.
  *
- * A course that names no exam is untouched by any of this, which is what makes
- * the feature safe to add to a platform full of courses that predate it.
+ * `FINAL`, the default, gates nothing. It is the paper at the end of the
+ * course, which the student reaches by working through the material — and
+ * because the certificate already requires every lesson complete, and the exam
+ * lesson only completes on a pass, passing it is already what finishes the
+ * course. Nothing extra is needed to make a final exam mean something.
+ *
+ * A course that names no exam at all is untouched by any of this, which is what
+ * makes the feature safe on a platform full of courses that predate it.
  */
 export interface EntryExamState {
   /** The lesson holding the exam, when the course has one. */
@@ -45,9 +52,12 @@ export class EntryExamService {
   async stateFor(courseId: string, studentId: string | null): Promise<EntryExamState> {
     const course = await this.prisma.course.findFirst({
       where: { id: courseId, deletedAt: null },
-      select: { examLessonId: true },
+      select: { examLessonId: true, examMode: true },
     });
-    if (!course?.examLessonId) return OPEN;
+    // A final exam is not a door. Answered before anything else is loaded, so a
+    // course with an ordinary end-of-course paper costs exactly what a course
+    // with no exam costs.
+    if (!course?.examLessonId || course.examMode !== 'GATE') return OPEN;
 
     const quiz = await this.prisma.quiz.findUnique({
       where: { lessonId: course.examLessonId },
@@ -63,7 +73,9 @@ export class EntryExamService {
     }
 
     const attempts = await this.prisma.quizAttempt.findMany({
-      where: { quizId: quiz.id, studentId },
+      // A voided attempt is one the teacher handed back. It is not a pass, not
+      // a score and not a "you already tried" — it is as if it had not been sat.
+      where: { quizId: quiz.id, studentId, voidedAt: null },
       select: { passed: true, scorePct: true, needsManualGrading: true, gradedAt: true },
     });
     const best = attempts.reduce<number | null>(

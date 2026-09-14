@@ -131,8 +131,11 @@ export default function CourseBuilderPage() {
    * exam per course instead of one per lesson.
    */
   const setRole = useMutation({
-    mutationFn: async (patch: { examLessonId?: string | null; assignmentLessonId?: string | null }) =>
-      (await api.patch(`/teacher/courses/${id}`, patch)).data,
+    mutationFn: async (patch: {
+      examLessonId?: string | null;
+      assignmentLessonId?: string | null;
+      examMode?: 'GATE' | 'FINAL';
+    }) => (await api.patch(`/teacher/courses/${id}`, patch)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-course', id] }),
   });
 
@@ -839,15 +842,55 @@ export default function CourseBuilderPage() {
                   className="mt-0.5 accent-primary"
                   disabled={selected!.type !== 'QUIZ' || setRole.isPending}
                   checked={course?.examLessonId === selected!.id}
-                  onChange={(e) => setRole.mutate({ examLessonId: e.target.checked ? selected!.id : null })}
+                  // Named as the paper at the end, which is what a teacher
+                  // means by "the course's exam". A placement test that shuts
+                  // the course is the other choice, made deliberately below.
+                  onChange={(e) =>
+                    setRole.mutate(
+                      e.target.checked
+                        ? { examLessonId: selected!.id, examMode: 'FINAL' }
+                        : { examLessonId: null },
+                    )
+                  }
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold">{t('assess.builder.isExam')}</span>
                   <span className="mt-0.5 block text-xs text-on-surface-variant">
-                    {selected!.type !== 'QUIZ' ? t('assess.builder.onlyQuizLesson') : t('assess.builder.examGateHint')}
+                    {selected!.type !== 'QUIZ' ? t('assess.builder.onlyQuizLesson') : t('assess.builder.isExamHint')}
                   </span>
                 </span>
               </label>
+
+              {/* What the exam is for. Two very different things were one
+                  checkbox: naming a lesson as the exam shut the whole course
+                  behind it, so a teacher who meant "the test at the end" locked
+                  their students out of the course on the way to it. */}
+              {course?.examLessonId === selected!.id && (
+                <div className="space-y-2 rounded-lg bg-surface-container-low p-3">
+                  <p className="text-xs font-bold text-on-surface-variant">{t('assess.builder.examModeTitle')}</p>
+                  {(['FINAL', 'GATE'] as const).map((mode) => (
+                    <label key={mode} className={`flex items-start gap-2 rounded-lg border p-2.5 text-sm transition ${
+                      (course?.examMode ?? 'FINAL') === mode
+                        ? 'border-primary bg-primary-fixed/30' : 'border-outline-variant/60'
+                    }`}>
+                      <input
+                        type="radio"
+                        className="mt-0.5 accent-primary"
+                        name="examMode"
+                        disabled={setRole.isPending}
+                        checked={(course?.examMode ?? 'FINAL') === mode}
+                        onChange={() => setRole.mutate({ examMode: mode })}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-bold">{t(`assess.builder.examMode.${mode}`)}</span>
+                        <span className="mt-0.5 block text-xs text-on-surface-variant">
+                          {t(`assess.builder.examMode.${mode}Hint`)}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
 
               <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm transition ${
                 course?.assignmentLessonId === selected!.id

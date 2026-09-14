@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/swagger';
-import { CoursePricingModel, CourseStatus, LessonType } from '@darsly/shared-types';
+import { CoursePricingModel, CourseStatus, LessonType, CourseExamMode } from '@darsly/shared-types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -62,6 +62,11 @@ export class UpdateCourseDto extends PartialType(CreateCourseDto) {
    */
   @IsOptional() @IsOptionalId() examLessonId?: string | null;
   @IsOptional() @IsOptionalId() assignmentLessonId?: string | null;
+  /**
+   * What the exam is for: the paper at the end (`FINAL`, the default) or a
+   * placement test the course stays shut behind (`GATE`).
+   */
+  @IsOptional() @IsEnum(CourseExamMode) examMode?: CourseExamMode;
 }
 
 export class UpsertUnitDto {

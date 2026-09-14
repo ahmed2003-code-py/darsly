@@ -1,11 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { GAMIFICATION_KEY } from '../../lib/gamification';
 import { RewardSummary } from '../../components/gamification/RewardBurst';
 import { Badge, ErrorNote, Spinner } from '../../components/ui';
+
+/** mm:ss, the only format a countdown is ever read in. */
+function clock(ms: number): string {
+  const total = Math.ceil(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
 
 export default function QuizTakerPage() {
   const { t } = useTranslation();
@@ -31,12 +37,45 @@ export default function QuizTakerPage() {
     },
   });
 
+  const done = !!result;
+
+  /**
+   * The countdown on a timed paper.
+   *
+   * The deadline is the server's, and so is the "now" it was measured against:
+   * a device with a wrong clock would otherwise read minutes left on a paper
+   * that closed, or close one that had not. Only the ticking is local.
+   *
+   * This draws the clock and sends the paper when it reaches zero. It is not
+   * what enforces the limit — the server checks the same deadline on arrival,
+   * because a countdown in a browser is a courtesy and can be turned off.
+   */
+  const deadline = quiz?.deadlineAt ? new Date(quiz.deadlineAt).getTime() : null;
+  const skew = quiz?.serverNow ? Date.now() - new Date(quiz.serverNow).getTime() : 0;
+  const [msLeft, setMsLeft] = useState<number | null>(null);
+  const autoSent = useRef(false);
+
+  useEffect(() => {
+    if (deadline == null || done) return;
+    const tick = () => setMsLeft(Math.max(0, deadline + skew - Date.now()));
+    tick();
+    const h = setInterval(tick, 1000);
+    return () => clearInterval(h);
+  }, [deadline, skew, done]);
+
+  useEffect(() => {
+    // Sent once, at zero, and only if they have answered something — an empty
+    // paper submitted automatically would spend the attempt for nothing.
+    if (msLeft !== 0 || done || autoSent.current || submit.isPending) return;
+    autoSent.current = true;
+    if (Object.keys(answers).length) submit.mutate();
+  }, [msLeft, done, submit, answers]);
+
   if (isLoading) return <div className="grid place-items-center py-24"><Spinner /></div>;
   if (!quiz) return null;
 
   const reviewById: Record<string, any> = {};
   (result?.review ?? []).forEach((r: any) => (reviewById[r.id] = r));
-  const done = !!result;
   const answered = Object.keys(answers).length;
 
   return (
@@ -78,6 +117,18 @@ export default function QuizTakerPage() {
       {done && result.gamification?.awarded && (
         <div className="mb-6">
           <RewardSummary outcome={result.gamification} />
+        </div>
+      )}
+
+      {/* The clock. Turns urgent under a minute, because a countdown nobody
+          notices is the same as no countdown. */}
+      {!done && msLeft != null && (
+        <div className={`card mb-6 flex items-center justify-center gap-2 border-2 ${
+          msLeft <= 60_000 ? 'border-error text-error' : 'border-outline-variant/60'
+        }`}>
+          <span className="material-symbols-outlined">timer</span>
+          <span className="font-heading text-2xl font-extrabold tabular-nums">{clock(msLeft)}</span>
+          <span className="text-sm text-on-surface-variant">{t('assess.take.timeLeft')}</span>
         </div>
       )}
 
@@ -146,6 +197,24 @@ export default function QuizTakerPage() {
                     );
                   })}
                 </div>
+              )}
+
+              {/* Why a written answer scored what it did. A bare number on an
+                  essay is not something a student can learn from or argue
+                  with, and the teacher can still regrade it. */}
+              {done && result.aiFeedback?.[q.id] && (
+                <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+                  result.aiFeedback[q.id].awarded
+                    ? 'bg-secondary-container/40 text-on-secondary-container'
+                    : 'bg-error-container/40 text-on-error-container'
+                }`} dir="auto">
+                  <span className="font-bold">
+                    {t(result.aiFeedback[q.id].awarded ? 'assess.take.aiAwarded' : 'assess.take.aiNotAwarded', {
+                      pct: result.aiFeedback[q.id].similarityPct,
+                    })}
+                  </span>
+                  {result.aiFeedback[q.id].reason && <span className="block">{result.aiFeedback[q.id].reason}</span>}
+                </p>
               )}
 
               {done && rev?.modelAnswer && (

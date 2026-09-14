@@ -737,7 +737,15 @@
       "onlyAssignmentLesson": "This lesson has to be an assignment first.",
       "remedial": "What a student who fails should watch",
       "remedialHint": "Anyone who does not pass is sent here before they try again.",
-      "remedialNone": "Nothing — send them straight back"
+      "remedialNone": "Nothing — send them straight back",
+      "isExamHint": "The course's official exam. Choose below whether it is the final paper or a placement test.",
+      "examModeTitle": "What is this exam for?",
+      "examMode": {
+        "FINAL": "Final exam",
+        "FINALHint": "At the end of the course, testing what was studied. It locks nothing: passing it completes the course and earns the certificate.",
+        "GATE": "Placement test",
+        "GATEHint": "A door in front of the course. No lesson opens until the student passes it — except free previews and the remedial lesson."
+      }
     },
     "q": {
       "mcq": "Multiple choice",
@@ -765,7 +773,20 @@
       "pickCorrectMulti": "Mark every right answer. The student has to name all of them to score.",
       "modelAnswer": "Model answer",
       "modelAnswerHint": "What you consider a right answer. You see it while grading; the student sees it after they submit.",
-      "modelAnswerPh": "Write the answer you expect"
+      "modelAnswerPh": "Write the answer you expect",
+      "timeLimit": "Time limit (minutes)",
+      "noLimit": "No limit",
+      "timeLimitHint": "The clock starts when the student opens the questions, and submission closes when it runs out. Leave empty for no limit.",
+      "maxAttempts": "Attempts allowed",
+      "unlimited": "Unlimited",
+      "maxAttemptsHint": "If a student uses them all up, you can give them back from the attempts list.",
+      "shuffle": "Shuffle the questions",
+      "shuffleHint": "Each student sees the questions in a different order.",
+      "aiGrading": "Mark written answers automatically",
+      "aiGradingHint": "Each answer is compared with the model answer you wrote. Anything it cannot judge comes to you to mark, as before.",
+      "aiThreshold": "Similarity needed: {{pct}}%",
+      "aiThresholdHint": "An answer at or above this scores full marks. You can still change any mark afterwards.",
+      "aiNeedsModelAnswer": "{{count}} written question(s) have no model answer — write one so automatic marking can work."
     },
     "assign": {
       "prompt": "Brief",
@@ -800,7 +821,10 @@
       "submitAssign": "Submit assignment",
       "lockedGraded": "This assignment is graded — resubmission is closed.",
       "submitted": "Submitted ✓",
-      "pickN": "Pick {{count}} answers"
+      "pickN": "Pick {{count}} answers",
+      "timeLeft": "left",
+      "aiAwarded": "Correct — {{pct}}% match with the model answer.",
+      "aiNotAwarded": "Incomplete — {{pct}}% match with the model answer."
     },
     "true": "True",
     "false": "False"

@@ -9,12 +9,16 @@ const QUESTIONS: any[] = [
   { id: 'q2', type: 'TRUE_FALSE', prompt: 'b', options: [], correctOptionId: 'true', explanation: '', points: 1 },
 ];
 
-function makeCtx(questions = QUESTIONS) {
+function makeCtx(questions = QUESTIONS, quizOver: Record<string, unknown> = {}, aiVerdicts?: Map<string, unknown>) {
   const created: any[] = [];
   const prisma: any = {
     quiz: {
       findUnique: jest.fn().mockResolvedValue({
         id: 'quiz1', lessonId: 'l1', passingScore: 50, questions,
+        // Defaults for the settings that used to be stored and never read.
+        timeLimitSec: null, shuffleQuestions: false, maxAttempts: null,
+        aiGrading: false, aiThresholdPct: 60,
+        ...quizOver,
       }),
     },
     quizAttempt: {
@@ -33,7 +37,10 @@ function makeCtx(questions = QUESTIONS) {
     },
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1' }) },
   };
-  const access: any = { requireStudentAccess: jest.fn().mockResolvedValue({ studentId: 's1' }) };
+  const access: any = {
+    requireStudentAccess: jest.fn().mockResolvedValue({ studentId: 's1' }),
+    requireTeacherLesson: jest.fn().mockResolvedValue({ id: 'l1', unit: { courseId: 'c1' } }),
+  };
   const notifications: any = { create: jest.fn().mockResolvedValue({}) };
   const certificates: any = { checkByLesson: jest.fn().mockResolvedValue(null) };
   const gamification: any = {
@@ -42,8 +49,14 @@ function makeCtx(questions = QUESTIONS) {
     noteStudySession: jest.fn().mockResolvedValue(undefined),
     checkStreakMilestone: jest.fn().mockResolvedValue({ awarded: false }),
   };
-  const svc = new QuizzesService(prisma, access, notifications, certificates, gamification);
-  return { svc, prisma, created, notifications, certificates, gamification };
+  // The marker is asked once per paper and never throws — an empty map is
+  // exactly what an outage looks like to the caller, so it is also the default.
+  const aiGrader: any = {
+    available: true,
+    mark: jest.fn().mockResolvedValue(aiVerdicts ?? new Map()),
+  };
+  const svc = new QuizzesService(prisma, access, notifications, certificates, gamification, aiGrader);
+  return { svc, prisma, created, notifications, certificates, gamification, aiGrader };
 }
 
 describe('QuizzesService', () => {
@@ -144,5 +157,152 @@ describe('QuizzesService', () => {
     expect(res.passed).toBe(true);
     expect(res.needsManualGrading).toBe(false);
     expect(notifications.create).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The three settings the schema described and nothing read, and the marker that
+ * replaced the teacher's queue for written answers.
+ *
+ * Each case here is about the student's side of it, because that is where
+ * getting this wrong costs marks they earned or time they were owed.
+ */
+describe('the settings that used to be decoration', () => {
+  const ESSAY: any[] = [
+    { id: 'q1', type: 'MCQ', prompt: 'a', options: [], correctOptionId: 'o1', explanation: '', points: 1 },
+    { id: 'e1', type: 'SHORT_ANSWER', prompt: 'why?', options: [], correctOptionId: null,
+      modelAnswer: 'because of X', explanation: '', points: 1 },
+  ];
+
+  describe('marking a written answer against the model answer', () => {
+    it('awards the marks at or above the threshold', async () => {
+      const { svc } = makeCtx(ESSAY, { aiGrading: true, aiThresholdPct: 60 },
+        new Map([['e1', { similarityPct: 72, reason: 'covers X' }]]));
+      const res = await svc.submit('u1', 'l1', { answers: { q1: 'o1', e1: 'X is why' } });
+      // Both questions marked, nothing left for the teacher.
+      expect(res.scorePct).toBe(100);
+      expect(res.passed).toBe(true);
+      expect(res.needsManualGrading).toBe(false);
+      expect(res.aiFeedback).toMatchObject({ e1: { similarityPct: 72, awarded: true } });
+    });
+
+    it('awards nothing below it, and still does not wait for the teacher', async () => {
+      const { svc } = makeCtx(ESSAY, { aiGrading: true, aiThresholdPct: 60 },
+        new Map([['e1', { similarityPct: 41, reason: 'misses X' }]]));
+      const res = await svc.submit('u1', 'l1', { answers: { q1: 'o1', e1: 'something else' } });
+      expect(res.scorePct).toBe(50);
+      expect(res.needsManualGrading).toBe(false);
+      expect(res.aiFeedback).toMatchObject({ e1: { awarded: false } });
+    });
+
+    it('counts the threshold itself as a pass, not a near miss', async () => {
+      const { svc } = makeCtx(ESSAY, { aiGrading: true, aiThresholdPct: 60 },
+        new Map([['e1', { similarityPct: 60, reason: 'just about' }]]));
+      expect((await svc.submit('u1', 'l1', { answers: { e1: 'x' } })).aiFeedback).toMatchObject({
+        e1: { awarded: true },
+      });
+    });
+
+    /**
+     * The rule the whole thing rests on. An outage, a refusal, a provider that
+     * timed out - none of them may cost a student marks. The answer goes to the
+     * teacher exactly as it did before any of this existed.
+     */
+    it('hands the answer to the teacher when it cannot judge it', async () => {
+      const { svc } = makeCtx(ESSAY, { aiGrading: true }, new Map()); // marker returned nothing
+      // The MCQ is answered wrongly on purpose, so the paper genuinely hangs on
+      // the written answer: 0 of 2 so far, 1 mark still in play, pass mark 50%.
+      // With the MCQ right the existing partial marking would already have
+      // decided a pass, and this would be testing that instead.
+      const res = await svc.submit('u1', 'l1', { answers: { q1: 'wrong', e1: 'a real answer' } });
+      expect(res.needsManualGrading).toBe(true);
+      expect(res.pendingPoints).toBe(1);
+      // Not marked wrong: the verdict is still open, so there is no verdict yet.
+      expect(res.passed).toBe(null);
+    });
+
+    it('does not wait on an answer left blank', async () => {
+      const { svc } = makeCtx(ESSAY, { aiGrading: true }, new Map());
+      const res = await svc.submit('u1', 'l1', { answers: { q1: 'o1', e1: '   ' } });
+      expect(res.needsManualGrading).toBe(false);
+      expect(res.scorePct).toBe(50);
+    });
+
+    it('is never asked at all when the teacher did not turn it on', async () => {
+      const { svc, aiGrader } = makeCtx(ESSAY);
+      const res = await svc.submit('u1', 'l1', { answers: { q1: 'o1', e1: 'an answer' } });
+      expect(aiGrader.mark).not.toHaveBeenCalled();
+      expect(res.needsManualGrading).toBe(true);
+    });
+  });
+
+  describe('a time limit that is actually a limit', () => {
+    const TIMED = { timeLimitSec: 600 };
+
+    it('reuses the sitting whose clock is already running', async () => {
+      const { svc, prisma } = makeCtx(QUESTIONS, TIMED);
+      prisma.quizAttempt.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve(where.submittedAt === null
+          ? { id: 'open1', startedAt: new Date(Date.now() - 60_000) }
+          : null),
+      );
+      await svc.submit('u1', 'l1', { answers: { q1: 'o1', q2: 'true' } });
+      // Submitted into the open row rather than opening a second one, which
+      // would spend two attempts on a single sitting.
+      expect(prisma.quizAttempt.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'open1' } }),
+      );
+      expect(prisma.quizAttempt.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a paper sent after time is up, and spends the attempt', async () => {
+      const { svc, prisma } = makeCtx(QUESTIONS, TIMED);
+      prisma.quizAttempt.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve(where.submittedAt === null
+          ? { id: 'open1', startedAt: new Date(Date.now() - 3_600_000) }
+          : null),
+      );
+      await expect(svc.submit('u1', 'l1', { answers: { q1: 'o1' } })).rejects.toMatchObject({
+        response: { code: 'QUIZ_TIME_UP' },
+      });
+      // Closed as sat-and-failed rather than thrown away: a refusal that left no
+      // record would let the same sitting be retried until the answers were right.
+      expect(prisma.quizAttempt.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'open1' },
+          data: expect.objectContaining({ passed: false, scorePct: 0 }),
+        }),
+      );
+    });
+
+    it('leaves an untimed paper exactly as it was', async () => {
+      const { svc, prisma } = makeCtx();
+      await svc.submit('u1', 'l1', { answers: { q1: 'o1', q2: 'true' } });
+      // No sitting is opened, so abandoning an untimed quiz still costs nothing.
+      expect(prisma.quizAttempt.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('giving a student their attempts back', () => {
+    it('voids them rather than deleting what they wrote', async () => {
+      const { svc, prisma, notifications } = makeCtx();
+      prisma.enrollment = { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) };
+      prisma.quizAttempt.updateMany = jest.fn().mockResolvedValue({ count: 3 });
+      const res = await svc.resetAttemptsFor('t1', 'l1', 's1');
+      expect(res).toEqual({ voided: 3 });
+      expect(prisma.quizAttempt.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { voidedAt: expect.any(Date) } }),
+      );
+      // The student is told, or they have no reason to go back and look.
+      expect(notifications.create).toHaveBeenCalled();
+    });
+
+    it('will not reach a student who is not in this academy', async () => {
+      const { svc, prisma } = makeCtx();
+      prisma.enrollment = { findFirst: jest.fn().mockResolvedValue(null) };
+      prisma.quizAttempt.updateMany = jest.fn();
+      await expect(svc.resetAttemptsFor('t1', 'l1', 'someone-elses')).rejects.toThrow();
+      expect(prisma.quizAttempt.updateMany).not.toHaveBeenCalled();
+    });
   });
 });

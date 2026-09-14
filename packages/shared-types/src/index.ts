@@ -66,6 +66,19 @@ export enum CourseStatus {
   ARCHIVED = 'ARCHIVED',
 }
 
+/**
+ * What a course's exam is for.
+ *
+ * FINAL is the paper at the end, about what was just studied: it locks nothing,
+ * and passing it is what completes the course. GATE is a placement test — until
+ * it is passed the course is shut except for the exam, its remedial lesson and
+ * the free previews.
+ */
+export enum CourseExamMode {
+  GATE = 'GATE',
+  FINAL = 'FINAL',
+}
+
 export enum LessonType {
   VIDEO = 'VIDEO',
   QUIZ = 'QUIZ',

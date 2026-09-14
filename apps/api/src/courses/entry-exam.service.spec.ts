@@ -9,11 +9,19 @@ import { EntryExamService } from './entry-exam.service';
  */
 function ctx(over: {
   examLessonId?: string | null;
+  examMode?: 'GATE' | 'FINAL';
   remedialLessonId?: string | null;
   attempts?: { passed: boolean | null; scorePct: number | null; needsManualGrading?: boolean; gradedAt?: Date | null }[];
 } = {}) {
   const prisma: any = {
-    course: { findFirst: jest.fn().mockResolvedValue({ examLessonId: over.examLessonId ?? null }) },
+    course: {
+      findFirst: jest.fn().mockResolvedValue({
+        examLessonId: over.examLessonId ?? null,
+        // These cases are about the gate, so they ask for the gate. A course
+        // whose exam is the paper at the end is the other describe block.
+        examMode: over.examMode ?? 'GATE',
+      }),
+    },
     quiz: {
       findUnique: jest.fn().mockResolvedValue(
         over.examLessonId ? { id: 'quiz1', remedialLessonId: over.remedialLessonId ?? null } : null,
@@ -132,6 +140,45 @@ describe('EntryExamService', () => {
     // The exam is still the only way in, and it is reachable.
     expect(svc.isAllowedWhileLocked(state, 'exam', false)).toBe(true);
     expect(svc.isAllowedWhileLocked(state, 'other', false)).toBe(false);
+  });
+
+  /**
+   * The distinction the feature was missing.
+   *
+   * A teacher writing their first course means, by "the course's exam", the
+   * paper at the end about what was just studied. Reading that as a locked
+   * front door shut students out of the course on their way to it — and the
+   * migration that adopted every course's sole quiz as its exam did exactly
+   * that, to courses whose teacher had never asked for a gate.
+   */
+  describe('a final exam is not a door', () => {
+    it('locks nothing, even unpassed', async () => {
+      const { svc } = ctx({ examLessonId: 'exam', examMode: 'FINAL', attempts: [] });
+      const state = await svc.stateFor('c1', 's1');
+      expect(state.passed).toBe(true);
+      await expect(svc.requirePassed('c1', 's1', 'lesson-2', false)).resolves.toBeDefined();
+    });
+
+    it('does not go looking for attempts it has no reason to want', async () => {
+      const { svc, prisma } = ctx({ examLessonId: 'exam', examMode: 'FINAL' });
+      await svc.stateFor('c1', 's1');
+      // A course with an ordinary end-of-course paper costs what a course with
+      // no exam costs: one query, and no attempt lookup.
+      expect(prisma.quizAttempt.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * An attempt the teacher handed back is not a pass, not a score, and not a
+   * "you already tried" — the only way out of an exhausted attempt cap on a
+   * gated course, so the gate has to honour it.
+   */
+  it('ignores the attempts a teacher voided', async () => {
+    const { svc, prisma } = ctx({ examLessonId: 'exam', attempts: [] });
+    await svc.stateFor('c1', 's1');
+    expect(prisma.quizAttempt.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ voidedAt: null }) }),
+    );
   });
 
   it('names the exam in the refusal, so the client can send them to it', async () => {

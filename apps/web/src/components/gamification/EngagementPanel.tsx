@@ -16,12 +16,18 @@ interface Overview {
 
 /**
  * Engagement, for whoever is responsible for it — the same panel serves a
- * teacher looking at their academy and an admin looking at the platform, with
- * only the endpoint different.
+ * teacher looking at their academy and an admin looking at the platform.
  *
  * A metric with nothing behind it yet reads "—" rather than "0%". A brand-new
  * academy has not achieved zero retention; it has not been around long enough
  * to have any, and those are different facts.
+ *
+ * Cohort retention — what share of the students who started N days ago came
+ * back — is a platform question, so it is shown to the admin and not to the
+ * teacher. A teacher reads this page to see whether their own students are
+ * turning up; three columns of "—" and a week-over-week return rate gave them
+ * a dashboard to interpret instead of an answer, and the numbers they could
+ * act on were the ones underneath it.
  */
 export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
   const { t } = useTranslation();
@@ -34,36 +40,41 @@ export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
   if (!data) return null;
 
   const d = data.last30Days;
+  const platformWide = scope === 'admin';
 
   return (
     <div className="space-y-6">
       <section>
         <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.activeTitle')}</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className={`grid grid-cols-2 gap-3 ${platformWide ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
           <Metric value={data.activeLearners.today} label={t('engagement.today')} />
           <Metric value={data.activeLearners.week} label={t('engagement.week')} />
           <Metric value={data.activeLearners.month} label={t('engagement.month')} />
-          <Metric
-            value={data.returning.lastWeek ? `${data.returning.pct}%` : '—'}
-            label={t('engagement.returning')}
-            hint={t('engagement.returningHint', { n: data.returning.returned, of: data.returning.lastWeek })}
-          />
+          {platformWide && (
+            <Metric
+              value={data.returning.lastWeek ? `${data.returning.pct}%` : '—'}
+              label={t('engagement.returning')}
+              hint={t('engagement.returningHint', { n: data.returning.returned, of: data.returning.lastWeek })}
+            />
+          )}
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.retentionTitle')}</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {data.retention.map((r) => (
-            <Metric
-              key={r.day}
-              value={r.eligible ? `${r.pct}%` : '—'}
-              label={t('engagement.dayN', { n: r.day })}
-              hint={r.eligible ? t('engagement.ofCohort', { n: r.eligible }) : t('engagement.tooEarly')}
-            />
-          ))}
-        </div>
-      </section>
+      {platformWide && (
+        <section>
+          <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.retentionTitle')}</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {data.retention.map((r) => (
+              <Metric
+                key={r.day}
+                value={r.eligible ? `${r.pct}%` : '—'}
+                label={t('engagement.dayN', { n: r.day })}
+                hint={r.eligible ? t('engagement.ofCohort', { n: r.eligible }) : t('engagement.tooEarly')}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.learningTitle')}</h2>

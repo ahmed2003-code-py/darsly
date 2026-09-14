@@ -230,11 +230,13 @@ export default function TeacherCoursesPage() {
             )}
           </div>
 
-          <label className="flex shrink-0 items-center gap-2 text-sm text-on-surface-variant">
+          <label className="flex shrink-0 items-center gap-1.5 text-sm text-on-surface-variant">
             <span className="material-symbols-outlined text-base">sort</span>
             <span className="sr-only sm:not-sr-only">{t('teacher.courses.sortBy')}</span>
+            {/* Narrower than a text input's `px-4`: the label already says what
+                this is, so the padding was reading as a gap between the two. */}
             <select
-              className="input py-2"
+              className="input px-3 py-2"
               value={sort}
               onChange={(e) => setSort(e.target.value as (typeof SORTS)[number])}
             >

@@ -306,11 +306,13 @@ export default function TeacherEnrollmentsPage() {
             )}
           </div>
 
-          <label className="flex shrink-0 items-center gap-2 text-sm text-on-surface-variant">
+          <label className="flex shrink-0 items-center gap-1.5 text-sm text-on-surface-variant">
             <span className="material-symbols-outlined text-base">sort</span>
             <span className="sr-only sm:not-sr-only">{t('teacher.students.sortBy')}</span>
+            {/* Same tightening as the courses list: the label carries the
+                meaning, so the select does not need a text input's padding. */}
             <select
-              className="input py-2"
+              className="input px-3 py-2"
               value={sort}
               onChange={(e) => setSort(e.target.value as (typeof SORTS)[number])}
             >

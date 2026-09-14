@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayNotEmpty,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -20,7 +21,7 @@ import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { IsOptionalId } from '../common/validation';
+import { IsOptionalId, LIMITS } from '../common/validation';
 import { EDUCATION_STAGES, type EducationStageValue } from '../auth/dto/auth.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscoverTeachersQuery, TeachersService } from './teachers.service';
@@ -47,7 +48,10 @@ class UpdateMyTeacherProfileDto {
   @IsOptional() @IsBoolean() acceptsStudentMessages?: boolean;
   @IsOptional() @IsUrl({ require_tld: false }) @MaxLength(500) introVideoUrl?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
-  @IsOptionalId() subjectId?: string;
+  /** The whole set, replaced — the list the teacher submitted is the list. */
+  @IsOptional() @IsArray() @ArrayNotEmpty() @ArrayMaxSize(12) @ArrayUnique()
+  @IsString({ each: true }) @MaxLength(LIMITS.ID, { each: true })
+  subjectIds?: string[];
   @IsOptional() @IsArray() @ArrayMaxSize(4) @ArrayUnique() @IsIn(EDUCATION_STAGES, { each: true })
   stages?: EducationStageValue[];
 }
@@ -88,7 +92,7 @@ export class TeachersController {
       where: { id: user.tenantId },
       include: {
         user: { select: { fullName: true, avatarUrl: true, email: true, phone: true } },
-        subject: true,
+        subjects: { include: { subject: true } },
       },
     });
   }
@@ -102,10 +106,26 @@ export class TeachersController {
     // course already sold to a stage is not un-sold by a later edit to the
     // profile, and pulling it out from under its students would be worse than
     // the inconsistency.
+    const { subjectIds, ...rest } = dto;
+    if (subjectIds?.length) {
+      const live = await this.prisma.subject.count({
+        where: { id: { in: subjectIds }, isActive: true },
+      });
+      if (live !== subjectIds.length) {
+        throw new BadRequestException({ message: 'Pick the subjects you teach', code: 'UNKNOWN_SUBJECT' });
+      }
+    }
     const profile = await this.prisma.teacherProfile.update({
       where: { id: user.tenantId },
-      data: dto,
-      include: { subject: true },
+      data: {
+        ...rest,
+        // Courses already sold keep the subject they were created with, for the
+        // same reason narrowing the stages leaves them alone.
+        ...(subjectIds
+          ? { subjects: { deleteMany: {}, create: subjectIds.map((subjectId) => ({ subjectId })) } }
+          : {}),
+      },
+      include: { subjects: { include: { subject: true } } },
     });
     await this.audit.log({
       actorUserId: user.sub,

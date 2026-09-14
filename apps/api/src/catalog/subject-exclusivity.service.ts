@@ -60,15 +60,19 @@ export class SubjectExclusivityService {
     const myTeacherIds = mine.map((e) => e.tenantId);
     if (!myTeacherIds.length) return [];
 
-    const myTeachers = await this.prisma.teacherProfile.findMany({
-      where: { id: { in: myTeacherIds } },
+    // A teacher teaches a set of subjects, so a rival is anyone who shares any
+    // one of them: the maths teacher who also takes the language schools is
+    // still a maths teacher to the student studying maths here.
+    const mySubjects = await this.prisma.teacherSubject.findMany({
+      where: { tenantId: { in: myTeacherIds } },
       select: { subjectId: true },
+      distinct: ['subjectId'],
     });
-    const subjectIds = [...new Set(myTeachers.map((t) => t.subjectId).filter((s): s is string => !!s))];
+    const subjectIds = mySubjects.map((s) => s.subjectId);
     if (!subjectIds.length) return [];
 
     const rivals = await this.prisma.teacherProfile.findMany({
-      where: { subjectId: { in: subjectIds }, id: { notIn: myTeacherIds } },
+      where: { subjects: { some: { subjectId: { in: subjectIds } } }, id: { notIn: myTeacherIds } },
       select: { id: true },
     });
     return rivals.map((t) => t.id);

@@ -11,7 +11,9 @@ import { useAcademyBranding } from '../lib/academy';
 import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 import GradeSelect from '../components/GradeSelect';
+import SubjectPicker from '../components/SubjectPicker';
 import { STAGES, type Stage } from '../lib/stages';
+import { STUDENT_TRACKS, type StudentTrack, type Subject } from '../lib/subjects';
 
 type Role = 'student' | 'teacher';
 
@@ -45,18 +47,23 @@ export default function RegisterPage() {
   // Asked here rather than in a settings page afterwards: everything a teacher
   // publishes is filed under these two answers, so a profile without them can
   // build courses no student will ever be shown.
-  const [subjectId, setSubjectId] = useState('');
+  const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   // A student's year decides what the whole app shows them, so it is asked for
   // here rather than left to a settings page they would have no reason to open.
   const [gradeId, setGradeId] = useState('');
+  // And which of the two school systems they are in, for the same reason: the
+  // syllabus behind a subject name is not the same in both.
+  const [track, setTrack] = useState<StudentTrack | ''>('');
   const { data: grades } = useQuery({
     queryKey: ['grades'],
     queryFn: async () => (await api.get('/catalog/grades')).data,
     enabled: role === 'student',
   });
-  const { data: subjects } = useQuery({
-    queryKey: ['subjects'],
+  // The whole catalogue, both systems: a teacher signing up has not said which
+  // ones they teach yet, and that is exactly what this list is for.
+  const { data: subjects } = useQuery<Subject[]>({
+    queryKey: ['subjects', 'all'],
     queryFn: async () => (await api.get('/catalog/subjects')).data,
     enabled: role === 'teacher',
   });
@@ -70,9 +77,10 @@ export default function RegisterPage() {
     try {
       if (role === 'student') {
         if (!gradeId) throw new Error(t('auth.gradeRequired'));
+        if (!track) throw new Error(t('auth.trackRequired'));
         const { data } = await api.post('/auth/register/student', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
-          gradeId,
+          gradeId, track,
           deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
         });
         setTokens(data.accessToken, data.refreshToken);
@@ -81,11 +89,11 @@ export default function RegisterPage() {
       } else {
         // Caught here so the answer is a sentence under the field rather than a
         // validation error from a round trip that created nothing.
-        if (!subjectId) throw new Error(t('auth.subjectRequired'));
+        if (!subjectIds.length) throw new Error(t('auth.subjectRequired'));
         if (!stages.length) throw new Error(t('auth.stagesRequired'));
         await api.post('/auth/register/teacher', {
           fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
-          subjectId, stages,
+          subjectIds, stages,
         });
         setPendingDone(true);
       }
@@ -178,18 +186,42 @@ export default function RegisterPage() {
           </label>
         )}
 
+        {role === 'student' && (
+          <div className="mb-4">
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+              {t('auth.track')}
+            </span>
+            {/* Two buttons rather than a dropdown: there are exactly two answers
+                and both fit on the narrowest phone, so nothing is worth hiding
+                behind a tap. */}
+            <div className="grid grid-cols-2 gap-2">
+              {STUDENT_TRACKS.map((tr) => (
+                <button
+                  key={tr}
+                  type="button"
+                  onClick={() => setTrack(tr)}
+                  className={`rounded-xl border px-3 py-3 text-sm font-bold transition ${
+                    track === tr
+                      ? 'border-primary bg-primary text-on-primary'
+                      : 'border-outline-variant hover:border-primary hover:text-primary'
+                  }`}
+                >
+                  {t(`subjects.track.${tr}`)}
+                </button>
+              ))}
+            </div>
+            <span className="mt-1.5 block text-xs text-outline">{t('auth.trackHint')}</span>
+          </div>
+        )}
+
         {role === 'teacher' && (
           <>
             <label className="mb-4 block">
               <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
                 {t('auth.subject')}
               </span>
-              <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-                <option value="">{t('auth.subjectPh')}</option>
-                {(subjects ?? []).map((sub: { id: string; nameAr: string; nameEn: string }) => (
-                  <option key={sub.id} value={sub.id}>{sub.nameAr}</option>
-                ))}
-              </select>
+              <SubjectPicker subjects={subjects ?? []} value={subjectIds} onChange={setSubjectIds} />
+              <span className="mt-1.5 block text-xs text-outline">{t('auth.subjectHint')}</span>
             </label>
 
             {/* Toggles rather than a multi-select: picking more than one is the

@@ -13,7 +13,9 @@ import { Role } from '@darsly/shared-types';
 import { GAMIFICATION_KEY, useGamification, useLocalized } from '../lib/gamification';
 import { LevelCard } from '../components/gamification/LevelCard';
 import GradeSelect from '../components/GradeSelect';
+import SubjectPicker from '../components/SubjectPicker';
 import { STAGES } from '../lib/stages';
+import { STUDENT_TRACKS, type StudentTrack, type Subject } from '../lib/subjects';
 
 /** A titled block, so the page reads as a set of decisions rather than a form. */
 function Section({
@@ -107,6 +109,9 @@ export default function ProfilePage() {
   // edit a student actually comes here to make, and it changes every listing
   // they see afterwards.
   const [gradeId, setGradeId] = useState('');
+  // Nobody who signed up before the question existed has an answer on file, so
+  // this is also where they give one for the first time.
+  const [track, setTrack] = useState<StudentTrack | ''>('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-profile'],
@@ -121,6 +126,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (data?.fullName) setName(data.fullName);
     if (data?.studentProfile?.gradeId) setGradeId(data.studentProfile.gradeId);
+    if (data?.studentProfile?.track) setTrack(data.studentProfile.track);
   }, [data]);
 
   const syncUser = (patch: Record<string, unknown>) => {
@@ -144,6 +150,7 @@ export default function ProfilePage() {
       (await api.patch('/me/profile', {
         fullName: name.trim(),
         ...(isStudent && gradeId ? { gradeId } : {}),
+        ...(isStudent && track ? { track } : {}),
       })).data,
     onSuccess: (d) => {
       syncUser({ fullName: d.fullName });
@@ -270,13 +277,36 @@ export default function ProfilePage() {
                 <GradeSelect value={gradeId} onChange={setGradeId} grades={grades} />
               </Field>
             )}
+            {isStudent && (
+              <Field label={t('auth.track')} hint={t('profile.trackHint')}>
+                <div className="grid grid-cols-2 gap-2">
+                  {STUDENT_TRACKS.map((tr) => (
+                    <button
+                      key={tr}
+                      type="button"
+                      aria-pressed={track === tr}
+                      onClick={() => setTrack(tr)}
+                      className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                        track === tr
+                          ? 'border-primary bg-primary text-on-primary'
+                          : 'border-outline-variant text-on-surface-variant hover:border-outline'
+                      }`}
+                    >
+                      {t(`subjects.track.${tr}`)}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 className="btn-primary w-full sm:w-auto"
                 disabled={
                   saveName.isPending ||
                   !name.trim() ||
-                  (name.trim() === data?.fullName && gradeId === (data?.studentProfile?.gradeId ?? ''))
+                  (name.trim() === data?.fullName &&
+                    gradeId === (data?.studentProfile?.gradeId ?? '') &&
+                    track === (data?.studentProfile?.track ?? ''))
                 }
                 onClick={() => saveName.mutate()}
               >
@@ -534,29 +564,33 @@ function MessagingSection({ role }: { role?: string }) {
 }
 
 function TeachingSection({ role }: { role?: string }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const qc = useQueryClient();
-  const ar = i18n.language !== 'en';
   const isTeacher = role === 'TEACHER';
   const { data: profile } = useQuery({
     queryKey: ['teacher-profile'],
     queryFn: async () => (await api.get('/teacher/profile')).data,
     enabled: isTeacher,
   });
-  const { data: subjects } = useQuery({
-    queryKey: ['subjects'],
+  const { data: subjects } = useQuery<Subject[]>({
+    queryKey: ['subjects', 'all'],
     queryFn: async () => (await api.get('/catalog/subjects')).data,
     enabled: isTeacher,
   });
-  const [draft, setDraft] = useState<{ subjectId: string; stages: string[] } | null>(null);
+  const [draft, setDraft] = useState<{ subjectIds: string[]; stages: string[] } | null>(null);
   useEffect(() => {
-    if (profile && !draft) setDraft({ subjectId: profile.subjectId ?? '', stages: profile.stages ?? [] });
+    if (profile && !draft) {
+      setDraft({
+        subjectIds: (profile.subjects ?? []).map((s: { subjectId: string }) => s.subjectId),
+        stages: profile.stages ?? [],
+      });
+    }
   }, [profile]); // eslint-disable-line
 
   const save = useMutation({
     mutationFn: async () =>
       (await api.patch('/teacher/profile', {
-        subjectId: draft!.subjectId || undefined,
+        subjectIds: draft!.subjectIds.length ? draft!.subjectIds : undefined,
         stages: draft!.stages,
       })).data,
     onSuccess: () => {
@@ -571,21 +605,21 @@ function TeachingSection({ role }: { role?: string }) {
       ...draft,
       stages: draft.stages.includes(st) ? draft.stages.filter((x) => x !== st) : [...draft.stages, st],
     });
+  const saved: string[] = (profile?.subjects ?? []).map((s: { subjectId: string }) => s.subjectId);
   const unchanged =
-    draft.subjectId === (profile?.subjectId ?? '') &&
+    draft.subjectIds.length === saved.length &&
+    draft.subjectIds.every((id) => saved.includes(id)) &&
     draft.stages.length === (profile?.stages?.length ?? 0) &&
     draft.stages.every((s: string) => (profile?.stages ?? []).includes(s));
 
   return (
     <Section icon="school" title={t('profile.sectionTeaching')} hint={t('profile.teachingHint')}>
-      <Field label={t('auth.subject')}>
-        <select className="input py-2" value={draft.subjectId}
-          onChange={(e) => setDraft({ ...draft, subjectId: e.target.value })}>
-          <option value="">{t('auth.subjectPh')}</option>
-          {(subjects ?? []).map((sub: { id: string; nameAr: string; nameEn: string }) => (
-            <option key={sub.id} value={sub.id}>{ar ? sub.nameAr : sub.nameEn}</option>
-          ))}
-        </select>
+      <Field label={t('auth.subject')} hint={t('auth.subjectHint')}>
+        <SubjectPicker
+          subjects={subjects ?? []}
+          value={draft.subjectIds}
+          onChange={(subjectIds) => setDraft({ ...draft, subjectIds })}
+        />
       </Field>
       <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('auth.stages')}</span>
       <div className="flex flex-wrap gap-2">

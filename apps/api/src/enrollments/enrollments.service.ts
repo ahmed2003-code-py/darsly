@@ -11,6 +11,7 @@ import { computeServiceFee } from '../payments/fee.util';
 import { LedgerService } from '../payments/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
+import { assertCourseTrack } from '../catalog/subject-track';
 import { activateBundleChildren } from './bundle';
 
 /**
@@ -155,6 +156,7 @@ export class EnrollmentsService {
     // should be told that rather than handed a payment screen for something
     // they were never going to be allowed to open.
     await assertCourseYear(this.prisma, courseId, student.gradeId, existing);
+    await assertCourseTrack(this.prisma, courseId, student.track, existing);
     const quote = await this.quote(courseId, couponCode);
 
     // Paid → must pay first (manual proof + verification).

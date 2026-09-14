@@ -11,6 +11,7 @@ import { validateImageDataUrl } from '../common/image.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
+import { assertCourseTrack } from '../catalog/subject-track';
 import { normalizePayerReference } from './payer-reference';
 import { activateBundleChildren } from '../enrollments/bundle';
 import { releaseCouponUse, reserveCouponUse } from './coupon-use';
@@ -71,6 +72,7 @@ export class ManualPaymentsService {
     // Checked before any money is named: the course being for another year is a
     // refusal, and taking a proof of payment for it would mean refunding it.
     await assertCourseYear(this.prisma, course.id, student.gradeId, enrollment);
+    await assertCourseTrack(this.prisma, course.id, student.track, enrollment);
 
     // The one thing that links this money to this student. Required, and
     // checked against the shape the chosen method's SMS will actually carry —
@@ -211,6 +213,7 @@ export class ManualPaymentsService {
     // Same gate as every other way in: paying from a balance already inside the
     // platform is still buying access, and the year still has to match.
     await assertCourseYear(this.prisma, course.id, student.gradeId, enrolled);
+    await assertCourseTrack(this.prisma, course.id, student.track, enrolled);
     const balance = await this.ledger.walletBalance(student.id);
 
     // A cheap pre-check so the common failure is a clean error rather than a

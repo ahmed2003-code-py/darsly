@@ -33,12 +33,12 @@ const avatar = (n: number) => `https://i.pravatar.cc/300?img=${(n % 70) + 1}`;
 const token = () => randomBytes(16).toString('base64url');
 
 const SUBJECTS = [
-  { key: 'math', nameAr: 'الرياضيات', nameEn: 'Mathematics', icon: 'calculate' },
-  { key: 'physics', nameAr: 'الفيزياء', nameEn: 'Physics', icon: 'science' },
-  { key: 'chem', nameAr: 'الكيمياء', nameEn: 'Chemistry', icon: 'experiment' },
-  { key: 'bio', nameAr: 'الأحياء', nameEn: 'Biology', icon: 'biotech' },
-  { key: 'arabic', nameAr: 'اللغة العربية', nameEn: 'Arabic', icon: 'menu_book' },
-  { key: 'english', nameAr: 'اللغة الإنجليزية', nameEn: 'English', icon: 'translate' },
+  { key: 'math', code: 'math-gen', nameAr: 'الرياضيات', nameEn: 'Mathematics', icon: 'calculate', track: 'GENERAL' as const },
+  { key: 'physics', code: 'physics-gen', nameAr: 'الفيزياء', nameEn: 'Physics', icon: 'science', track: 'GENERAL' as const },
+  { key: 'chem', code: 'chem-gen', nameAr: 'الكيمياء', nameEn: 'Chemistry', icon: 'experiment', track: 'GENERAL' as const },
+  { key: 'bio', code: 'bio-gen', nameAr: 'الأحياء', nameEn: 'Biology', icon: 'biotech', track: 'GENERAL' as const },
+  { key: 'arabic', code: 'arabic', nameAr: 'اللغة العربية', nameEn: 'Arabic', icon: 'menu_book', track: 'BOTH' as const },
+  { key: 'english', code: 'english', nameAr: 'اللغة الإنجليزية', nameEn: 'English', icon: 'translate', track: 'BOTH' as const },
 ];
 
 /** Subject-relevant cover photos (Unsplash CDN). */
@@ -168,7 +168,11 @@ export async function seedDatabase(prisma: Db, log: (m: string) => void = () => 
 
   const subjects: Record<string, string> = {};
   for (let i = 0; i < SUBJECTS.length; i++) {
-    const s = await prisma.subject.create({ data: { nameAr: SUBJECTS[i].nameAr, nameEn: SUBJECTS[i].nameEn, icon: SUBJECTS[i].icon, sortOrder: i } });
+    const s = await prisma.subject.upsert({
+      where: { code: SUBJECTS[i].code },
+      update: {},
+      create: { code: SUBJECTS[i].code, nameAr: SUBJECTS[i].nameAr, nameEn: SUBJECTS[i].nameEn, icon: SUBJECTS[i].icon, sortOrder: i, track: SUBJECTS[i].track },
+    });
     subjects[SUBJECTS[i].key] = s.id;
   }
   const grades: string[] = [];
@@ -204,7 +208,7 @@ export async function seedDatabase(prisma: Db, log: (m: string) => void = () => 
     const subjName = SUBJECTS.find((s) => s.key === T.subject)!.nameAr;
     const cover = SUBJECT_COVER[T.subject];
     const tUser = await prisma.user.create({ data: { role: 'TEACHER', email: `teacher${ti + 1}@darsly.app`, passwordHash: hash, fullName: T.name, avatarUrl: avatar(ti + 1) } });
-    const tp = await prisma.teacherProfile.create({ data: { userId: tUser.id, slug: T.slug, bio: T.tagline, subjectId: subjects[T.subject], status: 'APPROVED', verifiedAt: new Date(), commissionPercent: 20 } });
+    const tp = await prisma.teacherProfile.create({ data: { userId: tUser.id, slug: T.slug, bio: T.tagline, subjects: { create: [{ subjectId: subjects[T.subject] }] }, status: 'APPROVED', verifiedAt: new Date(), commissionPercent: 20 } });
     const academy = await prisma.academy.create({
       data: { id: tp.id, slug: T.slug, name: T.name.replace('أ. ', 'أكاديمية '), status: 'ACTIVE', ownerUserId: tUser.id, tagline: T.tagline, logoUrl: avatar(ti + 1), coverUrl: cover, colorPrimary: T.color, colorAccent: T.color, feeType: 'PERCENT', feeValue: 20 },
     });

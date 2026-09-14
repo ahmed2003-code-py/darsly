@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { LIMITS } from '../../common/validation';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
@@ -18,6 +19,13 @@ import {
 /** Kept in step with the `EducationStage` enum in the schema. */
 export const EDUCATION_STAGES = ['PRIMARY', 'PREPARATORY', 'SECONDARY', 'BACCALAUREATE'] as const;
 export type EducationStageValue = (typeof EDUCATION_STAGES)[number];
+
+/**
+ * The `SubjectTrack` values a student can be. `BOTH` is deliberately absent:
+ * it describes a subject every student sits, not a school anyone attends.
+ */
+export const STUDENT_TRACKS = ['GENERAL', 'LANGUAGES'] as const;
+export type StudentTrackValue = (typeof STUDENT_TRACKS)[number];
 
 // Egyptian mobile numbers: 010/011/012/015 + 8 digits, with optional +20/20/0020 prefix.
 export const EGY_PHONE_REGEX = /^(\+20|0020|20|0)?1[0125][0-9]{8}$/;
@@ -92,6 +100,14 @@ export class RegisterStudentDto {
   @IsNotEmpty({ message: 'Pick the year you are in' })
   gradeId: string;
 
+  // Which school system they are in, asked for the same reason as the year:
+  // a language-school student and a national-system one sit different syllabi
+  // under the same subject name, and showing each of them the other's teachers
+  // is showing them courses they cannot use.
+  @ApiProperty({ example: 'GENERAL', enum: STUDENT_TRACKS })
+  @IsIn(STUDENT_TRACKS, { message: 'Pick whether you are in a general or a language school' })
+  track: StudentTrackValue;
+
   @ApiPropertyOptional({ example: 'Chrome on Android' })
   @IsOptional()
   @IsString()
@@ -132,10 +148,16 @@ export class RegisterTeacherDto {
   // Asked for at sign-up rather than left to a settings page nobody visits.
   // Every course this teacher creates is offered inside these answers, so a
   // blank profile would leave them unable to publish anything findable.
-  @ApiProperty({ example: 'clx123subjectid' })
-  @IsString()
-  @IsNotEmpty({ message: 'Pick the subject you teach' })
-  subjectId: string;
+  // A set, not one: a maths teacher usually takes both school systems, and
+  // being asked to pick one of them hid them from half the students they teach.
+  @ApiProperty({ example: ['clx123subjectid'], isArray: true })
+  @IsArray()
+  @ArrayNotEmpty({ message: 'Pick at least one subject you teach' })
+  @ArrayMaxSize(12)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(LIMITS.ID, { each: true })
+  subjectIds: string[];
 
   @ApiProperty({ example: ['SECONDARY', 'BACCALAUREATE'], enum: EDUCATION_STAGES, isArray: true })
   @IsArray()

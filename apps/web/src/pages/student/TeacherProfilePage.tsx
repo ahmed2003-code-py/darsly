@@ -43,7 +43,9 @@ export default function TeacherProfilePage() {
             {teacher.verified && <Badge tone="teal">{t('teacherProfile.verifiedTeacher')}</Badge>}
           </div>
           <p className="mb-3 font-heading text-xl font-bold text-primary">
-            {teacher.subject ? (ar ? teacher.subject.nameAr : teacher.subject.nameEn) : ''}
+            {(teacher.subjects ?? [])
+              .map((s: any) => (ar ? s.nameAr : s.nameEn))
+              .join(t('common.listSeparator'))}
             {teacher.grades?.length
               ? ` — ${teacher.grades.map((g: any) => (ar ? g.nameAr : g.nameEn)).join(t('common.listSeparator'))}`
               : ''}

@@ -13,7 +13,8 @@ import { VideoSource, YoutubeImportService } from '../video/youtube-import.servi
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
 import { yearAdmits } from '../catalog/course-year';
-import { viewerGrade } from '../catalog/stage.util';
+import { viewerGrade, viewerTrack } from '../catalog/stage.util';
+import { trackFilter } from '../catalog/subject-track';
 import {
   CreateCourseDto,
   CreateLessonDto,
@@ -69,6 +70,7 @@ export class CoursesService {
     // something in it — `notIn: []` is not a filter worth generating.
     const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
     const gradeId = await viewerGrade(this.prisma, query, viewerUserId);
+    const tracks = trackFilter(await viewerTrack(this.prisma, viewerUserId));
 
     const priceFilter: Prisma.IntFilter = {};
     if (query.free) priceFilter.equals = 0;
@@ -117,6 +119,13 @@ export class CoursesService {
         // nobody.
         ...(gradeId
           ? [{ OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }]
+          : []),
+        // And the other half of the same question: a language-school student
+        // sits a different syllabus, so the national system's courses are not
+        // theirs to take. A course with no subject was never filed under either
+        // system, so it stays — same reasoning as a course with no year.
+        ...(tracks
+          ? [{ OR: [{ subject: { track: { in: tracks } } }, { subjectId: null }] }]
           : []),
         ...(query.q?.trim()
           ? [
@@ -304,16 +313,37 @@ export class CoursesService {
   /**
    * What this teacher is allowed to aim a course at.
    *
-   * The subject is theirs, full stop — they chose it when they signed up and a
-   * course is not the place to change it. The stages are the ones they signed
-   * up for, and a course left unnarrowed goes to all of them rather than to
-   * none, because an empty list in the form means "I didn't pick", not "nobody".
+   * The subject has to be one of theirs — they chose them when they signed up
+   * and a course is not the place to add a new one — but which of them is the
+   * course's is now a real question, because a teacher who takes both school
+   * systems has more than one. Teaching exactly one subject answers it without
+   * being asked, which is what every teacher on the platform before this did.
+   *
+   * The stages are the ones they signed up for, and a course left unnarrowed
+   * goes to all of them rather than to none, because an empty list in the form
+   * means "I didn't pick", not "nobody".
    */
-  private async reachOf(tenantId: string, wanted?: string[]) {
+  private async reachOf(tenantId: string, wanted?: string[], wantedSubject?: string) {
     const teacher = await this.prisma.teacherProfile.findUniqueOrThrow({
       where: { id: tenantId },
-      select: { subjectId: true, stages: true },
+      select: { stages: true, subjects: { select: { subjectId: true } } },
     });
+    const ownSubjects = teacher.subjects.map((s) => s.subjectId);
+    if (wantedSubject && !ownSubjects.includes(wantedSubject)) {
+      throw new BadRequestException({
+        message: 'You did not sign up to teach that subject',
+        code: 'SUBJECT_NOT_YOURS',
+        subjectId: wantedSubject,
+      });
+    }
+    const subjectId = wantedSubject ?? (ownSubjects.length === 1 ? ownSubjects[0] : null);
+    if (!subjectId && ownSubjects.length > 1) {
+      throw new BadRequestException({
+        message: 'Say which of your subjects this course is',
+        code: 'SUBJECT_REQUIRED',
+        subjectIds: ownSubjects,
+      });
+    }
     // The years inside the stages this teacher signed up for. Asked for once
     // and used both to default and to check, so the form's options and the
     // rule behind them can never drift apart.
@@ -333,13 +363,13 @@ export class CoursesService {
         gradeIds: outside,
       });
     }
-    return { subjectId: teacher.subjectId, gradeIds: asked };
+    return { subjectId, gradeIds: asked };
   }
 
   async create(tenantId: string, dto: CreateCourseDto) {
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
-    const { gradeIds, ...rest } = dto;
-    const { subjectId, gradeIds: years } = await this.reachOf(tenantId, gradeIds);
+    const { gradeIds, subjectId: wantedSubject, ...rest } = dto;
+    const { subjectId, gradeIds: years } = await this.reachOf(tenantId, gradeIds, wantedSubject);
     return this.prisma.course.create({
       data: {
         ...rest,
@@ -475,21 +505,20 @@ export class CoursesService {
       }
     }
 
-    const { gradeIds, ...rest } = dto;
+    const { gradeIds, subjectId: wantedSubject, ...rest } = dto;
     // Only re-checked when the teacher actually changed it, so an edit that
     // touches the title alone never has to restate where the course is aimed.
-    const reach = gradeIds ? await this.reachOf(tenantId, gradeIds) : null;
+    const reach = gradeIds || wantedSubject ? await this.reachOf(tenantId, gradeIds, wantedSubject) : null;
     return this.prisma.course.update({
       where: { id: courseId },
       data: {
         ...rest,
-        ...(reach
-          ? {
-              subjectId: reach.subjectId,
-              // Replaced wholesale: the list the teacher just submitted is the
-              // list, and diffing it would only be a slower way to say so.
-              grades: { deleteMany: {}, create: reach.gradeIds.map((gradeId) => ({ gradeId })) },
-            }
+        ...(reach?.subjectId ? { subjectId: reach.subjectId } : {}),
+        // Replaced wholesale, and only when the teacher actually sent a list:
+        // moving a course to another subject must not silently re-aim it at
+        // every year they teach.
+        ...(reach && gradeIds
+          ? { grades: { deleteMany: {}, create: reach.gradeIds.map((gradeId) => ({ gradeId })) } }
           : {}),
       },
       include: COURSE_REACH,

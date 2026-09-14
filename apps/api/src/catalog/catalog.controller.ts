@@ -1,13 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
-import { IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { LIMITS } from '../common/validation';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubjectTrack } from '@prisma/client';
+import { viewerTrack } from './stage.util';
+import { trackFilter } from './subject-track';
 
 class UpsertSubjectDto {
   @IsString() @MinLength(2) @MaxLength(LIMITS.NAME) nameAr: string;
@@ -15,6 +18,7 @@ class UpsertSubjectDto {
   @IsOptional() @IsString() @MaxLength(60) icon?: string;
   @IsOptional() @IsInt() @Min(0) @Max(10_000) sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsIn(['GENERAL', 'LANGUAGES', 'BOTH']) track?: SubjectTrack;
 }
 
 class UpsertGradeDto {
@@ -37,12 +41,24 @@ export class CatalogController {
     private readonly audit: AuditService,
   ) {}
 
+  /**
+   * The subjects to offer, narrowed to the asker's school system.
+   *
+   * A signed-in student gets their own — that is the whole point of asking them
+   * at sign-up — and `track=` is how the teacher's own picker and an admin
+   * screen ask for a specific one. Everyone else gets the catalogue: a teacher
+   * signing up has not said which systems they teach yet, and that question is
+   * exactly what this list is for.
+   */
   @Public()
   @Get('subjects')
-  @ApiOperation({ summary: 'List active subjects' })
-  subjects() {
+  @ApiOperation({ summary: 'List active subjects (narrowed to the viewer’s school system)' })
+  async subjects(@Query('track') asked?: string, @CurrentUser() viewer?: JwtPayload) {
+    const wanted = asked === 'GENERAL' || asked === 'LANGUAGES' ? (asked as SubjectTrack) : null;
+    const mine = wanted ?? (viewer?.sub ? await viewerTrack(this.prisma, viewer.sub) : null);
+    const tracks = trackFilter(mine);
     return this.prisma.subject.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...(tracks ? { track: { in: tracks } } : {}) },
       orderBy: { sortOrder: 'asc' },
     });
   }

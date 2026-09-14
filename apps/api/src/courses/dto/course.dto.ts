@@ -33,10 +33,11 @@ export class CreateCourseDto {
   // `validateThumbnailUrl` in the service — this cap just stops an oversized
   // string from being decoded at all.
   @IsOptional() @IsString() @MaxLength(LIMITS.IMAGE_DATA_URL) thumbnailUrl?: string;
-  // The subject is not taken from the request at all — it is whatever the
-  // teacher signed up to teach. The years are, but they are checked against
-  // the stages that teacher signed up for, so a course cannot be aimed at a
-  // year its author does not teach however the form is driven.
+  // Which of the teacher's own subjects this course is. Optional because a
+  // teacher who signed up for exactly one does not have to answer; the service
+  // refuses a subject that is not theirs however the form is driven, the same
+  // way it refuses a year they never signed up to teach.
+  @IsOptional() @IsString() @MaxLength(LIMITS.ID) subjectId?: string;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(30)

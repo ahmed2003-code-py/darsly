@@ -1,4 +1,4 @@
-import { EducationStage } from '@prisma/client';
+import { EducationStage, SubjectTrack } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -65,4 +65,23 @@ export async function viewerGrade(
     select: { gradeId: true },
   });
   return student?.gradeId ?? null;
+}
+
+/**
+ * Which school system to filter a listing by for this viewer.
+ *
+ * Null for everyone the question does not apply to — visitors, staff, and the
+ * students who signed up before it was asked — and those are exactly the cases
+ * where filtering on it would hide the whole platform rather than half of it.
+ */
+export async function viewerTrack(
+  prisma: PrismaService,
+  viewerUserId?: string,
+): Promise<SubjectTrack | null> {
+  if (!viewerUserId) return null;
+  const student = await prisma.studentProfile.findFirst({
+    where: { userId: viewerUserId },
+    select: { track: true },
+  });
+  return student?.track ?? null;
 }

@@ -7,12 +7,14 @@ import { egp } from '../../lib/format';
 import { stripMarkdown } from '../../lib/markdown';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
 import { STAGES, type Grade } from '../../lib/stages';
+import { type Subject } from '../../lib/subjects';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
 
 interface CourseForm {
   id?: string;
   title: string;
   description: string;
+  subjectId: string;
   gradeIds: string[];
   pricingModel: string;
   priceEgp: string;
@@ -21,6 +23,7 @@ interface CourseForm {
 const EMPTY_FORM: CourseForm = {
   title: '',
   description: '',
+  subjectId: '',
   gradeIds: [],
   pricingModel: 'ONE_TIME',
   priceEgp: '',
@@ -109,6 +112,9 @@ export default function TeacherCoursesPage() {
     queryKey: ['teacher-profile'],
     queryFn: async () => (await api.get('/teacher/profile')).data,
   });
+  // Everything this teacher signed up to teach — the only subjects a course of
+  // theirs may be filed under, which the API checks again on the way in.
+  const mySubjects: Subject[] = (profile?.subjects ?? []).map((s: { subject: Subject }) => s.subject);
   const myStages: string[] = profile?.stages ?? [];
   // The years inside those stages — the exact set a course may be aimed at.
   const { data: grades } = useQuery({
@@ -124,6 +130,7 @@ export default function TeacherCoursesPage() {
       const payload = {
         title: f.title,
         description: f.description,
+        ...(f.subjectId ? { subjectId: f.subjectId } : {}),
         gradeIds: f.gradeIds,
         pricingModel: f.pricingModel,
         priceCents: Math.round(Number(f.priceEgp || 0) * 100),
@@ -316,6 +323,7 @@ export default function TeacherCoursesPage() {
                       id: c.id,
                       title: c.title,
                       description: c.description,
+                      subjectId: c.subject?.id ?? '',
                       gradeIds: (c.grades ?? []).map((g: { id: string }) => g.id),
                       pricingModel: c.pricingModel,
                       priceEgp: String(c.priceCents / 100),
@@ -408,14 +416,28 @@ export default function TeacherCoursesPage() {
 
             <section>
               <SectionLabel>{t('teacher.courses.form.sectionClassify')}</SectionLabel>
-              {/* Stated, not asked. The subject was settled at sign-up and a
-                  course is not the place to reopen it. */}
+              {/* Stated when there is nothing to decide, asked when there is:
+                  a teacher who signed up for one subject has already answered
+                  this, and one who takes both school systems has not. */}
               <Field label={t('teacher.courses.form.subject')}>
-                <p className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-semibold">
-                  {profile?.subject
-                    ? ar ? profile.subject.nameAr : profile.subject.nameEn
-                    : t('teacher.courses.form.noSubject')}
-                </p>
+                {mySubjects.length > 1 ? (
+                  <select
+                    className="input"
+                    value={form.subjectId}
+                    onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+                  >
+                    <option value="">{t('auth.subjectPh')}</option>
+                    {mySubjects.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{ar ? sub.nameAr : sub.nameEn}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-semibold">
+                    {mySubjects[0]
+                      ? ar ? mySubjects[0].nameAr : mySubjects[0].nameEn
+                      : t('teacher.courses.form.noSubject')}
+                  </p>
+                )}
               </Field>
 
               {/* The exact years, grouped under their stage. A second-year

@@ -19,6 +19,8 @@ describe('student registration', () => {
     phone: '01012345678',
     // Required: it is what every listing the student sees is filtered by.
     gradeId: 'clx123gradeid',
+    // Required for the same reason: which of the two school systems they sit.
+    track: 'GENERAL' as const,
   };
 
   it('accepts a complete signup', () => {

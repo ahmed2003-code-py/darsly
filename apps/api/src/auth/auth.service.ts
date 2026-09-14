@@ -76,7 +76,7 @@ export class AuthService {
         username,
         fullName: dto.fullName.trim(),
         passwordHash: await argon2.hash(dto.password),
-        studentProfile: { create: { gradeId: dto.gradeId } },
+        studentProfile: { create: { gradeId: dto.gradeId, track: dto.track } },
       },
       include: { teacherProfile: true, studentProfile: true },
     });
@@ -108,7 +108,7 @@ export class AuthService {
 
     const slug = await this.uniqueSlug(dto.email, dto.fullName);
     const fullName = dto.fullName.trim();
-    await this.assertSubjectExists(dto.subjectId);
+    await this.assertSubjectsExist(dto.subjectIds);
     // Create the teacher AND provision their own Academy + OWNER membership in one
     // transaction. Without the academy, every @AcademyStaff console route (courses,
     // lessons, quizzes, wallet…) 404s — the teacher can't build anything.
@@ -126,7 +126,7 @@ export class AuthService {
               slug,
               bio: dto.bio ?? '',
               status: TeacherStatus.PENDING,
-              subjectId: dto.subjectId,
+              subjects: { create: dto.subjectIds.map((subjectId) => ({ subjectId })) },
               stages: dto.stages,
             },
           },
@@ -348,7 +348,9 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        teacherProfile: { include: { subject: true, grades: { include: { grade: true } } } },
+        teacherProfile: {
+          include: { subjects: { include: { subject: true } }, grades: { include: { grade: true } } },
+        },
         studentProfile: { include: { grade: true, interests: { include: { subject: true } } } },
       },
     });
@@ -411,9 +413,16 @@ export class AuthService {
     if (!grade) throw new BadRequestException({ message: 'Pick the year you are in', code: 'UNKNOWN_GRADE' });
   }
 
-  private async assertSubjectExists(subjectId: string) {
-    const subject = await this.prisma.subject.findFirst({ where: { id: subjectId, isActive: true } });
-    if (!subject) throw new BadRequestException({ message: 'Pick the subject you teach', code: 'UNKNOWN_SUBJECT' });
+  /** Every id has to be a live subject — one unknown id fails the whole set,
+   *  because a teacher half-registered for what they teach is worse than one
+   *  told to pick again. */
+  private async assertSubjectsExist(subjectIds: string[]) {
+    const found = await this.prisma.subject.count({
+      where: { id: { in: subjectIds }, isActive: true },
+    });
+    if (found !== subjectIds.length) {
+      throw new BadRequestException({ message: 'Pick the subjects you teach', code: 'UNKNOWN_SUBJECT' });
+    }
   }
 
   private async assertEmailFree(email: string) {

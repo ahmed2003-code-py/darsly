@@ -1,10 +1,11 @@
 import { BadRequestException, Body, Controller, Delete, Get, Module, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { validateImageDataUrl } from '../common/image.util';
 import { LIMITS } from '../common/validation';
+import { STUDENT_TRACKS, type StudentTrackValue } from '../auth/dto/auth.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 // ~300 KB after decode is plenty for a client-resized 256² avatar.
@@ -25,6 +26,14 @@ class UpdateMeDto {
    * theirs in the next.
    */
   @IsOptional() @IsString() @MaxLength(LIMITS.ID) gradeId?: string;
+
+  /**
+   * Which school system they are in. Changeable for the same reason the year
+   * is — students do move between them — and for the one the year does not
+   * have: everybody who signed up before the question existed has no answer on
+   * file, and this is where they give it.
+   */
+  @IsOptional() @IsIn(STUDENT_TRACKS) track?: StudentTrackValue;
 }
 
 @ApiTags('profile')
@@ -40,14 +49,16 @@ class ProfileController {
       where: { id: u.sub },
       select: {
         id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true, createdAt: true,
-        studentProfile: { select: { gradeId: true, grade: { select: { id: true, nameAr: true, nameEn: true, stage: true } } } },
+        studentProfile: {
+          select: { gradeId: true, track: true, grade: { select: { id: true, nameAr: true, nameEn: true, stage: true } } },
+        },
       },
     });
     return user;
   }
 
   @Patch('profile')
-  @ApiOperation({ summary: 'Update my display name, or the year I am in' })
+  @ApiOperation({ summary: 'Update my display name, the year I am in, or my school system' })
   async update(@CurrentUser() u: JwtPayload, @Body() dto: UpdateMeDto) {
     if (dto.gradeId) {
       const grade = await this.prisma.gradeLevel.findFirst({ where: { id: dto.gradeId, isActive: true } });
@@ -57,6 +68,12 @@ class ProfileController {
       await this.prisma.studentProfile.updateMany({
         where: { userId: u.sub },
         data: { gradeId: dto.gradeId },
+      });
+    }
+    if (dto.track) {
+      await this.prisma.studentProfile.updateMany({
+        where: { userId: u.sub },
+        data: { track: dto.track },
       });
     }
     return this.prisma.user.update({

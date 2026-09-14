@@ -3,7 +3,8 @@ import { Prisma } from '@prisma/client';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
-import { viewerGrade, viewerStage } from '../catalog/stage.util';
+import { viewerGrade, viewerStage, viewerTrack } from '../catalog/stage.util';
+import { trackFilter } from '../catalog/subject-track';
 
 export interface DiscoverTeachersQuery {
   q?: string;
@@ -47,11 +48,21 @@ export class TeachersService {
     const forMyYear = gradeId
       ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
       : {};
+    // A teacher of the other school system teaches a syllabus this student does
+    // not sit, so they are not a teacher for them. One who takes both systems
+    // has a subject on this side too, and stays.
+    const tracks = trackFilter(await viewerTrack(this.prisma, viewerUserId));
     const where: Prisma.TeacherProfileWhereInput = {
       status: 'APPROVED',
       user: { isActive: true },
       ...(hidden.length ? { id: { notIn: hidden } } : {}),
-      ...(query.subjectId ? { subjectId: query.subjectId } : {}),
+      // Both of these ask about `subjects`, so they go in an AND rather than as
+      // two keys of the same object, where the second would silently replace
+      // the first and drop whichever filter was written above it.
+      AND: [
+        ...(query.subjectId ? [{ subjects: { some: { subjectId: query.subjectId } } }] : []),
+        ...(tracks ? [{ subjects: { some: { subject: { track: { in: tracks } } } } }] : []),
+      ],
       ...(stage ? { stages: { has: stage } } : {}),
       ...(query.language ? { language: query.language } : {}),
       ...(query.q
@@ -68,7 +79,7 @@ export class TeachersService {
       where,
       include: {
         user: { select: { fullName: true, avatarUrl: true } },
-        subject: true,
+        subjects: { include: { subject: true } },
         grades: { include: { grade: true } },
         courses: {
           where: { status: 'PUBLISHED', deletedAt: null, ...forMyYear },
@@ -106,7 +117,7 @@ export class TeachersService {
         bio: t.bio,
         language: t.language,
         verified: !!t.verifiedAt,
-        subject: t.subject,
+        subjects: t.subjects.map((s) => s.subject),
         grades: t.grades.map((g) => g.grade),
         coursesCount: t.courses.length,
         minPriceCents: prices.length ? Math.min(...prices) : null,
@@ -174,7 +185,7 @@ export class TeachersService {
             },
           },
         },
-        subject: true,
+        subjects: { include: { subject: true } },
         grades: { include: { grade: true } },
         courses: {
           where: { status: 'PUBLISHED', deletedAt: null, ...forMyYear },
@@ -253,7 +264,7 @@ export class TeachersService {
       acceptsStudentMessages: teacher.acceptsStudentMessages,
       language: teacher.language,
       verified: !!teacher.verifiedAt,
-      subject: teacher.subject,
+      subjects: teacher.subjects.map((s) => s.subject),
       grades: teacher.grades.map((g) => g.grade),
       stats: {
         studentsCount,

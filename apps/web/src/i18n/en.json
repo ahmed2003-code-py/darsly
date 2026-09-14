@@ -613,7 +613,8 @@
     "default": "Default",
     "currencyShort": "EGP",
     "optional": "optional",
-    "add": "Add"
+    "add": "Add",
+    "clear": "Clear"
   },
   "wallet": {
     "title": "Wallet",
@@ -940,7 +941,11 @@
     "grade": "Your year",
     "gradePh": "Pick your year",
     "gradeHint": "We will show you the teachers and courses for your year — you can change it later from your profile.",
-    "gradeRequired": "Pick your year."
+    "gradeRequired": "Pick your year.",
+    "track": "School system",
+    "trackHint": "We only show you the subjects and teachers of your own school system.",
+    "trackRequired": "Pick your school system",
+    "subjectHint": "Pick everything you teach — you can choose more than one."
   },
   "live": {
     "title": "Live sessions",
@@ -1078,7 +1083,8 @@
     "messagingHint": "Control whether students can reach you on the platform.",
     "acceptMessages": "Accept messages from students",
     "acceptMessagesOn": "Students can write to you, and you can write to them from My students.",
-    "acceptMessagesOff": "Chat is closed. Nobody can write to you and you cannot write to them. Existing conversations are kept, not deleted."
+    "acceptMessagesOff": "Chat is closed. Nobody can write to you and you cannot write to them. Existing conversations are kept, not deleted.",
+    "trackHint": "Change this and the subjects you are shown change with it."
   },
   "pay": {
     "title": "Complete payment",
@@ -1897,5 +1903,14 @@
     "activateNow": "Activate now",
     "storeThemes": "Store themes",
     "storeThemesHint": "A whole look for the app — the page, the menus and the buttons all change."
+  },
+  "subjects": {
+    "searchPh": "Search for a subject…",
+    "noMatch": "No subject by that name",
+    "track": {
+      "GENERAL": "General",
+      "LANGUAGES": "Language schools",
+      "BOTH": "Shared subjects"
+    }
   }
 }

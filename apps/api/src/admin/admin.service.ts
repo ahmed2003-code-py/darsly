@@ -47,7 +47,7 @@ export class AdminService {
       orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { fullName: true, email: true, phone: true, avatarUrl: true } },
-        subject: true,
+        subjects: { include: { subject: true } },
         _count: { select: { courses: true } },
       },
     });

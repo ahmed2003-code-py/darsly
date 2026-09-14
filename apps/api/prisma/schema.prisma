@@ -242,8 +242,11 @@ model TeacherProfile {
 
   slug                   String        @unique
   bio                    String        @default("")
-  subjectId              String?
-  subject                Subject?      @relation(fields: [subjectId], references: [id])
+  /// Everything this teacher teaches. A set rather than one subject, because a
+  /// maths teacher usually takes both school systems — "الرياضيات" for the
+  /// national one and "Math" for the language schools — and being asked to pick
+  /// one of them hid them from half the students they actually teach.
+  subjects               TeacherSubject[]
   /// The bands this teacher teaches, chosen when they sign up. Every course
   /// they create is offered to some subset of these and never outside them.
   stages                 EducationStage[]
@@ -284,6 +287,12 @@ model StudentProfile {
   user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   gradeId String?
   grade   GradeLevel? @relation(fields: [gradeId], references: [id])
+  /// Which school system this student is in — GENERAL or LANGUAGES, never BOTH
+  /// (that value describes a subject, not a student). Null for anyone who
+  /// signed up before the question existed: like an unset year, it means the
+  /// filter has nothing to go on, so they are shown everything rather than
+  /// locked out of the platform they already paid for.
+  track   SubjectTrack?
 
   // Motivation / streaks
   currentStreak     Int       @default(0)
@@ -338,17 +347,52 @@ model SavedCourse {
 
 // ─────────────────────────── Catalog taxonomy ──────────────────────────────
 
+/// Which school system a subject belongs to.
+///
+/// Egypt runs two in parallel and they are not the same course: a language
+/// school's "Math" is taught in English against a different syllabus than the
+/// national system's "الرياضيات", and a student in one has no use for a teacher
+/// of the other. So they are separate subjects rather than one subject with two
+/// names — which is also how a teacher describes what they do.
+///
+/// `BOTH` is for the subjects every student sits whichever school they are in:
+/// Arabic, religion, social studies, second languages. Those are one row, not
+/// two, because there is only one of them in the world.
+enum SubjectTrack {
+  GENERAL
+  LANGUAGES
+  BOTH
+}
+
 model Subject {
   id        String  @id @default(cuid())
+  /// Stable key for the platform's own catalogue, so seeding it again updates
+  /// the rows teachers and courses already point at instead of duplicating them.
+  code      String? @unique
   nameAr    String
   nameEn    String
   icon      String?
   sortOrder Int     @default(0)
   isActive  Boolean @default(true)
+  /// Defaults to BOTH so a subject that predates this field, or one an admin
+  /// adds without thinking about systems, is shown to everybody rather than
+  /// disappearing from half the platform.
+  track     SubjectTrack @default(BOTH)
 
-  teachers  TeacherProfile[]
+  teachers  TeacherSubject[]
   courses   Course[]
   interests StudentInterest[]
+}
+
+/// What a teacher teaches. Many-to-many: see `TeacherProfile.subjects`.
+model TeacherSubject {
+  tenantId  String
+  subjectId String
+  teacher   TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, subjectId])
+  @@index([subjectId])
 }
 
 /// The bands a teacher teaches and a course targets.

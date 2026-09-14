@@ -10,7 +10,7 @@ import { SubjectExclusivityService } from './subject-exclusivity.service';
  * commitment, whose catalogue disappears, and who is exempt entirely.
  */
 
-type Teacher = { id: string; subjectId: string | null };
+type Teacher = { id: string; subjectIds: string[] };
 type Enrolment = { tenantId: string; status: string };
 
 function build(world: {
@@ -34,13 +34,22 @@ function build(world: {
         return [...new Map(rows.map((e) => [e.tenantId, e])).values()];
       }),
     },
+    teacherSubject: {
+      findMany: jest.fn(async ({ where }: any) => {
+        const rows = teachers.filter((t) => where.tenantId.in.includes(t.id));
+        const pairs = rows.flatMap((t) => t.subjectIds.map((subjectId) => ({ subjectId })));
+        // `distinct` in the real query, mirrored here so a teacher who takes
+        // both school systems does not report the same subject twice.
+        return [...new Set(pairs.map((p) => p.subjectId))].map((subjectId) => ({ subjectId }));
+      }),
+    },
     teacherProfile: {
-      findMany: jest.fn(async ({ where, select }: any) => {
+      findMany: jest.fn(async ({ where }: any) => {
         let rows = teachers;
-        if (where.id?.in) rows = rows.filter((t) => where.id.in.includes(t.id));
         if (where.id?.notIn) rows = rows.filter((t) => !where.id.notIn.includes(t.id));
-        if (where.subjectId?.in) rows = rows.filter((t) => t.subjectId && where.subjectId.in.includes(t.subjectId));
-        return rows.map((t) => (select?.id ? { id: t.id } : { subjectId: t.subjectId }));
+        const wanted: string[] | undefined = where.subjects?.some?.subjectId?.in;
+        if (wanted) rows = rows.filter((t) => t.subjectIds.some((s) => wanted.includes(s)));
+        return rows.map((t) => ({ id: t.id }));
       }),
     },
   } as unknown as PrismaService;
@@ -50,11 +59,11 @@ function build(world: {
 
 const WORLD = {
   teachers: [
-    { id: 'mine_ar', subjectId: 'arabic' },
-    { id: 'rival_ar', subjectId: 'arabic' },
-    { id: 'another_ar', subjectId: 'arabic' },
-    { id: 'phys', subjectId: 'physics' },
-    { id: 'chem', subjectId: 'chemistry' },
+    { id: 'mine_ar', subjectIds: ['arabic'] },
+    { id: 'rival_ar', subjectIds: ['arabic'] },
+    { id: 'another_ar', subjectIds: ['arabic'] },
+    { id: 'phys', subjectIds: ['physics'] },
+    { id: 'chem', subjectIds: ['chemistry'] },
   ],
 };
 
@@ -156,9 +165,27 @@ describe('who the rule does not apply to', () => {
   it('hides nothing when the student\'s teacher has no subject set', async () => {
     // Nothing to compare against — better to show everyone than to guess.
     const { service } = build({
-      teachers: [{ id: 'mine', subjectId: null }, { id: 'other', subjectId: 'arabic' }],
+      teachers: [{ id: 'mine', subjectIds: [] }, { id: 'other', subjectIds: ['arabic'] }],
       enrolments: [{ tenantId: 'mine', status: 'ACTIVE' }],
     });
     expect(await service.hiddenTeacherIds('u1')).toEqual([]);
+  });
+
+  /**
+   * A teacher who takes both school systems is one person, and a rival on the
+   * strength of any subject they share — not only the one they are best known
+   * for. Matching on a single subject each would have let the maths teacher who
+   * also teaches "Math" keep appearing beside the one this student pays.
+   */
+  it('hides a rival who shares only one of several subjects', async () => {
+    const { service } = build({
+      teachers: [
+        { id: 'mine', subjectIds: ['math-gen'] },
+        { id: 'rival_both', subjectIds: ['math-gen', 'math-lang'] },
+        { id: 'lang_only', subjectIds: ['math-lang'] },
+      ],
+      enrolments: [{ tenantId: 'mine', status: 'ACTIVE' }],
+    });
+    expect(await service.hiddenTeacherIds('u1')).toEqual(['rival_both']);
   });
 });

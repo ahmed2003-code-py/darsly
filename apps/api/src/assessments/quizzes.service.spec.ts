@@ -306,3 +306,52 @@ describe('the settings that used to be decoration', () => {
     });
   });
 });
+
+/**
+ * Saving a quiz for the very first time.
+ *
+ * The builder saves the question set and the settings as two calls. Which order
+ * they go in is not a free choice: the settings call is what used to create the
+ * quiz row, and the question call used to refuse without one - so when the
+ * order was reversed (so that switching automatic marking on could be checked
+ * against the model answers in the same edit), the first save of every new quiz
+ * started failing with "create the quiz before adding questions", on a lesson
+ * whose questions were sitting right there.
+ */
+describe('the first save of a new quiz', () => {
+  function ctx(existing: unknown = null) {
+    const prisma: any = {
+      quiz: {
+        findUnique: jest.fn().mockResolvedValue(existing),
+        upsert: jest.fn(async (args: any) => existing ?? { id: 'quiz1', lessonId: 'l1', aiGrading: false, ...args.create }),
+      },
+      quizQuestion: { deleteMany: jest.fn(), create: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn().mockResolvedValue([]),
+    };
+    const access: any = {
+      requireTeacherLesson: jest.fn().mockResolvedValue({ id: 'l1', unit: { courseId: 'c1' } }),
+    };
+    const svc = new QuizzesService(prisma, access, {} as any, {} as any, {} as any, {} as any);
+    // getForTeacher is the return value and has its own coverage; the subject
+    // here is whether the write went through at all.
+    jest.spyOn(svc, 'getForTeacher').mockResolvedValue({} as any);
+    return { svc, prisma };
+  }
+
+  it('creates the quiz rather than refusing the questions', async () => {
+    const { svc, prisma } = ctx(null);
+    await expect(
+      svc.setQuestions('t1', 'l1', { questions: [{ prompt: 'why', type: 'MCQ' } as any] }),
+    ).resolves.toBeDefined();
+    expect(prisma.quiz.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { lessonId: 'l1' }, create: { lessonId: 'l1' } }),
+    );
+  });
+
+  it("leaves an existing quiz's settings alone", async () => {
+    const { svc, prisma } = ctx({ id: 'quiz1', lessonId: 'l1', passingScore: 80, aiGrading: false });
+    await svc.setQuestions('t1', 'l1', { questions: [{ prompt: 'why', type: 'MCQ' } as any] });
+    // An empty update: saving questions is not the call that changes settings.
+    expect(prisma.quiz.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: {} }));
+  });
+});

@@ -112,7 +112,7 @@ export class QuizzesService {
 
   /** Replace the full question set (builder saves the whole list at once). */
   async setQuestions(tenantId: string, lessonId: string, dto: SetQuizQuestionsDto) {
-    const quiz = await this.assertTeacherQuiz(tenantId, lessonId);
+    const quiz = await this.ownQuiz(tenantId, lessonId);
 
     // The same rule as switching automatic marking on, approached from the
     // other side: a paper already being marked automatically cannot take on a
@@ -624,11 +624,26 @@ export class QuizzesService {
     });
   }
 
-  private async assertTeacherQuiz(tenantId: string, lessonId: string) {
+  /**
+   * This teacher's quiz on this lesson, created if it is not there yet.
+   *
+   * It used to refuse — "create the quiz before adding questions" — which made
+   * saving the settings first a requirement, and the builder happened to do
+   * that. Then the settings had to be saved *after* the questions instead, so
+   * that turning automatic marking on could be checked against the model
+   * answers in the same edit, and the first save of every new quiz started
+   * failing on an ordering rule nothing needed.
+   *
+   * A lesson being given questions has a quiz. Defaults here are only the ones
+   * the settings call is about to overwrite anyway.
+   */
+  private async ownQuiz(tenantId: string, lessonId: string) {
     await this.access.requireTeacherLesson(tenantId, lessonId);
-    const quiz = await this.prisma.quiz.findUnique({ where: { lessonId } });
-    if (!quiz) throw new NotFoundException('Create the quiz before adding questions');
-    return quiz;
+    return this.prisma.quiz.upsert({
+      where: { lessonId },
+      create: { lessonId },
+      update: {},
+    });
   }
 
   private async notifyGraded(studentId: string, lessonTitle: string, scorePct: number, passed: boolean) {

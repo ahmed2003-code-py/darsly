@@ -177,7 +177,7 @@ export default function QuizTakerPage() {
       {/* What the attempt earned. Shown for a failed attempt too — finishing a
           quiz is work, and the page should say so rather than only rewarding
           the students who already knew the answers. */}
-      {done && result.gamification?.awarded && (
+      {done && result?.gamification?.awarded && (
         <div className="mb-6">
           <RewardSummary outcome={result.gamification} />
         </div>
@@ -267,18 +267,18 @@ export default function QuizTakerPage() {
               {/* Why a written answer scored what it did. A bare number on an
                   essay is not something a student can learn from or argue
                   with, and the teacher can still regrade it. */}
-              {done && result.aiFeedback?.[q.id] && (
+              {done && outcome.aiFeedback?.[q.id] && (
                 <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${
-                  result.aiFeedback[q.id].awarded
+                  outcome.aiFeedback[q.id].awarded
                     ? 'bg-secondary-container/40 text-on-secondary-container'
                     : 'bg-error-container/40 text-on-error-container'
                 }`} dir="auto">
                   <span className="font-bold">
-                    {t(result.aiFeedback[q.id].awarded ? 'assess.take.aiAwarded' : 'assess.take.aiNotAwarded', {
-                      pct: result.aiFeedback[q.id].similarityPct,
+                    {t(outcome.aiFeedback[q.id].awarded ? 'assess.take.aiAwarded' : 'assess.take.aiNotAwarded', {
+                      pct: outcome.aiFeedback[q.id].similarityPct,
                     })}
                   </span>
-                  {result.aiFeedback[q.id].reason && <span className="block">{result.aiFeedback[q.id].reason}</span>}
+                  {outcome.aiFeedback[q.id].reason && <span className="block">{outcome.aiFeedback[q.id].reason}</span>}
                 </p>
               )}
 

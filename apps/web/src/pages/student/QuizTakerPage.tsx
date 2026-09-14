@@ -19,6 +19,8 @@ export default function QuizTakerPage() {
   const qc = useQueryClient();
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [result, setResult] = useState<any>(null);
+  /** Whether their previous answers have been read back into the form yet. */
+  const restored = useRef(false);
 
   const { data: quiz, isLoading } = useQuery({
     queryKey: ['quiz', lessonId],
@@ -37,7 +39,39 @@ export default function QuizTakerPage() {
     },
   });
 
-  const done = !!result;
+  /**
+   * Coming back to a paper you have already sat.
+   *
+   * The page used to open on a blank paper with a running clock whatever had
+   * happened before — so a student who had finished and closed it came back to
+   * what looked like a fresh exam, and (once the clock was real) opening it
+   * spent another attempt. What they should land on is their result.
+   *
+   * `retaking` is the student saying, on purpose, that they want another go.
+   * Nothing here decides that for them.
+   */
+  const [retaking, setRetaking] = useState(false);
+  const sat = quiz?.lastAttempt ?? null;
+  // Their result: the one just submitted, or the one already on file.
+  const outcome = result ?? sat;
+  const done = !!outcome && !retaking;
+
+  /**
+   * Show them their own paper, once.
+   *
+   * Their answers come back with the quiz, so a finished paper renders filled
+   * in rather than empty. Copied into state a single time — after that the
+   * inputs belong to the student, and a refetch must not overwrite what they
+   * are in the middle of typing.
+   */
+  useEffect(() => {
+    if (restored.current || retaking) return;
+    const prior = quiz?.lastAttempt?.answers;
+    if (!prior || !Object.keys(prior).length) return;
+    restored.current = true;
+    setAnswers(prior);
+  }, [quiz?.lastAttempt?.answers, retaking]);
+
 
   /**
    * The countdown on a timed paper.
@@ -75,7 +109,12 @@ export default function QuizTakerPage() {
   if (!quiz) return null;
 
   const reviewById: Record<string, any> = {};
-  (result?.review ?? []).forEach((r: any) => (reviewById[r.id] = r));
+  // The key, from the submission that just happened or from the paper on file.
+  // Empty when the teacher keeps the answers to themselves, or while the
+  // student still has an attempt they could spend them on.
+  ((result?.review?.length ? result.review : quiz?.review) ?? []).forEach(
+    (r: any) => (reviewById[r.id] = r),
+  );
   const answered = Object.keys(answers).length;
 
   return (
@@ -95,8 +134,8 @@ export default function QuizTakerPage() {
 
       {/* Result banner */}
       {done && (
-        <div className={`card mb-6 text-center ${result.passed ? 'border-secondary' : result.needsManualGrading ? 'border-warn' : 'border-error'} border-2`}>
-          {result.needsManualGrading ? (
+        <div className={`card mb-6 text-center ${outcome.passed ? 'border-secondary' : outcome.needsManualGrading ? 'border-warn' : 'border-error'} border-2`}>
+          {outcome.needsManualGrading ? (
             <>
               <span className="material-symbols-outlined mb-1 text-4xl text-warn">hourglass_top</span>
               <p className="font-heading text-lg font-bold">{t('assess.take.pendingManual')}</p>
@@ -104,9 +143,33 @@ export default function QuizTakerPage() {
             </>
           ) : (
             <>
-              <p className={`font-heading text-4xl font-extrabold ${result.passed ? 'text-secondary' : 'text-error'}`}>{result.scorePct}%</p>
-              <p className="mt-1 font-bold">{result.passed ? t('assess.take.passed') : t('assess.take.failed')}</p>
+              <p className={`font-heading text-4xl font-extrabold ${outcome.passed ? 'text-secondary' : 'text-error'}`}>{outcome.scorePct}%</p>
+              <p className="mt-1 font-bold">{outcome.passed ? t('assess.take.passed') : t('assess.take.failed')}</p>
+              {/* Said plainly, because arriving at a paper you have already sat
+                  and being shown a blank one is what this replaces. */}
+              {!result && <p className="mt-1 text-sm text-outline">{t('assess.take.alreadySat')}</p>}
             </>
+          )}
+
+          {/* Another go, only when there is something to gain from one: the
+              server decides that (attempts left, and not already full marks)
+              and the page does not second-guess it. An attempt cap of one never
+              advertises a second. */}
+          {quiz.canSitAgain && !outcome.needsManualGrading && (
+            <div className="mt-4">
+              <button className="btn-ghost" onClick={() => {
+                restored.current = true; // a retake starts from a blank paper
+                setRetaking(true); setResult(null); setAnswers({});
+              }}>
+                <span className="material-symbols-outlined text-base">refresh</span>
+                {t('assess.take.retake')}
+              </button>
+              <p className="mt-1 text-xs text-outline">
+                {quiz.attemptsRemaining != null
+                  ? t('assess.take.retakeHintCounted', { count: quiz.attemptsRemaining })
+                  : t('assess.take.retakeHint')}
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -136,7 +199,9 @@ export default function QuizTakerPage() {
       {!done && quiz.lastAttempt && (
         <div className="card mb-6 flex items-center justify-between">
           <span className="text-sm text-on-surface-variant">{t('assess.take.lastAttempt')}</span>
-          {quiz.lastAttempt.needsManualGrading
+          {/* A score of null is a paper still being marked, not a score of
+              nothing — it used to render as a bare "%". */}
+          {quiz.lastAttempt.needsManualGrading || quiz.lastAttempt.scorePct == null
             ? <Badge tone="warn">{t('assess.q.needsGrading')}</Badge>
             : <Badge tone={quiz.lastAttempt.passed ? 'teal' : 'error'}>{quiz.lastAttempt.scorePct}%</Badge>}
         </div>

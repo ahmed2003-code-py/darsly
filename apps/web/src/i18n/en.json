@@ -786,7 +786,9 @@
       "aiGradingHint": "Each answer is compared with the model answer you wrote. Anything it cannot judge comes to you to mark, as before.",
       "aiThreshold": "Similarity needed: {{pct}}%",
       "aiThresholdHint": "An answer at or above this scores full marks. You can still change any mark afterwards.",
-      "aiNeedsModelAnswer": "{{count}} written question(s) have no model answer — write one so automatic marking can work."
+      "aiNeedsModelAnswer": "{{count}} written question(s) have no model answer — write one so automatic marking can work.",
+      "showAnswers": "Show students the right answers",
+      "showAnswersHint": "Once they are done with the paper. Switch it off and they see their score and their own answers only. Answers never appear while a student still has an attempt to spend them on."
     },
     "assign": {
       "prompt": "Brief",
@@ -824,7 +826,11 @@
       "pickN": "Pick {{count}} answers",
       "timeLeft": "left",
       "aiAwarded": "Correct — {{pct}}% match with the model answer.",
-      "aiNotAwarded": "Incomplete — {{pct}}% match with the model answer."
+      "aiNotAwarded": "Incomplete — {{pct}}% match with the model answer.",
+      "alreadySat": "You have already sat this quiz — this is your result.",
+      "retake": "Try again to improve your score",
+      "retakeHint": "You will start a fresh paper, and your best score is the one that counts.",
+      "retakeHintCounted": "{{count}} attempt(s) left. Your best score is the one that counts."
     },
     "true": "True",
     "false": "False"

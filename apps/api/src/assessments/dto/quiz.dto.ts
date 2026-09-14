@@ -46,6 +46,8 @@ export class UpsertQuizDto {
   /** Mark the written answers against the model answer instead of queueing them. */
   @IsOptional() @IsBoolean() aiGrading?: boolean;
   @IsOptional() @IsInt() @Min(MIN_AI_THRESHOLD_PCT) @Max(MAX_AI_THRESHOLD_PCT) aiThresholdPct?: number;
+  /** Whether the student sees the right answers once they are done with it. */
+  @IsOptional() @IsBoolean() showAnswers?: boolean;
 }
 
 export class QuizOptionDto {

@@ -1160,6 +1160,17 @@ model Quiz {
   /// design: at or above this the question is full marks, below it is zero, and
   /// the teacher can still regrade either way.
   aiThresholdPct   Int     @default(60)
+  /// Whether a student gets to see the right answers once they are done with
+  /// the paper.
+  ///
+  /// On by default, which is what the platform already did. A teacher who reuses
+  /// the same paper across intakes turns it off, and their students see their
+  /// score and their own answers without the key.
+  ///
+  /// It never overrides the anti-replay rule: answers appear only once the
+  /// student can no longer sit the paper again, because handing someone the key
+  /// and a spare attempt is the same as handing them the marks.
+  showAnswers      Boolean @default(true)
 
   questions QuizQuestion[]
   attempts  QuizAttempt[]

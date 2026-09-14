@@ -96,6 +96,7 @@ export class QuizzesService {
         remedialLessonId: dto.remedialLessonId ?? null,
         aiGrading: dto.aiGrading ?? false,
         aiThresholdPct: dto.aiThresholdPct ?? 60,
+        showAnswers: dto.showAnswers ?? true,
       },
       update: {
         ...(dto.passingScore != null ? { passingScore: dto.passingScore } : {}),
@@ -105,6 +106,7 @@ export class QuizzesService {
         ...(dto.remedialLessonId !== undefined ? { remedialLessonId: dto.remedialLessonId || null } : {}),
         ...(dto.aiGrading != null ? { aiGrading: dto.aiGrading } : {}),
         ...(dto.aiThresholdPct != null ? { aiThresholdPct: dto.aiThresholdPct } : {}),
+        ...(dto.showAnswers != null ? { showAnswers: dto.showAnswers } : {}),
       },
       include: { questions: { orderBy: { sortOrder: 'asc' } } },
     });
@@ -286,19 +288,40 @@ export class QuizzesService {
     });
     if (!quiz) throw new NotFoundException('This lesson has no quiz');
 
-    const [lastAttempt, attemptsUsed] = await Promise.all([
-      this.prisma.quizAttempt.findFirst({
-        where: { quizId: quiz.id, studentId, voidedAt: null },
-        orderBy: { startedAt: 'desc' },
-      }),
-      this.prisma.quizAttempt.count({ where: { quizId: quiz.id, studentId, voidedAt: null } }),
-    ]);
+    // Only sittings that were actually sat. An abandoned row — opened when a
+    // timed paper was handed over and never sent — is not a result and must not
+    // be shown as the student's last attempt.
+    const sat = await this.prisma.quizAttempt.findMany({
+      where: { quizId: quiz.id, studentId, voidedAt: null, submittedAt: { not: null } },
+      orderBy: { submittedAt: 'desc' },
+    });
+    const attemptsUsed = sat.length;
+    const lastAttempt = sat[0] ?? null;
+    const bestScorePct = sat.reduce<number | null>(
+      (best, a) => (a.scorePct == null ? best : best == null ? a.scorePct : Math.max(best, a.scorePct)),
+      null,
+    );
+    const canSitAgain = this.canSitAgain(quiz, attemptsUsed, bestScorePct);
 
-    // A timed paper starts its clock here, the moment the questions are handed
-    // over — which is the only honest place for it. The row it opens is what
-    // the deadline is measured against on submission, so the limit survives a
-    // reloaded page, a second tab, and a client whose clock is wrong.
-    const inFlight = quiz.timeLimitSec != null ? await this.openAttempt(quiz, studentId) : null;
+    /**
+     * The clock starts only for a sitting that can actually happen.
+     *
+     * It used to start on every visit to the page, so a student opening a paper
+     * they had already finished started a fresh sitting — which spent an
+     * attempt, and put a running countdown over a result they had already got.
+     */
+    const inFlight =
+      quiz.timeLimitSec != null && canSitAgain ? await this.openAttempt(quiz, studentId) : null;
+
+    /**
+     * Whether the right answers travel with this response.
+     *
+     * Two conditions, and both have to hold. The teacher has to have allowed it
+     * at all, and the student has to have no attempt left to spend the answers
+     * on — because a key plus a spare attempt is just a slower way of giving
+     * out full marks.
+     */
+    const reveal = quiz.showAnswers && !canSitAgain && attemptsUsed > 0;
 
     return {
       id: quiz.id,
@@ -314,6 +337,11 @@ export class QuizzesService {
       maxAttempts: quiz.maxAttempts,
       attemptsUsed,
       attemptsRemaining: quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptsUsed) : null,
+      /** Whether to offer them another go — see canSitAgain for what decides it. */
+      canSitAgain,
+      /** Their best result so far, which is the one that counts. */
+      bestScorePct,
+      showAnswers: quiz.showAnswers,
       questions: this.inReadingOrder(quiz.questions, quiz.shuffleQuestions).map((q) => ({
         id: q.id,
         type: q.type,
@@ -328,8 +356,17 @@ export class QuizzesService {
             passed: lastAttempt.passed,
             needsManualGrading: lastAttempt.needsManualGrading,
             submittedAt: lastAttempt.submittedAt,
+            /**
+             * What they wrote, so coming back to a paper shows them their own
+             * paper instead of a blank one. Sent whatever the teacher decided
+             * about the answers: these are the student's, not the key.
+             */
+            answers: (lastAttempt.answers ?? {}) as Record<string, string | string[]>,
+            aiFeedback: lastAttempt.aiFeedback ?? null,
           }
         : null,
+      /** The key, when there is nothing left to gain from it. */
+      review: reveal ? this.reviewOf(quiz.questions, (lastAttempt?.answers ?? {}) as any) : [],
     };
   }
 
@@ -350,9 +387,12 @@ export class QuizzesService {
       this.prisma.quizAttempt.count({
         where: { quizId: quiz.id, studentId, voidedAt: null, submittedAt: { not: null } },
       }),
+      // The best pass so far, if any: what matters is whether they already have
+      // full marks, not merely whether they got over the line.
       this.prisma.quizAttempt.findFirst({
         where: { quizId: quiz.id, studentId, passed: true, voidedAt: null },
-        select: { id: true },
+        orderBy: { scorePct: 'desc' },
+        select: { id: true, scorePct: true },
       }),
       // The open sitting for a timed paper, whose clock started when the
       // questions were handed over.
@@ -364,8 +404,17 @@ export class QuizzesService {
           })
         : Promise.resolve(null),
     ]);
-    if (passedBefore) {
-      throw new BadRequestException({ message: 'You have already passed this quiz', code: 'ALREADY_PASSED' });
+    /**
+     * Whether this sitting is allowed at all.
+     *
+     * Passing used to close the paper for good, which meant a student who
+     * scraped 55% on a three-attempt paper was told "you have already passed
+     * this quiz" when they tried to do better. What actually has nothing left
+     * to improve is a full score — so that is what is refused, along with
+     * having no attempts left.
+     */
+    if (passedBefore?.scorePct != null && passedBefore.scorePct >= 100) {
+      throw new BadRequestException({ message: 'You already have full marks on this quiz', code: 'ALREADY_FULL_MARKS' });
     }
     if (quiz.maxAttempts != null && priorCount >= quiz.maxAttempts) {
       throw new BadRequestException({ message: 'No attempts remaining for this quiz', code: 'NO_ATTEMPTS_LEFT' });
@@ -492,12 +541,18 @@ export class QuizzesService {
         ? undefined
         : await this.awardQuiz({ studentId, lessonId, quizId: quiz.id, attemptId: attempt.id, scorePct: autoPct, passed });
 
-    // Only reveal the answer key once the student has passed or exhausted their
-    // attempts — otherwise a failed attempt would hand out every correct answer
-    // to be replayed on the next submission.
+    /**
+     * Whether the key goes out with this result, and whether another go is
+     * offered — the same question, answered in one place, from the same rule
+     * the page itself uses when they come back to it.
+     *
+     * The key waits for there to be no attempt left to spend it on, and the
+     * teacher has to have allowed it at all.
+     */
     const attemptNumber = priorCount + 1;
-    const attemptsExhausted = quiz.maxAttempts != null && attemptNumber >= quiz.maxAttempts;
-    const reveal = passed === true || attemptsExhausted;
+    const bestSoFar = Math.max(scorePct ?? 0, passedBefore?.scorePct ?? 0);
+    const canSitAgain = this.canSitAgain(quiz, attemptNumber, bestSoFar);
+    const reveal = quiz.showAnswers && !canSitAgain;
     const attemptsRemaining = quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptNumber) : null;
 
     return {
@@ -518,27 +573,77 @@ export class QuizzesService {
       passingScore: quiz.passingScore,
       revealed: reveal,
       attemptsRemaining,
-      review: reveal
-        ? quiz.questions.map((q) => ({
-            id: q.id,
-            prompt: q.prompt,
-            type: q.type,
-            correctOptionId: q.correctOptionId,
-            correctOptionIds: q.correctOptionIds?.length
-              ? q.correctOptionIds
-              : q.correctOptionId != null
-                ? [q.correctOptionId]
-                : [],
-            modelAnswer: q.modelAnswer,
-            explanation: q.explanation,
-            yourAnswer: dto.answers[q.id] ?? null,
-            correct: q.type === 'SHORT_ANSWER' ? null : isCorrectAnswer(q, dto.answers[q.id]),
-          }))
-        : [],
+      /** Offer another go only when there is something to gain from one. */
+      canSitAgain,
+      /** Their best across every sitting, which is the result that counts. */
+      bestScorePct: bestSoFar,
+      review: reveal ? this.reviewOf(quiz.questions, dto.answers) : [],
     };
   }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+  /**
+   * The answer key beside what the student wrote.
+   *
+   * Built in one place because both sides hand it out — the result of a
+   * submission, and the paper revisited afterwards — and two versions of this
+   * would eventually disagree about what a student is allowed to see.
+   */
+  private reviewOf(
+    questions: {
+      id: string; prompt: string; type: string; correctOptionId: string | null;
+      correctOptionIds: string[]; modelAnswer: string; explanation: string;
+    }[],
+    answers: Record<string, string | string[]>,
+  ) {
+    return questions.map((q) => ({
+      id: q.id,
+      prompt: q.prompt,
+      type: q.type,
+      correctOptionId: q.correctOptionId,
+      correctOptionIds: q.correctOptionIds?.length
+        ? q.correctOptionIds
+        : q.correctOptionId != null
+          ? [q.correctOptionId]
+          : [],
+      modelAnswer: q.modelAnswer,
+      explanation: q.explanation,
+      yourAnswer: answers[q.id] ?? null,
+      // A written answer has no machine verdict to report here; its marks came
+      // from the automatic marker or from the teacher.
+      correct: q.type === 'SHORT_ANSWER' ? null : isCorrectAnswer(q, answers[q.id]),
+    }));
+  }
+
+  /**
+   * Is there anything left for this student to gain by sitting the paper again?
+   *
+   * One question, asked in one place, because three separate things hang off
+   * it and they must never disagree:
+   *
+   *  - whether the student is offered a retake at all. An attempt cap of one
+   *    should not advertise a second go, and a full score has nothing to
+   *    improve.
+   *  - whether the clock is started when they open the page. It used to start
+   *    on every visit, so looking at a paper you had already sat opened a fresh
+   *    sitting and quietly spent an attempt on it.
+   *  - whether the right answers are revealed. Answers plus a spare attempt is
+   *    the same as handing over the marks, so they wait until there is no spare
+   *    attempt to use them on.
+   *
+   * A pass no longer closes it: a student who scraped 55% on a paper that allows
+   * three attempts is exactly who a retake is for. What closes it is a full
+   * score, or having no attempts left.
+   */
+  private canSitAgain(
+    quiz: { maxAttempts: number | null },
+    used: number,
+    bestScorePct: number | null,
+  ): boolean {
+    if (bestScorePct != null && bestScorePct >= 100) return false;
+    return quiz.maxAttempts == null || used < quiz.maxAttempts;
+  }
 
   /**
    * The order the student reads the questions in.

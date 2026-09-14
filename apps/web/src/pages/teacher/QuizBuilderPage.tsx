@@ -57,6 +57,7 @@ export default function QuizBuilderPage() {
   const [shuffle, setShuffle] = useState(false);
   const [aiGrading, setAiGrading] = useState(false);
   const [aiThresholdPct, setAiThresholdPct] = useState(60);
+  const [showAnswers, setShowAnswers] = useState(true);
   const [questions, setQuestions] = useState<Q[]>([]);
   const [gradingId, setGradingId] = useState<string | null>(null);
 
@@ -86,6 +87,7 @@ export default function QuizBuilderPage() {
       setShuffle(!!data.shuffleQuestions);
       setAiGrading(!!data.aiGrading);
       setAiThresholdPct(data.aiThresholdPct ?? 60);
+      setShowAnswers(data.showAnswers ?? true);
       setQuestions(
         (data.questions ?? []).map((q: any) => ({
           type: q.type,
@@ -140,6 +142,7 @@ export default function QuizBuilderPage() {
         shuffleQuestions: shuffle,
         aiGrading,
         aiThresholdPct,
+        showAnswers,
       });
       return saved;
     },
@@ -354,6 +357,19 @@ export default function QuizBuilderPage() {
                 <span>
                   <span className="block font-bold">{t('assess.q.shuffle')}</span>
                   <span className="block text-xs text-on-surface-variant">{t('assess.q.shuffleHint')}</span>
+                </span>
+              </label>
+
+              {/* A teacher who reuses one paper across intakes keeps the key to
+                  themselves. Either way the student sees their score and their
+                  own answers — and the answers never appear while they still
+                  have an attempt to spend them on. */}
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-0.5 accent-primary" checked={showAnswers}
+                  onChange={(e) => setShowAnswers(e.target.checked)} />
+                <span>
+                  <span className="block font-bold">{t('assess.q.showAnswers')}</span>
+                  <span className="block text-xs text-on-surface-variant">{t('assess.q.showAnswersHint')}</span>
                 </span>
               </label>
             </div>

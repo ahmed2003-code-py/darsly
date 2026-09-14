@@ -355,3 +355,146 @@ describe('the first save of a new quiz', () => {
     expect(prisma.quiz.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: {} }));
   });
 });
+
+/**
+ * Coming back to a paper you have already sat.
+ *
+ * The page used to open on a blank paper with a running clock whatever had
+ * happened before, so a student who finished and closed it came back to what
+ * looked like a fresh exam — and once the clock was real, merely opening it
+ * started a sitting and spent an attempt.
+ *
+ * Three things hang off one question — is there anything left to gain from
+ * sitting it again — and they must never disagree: whether a retake is offered,
+ * whether the clock starts, and whether the answer key is handed over.
+ */
+describe('a paper that has already been sat', () => {
+  const PAPER: any[] = [
+    { id: 'q1', type: 'MCQ', prompt: 'a', options: [], correctOptionId: 'o1',
+      correctOptionIds: ['o1'], modelAnswer: '', explanation: 'because', points: 1 },
+    { id: 'q2', type: 'MCQ', prompt: 'b', options: [], correctOptionId: 'o2',
+      correctOptionIds: ['o2'], modelAnswer: '', explanation: '', points: 1 },
+  ];
+
+  function ctx(quizOver: Record<string, unknown>, attempts: any[]) {
+    const created: any[] = [];
+    const prisma: any = {
+      quiz: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'quiz1', lessonId: 'l1', passingScore: 50, questions: PAPER,
+          timeLimitSec: null, shuffleQuestions: false, maxAttempts: null,
+          aiGrading: false, aiThresholdPct: 60, showAnswers: true,
+          ...quizOver,
+        }),
+      },
+      quizAttempt: {
+        findMany: jest.fn().mockResolvedValue(attempts),
+        // Opening a sitting looks for one already running before it starts a
+        // new one, so a reload does not buy more time.
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn(async (a: any) => { created.push(a.data); return { id: 'new', startedAt: new Date(), ...a.data }; }),
+      },
+    };
+    const access: any = { requireStudentAccess: jest.fn().mockResolvedValue({ studentId: 's1' }) };
+    const svc = new QuizzesService(prisma, access, {} as any, {} as any, {} as any, {} as any);
+    return { svc, prisma, created };
+  }
+
+  const sitting = (scorePct: number | null, passed: boolean | null = true) => ({
+    id: 'a1', scorePct, passed, needsManualGrading: false,
+    submittedAt: new Date('2026-09-14T12:00:00Z'),
+    answers: { q1: 'o1' }, aiFeedback: null,
+  });
+
+  it('hands back the result and the answers they gave', async () => {
+    const { svc } = ctx({ maxAttempts: 1 }, [sitting(50)]);
+    const view = await svc.getForStudent('u1', 'l1');
+    expect(view.lastAttempt).toMatchObject({ scorePct: 50, answers: { q1: 'o1' } });
+    // Their own paper, so the page renders it filled in instead of empty.
+    expect(view.attemptsUsed).toBe(1);
+  });
+
+  it('does not start a clock on a paper they cannot sit again', async () => {
+    // This is what spent an attempt just for opening the page.
+    const { svc, prisma } = ctx({ maxAttempts: 1, timeLimitSec: 600 }, [sitting(50)]);
+    const view = await svc.getForStudent('u1', 'l1');
+    expect(prisma.quizAttempt.create).not.toHaveBeenCalled();
+    expect(view.deadlineAt).toBeNull();
+  });
+
+  it('does start one when they still have a go left', async () => {
+    const { svc, prisma } = ctx({ maxAttempts: 3, timeLimitSec: 600 }, [sitting(50)]);
+    const view = await svc.getForStudent('u1', 'l1');
+    expect(prisma.quizAttempt.create).toHaveBeenCalled();
+    expect(view.deadlineAt).not.toBeNull();
+  });
+
+  it('ignores a sitting that was opened and never sent', async () => {
+    // An abandoned row is not a result and must not be shown as one.
+    const { svc, prisma } = ctx({}, []);
+    await svc.getForStudent('u1', 'l1');
+    expect(prisma.quizAttempt.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ submittedAt: { not: null } }) }),
+    );
+  });
+
+  describe('offering another go', () => {
+    it('offers one below full marks while attempts remain', async () => {
+      const { svc } = ctx({ maxAttempts: 3 }, [sitting(60)]);
+      expect((await svc.getForStudent('u1', 'l1')).canSitAgain).toBe(true);
+    });
+
+    it('offers one even though they passed — 60% is worth improving', async () => {
+      const { svc } = ctx({}, [sitting(60, true)]);
+      expect((await svc.getForStudent('u1', 'l1')).canSitAgain).toBe(true);
+    });
+
+    it('offers none on a one-attempt paper', async () => {
+      const { svc } = ctx({ maxAttempts: 1 }, [sitting(40, false)]);
+      expect((await svc.getForStudent('u1', 'l1')).canSitAgain).toBe(false);
+    });
+
+    it('offers none at full marks, however many attempts are left', async () => {
+      const { svc } = ctx({ maxAttempts: 5 }, [sitting(100)]);
+      expect((await svc.getForStudent('u1', 'l1')).canSitAgain).toBe(false);
+    });
+
+    it('counts their best sitting, not their last', async () => {
+      const { svc } = ctx({ maxAttempts: 5 }, [sitting(40, false), sitting(100)]);
+      const view = await svc.getForStudent('u1', 'l1');
+      expect(view.bestScorePct).toBe(100);
+      expect(view.canSitAgain).toBe(false);
+    });
+  });
+
+  describe('handing over the answer key', () => {
+    it('gives it up when there is no attempt left to spend it on', async () => {
+      // The case asked for: one attempt, so the student sees their whole paper
+      // with the answers.
+      const { svc } = ctx({ maxAttempts: 1 }, [sitting(40, false)]);
+      const view = await svc.getForStudent('u1', 'l1');
+      expect(view.review).toHaveLength(2);
+      expect(view.review[0]).toMatchObject({ correctOptionIds: ['o1'], explanation: 'because' });
+    });
+
+    it('withholds it while they could still use it to score better', async () => {
+      // Answers plus a spare attempt is a slower way of giving out full marks.
+      const { svc } = ctx({ maxAttempts: 3 }, [sitting(40, false)]);
+      expect((await svc.getForStudent('u1', 'l1')).review).toEqual([]);
+    });
+
+    it('withholds it when the teacher said not to show it', async () => {
+      const { svc } = ctx({ maxAttempts: 1, showAnswers: false }, [sitting(40, false)]);
+      const view = await svc.getForStudent('u1', 'l1');
+      expect(view.review).toEqual([]);
+      // Their score and their own answers still come back — it is the key that
+      // is withheld, not their paper.
+      expect(view.lastAttempt).toMatchObject({ scorePct: 40, answers: { q1: 'o1' } });
+    });
+
+    it('has nothing to reveal before they have sat it at all', async () => {
+      const { svc } = ctx({ maxAttempts: 1 }, []);
+      expect((await svc.getForStudent('u1', 'l1')).review).toEqual([]);
+    });
+  });
+});

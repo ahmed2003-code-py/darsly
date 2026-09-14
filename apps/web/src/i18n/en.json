@@ -261,6 +261,7 @@
     "statusRevoked": "Your access to this course was revoked",
     "statusExpired": "Your subscription expired — renew to continue",
     "renew": "Renew subscription",
+    "otherYear": "This course is for {{years}}, so it is not open to your year.",
     "requestSent": "Enrollment request sent successfully",
     "enrolledNow": "Your enrollment is now active!",
     "students": "{{count}} students",
@@ -1789,7 +1790,8 @@
     "htmlLocked": "This page is hand-authored, so publishing cannot change it — hand it to the studio first.",
     "noHandAuthored": "There is no hand-authored page kept for this academy.",
     "enrollmentActive": "A course you are still enrolled in, or whose payment is still being checked, cannot be removed.",
-    "messagingClosed": "Messaging is switched off for this academy."
+    "messagingClosed": "Messaging is switched off for this academy.",
+    "courseOtherYear": "This course is for a different year, so it is not open to you."
   },
   "myStudio": {
     "title": "My Studio",

@@ -215,6 +215,7 @@ const ERROR_CODES: Record<string, string> = {
   NO_HAND_AUTHORED_HTML: 'err.noHandAuthored',
   ENROLLMENT_ACTIVE: 'err.enrollmentActive',
   MESSAGING_CLOSED: 'err.messagingClosed',
+  COURSE_OTHER_YEAR: 'err.courseOtherYear',
 };
 
 export function ErrorNote({ error }: { error: unknown }) {

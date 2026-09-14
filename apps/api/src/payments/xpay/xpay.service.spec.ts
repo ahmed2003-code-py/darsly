@@ -260,6 +260,10 @@ describe('a failed checkout leaves nothing behind', () => {
       course: { findFirst: jest.fn().mockResolvedValue({ id: 'c_1', tenantId: 't_1', title: 'X', priceCents: 10000, currency: 'EGP' }) },
       enrollment: { findUnique: jest.fn().mockResolvedValue(over.existing ?? null) },
       payment: { update: jest.fn().mockResolvedValue({}) },
+      // Checkout asks whether the course's years are the student's before it
+      // calls the provider. This course names none, so it is open to everyone
+      // and the gate has nothing to say here — see course-year.spec.ts for it.
+      courseGrade: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
     } as unknown as PrismaService;
 

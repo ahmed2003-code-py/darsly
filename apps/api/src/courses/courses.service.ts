@@ -12,6 +12,7 @@ import { VideoProcessingService } from '../video/video-processing.service';
 import { VideoSource, YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
+import { yearAdmits } from '../catalog/course-year';
 import { viewerGrade } from '../catalog/stage.util';
 import {
   CreateCourseDto,
@@ -98,26 +99,37 @@ export class CoursesService {
           ? { tenantId: query.teacherId }
           : {}),
       ...(query.subjectId ? { subjectId: query.subjectId } : {}),
-      // The whole point of asking a student their year: a course names the
-      // years it is for, and a second-baccalaureate student is shown those and
-      // not the rest of the band. A course that named no year is still shown —
-      // it was never narrowed, which is not the same as being for nobody.
-      ...(gradeId
-        ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
-        : {}),
       ...(Object.keys(priceFilter).length ? { priceCents: priceFilter } : {}),
       ...(query.hasPreview
         ? { units: { some: { deletedAt: null, lessons: { some: { deletedAt: null, isFreePreview: true } } } } }
         : {}),
-      ...(query.q?.trim()
-        ? {
-            OR: [
-              { title: { contains: query.q.trim(), mode: 'insensitive' } },
-              { description: { contains: query.q.trim(), mode: 'insensitive' } },
-              { teacher: { user: { fullName: { contains: query.q.trim(), mode: 'insensitive' } } } },
-            ],
-          }
-        : {}),
+      // The year and the search text are both a set of alternatives, so they
+      // are collected here rather than spread: as two `OR` keys on one object
+      // the second silently replaced the first, and typing anything into the
+      // search box dropped the year filter — a third-secondary student who
+      // searched was shown every year's courses again. Inside `AND` the two
+      // narrow together, and a third such filter will too.
+      AND: [
+        // The whole point of asking a student their year: a course names the
+        // years it is for, and a second-baccalaureate student is shown those
+        // and not the rest of the band. A course that named no year is still
+        // shown — it was never narrowed, which is not the same as being for
+        // nobody.
+        ...(gradeId
+          ? [{ OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }]
+          : []),
+        ...(query.q?.trim()
+          ? [
+              {
+                OR: [
+                  { title: { contains: query.q.trim(), mode: 'insensitive' as const } },
+                  { description: { contains: query.q.trim(), mode: 'insensitive' as const } },
+                  { teacher: { user: { fullName: { contains: query.q.trim(), mode: 'insensitive' as const } } } },
+                ],
+              },
+            ]
+          : []),
+      ],
     };
 
     // `popular` and `rating` are aggregates, so they cannot be an ORDER BY on
@@ -855,12 +867,14 @@ export class CoursesService {
 
     let enrollment = null;
     let studentId: string | null = null;
+    let studentGrade: string | null = null;
     if (viewer?.role === Role.STUDENT) {
       const student = await this.prisma.studentProfile.findUnique({
         where: { userId: viewer.sub },
       });
       if (student) {
         studentId = student.id;
+        studentGrade = student.gradeId;
         enrollment = await this.prisma.enrollment.findUnique({
           where: { studentId_courseId: { studentId: student.id, courseId } },
         });
@@ -870,6 +884,21 @@ export class CoursesService {
     const activeEnrollment =
       enrollment?.status === 'ACTIVE' &&
       (!enrollment.expiresAt || enrollment.expiresAt > new Date());
+    /**
+     * Whether this course's years are the student's own.
+     *
+     * The page is reachable without going through discovery — from the
+     * teacher's public landing page, or a link a friend sent — so it is where a
+     * student first learns a course is not for their year. Sent with the page so
+     * the enrol button can say so instead of being pressed and refused.
+     *
+     * A course they have already held stays theirs: the same carve-out the
+     * enrolment gate makes, so the two never disagree on one course.
+     */
+    const forMyYear =
+      yearAdmits(course.grades.map((g) => g.gradeId), studentGrade) ||
+      enrollment?.status === 'ACTIVE' ||
+      enrollment?.status === 'EXPIRED';
 
     const now = Date.now();
     const unlockedByDrip = (lesson: { dripUnlockAt: Date | null; dripAfterEnrollDays: number | null }) => {
@@ -930,6 +959,8 @@ export class CoursesService {
         enrollmentStatus: enrollment?.status ?? null,
         enrollmentExpiresAt: enrollment?.expiresAt ?? null,
         hasAccess: isOwner || !!activeEnrollment,
+        /** False only when the course names years and none of them is theirs. */
+        forMyYear: isOwner || forMyYear,
       },
       units: course.units.map((u) => ({
         id: u.id,

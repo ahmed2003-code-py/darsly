@@ -115,6 +115,17 @@ describe('every filter resolves in the database', () => {
     return calls.where as Record<string, unknown>;
   };
 
+  // The year and the search text are each a set of alternatives, and they live
+  // in `AND` so that having both narrows by both. As two `OR` keys on one
+  // object the second replaced the first, so these are picked apart by what
+  // they match on rather than by position.
+  type Alternatives = { OR: Record<string, unknown>[] };
+  const alternatives = (where: Record<string, unknown>) => (where.AND ?? []) as Alternatives[];
+  const yearClause = (where: Record<string, unknown>) =>
+    alternatives(where).find((c) => c.OR?.some((o) => 'grades' in o))?.OR;
+  const searchClause = (where: Record<string, unknown>) =>
+    alternatives(where).find((c) => c.OR?.some((o) => 'title' in o))?.OR;
+
   it('filters subject and teacher directly', async () => {
     expect(await whereFor({ subjectId: 's1', teacherId: 't9' })).toMatchObject({
       subjectId: 's1', tenantId: 't9',
@@ -127,27 +138,40 @@ describe('every filter resolves in the database', () => {
     await service.discover({}, 'user-1');
     const where = (prisma.course.findMany as jest.Mock).mock.calls[0][0].where;
     // Their year, and courses that named no year at all.
-    expect(where.OR).toEqual([{ grades: { some: { gradeId: 'prep-2' } } }, { grades: { none: {} } }]);
+    expect(yearClause(where)).toEqual([{ grades: { some: { gradeId: 'prep-2' } } }, { grades: { none: {} } }]);
   });
 
   it('lets a student ask to look outside their own year', async () => {
     const { service, prisma } = build();
     (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ gradeId: 'prep-2' });
     await service.discover({ allStages: true }, 'user-1');
-    expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].where).not.toHaveProperty('OR');
+    expect(yearClause((prisma.course.findMany as jest.Mock).mock.calls[0][0].where)).toBeUndefined();
   });
 
   it('narrows nothing for a visitor who is not signed in', async () => {
     const { service, prisma } = build();
     await service.discover({});
-    expect((prisma.course.findMany as jest.Mock).mock.calls[0][0].where).not.toHaveProperty('OR');
+    expect(yearClause((prisma.course.findMany as jest.Mock).mock.calls[0][0].where)).toBeUndefined();
   });
 
   it('filters by the exact year asked for', async () => {
     const where = await whereFor({ gradeId: 'g1' });
     // The year itself, and courses that were never narrowed — an empty list
     // means "not yet decided", not "for nobody".
-    expect(where.OR).toEqual([{ grades: { some: { gradeId: 'g1' } } }, { grades: { none: {} } }]);
+    expect(yearClause(where)).toEqual([{ grades: { some: { gradeId: 'g1' } } }, { grades: { none: {} } }]);
+  });
+
+  /**
+   * A student who typed in the search box used to be shown every year's
+   * courses: the year filter and the search were both written to `where.OR`,
+   * and the second overwrote the first. That is how a third-secondary student
+   * reached a first-baccalaureate course — so both clauses have to survive
+   * being asked for together.
+   */
+  it('keeps the year filter when the student also searches', async () => {
+    const where = await whereFor({ gradeId: 'g1', q: 'python' });
+    expect(yearClause(where)).toEqual([{ grades: { some: { gradeId: 'g1' } } }, { grades: { none: {} } }]);
+    expect(JSON.stringify(searchClause(where))).toContain('python');
   });
 
   it('filters teaching language through the teacher', async () => {
@@ -156,15 +180,15 @@ describe('every filter resolves in the database', () => {
 
   it('searches the title, the description and the teacher\'s name', async () => {
     const where = await whereFor({ q: ' algebra ' });
-    expect(where.OR).toHaveLength(3);
-    expect(JSON.stringify(where.OR)).toContain('algebra');
+    expect(searchClause(where)).toHaveLength(3);
+    expect(JSON.stringify(searchClause(where))).toContain('algebra');
     // Trimmed, and case-insensitive — a student typing "Algebra" finds it.
-    expect(JSON.stringify(where.OR)).not.toContain(' algebra ');
-    expect(JSON.stringify(where.OR)).toContain('insensitive');
+    expect(JSON.stringify(searchClause(where))).not.toContain(' algebra ');
+    expect(JSON.stringify(searchClause(where))).toContain('insensitive');
   });
 
   it('ignores an empty search rather than matching everything against ""', async () => {
-    expect(await whereFor({ q: '   ' })).not.toHaveProperty('OR');
+    expect(searchClause(await whereFor({ q: '   ' }))).toBeUndefined();
   });
 
   it('filters a price range', async () => {

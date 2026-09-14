@@ -10,6 +10,7 @@ import { reserveCouponUse } from '../payments/coupon-use';
 import { computeServiceFee } from '../payments/fee.util';
 import { LedgerService } from '../payments/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertCourseYear } from '../catalog/course-year';
 import { activateBundleChildren } from './bundle';
 
 /**
@@ -150,6 +151,10 @@ export class EnrollmentsService {
     if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
       throw new ConflictException('Already enrolled in this course');
     }
+    // Before the price, because a student whose year this course is not for
+    // should be told that rather than handed a payment screen for something
+    // they were never going to be allowed to open.
+    await assertCourseYear(this.prisma, courseId, student.gradeId, existing);
     const quote = await this.quote(courseId, couponCode);
 
     // Paid → must pay first (manual proof + verification).

@@ -21,7 +21,7 @@ const LESSON_ICON: Record<string, string> = {
 /** Course page per course_curriculum design: curriculum accordion with
  *  lock/preview/drip state per lesson + enrollment card with coupon quote. */
 export default function CourseDetailPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
@@ -102,8 +102,21 @@ export default function CourseDetailPage() {
             : enrollmentStatus === 'ACTIVE' || enrollmentStatus === 'EXPIRED'
               ? { tone: 'warn', icon: 'schedule', text: t('course.statusExpired') }
               : null;
+  // A course for other years than the student's own is not something they can
+  // buy, so the page says that where the price and the button would be. They
+  // can still read it — the teacher's landing page links here, and arriving to
+  // a dead end with no explanation is worse than arriving to one with a reason.
+  const otherYear = isStudent && course.viewer.forMyYear === false;
+  // Named in the reader's own language, and joined with their own comma — the
+  // sentence around them is translated, so the years inside it cannot be left
+  // in Arabic for an English reader.
+  const ar = i18n.language !== 'en';
+  const yearNames = (course.grades ?? [])
+    .map((g: { nameAr: string; nameEn: string }) => (ar ? g.nameAr : g.nameEn))
+    .join(ar ? '، ' : ', ');
   const canEnroll =
     isStudent &&
+    !otherYear &&
     (!enrollmentStatus || ['REJECTED', 'REVOKED', 'EXPIRED'].includes(enrollmentStatus) ||
       (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess));
 
@@ -362,6 +375,14 @@ export default function CourseDetailPage() {
                 <p className="mb-4 rounded-lg bg-secondary-container/50 px-4 py-3 text-sm font-bold text-on-secondary-container">{flash}</p>
               )}
 
+              {otherYear && (
+                <p className="mb-1 flex items-start gap-2 rounded-xl bg-secondary-container/60 px-4 py-3 text-sm font-bold text-on-secondary-container">
+                  <span className="material-symbols-outlined text-base">school</span>
+                  <span>
+                    {t('course.otherYear', { years: yearNames })}
+                  </span>
+                </p>
+              )}
               {canEnroll && (
                 <>
                   {course.priceCents > 0 && (

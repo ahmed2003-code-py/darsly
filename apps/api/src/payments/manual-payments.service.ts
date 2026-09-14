@@ -10,6 +10,7 @@ import { Role } from '@darsly/shared-types';
 import { validateImageDataUrl } from '../common/image.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertCourseYear } from '../catalog/course-year';
 import { activateBundleChildren } from '../enrollments/bundle';
 import { releaseCouponUse, reserveCouponUse } from './coupon-use';
 import { computeServiceFee } from './fee.util';
@@ -65,6 +66,10 @@ export class ManualPaymentsService {
       where: { studentId: student.id, courseId: course.id, status: 'PENDING' },
     });
     if (pending) throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+
+    // Checked before any money is named: the course being for another year is a
+    // refusal, and taking a proof of payment for it would mean refunding it.
+    await assertCourseYear(this.prisma, course.id, student.gradeId, enrollment);
 
     const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
 
@@ -196,6 +201,9 @@ export class ManualPaymentsService {
         (!enrolled.expiresAt || enrolled.expiresAt > new Date())) {
       throw new ConflictException({ message: 'Already enrolled', code: 'ALREADY_ENROLLED' });
     }
+    // Same gate as every other way in: paying from a balance already inside the
+    // platform is still buying access, and the year still has to match.
+    await assertCourseYear(this.prisma, course.id, student.gradeId, enrolled);
     const balance = await this.ledger.walletBalance(student.id);
 
     // A cheap pre-check so the common failure is a clean error rather than a

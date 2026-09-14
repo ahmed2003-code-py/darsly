@@ -38,6 +38,15 @@ export class TeachersService {
     // it — see SubjectExclusivityService for why the rule is drawn this way.
     const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
     const stage = await viewerStage(this.prisma, query, viewerUserId);
+    // The card counts and prices the same courses the teacher's page will list,
+    // which is the student's own year — teachers are matched on the band, but a
+    // course is for a year. Counting every published course instead told a
+    // third-secondary student a teacher had one course, and then showed them an
+    // empty page when they opened it.
+    const gradeId = await viewerGrade(this.prisma, query, viewerUserId);
+    const forMyYear = gradeId
+      ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
+      : {};
     const where: Prisma.TeacherProfileWhereInput = {
       status: 'APPROVED',
       user: { isActive: true },
@@ -62,7 +71,7 @@ export class TeachersService {
         subject: true,
         grades: { include: { grade: true } },
         courses: {
-          where: { status: 'PUBLISHED' },
+          where: { status: 'PUBLISHED', deletedAt: null, ...forMyYear },
           select: { id: true, priceCents: true, pricingModel: true },
         },
       },

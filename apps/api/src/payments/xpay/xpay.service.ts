@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertCourseYear } from '../../catalog/course-year';
 import { releaseCouponUse, reserveCouponUse } from '../coupon-use';
 import { ManualPaymentsService } from '../manual-payments.service';
 import { XPayClient } from './xpay.client';
@@ -57,6 +58,9 @@ export class XPayService {
     if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
       throw new ConflictException('You are already enrolled in this course');
     }
+    // Before the provider is involved, so a course that is for another year is
+    // refused here rather than by a refund after the card has been charged.
+    await assertCourseYear(this.prisma, courseId, student.gradeId, existing);
 
     // Priced through the same method the bank-transfer route uses, coupon and
     // all. Two routes that price differently would credit a teacher different

@@ -12,7 +12,33 @@ import {
   UpsertQuizDto,
 } from './dto/quiz.dto';
 
-@Injectable()
+/**
+ * Was this answer right?
+ *
+ * A question can have more than one right option, and then naming some of them
+ * is not the same as naming them — partial credit on a "choose two" turns it
+ * into two easier questions. So the sets have to match exactly.
+ *
+ * `correctOptionIds` is what is read; `correctOptionId` is the fallback for any
+ * row written before the column existed.
+ */
+export function isCorrectAnswer(
+  q: { type: string; correctOptionId: string | null; correctOptionIds?: string[] },
+  answer: unknown,
+): boolean {
+  if (q.type === 'SHORT_ANSWER') return false;
+  const key = q.correctOptionIds?.length
+    ? q.correctOptionIds
+    : q.correctOptionId != null
+      ? [q.correctOptionId]
+      : [];
+  if (!key.length) return false;
+  const given = Array.isArray(answer) ? answer : answer != null ? [answer] : [];
+  const chosen = new Set(given.filter((v): v is string => typeof v === 'string'));
+  return chosen.size === key.length && key.every((k) => chosen.has(k));
+}
+
+  @Injectable()
 export class QuizzesService {
   constructor(
     private readonly prisma: PrismaService,
@@ -60,7 +86,12 @@ export class QuizzesService {
             type: (q.type as any) ?? 'MCQ',
             prompt: q.prompt,
             options: (q.options ?? []) as any,
-            correctOptionId: q.correctOptionId ?? null,
+            // Both are written: the array is what grading reads, and the
+            // single id keeps any not-yet-deployed code correct.
+            correctOptionIds: q.correctOptionIds ?? (q.correctOptionId ? [q.correctOptionId] : []),
+            correctOptionId: q.correctOptionIds?.[0] ?? q.correctOptionId ?? null,
+            maxSelections: Math.max(1, Math.min(q.maxSelections ?? 1, (q.options ?? []).length || 1)),
+            modelAnswer: q.modelAnswer ?? '',
             explanation: q.explanation ?? '',
             points: q.points ?? 1,
             sortOrder: i,
@@ -104,7 +135,7 @@ export class QuizzesService {
       if (q.type === 'SHORT_ANSWER') {
         const awarded = Number(dto.scores?.[q.id] ?? 0);
         earned += Math.max(0, Math.min(q.points, awarded));
-      } else if (answers[q.id] != null && answers[q.id] === q.correctOptionId) {
+      } else if (isCorrectAnswer(q, answers[q.id])) {
         earned += q.points;
       }
     }
@@ -203,19 +234,36 @@ export class QuizzesService {
 
     let earned = 0;
     let total = 0;
+    let pending = 0; // points on questions only a person can mark
     let needsManual = false;
     for (const q of quiz.questions) {
       total += q.points;
       if (q.type === 'SHORT_ANSWER') {
         needsManual = true; // graded later by the teacher
-      } else if (dto.answers[q.id] != null && dto.answers[q.id] === q.correctOptionId) {
+        pending += q.points;
+      } else if (isCorrectAnswer(q, dto.answers[q.id])) {
         earned += q.points;
       }
     }
 
+    /**
+     * Mark what can be marked now.
+     *
+     * One essay used to put the whole paper in a queue, so a student who got
+     * every multiple-choice question right was told "awaiting grading" and
+     * learned nothing. The machine knows the answers to the questions it set;
+     * it should say so.
+     *
+     * The verdict follows from the two ends of what is still possible: with the
+     * objective part alone already past the pass mark the student has passed,
+     * and with every remaining point still not enough they have not. Only the
+     * gap between those is genuinely waiting on a person.
+     */
     const autoPct = total ? Math.round((earned / total) * 100) : 0;
-    const scorePct = needsManual ? null : autoPct;
-    const passed = needsManual ? null : autoPct >= quiz.passingScore;
+    const bestPct = total ? Math.round(((earned + pending) / total) * 100) : 0;
+    const decided = !needsManual || autoPct >= quiz.passingScore || bestPct < quiz.passingScore;
+    const scorePct = autoPct;
+    const passed = decided ? autoPct >= quiz.passingScore : null;
 
     const attempt = await this.prisma.quizAttempt.create({
       data: {
@@ -226,6 +274,8 @@ export class QuizzesService {
         passed,
         needsManualGrading: needsManual,
         submittedAt: new Date(),
+        // Marked now only when nothing is left for a person to read. A decided
+        // result with essays outstanding is still a partial score.
         gradedAt: needsManual ? null : new Date(),
       },
     });
@@ -234,9 +284,12 @@ export class QuizzesService {
 
     // Points for the work, before the result is assembled — the response
     // carries them so the result screen can show what the attempt earned.
-    const gamification = needsManual
-      ? undefined
-      : await this.awardQuiz({ studentId, lessonId, quizId: quiz.id, attemptId: attempt.id, scorePct: autoPct, passed: !!passed });
+    // Rewarded once the verdict is real, which is now the common case even
+    // with an essay on the paper.
+    const gamification =
+      passed == null
+        ? undefined
+        : await this.awardQuiz({ studentId, lessonId, quizId: quiz.id, attemptId: attempt.id, scorePct: autoPct, passed });
 
     // Only reveal the answer key once the student has passed or exhausted their
     // attempts — otherwise a failed attempt would hand out every correct answer
@@ -252,6 +305,9 @@ export class QuizzesService {
       passed,
       gamification,
       needsManualGrading: needsManual,
+      /** Points still with a person. Shown so a partial score reads as partial. */
+      pendingPoints: pending,
+      totalPoints: total,
       passingScore: quiz.passingScore,
       revealed: reveal,
       attemptsRemaining,
@@ -261,18 +317,21 @@ export class QuizzesService {
             prompt: q.prompt,
             type: q.type,
             correctOptionId: q.correctOptionId,
+            correctOptionIds: q.correctOptionIds?.length
+              ? q.correctOptionIds
+              : q.correctOptionId != null
+                ? [q.correctOptionId]
+                : [],
+            modelAnswer: q.modelAnswer,
             explanation: q.explanation,
             yourAnswer: dto.answers[q.id] ?? null,
-            correct:
-              q.type === 'SHORT_ANSWER'
-                ? null
-                : dto.answers[q.id] != null && dto.answers[q.id] === q.correctOptionId,
+            correct: q.type === 'SHORT_ANSWER' ? null : isCorrectAnswer(q, dto.answers[q.id]),
           }))
         : [],
     };
   }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+// ── helpers ────────────────────────────────────────────────────────────────
 
   private async assertTeacherQuiz(tenantId: string, lessonId: string) {
     await this.access.requireTeacherLesson(tenantId, lessonId);

@@ -110,12 +110,20 @@ export function IsPageSize(max = 50): PropertyDecorator {
  * of them gets iterated by the grading code.
  */
 export function IsBoundedRecord(
-  opts: { maxKeys?: number; maxKeyLength?: number; maxValueLength?: number } = {},
+  opts: {
+    maxKeys?: number;
+    maxKeyLength?: number;
+    maxValueLength?: number;
+    /** Accept an array of strings as a value, up to this many entries. A
+     *  question that asks for more than one answer sends one. */
+    allowArrays?: number;
+  } = {},
   validationOptions?: ValidationOptions,
 ): PropertyDecorator {
   const maxKeys = opts.maxKeys ?? 200;
   const maxKeyLength = opts.maxKeyLength ?? LIMITS.ID;
   const maxValueLength = opts.maxValueLength ?? LIMITS.NOTE;
+  const allowArrays = opts.allowArrays ?? 0;
 
   return function (object: object, propertyName: string | symbol) {
     registerDecorator({
@@ -132,7 +140,11 @@ export function IsBoundedRecord(
             ([key, val]) =>
               key.length <= maxKeyLength &&
               (typeof val === 'number' ||
-                (typeof val === 'string' && val.length <= maxValueLength)),
+                (typeof val === 'string' && val.length <= maxValueLength) ||
+                (allowArrays > 0 &&
+                  Array.isArray(val) &&
+                  val.length <= allowArrays &&
+                  val.every((v) => typeof v === 'string' && v.length <= maxValueLength))),
           );
         },
         defaultMessage() {

@@ -736,7 +736,14 @@
       "gradeNow": "Grade now",
       "gradeGeneric": "Confirm the result.",
       "awardPoints": "of {{max}}",
-      "finalize": "Finalize score"
+      "finalize": "Finalize score",
+      "howMany": "The student picks",
+      "howManyOne": "one answer",
+      "howManyN": "{{count}} answers",
+      "pickCorrectMulti": "Mark every right answer. The student has to name all of them to score.",
+      "modelAnswer": "Model answer",
+      "modelAnswerHint": "What you consider a right answer. You see it while grading; the student sees it after they submit.",
+      "modelAnswerPh": "Write the answer you expect"
     },
     "assign": {
       "prompt": "Brief",
@@ -770,7 +777,8 @@
       "resubmit": "Resubmit",
       "submitAssign": "Submit assignment",
       "lockedGraded": "This assignment is graded — resubmission is closed.",
-      "submitted": "Submitted ✓"
+      "submitted": "Submitted ✓",
+      "pickN": "Pick {{count}} answers"
     },
     "true": "True",
     "false": "False"

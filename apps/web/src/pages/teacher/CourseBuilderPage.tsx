@@ -364,6 +364,8 @@ export default function CourseBuilderPage() {
     };
   }
 
+  const [videoError, setVideoError] = useState<unknown>(null);
+
   async function uploadVideo(file: File) {
     // Which lesson this belongs to is decided now, not when the upload lands:
     // the teacher is free to open another lesson while it runs, and the video
@@ -374,6 +376,7 @@ export default function CourseBuilderPage() {
     setUploadingLessonId(lessonId);
     uploadingRef.current = true;
     const onPct = throttledPct(setVideoPct);
+    setVideoError(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -382,6 +385,12 @@ export default function CourseBuilderPage() {
       });
       await api.patch(`/teacher/lessons/${lessonId}`, { videoAssetId: asset.id });
       invalidate();
+    } catch (err) {
+      // `finally` used to clear the progress bar and let the error go, so a
+      // refused file — too large, wrong type, a network that dropped — put the
+      // page back to "upload a video" as though nothing had been attempted.
+      // Silence is the worst of the three possible answers.
+      setVideoError(err);
     } finally {
       uploadingRef.current = false;
       setVideoPct(null);
@@ -658,6 +667,8 @@ export default function CourseBuilderPage() {
               className="hidden"
               onChange={(e) => e.target.files?.[0] && uploadVideo(e.target.files[0])}
             />
+
+            {videoError != null && <ErrorNote error={videoError} />}
 
             {videoPct != null && uploadingLessonId === selectedLessonId ? (
               <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-3">

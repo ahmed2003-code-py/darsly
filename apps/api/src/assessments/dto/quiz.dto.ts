@@ -42,6 +42,11 @@ export class QuizQuestionDto {
   @ValidateNested({ each: true }) @Type(() => QuizOptionDto)
   options?: QuizOptionDto[];
   @IsOptionalId() correctOptionId?: string | null;
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_OPTIONS) @IsString({ each: true })
+  correctOptionIds?: string[];
+  /** How many the student may pick. Bounded by the option count on save. */
+  @IsOptional() @IsInt() @Min(1) @Max(MAX_OPTIONS) maxSelections?: number;
+  @IsOptional() @IsString() @MaxLength(LIMITS.PROSE) modelAnswer?: string;
   @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) explanation?: string;
   @IsOptional() @IsInt() @Min(1) @Max(1_000) points?: number;
 }
@@ -53,10 +58,11 @@ export class SetQuizQuestionsDto {
 }
 
 export class SubmitAttemptDto {
-  // { [questionId]: optionId | freeText }. Bounded rather than a bare object:
-  // the grader iterates every key, so an unbounded map is billable CPU.
-  @IsBoundedRecord({ maxKeys: MAX_QUESTIONS, maxValueLength: LIMITS.PROSE })
-  answers: Record<string, string>;
+  // { [questionId]: optionId | optionId[] | freeText }. Bounded rather than a
+  // bare object: the grader iterates every key, so an unbounded map is billable
+  // CPU. An array arrives for a question that asks for more than one answer.
+  @IsBoundedRecord({ maxKeys: MAX_QUESTIONS, maxValueLength: LIMITS.PROSE, allowArrays: MAX_OPTIONS })
+  answers: Record<string, string | string[]>;
 }
 
 export class GradeAttemptDto {

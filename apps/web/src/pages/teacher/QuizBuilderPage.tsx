@@ -11,21 +11,34 @@ type Q = {
   type: 'MCQ' | 'TRUE_FALSE' | 'SHORT_ANSWER';
   prompt: string;
   options: Opt[];
-  correctOptionId: string | null;
+  /** Every option that counts as right. One for most questions. */
+  correctOptionIds: string[];
+  /** How many the student may pick. `1` is an ordinary multiple choice. */
+  maxSelections: number;
+  /** What a good essay answer says. Read while grading, shown afterwards. */
+  modelAnswer: string;
   explanation: string;
-  points: number;
+  /** Held as text so the box can be emptied while it is being retyped. */
+  points: string;
 };
 
 const rid = () => Math.random().toString(36).slice(2, 8);
 const blankQ = (type: Q['type']): Q => {
+  const base = { prompt: '', maxSelections: 1, modelAnswer: '', explanation: '', points: '1' };
   if (type === 'TRUE_FALSE') {
-    return { type, prompt: '', options: [{ id: 'true', text: i18n.t('assess.true') }, { id: 'false', text: i18n.t('assess.false') }], correctOptionId: 'true', explanation: '', points: 1 };
+    return {
+      ...base, type,
+      options: [{ id: 'true', text: i18n.t('assess.true') }, { id: 'false', text: i18n.t('assess.false') }],
+      correctOptionIds: ['true'],
+    };
   }
   if (type === 'SHORT_ANSWER') {
-    return { type, prompt: '', options: [], correctOptionId: null, explanation: '', points: 1 };
+    return { ...base, type, options: [], correctOptionIds: [] };
   }
-  const a = rid(), b = rid();
-  return { type: 'MCQ', prompt: '', options: [{ id: a, text: '' }, { id: b, text: '' }], correctOptionId: a, explanation: '', points: 1 };
+  // Four, because four is what a multiple-choice question looks like. Starting
+  // at two meant adding two more every single time.
+  const ids = [rid(), rid(), rid(), rid()];
+  return { ...base, type: 'MCQ', options: ids.map((id) => ({ id, text: '' })), correctOptionIds: [ids[0]] };
 };
 
 export default function QuizBuilderPage() {
@@ -50,8 +63,18 @@ export default function QuizBuilderPage() {
       setPassingScore(data.passingScore ?? 50);
       setQuestions(
         (data.questions ?? []).map((q: any) => ({
-          type: q.type, prompt: q.prompt, options: q.options ?? [],
-          correctOptionId: q.correctOptionId, explanation: q.explanation ?? '', points: q.points ?? 1,
+          type: q.type,
+          prompt: q.prompt,
+          options: q.options ?? [],
+          correctOptionIds: q.correctOptionIds?.length
+            ? q.correctOptionIds
+            : q.correctOptionId
+              ? [q.correctOptionId]
+              : [],
+          maxSelections: q.maxSelections ?? 1,
+          modelAnswer: q.modelAnswer ?? '',
+          explanation: q.explanation ?? '',
+          points: String(q.points ?? 1),
         })),
       );
     }
@@ -60,7 +83,14 @@ export default function QuizBuilderPage() {
   const save = useMutation({
     mutationFn: async () => {
       await api.put(`/teacher/lessons/${lessonId}/quiz`, { passingScore });
-      return (await api.put(`/teacher/lessons/${lessonId}/quiz/questions`, { questions })).data;
+      // The score is typed, so it can be mid-edit or empty when Save is pressed.
+      // One is the floor because a question worth nothing is not a question.
+      const payload = questions.map((q) => ({
+        ...q,
+        points: Math.max(1, Number(q.points) || 1),
+        maxSelections: Math.max(1, Math.min(q.maxSelections, q.options.length || 1)),
+      }));
+      return (await api.put(`/teacher/lessons/${lessonId}/quiz/questions`, { questions: payload })).data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tquiz', lessonId] }),
   });
@@ -111,38 +141,108 @@ export default function QuizBuilderPage() {
 
               {q.type !== 'SHORT_ANSWER' ? (
                 <div className="space-y-2">
-                  {q.options.map((o) => (
-                    <label key={o.id} className="flex items-center gap-2">
-                      <input type="radio" className="accent-primary" checked={q.correctOptionId === o.id}
-                        onChange={() => setQ(i, { correctOptionId: o.id })} />
-                      <input className="input py-1.5 text-sm" dir="auto" value={o.text} disabled={q.type === 'TRUE_FALSE'}
-                        placeholder={t('assess.q.optionPlaceholder')}
-                        onChange={(e) => setQ(i, { options: q.options.map((oo) => (oo.id === o.id ? { ...oo, text: e.target.value } : oo)) })} />
-                      {q.type === 'MCQ' && q.options.length > 2 && (
-                        <button className="text-outline hover:text-error"
-                          onClick={() => setQ(i, { options: q.options.filter((oo) => oo.id !== o.id) })}>
-                          <span className="material-symbols-outlined text-base">close</span>
-                        </button>
-                      )}
+                  {/* How many answers the question asks for. Above the options,
+                      because it changes what marking one of them means. */}
+                  {q.type === 'MCQ' && q.options.length > 1 && (
+                    <label className="mb-1 flex items-center gap-2 text-sm text-on-surface-variant">
+                      {t('assess.q.howMany')}
+                      <select
+                        className="input w-auto py-1 text-sm"
+                        value={q.maxSelections}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          // Narrowing the ask cannot leave more answers marked
+                          // than it now allows.
+                          setQ(i, { maxSelections: n, correctOptionIds: q.correctOptionIds.slice(0, n) });
+                        }}
+                      >
+                        {Array.from({ length: q.options.length }, (_, n) => n + 1).map((n) => (
+                          <option key={n} value={n}>
+                            {n === 1 ? t('assess.q.howManyOne') : t('assess.q.howManyN', { count: n })}
+                          </option>
+                        ))}
+                      </select>
                     </label>
-                  ))}
+                  )}
+
+                  {q.options.map((o) => {
+                    const on = q.correctOptionIds.includes(o.id);
+                    const multi = q.maxSelections > 1;
+                    const mark = () => {
+                      if (!multi) return setQ(i, { correctOptionIds: [o.id] });
+                      if (on) return setQ(i, { correctOptionIds: q.correctOptionIds.filter((x) => x !== o.id) });
+                      // Marking one more than the question asks for drops the
+                      // oldest, so the count always matches what was chosen.
+                      const next = [...q.correctOptionIds, o.id];
+                      setQ(i, { correctOptionIds: next.slice(-q.maxSelections) });
+                    };
+                    return (
+                      <label key={o.id} className="flex items-center gap-2">
+                        <input
+                          type={multi ? 'checkbox' : 'radio'}
+                          className="accent-primary"
+                          checked={on}
+                          onChange={mark}
+                        />
+                        {q.type === 'TRUE_FALSE' ? (
+                          /* Text, not a disabled input. A disabled field swallows
+                             the click, so the only way to answer was to hit the
+                             dot itself — which on a phone is a small target for
+                             a word sitting right beside it. */
+                          <span className="flex-1 cursor-pointer select-none rounded-lg bg-surface-container-low px-3 py-2 text-sm font-semibold">
+                            {o.text}
+                          </span>
+                        ) : (
+                          <input className="input py-1.5 text-sm" dir="auto" value={o.text}
+                            placeholder={t('assess.q.optionPlaceholder')}
+                            onChange={(e) => setQ(i, { options: q.options.map((oo) => (oo.id === o.id ? { ...oo, text: e.target.value } : oo)) })} />
+                        )}
+                        {q.type === 'MCQ' && q.options.length > 2 && (
+                          <button type="button" className="text-outline hover:text-error"
+                            onClick={() => setQ(i, {
+                              options: q.options.filter((oo) => oo.id !== o.id),
+                              correctOptionIds: q.correctOptionIds.filter((x) => x !== o.id),
+                            })}>
+                            <span className="material-symbols-outlined text-base">close</span>
+                          </button>
+                        )}
+                      </label>
+                    );
+                  })}
                   {q.type === 'MCQ' && (
-                    <button className="text-sm text-primary hover:underline"
+                    <button type="button" className="text-sm text-primary hover:underline"
                       onClick={() => setQ(i, { options: [...q.options, { id: rid(), text: '' }] })}>
                       + {t('assess.q.addOption')}
                     </button>
                   )}
-                  <p className="text-xs text-outline">{t('assess.q.pickCorrect')}</p>
+                  <p className="text-xs text-outline">
+                    {q.maxSelections > 1 ? t('assess.q.pickCorrectMulti') : t('assess.q.pickCorrect')}
+                  </p>
                 </div>
               ) : (
-                <p className="rounded-lg bg-surface-container-low px-3 py-2 text-xs text-outline">{t('assess.q.manualNote')}</p>
+                <div className="space-y-2">
+                  <p className="rounded-lg bg-surface-container-low px-3 py-2 text-xs text-outline">{t('assess.q.manualNote')}</p>
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-semibold text-on-surface-variant">
+                      {t('assess.q.modelAnswer')}
+                    </span>
+                    <textarea className="input min-h-[4rem]" dir="auto" value={q.modelAnswer}
+                      placeholder={t('assess.q.modelAnswerPh')}
+                      onChange={(e) => setQ(i, { modelAnswer: e.target.value })} />
+                    <span className="mt-1 block text-xs text-outline">{t('assess.q.modelAnswerHint')}</span>
+                  </label>
+                </div>
               )}
 
               <div className="mt-3 flex items-center gap-4">
                 <label className="flex items-center gap-2 text-sm">
                   {t('assess.q.points')}
+                  {/* Held as text. Forcing it back to 1 on every keystroke meant
+                      the box could never be emptied: clearing it to type "10"
+                      put a 1 back and you got "110". */}
                   <input className="input w-16 py-1 text-sm" inputMode="numeric" value={q.points}
-                    onChange={(e) => setQ(i, { points: Math.max(1, Number(e.target.value.replace(/\D/g, '')) || 1) })} />
+                    onChange={(e) => setQ(i, { points: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                    onBlur={() => setQ(i, { points: String(Math.max(1, Number(q.points) || 1)) })} />
                 </label>
               </div>
             </div>

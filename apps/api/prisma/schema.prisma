@@ -1111,7 +1111,21 @@ model QuizQuestion {
   type            QuestionType @default(MCQ)
   prompt          String
   options         Json         @default("[]") // [{id, text}]
+  /// Kept in step with the first entry of `correctOptionIds`, so code that has
+  /// not been deployed yet still grades a single-answer question correctly.
+  /// Everything reads the array.
   correctOptionId String?
+  /// Every option that counts as right. One for most questions; a question can
+  /// ask for more, and then the student has to name all of them.
+  correctOptionIds String[] @default([])
+  /// How many the student may pick. The teacher sets it, because "choose two"
+  /// is a different question from "choose the one that is true" even when the
+  /// options are identical.
+  maxSelections   Int          @default(1)
+  /// What a good answer looks like, for the questions a machine cannot mark.
+  /// The teacher reads it while grading instead of recalling it, and it is what
+  /// the student is shown afterwards.
+  modelAnswer     String       @default("")
   explanation     String       @default("")
   points          Int          @default(1)
   sortOrder       Int          @default(0)

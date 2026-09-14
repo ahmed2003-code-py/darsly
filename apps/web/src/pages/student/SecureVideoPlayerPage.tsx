@@ -214,6 +214,22 @@ export default function SecureVideoPlayerPage() {
    */
   const userSeek = useRef(false);
 
+  /**
+   * What just happened, shown for a moment.
+   *
+   * A shortcut with no acknowledgement is indistinguishable from a shortcut
+   * that did not fire, which is most of why these felt broken: pressing the
+   * right arrow moved the picture ten seconds on and said nothing, so the only
+   * way to know it worked was to already know where you were.
+   */
+  const [flash, setFlash] = useState<{ icon: string; label: string; side: 'start' | 'end' | 'center' } | null>(null);
+  const flashTimer = useRef<number | null>(null);
+  const say = (icon: string, label: string, side: 'start' | 'end' | 'center' = 'center') => {
+    setFlash({ icon, label, side });
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlash(null), 700);
+  };
+
   // Keyboard shortcuts (ignored while typing in the notes box / inputs).
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -222,20 +238,56 @@ export default function SecureVideoPlayerPage() {
       const v = videoRef.current;
       if (!v) return;
       const rates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-      switch (e.key) {
-        case ' ':
-        case 'k':
+      // The letters come from `e.code`, which is the key's place on the board
+      // rather than the character it produces. On an Arabic layout `e.key` for
+      // the K key is "ن", so every letter shortcut silently did nothing — and a
+      // capital M did nothing either, because "M" is not "m".
+      const code = e.code;
+      const pct = (n: number) => `${Math.round(n * 100)}%`;
+      switch (true) {
+        case e.key === ' ' || code === 'Space' || code === 'KeyK':
           e.preventDefault();
-          v.paused ? v.play().catch(() => {}) : v.pause();
+          if (v.paused) { v.play().catch(() => {}); say('play_arrow', t('player.kPlay')); }
+          else { v.pause(); say('pause', t('player.kPlay')); }
           break;
-        case 'ArrowRight': e.preventDefault(); userSeek.current = true; v.currentTime = Math.min(v.duration || 1e9, v.currentTime + 10); break;
-        case 'ArrowLeft': e.preventDefault(); userSeek.current = true; v.currentTime = Math.max(0, v.currentTime - 10); break;
-        case 'ArrowUp': e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); break;
-        case 'ArrowDown': e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1); break;
-        case 'm': v.muted = !v.muted; break;
-        case 'f': toggleFullscreen(); break;
-        case '>': case '.': { const i = rates.indexOf(v.playbackRate); applyRate(rates[Math.min(rates.length - 1, i + 1)] ?? v.playbackRate); break; }
-        case '<': case ',': { const i = rates.indexOf(v.playbackRate); applyRate(rates[Math.max(0, i - 1)] ?? v.playbackRate); break; }
+        case e.key === 'ArrowRight':
+          e.preventDefault(); userSeek.current = true;
+          v.currentTime = Math.min(v.duration || 1e9, v.currentTime + 10);
+          say('forward_10', '+10', 'end');
+          break;
+        case e.key === 'ArrowLeft':
+          e.preventDefault(); userSeek.current = true;
+          v.currentTime = Math.max(0, v.currentTime - 10);
+          say('replay_10', '−10', 'start');
+          break;
+        case e.key === 'ArrowUp':
+          e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); v.muted = false;
+          say('volume_up', pct(v.volume));
+          break;
+        case e.key === 'ArrowDown':
+          e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1);
+          say(v.volume === 0 ? 'volume_off' : 'volume_down', pct(v.volume));
+          break;
+        case code === 'KeyM':
+          v.muted = !v.muted;
+          say(v.muted ? 'volume_off' : 'volume_up', t('player.kMute'));
+          break;
+        case code === 'KeyF':
+          toggleFullscreen();
+          say('fullscreen', t('player.kFullscreen'));
+          break;
+        case e.key === '>' || e.key === '.' || code === 'Period': {
+          const i = rates.indexOf(v.playbackRate);
+          const r = rates[Math.min(rates.length - 1, i + 1)] ?? v.playbackRate;
+          applyRate(r); say('speed', `${r}×`);
+          break;
+        }
+        case e.key === '<' || e.key === ',' || code === 'Comma': {
+          const i = rates.indexOf(v.playbackRate);
+          const r = rates[Math.max(0, i - 1)] ?? v.playbackRate;
+          applyRate(r); say('slow_motion_video', `${r}×`);
+          break;
+        }
       }
     }
     window.addEventListener('keydown', onKey);
@@ -492,6 +544,22 @@ export default function SecureVideoPlayerPage() {
                   onTimeUpdate={(e) => { setCurrentTime(e.currentTarget.currentTime); heartbeat('hb'); }}
                 />
                 <RovingWatermark payload={ticket.watermark} />
+
+                {/* What a shortcut just did. Anchored to the side it acted on,
+                    so a skip forward reads as forward without being read. */}
+                {flash && (
+                  <div
+                    className={`pointer-events-none absolute inset-y-0 z-20 grid place-items-center ${
+                      flash.side === 'center' ? 'inset-x-0' : flash.side === 'end' ? 'end-0 w-1/3' : 'start-0 w-1/3'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <span className="s-pop-in flex flex-col items-center gap-1 rounded-2xl bg-black/60 px-5 py-4 text-white backdrop-blur">
+                      <span className="material-symbols-outlined text-4xl leading-none">{flash.icon}</span>
+                      <span className="font-heading text-sm font-bold tabular-nums">{flash.label}</span>
+                    </span>
+                  </div>
+                )}
 
                 {/* Big center play button — shown whenever paused, doubles as
                     an affordance that the whole frame is clickable. */}

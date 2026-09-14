@@ -11,7 +11,7 @@ export default function QuizTakerPage() {
   const { t } = useTranslation();
   const { courseId, lessonId } = useParams();
   const qc = useQueryClient();
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [result, setResult] = useState<any>(null);
 
   const { data: quiz, isLoading } = useQuery({
@@ -107,24 +107,51 @@ export default function QuizTakerPage() {
                   placeholder={t('assess.take.yourAnswer')} />
               ) : (
                 <div className="space-y-2">
+                  {/* A question may ask for more than one. Saying so is the
+                      difference between "pick the right one" and "pick two",
+                      which the options alone cannot tell you. */}
+                  {(q.maxSelections ?? 1) > 1 && !done && (
+                    <p className="text-xs font-semibold text-primary">
+                      {t('assess.take.pickN', { count: q.maxSelections })}
+                    </p>
+                  )}
                   {q.options.map((o: any) => {
-                    const chosen = answers[q.id] === o.id;
-                    const isCorrect = done && rev && rev.correctOptionId === o.id;
-                    const isWrongChosen = done && chosen && rev && !rev.correct;
+                    const picked = answers[q.id];
+                    const many = (q.maxSelections ?? 1) > 1;
+                    const chosen = Array.isArray(picked) ? picked.includes(o.id) : picked === o.id;
+                    const key: string[] = rev?.correctOptionIds ?? (rev?.correctOptionId ? [rev.correctOptionId] : []);
+                    const isCorrect = done && key.includes(o.id);
+                    const isWrongChosen = done && chosen && !isCorrect;
+                    const toggle = () => {
+                      if (!many) return setAnswers((a) => ({ ...a, [q.id]: o.id }));
+                      const cur = Array.isArray(picked) ? picked : picked ? [picked] : [];
+                      const next = cur.includes(o.id)
+                        ? cur.filter((x) => x !== o.id)
+                        // Past the limit the oldest choice makes way, so the
+                        // student is never stuck having to untick first.
+                        : [...cur, o.id].slice(-q.maxSelections);
+                      setAnswers((a) => ({ ...a, [q.id]: next }));
+                    };
                     return (
                       <label key={o.id}
                         className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
                           isCorrect ? 'border-secondary bg-secondary-container/40'
                           : isWrongChosen ? 'border-error bg-error-container/30'
                           : chosen ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
-                        <input type="radio" className="accent-primary" name={q.id} disabled={done} checked={chosen}
-                          onChange={() => setAnswers((a) => ({ ...a, [q.id]: o.id }))} />
+                        <input type={many ? 'checkbox' : 'radio'} className="accent-primary" name={q.id}
+                          disabled={done} checked={chosen} onChange={toggle} />
                         <span dir="auto">{o.text}</span>
                         {isCorrect && <span className="material-symbols-outlined ms-auto text-base text-secondary">check_circle</span>}
                       </label>
                     );
                   })}
                 </div>
+              )}
+
+              {done && rev?.modelAnswer && (
+                <p className="mt-2 rounded-lg border border-secondary/30 bg-secondary-container/25 px-3 py-2 text-xs" dir="auto">
+                  <span className="font-bold">{t('assess.q.modelAnswer')}: </span>{rev.modelAnswer}
+                </p>
               )}
 
               {done && rev?.explanation && (

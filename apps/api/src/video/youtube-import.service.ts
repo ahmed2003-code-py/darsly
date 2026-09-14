@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { cleanYoutubeDescription } from './description.util';
 
 export interface YoutubeMeta {
   title: string;
@@ -238,7 +239,7 @@ export class YoutubeImportService {
     const json = JSON.parse(out);
     return {
       title: String(json.title ?? '').trim().slice(0, 200) || 'فيديو مستورد من يوتيوب',
-      description: String(json.description ?? '').trim().slice(0, 1000),
+      description: cleanYoutubeDescription(String(json.description ?? '')),
     };
   }
 

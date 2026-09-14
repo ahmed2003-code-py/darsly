@@ -65,17 +65,64 @@ describe('QuizzesService', () => {
     expect(res.passed).toBe(false);
   });
 
-  it('defers scoring when a short-answer question is present', async () => {
+  /**
+   * An essay puts the essay in a queue, not the paper.
+   *
+   * The machine set the multiple-choice questions and knows their answers, so
+   * it says what it knows straight away. Only the verdict waits, and only while
+   * the outstanding points could still change it.
+   */
+  it('scores what it can and leaves only the essay pending', async () => {
     const { svc, created, certificates } = makeCtx([
       ...QUESTIONS,
       { id: 'q3', type: 'SHORT_ANSWER', prompt: 'explain', options: [], correctOptionId: null, explanation: '', points: 3 },
     ]);
+    // 3 of 6 objective points are earned; the 3 essay points could take it to 6.
+    // 50% is the pass mark, so it is already decided: passed.
     const res = await svc.submit('u1', 'l1', { answers: { q1: 'o1', q2: 'true', q3: 'my essay' } });
-    expect(res.scorePct).toBeNull();
+    expect(res.scorePct).toBe(50);
+    expect(res.passed).toBe(true);
+    expect(res.needsManualGrading).toBe(true);
+    expect(res.pendingPoints).toBe(3);
+    expect(created[0].needsManualGrading).toBe(true);
+  });
+
+  it('waits only while the outstanding points could still change the verdict', async () => {
+    const { svc } = makeCtx([
+      ...QUESTIONS,
+      { id: 'q3', type: 'SHORT_ANSWER', prompt: 'explain', options: [], correctOptionId: null, explanation: '', points: 3 },
+    ]);
+    // 1 of 6 objective points. The essay's 3 could reach 4/6 = 67%, past the
+    // 50% mark — so nobody can say yet.
+    const res = await svc.submit('u1', 'l1', { answers: { q1: 'wrong', q2: 'true', q3: 'essay' } });
+    expect(res.scorePct).toBe(17);
     expect(res.passed).toBeNull();
     expect(res.needsManualGrading).toBe(true);
-    expect(created[0].needsManualGrading).toBe(true);
-    expect(certificates.checkByLesson).not.toHaveBeenCalled(); // not completed yet
+  });
+
+  it('says failed when every remaining point would still not be enough', async () => {
+    const { svc } = makeCtx([
+      ...QUESTIONS,
+      { id: 'q3', type: 'SHORT_ANSWER', prompt: 'explain', options: [], correctOptionId: null, explanation: '', points: 1 },
+    ]);
+    // 0 of 3 objective points and 1 left with the teacher: 1/4 = 25%, under the
+    // mark whatever the essay scores. Telling them to wait would be a fiction.
+    const res = await svc.submit('u1', 'l1', { answers: { q1: 'wrong', q2: 'false', q3: 'essay' } });
+    expect(res.passed).toBe(false);
+    expect(res.needsManualGrading).toBe(true);
+  });
+
+  /** A question that asks for two answers is not two questions worth a half. */
+  it('takes every right option, or none of the marks', async () => {
+    const { svc } = makeCtx([
+      { id: 'm1', type: 'MCQ', prompt: 'pick two', options: [], correctOptionId: 'a',
+        correctOptionIds: ['a', 'b'], explanation: '', points: 2 },
+    ]);
+    expect((await svc.submit('u1', 'l1', { answers: { m1: ['a', 'b'] } })).scorePct).toBe(100);
+    expect((await svc.submit('u1', 'l1', { answers: { m1: ['b', 'a'] } })).scorePct).toBe(100);
+    expect((await svc.submit('u1', 'l1', { answers: { m1: ['a'] } })).scorePct).toBe(0);
+    expect((await svc.submit('u1', 'l1', { answers: { m1: ['a', 'b', 'c'] } })).scorePct).toBe(0);
+    expect((await svc.submit('u1', 'l1', { answers: { m1: 'a' } })).scorePct).toBe(0);
   });
 
   it('finalizes the score when the teacher grades short-answer points', async () => {

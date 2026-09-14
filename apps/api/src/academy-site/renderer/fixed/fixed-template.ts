@@ -1,5 +1,5 @@
 import { paletteTokens } from '../../pipeline/color-palettes';
-import { SiteBlock, SiteDocument } from '../../schema/site-document';
+import { ListItem, SiteBlock, SiteDocument } from '../../schema/site-document';
 import { escapeAttr, escapeHtml, safeUrl } from '../html.util';
 import { RenderContext } from '../types';
 
@@ -12,14 +12,103 @@ import { RenderContext } from '../types';
  * is no pattern registry, no per-section layout choice, nothing left for a
  * model to design: this function is pure and total, the same way `compile.ts`
  * is for the composition engine, except here there is exactly one page to emit.
+ *
+ * The visitor's language is a client-side toggle, not two documents: every
+ * authored field is already bilingual (Site Document invariant), so both
+ * readings are baked into one HTML page as parallel `.lang-ar`/`.lang-en`
+ * nodes and CSS shows only the one matching `<html lang>` — no re-render, no
+ * second fetch, and a returning visitor's choice (localStorage) applies
+ * before first paint the same way the dark-mode choice already does below.
  */
 
 type LT = { ar: string; en: string };
-const text = (lt: LT | undefined, fallback = ''): string => {
-  const v = (lt?.ar?.trim() || lt?.en?.trim() || fallback).toString();
-  return escapeHtml(v);
+
+/** Inline pair — safe to nest inside a heading, button, or <p>. */
+function bi(arHtml: string, enHtml: string): string {
+  if (arHtml === enHtml) return arHtml;
+  return `<span class="lang-ar">${arHtml}</span><span class="lang-en">${enHtml}</span>`;
+}
+/** Block pair — for content that itself contains block elements (paragraphs). */
+function biBlock(arHtml: string, enHtml: string): string {
+  if (arHtml === enHtml) return arHtml;
+  return `<div class="lang-ar">${arHtml}</div><div class="lang-en">${enHtml}</div>`;
+}
+/** An authored field, read in each language independently (one may fall back
+ * to the other only when it was never written at all). */
+const text = (lt: LT | undefined, fallbackAr = '', fallbackEn = fallbackAr): string => {
+  const ar = escapeHtml((lt?.ar?.trim() || lt?.en?.trim() || fallbackAr).toString());
+  const en = escapeHtml((lt?.en?.trim() || lt?.ar?.trim() || fallbackEn).toString());
+  return bi(ar, en);
 };
+/** The Arabic (or only) reading, unescaped — for callers that still need to
+ * split or slice the text themselves before it goes back through bi(). */
 const raw = (lt: LT | undefined, fallback = ''): string => (lt?.ar?.trim() || lt?.en?.trim() || fallback).toString();
+const rawEn = (lt: LT | undefined, fallback = ''): string => (lt?.en?.trim() || lt?.ar?.trim() || fallback).toString();
+/** For <title> / meta attributes, which cannot hold markup — always one language. */
+const plain = (lt: LT | undefined, fallback = ''): string => escapeHtml(raw(lt, fallback));
+
+/** A `ListItem` (bilingual object, or a plain legacy string shared by both languages). */
+function listItemPair(it: ListItem | undefined): [string, string] {
+  if (!it) return ['', ''];
+  if (typeof it === 'string') return [it, it];
+  const ar = (it.ar?.trim() || it.en?.trim() || '').toString();
+  const en = (it.en?.trim() || it.ar?.trim() || '').toString();
+  return [ar, en];
+}
+const listItemText = (it: ListItem | undefined): string => {
+  const [ar, en] = listItemPair(it);
+  return bi(escapeHtml(ar), escapeHtml(en));
+};
+const firstWords = (s: string, n: number): string => s.split(/\s+/).filter(Boolean).slice(0, n).join(' ');
+const paragraphsOf = (s: string): string =>
+  s
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${escapeHtml(p)}</p>`)
+    .join('\n      ');
+
+/** Static UI chrome — [ar, en] — the only text the AI never writes. */
+const UI = {
+  navAbout: ['نبذة', 'About'],
+  navAchievements: ['الإنجازات', 'Achievements'],
+  navCourses: ['الدورات', 'Courses'],
+  navGallery: ['المعرض', 'Gallery'],
+  navJourney: ['الرحلة', 'Journey'],
+  login: ['تسجيل الدخول', 'Log in'],
+  signup: ['سجّل الآن', 'Sign up'],
+  enrolNow: ['التسجيل متاح الآن', 'Enrolment is open now'],
+  learnMore: ['اعرف أكتر', 'Learn more'],
+  followMe: ['تابعني على', 'Follow me on'],
+  chipLearnOnline: ['تعلّم أونلاين', 'Learn online'],
+  chipOngoing: ['متابعة مستمرة', 'Ongoing support'],
+  chipYearRound: ['دعم على مدار العام', 'Support all year'],
+  aboutEyebrow: ['نبذة', 'About'],
+  aboutHeading: ['نبذة عننا', 'About me'],
+  focusAreas: ['محاور المتابعة', 'Focus areas'],
+  achievementsEyebrow: ['الإنجازات', 'Achievements'],
+  achievementsHeading: ['ليه تتابع معايا؟', 'Why learn with me?'],
+  coursesEyebrow: ['الدورات', 'Courses'],
+  coursesHeading: ['الدورات المتاحة دلوقتي', 'Courses available now'],
+  galleryEyebrow: ['المعرض', 'Gallery'],
+  galleryHeading: ['لحظات من الرحلة', 'Moments from the journey'],
+  journeyEyebrow: ['الطريقة', 'The method'],
+  journeyHeading: ['إزاي تسير الرحلة معايا؟', 'How the journey works'],
+  faqHead: ['أسئلة شائعة', 'Frequently asked questions'],
+  contactHeading: ['جاهز تبدأ رحلتك؟', 'Ready to start your journey?'],
+  contactBody: [
+    'سجّل دلوقتي على منصة درسلي، وتابعنا عشان تبقى على اطلاع بكل جديد.',
+    'Sign up now on Darsly, and follow along to stay up to date with everything new.',
+  ],
+  signupStudent: ['سجّل كطالب الآن', 'Sign up as a student'],
+  youtube: ['يوتيوب', 'YouTube'],
+  facebook: ['فيسبوك', 'Facebook'],
+} as const;
+
+function u(key: keyof typeof UI): string {
+  const [ar, en] = UI[key];
+  return bi(escapeHtml(ar), escapeHtml(en));
+}
 
 function findBlock<T extends SiteBlock['type']>(
   blocks: SiteBlock[],
@@ -64,14 +153,18 @@ export function renderFixedSite(doc: SiteDocument, ctx: RenderContext): string {
   const aboutPhotoUrl = galleryMedia[0]?.m.url || heroPhotoUrl;
 
   const brandName = escapeHtml(ctx.academyName);
-  const brandSmall = escapeHtml(raw(hero?.subheadline).split(/\s+/).slice(0, 4).join(' '));
+  const subAr = raw(hero?.subheadline);
+  const subEn = rawEn(hero?.subheadline);
+  const brandSmallAr = firstWords(subAr, 4);
+  const brandSmallEn = firstWords(subEn, 4);
+  const brandSmall = brandSmallAr || brandSmallEn ? bi(escapeHtml(brandSmallAr), escapeHtml(brandSmallEn)) : '';
 
   const navLinks: string[] = [];
-  if (about) navLinks.push(navLink('about', 'نبذة'));
-  if (credentials) navLinks.push(navLink('credentials', 'الإنجازات'));
-  navLinks.push('<a href="#courses" data-section="courses" id="navCoursesLink" hidden>الدورات</a>');
-  if (gallery && galleryMedia.length) navLinks.push(navLink('gallery', 'المعرض'));
-  if (process || faq) navLinks.push(navLink('journey', 'الرحلة'));
+  if (about) navLinks.push(navLink('about', u('navAbout')));
+  if (credentials) navLinks.push(navLink('credentials', u('navAchievements')));
+  navLinks.push(`<a href="#courses" data-section="courses" id="navCoursesLink" hidden>${u('navCourses')}</a>`);
+  if (gallery && galleryMedia.length) navLinks.push(navLink('gallery', u('navGallery')));
+  if (process || faq) navLinks.push(navLink('journey', u('navJourney')));
 
   const secondaryHref = gallery && galleryMedia.length ? '#gallery' : credentials ? '#credentials' : '#about';
 
@@ -80,7 +173,7 @@ export function renderFixedSite(doc: SiteDocument, ctx: RenderContext): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${text(doc.seo?.title, ctx.academyName)}</title>
+<title>${plain(doc.seo?.title, ctx.academyName)}</title>
 <script>
 (function(){
   try{
@@ -92,9 +185,16 @@ export function renderFixedSite(doc: SiteDocument, ctx: RenderContext): string {
     var wantsDark=saved?saved==='dark':(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.setAttribute('data-theme',wantsDark?'dark':'light');
   }catch(e){}
+  try{
+    /* Same reasoning as the dark-mode read above: apply a returning visitor's
+       language before the first paint, so the page never flashes Arabic and
+       then swaps to the English they had already chosen. */
+    var lang=localStorage.getItem('darsly_lang');
+    if(lang==='en'){document.documentElement.lang='en';document.documentElement.dir='ltr';}
+  }catch(e){}
 })();
 </script>
-${doc.seo?.description ? `<meta name="description" content="${text(doc.seo.description)}">` : ''}
+${doc.seo?.description ? `<meta name="description" content="${plain(doc.seo.description)}">` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=El+Messiri:wght@500;600;700;800&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
@@ -119,11 +219,12 @@ ${SPRITE}
       ${navLinks.join('\n      ')}
     </div>
     <div class="nav-cta">
-      <button class="theme-toggle" id="themeToggle" type="button" aria-label="تبديل الوضع الداكن">
+      <button class="lang-toggle" id="langToggle" type="button" aria-label="Language / اللغة">English</button>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode / تبديل الوضع الداكن">
         <svg class="icon"><use href="#i-moon" id="themeIconUse"/></svg>
       </button>
-      <a class="nav-login" href="/login?academy=${escapeAttr(slug)}" target="_top">تسجيل الدخول</a>
-      <a class="btn btn-primary" href="/register?academy=${escapeAttr(slug)}" target="_top">سجّل الآن</a>
+      <a class="nav-login" href="/login?academy=${escapeAttr(slug)}" target="_top">${u('login')}</a>
+      <a class="btn btn-primary" href="/register?academy=${escapeAttr(slug)}" target="_top">${u('signup')}</a>
     </div>
   </div>
 </nav>
@@ -142,12 +243,12 @@ ${contactSection(contact, ytUrl, fbUrl, slug)}
 
 <footer>${brandName}</footer>
 
-${waUrl ? `<a class="fab" href="${escapeAttr(waUrl)}" target="_blank" rel="noopener noreferrer" aria-label="تواصل عبر واتساب"><svg class="icon"><use href="#i-wa"/></svg></a>` : ''}
+${waUrl ? `<a class="fab" href="${escapeAttr(waUrl)}" target="_blank" rel="noopener noreferrer" aria-label="Contact via WhatsApp / تواصل عبر واتساب"><svg class="icon"><use href="#i-wa"/></svg></a>` : ''}
 
 <div class="lightbox" id="lightbox">
-  <button class="lightbox-close" id="lbClose" aria-label="إغلاق"><svg class="icon"><use href="#i-close"/></svg></button>
-  <button class="lightbox-nav lightbox-prev" id="lbPrev" aria-label="السابق"><svg class="icon"><use href="#i-arrow" style="transform:scaleX(-1)"/></svg></button>
-  <button class="lightbox-nav lightbox-next" id="lbNext" aria-label="التالي"><svg class="icon"><use href="#i-arrow"/></svg></button>
+  <button class="lightbox-close" id="lbClose" aria-label="Close / إغلاق"><svg class="icon"><use href="#i-close"/></svg></button>
+  <button class="lightbox-nav lightbox-prev" id="lbPrev" aria-label="Previous / السابق"><svg class="icon"><use href="#i-arrow" style="transform:scaleX(-1)"/></svg></button>
+  <button class="lightbox-nav lightbox-next" id="lbNext" aria-label="Next / التالي"><svg class="icon"><use href="#i-arrow"/></svg></button>
   <div class="lightbox-stage" id="lbStage"></div>
 </div>
 
@@ -168,25 +269,25 @@ function heroSection(
   secondaryHref: string,
   slug: string,
 ): string {
-  const headline = text(hero?.headline, 'مرحبًا بك');
+  const headline = text(hero?.headline, 'مرحبًا بك', 'Welcome');
   const lead = text(hero?.subheadline);
-  const cta = text(hero?.ctaLabel, 'سجّل الآن');
+  const cta = text(hero?.ctaLabel, ...UI.signup);
   const follow = ytUrl || fbUrl;
   return `<section class="hero" id="hero">
   <div class="wrap">
     <div>
-      <span class="eyebrow hero-in"><svg class="icon"><use href="#i-star"/></svg> التسجيل متاح الآن</span>
+      <span class="eyebrow hero-in"><svg class="icon"><use href="#i-star"/></svg> ${u('enrolNow')}</span>
       <h1 class="hero-in"><span class="grad-text">${headline}</span></h1>
       ${lead ? `<p class="lead hero-in">${lead}</p>` : ''}
       <div class="actions hero-in">
         <a class="btn btn-primary" href="/register?academy=${escapeAttr(slug)}" target="_top">${cta} <svg class="icon arrow"><use href="#i-arrow"/></svg></a>
-        <a class="btn btn-ghost" href="${secondaryHref}">اعرف أكتر</a>
+        <a class="btn btn-ghost" href="${secondaryHref}">${u('learnMore')}</a>
       </div>
       ${follow ? `<div class="follow hero-in">
-        <span>تابعني على</span>
+        <span>${u('followMe')}</span>
         <span class="links">
-          ${ytUrl ? `<a class="social-btn yt" href="${escapeAttr(ytUrl)}" target="_blank" rel="noopener noreferrer" aria-label="يوتيوب"><svg class="icon"><use href="#i-yt"/></svg></a>` : ''}
-          ${fbUrl ? `<a class="social-btn fb" href="${escapeAttr(fbUrl)}" target="_blank" rel="noopener noreferrer" aria-label="فيسبوك"><svg class="icon"><use href="#i-fb"/></svg></a>` : ''}
+          ${ytUrl ? `<a class="social-btn yt" href="${escapeAttr(ytUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(UI.youtube[0])}"><svg class="icon"><use href="#i-yt"/></svg></a>` : ''}
+          ${fbUrl ? `<a class="social-btn fb" href="${escapeAttr(fbUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(UI.facebook[0])}"><svg class="icon"><use href="#i-fb"/></svg></a>` : ''}
         </span>
       </div>` : ''}
     </div>
@@ -195,9 +296,9 @@ function heroSection(
       <div class="hero-photo-frame" id="tiltFrame">
         <img src="${escapeAttr(photoUrl)}" alt="">
       </div>
-      <span class="chip chip-1"><svg class="icon"><use href="#i-cap"/></svg> تعلّم أونلاين</span>
-      <span class="chip chip-2"><svg class="icon"><use href="#i-book"/></svg> متابعة مستمرة</span>
-      <span class="chip chip-3"><svg class="icon"><use href="#i-star"/></svg> دعم على مدار العام</span>
+      <span class="chip chip-1"><svg class="icon"><use href="#i-cap"/></svg> ${u('chipLearnOnline')}</span>
+      <span class="chip chip-2"><svg class="icon"><use href="#i-book"/></svg> ${u('chipOngoing')}</span>
+      <span class="chip chip-3"><svg class="icon"><use href="#i-star"/></svg> ${u('chipYearRound')}</span>
     </div>` : ''}
   </div>
 </section>`;
@@ -208,24 +309,18 @@ function aboutSection(
   toolkit: Extract<SiteBlock, { type: 'toolkit' }> | undefined,
   photoUrl: string | undefined,
 ): string {
-  const paragraphs = raw(about.body)
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => `<p>${escapeHtml(p)}</p>`)
-    .join('\n      ');
-  const tags = (toolkit?.items ?? []).map((it) => (typeof it === 'string' ? it : it.ar || it.en));
-  const doubled = tags.length ? [...tags, ...tags] : [];
+  const paragraphs = biBlock(paragraphsOf(raw(about.body)), paragraphsOf(rawEn(about.body)));
+  const doubled = (toolkit?.items ?? []).length ? [...toolkit!.items, ...toolkit!.items] : [];
   return `<section class="section about" id="about">
   <div class="wrap">
     <div class="about-text reveal">
-      <span class="eyebrow">نبذة</span>
-      <h2>${text(about.heading, 'نبذة عننا')}</h2>
+      <span class="eyebrow">${u('aboutEyebrow')}</span>
+      <h2>${text(about.heading, ...UI.aboutHeading)}</h2>
       ${paragraphs}
-      ${doubled.length ? `<div class="toolkit-label">محاور المتابعة</div>
+      ${doubled.length ? `<div class="toolkit-label">${u('focusAreas')}</div>
       <div class="marquee-wrap">
         <div class="marquee-track">
-          ${doubled.map((t) => `<span class="tag"><svg class="icon"><use href="#i-book"/></svg> ${escapeHtml(t)}</span>`).join('\n          ')}
+          ${doubled.map((t) => `<span class="tag"><svg class="icon"><use href="#i-book"/></svg> ${listItemText(t)}</span>`).join('\n          ')}
         </div>
       </div>` : ''}
     </div>
@@ -244,14 +339,14 @@ function credentialsSection(credentials: Extract<SiteBlock, { type: 'credentials
   return `<section class="section soft" id="credentials">
   <div class="wrap">
     <div class="section-head center reveal">
-      <span class="eyebrow">الإنجازات</span>
-      <h2>${text(credentials.heading, 'ليه تتابع معايا؟')}</h2>
+      <span class="eyebrow">${u('achievementsEyebrow')}</span>
+      <h2>${text(credentials.heading, ...UI.achievementsHeading)}</h2>
     </div>
     <div class="cred-grid stagger">
       ${items
         .map(
           (it, i) =>
-            `<div class="cred-card glow"><span class="cred-num">${NUM[i]}</span><p>${escapeHtml(typeof it === 'string' ? it : it.ar || it.en)}</p></div>`,
+            `<div class="cred-card glow"><span class="cred-num">${NUM[i]}</span><p>${listItemText(it)}</p></div>`,
         )
         .join('\n      ')}
     </div>
@@ -263,8 +358,8 @@ function coursesSection(): string {
   return `<section class="section courses-hidden" id="courses">
   <div class="wrap">
     <div class="section-head center reveal">
-      <span class="eyebrow">الدورات</span>
-      <h2>الدورات المتاحة دلوقتي</h2>
+      <span class="eyebrow">${u('coursesEyebrow')}</span>
+      <h2>${u('coursesHeading')}</h2>
     </div>
     <div class="course-grid stagger" id="courseGrid"></div>
   </div>
@@ -301,8 +396,8 @@ function gallerySection(
   return `<section class="section" id="gallery">
   <div class="wrap">
     <div class="section-head center reveal">
-      <span class="eyebrow">المعرض</span>
-      <h2>لحظات من الرحلة</h2>
+      <span class="eyebrow">${u('galleryEyebrow')}</span>
+      <h2>${u('galleryHeading')}</h2>
     </div>
     <div class="gal-grid stagger" id="galGrid">
       ${tiles.join('\n      ')}
@@ -320,15 +415,16 @@ function journeySection(
   return `<section class="section soft" id="journey">
   <div class="wrap">
     ${steps.length ? `<div class="section-head center reveal">
-      <span class="eyebrow">الطريقة</span>
-      <h2>إزاي تسير الرحلة معايا؟</h2>
+      <span class="eyebrow">${u('journeyEyebrow')}</span>
+      <h2>${u('journeyHeading')}</h2>
     </div>
     <div class="steps stagger">
       ${steps
         .map((s, i) => `<div class="step glow"><span class="step-n">${NUM[i]}</span><h3>${text(s.title)}</h3><p>${text(s.body)}</p></div>`)
         .join('\n      ')}
     </div>` : ''}
-    ${items.length ? `<div class="faq-inner-head reveal">أسئلة شائعة</div>
+    ${items.length ? `<div class="faq-inner-head reveal">${u('faqHead')}</div>` : ''}
+    ${items.length ? `
     <div class="faq-list reveal">
       ${items
         .map(
@@ -352,12 +448,12 @@ function contactSection(
   return `<section class="section" id="contact">
   <div class="wrap">
     <div class="contact-band reveal">
-      <h2>جاهز تبدأ رحلتك؟</h2>
-      <p>سجّل دلوقتي على منصة درسلي، وتابعنا عشان تبقى على اطلاع بكل جديد.</p>
+      <h2>${u('contactHeading')}</h2>
+      <p>${u('contactBody')}</p>
       <div class="actions">
-        <a class="btn btn-on-brand" href="/register?academy=${escapeAttr(slug)}" target="_top"><svg class="icon"><use href="#i-arrow"/></svg> سجّل كطالب الآن</a>
-        ${ytUrl ? `<a class="btn btn-on-brand" href="${escapeAttr(ytUrl)}" target="_blank" rel="noopener noreferrer"><svg class="icon"><use href="#i-yt"/></svg> يوتيوب</a>` : ''}
-        ${fbUrl ? `<a class="btn btn-on-brand" href="${escapeAttr(fbUrl)}" target="_blank" rel="noopener noreferrer"><svg class="icon"><use href="#i-fb"/></svg> فيسبوك</a>` : ''}
+        <a class="btn btn-on-brand" href="/register?academy=${escapeAttr(slug)}" target="_top"><svg class="icon"><use href="#i-arrow"/></svg> ${u('signupStudent')}</a>
+        ${ytUrl ? `<a class="btn btn-on-brand" href="${escapeAttr(ytUrl)}" target="_blank" rel="noopener noreferrer"><svg class="icon"><use href="#i-yt"/></svg> ${u('youtube')}</a>` : ''}
+        ${fbUrl ? `<a class="btn btn-on-brand" href="${escapeAttr(fbUrl)}" target="_blank" rel="noopener noreferrer"><svg class="icon"><use href="#i-fb"/></svg> ${u('facebook')}</a>` : ''}
       </div>
     </div>
   </div>
@@ -457,8 +553,14 @@ button{font-family:inherit;cursor:pointer}
 .theme-toggle{width:42px;height:42px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--card-bg);border:1px solid var(--line);color:var(--ink-soft);box-shadow:var(--sh-sm);transition:color .2s,border-color .2s,transform .2s}
 .theme-toggle:hover{color:var(--primary);border-color:var(--primary);transform:rotate(14deg)}
 .theme-toggle .icon{width:19px;height:19px}
+.lang-toggle{flex:none;font-family:var(--font-h);font-weight:700;font-size:.86rem;padding:.6em 1.1em;border-radius:var(--r-pill);background:var(--card-bg);border:1px solid var(--line);color:var(--ink-soft);box-shadow:var(--sh-sm);transition:color .2s,border-color .2s}
+.lang-toggle:hover{color:var(--primary);border-color:var(--primary)}
 .nav-login:hover{color:var(--primary)}
 @media(max-width:900px){.nav-links{display:none}.nav-login{display:none}.nav .wrap{grid-template-columns:auto auto}}
+/* The visitor's language: every authored field is baked in both readings,
+   and only <html lang> decides which one is on screen. */
+html[lang="en"] .lang-ar{display:none}
+html:not([lang="en"]) .lang-en{display:none}
 .blobs{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none}
 .blobs i{position:absolute;display:block;border-radius:50%;filter:blur(70px);opacity:.55;will-change:transform}
 .blobs i:nth-child(1){width:46vw;height:46vw;top:-14vw;inset-inline-start:-10vw;background:radial-gradient(circle,var(--primary),transparent 70%);animation:drift1 24s ease-in-out infinite}
@@ -645,6 +747,27 @@ function clientScript(slug: string): string {
 })();
 
 (function(){
+  var root=document.documentElement;
+  var btn=document.getElementById('langToggle');
+  if(!btn)return;
+  var KEY='darsly_lang';
+  function label(l){ btn.textContent = l==='en' ? 'العربية' : 'English'; }
+  function apply(l){
+    root.lang = l;
+    root.dir = l==='en' ? 'ltr' : 'rtl';
+    label(l);
+    try{ window.__darslyLang = l; if(window.__darslyRenderCourses) window.__darslyRenderCourses(); }catch(e){}
+  }
+  label(root.lang==='en' ? 'en' : 'ar');
+  window.__darslyLang = root.lang==='en' ? 'en' : 'ar';
+  btn.addEventListener('click',function(){
+    var next = root.lang==='en' ? 'ar' : 'en';
+    apply(next);
+    try{ localStorage.setItem(KEY, next); }catch(e){}
+  });
+})();
+
+(function(){
   var nav=document.getElementById('nav');
   var fill=document.getElementById('progressFill');
   var ticking=false;
@@ -751,25 +874,37 @@ document.querySelectorAll('.glow').forEach(function(el){
   var grid=document.getElementById('courseGrid');
   var navLink=document.getElementById('navCoursesLink');
   if(!section||!grid)return;
-  fetch(${coursesUrl}).then(function(r){ return r.ok?r.json():[]; }).then(function(courses){
-    if(!Array.isArray(courses)||!courses.length)return;
+  var courses=null;
+  function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+  // Course titles/prices are the teacher's own catalog data, not this page's
+  // authored copy — only the "free"/"details" chrome around them follows the
+  // visitor's language toggle.
+  function render(){
+    if(!courses)return;
+    var en=window.__darslyLang==='en';
+    var freeLabel=en?'Free':'مجانًا', detailsLabel=en?'Details':'التفاصيل';
     grid.innerHTML=courses.map(function(c){
       var price=c.priceCents>0
-        ? '<span class="amount">'+(c.priceCents/100).toLocaleString('ar-EG')+' ج.م</span>'
-        : '<span class="free">مجانًا</span>';
+        ? '<span class="amount">'+(c.priceCents/100).toLocaleString(en?'en-US':'ar-EG')+(en?' EGP':' ج.م')+'</span>'
+        : '<span class="free">'+freeLabel+'</span>';
       var thumb=c.thumbnailUrl
         ? '<img src="'+c.thumbnailUrl+'" alt="" loading="lazy">'
         : '<svg class="icon"><use href="#i-book"/></svg>';
       return '<a class="course-card" href="'+c.url+'" target="_top">'
         +'<span class="course-thumb">'+thumb+'</span>'
         +'<span class="course-body"><h3>'+esc(c.title)+'</h3>'
-        +'<span class="course-price">'+price+'<span class="go">التفاصيل <svg class="icon"><use href="#i-arrow"/></svg></span></span>'
+        +'<span class="course-price">'+price+'<span class="go">'+detailsLabel+' <svg class="icon"><use href="#i-arrow"/></svg></span></span>'
         +'</span></a>';
     }).join('');
+  }
+  window.__darslyRenderCourses=render;
+  fetch(${coursesUrl}).then(function(r){ return r.ok?r.json():[]; }).then(function(list){
+    if(!Array.isArray(list)||!list.length)return;
+    courses=list;
+    render();
     section.classList.remove('courses-hidden');
     if(navLink)navLink.hidden=false;
   }).catch(function(){ /* courses just stay hidden — nothing broke */ });
-  function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 })();
 
 document.querySelectorAll('.faq-q').forEach(function(btn){

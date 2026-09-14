@@ -53,6 +53,15 @@ export class CreateCourseDto {
 
 export class UpdateCourseDto extends PartialType(CreateCourseDto) {
   @IsOptional() @IsEnum(CourseStatus) status?: CourseStatus;
+  /**
+   * Which lesson is the course's exam, and which is its assignment.
+   *
+   * `null` unnames one. The lesson has to be in this course and of the right
+   * type; both are checked on save rather than trusted, because the id arrives
+   * from a browser.
+   */
+  @IsOptional() @IsOptionalId() examLessonId?: string | null;
+  @IsOptional() @IsOptionalId() assignmentLessonId?: string | null;
 }
 
 export class UpsertUnitDto {

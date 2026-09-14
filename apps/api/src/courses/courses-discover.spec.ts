@@ -50,7 +50,7 @@ function build(rows: unknown[] = [], total = rows.length) {
   // Nothing is hidden here: exclusivity has its own suite, and letting it
   // return anything would make every assertion below depend on it.
   const openToEveryone = { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService;
-  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport, noMedia), prisma, calls };
+  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport, noMedia, entryExamMock), prisma, calls };
 }
 
 const course = (over: Record<string, unknown> = {}) => ({
@@ -62,6 +62,16 @@ const course = (over: Record<string, unknown> = {}) => ({
   teacher: { id: 't1', slug: 'ahmed', language: 'ar', verifiedAt: new Date(0), user: { fullName: 'Ahmed', avatarUrl: null } },
   ...over,
 });
+
+/** These courses name no exam, so the gate is open and says so. */
+const entryExamMock: any = {
+  stateFor: jest.fn().mockResolvedValue({
+    lessonId: null, passed: true, attempted: false,
+    remedialLessonId: null, bestScorePct: null, awaitingGrading: false,
+  }),
+  requirePassed: jest.fn().mockResolvedValue(undefined),
+  isAllowedWhileLocked: () => true,
+};
 
 describe('a published course is findable', () => {
   it('returns it with everything a card needs', async () => {
@@ -261,6 +271,7 @@ describe('prices carry the platform fee', () => {
       noVideoProcessing,
       noYoutubeImport,
       noMedia,
+      entryExamMock,
     );
     await service.discover({});
     // The card and the checkout must agree, and the academy's own price must not
@@ -299,6 +310,7 @@ describe('a student is not shown the catalogues of their teacher\'s rivals', () 
       noVideoProcessing,
       noYoutubeImport,
       noMedia,
+      entryExamMock,
     );
     return { service, calls };
   }

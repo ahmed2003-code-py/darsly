@@ -13,6 +13,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { PrismaService } from './prisma/prisma.service';
 import { ChatModule } from './chat/chat.module';
+import { EntryExamModule } from './courses/entry-exam.module';
 import { CoursesModule } from './courses/courses.module';
 import { EnrollmentsModule } from './enrollments/enrollments.module';
 import { HealthController } from './health/health.controller';
@@ -82,6 +83,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     AuthModule,
     CatalogModule,
     TeachersModule,
+    EntryExamModule,
     CoursesModule,
     StorageModule,
     UploadsModule,

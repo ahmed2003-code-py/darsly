@@ -164,6 +164,72 @@ export default function CourseDetailPage() {
             </>
           )}
 
+          {/* The exam, before the curriculum and before anything else a student
+              could click. Asked for in exactly those words: it should be in
+              your face the moment you come in, not something you find. */}
+          {course.viewer?.hasAccess && course.entryExam?.lessonId && !course.entryExam.passed && (
+            <div className="card mb-6 border-primary/40 bg-primary-fixed/30">
+              <div className="flex items-start gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary">
+                  <span className="material-symbols-outlined">quiz</span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-heading text-lg font-extrabold">{t('course.examTitle')}</h2>
+
+                  {course.entryExam.awaitingGrading ? (
+                    <p className="mt-1 text-sm text-on-surface-variant">{t('course.examWaiting')}</p>
+                  ) : (
+                    <p className="mt-1 text-sm text-on-surface-variant">{t('course.examBody')}</p>
+                  )}
+
+                  {course.entryExam.bestScorePct != null && (
+                    <p className="mt-1 text-sm font-bold text-student-gold-ink">
+                      {t('course.examBest', { pct: course.entryExam.bestScorePct })}
+                    </p>
+                  )}
+
+                  {/* Failed, and the teacher left something to watch. The lesson
+                      comes first: sending somebody straight back to a paper they
+                      just failed is not teaching them anything. */}
+                  {course.entryExam.attempted
+                    && !course.entryExam.awaitingGrading
+                    && course.entryExam.remedialLessonId && (
+                    <div className="mt-3 rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
+                      <p className="text-sm font-bold">{t('course.examRemedial')}</p>
+                      <p className="mt-0.5 text-xs text-on-surface-variant">{t('course.examRemedialBody')}</p>
+                      <Link
+                        to={`/learn/${course.id}/${course.entryExam.remedialLessonId}`}
+                        className="btn-primary mt-2 inline-flex items-center gap-1.5 py-2 text-sm"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">play_circle</span>
+                        {t('course.examRemedial')}
+                      </Link>
+                    </div>
+                  )}
+
+                  {!course.entryExam.awaitingGrading && (
+                    <Link
+                      to={`/learn/${course.id}/${course.entryExam.lessonId}`}
+                      className={`mt-3 inline-flex items-center gap-1.5 py-2 text-sm ${
+                        course.entryExam.remedialLessonId && course.entryExam.attempted ? 'btn-ghost' : 'btn-primary'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">edit_note</span>
+                      {course.entryExam.attempted ? t('course.examRetry') : t('course.examStart')}
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {course.viewer?.hasAccess && course.entryExam?.lessonId && course.entryExam.passed && (
+            <p className="mb-4 flex items-center gap-1.5 text-sm font-bold text-secondary">
+              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+              {t('course.examPassed')}
+            </p>
+          )}
+
           {/* Curriculum */}
           <h2 className="mb-4 font-heading text-2xl font-extrabold">{t('course.curriculum')}</h2>
           <div className="space-y-4">

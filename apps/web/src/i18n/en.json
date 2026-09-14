@@ -266,7 +266,17 @@
     "students": "{{count}} students",
     "notFound": "Course not found",
     "payAndEnroll": "Pay & enrol",
-    "payHint": "Pay and upload proof; the teacher verifies it and activates your access."
+    "payHint": "Pay and upload proof; the teacher verifies it and activates your access.",
+    "examTitle": "Placement exam",
+    "examBody": "Pass this first and the course opens.",
+    "examStart": "Start the exam",
+    "examRetry": "Try again",
+    "examBest": "Best score: {{pct}}%",
+    "examWaiting": "Your teacher is marking the written part. You will be told as soon as it is done.",
+    "examRemedial": "Watch the explanation first",
+    "examRemedialBody": "Your teacher left a lesson covering what you missed. Watch it, then try again.",
+    "examLocked": "Locked until you pass the placement exam",
+    "examPassed": "Placement exam passed ✓"
   },
   "player": {
     "protected": "Protected content",
@@ -715,7 +725,18 @@
       "quizTitle": "Quiz builder",
       "quizSubtitle": "Add questions and set the pass mark, then grade written answers.",
       "assignTitle": "Assignment builder",
-      "assignSubtitle": "Write the brief, set the max score, and grade student submissions."
+      "assignSubtitle": "Write the brief, set the max score, and grade student submissions.",
+      "courseLevel": "The course's exam and assignment",
+      "courseLevelHint": "A course has one exam and one assignment — not one per lesson.",
+      "isExam": "This is the course's exam",
+      "isAssignment": "This is the course's assignment",
+      "examGateHint": "A student has to pass it before the rest of the course opens.",
+      "takenBy": "Currently: {{title}}",
+      "onlyQuizLesson": "This lesson has to be a quiz first.",
+      "onlyAssignmentLesson": "This lesson has to be an assignment first.",
+      "remedial": "What a student who fails should watch",
+      "remedialHint": "Anyone who does not pass is sent here before they try again.",
+      "remedialNone": "Nothing — send them straight back"
     },
     "q": {
       "mcq": "Multiple choice",

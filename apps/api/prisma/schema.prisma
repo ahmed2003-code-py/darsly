@@ -438,6 +438,21 @@ model Course {
   /// who is not logged in can watch it. Lesson video goes through the
   /// encrypted-HLS pipeline instead and never through here.
   introVideoUrl     String?
+
+  /// The one exam for this course, and the one assignment.
+  ///
+  /// A lesson is still what holds them — access, completion, points and
+  /// certificates are all keyed on a lesson — but the course names which lesson
+  /// is *the* exam. Being one column rather than a list is what makes it one
+  /// per course instead of one per lesson.
+  ///
+  /// Naming an exam also gates the course: until a student passes it, the only
+  /// things they can open are the exam itself and whatever it sends them to
+  /// watch. A course that names none behaves exactly as it always did.
+  examLessonId       String? @unique
+  examLesson         Lesson? @relation("courseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
+  assignmentLessonId String? @unique
+  assignmentLesson   Lesson? @relation("courseAssignment", fields: [assignmentLessonId], references: [id], onDelete: SetNull)
   /// The AcademyMedia row behind introVideoUrl, kept so replacing or removing
   /// the clip can delete the stored object instead of orphaning it.
   introVideoMediaId String?
@@ -518,6 +533,10 @@ model Lesson {
   id          String     @id @default(cuid())
   unitId      String
   unit        CourseUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  /// Back-references for the three roles a lesson can be given by name.
+  examOfCourse       Course? @relation("courseExam")
+  assignmentOfCourse Course? @relation("courseAssignment")
+  remedialForQuizzes Quiz[]  @relation("quizRemedial")
   title       String
   // What the lesson covers, shown to the student above the player.
   description String?
@@ -1089,6 +1108,14 @@ model Quiz {
   id               String  @id @default(cuid())
   lessonId         String  @unique
   lesson           Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  /// What to watch when the exam says you are not ready yet.
+  ///
+  /// A lesson in the same course rather than a bare URL, so it plays through
+  /// the same protected pipeline as everything else and needs no second upload
+  /// path. Failing opens it; it is the one thing besides the exam that a
+  /// student who has not passed can reach.
+  remedialLessonId String?
+  remedialLesson   Lesson? @relation("quizRemedial", fields: [remedialLessonId], references: [id], onDelete: SetNull)
   passingScore     Int     @default(50) // percent
   timeLimitSec     Int?
   shuffleQuestions Boolean @default(false)

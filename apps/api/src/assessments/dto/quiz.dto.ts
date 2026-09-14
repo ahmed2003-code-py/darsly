@@ -23,6 +23,8 @@ const MAX_TIME_LIMIT_SEC = 86_400;
 
 export class UpsertQuizDto {
   @IsOptional() @IsInt() @Min(0) @Max(100) passingScore?: number;
+  /** The lesson to send a student to when they do not pass. `null` clears it. */
+  @IsOptionalId() remedialLessonId?: string | null;
   @IsOptional() @IsInt() @Min(0) @Max(MAX_TIME_LIMIT_SEC) timeLimitSec?: number | null;
   @IsOptional() @IsBoolean() shuffleQuestions?: boolean;
   @IsOptional() @IsInt() @Min(1) @Max(50) maxAttempts?: number | null;

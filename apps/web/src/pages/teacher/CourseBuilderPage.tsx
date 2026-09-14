@@ -123,6 +123,19 @@ export default function CourseBuilderPage() {
     }
   };
 
+  /**
+   * Naming this lesson as the course's exam or its assignment.
+   *
+   * A `PATCH` on the course rather than on the lesson, because the course is
+   * what holds the answer — and holding it in one column is what makes it one
+   * exam per course instead of one per lesson.
+   */
+  const setRole = useMutation({
+    mutationFn: async (patch: { examLessonId?: string | null; assignmentLessonId?: string | null }) =>
+      (await api.patch(`/teacher/courses/${id}`, patch)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-course', id] }),
+  });
+
   const { data: course, isLoading } = useQuery({
     queryKey: ['teacher-course', id],
     queryFn: async () => (await api.get(`/teacher/courses/${id}`)).data,
@@ -808,11 +821,58 @@ export default function CourseBuilderPage() {
           </div>
 
           <div>
-            <p className="mb-2 flex items-center gap-1 text-sm font-bold">
+            <p className="mb-1 flex items-center gap-1 text-sm font-bold">
               <span className="material-symbols-outlined text-base">quiz</span>
-              {t('assess.builder.section')}
+              {t('assess.builder.courseLevel')}
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <p className="mb-2 text-xs text-outline">{t('assess.builder.courseLevelHint')}</p>
+
+            {/* Naming this lesson as the course's exam, rather than giving every
+                lesson its own. One course, one exam, one assignment. */}
+            <div className="space-y-2">
+              <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm transition ${
+                course?.examLessonId === selected!.id
+                  ? 'border-primary bg-primary-fixed/30' : 'border-outline-variant/60'
+              } ${selected!.type === 'QUIZ' ? '' : 'opacity-50'}`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-primary"
+                  disabled={selected!.type !== 'QUIZ' || setRole.isPending}
+                  checked={course?.examLessonId === selected!.id}
+                  onChange={(e) => setRole.mutate({ examLessonId: e.target.checked ? selected!.id : null })}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold">{t('assess.builder.isExam')}</span>
+                  <span className="mt-0.5 block text-xs text-on-surface-variant">
+                    {selected!.type !== 'QUIZ' ? t('assess.builder.onlyQuizLesson') : t('assess.builder.examGateHint')}
+                  </span>
+                </span>
+              </label>
+
+              <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm transition ${
+                course?.assignmentLessonId === selected!.id
+                  ? 'border-primary bg-primary-fixed/30' : 'border-outline-variant/60'
+              } ${selected!.type === 'ASSIGNMENT' ? '' : 'opacity-50'}`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-primary"
+                  disabled={selected!.type !== 'ASSIGNMENT' || setRole.isPending}
+                  checked={course?.assignmentLessonId === selected!.id}
+                  onChange={(e) => setRole.mutate({ assignmentLessonId: e.target.checked ? selected!.id : null })}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold">{t('assess.builder.isAssignment')}</span>
+                  {selected!.type !== 'ASSIGNMENT' && (
+                    <span className="mt-0.5 block text-xs text-on-surface-variant">
+                      {t('assess.builder.onlyAssignmentLesson')}
+                    </span>
+                  )}
+                </span>
+              </label>
+            </div>
+            <ErrorNote error={setRole.error} />
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
               {/* `?course=` so the back link there returns to this lesson. */}
               <Link to={`/teacher/lessons/${selected!.id}/quiz?course=${id}`}
                 className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary">

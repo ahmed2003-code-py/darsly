@@ -11,6 +11,7 @@ import { DRM_PROVIDER, IDrmProvider } from '../video/drm/drm.provider';
 import { CertificatesService } from '../assessments/certificates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EntryExamService } from '../courses/entry-exam.service';
 import { ProgressService } from '../progress/progress.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { GamificationOutcome } from '../gamification/gamification.types';
@@ -42,6 +43,7 @@ export class PlaybackService {
     private readonly gamification: GamificationService,
     private readonly notifications: NotificationsService,
     private readonly certificates: CertificatesService,
+    private readonly entryExam: EntryExamService,
   ) {}
 
   /** DRS-89421-A8X9 — human-readable, shown in the overlay & used by leak-trace. */
@@ -120,6 +122,11 @@ export class PlaybackService {
       ) {
         throw new ForbiddenException('Lesson is not unlocked yet');
       }
+
+      // The course's own exam, if it has one. Checked here as well as in the
+      // assessment gate because a ticket is what actually plays a video: a
+      // gate the page respects but the API does not is decoration.
+      await this.entryExam.requirePassed(course.id, student.id, lessonId, lesson.isFreePreview);
     }
 
     const progress = await this.prisma.lessonProgress.findUnique({

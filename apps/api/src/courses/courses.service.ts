@@ -5,6 +5,7 @@ import { JwtPayload, Role } from '@darsly/shared-types';
 import { SubjectExclusivityService } from '../catalog/subject-exclusivity.service';
 import { validateThumbnailUrl } from '../common/image.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { EntryExamService } from './entry-exam.service';
 import { AcademyMediaService } from '../academy-site/media/academy-media.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { VideoProcessingService } from '../video/video-processing.service';
@@ -43,6 +44,7 @@ export class CoursesService {
     private readonly videoProcessing: VideoProcessingService,
     private readonly youtubeImport: YoutubeImportService,
     private readonly media: AcademyMediaService,
+    private readonly entryExam: EntryExamService,
   ) {}
 
   /**
@@ -416,6 +418,27 @@ export class CoursesService {
         throw new BadRequestException({
           message: 'Cannot publish a course with no lessons',
           code: 'NO_LESSONS',
+        });
+      }
+    }
+
+    // A lesson named as the exam or the assignment has to be in this course and
+    // of the matching type. The id comes from a browser, so pointing the gate at
+    // somebody else's lesson — or at a video — is refused rather than stored.
+    for (const [field, want] of [
+      ['examLessonId', 'QUIZ'],
+      ['assignmentLessonId', 'ASSIGNMENT'],
+    ] as const) {
+      const id = dto[field];
+      if (id == null || id === '') continue;
+      const ok = await this.prisma.lesson.findFirst({
+        where: { id: String(id), deletedAt: null, type: want, unit: { courseId } },
+        select: { id: true },
+      });
+      if (!ok) {
+        throw new BadRequestException({
+          message: `That lesson cannot be this course's ${want === 'QUIZ' ? 'exam' : 'assignment'}`,
+          code: 'BAD_ASSESSMENT_LESSON',
         });
       }
     }
@@ -831,11 +854,13 @@ export class CoursesService {
     if (!course) throw new NotFoundException('Course not found');
 
     let enrollment = null;
+    let studentId: string | null = null;
     if (viewer?.role === Role.STUDENT) {
       const student = await this.prisma.studentProfile.findUnique({
         where: { userId: viewer.sub },
       });
       if (student) {
+        studentId = student.id;
         enrollment = await this.prisma.enrollment.findUnique({
           where: { studentId_courseId: { studentId: student.id, courseId } },
         });
@@ -872,6 +897,15 @@ export class CoursesService {
       thumbnailUrl: course.thumbnailUrl,
       introVideoUrl: course.introVideoUrl,
       status: course.status,
+      /**
+       * The exam standing between this student and the course, if there is one.
+       *
+       * Sent with the page rather than fetched after it, so the exam is the
+       * first thing on screen instead of something that appears a moment later
+       * once a second request lands.
+       */
+      entryExam: await this.entryExam.stateFor(course.id, studentId),
+      assignmentLessonId: course.assignmentLessonId,
       subject: course.subject,
       grades: course.grades.map((g) => g.grade),
       pricingModel: course.pricingModel,

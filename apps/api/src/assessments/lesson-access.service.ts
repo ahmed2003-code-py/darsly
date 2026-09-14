@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EntryExamService } from '../courses/entry-exam.service';
 
 /**
  * Access gating shared by quizzes and assignments. Mirrors the playback
@@ -13,7 +14,10 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 @Injectable()
 export class LessonAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly entryExam: EntryExamService,
+  ) {}
 
   async studentIdOf(userId: string): Promise<string> {
     const s = await this.prisma.studentProfile.findUnique({ where: { userId } });
@@ -56,6 +60,10 @@ export class LessonAccessService {
       ) {
         throw new ForbiddenException('Lesson is not unlocked yet');
       }
+
+      // The exam does not lock itself, and it does not lock what it sends a
+      // student to watch. Everything else in the course waits for a pass.
+      await this.entryExam.requirePassed(course.id, studentId, lessonId, lesson.isFreePreview);
     }
     return { lesson, course, studentId };
   }

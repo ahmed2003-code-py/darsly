@@ -52,9 +52,30 @@ export class QuizzesService {
 
   /** Create or update the quiz attached to one of the teacher's lessons. */
   async upsertForTeacher(tenantId: string, lessonId: string, dto: UpsertQuizDto) {
-    await this.access.requireTeacherLesson(tenantId, lessonId);
+    const own = await this.access.requireTeacherLesson(tenantId, lessonId);
     // A quiz lesson should be typed QUIZ so the player renders the quiz UI.
     await this.prisma.lesson.update({ where: { id: lessonId }, data: { type: 'QUIZ' } });
+
+    // The remedial lesson has to be a video in the same course. Anything else
+    // would either send a failing student nowhere or, worse, somewhere they are
+    // not entitled to be — and this is the one lesson the exam gate lets past.
+    if (dto.remedialLessonId) {
+      const ok = await this.prisma.lesson.findFirst({
+        where: {
+          id: dto.remedialLessonId,
+          deletedAt: null,
+          type: 'VIDEO',
+          unit: { courseId: own.unit.courseId },
+        },
+        select: { id: true },
+      });
+      if (!ok) {
+        throw new BadRequestException({
+          message: 'The remedial lesson must be a video in this course',
+          code: 'BAD_REMEDIAL_LESSON',
+        });
+      }
+    }
     return this.prisma.quiz.upsert({
       where: { lessonId },
       create: {
@@ -63,12 +84,14 @@ export class QuizzesService {
         timeLimitSec: dto.timeLimitSec ?? null,
         shuffleQuestions: dto.shuffleQuestions ?? false,
         maxAttempts: dto.maxAttempts ?? null,
+        remedialLessonId: dto.remedialLessonId ?? null,
       },
       update: {
         ...(dto.passingScore != null ? { passingScore: dto.passingScore } : {}),
         ...(dto.timeLimitSec !== undefined ? { timeLimitSec: dto.timeLimitSec } : {}),
         ...(dto.shuffleQuestions != null ? { shuffleQuestions: dto.shuffleQuestions } : {}),
         ...(dto.maxAttempts !== undefined ? { maxAttempts: dto.maxAttempts } : {}),
+        ...(dto.remedialLessonId !== undefined ? { remedialLessonId: dto.remedialLessonId || null } : {}),
       },
       include: { questions: { orderBy: { sortOrder: 'asc' } } },
     });

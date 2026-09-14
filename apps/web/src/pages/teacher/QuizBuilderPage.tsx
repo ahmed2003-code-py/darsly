@@ -50,8 +50,20 @@ export default function QuizBuilderPage() {
   const qc = useQueryClient();
 
   const [passingScore, setPassingScore] = useState(50);
+  const [remedialLessonId, setRemedialLessonId] = useState('');
   const [questions, setQuestions] = useState<Q[]>([]);
   const [gradingId, setGradingId] = useState<string | null>(null);
+
+  // The course's video lessons, so the remedy is picked rather than typed.
+  const { data: courseData } = useQuery({
+    queryKey: ['teacher-course', fromCourse],
+    queryFn: async () => (await api.get(`/teacher/courses/${fromCourse}`)).data,
+    enabled: !!fromCourse,
+    staleTime: 60_000,
+  });
+  const videoLessons: { id: string; title: string }[] = (courseData?.units ?? []).flatMap(
+    (u: any) => (u.lessons ?? []).filter((l: any) => l.type === 'VIDEO').map((l: any) => ({ id: l.id, title: l.title })),
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ['tquiz', lessonId],
@@ -61,6 +73,7 @@ export default function QuizBuilderPage() {
   useEffect(() => {
     if (data) {
       setPassingScore(data.passingScore ?? 50);
+      setRemedialLessonId(data.remedialLessonId ?? '');
       setQuestions(
         (data.questions ?? []).map((q: any) => ({
           type: q.type,
@@ -82,7 +95,10 @@ export default function QuizBuilderPage() {
 
   const save = useMutation({
     mutationFn: async () => {
-      await api.put(`/teacher/lessons/${lessonId}/quiz`, { passingScore });
+      await api.put(`/teacher/lessons/${lessonId}/quiz`, {
+        passingScore,
+        remedialLessonId: remedialLessonId || null,
+      });
       // The score is typed, so it can be mid-edit or empty when Save is pressed.
       // One is the floor because a question worth nothing is not a question.
       const payload = questions.map((q) => ({
@@ -261,6 +277,22 @@ export default function QuizBuilderPage() {
             <label className="mb-1 block text-sm font-bold">{t('assess.q.passingScore')}</label>
             <input className="input" inputMode="numeric" value={passingScore}
               onChange={(e) => setPassingScore(Math.min(100, Number(e.target.value.replace(/\D/g, '')) || 0))} />
+
+            {/* Where a student goes when the answer is no. Sending them straight
+                back to the paper they just failed teaches them nothing. */}
+            {fromCourse && (
+              <label className="mt-4 block">
+                <span className="mb-1 block text-sm font-bold">{t('assess.builder.remedial')}</span>
+                <select className="input" value={remedialLessonId}
+                  onChange={(e) => setRemedialLessonId(e.target.value)}>
+                  <option value="">{t('assess.builder.remedialNone')}</option>
+                  {videoLessons.map((l) => (
+                    <option key={l.id} value={l.id}>{l.title}</option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-outline">{t('assess.builder.remedialHint')}</span>
+              </label>
+            )}
             <button className="btn-primary mt-4 w-full" disabled={save.isPending || !questions.length} onClick={() => save.mutate()}>
               {save.isPending ? t('common.saving') : t('assess.q.saveQuiz')}
             </button>

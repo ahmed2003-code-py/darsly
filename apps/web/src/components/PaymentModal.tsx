@@ -31,6 +31,29 @@ export default function PaymentModal({
   // each time, not something the platform decides for them because it happens
   // to be sitting there.
   const [useWallet, setUseWallet] = useState(false);
+  /**
+   * "I have already transferred the money."
+   *
+   * The form used to be openable and sendable before any money moved, and the
+   * reference was optional — so a student could submit, in good faith, a
+   * request with nothing behind it and nothing to match it to, and it landed in
+   * an admin's queue as indistinguishable from a real one. Saying it out loud
+   * is the difference between a payment and an intention.
+   */
+  const [transferred, setTransferred] = useState(false);
+
+  /**
+   * Which identifier this method's SMS will actually carry.
+   *
+   * Kept in step with the server's rule in payer-reference.ts, which remains
+   * the authority — this exists so the student learns the number is wrong while
+   * they are still looking at it, instead of from a rejection afterwards.
+   */
+  const refKind = method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
+  const referenceLooksRight =
+    refKind === 'WALLET_NUMBER'
+      ? /^(?:\+?20|0)?1[0125]\d{8}$/.test(reference.replace(/[^\d]/g, ''))
+      : reference.replace(/[^0-9a-z]/gi, '').length >= 4;
 
   const { data: accounts } = useQuery({
     queryKey: ['payment-accounts'],
@@ -249,15 +272,40 @@ export default function PaymentModal({
             <p className="mb-2 flex items-center gap-2 font-heading font-bold">
               <span className="material-symbols-outlined text-primary">receipt_long</span>{t('pay.afterTransfer')}
             </p>
+
+            {/* The order matters and used to be left to the student to infer:
+                transfer, then tell us about it. A request submitted before the
+                money moved has nothing to match and reaches an admin looking
+                exactly like one that does. */}
+            <label className={`mb-3 flex items-start gap-2 rounded-xl border p-3 text-sm transition ${
+              transferred ? 'border-secondary bg-secondary-container/25' : 'border-outline-variant/60'
+            }`}>
+              <input type="checkbox" className="mt-0.5 accent-primary" checked={transferred}
+                onChange={(e) => setTransferred(e.target.checked)} />
+              <span>
+                <span className="block font-bold">{t('pay.confirmTransferred')}</span>
+                <span className="block text-xs text-on-surface-variant">{t('pay.confirmTransferredHint')}</span>
+              </span>
+            </label>
+
             <Field label={t('pay.method')}>
               <select className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
                 <option value="">{t('pay.pickMethod')}</option>
                 <option value="INSTAPAY">{t('method.INSTAPAY')}</option><option value="VODAFONE_CASH">{t('method.VODAFONE_CASH')}</option><option value="BANK_TRANSFER">{t('method.BANK_TRANSFER')}</option><option value="OTHER">{t('method.OTHER')}</option>
               </select>
             </Field>
-            <Field label={t('pay.reference')} hint={t('pay.referenceHint')}>
-              <input className="input" dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="TXN / 010…" />
-            </Field>
+
+            {/* Which identifier is asked for is decided by the provider, not by
+                us: a Vodafone Cash SMS names the sending wallet and carries no
+                transaction id, a bank's names a reference and carries no phone
+                number. Asking for the wrong one guarantees no match. */}
+            {method && (
+              <Field label={t(`pay.ref.${refKind}`)} hint={t(`pay.ref.${refKind}Hint`)}>
+                <input className="input" dir="ltr" inputMode={refKind === 'WALLET_NUMBER' ? 'tel' : 'text'}
+                  value={reference} onChange={(e) => setReference(e.target.value)}
+                  placeholder={refKind === 'WALLET_NUMBER' ? '01xxxxxxxxx' : '05b6efa4'} />
+              </Field>
+            )}
             <Field label={t('pay.proof')}>
               <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
                 onChange={(e) => e.target.files?.[0] && pickProof(e.target.files[0])} />
@@ -270,7 +318,9 @@ export default function PaymentModal({
             </Field>
             {proof && <img src={proof} alt="" className="mb-3 max-h-40 rounded-lg border border-outline-variant/50 object-contain" />}
             <ErrorNote error={submit.error} />
-            <button className="btn-primary w-full" disabled={submit.isPending || !method || !proof} onClick={() => submit.mutate()}>
+            <button className="btn-primary w-full"
+              disabled={submit.isPending || !method || !proof || !transferred || !referenceLooksRight}
+              onClick={() => submit.mutate()}>
               {submit.isPending ? t('common.saving') : t('pay.submit')}
             </button>
           </div>

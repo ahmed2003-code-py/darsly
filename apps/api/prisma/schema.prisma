@@ -892,6 +892,14 @@ model PaymentEvent {
   reference        String?
   occurredAt       DateTime
   rawMessage       String             @default("")
+  /// The name of the person who sent the money, as the provider printed it.
+  ///
+  /// The one piece of evidence on a transfer a student cannot read off somebody
+  /// else's receipt — the amount and the reference are both on a screenshot
+  /// they could have been forwarded, and the name is whoever actually holds the
+  /// wallet. Kept so a match can be justified after the fact, and so an admin
+  /// looking at a queue can see who paid without reading the raw SMS.
+  payerName        String?
   deviceId         String?
   status           PaymentEventStatus @default(UNMATCHED)
   matchedPaymentId String?

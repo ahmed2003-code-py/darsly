@@ -1099,7 +1099,15 @@
     "fromWalletLine": "From your wallet",
     "amountDueAfterWallet": "Amount to transfer",
     "useWalletToggle": "Use my wallet balance for this",
-    "shortBalance": "Your balance is {{balance}} and this course needs {{required}} — top up and try again."
+    "shortBalance": "Your balance is {{balance}} and this course needs {{required}} — top up and try again.",
+    "confirmTransferred": "I have already transferred the money",
+    "confirmTransferredHint": "Transfer first, then fill this in. A request with no transfer behind it cannot be activated, and there is nothing to match it to.",
+    "ref": {
+      "WALLET_NUMBER": "The wallet number you transferred from",
+      "WALLET_NUMBERHint": "This is the number that reaches us in the transfer message, and how we know the transfer is yours. It has to be right.",
+      "TRANSACTION_REFERENCE": "The transfer reference",
+      "TRANSACTION_REFERENCEHint": "Copy it from the transfer message you received — like 05b6efa4. It is how we tell your transfer from anyone else’s."
+    }
   },
   "tpay": {
     "title": "Verify payments",

@@ -8,6 +8,7 @@ import { validateImageDataUrl } from '../common/image.util';
 import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizePayerReference } from '../payments/payer-reference';
 
 const PROOF_MAX_BYTES = 1_200 * 1024; // ~1.2 MB screenshot
 const MIN_TOPUP_CENTS = 1_000; // 10 EGP
@@ -89,7 +90,9 @@ export class WalletService {
         amountCents: amount,
         method: dto.method as any,
         proofImageUrl: dto.proofImageUrl,
-        reference: dto.reference?.trim() || null,
+        // Same rule as a course payment: a top-up is the same transfer with no
+        // course attached, matched on the same single identifier.
+        reference: normalizePayerReference(dto.method, dto.reference),
         status: 'PENDING',
       },
       select: { id: true, amountCents: true, status: true, createdAt: true },

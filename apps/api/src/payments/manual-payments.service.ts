@@ -11,6 +11,7 @@ import { validateImageDataUrl } from '../common/image.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
+import { normalizePayerReference } from './payer-reference';
 import { activateBundleChildren } from '../enrollments/bundle';
 import { releaseCouponUse, reserveCouponUse } from './coupon-use';
 import { computeServiceFee } from './fee.util';
@@ -71,6 +72,12 @@ export class ManualPaymentsService {
     // refusal, and taking a proof of payment for it would mean refunding it.
     await assertCourseYear(this.prisma, course.id, student.gradeId, enrollment);
 
+    // The one thing that links this money to this student. Required, and
+    // checked against the shape the chosen method's SMS will actually carry —
+    // see payer-reference.ts. A blank or malformed one could never match, and
+    // every payment carrying one went to an admin to resolve by hand.
+    const reference = normalizePayerReference(dto.method, dto.reference);
+
     const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
 
     // A wallet contribution is never automatic — it's the student's money and
@@ -125,7 +132,7 @@ export class ManualPaymentsService {
           gateway: 'manual',
           method: dto.method as any,
           proofImageUrl: dto.proofImageUrl ?? '',
-          reference: dto.reference?.trim() || null,
+          reference,
           couponId,
           status: 'PENDING',
         },

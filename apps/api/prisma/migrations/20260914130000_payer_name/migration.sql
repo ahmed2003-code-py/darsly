@@ -1,0 +1,13 @@
+-- Who actually sent the money.
+--
+-- Both providers print the payer's name and the parser threw it away:
+--
+--   Vodafone Cash  «... من 01284120292؛ المسجل بإسم احمد عبدالعزيز هريدى على ...»
+--   CIB / InstaPay «... من ادهم محمد اشرف يسري ابو برقم مرجعي 05b6efa4 ...»
+--
+-- It is the only evidence on a transfer that a student cannot read off somebody
+-- else's receipt: the amount and the reference are both on a screenshot they
+-- could have been forwarded, while the name is whoever actually holds the
+-- wallet. Storing it is what lets a match be justified after the fact, and what
+-- an admin reads instead of the raw SMS.
+ALTER TABLE "PaymentEvent" ADD COLUMN IF NOT EXISTS "payerName" TEXT;

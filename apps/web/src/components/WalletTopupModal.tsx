@@ -28,7 +28,20 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
   });
 
   const amountCents = Math.round(parseFloat(amount || '0') * 100);
-  const valid = amountCents >= 1000 && !!method && !!proof;
+  /**
+   * Which identifier this method's SMS will carry, and whether what the student
+   * typed could be it. Kept in step with the server's rule in
+   * payer-reference.ts, which is the authority — this is so a wrong number is
+   * caught while they are still looking at it. A top-up is the same transfer as
+   * a course payment with no course attached, and is matched the same way, so it
+   * asks for the same thing.
+   */
+  const refKind = method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
+  const referenceLooksRight =
+    refKind === 'WALLET_NUMBER'
+      ? /^(?:\+?20|0)?1[0125]\d{8}$/.test(reference.replace(/[^\d]/g, ''))
+      : reference.replace(/[^0-9a-z]/gi, '').length >= 4;
+  const valid = amountCents >= 1000 && !!method && !!proof && referenceLooksRight;
 
   const submit = useMutation({
     mutationFn: async () =>
@@ -109,9 +122,13 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
                 <option value="OTHER">{t('method.OTHER')}</option>
               </select>
             </Field>
-            <Field label={t('walletStudent.reference')}>
-              <input className="input" dir="ltr" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="TXN / 010…" />
-            </Field>
+            {method && (
+              <Field label={t(`pay.ref.${refKind}`)} hint={t(`pay.ref.${refKind}Hint`)}>
+                <input className="input" dir="ltr" inputMode={refKind === 'WALLET_NUMBER' ? 'tel' : 'text'}
+                  value={reference} onChange={(e) => setReference(e.target.value)}
+                  placeholder={refKind === 'WALLET_NUMBER' ? '01xxxxxxxxx' : '05b6efa4'} />
+              </Field>
+            )}
             <Field label={t('walletStudent.proof')}>
               <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
                 onChange={(e) => e.target.files?.[0] && pickProof(e.target.files[0])} />

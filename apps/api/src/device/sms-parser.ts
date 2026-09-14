@@ -215,3 +215,121 @@ export function messageHash(
   const epochSec = Math.floor(receivedAt.getTime() / 1000);
   return sha256(`${normalizeSender(sender)} ${body ?? ''} ${epochSec}`);
 }
+
+/**
+ * Fold an Arabic name to the form two spellings of the same person share.
+ *
+ * The name on a transfer and the name on an account are the same person spelled
+ * by two different systems: «أحمد عبد العزيز هريدي» on the register, «احمد
+ * عبدالعزيز هريدى» in the SMS. Neither is wrong, and a comparison that treats
+ * them as different people is worse than no comparison at all — so the
+ * differences that carry no meaning are folded away first:
+ *
+ *  - hamza and madda on alif (أ إ آ ٱ → ا), which Egyptians type both ways
+ *  - final ya (ى → ي) and final ta marbuta (ة → ه), likewise
+ *  - harakat and tatweel, which are decoration
+ *  - Arabic-Indic digits, so a name with a number in it still compares
+ *  - "عبد العزيز" against "عبدالعزيز": spaces go entirely, because where the
+ *    break in a compound name falls is not information
+ *  - honorifics, which one side prints and the other does not
+ */
+export function normalizeArabicName(value: string): string {
+  return (value ?? '')
+    .normalize('NFKC')
+    // Harakat, tatweel, and the zero-width marks that ride along with RTL text.
+    .replace(/[\u0610-\u061A\u064B-\u0652\u0640\u200B-\u200F\u0670\u06D6-\u06ED]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/[ىئي]/g, 'ي')
+    .replace(/[ؤ]/g, 'و')
+    .replace(/ة/g, 'ه')
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    // Anchored on whitespace, not \b: that is an ASCII word boundary and never
+    // matches beside an Arabic letter, so this whole list used to do nothing.
+    .replace(/(?:^|\s)(?:الاستاذه|الاستاذ|السيده|السيد|الست|دكتور|مهندس|مستر)(?=\s|$)/g, ' ')
+    .replace(/\b(?:mr|mrs|ms|dr|eng)\b\.?/gi, '')
+    .toLowerCase()
+    // Everything that is not a letter or a digit, spaces included.
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+/** The same name split into its parts, folded, for token-by-token comparison. */
+export function nameParts(value: string): string[] {
+  return (value ?? '')
+    .split(/[\s\u00A0]+/)
+    .map(normalizeArabicName)
+    .filter((p) => p.length >= 2);
+}
+
+/**
+ * Does the name on the transfer belong to the person who says they sent it?
+ *
+ * Not equality. The two names are rarely character-identical even after
+ * folding: a bank prints three of four parts and truncates the fourth («ادهم
+ * محمد اشرف يسري ابو»), a student registers with two. What does hold is that
+ * the parts they do share must agree — so this asks whether the shorter name's
+ * parts all appear in the longer one, plus the given names line up.
+ *
+ * Deliberately not a similarity score. A threshold on a distance metric passes
+ * two different people with common Egyptian names («محمد أحمد» and «محمد
+ * علي») far too often, and this decides whether to take someone's money for a
+ * course they did not buy.
+ */
+export function namesAgree(a: string, b: string): boolean {
+  const left = nameParts(a);
+  const right = nameParts(b);
+  // One name, or a single-word name, is not evidence either way.
+  if (left.length < 2 || right.length < 2) return false;
+
+  // The first part is the given name, and it has to be the same person's.
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  if (shorter[0] !== longer[0]) return false;
+
+  // Every part of the shorter name appears in the longer one. A bank that
+  // truncates the last part still agrees on the parts it printed; an entirely
+  // different person does not.
+  return shorter.every((part) =>
+    longer.some((other) => other === part || other.startsWith(part) || part.startsWith(other)),
+  );
+}
+
+/**
+ * The name of the person who sent the money, when the message says.
+ *
+ * Both providers print it, in their own shape:
+ *
+ *   Vodafone Cash  «تم استلام مبلغ 10.00 جنيه من 01284120292؛
+ *                   المسجل بإسم احمد عبدالعزيز هريدى على رقم محفظتك …»
+ *   CIB / InstaPay «تم تنفيذ تحويل لحظي بمبلغ 2.00 جم إلى حسابك المنتهي بـ
+ *                   7717******** من ادهم محمد اشرف يسري ابو برقم مرجعي …»
+ *
+ * This is the one piece of evidence a student cannot copy off somebody else's
+ * receipt: the reference and the amount are on the screenshot they were sent,
+ * but the name is whoever actually holds the wallet. It is what turns "a
+ * transfer of this size arrived around then" into "this person paid".
+ *
+ * Returns null rather than a guess. A wrong name is worse than no name, because
+ * the matcher weighs a mismatch as evidence against.
+ */
+export function parsePayerName(body: string): string | null {
+  if (!body) return null;
+
+  const patterns = [
+    // Vodafone Cash: registered-name clause, ending at the next clause.
+    /(?:المسجل|المسجله|مسجل)\s*(?:بإسم|باسم|بأسم)\s*([^\d\n]{3,60}?)\s*(?:على|علي|عن|بتاريخ|$)/,
+    // Bank / InstaPay: "from <name>" ending at the reference clause.
+    // Anchored on start-of-line or whitespace for the same reason, and the name
+    // is taken greedily up to a *whitespace-separated* terminator: read lazily,
+    // it stopped a letter early and took the "ب" out of "برقم" into the name.
+    /(?:^|[\s*\u0640])من\s+((?:[\u0621-\u064A]+\s+){1,5}[\u0621-\u064A]+)(?=\s+(?:برقم|بتاريخ|رقم\s*مرجعي)|\s*$)/m,
+    // English-language equivalents, for senders that send them.
+    /\bfrom\s+([A-Za-z][A-Za-z.'\-\s]{2,59}?)\s*(?:with|ref|on|at|$)/i,
+  ];
+
+  for (const re of patterns) {
+    const name = body.match(re)?.[1]?.trim().replace(/\s+/g, ' ');
+    // Two parts minimum: a single word is as likely to be a stray preposition
+    // as a name, and namesAgree would refuse it anyway.
+    if (name && nameParts(name).length >= 2) return name;
+  }
+  return null;
+}

@@ -1099,7 +1099,15 @@
     "fromWalletLine": "من محفظتك",
     "amountDueAfterWallet": "المطلوب تحويله",
     "useWalletToggle": "استخدم رصيد محفظتك في الدفع",
-    "shortBalance": "رصيدك دلوقتي {{balance}} والدورة دي محتاجة {{required}} — اشحن المحفظة وكمّل."
+    "shortBalance": "رصيدك دلوقتي {{balance}} والدورة دي محتاجة {{required}} — اشحن المحفظة وكمّل.",
+    "confirmTransferred": "حوّلت المبلغ فعلاً",
+    "confirmTransferredHint": "حوّل الأول، وبعدها املا البيانات دي. طلب من غير تحويل مش هيتفعّل ومفيش حاجة نطابقه بيها.",
+    "ref": {
+      "WALLET_NUMBER": "رقم المحفظة اللي حوّلت منها",
+      "WALLET_NUMBERHint": "ده الرقم اللي بيوصلنا في رسالة التحويل، وبيه نعرف إن التحويل ده بتاعك. لازم يكون صح.",
+      "TRANSACTION_REFERENCE": "الرقم المرجعي للتحويل",
+      "TRANSACTION_REFERENCEHint": "انقله من رسالة التحويل اللي وصلتك — زي 05b6efa4. بيه نعرف تحويلك من غيره."
+    }
   },
   "tpay": {
     "title": "مراجعة الدفعات",

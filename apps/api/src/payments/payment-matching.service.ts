@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseIdentities } from '../device/sms-parser';
+import { namesAgree, parseIdentities, parsePayerName } from '../device/sms-parser';
 import { ManualPaymentsService } from './manual-payments.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -116,7 +116,12 @@ export class PaymentMatchingService {
           OR: [{ status: 'PENDING' }, { status: 'PAID', settledAt: null }],
         },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, reference: true, status: true, amountCents: true, walletCents: true },
+        select: {
+          id: true, reference: true, status: true, amountCents: true, walletCents: true,
+          // Who the platform thinks is paying, to weigh against who the provider
+          // says actually sent the money.
+          student: { select: { user: { select: { fullName: true } } } },
+        },
       })
     ).filter((p) => p.amountCents - p.walletCents === dto.amountCents);
 
@@ -133,21 +138,43 @@ export class PaymentMatchingService {
         createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
       },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, reference: true },
+      select: {
+        id: true, reference: true,
+        student: { select: { user: { select: { fullName: true } } } },
+      },
     });
 
-    const candidates: Array<{ kind: 'payment' | 'topup'; id: string; reference: string | null; status?: string }> = [
-      ...payments.map((p) => ({ kind: 'payment' as const, id: p.id, reference: p.reference, status: p.status })),
-      ...topups.map((t) => ({ kind: 'topup' as const, id: t.id, reference: t.reference })),
+    type Candidate = {
+      kind: 'payment' | 'topup';
+      id: string;
+      reference: string | null;
+      status?: string;
+      /** The name on the account that owes this money. */
+      owner: string;
+    };
+    const candidates: Candidate[] = [
+      ...payments.map((p) => ({
+        kind: 'payment' as const, id: p.id, reference: p.reference, status: p.status,
+        owner: p.student?.user?.fullName ?? '',
+      })),
+      ...topups.map((t) => ({
+        kind: 'topup' as const, id: t.id, reference: t.reference,
+        owner: t.student?.user?.fullName ?? '',
+      })),
     ];
 
-    let chosen: { kind: 'payment' | 'topup'; id: string; status?: string } | null = null;
+    let chosen: Candidate | null = null;
     let status: 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS' = 'UNMATCHED';
     let note: string | undefined;
 
     const identities = (dto.identities?.length ? dto.identities : [dto.reference ?? ''])
       .map(normRef)
       .filter(Boolean);
+
+    // Who the provider says sent the money. Read from the raw message rather
+    // than taken from the caller: the phone forwards what it received, and the
+    // server re-derives anything that decides whether money is credited.
+    const payerName = parsePayerName(dto.rawMessage ?? '');
 
     if (candidates.length === 0) {
       status = 'UNMATCHED';
@@ -156,10 +183,50 @@ export class PaymentMatchingService {
       const refMatches = candidates.filter((c) =>
         identities.some((identity) => refExact(normRef(c.reference), identity)),
       );
-      if (refMatches.length === 1) { chosen = refMatches[0]; status = 'MATCHED'; }
-      else if (refMatches.length > 1) { status = 'AMBIGUOUS'; note = 'multiple payments share this reference'; }
-      else if (candidates.length === 1) { chosen = candidates[0]; status = 'MATCHED'; note = 'matched by amount+time (reference differed)'; }
-      else { status = 'AMBIGUOUS'; note = 'several amount matches, none by reference'; }
+      if (refMatches.length === 1) {
+        chosen = refMatches[0];
+        status = 'MATCHED';
+        // The reference is the strong evidence and stands on its own. The name
+        // is recorded either way, because a transfer whose reference matches one
+        // student while the wallet belongs to somebody else is worth an admin's
+        // attention even though it is credited.
+        if (payerName && chosen.owner && !namesAgree(payerName, chosen.owner)) {
+          note = `matched by reference, but the transfer is in the name of "${payerName}" and the account is "${chosen.owner}" — worth a look`;
+        }
+      } else if (refMatches.length > 1) {
+        status = 'AMBIGUOUS';
+        note = 'multiple payments share this reference';
+      } else if (candidates.length === 1) {
+        /**
+         * One payment of this size, in this window, and the reference the
+         * student typed does not match the transfer.
+         *
+         * This used to be credited anyway, on amount and timing alone. That is
+         * the weakest evidence there is — two students buying the same course
+         * within three days transfer identical amounts, and whichever one the
+         * window happened to hold got the other's money. The name closes it: a
+         * transfer is credited here only when the person who sent it is the
+         * person who owes it.
+         *
+         * Where there is no name to check (a provider that does not print one),
+         * it goes to a human rather than through on the old evidence.
+         */
+        const owner = candidates[0].owner;
+        if (payerName && owner && namesAgree(payerName, owner)) {
+          chosen = candidates[0];
+          status = 'MATCHED';
+          note = `matched by amount+time and the payer's name ("${payerName}"); the reference differed`;
+        } else if (payerName && owner) {
+          status = 'AMBIGUOUS';
+          note = `one amount match, but the transfer is in the name of "${payerName}" and the account is "${owner}" — reference did not match either`;
+        } else {
+          status = 'AMBIGUOUS';
+          note = 'one amount match, but neither the reference nor a payer name confirms it';
+        }
+      } else {
+        status = 'AMBIGUOUS';
+        note = 'several amount matches, none by reference';
+      }
     }
 
     const r = await this.record(
@@ -167,6 +234,7 @@ export class PaymentMatchingService {
       chosen?.kind === 'payment' ? chosen.id : null,
       note,
       chosen?.kind === 'topup' ? chosen.id : null,
+      payerName,
     );
     // Only act if we actually recorded a fresh MATCHED event (a concurrent replay
     // that lost the unique-index race returns created=false and does nothing).
@@ -306,6 +374,7 @@ export class PaymentMatchingService {
     dto: PaymentEventDto, occurredAt: Date, dedupeKey: string | null,
     status: 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS' | 'DUPLICATE',
     matchedPaymentId: string | null, note?: string, matchedTopupId?: string | null,
+    payerName?: string | null,
   ) {
     try {
       const event = await this.prisma.paymentEvent.create({
@@ -315,6 +384,9 @@ export class PaymentMatchingService {
           reference: dto.reference?.trim() || null,
           occurredAt,
           rawMessage: dto.rawMessage ?? '',
+          // Re-derived from the raw message when the caller did not pass it, so
+          // an event recorded on any path carries who sent the money.
+          payerName: payerName ?? parsePayerName(dto.rawMessage ?? ''),
           deviceId: dto.deviceId ?? null,
           status,
           matchedPaymentId,

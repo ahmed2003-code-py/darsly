@@ -1,0 +1,87 @@
+import { BadRequestException } from '@nestjs/common';
+
+/**
+ * What the student has to tell us about their transfer, and why it differs by
+ * method.
+ *
+ * Matching a transfer to a payment needs one identifier that appears on both
+ * sides. Which identifier exists is decided by the provider, not by us:
+ *
+ *   Vodafone Cash sends no transaction id the student can see. What its SMS
+ *   carries is the *sending wallet's number* — «تم استلام مبلغ 10.00 جنيه من
+ *   01284120292» — so the number they transferred from is the identity, and it
+ *   is something they know by heart.
+ *
+ *   A bank or InstaPay transfer carries a reference and no phone number at all
+ *   — «برقم مرجعي 05b6efa4» — so the reference off their own receipt is the
+ *   only thing both sides share.
+ *
+ * Asking for "reference (TXN / 010…)" and accepting anything, or nothing, is
+ * why payments sat in manual review: a free-text box that a student could leave
+ * empty removed the only link between the money and the person. So the field is
+ * required, it is labelled for the method they picked, and its shape is checked
+ * here — a wallet number that is not a wallet number cannot match any SMS, and
+ * telling the student that now is far better than an admin working it out
+ * tomorrow.
+ */
+
+/** Egyptian mobile, the four live prefixes, with or without a country code. */
+const EG_MOBILE = /^(?:\+?20|0)?1[0125]\d{8}$/;
+
+export type ReferenceKind = 'WALLET_NUMBER' | 'TRANSACTION_REFERENCE';
+
+/** Which identifier this method's SMS will actually carry. */
+export function referenceKindFor(method: string): ReferenceKind {
+  return method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
+}
+
+/**
+ * Normalize the student's answer to the form matching compares against, or
+ * refuse it with the reason.
+ *
+ * Wallet numbers are stored as the bare local number (01xxxxxxxxx) so that a
+ * student who typed +20 and an SMS that printed 0 still meet. References keep
+ * their own characters — a bank's reference is not ours to reshape — and only
+ * lose surrounding whitespace.
+ */
+export function normalizePayerReference(method: string, raw: string | undefined): string {
+  const value = (raw ?? '').trim();
+  const kind = referenceKindFor(method);
+
+  if (!value) {
+    throw new BadRequestException({
+      message:
+        kind === 'WALLET_NUMBER'
+          ? 'Enter the wallet number you transferred from'
+          : 'Enter the transfer reference from your receipt',
+      code: 'REFERENCE_REQUIRED',
+      kind,
+    });
+  }
+
+  if (kind === 'WALLET_NUMBER') {
+    const digits = value.replace(/[^\d]/g, '');
+    if (!EG_MOBILE.test(digits)) {
+      throw new BadRequestException({
+        message: 'That is not an Egyptian wallet number — it should look like 01xxxxxxxxx',
+        code: 'BAD_WALLET_NUMBER',
+        kind,
+      });
+    }
+    // The last ten digits are the number itself; a leading 0 or +20 is not part
+    // of it, and the SMS prints only one of the three spellings.
+    return `0${digits.slice(-10)}`;
+  }
+
+  // A reference has to have enough to it to identify one transfer. Four
+  // alphanumeric characters is the floor: below that it matches by accident.
+  const alnum = value.replace(/[^0-9a-z]/gi, '');
+  if (alnum.length < 4) {
+    throw new BadRequestException({
+      message: 'That reference is too short — copy it from the transfer message',
+      code: 'BAD_REFERENCE',
+      kind,
+    });
+  }
+  return value;
+}

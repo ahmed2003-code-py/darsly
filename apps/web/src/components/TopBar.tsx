@@ -88,10 +88,10 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
 
   return (
     <header className="glass sticky top-0 z-40">
-      <div className="flex h-16 items-center gap-4 px-6">
+      <div className="flex h-16 items-center gap-2 px-4 sm:gap-4 sm:px-6">
         {onToggleSidebar && (
           <button
-            className="grid h-10 w-10 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low lg:hidden"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low lg:hidden"
             onClick={onToggleSidebar}
             aria-label="menu"
           >
@@ -100,7 +100,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
         )}
 
         {/* Search — start-aligned, not centered */}
-        <form onSubmit={submitSearch} className="me-auto w-full max-w-md">
+        <form onSubmit={submitSearch} className="me-auto min-w-0 w-full max-w-md">
           <div className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2 transition-[border-color,box-shadow] duration-150 ease-premium focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
             <span className="material-symbols-outlined text-[20px] text-outline">search</span>
             <input
@@ -112,7 +112,7 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
           </div>
         </form>
 
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-1">
           {/* Light or dark — the same switch the public academy page carries,
               so the choice a visitor made out there is still theirs in here. */}
           <ColorModeToggle />

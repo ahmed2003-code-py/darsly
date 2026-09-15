@@ -1,13 +1,41 @@
 import { HTMLMotionProps, m, useReducedMotion, Variants } from 'framer-motion';
 import { ReactNode, useState } from 'react';
+import { useThemeLayout } from '../lib/useThemeLayout';
 
 /**
  * Shared motion primitives. One curve (easeOutExpo), short durations, small
- * translateY — subtle and fast, never bouncy. All reveals fire once on scroll-in
- * and collapse to a no-op under prefers-reduced-motion.
+ * translateY — subtle and fast, never bouncy. All reveals fire once on
+ * scroll-in and collapse to a no-op under prefers-reduced-motion.
+ *
+ * The theme sets how much of it there is. `still` is none — not slower, none,
+ * the same as reduced motion. `subtle` is the app as it was. `expressive` is a
+ * touch further and a touch longer, which is as far as "premium" should ever
+ * go: motion that draws attention to itself is motion that is in the way. The
+ * reader's own preference always wins over the theme's.
  */
 
 const EASE = [0.16, 1, 0.3, 1] as const;
+
+/** How far and how long, for the theme's motion level. */
+const LEVELS: Record<string, { scale: number; dur: number }> = {
+  still: { scale: 0, dur: 0 },
+  subtle: { scale: 1, dur: 0.26 },
+  expressive: { scale: 1.35, dur: 0.36 },
+};
+
+/**
+ * The theme's motion level, resolved against the reader's preference.
+ *
+ * `off` is what both `still` and reduced-motion mean: no entrance, no lift.
+ * Everything else scales the distance and the duration together.
+ */
+export function useMotion(): { off: boolean; scale: number; dur: number } {
+  const reduce = useReducedMotion();
+  const { motion } = useThemeLayout();
+  const level = LEVELS[motion] ?? LEVELS.subtle;
+  const off = !!reduce || level.scale === 0;
+  return { off, scale: off ? 0 : level.scale, dur: off ? 0 : level.dur };
+}
 
 /** Fade + small rise, once on scroll-in. `delay` in seconds for hand-placed items. */
 export function Reveal({
@@ -23,15 +51,15 @@ export function Reveal({
   className?: string;
   as?: keyof typeof m;
 }) {
-  const reduce = useReducedMotion();
+  const { off, scale, dur } = useMotion();
   const Comp = (m as any)[as] as typeof m.div;
   return (
     <Comp
       className={className}
-      initial={reduce ? false : { opacity: 0, y }}
-      whileInView={reduce ? undefined : { opacity: 1, y: 0 }}
+      initial={off ? false : { opacity: 0, y: y * scale }}
+      whileInView={off ? undefined : { opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.26, ease: EASE, delay }}
+      transition={{ duration: dur, ease: EASE, delay }}
     >
       {children}
     </Comp>
@@ -58,18 +86,18 @@ export function Stagger({
   className?: string;
   gap?: number;
 }) {
-  const reduce = useReducedMotion();
+  const { off, scale } = useMotion();
   const [revealed, setRevealed] = useState(false);
   const container: Variants = {
     hidden: {},
-    show: { transition: { staggerChildren: reduce ? 0 : gap } },
+    show: { transition: { staggerChildren: off ? 0 : gap * scale } },
   };
   return (
     <m.div
       className={className}
       variants={container}
-      initial={reduce ? false : 'hidden'}
-      animate={reduce || revealed ? 'show' : 'hidden'}
+      initial={off ? false : 'hidden'}
+      animate={off || revealed ? 'show' : 'hidden'}
       onViewportEnter={() => setRevealed(true)}
       viewport={{ once: true, margin: '-40px' }}
     >
@@ -78,16 +106,16 @@ export function Stagger({
   );
 }
 
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.26, ease: EASE } },
-};
-
 export function StaggerItem({
   children,
   className,
   ...rest
 }: { children: ReactNode; className?: string } & HTMLMotionProps<'div'>) {
+  const { scale, dur } = useMotion();
+  const itemVariants: Variants = {
+    hidden: { opacity: 0, y: 12 * scale },
+    show: { opacity: 1, y: 0, transition: { duration: dur, ease: EASE } },
+  };
   return (
     <m.div className={className} variants={itemVariants} {...rest}>
       {children}
@@ -95,9 +123,18 @@ export function StaggerItem({
   );
 }
 
-/** Subtle press/hover affordance for interactive cards (transform only). */
-export const hoverLift = {
-  whileHover: { y: -2 },
-  whileTap: { scale: 0.99 },
-  transition: { duration: 0.2, ease: EASE },
-};
+/**
+ * Subtle press/hover affordance for interactive cards (transform only).
+ *
+ * A hook rather than a constant now, because the lift follows the theme: a
+ * still theme lifts nothing, an expressive one lifts a little more.
+ */
+export function useHoverLift() {
+  const { off, scale, dur } = useMotion();
+  if (off) return {};
+  return {
+    whileHover: { y: -2 * scale },
+    whileTap: { scale: 0.99 },
+    transition: { duration: Math.max(0.12, dur * 0.75), ease: EASE },
+  };
+}

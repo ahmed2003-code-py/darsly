@@ -10,6 +10,7 @@
     "start": "vite preview --host 0.0.0.0 --port ${PORT:-4173}"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.87.0",
     "@darsly/shared-types": "*",
     "@tanstack/react-query": "^5.51.23",
     "axios": "^1.7.4",

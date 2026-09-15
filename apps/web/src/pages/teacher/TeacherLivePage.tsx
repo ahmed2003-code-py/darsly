@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Markdown } from '../../lib/markdown';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
@@ -12,6 +13,7 @@ function when(iso: string) {
 export default function TeacherLivePage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [bookingsFor, setBookingsFor] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', description: '', startsAt: '', durationMin: '60', capacity: '', joinUrl: '' });
@@ -41,6 +43,14 @@ export default function TeacherLivePage() {
     mutationFn: async (id: string) => (await api.delete(`/teacher/live/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-live'] }),
   });
+  // Starting creates the room server-side; the page only navigates once it has.
+  const start = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/teacher/live/${id}/start`)).data,
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ['teacher-live'] });
+      navigate(`/live/${id}/meeting`);
+    },
+  });
   const { data: bookings } = useQuery({
     queryKey: ['live-bookings', bookingsFor],
     queryFn: async () => (await api.get(`/teacher/live/${bookingsFor}/bookings`)).data,
@@ -63,12 +73,24 @@ export default function TeacherLivePage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {data.map((s: any) => {
-            const past = new Date(s.startsAt).getTime() + s.durationMin * 60_000 < Date.now();
+            const endsAt = new Date(s.startsAt).getTime() + s.durationMin * 60_000;
+            const past = s.status === 'ENDED' || endsAt < Date.now();
+            const live = s.status === 'LIVE' && !past;
+            // The doors open a quarter of an hour early, the same window the
+            // server enforces — this only decides whether to offer the button.
+            const canStart = !past && Date.now() >= new Date(s.startsAt).getTime() - 15 * 60_000;
             return (
               <div key={s.id} className="card flex flex-col gap-2">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-heading text-lg font-bold">{s.title}</h3>
-                  <Badge tone={past ? 'neutral' : 'teal'}>{past ? t('live.ended') : t('live.upcoming')}</Badge>
+                  <h3 className="min-w-0 font-heading text-lg font-bold">{s.title}</h3>
+                  {live ? (
+                    <Badge tone="error">
+                      <span className="me-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current align-middle" />
+                      {t('live.liveNow')}
+                    </Badge>
+                  ) : (
+                    <Badge tone={past ? 'neutral' : 'teal'}>{past ? t('live.ended') : t('live.upcoming')}</Badge>
+                  )}
                 </div>
                 {s.description && <Markdown className="text-sm text-on-surface-variant">{s.description}</Markdown>}
                 <div className="flex flex-wrap items-center gap-4 text-xs text-outline">
@@ -84,6 +106,21 @@ export default function TeacherLivePage() {
                     <span className="material-symbols-outlined text-base">delete</span>
                   </button>
                 </div>
+
+                {/* The meeting itself. A session already running is re-entered
+                    rather than started again — that is the refresh case, and
+                    the second-device case. */}
+                {!past && (
+                  <button
+                    className="btn-primary w-full py-2.5 text-sm"
+                    disabled={!canStart || start.isPending}
+                    onClick={() => (live ? navigate(`/live/${s.id}/meeting`) : start.mutate(s.id))}
+                  >
+                    <span className="material-symbols-outlined text-base">videocam</span>
+                    {live ? t('live.continueMeeting') : canStart ? t('live.startMeeting') : t('live.startOpensSoon')}
+                  </button>
+                )}
+                <ErrorNote error={start.error} />
               </div>
             );
           })}

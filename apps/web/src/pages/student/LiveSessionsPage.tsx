@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Markdown } from '../../lib/markdown';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, PageHeader } from '../../components/ui';
@@ -33,10 +34,7 @@ export default function LiveSessionsPage() {
     mutationFn: async (id: string) => (await api.delete(`/live/${id}/book`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live-upcoming'] }),
   });
-  const join = useMutation({
-    mutationFn: async (id: string) => (await api.get(`/live/${id}/join`)).data,
-    onSuccess: (d) => { if (d.joinUrl) window.open(d.joinUrl, '_blank', 'noopener'); },
-  });
+  const navigate = useNavigate();
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
@@ -48,7 +46,10 @@ export default function LiveSessionsPage() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
           {data.map((s: any) => {
-            const soon = new Date(s.startsAt).getTime() - Date.now() < 15 * 60_000;
+            // The server works out whether the door is open — it owns the clock,
+            // the booking and whether the teacher has actually started.
+            const live = s.status === 'LIVE';
+            const soon = new Date(s.joinOpensAt).getTime() <= Date.now();
             const full = s.seatsLeft === 0 && !s.booked;
             return (
               <div key={s.id} className="card flex flex-col gap-3">
@@ -56,9 +57,11 @@ export default function LiveSessionsPage() {
                   <div className="min-w-0">
                     <div className="mb-1 flex items-center gap-2">
                       <span className="flex h-2.5 w-2.5 items-center justify-center">
-                        <span className={`h-2.5 w-2.5 rounded-full ${soon ? 'animate-pulse bg-error' : 'bg-secondary'}`} />
+                        <span className={`h-2.5 w-2.5 rounded-full ${live ? 'animate-pulse bg-error' : 'bg-secondary'}`} />
                       </span>
-                      <span className="text-xs font-bold text-outline">{startsInLabel(s.startsAt, t)}</span>
+                      <span className={`text-xs font-extrabold ${live ? 'text-error' : 'text-outline'}`}>
+                        {live ? t('live.liveNow') : startsInLabel(s.startsAt, t)}
+                      </span>
                     </div>
                     <h3 className="font-heading text-lg font-bold">{s.title}</h3>
                     <p className="text-sm text-primary">{s.teacherName}</p>
@@ -79,9 +82,16 @@ export default function LiveSessionsPage() {
                 <div className="mt-auto flex gap-2">
                   {s.booked ? (
                     <>
-                      <button className="btn-primary flex-1 py-2.5 text-sm" disabled={!soon || join.isPending} onClick={() => join.mutate(s.id)}>
+                      <button
+                        className="btn-primary flex-1 py-2.5 text-sm"
+                        disabled={!s.canJoin}
+                        onClick={() => navigate(`/live/${s.id}/meeting`)}
+                      >
                         <span className="material-symbols-outlined text-base">videocam</span>
-                        {soon ? t('live.join') : t('live.joinOpensSoon')}
+                        {/* Why it is unavailable, rather than a dead button: the
+                            two reasons are different and a student can act on
+                            only one of them. */}
+                        {s.canJoin ? t('live.join') : soon ? t('live.waitingTeacher') : t('live.joinOpensSoon')}
                       </button>
                       <button className="btn-ghost px-4 py-2.5 text-sm" disabled={cancel.isPending} onClick={() => cancel.mutate(s.id)}>
                         {t('live.cancel')}
@@ -94,7 +104,7 @@ export default function LiveSessionsPage() {
                     </button>
                   )}
                 </div>
-                <ErrorNote error={book.error || join.error} />
+                <ErrorNote error={book.error || cancel.error} />
               </div>
             );
           })}

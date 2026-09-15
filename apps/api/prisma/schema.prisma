@@ -55,6 +55,7 @@ model User {
   academyMemberships AcademyMembership[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt          DateTime?
+  liveAttendance   LiveAttendance[]
 }
 
 // ─────────────────────────── Academy (Workspace) ───────────────────────────
@@ -1451,6 +1452,18 @@ model Notification {
   @@index([userId, readAt, createdAt])
 }
 
+/// Where a session is in its life, as the teacher drove it.
+///
+/// Only the transitions a person actually makes are stored. "It is past its
+/// window" is not one of them — that is a fact about the clock, derived on
+/// read, so a session nobody bothered to end never sits in the wrong state
+/// waiting for a cron job that might not run.
+enum LiveSessionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
 model LiveSession {
   id          String         @id @default(cuid())
   tenantId    String
@@ -1462,14 +1475,54 @@ model LiveSession {
   durationMin Int            @default(60)
   // null = unlimited seats
   capacity    Int?
+  /// An external meeting link (Zoom, Meet) the teacher pasted in themselves.
+  /// Predates the built-in classroom and still works: a session that has one
+  /// and no room of its own keeps sending students there.
   joinUrl     String?
+  status      LiveSessionStatus @default(SCHEDULED)
+  /// The Daily room backing this session. Created when the teacher starts it,
+  /// not when they schedule it — a room booked weeks ahead is a room sitting
+  /// open weeks ahead, and the session may never run at all.
+  roomName    String?        @unique
+  roomUrl     String?
+  startedAt   DateTime?
+  endedAt     DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   deletedAt   DateTime?
 
-  bookings LiveBooking[]
+  bookings   LiveBooking[]
+  attendance LiveAttendance[]
 
   @@index([tenantId, startsAt])
+  @@index([tenantId, status])
+}
+
+/// Who was actually in the room, and for how long.
+///
+/// One row per person per session, so a refresh, a dropped connection or a
+/// second tab extends the record they already have instead of inventing a new
+/// attendance. Duration accumulates from heartbeats rather than from
+/// `leftAt - joinedAt`: a student who joins, closes the laptop for an hour and
+/// comes back for the last five minutes was present for ten minutes, not
+/// seventy, and the browser cannot be trusted to say so on its way out.
+model LiveAttendance {
+  id              String      @id @default(cuid())
+  sessionId       String
+  session         LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// TEACHER or STUDENT, decided by the server from the JWT — never sent up.
+  role            Role
+  joinedAt        DateTime    @default(now())
+  /// Last heartbeat. Also how a session works out who is still in the room.
+  lastSeenAt      DateTime    @default(now())
+  leftAt          DateTime?
+  durationSeconds Int         @default(0)
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
 }
 
 // A student's seat reservation for a live session.

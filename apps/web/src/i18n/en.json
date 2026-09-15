@@ -983,7 +983,11 @@
     "fCapacity": "Capacity",
     "fCapacityHint": "Leave empty = unlimited",
     "fJoinUrl": "Join URL",
-    "publish": "Publish session"
+    "publish": "Publish session",
+    "waitingTeacher": "Waiting for the teacher to start",
+    "startMeeting": "Start meeting",
+    "continueMeeting": "Join meeting",
+    "startOpensSoon": "Opens 15 minutes before"
   },
   "analytics": {
     "title": "Analytics",
@@ -1911,6 +1915,35 @@
       "GENERAL": "General",
       "LANGUAGES": "Language schools",
       "BOTH": "Shared subjects"
+    }
+  },
+  "meeting": {
+    "brand": "Darsly Live",
+    "live": "LIVE",
+    "you": "You",
+    "teacherBadge": "Teacher",
+    "mic": "Microphone",
+    "cam": "Camera",
+    "share": "Share screen",
+    "people": "Participants",
+    "leave": "Leave",
+    "enter": "Join meeting",
+    "back": "Back",
+    "endForAll": "End for all",
+    "endConfirm": "This ends the meeting for everyone. Are you sure?",
+    "sharingScreen": "{{name}} is sharing their screen",
+    "peopleCount": "Participants ({{count}})",
+    "muteOne": "Mute participant",
+    "removeOne": "Remove participant",
+    "removeConfirm": "Remove {{name}} from the meeting?",
+    "err": {
+      "NOT_OPEN_YET": "The meeting opens 15 minutes before the scheduled time.",
+      "ENDED": "This session has ended.",
+      "NOT_STARTED": "The teacher has not started yet. Try again shortly.",
+      "LIVE_NOT_CONFIGURED": "Live classrooms are not enabled on the platform.",
+      "LIVE_PROVIDER_UNREACHABLE": "Could not reach the video service. Try again shortly.",
+      "LIVE_PROVIDER_ERROR": "Could not prepare the meeting room. Try again shortly.",
+      "GENERIC": "Could not enter the meeting. Check your booking and try again."
     }
   }
 }

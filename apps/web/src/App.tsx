@@ -45,6 +45,7 @@ const TeacherProfilePage = lazyPage(() => import('./pages/student/TeacherProfile
 const AssignmentBuilderPage = lazyPage(() => import('./pages/teacher/AssignmentBuilderPage'));
 const CourseBuilderPage = lazyPage(() => import('./pages/teacher/CourseBuilderPage'));
 const TeacherLivePage = lazyPage(() => import('./pages/teacher/TeacherLivePage'));
+const MeetingPage = lazyPage(() => import('./pages/live/MeetingPage'));
 const AdminPaymentsPage = lazyPage(() => import('./pages/admin/AdminPaymentsPage'));
 const AdminAcademyStudioPage = lazyPage(() => import('./pages/admin/AdminAcademyStudioPage'));
 const TeacherAnalyticsPage = lazyPage(() => import('./pages/teacher/TeacherAnalyticsPage'));
@@ -57,7 +58,16 @@ const TeacherEnrollmentsPage = lazyPage(() => import('./pages/teacher/TeacherEnr
 const TeacherSecurityPage = lazyPage(() => import('./pages/teacher/TeacherSecurityPage'));
 const TeacherWalletPage = lazyPage(() => import('./pages/teacher/TeacherWalletPage'));
 
-function RequireAuth({ children, role }: { children: ReactNode; role?: Role }) {
+/**
+ * `bare` drops the sidebar, top bar and bottom navigation.
+ *
+ * For the live classroom: a phone in a class has one job, and three rows of
+ * app chrome is three rows the video does not get. Everything else about the
+ * guard — the token, the role, the redirect that remembers where you were
+ * going — is unchanged, because a page without navigation is still a page
+ * that has to be signed in for.
+ */
+function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Role; bare?: boolean }) {
   const { accessToken, user } = useAuthStore();
   const location = useLocation();
   // Carry the destination to the login page. A visitor arriving from a generated
@@ -69,6 +79,7 @@ function RequireAuth({ children, role }: { children: ReactNode; role?: Role }) {
   if (role && user?.role !== role && user?.role !== Role.SUPER_ADMIN) {
     return <Navigate to={user?.role === Role.TEACHER ? '/teacher' : '/'} replace />;
   }
+  if (bare) return <>{children}</>;
   return <Layout>{children}</Layout>;
 }
 
@@ -134,6 +145,10 @@ export default function App() {
       <Route path="/my-courses" element={<RequireAuth role={Role.STUDENT}><MyCoursesPage /></RequireAuth>} />
       <Route path="/my-certificates" element={<RequireAuth role={Role.STUDENT}><CertificatesPage /></RequireAuth>} />
       <Route path="/live" element={<RequireAuth role={Role.STUDENT}><LiveSessionsPage /></RequireAuth>} />
+      {/* The classroom itself. No role here on purpose — the same page serves
+          the teacher and the student, and which of them you are is decided by
+          the API, not by the route you reached it through. */}
+      <Route path="/live/:id/meeting" element={<RequireAuth bare><MeetingPage /></RequireAuth>} />
       <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
       <Route path="/wallet" element={<RequireAuth role={Role.STUDENT}><WalletPage /></RequireAuth>} />
       <Route path="/learning" element={<RequireAuth role={Role.STUDENT}><LearningCenterPage /></RequireAuth>} />

@@ -87,6 +87,42 @@ export class LiveController {
     return this.live.bookingsFor(ctx.academyId, id);
   }
 
+  @Get('teacher/live/:id/attendance')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Who actually attended, and for how long' })
+  attendance(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.attendanceFor(ctx.academyId, id);
+  }
+
+  /**
+   * Opens the classroom and hands the teacher their own way in.
+   *
+   * The owner token this returns is what allows moderation, so it is minted
+   * from the academy membership the guard already proved — never from anything
+   * the request asked for.
+   */
+  @Post('teacher/live/:id/start')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Start the meeting and get an owner token' })
+  start(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @CurrentUser() u: JwtPayload) {
+    return this.live.start(ctx.academyId, id, u.sub);
+  }
+
+  /** Walking back into a class already running — a refresh, or a second device. */
+  @Get('teacher/live/:id/join')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Re-enter a running meeting' })
+  teacherJoin(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @CurrentUser() u: JwtPayload) {
+    return this.live.teacherJoin(ctx.academyId, id, u.sub);
+  }
+
+  @Post('teacher/live/:id/end')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] End the meeting for everyone' })
+  end(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.end(ctx.academyId, id);
+  }
+
   // ── Student ──────────────────────────────────────────────────────────────
 
   @Get('live/upcoming')
@@ -110,10 +146,34 @@ export class LiveController {
     return this.live.cancel(u.sub, id);
   }
 
+  /**
+   * The secure door into the classroom.
+   *
+   * Returns a room URL and a token scoped to this student, this room and this
+   * session's window — and only after the server has checked the booking, the
+   * clock and that the teacher has actually started. Nothing here is decided
+   * by the caller.
+   */
   @Get('live/:id/join')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] Get the join link (booked + within window)' })
+  @ApiOperation({ summary: '[student] Enter the meeting (booked + started + within window)' })
   join(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     return this.live.join(u.sub, id);
+  }
+
+  // ── Presence (either side of the classroom) ──────────────────────────────
+
+  @Post('live/:id/heartbeat')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'Still in the room — what attendance time is counted from' })
+  heartbeat(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.live.heartbeat(u.sub, id);
+  }
+
+  @Post('live/:id/leave')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'Left the room (best effort — heartbeats are the record)' })
+  leave(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.live.leave(u.sub, id);
   }
 }

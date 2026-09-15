@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -32,6 +33,19 @@ class CreateLiveDto {
   @IsOptionalId() courseId?: string | null;
   // Rendered as a link students click — anything but a real URL is a trap.
   @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?: string | null;
+}
+
+class RecordingStartedDto {
+  /** Daily's id for the recording, as the client reported it starting. */
+  @IsOptional() @IsString() @MaxLength(LIMITS.ID) recordingId?: string;
+}
+
+class SummaryVisibilityDto {
+  @IsBoolean() visible: boolean;
+}
+
+class ChatMessageDto {
+  @IsString() @MinLength(1) @MaxLength(2000) body: string;
 }
 
 class UpdateLiveDto {
@@ -159,6 +173,77 @@ export class LiveController {
   @ApiOperation({ summary: '[student] Enter the meeting (booked + started + within window)' })
   join(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     return this.live.join(u.sub, id);
+  }
+
+  // ── Recording, summary and attendance (the teacher's side) ───────────────
+
+  /** Records that recording began, and the provider's id for it. */
+  @Post('teacher/live/:id/recording/start')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Mark the session as recording' })
+  startRecording(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: RecordingStartedDto,
+  ) {
+    return this.live.markRecording(ctx.academyId, id, dto.recordingId ?? null);
+  }
+
+  @Post('teacher/live/:id/recording/stop')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Mark recording as stopped (still processing)' })
+  stopRecording(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.stopRecording(ctx.academyId, id);
+  }
+
+  @Post('teacher/live/:id/summary')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Queue an AI summary of the lesson' })
+  summarise(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.requestSummary(ctx.academyId, id);
+  }
+
+  @Patch('teacher/live/:id/summary/visibility')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Share the summary with the class, or stop sharing it' })
+  shareSummary(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: SummaryVisibilityDto,
+  ) {
+    return this.live.setSummaryVisibility(ctx.academyId, id, dto.visible);
+  }
+
+  // ── The classroom, for anyone admitted to it ─────────────────────────────
+
+  /** What a viewer may read about a session: recording and summary, by role. */
+  @Get('live/:id/detail')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'Session detail (recording + summary, filtered by role)' })
+  detail(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.live.sessionDetail(u.sub, id);
+  }
+
+  @Get('live/:id/chat')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'Messages sent inside the classroom' })
+  chat(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.live.chatHistory(u.sub, id);
+  }
+
+  @Post('live/:id/chat')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'Send a message to the classroom' })
+  sendChat(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ChatMessageDto) {
+    return this.live.sendChat(u.sub, id, dto.body);
+  }
+
+  /** A short-lived link to the recording, minted per request. */
+  @Get('live/:id/recording')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'A short-lived link to watch the recording' })
+  recording(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.live.recordingLink(u.sub, id);
   }
 
   // ── Presence (either side of the classroom) ──────────────────────────────

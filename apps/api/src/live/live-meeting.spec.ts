@@ -111,8 +111,10 @@ function build(world: {
 
   const notifications = { create: jest.fn(async () => ({})) } as any;
   const gamification = { record: jest.fn(async () => ({})) } as any;
-  const service = new LiveService(prisma, notifications, gamification, daily);
-  return { service, prisma, daily, notifications, session: s, updated, upserted };
+  const realtime = { emitToLive: jest.fn() } as any;
+  const jobs = { enqueue: jest.fn(async () => ({ id: 'job_1' })) } as any;
+  const service = new LiveService(prisma, notifications, gamification, daily, realtime, jobs);
+  return { service, prisma, daily, notifications, realtime, jobs, session: s, updated, upserted };
 }
 
 describe('a teacher opens the classroom', () => {

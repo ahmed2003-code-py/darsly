@@ -68,6 +68,9 @@ export function useDailyMeeting(liveSessionId: string) {
   const [micOn, setMicOn] = useState(false);
   const [camOn, setCamOn] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const recIdResolve = useRef<((id: string | null) => void) | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
   /** A short, self-clearing line for the things that fail quietly. */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -132,12 +135,25 @@ export function useDailyMeeting(liveSessionId: string) {
     events.forEach((e) => c.on(e as any, sync));
     c.on('error', onError);
     c.on('left-meeting', () => setJoined(false));
+    // The provider's id for the recording arrives on the event, not from the
+    // call that started it — so the promise `startRecording()` hands back is
+    // settled here, where the id actually shows up.
+    const onRecStarted = (ev: any) => {
+      setRecording(true);
+      recIdResolve.current?.(ev?.recordingId ?? null);
+      recIdResolve.current = null;
+    };
+    const onRecStopped = () => setRecording(false);
+    c.on('recording-started', onRecStarted);
+    c.on('recording-stopped', onRecStopped);
     // Sync once on attach: a call object that already existed (the reused
     // instance) has participants this page has not heard the events for.
     sync();
     return () => {
       events.forEach((e) => c.off(e as any, sync));
       c.off('error', onError);
+      c.off('recording-started', onRecStarted);
+      c.off('recording-stopped', onRecStopped);
     };
   }, [call]);
 
@@ -215,6 +231,64 @@ export function useDailyMeeting(liveSessionId: string) {
     }
   }, [sharing, canShare]);
 
+  /**
+   * Recording, which only an owner token can start.
+   *
+   * Returns the provider's id so the caller can hand it to the server: without
+   * it a finished recording cannot be found again.
+   */
+  const startRecording = useCallback(async (): Promise<string | null> => {
+    const c = callRef.current;
+    if (!c) return null;
+    const waitForId = new Promise<string | null>((resolve) => {
+      recIdResolve.current = resolve;
+      // The recording is running either way; an id that never arrives should
+      // not leave the caller waiting on it forever.
+      setTimeout(() => {
+        if (recIdResolve.current === resolve) {
+          recIdResolve.current = null;
+          resolve(null);
+        }
+      }, 8000);
+    });
+    try {
+      await c.startRecording();
+    } catch {
+      recIdResolve.current = null;
+      setNotice('RECORDING_FAILED');
+      return null;
+    }
+    // Transcription rides along with the recording, because the teacher's
+    // intent is the same one: capture this lesson. It is a separate feature at
+    // the provider and may not be on every plan, so its failure is allowed to
+    // be silent — the recording is still running, and the only thing lost is
+    // the summary, which the session page reports on its own.
+    try {
+      await c.startTranscription();
+      setTranscribing(true);
+    } catch {
+      setTranscribing(false);
+    }
+    return waitForId;
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    const c = callRef.current;
+    if (!c) return;
+    try {
+      await c.stopRecording();
+    } catch {
+      setNotice('RECORDING_FAILED');
+    }
+    try {
+      await c.stopTranscription();
+    } catch {
+      // Never started, or already stopped. Neither is worth reporting.
+    }
+    setTranscribing(false);
+    setRecording(false);
+  }, []);
+
   /** Owner-only, and the server decided who that is. */
   const muteParticipant = useCallback((sessionId: string) => {
     callRef.current?.updateParticipant(sessionId, { setAudio: false });
@@ -256,6 +330,10 @@ export function useDailyMeeting(liveSessionId: string) {
     toggleMic,
     toggleCam,
     toggleShare,
+    recording,
+    transcribing,
+    startRecording,
+    stopRecording,
     muteParticipant,
     removeParticipant,
     ready: !!call,

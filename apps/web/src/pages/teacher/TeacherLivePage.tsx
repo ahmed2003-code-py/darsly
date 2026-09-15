@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Markdown } from '../../lib/markdown';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
+import SessionSummary from '../live/SessionSummary';
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -54,6 +55,15 @@ export default function TeacherLivePage() {
       navigate(`/live/${id}/meeting`);
     },
   });
+  // Finished sessions open into their own record: who came, and what the
+  // lesson came to.
+  const [detailFor, setDetailFor] = useState<string | null>(null);
+  const { data: attendance } = useQuery({
+    queryKey: ['live-attendance', detailFor],
+    queryFn: async () => (await api.get(`/teacher/live/${detailFor}/attendance`)).data,
+    enabled: !!detailFor,
+  });
+
   const { data: bookings } = useQuery({
     queryKey: ['live-bookings', bookingsFor],
     queryFn: async () => (await api.get(`/teacher/live/${bookingsFor}/bookings`)).data,
@@ -124,6 +134,13 @@ export default function TeacherLivePage() {
                   </button>
                 )}
                 <ErrorNote error={start.error} />
+
+                {past && (
+                  <button className="btn-ghost w-full py-2.5 text-sm" onClick={() => setDetailFor(s.id)}>
+                    <span className="material-symbols-outlined text-base">description</span>
+                    {t('live.viewSession')}
+                  </button>
+                )}
               </div>
             );
           })}
@@ -195,6 +212,37 @@ export default function TeacherLivePage() {
         <button className="btn-primary mt-2 w-full" disabled={create.isPending || !form.title.trim() || !form.startsAt} onClick={() => create.mutate()}>
           {create.isPending ? t('common.saving') : t('live.publish')}
         </button>
+      </Modal>
+
+      {/* What a finished lesson left behind. */}
+      <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={t('live.sessionRecord')}>
+        {detailFor && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="mb-2 font-heading text-base font-bold">{t('live.attendance')}</h3>
+              {!attendance?.length ? (
+                <p className="py-3 text-center text-sm text-outline">{t('live.noAttendance')}</p>
+              ) : (
+                <ul className="divide-y divide-outline-variant/40">
+                  {attendance.map((a: any) => (
+                    <li key={a.id} className="flex items-center gap-2 py-2">
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold">{a.fullName}</span>
+                      {a.role === 'TEACHER' && (
+                        <span className="rounded-full bg-primary-fixed px-2 py-0.5 text-[10px] font-bold text-on-primary-fixed">
+                          {t('meeting.teacherBadge')}
+                        </span>
+                      )}
+                      <span className="shrink-0 text-xs text-outline">
+                        {t('live.minutes', { count: Math.max(1, Math.round(a.durationSeconds / 60)) })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <SessionSummary sessionId={detailFor} />
+          </div>
+        )}
       </Modal>
 
       {/* Bookings modal */}

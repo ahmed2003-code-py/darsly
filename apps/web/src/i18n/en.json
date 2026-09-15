@@ -991,7 +991,11 @@
     "builtInTitle": "The classroom is built in",
     "builtInHint": "No link needed — press “Start meeting” at the time and students join from inside the app.",
     "useExternal": "I would rather use an external link (Zoom / Meet)",
-    "useBuiltIn": "Use the Darsly classroom instead"
+    "useBuiltIn": "Use the Darsly classroom instead",
+    "viewSession": "Session details",
+    "sessionRecord": "Session record",
+    "attendance": "Attendance",
+    "noAttendance": "Nobody attended this session"
   },
   "analytics": {
     "title": "Analytics",
@@ -1954,7 +1958,33 @@
     "waitingTeacherInRoom": "Waiting for the teacher to join…",
     "notice": {
       "SHARE_UNSUPPORTED": "Mobile browsers cannot share a screen. Open the class on a computer to share yours.",
-      "SHARE_FAILED": "Could not start screen sharing. Try again."
-    }
+      "SHARE_FAILED": "Could not start screen sharing. Try again.",
+      "RECORDING_FAILED": "Could not start recording. Try again."
+    },
+    "chat": "Chat",
+    "chatEmpty": "No messages yet",
+    "chatPh": "Write a message…",
+    "send": "Send",
+    "startRec": "Start recording",
+    "stopRec": "Stop recording"
+  },
+  "summary": {
+    "title": "AI lesson summary",
+    "generate": "Generate summary",
+    "processing": "Generating summary…",
+    "failed": "Unable to generate summary.",
+    "retry": "Try again",
+    "share": "Share with students",
+    "notYetHint": "Built from what was said in the lesson. Without a recording there is nothing to read.",
+    "notShared": "Your teacher has not shared a summary for this session.",
+    "lesson": "Lesson summary",
+    "topics": "Topics",
+    "keyPoints": "Key points",
+    "qa": "Questions & answers",
+    "homework": "Homework",
+    "noneTopics": "No specific topics were identified.",
+    "noneKeyPoints": "No key points were identified.",
+    "noneQa": "No questions were asked in this session.",
+    "noneHomework": "No homework or action items were identified in this session."
   }
 }

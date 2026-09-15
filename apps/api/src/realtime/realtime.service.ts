@@ -22,4 +22,15 @@ export class RealtimeService {
   emitToThread(threadId: string, event: string, payload: unknown) {
     this.server?.to(`thread:${threadId}`).emit(event, payload);
   }
+
+  /**
+   * Everyone currently inside one live classroom.
+   *
+   * A room per session rather than per pair: a class is a group, and the
+   * membership check that lets someone join the socket room is the same one
+   * that let them into the meeting.
+   */
+  emitToLive(sessionId: string, event: string, payload: unknown) {
+    this.server?.to(`live:${sessionId}`).emit(event, payload);
+  }
 }

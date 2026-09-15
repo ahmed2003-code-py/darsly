@@ -13,6 +13,7 @@ import { JwtPayload, RealtimeEvents, SendMessagePayload } from '@darsly/shared-t
 import type { Server, Socket } from 'socket.io';
 import { ChatService } from '../chat/chat.service';
 import { RealtimeService } from './realtime.service';
+import { LiveService } from '../live/live.service';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
   .split(',')
@@ -34,6 +35,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
     private readonly jwt: JwtService,
     private readonly chat: ChatService,
     private readonly realtime: RealtimeService,
+    private readonly live: LiveService,
   ) {}
 
   afterInit(server: Server) {
@@ -92,6 +94,30 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
     // spray typing echoes into (and leak their identity to) that room.
     if (!user || !(await this.chat.canAccessThread(user, threadId))) return;
     client.to(`thread:${threadId}`).emit(RealtimeEvents.TYPING_ECHO, { threadId, userId: user.sub });
+  }
+
+  /**
+   * Join the room for one live classroom.
+   *
+   * Gated on the same question the meeting itself asks — booked student or the
+   * academy's own staff — because a socket room that anyone could join by
+   * guessing a session id would hand them the whole class's chat.
+   */
+  @SubscribeMessage('live:join')
+  async joinLive(@ConnectedSocket() client: Socket, @MessageBody() sessionId: string) {
+    const user = this.user(client);
+    if (!user || !sessionId) return;
+    try {
+      await this.live.assertInSession(user.sub, sessionId);
+    } catch {
+      return;
+    }
+    client.join(`live:${sessionId}`);
+  }
+
+  @SubscribeMessage('live:leave')
+  leaveLive(@ConnectedSocket() client: Socket, @MessageBody() sessionId: string) {
+    client.leave(`live:${sessionId}`);
   }
 
   @SubscribeMessage(RealtimeEvents.MARK_READ)

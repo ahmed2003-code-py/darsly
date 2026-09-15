@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { DailyService } from './daily.service';
+import { RealtimeService } from '../realtime/realtime.service';
+import { AiJobService } from '../academy-site/jobs/ai-job.service';
 
 /** How long before the scheduled time the doors open. */
 export const JOIN_OPENS_MIN = 15;
@@ -31,6 +33,8 @@ export class LiveService {
     private readonly notifications: NotificationsService,
     private readonly gamification: GamificationService,
     private readonly daily: DailyService,
+    private readonly realtime: RealtimeService,
+    private readonly jobs: AiJobService,
   ) {}
 
   // ── Teacher ────────────────────────────────────────────────────────────────
@@ -402,6 +406,218 @@ export class LiveService {
       data: { leftAt: now, lastSeenAt: now },
     });
     return { ok: true };
+  }
+
+  // ── The classroom's chat ───────────────────────────────────────────────────
+
+  /**
+   * Everyone in the room can read it, and only they can.
+   *
+   * "In the room" is the same question the join gate answers — booked student
+   * or the academy's own staff — so it is asked the same way rather than
+   * invented again here.
+   */
+  async assertInSession(userId: string, sessionId: string) {
+    const session = await this.prisma.liveSession.findUnique({
+      where: { id: sessionId },
+      select: { id: true, tenantId: true, deletedAt: true, teacher: { select: { userId: true } } },
+    });
+    if (!session || session.deletedAt) throw new NotFoundException('Session not found');
+    if (session.teacher.userId === userId) return { session, role: 'TEACHER' as const };
+    const staff = await this.prisma.academyMembership.findFirst({
+      where: { academyId: session.tenantId, userId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    if (staff) return { session, role: 'TEACHER' as const };
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    const booked =
+      student &&
+      (await this.prisma.liveBooking.findUnique({
+        where: { sessionId_studentId: { sessionId, studentId: student.id } },
+        select: { id: true },
+      }));
+    if (!booked) throw new ForbiddenException('You are not in this session');
+    return { session, role: 'STUDENT' as const };
+  }
+
+  async chatHistory(userId: string, sessionId: string) {
+    await this.assertInSession(userId, sessionId);
+    const rows = await this.prisma.liveChatMessage.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+      include: { user: { select: { id: true, fullName: true, role: true } } },
+    });
+    return rows.map((m) => this.chatView(m));
+  }
+
+  async sendChat(userId: string, sessionId: string, body: string) {
+    const { session } = await this.assertInSession(userId, sessionId);
+    const text = body.trim();
+    if (!text) throw new BadRequestException('Empty message');
+    const saved = await this.prisma.liveChatMessage.create({
+      data: { sessionId, userId, body: text.slice(0, 2000) },
+      include: { user: { select: { id: true, fullName: true, role: true } } },
+    });
+    const view = this.chatView(saved);
+    // Same socket server the rest of the app uses; a room per session so a
+    // message never reaches anyone who was not admitted to it.
+    this.realtime.emitToLive(session.id, 'live:message', view);
+    return view;
+  }
+
+  private chatView(m: { id: string; body: string; createdAt: Date; user: { id: string; fullName: string; role: string } }) {
+    return {
+      id: m.id,
+      body: m.body,
+      createdAt: m.createdAt,
+      senderId: m.user.id,
+      senderName: m.user.fullName,
+      senderRole: m.user.role,
+    };
+  }
+
+  // ── Recording ──────────────────────────────────────────────────────────────
+
+  /**
+   * The teacher records, and only deliberately.
+   *
+   * Daily starts the recording from the client — the owner token is what
+   * permits it — so this records the intent and the id. The provider's own
+   * state is asked for later, because a recording is not finished when the
+   * class is.
+   */
+  async markRecording(tenantId: string, id: string, recordingId: string | null) {
+    await this.assertOwned(tenantId, id);
+    return this.prisma.liveSession.update({
+      where: { id },
+      data: {
+        recordingStatus: 'PROCESSING',
+        recordingId,
+        recordingStartedAt: new Date(),
+      },
+      select: { id: true, recordingStatus: true, recordingStartedAt: true },
+    });
+  }
+
+  /** Stopped. Processing continues at the provider for a while yet. */
+  async stopRecording(tenantId: string, id: string) {
+    await this.assertOwned(tenantId, id);
+    return this.prisma.liveSession.update({
+      where: { id },
+      data: { recordingStatus: 'PROCESSING' },
+      select: { id: true, recordingStatus: true },
+    });
+  }
+
+  /**
+   * A link to watch, minted now and expiring on its own.
+   *
+   * Never stored: a recording URL in a database row is a permanent public link
+   * the first time that row is read by the wrong person.
+   */
+  async recordingLink(userId: string, sessionId: string) {
+    const { session, role } = await this.assertInSession(userId, sessionId);
+    const full = await this.prisma.liveSession.findUnique({
+      where: { id: sessionId },
+      select: { recordingId: true, recordingStatus: true, summaryForStudents: true },
+    });
+    if (!full?.recordingId || full.recordingStatus !== 'READY') {
+      throw new BadRequestException({ message: 'التسجيل مش جاهز', code: 'RECORDING_NOT_READY' });
+    }
+    // A student sees the recording on the same permission that shows them the
+    // summary: the teacher decided this lesson is theirs to keep.
+    if (role === 'STUDENT' && !full.summaryForStudents) {
+      throw new ForbiddenException({ message: 'التسجيل غير متاح للطلبة', code: 'RECORDING_NOT_SHARED' });
+    }
+    const link = await this.daily.recordingLink(full.recordingId);
+    if (!link) throw new BadRequestException({ message: 'التسجيل مش جاهز', code: 'RECORDING_NOT_READY' });
+    void session;
+    return link;
+  }
+
+  // ── Transcript and summary ─────────────────────────────────────────────────
+
+  /**
+   * Ask for a summary. Returns immediately; the work happens on the queue.
+   *
+   * Idempotent on purpose: pressing the button twice, or a webhook arriving
+   * twice, must not spend two model calls on one lesson.
+   */
+  async requestSummary(tenantId: string, id: string) {
+    const session = await this.assertOwned(tenantId, id);
+    if (session.summaryStatus === 'PROCESSING') return { status: 'PROCESSING' as const };
+    if (session.summaryStatus === 'READY') return { status: 'READY' as const };
+    await this.prisma.liveSession.update({
+      where: { id },
+      data: { summaryStatus: 'PROCESSING', summaryError: null },
+    });
+    await this.jobs.enqueue(tenantId, 'LIVE_SUMMARY', { liveSessionId: id });
+    return { status: 'PROCESSING' as const };
+  }
+
+  /** The teacher decides whether the class gets to keep the notes. */
+  async setSummaryVisibility(tenantId: string, id: string, visible: boolean) {
+    await this.assertOwned(tenantId, id);
+    const updated = await this.prisma.liveSession.update({
+      where: { id },
+      data: { summaryForStudents: visible },
+      select: { id: true, summaryForStudents: true, summaryStatus: true, title: true, tenantId: true },
+    });
+    if (visible && updated.summaryStatus === 'READY') {
+      const booked = await this.prisma.liveBooking.findMany({
+        where: { sessionId: id },
+        select: { student: { select: { userId: true } } },
+      });
+      await Promise.all(
+        booked.map((b) =>
+          this.notifications.create({
+            userId: b.student.userId,
+            type: 'LIVE_SESSION_REMINDER',
+            title: 'ملخّص الحصة جاهز 📝',
+            body: `ملخّص «${updated.title}» بقى متاح ليك.`,
+            meta: { sessionId: id, summary: true },
+          }),
+        ),
+      );
+    }
+    return updated;
+  }
+
+  /** What a viewer is allowed to read about a finished session. */
+  async sessionDetail(userId: string, sessionId: string) {
+    const { role } = await this.assertInSession(userId, sessionId);
+    const s = await this.prisma.liveSession.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: {
+        id: true, title: true, startsAt: true, durationMin: true, status: true,
+        recordingStatus: true, summaryStatus: true, summary: true,
+        summaryForStudents: true, transcriptStatus: true,
+      },
+    });
+    const canSeeSummary = role === 'TEACHER' || s.summaryForStudents;
+    return {
+      id: s.id,
+      title: s.title,
+      startsAt: s.startsAt,
+      durationMin: s.durationMin,
+      status: this.effectiveStatus(s),
+      role,
+      recording: {
+        status: s.recordingStatus,
+        // A student is told there is a recording only once it is theirs to see.
+        available: s.recordingStatus === 'READY' && (role === 'TEACHER' || s.summaryForStudents),
+      },
+      summary: {
+        status: canSeeSummary ? s.summaryStatus : 'NOT_STARTED',
+        data: canSeeSummary && s.summaryStatus === 'READY' ? s.summary : null,
+        sharedWithStudents: s.summaryForStudents,
+        ...(role === 'TEACHER' ? { transcriptStatus: s.transcriptStatus } : {}),
+      },
+    };
   }
 
   /** Who actually turned up, for the teacher's own session. */

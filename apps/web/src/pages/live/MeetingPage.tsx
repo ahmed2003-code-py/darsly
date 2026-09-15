@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../../lib/api';
 import { useDailyMeeting, type Participant } from '../../lib/useDailyMeeting';
+import { useLiveChat } from '../../lib/useLiveChat';
 import { useAuthStore } from '../../stores/auth';
 import { Spinner } from '../../components/ui';
 
@@ -147,7 +148,11 @@ export default function MeetingPage() {
   const [wantMic, setWantMic] = useState(true);
   const [wantCam, setWantCam] = useState(true);
   const [showPeople, setShowPeople] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [draft, setDraft] = useState('');
   const meeting = useDailyMeeting(id);
+  const chat = useLiveChat(id, showChat);
+  const feedRef = useRef<HTMLDivElement>(null);
 
   /**
    * The server decides everything: whether this person may enter, which room,
@@ -158,6 +163,22 @@ export default function MeetingPage() {
     queryFn: async () =>
       (await api.get(isTeacher ? `/teacher/live/${id}/join` : `/live/${id}/join`)).data,
     retry: false,
+  });
+
+  /**
+   * Recording starts in the browser, because that is where Daily's owner token
+   * is. The server is told so the session carries the state and the id — the
+   * page is not the record of anything.
+   */
+  const recording = useMutation({
+    mutationFn: async (startIt: boolean) => {
+      if (startIt) {
+        const id2 = await meeting.startRecording();
+        return (await api.post(`/teacher/live/${id}/recording/start`, { recordingId: id2 ?? undefined })).data;
+      }
+      await meeting.stopRecording();
+      return (await api.post(`/teacher/live/${id}/recording/stop`)).data;
+    },
   });
 
   const end = useMutation({
@@ -176,6 +197,10 @@ export default function MeetingPage() {
       window.location.replace(entry.data.externalUrl);
     }
   }, [entry.data]);
+
+  useEffect(() => {
+    if (showChat) feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
+  }, [chat.messages.length, showChat]);
 
   const leaveAndGo = async () => {
     await meeting.leave();
@@ -282,6 +307,14 @@ export default function MeetingPage() {
           <span className="text-[11px] font-extrabold text-error">{t('meeting.live')}</span>
         </span>
         <h1 className="min-w-0 flex-1 truncate font-heading text-sm font-bold">{session.title}</h1>
+        {/* Visible to everyone, not only the teacher who started it: being
+            recorded is something a class is entitled to know at a glance. */}
+        {meeting.recording && (
+          <span className="flex items-center gap-1 rounded-full bg-error px-2 py-0.5 text-[10px] font-extrabold text-on-error">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+            REC
+          </span>
+        )}
         <button
           className="flex items-center gap-1 rounded-full bg-surface-container px-2.5 py-1 text-xs font-bold"
           onClick={() => setShowPeople((v) => !v)}
@@ -359,7 +392,23 @@ export default function MeetingPage() {
           label={meeting.canShare ? t('meeting.share') : t('meeting.shareUnsupported')}
           onClick={meeting.toggleShare}
         />
+        <div className="relative">
+          <Ctl icon="chat" label={t('meeting.chat')} onClick={() => setShowChat((v) => !v)} />
+          {chat.unread > 0 && !showChat && (
+            <span className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-error px-1 text-[10px] font-bold text-on-error">
+              {chat.unread > 9 ? '9+' : chat.unread}
+            </span>
+          )}
+        </div>
         <Ctl icon="group" label={t('meeting.people')} onClick={() => setShowPeople((v) => !v)} />
+        {amOwner && (
+          <Ctl
+            icon="radio_button_checked"
+            active={meeting.recording}
+            label={meeting.recording ? t('meeting.stopRec') : t('meeting.startRec')}
+            onClick={() => recording.mutate(!meeting.recording)}
+          />
+        )}
         <Ctl icon="call_end" danger label={t('meeting.leave')} onClick={leaveAndGo} />
         {amOwner && (
           <button
@@ -370,6 +419,91 @@ export default function MeetingPage() {
           </button>
         )}
       </footer>
+
+      {/* Chat. A sheet rather than a sidebar: on the screen most of this class
+          is on, a column beside the video is a column neither of them can use. */}
+      <AnimatePresence>
+        {showChat && (
+          <m.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-on-surface/40"
+            onClick={() => setShowChat(false)}
+          >
+            <m.aside
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="absolute inset-x-0 bottom-0 flex h-[75dvh] flex-col rounded-t-3xl bg-surface-container-lowest"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="shrink-0 px-4 pt-3">
+                <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-outline-variant" />
+                <h2 className="mb-2 font-heading text-base font-bold">{t('meeting.chat')}</h2>
+              </div>
+
+              <div ref={feedRef} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 pb-2">
+                {chat.messages.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-outline">{t('meeting.chatEmpty')}</p>
+                ) : (
+                  chat.messages.map((msg) => {
+                    const mine = msg.senderId === user?.id;
+                    return (
+                      <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-3 py-2 ${
+                            mine ? 'bg-primary text-on-primary' : 'bg-surface-container'
+                          }`}
+                        >
+                          {!mine && (
+                            <p className="mb-0.5 text-[11px] font-bold text-primary">
+                              {msg.senderName}
+                              {msg.senderRole === 'TEACHER' && ` · ${t('meeting.teacherBadge')}`}
+                            </p>
+                          )}
+                          <p className="whitespace-pre-wrap break-words text-sm" dir="auto">{msg.body}</p>
+                          <p className={`mt-0.5 text-[10px] ${mine ? 'text-on-primary/70' : 'text-outline'}`}>
+                            {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <form
+                className="flex shrink-0 items-center gap-2 border-t border-outline-variant/40 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const text = draft;
+                  setDraft('');
+                  void chat.send(text);
+                }}
+              >
+                <input
+                  className="input flex-1"
+                  dir="auto"
+                  value={draft}
+                  maxLength={2000}
+                  placeholder={t('meeting.chatPh')}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  aria-label={t('meeting.send')}
+                  disabled={!draft.trim() || chat.sending}
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">send</span>
+                </button>
+              </form>
+            </m.aside>
+          </m.div>
+        )}
+      </AnimatePresence>
 
       {/* People sheet — a drawer on the phone, which is where it belongs. */}
       <AnimatePresence>

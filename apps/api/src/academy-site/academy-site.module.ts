@@ -20,6 +20,8 @@ import { AcademySiteController } from './site/academy-site.controller';
 import { AcademySiteService } from './site/academy-site.service';
 import { AiClient } from './ai/ai.client';
 import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
+import { DailyModule } from '../live/daily.module';
+import { LiveSummaryHandler } from '../live/live-summary.handler';
 import { AiJobService } from './jobs/ai-job.service';
 import { AiJobWorker } from './jobs/ai-job.worker';
 import { AcademyMediaController } from './media/academy-media.controller';
@@ -34,7 +36,7 @@ import { StudentPriceService } from '../payments/student-price.service';
  * facts/editor APIs, renderer and public page. PrismaService is global.
  */
 @Module({
-  imports: [AcademyModule],
+  imports: [AcademyModule, DailyModule],
   controllers: [
     AcademyMediaController,
     AcademyFactsController,
@@ -49,6 +51,7 @@ import { StudentPriceService } from '../payments/student-price.service';
     AiClient,
     AiJobService,
     AiJobWorker,
+    LiveSummaryHandler,
     AcademyMediaProcessor,
     AcademyMediaService,
     MediaMaintenanceWorker,
@@ -66,8 +69,13 @@ import { StudentPriceService } from '../payments/student-price.service';
     // Job handler registry: the worker dispatches each AiJobType to its handler.
     {
       provide: AI_JOB_HANDLERS,
-      useFactory: (siteGenerate: SiteGenerateHandler) => [siteGenerate],
-      inject: [SiteGenerateHandler],
+      // The live summary runs on the same worker as site generation: one queue,
+      // one lease, one retry policy.
+      useFactory: (siteGenerate: SiteGenerateHandler, liveSummary: LiveSummaryHandler) => [
+        siteGenerate,
+        liveSummary,
+      ],
+      inject: [SiteGenerateHandler, LiveSummaryHandler],
     },
   ],
   exports: [

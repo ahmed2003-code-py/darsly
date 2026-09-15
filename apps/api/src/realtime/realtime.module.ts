@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ChatModule } from '../chat/chat.module';
+import { LiveModule } from '../live/live.module';
 import { ChatGateway } from './chat.gateway';
 import { RealtimeService } from './realtime.service';
 
@@ -11,7 +12,7 @@ import { RealtimeService } from './realtime.service';
  */
 @Global()
 @Module({
-  imports: [JwtModule.register({}), ChatModule],
+  imports: [JwtModule.register({}), ChatModule, LiveModule],
   providers: [RealtimeService, ChatGateway],
   exports: [RealtimeService],
 })

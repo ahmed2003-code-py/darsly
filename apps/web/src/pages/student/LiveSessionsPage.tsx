@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Markdown } from '../../lib/markdown';
-import { Badge, CardGridSkeleton, EmptyState, ErrorNote, PageHeader } from '../../components/ui';
+import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Modal, PageHeader } from '../../components/ui';
+import SessionSummary from '../live/SessionSummary';
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -35,6 +37,7 @@ export default function LiveSessionsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live-upcoming'] }),
   });
   const navigate = useNavigate();
+  const [recordFor, setRecordFor] = useState<string | null>(null);
 
   return (
     <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
@@ -79,6 +82,18 @@ export default function LiveSessionsPage() {
                   )}
                 </div>
 
+                {/* A finished lesson still has something in it: the notes, if
+                    the teacher shared them. */}
+                {s.status === 'ENDED' && (
+                  <button
+                    className="flex items-center gap-1 self-start text-sm font-bold text-primary hover:underline"
+                    onClick={() => setRecordFor(s.id)}
+                  >
+                    <span className="material-symbols-outlined text-base">description</span>
+                    {t('live.viewSession')}
+                  </button>
+                )}
+
                 <div className="mt-auto flex gap-2">
                   {s.booked ? (
                     <>
@@ -110,6 +125,10 @@ export default function LiveSessionsPage() {
           })}
         </div>
       )}
+
+      <Modal open={!!recordFor} onClose={() => setRecordFor(null)} title={t('live.sessionRecord')}>
+        {recordFor && <SessionSummary sessionId={recordFor} />}
+      </Modal>
     </div>
   );
 }

@@ -99,6 +99,10 @@ export class DailyService {
           exp,
           enable_screenshare: true,
           enable_chat: true,
+          // Recording is the teacher's to start, never automatic: a class
+          // recorded without anyone asking is a class recorded without anyone
+          // consenting. The room merely allows it.
+          enable_recording: 'cloud',
           // Nobody is broadcast the instant they arrive: the pre-join screen is
           // where they decide, and the browser's own permission prompt is where
           // they mean it.
@@ -165,6 +169,8 @@ export class DailyService {
           user_name: input.userName,
           user_id: input.userId,
           is_owner: input.isOwner,
+          // Only the owner may record, and the token is where that is decided.
+          enable_recording: input.isOwner ? 'cloud' : false,
           exp,
           start_video_off: true,
           start_audio_off: true,
@@ -172,6 +178,77 @@ export class DailyService {
       }),
     });
     return res.token;
+  }
+
+  /**
+   * What the provider knows about a recording.
+   *
+   * `status` is theirs: recordings finish some time after the class does, so a
+   * request the moment the teacher leaves usually answers "in-progress".
+   */
+  async recording(id: string): Promise<{ status: string; duration?: number } | null> {
+    try {
+      return await this.call<{ status: string; duration?: number }>(`/recordings/${encodeURIComponent(id)}`, {
+        method: 'GET',
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A short-lived link to watch a recording.
+   *
+   * Fetched when someone is allowed to watch and never stored: a recording URL
+   * that lives in our database is a permanent public one the first time a row
+   * leaks. Daily issues these with their own expiry, which is the property
+   * worth having.
+   */
+  async recordingLink(id: string): Promise<{ url: string; expiresAt: Date } | null> {
+    try {
+      const res = await this.call<{ download_link?: string; link?: string; expires: number }>(
+        `/recordings/${encodeURIComponent(id)}/access-link`,
+        { method: 'GET' },
+      );
+      const url = res.download_link ?? res.link;
+      if (!url) return null;
+      return { url, expiresAt: new Date(res.expires * 1000) };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The words that were spoken, if the provider captured them.
+   *
+   * Returns null rather than throwing when transcription is not on the plan —
+   * the summary is a bonus on top of a class that already happened, and a
+   * missing transcript must not read as a broken lesson.
+   */
+  async transcriptFor(roomName: string): Promise<string | null> {
+    try {
+      const list = await this.call<{ data?: { id: string; status: string; roomName?: string }[] }>(
+        `/transcript?roomName=${encodeURIComponent(roomName)}`,
+        { method: 'GET' },
+      );
+      // Daily prefixes these ("t_in_progress", "t_finished"), and has changed
+      // the spelling before. Matching on the word rather than the exact string
+      // means a rename does not silently turn every lesson into "no transcript".
+      const done = (list.data ?? []).find((t) => /finish/i.test(t.status ?? ''));
+      if (!done) return null;
+      const link = await this.call<{ link?: string }>(
+        `/transcript/${encodeURIComponent(done.id)}/access-link`,
+        { method: 'GET' },
+      );
+      if (!link.link) return null;
+      const res = await fetch(link.link, { signal: AbortSignal.timeout(20_000) });
+      if (!res.ok) return null;
+      const text = await res.text();
+      return text.trim() || null;
+    } catch (e) {
+      this.logger.warn(`No transcript for room ${roomName}: ${(e as Error).message}`);
+      return null;
+    }
   }
 
   /**

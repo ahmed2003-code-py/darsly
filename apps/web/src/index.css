@@ -562,39 +562,40 @@
     0 0 18px -4px rgb(var(--s-accent, var(--c-primary)) / 0.55);
 }
 
-/* ── Profile frames ──────────────────────────────────────────────────────── */
+/* ── Profile frames ──────────────────────────────────────────────────────────
+   Drawn with `box-shadow`, not with a ring on `::after`.
+
+   An avatar clips its own photo to a circle with `overflow: hidden`, and a
+   pseudo-element at `inset: -4px` is a child of that box — so the ring was
+   clipped away by the very element it was meant to go around, and every frame
+   was invisible on every screen. A box-shadow is painted outside the border box
+   and is not subject to the element's own overflow, so one property does what
+   an extra element would otherwise be needed for. */
 .studio-frame { position: relative; }
-.studio-frame::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 999px;
-  border: 2px solid transparent;
-  pointer-events: none;
+:root[data-s-frame='bronze'] .studio-frame { box-shadow: 0 0 0 2px #b06b2c; }
+:root[data-s-frame='silver'] .studio-frame { box-shadow: 0 0 0 2px #9ca3af; }
+:root[data-s-frame='gold'] .studio-frame { box-shadow: 0 0 0 2px #d4a017; }
+:root[data-s-frame='diamond'] .studio-frame {
+  box-shadow: 0 0 0 2px #67e8f9, 0 0 12px -2px #67e8f9;
 }
-:root[data-s-frame='bronze'] .studio-frame::after { border-color: #b06b2c; }
-:root[data-s-frame='silver'] .studio-frame::after { border-color: #9ca3af; }
-:root[data-s-frame='gold'] .studio-frame::after { border-color: #d4a017; }
-:root[data-s-frame='diamond'] .studio-frame::after {
-  border-color: #67e8f9;
-  box-shadow: 0 0 12px -2px #67e8f9;
+:root[data-s-frame='fire'] .studio-frame {
+  box-shadow: 0 0 0 2px #f97316, 0 0 12px -2px #f97316;
 }
-:root[data-s-frame='fire'] .studio-frame::after {
-  border-color: #f97316;
-  box-shadow: 0 0 12px -2px #f97316;
-}
-:root[data-s-frame='lightning'] .studio-frame::after { border-color: #facc15; }
-:root[data-s-frame='scholar'] .studio-frame::after { border-color: #92400e; }
-:root[data-s-frame='legendary'] .studio-frame::after {
-  border-color: #a855f7;
-  box-shadow: 0 0 14px -2px #a855f7;
+:root[data-s-frame='lightning'] .studio-frame { box-shadow: 0 0 0 2px #facc15; }
+:root[data-s-frame='scholar'] .studio-frame { box-shadow: 0 0 0 2px #92400e; }
+:root[data-s-frame='legendary'] .studio-frame {
+  box-shadow: 0 0 0 2px #a855f7, 0 0 14px -2px #a855f7;
 }
 
 /* Somebody who asked for less movement gets less movement — the glow and the
    frame shadows are decoration, and decoration is the first thing to go. */
 @media (prefers-reduced-motion: reduce) {
   :root[data-s-effect='glow'] .studio-active { box-shadow: none; }
-  .studio-frame::after { box-shadow: none !important; }
+  /* The ring stays — it is the frame. Only the halo around the showy ones is
+     decoration, and decoration is the first thing to go. */
+  :root[data-s-frame='diamond'] .studio-frame { box-shadow: 0 0 0 2px #67e8f9; }
+  :root[data-s-frame='fire'] .studio-frame { box-shadow: 0 0 0 2px #f97316; }
+  :root[data-s-frame='legendary'] .studio-frame { box-shadow: 0 0 0 2px #a855f7; }
 }
 
 /*

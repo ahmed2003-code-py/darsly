@@ -1028,3 +1028,150 @@ describe('Rose & Lavender', () => {
     }
   });
 });
+
+/**
+ * Every theme in the shop, held to the same floors.
+ *
+ * Written as one sweep rather than a block per item, because the catalogue is
+ * meant to grow: a new theme is a row, and this is what stops a row shipping a
+ * page nobody can read. It caught four at once — the tints were seated against
+ * the platform's *page* and missed 4.5:1 on its cards, which is the surface the
+ * product's text actually lives on.
+ *
+ * The grounds below are the platform's own, from `index.css`. A theme that
+ * brings no ground of its own is read on these.
+ */
+describe('every theme in the catalogue is legible', () => {
+  const PLATFORM = {
+    light: { bg: '#f7f7f4', card: '#dfded6' },
+    dark: { bg: '#131318', card: '#2f2f38' },
+  } as const;
+  const themes = CATALOG.filter((c) => c.category === 'THEME');
+
+  it('ships more than one, at more than one price', () => {
+    expect(themes.length).toBeGreaterThan(2);
+    expect(new Set(themes.map((t) => t.costCoins)).size).toBeGreaterThan(2);
+  });
+
+  it.each(themes.map((t) => [t.key, t] as const))('%s reads on both grounds', (_key, item) => {
+    const derived = deriveStudioThemes({ themeConfig: item.config as any });
+    for (const mode of ['light', 'dark'] as const) {
+      const { brand, tokens } = derived[mode];
+      const bg = brand['--c-background'] ? fromTriple(brand['--c-background']) : PLATFORM[mode].bg;
+      const card = brand['--c-surface-container-highest']
+        ? fromTriple(brand['--c-surface-container-highest'])
+        : PLATFORM[mode].card;
+
+      // A theme that lays down its own ground owns the text on it too.
+      if (brand['--c-on-surface']) {
+        expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
+        expect(contrastRatio(fromTriple(brand['--c-on-surface']), card)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), card)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
+      }
+      // The brand as a label, and whatever sits on it as a fill.
+      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(brand['--c-on-primary']), fromTriple(brand['--c-primary'])),
+      ).toBeGreaterThanOrEqual(4.5);
+      // And each of the student's own families, wherever the theme names one.
+      for (const family of ['accent', 'secondary', 'gold'] as const) {
+        if (!tokens[`--s-${family}-ink`]) continue;
+        expect(contrastRatio(fromTriple(tokens[`--s-${family}-ink`]), card)).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(fromTriple(tokens[`--s-on-${family}`]), fromTriple(tokens[`--s-${family}`])),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+});
+
+/**
+ * The ladder.
+ *
+ * The shop is meant to read as rungs — something for forty minutes of lessons,
+ * something for a month of them — so the shape of the catalogue is asserted
+ * rather than left to whoever edits it next.
+ */
+describe('the catalogue is a ladder', () => {
+  const priceOf = (key: string) => CATALOG.find((c) => c.key === key)!.costCoins;
+
+  /**
+   * Egyptian King is left out on purpose, and it is the one rung out of line:
+   * at 100 coins it is cheaper than a card style, because it was priced as the
+   * first skin anyone would ever see rather than as a place on this ladder.
+   * Repricing something students may already own is a product decision, not a
+   * tidy-up, so it stays — named here so the next reader knows it is deliberate.
+   */
+  it('sells single-slot changes for less than any theme', () => {
+    const cheapest = Math.min(
+      ...CATALOG.filter((c) => c.category === 'THEME' && c.key !== 'theme-egyptian-king').map(
+        (c) => c.costCoins,
+      ),
+    );
+    for (const c of CATALOG.filter((c) =>
+      ['BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE'].includes(c.category),
+    )) {
+      expect(c.costCoins).toBeLessThan(cheapest);
+    }
+  });
+
+  it('charges more for a theme that brings its own ground than for one that does not', () => {
+    const tint = CATALOG.filter(
+      (c) => c.category === 'THEME' && !(c.config as any).surfaces && c.costCoins > 0,
+    );
+    const skin = CATALOG.filter(
+      (c) => c.category === 'THEME' && (c.config as any).surfaces && c.costCoins > 0,
+    );
+    expect(tint.length).toBeGreaterThan(0);
+    expect(skin.length).toBeGreaterThan(0);
+    // The one deliberate exception is priced as a doorway, not as a skin.
+    const dearestTint = Math.max(...tint.map((c) => c.costCoins));
+    const skins = skin.filter((c) => c.key !== 'theme-egyptian-king');
+    expect(Math.min(...skins.map((c) => c.costCoins))).toBeGreaterThan(dearestTint);
+  });
+
+  it('gates the dearer rungs on a level, and the cheapest on nothing', () => {
+    expect(priceOf('button-pill')).toBeLessThan(100);
+    expect(CATALOG.find((c) => c.key === 'button-pill')!.requiredLevel).toBeUndefined();
+    for (const c of CATALOG.filter((c) => c.costCoins >= 400 && !c.requiredAchievement)) {
+      expect(c.requiredLevel ?? 1).toBeGreaterThan(1);
+    }
+  });
+
+  /**
+   * A mark that can be bought says nothing about the person wearing it, so the
+   * three earned frames must never acquire a price by accident.
+   */
+  it('keeps the earned frames unbuyable', () => {
+    const earned = CATALOG.filter((c) => c.requiredAchievement);
+    expect(earned.length).toBeGreaterThanOrEqual(3);
+    for (const c of earned) {
+      expect(c.costCoins).toBe(0);
+      expect(c.requiredLevel).toBeUndefined();
+    }
+  });
+
+  /**
+   * Nothing in the shop may promise something the app does not draw.
+   *
+   * Avatar styles and the confetti effect are names the engine accepts and the
+   * stylesheet has never implemented — selling either would be selling nothing.
+   */
+  it('sells nothing the stylesheet cannot draw', () => {
+    expect(CATALOG.some((c) => c.category === 'AVATAR')).toBe(false);
+    expect(
+      CATALOG.some((c) => c.category === 'EFFECT' && (c.config as any).style === 'confetti'),
+    ).toBe(false);
+  });
+
+  it('never sells a plain accent colour, because mixing one is free', () => {
+    expect(CATALOG.some((c) => c.category === 'ACCENT')).toBe(false);
+  });
+
+  it('gives every item a distinct key and a place in the order', () => {
+    expect(new Set(CATALOG.map((c) => c.key)).size).toBe(CATALOG.length);
+    expect(new Set(CATALOG.map((c) => c.sortOrder)).size).toBe(CATALOG.length);
+  });
+});

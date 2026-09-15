@@ -318,4 +318,166 @@ export const CATALOG: CatalogSeed[] = [
       nav: 'floating',
     },
   ),
+
+  // ── Rung one: one thing, cheaply ─────────────────────────────────────────
+  //
+  // The bottom of the ladder, and the reason it exists. A skin is a decision
+  // and a month of coins; this is a student who wants their buttons round and
+  // has forty minutes of lessons to spend on it. Every one of these changes a
+  // single slot across the whole app and nothing else, which is also why they
+  // are the only items here that carry no colour and so can never be illegible.
+  //
+  // They stack with a theme and with each other: a skin brings its own shapes,
+  // and these are for arguing with it.
+  style('BUTTON_STYLE', 'button-pill', 'pill', 'COMMON', 'أزرار بيضاوية', 'Pill buttons',
+    'حواف دايرة بالكامل على كل زرار في التطبيق.', 'Fully rounded edges on every button in the app.', 60, 100),
+  style('BUTTON_STYLE', 'button-sharp', 'sharp', 'COMMON', 'أزرار حادة', 'Sharp buttons',
+    'حواف شبه مستقيمة — شكل أكثر جدية.', 'Near-square edges, for a stricter look.', 60, 101),
+  style('BUTTON_STYLE', 'button-elevated', 'elevated', 'COMMON', 'أزرار بارزة', 'Raised buttons',
+    'ظل خفيف تحت كل زرار، كإنه مرفوع عن الصفحة.', 'A soft shadow under every button, lifting it off the page.', 80, 102),
+  style('CARD_STYLE', 'card-soft', 'soft', 'COMMON', 'كروت ناعمة', 'Soft cards',
+    'كورنرز أوسع وخلفية أهدى لكل كارت.', 'Wider corners and a quieter background on every card.', 80, 110),
+  style('CARD_STYLE', 'card-paper', 'paper', 'COMMON', 'كروت ورق', 'Paper cards',
+    'من غير ظل ولا كورنرز — مسطّح زي الورق.', 'No shadow and barely any corner — flat, like paper.', 80, 111),
+  // Dearer than the rest of the rung: a blur is the one shape choice that costs
+  // the phone something, so it is used sparingly and priced like it.
+  style('CARD_STYLE', 'card-glass', 'glass', 'RARE', 'كروت زجاج', 'Frosted cards',
+    'شفافية وضبابية خفيفة — اللي تحت الكارت بيبان من ورا.', 'Translucent and lightly blurred — what is behind shows through.', 140, 112),
+  style('NAV_STYLE', 'nav-floating', 'floating', 'COMMON', 'تنقّل عائم', 'Floating nav',
+    'عناصر القائمة بتبقى كبسولات دايرة.', 'Menu items become rounded capsules.', 60, 120),
+  style('NAV_STYLE', 'nav-compact', 'compact', 'COMMON', 'تنقّل مضغوط', 'Compact nav',
+    'مسافات أقل في القائمة — حاجات أكتر من غير نزول.', 'Tighter spacing in the menu — more of it without scrolling.', 60, 121),
+
+  // ── Rung two: the mark on your own face ──────────────────────────────────
+  //
+  // A frame is the only thing here other people were ever meant to read, so it
+  // is the one slot where the ladder is a ladder: bronze is an afternoon,
+  // diamond is level six, and the last three cannot be bought at any price.
+  style('EFFECT', 'effect-glow', 'glow', 'RARE', 'وهج', 'Glow',
+    'هالة خفيفة حوالين الحاجة المختارة في القائمة.', 'A soft halo around whatever is selected in the menu.', 180, 130,
+    { requiredLevel: 3 }),
+  style('FRAME', 'frame-bronze', 'bronze', 'COMMON', 'إطار برونزي', 'Bronze frame',
+    'حلقة برونزي حوالين صورتك في كل مكان.', 'A bronze ring around your picture, everywhere it appears.', 90, 140),
+  style('FRAME', 'frame-silver', 'silver', 'COMMON', 'إطار فضي', 'Silver frame',
+    'حلقة فضي حوالين صورتك في كل مكان.', 'A silver ring around your picture, everywhere it appears.', 150, 141,
+    { requiredLevel: 2 }),
+  style('FRAME', 'frame-gold', 'gold', 'RARE', 'إطار ذهبي', 'Gold frame',
+    'حلقة ذهب حوالين صورتك في كل مكان.', 'A gold ring around your picture, everywhere it appears.', 260, 142,
+    { requiredLevel: 4 }),
+  style('FRAME', 'frame-lightning', 'lightning', 'RARE', 'إطار برق', 'Lightning frame',
+    'حلقة صفرا لامعة حوالين صورتك.', 'A bright yellow ring around your picture.', 280, 143,
+    { requiredLevel: 5 }),
+  style('FRAME', 'frame-diamond', 'diamond', 'EPIC', 'إطار ألماس', 'Diamond frame',
+    'حلقة سماوي بهالة حواليها.', 'A cyan ring with a halo around it.', 450, 144,
+    { requiredLevel: 6 }),
+
+  // Earned, not sold. Nothing on this rung has a price, because a mark that can
+  // be bought says nothing about the person wearing it — and these three are
+  // the only things in the whole shop that are a claim rather than a taste.
+  style('FRAME', 'frame-scholar', 'scholar', 'RARE', 'إطار العالِم', 'Scholar frame',
+    'مش بيتباع. بيجي لوحده مع إنجاز «عالِم» — تلات شهادات.',
+    'Not for sale. It arrives with the "Scholar" achievement — three certificates.', 0, 145,
+    { requiredAchievement: 'scholar' }),
+  style('FRAME', 'frame-fire', 'fire', 'EPIC', 'إطار النار', 'Fire frame',
+    'مش بيتباع. بيجي لوحده مع إنجاز «شهر كامل» — ٣٠ يوم متواصلين.',
+    'Not for sale. It arrives with the "A whole month" achievement — a 30-day streak.', 0, 146,
+    { requiredAchievement: 'streak_30' }),
+  style('FRAME', 'frame-legendary', 'legendary', 'LEGENDARY', 'إطار الأسطورة', 'Legendary frame',
+    'مش بيتباع، ومحدش يقدر يشتريه. مية يوم متواصلين وبس.',
+    'Not for sale, and no amount of coins will do. A hundred-day streak, and nothing else.', 0, 147,
+    { requiredAchievement: 'streak_100' }),
+
+  // ── Rung three: a colour over the platform, not instead of it ────────────
+  //
+  // The middle of the ladder, and the rung that explains the top of it. These
+  // bring an accent, a second colour, a wash, a backdrop, a typeface and a set
+  // of shapes — everything a skin brings except **the ground**. The page stays
+  // the platform's own, so the app still looks like Darsly with a mood on it.
+  //
+  // That is the whole difference in the price: a skin replaces where you are, a
+  // tint changes the light in it.
+  theme(
+    'theme-mint', 'RARE', 'نعناع', 'Mint',
+    'أخضر هادي وخلفية فاتحة — شكل مريح للقراءة الطويلة.',
+    'A calm green over a light wash — easy on a long evening of reading.',
+    '#0f766e', '#2dd4bf', 220, 200,
+    {
+      requiredLevel: 2,
+      secondary: '#0891b2', secondaryDark: '#22d3ee',
+      wash: '#effaf7', washDark: '#0b1a18',
+      pattern: 'halftone', font: 'round', radius: 'soft', card: 'soft', button: 'rounded',
+    },
+  ),
+  theme(
+    'theme-ocean', 'RARE', 'محيط', 'Ocean',
+    'أزرق عميق مع ضوء بيتحرك في الخلفية.',
+    'A deep blue with a light that drifts behind the page.',
+    '#1d4ed8', '#60a5fa', 240, 201,
+    {
+      requiredLevel: 2,
+      secondary: '#0e7490', secondaryDark: '#38bdf8',
+      wash: '#eef4ff', washDark: '#0a1020',
+      pattern: 'glow', glow: true, font: 'default', radius: 'soft', card: 'elevated', button: 'rounded',
+    },
+  ),
+  theme(
+    'theme-sunset', 'EPIC', 'غروب', 'Sunset',
+    'برتقالي دافي وخطوط مايلة في الخلفية.',
+    'A warm orange with slanted lines running behind everything.',
+    '#c2410c', '#fb923c', 320, 202,
+    {
+      requiredLevel: 3,
+      secondary: '#be123c', secondaryDark: '#fb7185',
+      wash: '#fff4ec', washDark: '#1a0f0a',
+      pattern: 'speed', font: 'display', radius: 'sharp', card: 'elevated', button: 'sharp',
+    },
+  ),
+  theme(
+    'theme-grape', 'EPIC', 'عنب', 'Grape',
+    'بنفسجي غامق وشبكة رفيعة بالكاد تتشاف.',
+    'A deep violet over a grid you can only just see.',
+    '#6d28d9', '#a78bfa', 340, 203,
+    {
+      requiredLevel: 4,
+      secondary: '#9333ea', secondaryDark: '#c084fc',
+      wash: '#f5f1ff', washDark: '#120b22',
+      pattern: 'grid', glow: true, font: 'tech', radius: 'default', card: 'elevated', button: 'elevated',
+    },
+  ),
+
+  // ── Rung four: a ground of its own ───────────────────────────────────────
+  //
+  // Where the price jumps, and it jumps for one reason: these replace the page.
+  // The background, the panels and the ink all come from the theme, so the app
+  // stops being Darsly-in-a-colour and becomes somewhere else.
+  theme(
+    'theme-paper', 'EPIC', 'ورق', 'Paper',
+    'ورق دافي وحبر كحلي — مكتبة، مش تطبيق.',
+    'Warm paper and navy ink — a library rather than an app.',
+    '#9a3412', '#fdba74', 480, 210,
+    {
+      requiredLevel: 4,
+      secondary: '#0f766e', secondaryDark: '#5eead4',
+      gold: '#a16207', goldDark: '#fcd34d',
+      wash: '#f7f1e4', washDark: '#191714',
+      surfaces: { background: '#191714', surface: '#221f1a', ink: '#ece5d6', line: '#6b6455' },
+      surfacesLight: { background: '#f7f1e4', surface: '#fffdf7', ink: '#1f2937', line: '#d9cfb8' },
+      pattern: 'none', font: 'default', radius: 'sharp', card: 'paper', button: 'classic',
+    },
+  ),
+  theme(
+    'theme-midnight', 'EPIC', 'منتصف الليل', 'Midnight',
+    'أزرق ليلي في الوضعين — الفاتح نفسه ليل، بس أهدى.',
+    'Night blue at both ends — the light side is still night, only quieter.',
+    '#2563eb', '#7dd3fc', 520, 211,
+    {
+      requiredLevel: 5,
+      secondary: '#7c3aed', secondaryDark: '#a78bfa',
+      gold: '#a16207', goldDark: '#fcd34d',
+      wash: '#e8edf7', washDark: '#080c14',
+      surfaces: { background: '#080c14', surface: '#101725', ink: '#dbe4f2', line: '#8c97ab' },
+      surfacesLight: { background: '#e8edf7', surface: '#f7f9fd', ink: '#111a2b', line: '#9aa6bb' },
+      pattern: 'glow', glow: true, font: 'tech', radius: 'default', card: 'glass', button: 'soft',
+    },
+  ),
 ];

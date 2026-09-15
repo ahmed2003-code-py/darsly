@@ -370,6 +370,57 @@ Earned and the streak are therefore both roses, and are told apart by **depth**:
 red-then-blue channel order at both ends — which fails the moment anyone reaches
 for an amber again.
 
+### The ladder
+
+The shop is rungs, and the rung is decided by **how much of the app changes** —
+which is also how the price is decided.
+
+| Rung | What it changes | Price | Gate |
+|---|---|---|---|
+| shapes (`button-*`, `card-*`, `nav-*`) | one slot, app-wide | 60–140 | none |
+| marks (`frame-*`, `effect-glow`) | your own avatar / the selected row | 90–450 | level 2–6 |
+| earned marks (`frame-scholar`, `frame-fire`, `frame-legendary`) | the same | **not for sale** | an achievement |
+| tints (`theme-mint`, `theme-ocean`, `theme-sunset`, `theme-grape`) | accent, second colour, wash, backdrop, typeface, shapes | 220–340 | level 2–4 |
+| skins (`theme-paper`, `theme-midnight`, `theme-rose-lavender`) | **the ground as well** | 480–750 | level 4–5 |
+
+The jump between a tint and a skin is the only price step that matters: a tint
+changes the light in the room, a skin replaces the room. Everything else follows
+from it.
+
+`theme-egyptian-king` sits outside the ladder at 100 coins with no gate. It was
+priced as the first skin anyone would ever see, before there was a ladder to be
+on. Repricing something students may already own is a product decision rather
+than a tidy-up, so it stays where it is and the test that checks the ladder
+names it as the exception.
+
+**Two things are deliberately not sold.** `AVATAR` styles and the `confetti`
+effect are names the engine accepts and the stylesheet has never drawn — selling
+either would be selling nothing, and a test asserts the catalogue contains
+neither. Plain accent colours are not sold either, because mixing one is already
+free in the Studio.
+
+### Every theme is held to the floors
+
+`studio.service.spec.ts` sweeps the whole catalogue rather than testing themes
+one by one: for each theme, in both modes, body text clears 7:1 on its ground and
+4.5:1 on its deepest card, and the brand, accent, second colour and "earned"
+families each clear 4.5:1 as a label and as a fill.
+
+It earned its keep immediately. All four tints failed on first run: a theme with
+no ground of its own was seated against the platform's **page**, never its
+cards — so its accent text measured about 4.0:1 on the surface most of the
+product's text actually sits on. `PLATFORM_SEAT` in `studio-theme.ts` now gives
+the default ground the same deepest-panel seat `surfaceSeat` already gave skins.
+
+### Frames were invisible
+
+Every frame was drawn on `.studio-frame::after` at `inset: -4px`, inside an
+element with `overflow: hidden` to clip the avatar photo — so the ring was
+clipped away by the very box it was meant to go around, on every screen, for
+every frame. They are `box-shadow` now, which is painted outside the border box
+and is not subject to the element's own overflow. The frame also follows the
+student to the top bar and the sidebar, rather than appearing only in the Studio.
+
 ### The second colour has a job
 
 Until this theme, `--s-secondary` was derived by the server, exposed in Tailwind

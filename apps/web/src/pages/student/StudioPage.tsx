@@ -1094,9 +1094,146 @@ function Swatch({ item }: { item: StudioItem }) {
       />
     );
   }
+  if (cfg.style) return <StylePreview category={item.category} style={cfg.style} />;
   return (
     <span className="grid h-24 w-full place-items-center rounded-xl bg-surface-container-high text-sm font-bold text-on-surface-variant">
-      {cfg.style ?? '—'}
+      —
+    </span>
+  );
+}
+
+/** The ring colours, kept in step with `.studio-frame` in `index.css`. */
+const FRAME_COLOUR: Record<string, string> = {
+  bronze: '#b06b2c',
+  silver: '#9ca3af',
+  gold: '#d4a017',
+  diamond: '#67e8f9',
+  fire: '#f97316',
+  lightning: '#facc15',
+  scholar: '#92400e',
+  legendary: '#a855f7',
+};
+
+const BUTTON_RADIUS: Record<string, string> = {
+  classic: '8px',
+  rounded: '12px',
+  pill: '999px',
+  sharp: '2px',
+  soft: '14px',
+  elevated: '14px',
+};
+
+const CARD_RADIUS: Record<string, string> = {
+  minimal: '12px',
+  soft: '20px',
+  elevated: '16px',
+  paper: '8px',
+  glass: '16px',
+};
+
+/**
+ * What a shape actually looks like, rather than what it is called.
+ *
+ * This slot used to print the style's own value — "pill", "paper" — into the
+ * card, so an entire rung of the shop advertised itself with an internal
+ * English identifier on an Arabic page. A student buying a shape should see the
+ * shape; the drawings below are the same lengths and radii the stylesheet
+ * applies, in miniature.
+ */
+function StylePreview({ category, style }: { category: Category; style: string }) {
+  const shell = 'grid h-24 w-full place-items-center rounded-xl bg-surface-container-high p-3';
+
+  if (category === 'FRAME') {
+    const colour = FRAME_COLOUR[style] ?? '#9ca3af';
+    const halo = ['diamond', 'fire', 'legendary'].includes(style);
+    return (
+      <span className={shell}>
+        <span
+          className="grid h-12 w-12 place-items-center rounded-full bg-surface-container-lowest font-heading font-bold text-on-surface-variant"
+          style={{ boxShadow: `0 0 0 2px ${colour}${halo ? `, 0 0 12px -2px ${colour}` : ''}` }}
+        >
+          ط
+        </span>
+      </span>
+    );
+  }
+
+  if (category === 'EFFECT') {
+    return (
+      <span className={shell}>
+        <span
+          className="rounded-lg bg-surface-container-lowest px-4 py-2 text-xs font-bold text-on-surface-variant"
+          style={{
+            boxShadow:
+              style === 'glow'
+                ? '0 0 0 1px rgb(var(--c-primary) / 0.35), 0 0 18px -4px rgb(var(--c-primary) / 0.55)'
+                : undefined,
+          }}
+        >
+          ●
+        </span>
+      </span>
+    );
+  }
+
+  if (category === 'NAV_STYLE') {
+    const gap = style === 'compact' ? '4px' : '8px';
+    const radius = style === 'floating' ? '999px' : '8px';
+    return (
+      <span className={`${shell} items-stretch`}>
+        <span className="flex w-full flex-col justify-center" style={{ gap }}>
+          {[0.9, 0.45, 0.45].map((o, i) => (
+            <span
+              key={i}
+              className="h-3.5 w-full bg-surface-container-lowest"
+              style={{ borderRadius: radius, opacity: o }}
+            />
+          ))}
+        </span>
+      </span>
+    );
+  }
+
+  if (category === 'CARD_STYLE') {
+    return (
+      <span className={shell}>
+        <span
+          className="flex h-full w-full flex-col justify-center gap-1.5 p-2"
+          style={{
+            borderRadius: CARD_RADIUS[style] ?? '12px',
+            background:
+              style === 'glass'
+                ? 'rgb(var(--c-surface-container-lowest) / 0.6)'
+                : 'rgb(var(--c-surface-container-lowest))',
+            backdropFilter: style === 'glass' ? 'blur(4px)' : undefined,
+            boxShadow: style === 'elevated' ? '0 8px 18px -10px rgb(0 0 0 / 0.5)' : undefined,
+            border: style === 'paper' ? '1px solid rgb(var(--c-line) / 0.25)' : undefined,
+          }}
+        >
+          <span className="h-1.5 w-2/3 rounded-full bg-on-surface/70" />
+          <span className="h-1.5 w-1/3 rounded-full bg-on-surface/30" />
+        </span>
+      </span>
+    );
+  }
+
+  // BUTTON_STYLE
+  const radius = BUTTON_RADIUS[style] ?? '10px';
+  return (
+    <span className={shell}>
+      <span className="flex items-center gap-2">
+        <span
+          className="h-7 w-16 bg-primary"
+          style={{
+            borderRadius: radius,
+            boxShadow: style === 'elevated' ? '0 6px 16px -6px rgb(0 0 0 / 0.55)' : undefined,
+          }}
+        />
+        <span
+          className="h-7 w-12 border border-outline-variant bg-surface-container-lowest"
+          style={{ borderRadius: radius }}
+        />
+      </span>
     </span>
   );
 }

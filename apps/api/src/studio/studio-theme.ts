@@ -135,6 +135,21 @@ function legible(fg: string, bg: string, target: number): string {
 const GROUND: Record<StudioMode, string> = { light: '#fdfdfb', dark: '#0e0e12' };
 
 /**
+ * The hardest surface on the platform's own ground.
+ *
+ * `surfaceSeat` gives a skin this, and it is why a skin's brand text clears its
+ * floor on a card rather than only on the page. A theme that brings no ground
+ * of its own — a tint, or a student who has only picked a colour — had no seat
+ * at all, so its colours were floored against the page and the page only. On
+ * the platform's light ground that is a near-white; real cards are `#dfded6`,
+ * and an accent seated on the lighter of the two misses 4.5:1 on the surface
+ * most of the product's text actually sits on.
+ *
+ * These are `--c-surface-container-highest` from the stylesheet, one per mode.
+ */
+const PLATFORM_SEAT: Record<StudioMode, string> = { light: '#dfded6', dark: '#2f2f38' };
+
+/**
  * One accent, seated for a mode, plus everything drawn from it.
  *
  * A student picks one colour. Hover, the soft fill behind a chip, the text that
@@ -381,8 +396,10 @@ export function deriveStudioThemes(input: {
   ) => {
     const surfaces = cfg ? deriveSurfaces(cfg) : null;
     const ground = cfg ? surfaceGround(cfg) : null;
-    const seat = cfg ? surfaceSeat(cfg) : null;
     const mode = ground ? groundMode(ground) : fallbackMode;
+    // A skin is seated on its own deepest panel; everything else on the
+    // platform's, which is the same rule rather than a second one.
+    const seat = cfg ? surfaceSeat(cfg) : PLATFORM_SEAT[mode];
     return {
       tokens: accentHex
         ? {

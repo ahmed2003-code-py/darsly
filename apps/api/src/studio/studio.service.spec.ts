@@ -580,13 +580,12 @@ describe('Egyptian King', () => {
     expect(item!.rarity).toBe('LEGENDARY');
   });
 
-  // The top of the ladder — and reachable. At roughly 585 coins in a moderate
-  // week, the dearest thing in the shop is about a week's work rather than a
-  // season's: a top shelf nobody reaches is a top shelf nobody looks at.
-  it('is the dearest thing in the shop, and still about a week away', () => {
-    expect(item!.costCoins).toBe(600);
+  // The top of the ladder, and meant to be far: about a month of ordinary play
+  // and level 8 on top. A shop whose top shelf is a week away has no top shelf.
+  it('is the dearest thing in the shop, and about a month away', () => {
+    expect(item!.costCoins).toBe(2500);
     expect(item!.costCoins).toBe(Math.max(...CATALOG.map((c) => c.costCoins)));
-    expect(item!.requiredLevel).toBe(5);
+    expect(item!.requiredLevel).toBe(8);
     // Earned items carry no price; a bought one must not pretend to be earned.
     expect(item!.requiredAchievement).toBeUndefined();
     expect(item!.isStarter).toBeUndefined();
@@ -864,8 +863,8 @@ describe('Rose & Lavender', () => {
    * anywhere in this platform, and a theme must not be the exception.
    */
   it('is legendary money, and still costs coins rather than XP', () => {
-    expect(item!.costCoins).toBe(500);
-    expect(item!.requiredLevel).toBe(4);
+    expect(item!.costCoins).toBe(1500);
+    expect(item!.requiredLevel).toBe(6);
     // Dearer than every epic, and behind only the King.
     const epics = CATALOG.filter((c) => c.rarity === 'EPIC').map((c) => c.costCoins);
     expect(item!.costCoins).toBeGreaterThan(Math.max(...epics));
@@ -1199,21 +1198,27 @@ describe('the catalogue is a ladder', () => {
   });
 
   /**
-   * Everything has to be reachable, or the ladder is decoration.
+   * Both ends of the ladder are held, because each has a job.
    *
    * A moderate student — two daily missions and two weekly ones — earns about
-   * 585 coins a week, and the level tiers put level 5 at 1800 XP. Nothing in
-   * the shop may sit beyond roughly a week of that, and nothing may ask for a
-   * level past 5.
+   * 585 coins a week. The bottom rung has to be an afternoon, so the shop is
+   * worth opening; the top has to be weeks, so the shop is worth coming back
+   * to and the dearest thing in it says something about who is wearing it.
+   * The first version of this test held everything to a week, which made the
+   * top shelf a formality — the correction is the whole point of the rung.
    */
-  it('keeps the whole ladder within about a week of ordinary play', () => {
+  it('starts within an afternoon and ends weeks away', () => {
     const WEEK = 585;
-    for (const c of CATALOG) {
-      expect(c.costCoins).toBeLessThanOrEqual(WEEK * 1.05);
-      expect(c.requiredLevel ?? 1).toBeLessThanOrEqual(5);
+    const priced = CATALOG.filter((c) => c.costCoins > 0).map((c) => c.costCoins);
+    expect(Math.min(...priced)).toBeLessThan(WEEK / 8);
+    expect(Math.max(...priced)).toBeGreaterThanOrEqual(WEEK * 4);
+    // Legendary means weeks, every time — never something a lucky week covers.
+    for (const c of CATALOG.filter((c) => c.rarity === 'LEGENDARY' && !c.requiredAchievement)) {
+      expect(c.costCoins).toBeGreaterThanOrEqual(WEEK * 2.5);
+      expect(c.requiredLevel ?? 1).toBeGreaterThanOrEqual(6);
     }
-    // And the bottom rung is an afternoon, not a week.
-    expect(Math.min(...CATALOG.filter((c) => c.costCoins > 0).map((c) => c.costCoins))).toBeLessThan(WEEK / 8);
+    // And nothing asks for a level the tiers do not reach.
+    for (const c of CATALOG) expect(c.requiredLevel ?? 1).toBeLessThanOrEqual(10);
   });
 
   it('gives every item a distinct key and a place in the order', () => {

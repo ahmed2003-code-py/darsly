@@ -375,44 +375,59 @@ for an amber again.
 The shop is rungs, and the rung is decided by **how much of the app changes** —
 which is also how the price is decided.
 
-| Rung | What it changes | Price | Gate |
-|---|---|---|---|
-| shapes (`button-*`, `card-*`, `nav-*`) | one slot, app-wide | 40–120 | none |
-| marks (`frame-*`, `effect-glow`) | your own avatar / the selected row | 70–300 | level 2–4 |
-| earned marks (`frame-scholar`, `frame-fire`, `frame-legendary`) | the same | **not for sale** | an achievement |
-| tints (`theme-mint`, `theme-ocean`, `theme-sunset`, `theme-grape`) | accent, second colour, wash, backdrop, typeface, shapes | 180–260 | level 2–3 |
-| skins (`theme-paper`, `theme-midnight`) | **the ground as well** | 340–380 | level 3–4 |
-| legendary skins (`theme-rose-lavender`, `theme-egyptian-king`) | the same, and the top of the shop | 500–600 | level 4–5 |
+| Rung | What it changes | Price | Gate | About |
+|---|---|---|---|---|
+| shapes (`button-*`, `card-*`, `nav-*`) | one slot, app-wide | 40–120 | none | an afternoon |
+| marks (`frame-*`, `effect-glow`) | your own avatar / the selected row | 70–550 | level 2–5 | a day to a week |
+| earned marks (`frame-scholar`, `frame-fire`, `frame-legendary`) | the same | **not for sale** | an achievement | — |
+| tints (`theme-mint`, `theme-ocean`, `theme-sunset`, `theme-grape`) | accent, second colour, wash, backdrop, typeface, shapes | 180–400 | level 2–3 | 2–5 days |
+| skins (`theme-paper`, `theme-midnight`) | **the ground as well** | 650–800 | level 4–5 | a week and a half |
+| legendary skins (`theme-rose-lavender`, `theme-egyptian-king`) | the same, and the top of the shop | 1500–2500 | level 6–8 | three weeks to a month |
 
 The jump between a tint and a skin is the only price step that matters: a tint
 changes the light in the room, a skin replaces the room. Everything else follows
 from it.
 
-**Everything is reachable.** A moderate student — two daily missions and two
-weekly ones — earns about **585 coins a week**, and level 5 is 1800 XP. So the
-bottom rung is an afternoon (40 coins), a tint is a few days, and the dearest
-thing in the shop is about a week. Nothing asks for a level past 5. A test holds
-both ends of that: no item above roughly one week's coins, none gated past level
-5, and the cheapest under an eighth of a week.
+**Both ends are held, because each has a job.** A moderate student — two daily
+missions and two weekly ones — earns about **585 coins a week**. The bottom rung
+is an afternoon so the shop is worth opening; the top is a month so the shop is
+worth coming back to, and so the dearest thing in it says something about who is
+wearing it. A test asserts the cheapest item is under an eighth of a week, the
+dearest is at least four weeks, and every purchasable legendary is at least two
+and a half weeks and level 6+.
 
-`theme-egyptian-king` has moved twice and the history is the point. It was 100
-coins as a doorway when the shelf was empty; it became 1200 and level 7 when the
-ladder arrived, which put the top shelf out of reach; it is 600 and level 5 now.
-A top shelf nobody reaches is a top shelf nobody looks at. Anyone who already
-owns it keeps it either way — ownership is a row, and the price is read only at
-the moment of purchase.
+The lever for "things people pay a lot for" is the shop, not the earning rate.
+Cutting coins or XP would make every mission, level-up and achievement feel
+stingier across the whole app; the catalogue is one file and touches nothing
+else.
+
+`theme-egyptian-king` has moved three times and the history is the point: 100
+as a doorway when the shelf was empty; 1200 when the ladder arrived; 600 when
+"reachable" was over-corrected into "a week"; 2500 and level 8 now, as the
+summit. A doorway is not a summit. Anyone who already owns it keeps it —
+ownership is a row, and the price is read only at the moment of purchase.
 
 **Rarity is a promise about price.** Each band starts above where the one below
-it ends — COMMON 40–100, RARE 120–200, EPIC 240–380, LEGENDARY 500–600 — and a
-test holds the bands apart, because "legendary" meaning 100 coins and 750 at the
-same time meant nothing.
+it ends — COMMON 40–100, RARE 120–300, EPIC 350–800, LEGENDARY 1500–2500 — and
+a test holds the bands apart.
+
+### Three tabs, three jobs
+
+- **مظهري / My look** — the category picker, then the teachers' themes, then
+  the items in that category **owned first**, then the rest cheapest-first. It
+  is about what is on and what can go on; the full-width hero for the dearest
+  thing you *do not* own used to sit at the top of it and push everything you
+  *do* own below the fold.
+- **مجموعتي / Collection** — the teachers' themes, then everything bought. The
+  teachers' themes were missing: a student who had bought nothing was told they
+  had nothing, when they had every academy they are enrolled in.
+- **المتجر / Shop** — the featured legendary as a hero, then everything unowned,
+  cheapest first. The one place a hero belongs is where you buy.
 
 ### The shop is ordered cheapest first
 
 `sortOrder` runs low price to high inside every category, with the earned items
-last. It did not: the themes tab opened on the two dearest items in the
-catalogue, so the first thing a student saw was the thing they could not afford.
-A test now asserts the order within each category is non-decreasing in price.
+last. A test asserts the order within each category is non-decreasing in price.
 
 ### A preview shows the thing, not its name
 

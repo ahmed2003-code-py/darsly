@@ -184,11 +184,15 @@ export default function StudioPage() {
   const equippedKey = (cat: Category): string | null => data?.equipped?.[SLOT[cat]] ?? null;
 
   // The premium theme nobody owns yet. One at most: a shop that features
-  // everything features nothing.
+  // everything features nothing. Shown in the shop, where buying happens.
   const featured = items.find(
     (i) => i.category === 'THEME' && i.rarity === 'LEGENDARY' && !i.owned,
   );
-  const gridItems = (byCategory.get(category) ?? []).filter((i) => i.key !== featured?.key);
+  // "My look": what is on and what can go on, before what could be bought.
+  const styleItems = useMemo(() => {
+    const inCat = byCategory.get(category) ?? [];
+    return [...inCat.filter((i) => i.owned), ...inCat.filter((i) => !i.owned)];
+  }, [byCategory, category]);
 
   /**
    * Try something on.
@@ -283,22 +287,10 @@ export default function StudioPage() {
               if (!next && ADVANCED.includes(category)) setCategory('THEME');
             }}
           />
-          {/* A single premium theme deserves more than one cell of a grid. It
-              gets the width, a taller preview and the price in full — and it
-              stops being featured the moment it is owned, because then it is
-              just one of the things you have. */}
-          {category === 'THEME' && featured && (
-            <FeaturedTheme
-              item={featured}
-              coins={b.coins}
-              ar={ar}
-              t={t}
-              previewing={previewing === featured.key}
-              onPreview={() => preview(featured)}
-              onUnlock={() => setConfirming(featured)}
-              busy={unlock.isPending}
-            />
-          )}
+          {/* The hero lives in the shop now. This tab is "my look": what is on
+              and what can go on. A full-width card for the dearest thing you do
+              not own pushed everything you *do* own below the fold, which is
+              the wrong way round for a page about your own appearance. */}
           {category === 'THEME' && (data?.academyThemes?.length ?? 0) > 0 && (
             <AcademyThemes
               rows={data.academyThemes}
@@ -315,13 +307,11 @@ export default function StudioPage() {
               t={t}
             />
           )}
-          {/* The featured theme is already on the page in full; leaving it in the
-              grid listed it twice, the second time under a heading about
-              teachers. A category whose only item is featured above is not an
-              empty category, so it says nothing rather than "nothing here". */}
-          {!(category === 'THEME' && featured && gridItems.length === 0) && (
+          {/* Owned first, then the rest cheapest-first: what you can put on now
+              sits above what you could buy, and within each half the order is
+              the ladder's. */}
           <ItemGrid
-            items={gridItems}
+            items={styleItems}
             heading={category === 'THEME' ? t('myStudio.storeThemes') : undefined}
             hint={category === 'THEME' ? t('myStudio.storeThemesHint') : undefined}
             equippedKey={equippedKey(category)}
@@ -333,7 +323,6 @@ export default function StudioPage() {
             onUnlock={(item) => setConfirming(item)}
             busy={equip.isPending || unlock.isPending}
           />
-          )}
           <div className="mt-6">
             <button
               className="studio-btn rounded-xl border border-outline-variant px-5 py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-error hover:text-error"
@@ -348,34 +337,66 @@ export default function StudioPage() {
       )}
 
       {tab === 'collection' && (
-        <ItemGrid
-          items={owned}
-          equippedKey={null}
-          equippedMap={data.equipped}
-          previewing={previewing}
-          ar={ar}
-          t={t}
-          onPreview={preview}
-          onEquip={(k) => equip.mutate(k)}
-          onUnlock={(item) => setConfirming(item)}
-          busy={equip.isPending || unlock.isPending}
-          empty={t('myStudio.emptyCollection')}
-        />
+        <>
+          {/* Free, always available, and yours — a collection that left them
+              out told a student who had bought nothing that they had nothing. */}
+          {(data?.academyThemes?.length ?? 0) > 0 && (
+            <AcademyThemes
+              rows={data.academyThemes}
+              onEquip={(id) => equipAcademy.mutate(id)}
+              busy={equipAcademy.isPending}
+              t={t}
+            />
+          )}
+          <ItemGrid
+            items={owned}
+            heading={owned.length ? t('myStudio.ownedItems') : undefined}
+            equippedKey={null}
+            equippedMap={data.equipped}
+            previewing={previewing}
+            ar={ar}
+            t={t}
+            onPreview={preview}
+            onEquip={(k) => equip.mutate(k)}
+            onUnlock={(item) => setConfirming(item)}
+            busy={equip.isPending || unlock.isPending}
+            empty={
+              (data?.academyThemes?.length ?? 0) > 0
+                ? t('myStudio.emptyBought')
+                : t('myStudio.emptyCollection')
+            }
+          />
+        </>
       )}
 
       {tab === 'shop' && (
-        <ItemGrid
-          items={shop}
-          equippedKey={null}
-          previewing={previewing}
-          ar={ar}
-          t={t}
-          onPreview={preview}
-          onEquip={(k) => equip.mutate(k)}
-          onUnlock={(item) => setConfirming(item)}
-          busy={equip.isPending || unlock.isPending}
-          empty={t('myStudio.emptyShop')}
-        />
+        <>
+          {/* The one place a hero belongs: where you buy. */}
+          {featured && (
+            <FeaturedTheme
+              item={featured}
+              coins={b.coins}
+              ar={ar}
+              t={t}
+              previewing={previewing === featured.key}
+              onPreview={() => preview(featured)}
+              onUnlock={() => setConfirming(featured)}
+              busy={unlock.isPending}
+            />
+          )}
+          <ItemGrid
+            items={shop.filter((i) => i.key !== featured?.key)}
+            equippedKey={null}
+            previewing={previewing}
+            ar={ar}
+            t={t}
+            onPreview={preview}
+            onEquip={(k) => equip.mutate(k)}
+            onUnlock={(item) => setConfirming(item)}
+            busy={equip.isPending || unlock.isPending}
+            empty={t('myStudio.emptyShop')}
+          />
+        </>
       )}
 
       <ErrorNote error={unlock.error ?? equip.error ?? accent.error ?? reset.error} />

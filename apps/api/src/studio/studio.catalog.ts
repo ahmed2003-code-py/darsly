@@ -179,12 +179,13 @@ export const CATALOG: CatalogSeed[] = [
    *
    * The dearest thing in the shop, and the last one most students will own.
    *
-   * It was a hundred coins once, priced as a doorway when there was nothing else
-   * on the shelf and the point was to show what a skin even is. There is a
-   * ladder now, and a full skin sitting below a card style made nonsense of it —
-   * so it goes where a legendary belongs: the top. Level 7 with it, because a
-   * price alone can be saved up to in a fortnight and this is meant to be a
-   * season's worth of work.
+   * 2,500 coins is a month and more of ordinary play — two dailies and two
+   * weeklies come to about 585 a week — and level 8 is 6,000 XP on top of it.
+   * That is the point. The bottom rung of this shop is an afternoon so that the
+   * shop is worth opening; the top rung is a season so that the shop is worth
+   * coming back to, and so that wearing this says something about the person
+   * wearing it. It was a hundred coins once, as a doorway when the shelf was
+   * empty; a doorway is not a summit.
    *
    * Nobody who already bought it pays again: ownership is a row, and the price
    * is only read at the moment of purchase.
@@ -198,10 +199,10 @@ export const CATALOG: CatalogSeed[] = [
     'A whole stadium — deep navy by night or warm chalk by day, Egyptian crimson, and gold for everything earned.',
     '#dc2626',
     '#ef4444',
-    600,
+    2500,
     17,
     {
-      requiredLevel: 5,
+      requiredLevel: 8,
       secondary: '#ee9800',
       secondaryDark: '#ffb95f',
       // Old gold on chalk, floodlit amber at night. The day value is picked to
@@ -241,9 +242,9 @@ export const CATALOG: CatalogSeed[] = [
   /**
    * Rose & Lavender — the second skin, and the expensive one.
    *
-   * Legendary, and priced like it: 950 coins and level 6. Only Egyptian King
-   * sits above it. A shop whose top shelf is within a week's reach has no top
-   * shelf.
+   * Legendary, and priced like it: 1,500 coins and level 6 — two or three
+   * weeks of ordinary play. Only Egyptian King sits above it. A shop whose top
+   * shelf is within a week's reach has no top shelf.
    *
    * Two colours with two jobs, and the split is the design. Lavender is the
    * action: buttons, active nav, links, progress — everything the app asks you
@@ -272,10 +273,10 @@ export const CATALOG: CatalogSeed[] = [
     'A blush morning or a deep violet night, cards made of frosted glass, and not a trace of gold anywhere.',
     '#8b5cf6',
     '#a78bfa',
-    500,
+    1500,
     16,
     {
-      requiredLevel: 4,
+      requiredLevel: 6,
       // Rose carries identity, not action: chips, rails, the streak, the second
       // orb. Softer at night, where the fuller rose goes heavy.
       secondary: '#ff6b8b',
@@ -369,14 +370,14 @@ export const CATALOG: CatalogSeed[] = [
   style('FRAME', 'frame-silver', 'silver', 'COMMON', 'إطار فضي', 'Silver frame',
     'حلقة فضي حوالين صورتك في كل مكان.', 'A silver ring around your picture, everywhere it appears.', 100, 41),
   style('FRAME', 'frame-gold', 'gold', 'RARE', 'إطار ذهبي', 'Gold frame',
-    'حلقة ذهب حوالين صورتك في كل مكان.', 'A gold ring around your picture, everywhere it appears.', 160, 43,
+    'حلقة ذهب حوالين صورتك في كل مكان.', 'A gold ring around your picture, everywhere it appears.', 220, 43,
     { requiredLevel: 2 }),
   style('FRAME', 'frame-lightning', 'lightning', 'RARE', 'إطار برق', 'Lightning frame',
-    'حلقة صفرا لامعة حوالين صورتك.', 'A bright yellow ring around your picture.', 200, 44,
+    'حلقة صفرا لامعة حوالين صورتك.', 'A bright yellow ring around your picture.', 300, 44,
     { requiredLevel: 3 }),
   style('FRAME', 'frame-diamond', 'diamond', 'EPIC', 'إطار ألماس', 'Diamond frame',
-    'حلقة سماوي بهالة حواليها.', 'A cyan ring with a halo around it.', 300, 45,
-    { requiredLevel: 4 }),
+    'حلقة سماوي بهالة حواليها.', 'A cyan ring with a halo around it.', 550, 45,
+    { requiredLevel: 5 }),
 
   // Earned, not sold. Nothing on this rung has a price, because a mark that can
   // be bought says nothing about the person wearing it — and these three are
@@ -431,7 +432,7 @@ export const CATALOG: CatalogSeed[] = [
     'theme-sunset', 'EPIC', 'غروب', 'Sunset',
     'برتقالي دافي وخطوط مايلة في الخلفية.',
     'A warm orange with slanted lines running behind everything.',
-    '#c2410c', '#fb923c', 240, 12,
+    '#c2410c', '#fb923c', 350, 12,
     {
       requiredLevel: 3,
       secondary: '#be123c', secondaryDark: '#fb7185',
@@ -443,7 +444,7 @@ export const CATALOG: CatalogSeed[] = [
     'theme-grape', 'EPIC', 'عنب', 'Grape',
     'بنفسجي غامق وشبكة رفيعة بالكاد تتشاف.',
     'A deep violet over a grid you can only just see.',
-    '#6d28d9', '#a78bfa', 260, 13,
+    '#6d28d9', '#a78bfa', 400, 13,
     {
       requiredLevel: 3,
       secondary: '#9333ea', secondaryDark: '#c084fc',
@@ -461,9 +462,9 @@ export const CATALOG: CatalogSeed[] = [
     'theme-paper', 'EPIC', 'ورق', 'Paper',
     'ورق دافي وحبر كحلي — مكتبة، مش تطبيق.',
     'Warm paper and navy ink — a library rather than an app.',
-    '#9a3412', '#fdba74', 340, 14,
+    '#9a3412', '#fdba74', 650, 14,
     {
-      requiredLevel: 3,
+      requiredLevel: 4,
       secondary: '#0f766e', secondaryDark: '#5eead4',
       gold: '#a16207', goldDark: '#fcd34d',
       wash: '#f7f1e4', washDark: '#191714',
@@ -476,9 +477,9 @@ export const CATALOG: CatalogSeed[] = [
     'theme-midnight', 'EPIC', 'منتصف الليل', 'Midnight',
     'أزرق ليلي في الوضعين — الفاتح نفسه ليل، بس أهدى.',
     'Night blue at both ends — the light side is still night, only quieter.',
-    '#2563eb', '#7dd3fc', 380, 15,
+    '#2563eb', '#7dd3fc', 800, 15,
     {
-      requiredLevel: 4,
+      requiredLevel: 5,
       secondary: '#7c3aed', secondaryDark: '#a78bfa',
       gold: '#a16207', goldDark: '#fcd34d',
       wash: '#e8edf7', washDark: '#080c14',

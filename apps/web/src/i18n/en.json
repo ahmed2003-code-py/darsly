@@ -1914,7 +1914,9 @@
     "later": "Later",
     "activateNow": "Activate now",
     "storeThemes": "Store themes",
-    "storeThemesHint": "A whole look for the app — the page, the menus and the buttons all change."
+    "storeThemesHint": "A whole look for the app — the page, the menus and the buttons all change.",
+    "ownedItems": "Your items",
+    "emptyBought": "You haven't bought anything from the shop yet — your teachers' themes above are always yours."
   },
   "subjects": {
     "searchPh": "Search for a subject…",

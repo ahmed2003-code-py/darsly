@@ -1,3 +1,8 @@
+/* The shell's shapes — every rule keyed to a `data-s-*` the theme wrote.
+   First, because an @import anywhere else is invalid CSS and is dropped
+   without a word — which is exactly what happened the first time. */
+@import './styles/shell.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

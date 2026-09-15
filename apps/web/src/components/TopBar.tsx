@@ -10,13 +10,49 @@ import { notificationLook, timeAgo } from '../lib/notificationLook';
 import { notificationRoute } from '../lib/notificationRoute';
 import { useNotificationPermission } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
+import { NavLink, useLocation } from 'react-router-dom';
+import type { NavItem } from './shell/nav';
 
 /**
- * Global glassmorphic top bar (design: sticky, backdrop-blur, centered search,
- * notifications, user menu). Search routes students to discovery; the bell
- * opens live in-app notifications; the avatar opens a small account menu.
+ * The header, in whichever shape the theme asked for.
+ *
+ * One component; the variant is a class on the wrapper and two decisions here.
+ * `standard` is the app as it was — sticky glass, start-aligned search, the
+ * controls at the end. The others move or shrink those same parts: `compact`
+ * and `minimal` fold the search into an icon, `editorial` grows tall and
+ * carries the page's own title, `centered` gives the search the whole middle,
+ * `floating` detaches from the edge. When the sidebar is `hidden`, this is
+ * also where the navigation lives — passed in as `nav`, drawn from the same
+ * list the sidebar draws from.
+ *
+ * Search routes students to discovery; the bell opens live notifications; the
+ * avatar opens a small account menu. None of that changes with the variant.
  */
-export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
+export default function TopBar({
+  onToggleSidebar,
+  alwaysMenu = false,
+  variant = 'standard',
+  sticky = true,
+  nav,
+  title,
+}: {
+  onToggleSidebar?: () => void;
+  /** Show the menu button at every width, not only under `lg`. */
+  alwaysMenu?: boolean;
+  variant?: string;
+  sticky?: boolean;
+  /** Navigation to carry in the header itself, when there is no sidebar. */
+  nav?: NavItem[];
+  /** The page's own title, for the editorial variant. */
+  title?: string;
+}) {
+  const location = useLocation();
+  const [searchOpen, setSearchOpen] = useState(false);
+  // A folded search that was opened stays open only on the page it was opened
+  // on; the next page starts folded again.
+  useEffect(() => setSearchOpen(false), [location.pathname]);
+  // Variants that fold the search into an icon until it is asked for.
+  const foldedSearch = (variant === 'compact' || variant === 'minimal') && !searchOpen;
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -86,12 +122,24 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
 
   const initial = user?.fullName?.trim()?.charAt(0) ?? '?';
 
+  const wrapper = [
+    'shell-header',
+    `shell-header-${variant}`,
+    sticky ? 'sticky top-0' : '',
+    'z-40',
+    // Standard keeps the exact class it always had; the others are drawn by
+    // the stylesheet under their own name.
+    variant === 'standard' ? 'glass' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <header className="glass sticky top-0 z-40">
-      <div className="flex h-16 items-center gap-2 px-4 sm:gap-4 sm:px-6">
+    <header className={wrapper} data-variant={variant}>
+      <div className="shell-header-row flex h-16 items-center gap-2 px-4 sm:gap-4 sm:px-6">
         {onToggleSidebar && (
           <button
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low lg:hidden"
+            className={`shell-menu-btn grid h-10 w-10 shrink-0 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low ${alwaysMenu ? '' : 'lg:hidden'}`}
             onClick={onToggleSidebar}
             aria-label="menu"
           >
@@ -99,20 +147,84 @@ export default function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => vo
           </button>
         )}
 
-        {/* Search — start-aligned, not centered */}
-        <form onSubmit={submitSearch} className="me-auto min-w-0 w-full max-w-md">
-          <div className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2 transition-[border-color,box-shadow] duration-150 ease-premium focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
-            <span className="material-symbols-outlined text-[20px] text-outline">search</span>
-            <input
-              className="w-full bg-transparent text-sm outline-none placeholder:text-outline"
-              placeholder={t('topbar.searchPlaceholder')}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </div>
-        </form>
+        {/* The brand, when there is no sidebar to carry it. */}
+        {nav && (
+          <span className="shell-header-brand hidden items-center gap-2 lg:flex">
+            <span className="brand-tile h-9 w-9" aria-hidden />
+            <span className="font-heading text-lg font-bold tracking-tight text-on-surface">{t('brand')}</span>
+          </span>
+        )}
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-1">
+        {/* The page's title, for a header tall enough to carry it. */}
+        {variant === 'editorial' && title && (
+          <h1 className="shell-header-title me-auto hidden min-w-0 truncate font-heading text-2xl font-bold tracking-tight text-on-surface lg:block">
+            {title}
+          </h1>
+        )}
+
+        {/* The navigation itself, when the sidebar is hidden. */}
+        {nav && (
+          <nav className="shell-header-nav hidden shrink-0 items-center gap-1 lg:flex">
+            {nav.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `shell-nav-item relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-heading text-sm font-semibold transition-colors ${
+                    isActive
+                      ? 'studio-active shell-nav-active bg-student-accent-soft text-student-accent-ink'
+                      : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                  }`
+                }
+              >
+                <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+                <span className="shell-nav-label leading-5">{t(item.labelKey)}</span>
+              </NavLink>
+            ))}
+          </nav>
+        )}
+
+        {/* Search — start-aligned by default; the whole middle in `centered`;
+            an icon until asked for in the compact variants. */}
+        {foldedSearch ? (
+          <button
+            className="shell-search-btn me-auto grid h-10 w-10 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low"
+            onClick={() => setSearchOpen(true)}
+            aria-label={t('topbar.searchPlaceholder')}
+          >
+            <span className="material-symbols-outlined">search</span>
+          </button>
+        ) : (
+          <form
+            onSubmit={submitSearch}
+            className={`shell-search min-w-0 flex-1 ${
+              // With the nav in the row the search takes what is left; on its
+              // own it takes the middle (centered) or the start (standard).
+              nav
+                ? 'max-w-md'
+                : variant === 'centered'
+                  ? 'mx-auto max-w-xl'
+                  : variant === 'editorial'
+                    ? 'ms-auto max-w-xs'
+                    : 'me-auto max-w-md'
+            }`}
+          >
+            <div className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2 transition-[border-color,box-shadow] duration-150 ease-premium focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
+              <span className="material-symbols-outlined text-[20px] text-outline">search</span>
+              <input
+                className="w-full bg-transparent text-sm outline-none placeholder:text-outline"
+                placeholder={t('topbar.searchPlaceholder')}
+                value={q}
+                autoFocus={searchOpen}
+                onBlur={() => !q && setSearchOpen(false)}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+          </form>
+        )}
+
+        <div className="shell-header-controls flex shrink-0 items-center gap-2 sm:gap-1">
           {/* Light or dark — the same switch the public academy page carries,
               so the choice a visitor made out there is still theirs in here. */}
           <ColorModeToggle />

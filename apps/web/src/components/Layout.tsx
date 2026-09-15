@@ -1,86 +1,44 @@
 import { useQuery } from '@tanstack/react-query';
 import { ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../lib/api';
 import { claimStudio, loadStudio } from '../lib/studio';
 import { useRealtime } from '../lib/useRealtime';
+import { useThemeLayout } from '../lib/useThemeLayout';
 import { useWebNotifications } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
 import NotificationToasts from './NotificationToasts';
+import BottomNav from './shell/BottomNav';
+import Footer from './shell/Footer';
+import { BOTTOM_TABS, NavItem, navFor } from './shell/nav';
+import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
 
-interface NavItem {
-  to: string;
-  icon: string;
-  labelKey: string;
-  end?: boolean;
-}
-
-const STUDENT_NAV: NavItem[] = [
-  { to: '/', icon: 'space_dashboard', labelKey: 'nav.home', end: true },
-  { to: '/courses', icon: 'auto_stories', labelKey: 'nav.browse' },
-  { to: '/discover', icon: 'travel_explore', labelKey: 'nav.discover' },
-  { to: '/my-courses', icon: 'menu_book', labelKey: 'nav.myCourses' },
-  { to: '/learning', icon: 'trophy', labelKey: 'nav.learning' },
-  { to: '/studio', icon: 'palette', labelKey: 'nav.myStudio' },
-  { to: '/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
-  { to: '/saved', icon: 'favorite', labelKey: 'nav.saved' },
-  { to: '/live', icon: 'sensors', labelKey: 'nav.live' },
-  { to: '/my-certificates', icon: 'workspace_premium', labelKey: 'nav.certificates' },
-  { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
-];
-
-const TEACHER_NAV: NavItem[] = [
-  { to: '/teacher', icon: 'space_dashboard', labelKey: 'nav.dashboard', end: true },
-  { to: '/academy/studio', icon: 'auto_awesome', labelKey: 'nav.studio' },
-  { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
-  { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
-  { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
-  { to: '/teacher/live', icon: 'sensors', labelKey: 'nav.live' },
-  { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
-  { to: '/teacher/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
-  { to: '/teacher/security', icon: 'shield', labelKey: 'nav.security' },
-  { to: '/teacher/coupons', icon: 'sell', labelKey: 'nav.coupons' },
-];
-
-const ADMIN_NAV: NavItem[] = [
-  { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
-  { to: '/admin/teachers', icon: 'verified_user', labelKey: 'nav.adminTeachers' },
-  { to: '/admin/academy-studio', icon: 'auto_awesome', labelKey: 'nav.adminStudio' },
-  { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },
-  { to: '/admin/wallet', icon: 'account_balance_wallet', labelKey: 'nav.adminWallet' },
-  { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },
-  { to: '/admin/gamification', icon: 'trophy', labelKey: 'nav.adminGamification' },
-  { to: '/admin/devices', icon: 'smartphone', labelKey: 'nav.adminDevices' },
-  { to: '/admin/security', icon: 'gpp_maybe', labelKey: 'nav.adminSecurity' },
-];
-
 /**
- * The destinations that earn a permanent spot on a phone, per role —
- * everything else stays one tap away behind "more". Reaching anything on a
- * phone meant opening the drawer first, which is a tap and a decision in front
- * of the screens people actually live in: a student's courses, a teacher's
- * builder, an admin's queue, and now the wallet each of them checks.
- */
-const BOTTOM_TABS: Record<string, string[]> = {
-  [Role.STUDENT]: ['/', '/my-courses', '/learning', '/messages', '/wallet'],
-  [Role.TEACHER]: ['/teacher', '/teacher/courses', '/teacher/students', '/messages', '/teacher/wallet'],
-  [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
-};
-
-/**
- * App shell: fixed sidebar on the inline-start edge (right in RTL) with a brand
- * block + nav, a sticky glassmorphic TopBar, and the routed page. Collapses to
- * an off-canvas drawer under lg, with a bottom tab bar for the common
- * destinations.
+ * The app shell, in the shape the theme asked for.
+ *
+ * This file used to *be* the layout: one sidebar at one width, one header, a
+ * bottom bar under `lg`, all decided here. It is a composition now. The theme
+ * writes `data-s-*` attributes on the root; `useThemeLayout` reads them; this
+ * picks which parts to render and passes each one its variant. The parts —
+ * `Sidebar`, `TopBar`, `Footer`, `BottomNav` — are each one component drawn
+ * from the same navigation list, so a theme changes what the shell looks like
+ * and never where anything goes.
+ *
+ * With no theme, every value is the default and this renders exactly what the
+ * old file rendered: the same classes on the same elements. That is not an
+ * accident and it is the thing to protect — teachers and admins read the same
+ * attributes and find nothing there.
  */
 export default function Layout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const [drawer, setDrawer] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const layout = useThemeLayout();
   useRealtime(); // live bell + chat list on every authenticated page
   useWebNotifications(navigate); // ...and as OS notifications, clickable, when the tab is away
   // A teacher who has closed messaging keeps no chat destination: the page
@@ -95,24 +53,19 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   // The student's own layer, fetched once the session is known. `bootStudio`
   // has already replayed the cached copy, so this is a correction rather than
-  // the first paint.
-  //
-  // Claiming the device happens for every role, not only for students: a look
-  // is kept across a sign-out so the person signing back in does not watch
-  // their app repaint, and it is somebody *else* arriving that must drop it. A
-  // teacher is somebody else. Before this, signing in as one on a device a
-  // student had used left the student's skin on the teacher's console.
+  // the first paint. Claiming the device happens for every role: a look is
+  // kept across a sign-out, and it is somebody *else* arriving that drops it.
   useEffect(() => {
     if (!user?.id) return;
     if (user.role === Role.STUDENT) void loadStudio(user.id).catch(() => undefined);
     else claimStudio(user.id);
   }, [user?.role, user?.id]);
-  const baseNav =
-    user?.role === Role.SUPER_ADMIN ? ADMIN_NAV : user?.role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
+
+  // The drawer closes itself on navigation, whichever surface opened it.
+  useEffect(() => setDrawer(false), [location.pathname]);
+
+  const baseNav = navFor(user?.role);
   const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;
-  // Ordered by the tab list, not by where they happen to sit in the sidebar,
-  // and drawn from the same entries so a renamed label can't drift between
-  // the two navigations.
   const bottomTabs = (BOTTOM_TABS[user?.role ?? Role.STUDENT] ?? [])
     .map((to) => nav.find((n) => n.to === to))
     .filter((n): n is NavItem => !!n);
@@ -123,140 +76,72 @@ export default function Layout({ children }: { children: ReactNode }) {
         ? t('layout.teacherConsole')
         : t('layout.studentSpace');
 
-  const sidebar = (
-    <div className="flex h-full flex-col">
-      {/* Brand block — flat accent tile, editorial wordmark, start-aligned */}
-      <div className="flex items-center gap-3 px-5 py-6">
-        {/* The real mark, not a stock glyph — and the same artwork the browser
-            tab uses, so the two can never drift apart. Drawn as a themed tile
-            rather than a fixed image: once a teacher publishes their academy,
-            an indigo square would be the one thing on screen still wearing the
-            platform's colours. */}
-        <span className="brand-tile h-11 w-11" aria-hidden />
-        <div className="min-w-0">
-          <h1 className="font-heading text-xl font-bold tracking-tight text-on-surface">{t('brand')}</h1>
-          <p className="text-xs text-on-surface-variant">{roleLabel}</p>
-        </div>
-      </div>
+  const { nav: navCfg, header, footer } = layout;
+  const desktopNav = navCfg.desktop;
+  const showSidebar = desktopNav !== 'hidden';
+  // A rail shows labels only on hover, whatever the theme said about labels.
+  const sidebarLabels = desktopNav === 'rail' ? false : navCfg.labels;
+  const title = typeof document !== 'undefined' ? document.title.replace(/\s*[|—-]\s*.*$/, '') : undefined;
 
-      <nav className="flex-1 space-y-0.5 px-3">
-        {nav.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={() => setDrawer(false)}
-            className={({ isActive }) =>
-              `studio-nav-item group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 font-heading text-sm font-semibold transition-colors duration-200 ease-premium ${
-                isActive
-                  ? 'studio-active bg-student-accent-soft text-student-accent-ink'
-                  : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && (
-                  <span className="absolute inset-y-1.5 start-0 w-1 rounded-full bg-student-accent" aria-hidden />
-                )}
-                <span className={`material-symbols-outlined text-[20px] ${isActive ? 'text-student-accent-ink' : 'text-outline group-hover:text-on-surface'}`}>
-                  {item.icon}
-                </span>
-                {t(item.labelKey)}
-              </>
-            )}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Account card at the foot → profile */}
-      <div className="p-4">
-        <NavLink to="/profile" className="flex items-center gap-3 rounded-xl bg-surface-container-low p-3 transition hover:bg-surface-container">
-          <span className="studio-frame grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName?.trim()?.charAt(0) ?? '?')}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold">{user?.fullName}</p>
-            <p className="truncate text-xs text-on-surface-variant">
-              {user?.role ? t(`dashboard.role.${user.role}`) : ''}
-            </p>
-          </div>
-          <span className="material-symbols-outlined ms-auto text-lg text-outline rtl:-scale-x-100">chevron_right</span>
-        </NavLink>
-      </div>
-    </div>
+  const sidebar = (labels: boolean) => (
+    <Sidebar nav={nav} labels={labels} roleLabel={roleLabel} onNavigate={() => setDrawer(false)} />
   );
 
   return (
-    <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-e border-outline-variant/40 bg-surface-container-lowest/80 backdrop-blur-sm lg:block">
-        {sidebar}
-      </aside>
+    <div className="shell flex min-h-screen" data-shell-nav={desktopNav} data-shell-tablet={navCfg.tablet}>
+      {/* Desktop sidebar. Hidden below `lg` by the base rule; the tablet
+          variant can bring it back between `md` and `lg` as a rail. */}
+      {showSidebar && (
+        <aside className="shell-aside sticky top-0 hidden h-screen w-64 shrink-0 border-e border-outline-variant/40 bg-surface-container-lowest/80 backdrop-blur-sm lg:block">
+          {sidebar(sidebarLabels)}
+        </aside>
+      )}
 
-      {/* Mobile drawer — the same navigation the desktop sidebar shows, so it
-          belongs on the same side of the screen: `start`, which is the left in
-          English and the right in Arabic. Anchoring it to `end` put it opposite
-          both the desktop sidebar and the hamburger that opens it, and swapped
-          sides between the two languages in exactly the wrong direction. */}
+      {/* Mobile drawer — the same navigation, always with labels, on the
+          `start` side (left in English, right in Arabic) where the hamburger is. */}
       {drawer && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className={`fixed inset-0 z-50 ${showSidebar ? 'lg:hidden' : ''}`}>
           <div className="absolute inset-0 bg-on-surface/40" onClick={() => setDrawer(false)} />
-          <aside className="absolute inset-y-0 start-0 w-64 border-e border-outline-variant/40 bg-surface-container-lowest shadow-modal">
-            {sidebar}
+          <aside className="shell-drawer absolute inset-y-0 start-0 w-64 border-e border-outline-variant/40 bg-surface-container-lowest shadow-modal">
+            {sidebar(true)}
           </aside>
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onToggleSidebar={() => setDrawer(true)} />
+      <div className="shell-main flex min-w-0 flex-1 flex-col">
+        {/* With no sidebar, the header carries the primary destinations —
+            the same five the phone's bar carries — and the drawer holds the
+            rest. Eleven links do not fit across a header, and a horizontal
+            nav that scrolls is a nav nobody finds the end of. */}
+        <TopBar
+          onToggleSidebar={() => setDrawer(true)}
+          alwaysMenu={!showSidebar}
+          variant={header.variant}
+          sticky={header.sticky}
+          nav={showSidebar ? undefined : bottomTabs}
+          title={title}
+        />
         <NotificationToasts />
-        {/* The bar is fixed, so the page has to end above it — including the
-            home-indicator strip on phones that have one. */}
-        <main className="min-w-0 flex-1 pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0">{children}</main>
+        {/* The phone's bar is fixed, so the page ends above it — including the
+            home-indicator strip on phones that have one. Only when there is a
+            bar: a theme that uses the drawer alone gets the room back. */}
+        <main
+          className={`shell-content min-w-0 flex-1 ${
+            navCfg.mobile === 'bottom' ? 'pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0' : ''
+          } ${footer === 'bottomBar' ? 'lg:pb-24' : ''}`}
+        >
+          {children}
+        </main>
+        <Footer variant={footer} />
       </div>
 
-      {/* Mobile bottom tab bar — the counterpart of the desktop sidebar, which
-          is why it disappears at exactly the width the sidebar appears. */}
-      {bottomTabs.length > 0 && (
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-outline-variant/40 bg-surface-container-lowest/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
-          <div className="flex items-stretch">
-            {bottomTabs.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex min-h-[3.75rem] min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 px-1 pt-1.5 pb-1 transition-colors ${
-                    isActive ? 'text-student-accent-ink' : 'text-on-surface-variant'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <span
-                      className={`material-symbols-outlined text-[22px] leading-none ${isActive ? 'text-student-accent-ink' : 'text-outline'}`}
-                      style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
-                    >
-                      {item.icon}
-                    </span>
-                    <span className="w-full truncate text-center text-[11px] font-bold leading-tight">
-                      {t(item.labelKey)}
-                    </span>
-                  </>
-                )}
-              </NavLink>
-            ))}
-            <button
-              type="button"
-              onClick={() => setDrawer(true)}
-              className="flex min-h-[3.75rem] min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 px-1 pb-1 pt-1.5 text-on-surface-variant transition-colors"
-            >
-              <span className="material-symbols-outlined text-[22px] leading-none text-outline">menu</span>
-              <span className="w-full truncate text-center text-[11px] font-bold leading-tight">{t('nav.more')}</span>
-            </button>
-          </div>
-        </nav>
+      {/* Phone navigation: the bar, or nothing but the drawer. */}
+      {navCfg.mobile === 'bottom' && bottomTabs.length > 0 && (
+        <BottomNav tabs={bottomTabs} onMore={() => setDrawer(true)} />
+      )}
+      {/* The floating bottom bar a theme may ask for on desktop. */}
+      {footer === 'bottomBar' && bottomTabs.length > 0 && (
+        <BottomNav tabs={bottomTabs} onMore={() => setDrawer(true)} floating />
       )}
     </div>
   );

@@ -130,6 +130,40 @@ export function teacherPendingEmail(input: { name: string; brandName?: string })
   };
 }
 
+/**
+ * To the platform's admins: somebody is waiting. A PENDING teacher cannot log
+ * in and cannot nudge anyone, so the only thing that gets them approved is an
+ * admin noticing — and the admin console is not a page anyone keeps open.
+ */
+export function teacherAppliedAdminEmail(input: {
+  name: string;
+  email: string;
+  phone: string;
+  subjects: string[];
+  reviewUrl: string;
+  brandName?: string;
+}): EmailContent {
+  const brandName = input.brandName ?? DEFAULT_BRAND;
+  const subjects = input.subjects.length ? input.subjects.join('، ') : '—';
+  return {
+    subject: `طلب معلّم جديد: ${input.name}`,
+    text: `${input.name} (${input.email} — ${input.phone}) قدّم طلب انضمام كمعلّم. المواد: ${subjects}. راجع الطلب: ${input.reviewUrl}`,
+    html: layout({
+      brandName,
+      title: 'طلب معلّم جديد',
+      body: `<p style="margin:0 0 12px;">فيه معلّم جديد مستني الاعتماد:</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 8px;font-size:15px;line-height:1.9;">
+          <tr><td style="color:${BRAND.muted};padding-inline-end:16px;">الاسم</td><td><strong>${esc(input.name)}</strong></td></tr>
+          <tr><td style="color:${BRAND.muted};padding-inline-end:16px;">الإيميل</td><td dir="ltr" style="text-align:right;">${esc(input.email)}</td></tr>
+          <tr><td style="color:${BRAND.muted};padding-inline-end:16px;">الموبايل</td><td dir="ltr" style="text-align:right;">${esc(input.phone)}</td></tr>
+          <tr><td style="color:${BRAND.muted};padding-inline-end:16px;">المواد</td><td>${esc(subjects)}</td></tr>
+        </table>
+        <p style="margin:0;">مش هيقدر يدخل ولا ينشر حاجة لحد ما تعتمده.</p>
+        ${button(input.reviewUrl, 'راجع الطلب')}`,
+    }),
+  };
+}
+
 export function teacherApprovedEmail(input: { name: string; loginUrl: string; brandName?: string }): EmailContent {
   const brandName = input.brandName ?? DEFAULT_BRAND;
   return {

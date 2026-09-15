@@ -1,5 +1,5 @@
 import { MailService } from './mail.service';
-import { resetPasswordEmail } from './templates';
+import { resetPasswordEmail, teacherAppliedAdminEmail } from './templates';
 
 describe('MailService', () => {
   const envBackup = { ...process.env };
@@ -95,5 +95,20 @@ describe('email templates', () => {
     });
     expect(html).toContain('dir="rtl"');
     expect(subject).toBe('إعادة تعيين كلمة المرور');
+  });
+
+  it('tells the admin who applied, how to reach them, and where to approve', () => {
+    const { html, text, subject } = teacherAppliedAdminEmail({
+      name: 'عمرو فاروق',
+      email: 'amr@example.com',
+      phone: '+201001234567',
+      subjects: ['رياضيات', 'فيزياء'],
+      reviewUrl: 'https://app/admin/teachers',
+    });
+    expect(subject).toContain('عمرو فاروق');
+    for (const piece of ['amr@example.com', '+201001234567', 'رياضيات، فيزياء', 'https://app/admin/teachers']) {
+      expect(html).toContain(piece);
+      expect(text).toContain(piece);
+    }
   });
 });

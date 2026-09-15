@@ -302,6 +302,8 @@ DATABASE_URL="<PUBLIC_URL>" npm run db:seed --workspace=@darsly/api
 - [ ] الـdeploy أخضر، **ومتحقّق منه** بـstring فريدة (قسم 4).
 - [ ] `RESEND_API_KEY` مضبوط، ويفضّل الدومين يبقى verified — من غير كده الرسايل
       بتتبعت من `onboarding@resend.dev` وبتوصل لصاحب الحساب بس.
+- [ ] `ADMIN_NOTIFY_EMAILS` = إيميل(ات) حقيقية بتتقرا — رسالة «معلّم جديد قدّم» بتروح هنا،
+      مش لحساب `admin@darsly.app` اللي هو login مش صندوق بريد.
 - [ ] حسابات الاستلام مضبوطة (الأدمن → الدفعات → حسابات الاستلام).
 - [ ] عمولة المنصة لكل مدرس مضبوطة (افتراضي 20%).
 - [ ] نسخ احتياطي دوري لقاعدة Postgres (Railway backups / cron `pg_dump`).

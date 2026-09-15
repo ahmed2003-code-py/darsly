@@ -1,18 +1,10 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  ServiceUnavailableException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { Role, TeacherStatus } from '@darsly/shared-types';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import { provisionTeacherAcademy } from '../academy/provision';
 import { MailService } from '../mail/mail.service';
-import { otpEmail, teacherPendingEmail, welcomeStudentEmail } from '../mail/templates';
+import { otpEmail, teacherAppliedAdminEmail, teacherPendingEmail, welcomeStudentEmail } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeviceContext, TokenService } from './token.service';
 import {
@@ -34,6 +26,7 @@ const MAX_RESET_ATTEMPTS = 5;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   // A valid argon2 hash to verify against when an account is absent, so login
   // latency doesn't reveal whether an email exists (constant-time login).
   private readonly dummyHash = argon2.hash('constant-time-dummy-password');
@@ -149,7 +142,59 @@ export class AuthService {
       );
     });
     this.mail.sendInBackground({ to: email, ...teacherPendingEmail({ name: fullName }) });
+    void this.tellAdminsTeacherApplied({ fullName, email, phone, subjectIds: dto.subjectIds });
     return { pending: true };
+  }
+
+  /**
+   * The other half of the approval flow. The applicant is told to wait; this
+   * tells the people they are waiting for. Every super admin with an address
+   * gets it — one platform, a handful of admins — and a failure here is logged
+   * by MailService and never reaches the signup response.
+   */
+  private async tellAdminsTeacherApplied(input: {
+    fullName: string;
+    email: string;
+    phone: string;
+    subjectIds: string[];
+  }) {
+    try {
+      const [recipients, subjects] = await Promise.all([
+        this.adminInboxes(),
+        this.prisma.subject.findMany({
+          where: { id: { in: input.subjectIds } },
+          select: { nameAr: true },
+        }),
+      ]);
+      const content = teacherAppliedAdminEmail({
+        name: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        subjects: subjects.map((s) => s.nameAr),
+        reviewUrl: this.mail.webUrl('/admin/teachers'),
+      });
+      for (const to of recipients) this.mail.sendInBackground({ to, ...content });
+    } catch (e) {
+      this.logger.warn(`Could not notify admins of a teacher application: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Where admin mail goes. `ADMIN_NOTIFY_EMAILS` (comma-separated) wins when
+   * set, because the admin *account* is `admin@darsly.app` — a login, not a
+   * mailbox anyone reads. Without it, every super admin's address is used.
+   */
+  private async adminInboxes(): Promise<string[]> {
+    const configured = (process.env.ADMIN_NOTIFY_EMAILS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (configured.length) return configured;
+    const admins = await this.prisma.user.findMany({
+      where: { role: Role.SUPER_ADMIN, email: { not: null } },
+      select: { email: true },
+    });
+    return admins.map((a) => a.email).filter((e): e is string => !!e);
   }
 
   // ── Login ──────────────────────────────────────────────────────────────────

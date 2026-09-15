@@ -81,7 +81,13 @@ export default function Layout({ children }: { children: ReactNode }) {
   const showSidebar = desktopNav !== 'hidden';
   // A rail shows labels only on hover, whatever the theme said about labels.
   const sidebarLabels = desktopNav === 'rail' ? false : navCfg.labels;
-  const title = typeof document !== 'undefined' ? document.title.replace(/\s*[|—-]\s*.*$/, '') : undefined;
+  // The page's name, for a header tall enough to carry one: the label of the
+  // navigation item that matches the route. `document.title` is the brand and
+  // never the page, so reading it put the wordmark in the header twice.
+  const current =
+    nav.find((n) => (n.end ? location.pathname === n.to : location.pathname === n.to || location.pathname.startsWith(n.to + '/'))) ??
+    (location.pathname.startsWith('/profile') ? { labelKey: 'nav.profile' } : undefined);
+  const title = current ? t(current.labelKey) : undefined;
 
   const sidebar = (labels: boolean) => (
     <Sidebar nav={nav} labels={labels} roleLabel={roleLabel} onNavigate={() => setDrawer(false)} />

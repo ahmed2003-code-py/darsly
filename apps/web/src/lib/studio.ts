@@ -177,6 +177,9 @@ const FONTS: Record<string, string> = {
   display: 'Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700',
   tech: 'Space+Grotesk:wght@400;500;600;700&family=Chakra+Petch:wght@500;600;700',
   round: 'Baloo+Bhaijaan+2:wght@400;500;600;700;800',
+  // A magazine's voice: a high-contrast Latin serif and a Naskh that carries
+  // the same weight in Arabic, over a plain body face.
+  serif: 'Playfair+Display:wght@500;600;700;800&family=Amiri:wght@400;700',
 };
 const RADII = ['default', 'sharp', 'soft', 'round'];
 const loadedFonts = new Set<string>();
@@ -204,7 +207,7 @@ const MOTIONS = ['subtle', 'still', 'expressive'];
 const ICON_WEIGHTS = [300, 400, 500, 600];
 const CARD_LAYOUTS = ['grid', 'imageFirst', 'editorial'];
 const TYPE_SCALES = ['default', 'compact', 'editorial'];
-const CARDS = ['minimal', 'soft', 'elevated', 'paper', 'glass'];
+const CARDS = ['minimal', 'soft', 'elevated', 'paper', 'glass', 'outlined'];
 const NAVS = ['classic', 'compact', 'floating'];
 const PATTERNS = [
   'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays', 'stadium',

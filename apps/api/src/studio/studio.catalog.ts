@@ -57,6 +57,11 @@ const theme = (
     button?: string;
     card?: string;
     nav?: string;
+    layout?: Prisma.InputJsonObject;
+    motion?: string;
+    icons?: { fill?: number; weight?: number };
+    cardLayout?: string;
+    typeScale?: string;
   } = {},
 ): CatalogSeed => ({
   key,
@@ -86,6 +91,12 @@ const theme = (
     ...(extra.button ? { button: extra.button } : {}),
     ...(extra.card ? { card: extra.card } : {}),
     ...(extra.nav ? { nav: extra.nav } : {}),
+    // The shape of the app. Absent, the shell stays as it is today.
+    ...(extra.layout ? { layout: extra.layout } : {}),
+    ...(extra.motion ? { motion: extra.motion } : {}),
+    ...(extra.icons ? { icons: extra.icons } : {}),
+    ...(extra.cardLayout ? { cardLayout: extra.cardLayout } : {}),
+    ...(extra.typeScale ? { typeScale: extra.typeScale } : {}),
   },
   costCoins,
   sortOrder,
@@ -200,7 +211,7 @@ export const CATALOG: CatalogSeed[] = [
     '#dc2626',
     '#ef4444',
     2500,
-    17,
+    22,
     {
       requiredLevel: 8,
       secondary: '#ee9800',
@@ -325,6 +336,170 @@ export const CATALOG: CatalogSeed[] = [
       card: 'glass',
       button: 'pill',
       nav: 'floating',
+    },
+  ),
+
+  // ── The experiences ──────────────────────────────────────────────────────
+  //
+  // Everything above this line repaints the app. Everything below reshapes
+  // it: a different navigation, a different header, a different density, a
+  // different card. The test for each one is not "is it a nice colour" but
+  // "would a student switching to it say the platform changed". Five, and
+  // each deliberately unlike the others in structure before it is unlike them
+  // in colour.
+
+  /**
+   * Midnight Pro — the expensive dark one.
+   *
+   * A rail instead of a sidebar, a glass header, a wide spacious page, and
+   * outlined icons: the shape of a professional tool, not a school app. The
+   * palette is restrained on purpose — one blue that acts, one teal that
+   * marks, and a warm gold for what is earned — and the motion is the app's
+   * own subtle level. "Premium" here is what is taken away.
+   */
+  theme(
+    'theme-midnight-pro', 'LEGENDARY', 'منتصف الليل برو', 'Midnight Pro',
+    'ليل غامق أنيق، شريط أيقونات بدل القائمة، هيدر زجاجي وصفحة واسعة — شكل أداة احترافية.',
+    'Deep, restrained dark; an icon rail instead of a sidebar, a glass header and a wide page — the shape of a professional tool.',
+    '#2563eb', '#60a5fa', 1800, 17,
+    {
+      requiredLevel: 6,
+      secondary: '#0f766e', secondaryDark: '#2dd4bf',
+      gold: '#b45309', goldDark: '#fbbf24',
+      wash: '#eef2f7', washDark: '#0b0f17',
+      surfaces: { background: '#0b0f17', surface: '#111827', ink: '#e5e7eb', line: '#6b7280' },
+      surfacesLight: { background: '#eef2f7', surface: '#ffffff', ink: '#0f172a', line: '#94a3b8' },
+      pattern: 'none', glow: true, font: 'default', radius: 'soft', card: 'elevated', button: 'soft',
+      layout: {
+        nav: { desktop: 'rail', tablet: 'rail', mobile: 'bottom', labels: false, active: 'glow' },
+        header: { variant: 'glass', sticky: true },
+        footer: 'minimal', density: 'spacious', width: 'wide',
+      },
+      motion: 'subtle', icons: { fill: 0, weight: 400 }, cardLayout: 'grid', typeScale: 'default',
+    },
+  ),
+
+  /**
+   * Aurora — the young one.
+   *
+   * A floating sidebar and a floating header, both detached from the edges;
+   * pill buttons and a pill active state; a poster-wall course grid with the
+   * title on the picture; and a floating bottom bar on desktop too. The two
+   * orbs behind the page are the aurora. Expressive motion — the one theme
+   * that moves more than the app does, and only a little more.
+   */
+  theme(
+    'theme-aurora', 'LEGENDARY', 'شفق', 'Aurora',
+    'قائمة عائمة وهيدر عائم، بنفسجي وسماوي بيتحركوا في الخلفية، كروت بوستر وحركة أكتر.',
+    'A floating sidebar and header, violet and cyan drifting behind the page, poster cards and a little more motion.',
+    '#7c3aed', '#a78bfa', 1800, 18,
+    {
+      requiredLevel: 6,
+      secondary: '#0891b2', secondaryDark: '#22d3ee',
+      gold: '#b45309', goldDark: '#fbbf24',
+      wash: '#f6f3ff', washDark: '#0f0a1f',
+      surfaces: { background: '#0f0a1f', surface: '#1a1233', ink: '#ece8ff', line: '#7d72a8' },
+      surfacesLight: { background: '#f6f3ff', surface: '#ffffff', ink: '#1e1b4b', line: '#a99bd6' },
+      pattern: 'glow', glow: true, font: 'round', radius: 'round', card: 'soft', button: 'pill',
+      layout: {
+        nav: { desktop: 'floating', tablet: 'drawer', mobile: 'bottom', labels: true, active: 'pill' },
+        header: { variant: 'floating', sticky: true },
+        footer: 'bottomBar', density: 'comfortable', width: 'standard',
+      },
+      motion: 'expressive', icons: { fill: 1, weight: 500 }, cardLayout: 'imageFirst', typeScale: 'default',
+    },
+  ),
+
+  /**
+   * Editorial — the magazine.
+   *
+   * A serif for headings, a tall header that carries the page's title, a
+   * sidebar with no chrome at all, an 880px column with generous air, paper
+   * cards with sharp corners, and courses laid out as a picture beside its
+   * text. Nothing moves. The one theme where the page is allowed to look
+   * like something printed.
+   */
+  theme(
+    'theme-editorial', 'LEGENDARY', 'افتتاحية', 'Editorial',
+    'خط سيريف للعناوين، هيدر عالي فيه اسم الصفحة، عمود ضيّق وهوا كتير، وكروت زي المجلات — ومفيش حركة.',
+    'A serif for headings, a tall header carrying the page title, a narrow column with room to breathe, magazine cards — and nothing moves.',
+    '#9f1239', '#fb7185', 1800, 19,
+    {
+      requiredLevel: 6,
+      secondary: '#1e3a5f', secondaryDark: '#93c5fd',
+      gold: '#92400e', goldDark: '#fcd34d',
+      wash: '#faf7f2', washDark: '#1c1917',
+      surfaces: { background: '#1c1917', surface: '#292524', ink: '#f5f5f4', line: '#78716c' },
+      surfacesLight: { background: '#faf7f2', surface: '#ffffff', ink: '#1c1917', line: '#a8a29e' },
+      pattern: 'none', glow: false, font: 'serif', radius: 'sharp', card: 'paper', button: 'sharp',
+      layout: {
+        nav: { desktop: 'minimal', tablet: 'drawer', mobile: 'drawer', labels: true, active: 'underline' },
+        header: { variant: 'editorial', sticky: false },
+        footer: 'minimal', density: 'spacious', width: 'narrow',
+      },
+      motion: 'still', icons: { fill: 0, weight: 300 }, cardLayout: 'editorial', typeScale: 'editorial',
+    },
+  ),
+
+  /**
+   * Cyber Academy — the terminal.
+   *
+   * A rail, a 48px header, a stats bar at the foot, a compact wide page, a
+   * fine grid behind everything, outlined cards, a technical typeface, and
+   * thin outlined icons. Cyan acts and magenta marks — one neon each, and
+   * both held to the same contrast floors as everything else, which is what
+   * keeps "neon" from meaning "unreadable".
+   */
+  theme(
+    'theme-cyber', 'LEGENDARY', 'أكاديمية سايبر', 'Cyber Academy',
+    'شريط أيقونات وهيدر قصير وشريط إحصائيات تحت، شبكة رفيعة في الخلفية، كروت مفرّغة وخط تقني.',
+    'A rail, a short header and a stats bar at the foot; a fine grid behind everything, outlined cards and a technical typeface.',
+    '#0e7490', '#22d3ee', 1800, 20,
+    {
+      requiredLevel: 6,
+      secondary: '#a21caf', secondaryDark: '#e879f9',
+      gold: '#a16207', goldDark: '#facc15',
+      wash: '#eef2f5', washDark: '#07090f',
+      surfaces: { background: '#07090f', surface: '#0d1117', ink: '#d7e0ea', line: '#3f4c5c' },
+      surfacesLight: { background: '#eef2f5', surface: '#ffffff', ink: '#0b1220', line: '#8ea0b3' },
+      pattern: 'grid', glow: true, font: 'tech', radius: 'sharp', card: 'outlined', button: 'sharp',
+      layout: {
+        nav: { desktop: 'rail', tablet: 'rail', mobile: 'bottom', labels: false, active: 'glow' },
+        header: { variant: 'compact', sticky: true },
+        footer: 'stats', density: 'compact', width: 'wide',
+      },
+      motion: 'subtle', icons: { fill: 0, weight: 300 }, cardLayout: 'grid', typeScale: 'compact',
+    },
+  ),
+
+  /**
+   * Luxury Minimal — the quiet one.
+   *
+   * No sidebar. The five primary destinations sit in a centered header, the
+   * rest behind the menu. A narrow column, spacious, black on near-white with
+   * a warm grey for the second colour, large restrained headings, minimal
+   * cards with a hairline and no shadow, thin icons, and nothing moves. The
+   * whole theme is what is not there.
+   */
+  theme(
+    'theme-luxury', 'LEGENDARY', 'فخامة هادية', 'Luxury Minimal',
+    'من غير قائمة جانبية خالص — التنقّل في الهيدر، عمود ضيّق، أسود على أبيض، وهدوء تام.',
+    'No sidebar at all — the navigation lives in the header; a narrow column, black on white, and complete calm.',
+    '#171717', '#fafafa', 1800, 21,
+    {
+      requiredLevel: 6,
+      secondary: '#78716c', secondaryDark: '#a8a29e',
+      gold: '#a16207', goldDark: '#fcd34d',
+      wash: '#fbfbfa', washDark: '#0a0a0a',
+      surfaces: { background: '#0a0a0a', surface: '#141414', ink: '#f5f5f5', line: '#525252' },
+      surfacesLight: { background: '#fbfbfa', surface: '#ffffff', ink: '#171717', line: '#d4d4d4' },
+      pattern: 'none', glow: false, font: 'default', radius: 'soft', card: 'minimal', button: 'rounded',
+      layout: {
+        nav: { desktop: 'hidden', tablet: 'drawer', mobile: 'drawer', labels: true, active: 'pill' },
+        header: { variant: 'centered', sticky: true },
+        footer: 'none', density: 'spacious', width: 'narrow',
+      },
+      motion: 'still', icons: { fill: 0, weight: 300 }, cardLayout: 'grid', typeScale: 'editorial',
     },
   ),
 

@@ -564,6 +564,17 @@
   backdrop-filter: blur(10px);
   border-color: rgb(var(--c-line) / 0.16);
 }
+/* Outlined: the page shows through, and the edge is the only chrome. A
+   technical look, and the lightest card there is to draw. */
+:root[data-s-card='outlined'] .studio-card,
+:root[data-s-card='outlined'] .card {
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid rgb(var(--s-accent, var(--c-primary)) / 0.28);
+}
+:root[data-s-card='outlined'] .card-hover:hover {
+  border-color: rgb(var(--s-accent, var(--c-primary)) / 0.6);
+}
 
 /* ── Navigation ──────────────────────────────────────────────────────────── */
 :root[data-s-nav='compact'] .studio-nav-item { padding-block: 0.4rem; }
@@ -809,6 +820,10 @@ body {
 :root[data-s-font='round'] {
   --font-heading: 'Baloo Bhaijaan 2', 'Rubik', 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --font-body: 'Baloo Bhaijaan 2', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+}
+:root[data-s-font='serif'] {
+  --font-heading: 'Playfair Display', 'Amiri', 'Times New Roman', serif;
+  --font-body: 'IBM Plex Sans Arabic', system-ui, sans-serif;
 }
 :root[data-s-font] .font-heading,
 :root[data-s-font] h1,

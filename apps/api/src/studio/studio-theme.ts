@@ -100,7 +100,7 @@ export interface StudioThemes {
 
 /** What a slot may hold. Anything else is refused before it reaches a token. */
 export const BUTTON_STYLES = ['classic', 'rounded', 'pill', 'sharp', 'soft', 'elevated'] as const;
-export const CARD_STYLES = ['minimal', 'soft', 'elevated', 'paper', 'glass'] as const;
+export const CARD_STYLES = ['minimal', 'soft', 'elevated', 'paper', 'glass', 'outlined'] as const;
 export const NAV_STYLES = ['classic', 'compact', 'floating'] as const;
 export const FRAME_STYLES = [
   'none', 'bronze', 'silver', 'gold', 'diamond', 'fire', 'lightning', 'scholar', 'legendary',
@@ -156,7 +156,7 @@ export const PATTERNS = [
  * each one is and the loader only ever fetches from the one list it knows. A
  * theme cannot point the browser at a font of its own.
  */
-export const FONTS = ['default', 'display', 'tech', 'round'] as const;
+export const FONTS = ['default', 'display', 'tech', 'round', 'serif'] as const;
 
 /** How sharp the corners are, as a name. */
 export const RADII = ['default', 'sharp', 'soft', 'round'] as const;

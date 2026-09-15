@@ -253,6 +253,114 @@ describe('the configured domain is checked, not assumed', () => {
   });
 });
 
+describe('the transcription provider is wired by the server, not by hand', () => {
+  // Real service, faked network: this is about what it tells Daily and what it
+  // keeps to itself.
+  const svc = () => new (require('./daily.service').DailyService)();
+  const KEY = 'dg_new_key_0123456789';
+  let calls: { url: string; method: string; body?: any }[];
+  let logged: string[];
+
+  const daily = (config: Record<string, unknown>, roomOk = true) => {
+    calls = [];
+    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
+      const body = init.body ? JSON.parse(init.body as string) : undefined;
+      calls.push({ url, method: init.method ?? 'GET', body });
+      if (url.endsWith('/v1/')) {
+        if (init.method === 'POST') config = { ...config, ...body.properties };
+        return { ok: true, status: 200, json: async () => ({ config }), text: async () => '' } as any;
+      }
+      if (url.endsWith('/rooms')) {
+        return roomOk
+          ? { ok: true, status: 200, json: async () => ({ name: 'r', url: 'https://x.daily.co/r' }), text: async () => '' } as any
+          : { ok: false, status: 500, json: async () => ({}), text: async () => 'boom' } as any;
+      }
+      throw new Error(`unexpected ${url}`);
+    }) as any;
+  };
+
+  beforeEach(() => {
+    process.env.DAILY_API_KEY = 'daily_test';
+    logged = [];
+    const { Logger } = require('@nestjs/common');
+    for (const m of ['log', 'warn', 'error'] as const) {
+      jest.spyOn(Logger.prototype, m).mockImplementation(function (msg: any) { logged.push(String(msg)); });
+    }
+  });
+  afterEach(() => {
+    delete process.env.DEEPGRAM_API_KEY;
+    delete process.env.DAILY_API_KEY;
+    jest.restoreAllMocks();
+  });
+
+  it('does nothing when no provider key was given', async () => {
+    daily({ enable_transcription: null });
+    expect(await svc().ensureTranscriptionProvider()).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('points the domain at our key when it is not already', async () => {
+    // The state after a rotation: Daily still holds the dead key.
+    process.env.DEEPGRAM_API_KEY = KEY;
+    daily({ enable_transcription: 'deepgram:old_dead_key' });
+    expect(await svc().ensureTranscriptionProvider()).toBe(true);
+    const post = calls.find((c) => c.method === 'POST');
+    expect(post?.body).toEqual({ properties: { enable_transcription: `deepgram:${KEY}` } });
+  });
+
+  it('leaves a domain that is already wired alone', async () => {
+    process.env.DEEPGRAM_API_KEY = KEY;
+    daily({ enable_transcription: `deepgram:${KEY}` });
+    expect(await svc().ensureTranscriptionProvider()).toBe(true);
+    expect(calls.map((c) => c.method)).toEqual(['GET']);
+  });
+
+  it('never writes the key to the log', async () => {
+    process.env.DEEPGRAM_API_KEY = KEY;
+    daily({ enable_transcription: null });
+    await svc().ensureTranscriptionProvider();
+    expect(logged.length).toBeGreaterThan(0);
+    expect(logged.join('\n')).not.toContain(KEY);
+  });
+
+  it('asks the domain once per process, and again after a failure', async () => {
+    process.env.DEEPGRAM_API_KEY = KEY;
+    daily({ enable_transcription: `deepgram:${KEY}` });
+    const s = svc();
+    await s.ensureTranscriptionProvider();
+    await s.ensureTranscriptionProvider();
+    expect(calls).toHaveLength(1);
+
+    // Now the provider is down: the answer is "unknown", and it is not
+    // remembered — the next class tries again.
+    global.fetch = jest.fn(async () => { throw new Error('down'); }) as any;
+    const t = svc();
+    expect(await t.ensureTranscriptionProvider()).toBeNull();
+    expect(await t.ensureTranscriptionProvider()).toBeNull();
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(2);
+  });
+
+  it('still opens the room when the provider cannot be wired', async () => {
+    // A class without a transcript is a class; a class without a room is not.
+    process.env.DEEPGRAM_API_KEY = KEY;
+    daily({ enable_transcription: null });
+    const s = svc();
+    const realFetch = global.fetch;
+    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/v1/')) throw new Error('down');
+      return (realFetch as any)(url, init);
+    }) as any;
+    const room = await s.createRoom('r', Date.now() + 60_000);
+    expect(room.url).toBe('https://x.daily.co/r');
+  });
+
+  it('counts a wired provider as transcription being available', async () => {
+    process.env.DEEPGRAM_API_KEY = KEY;
+    daily({ enable_transcription: null });
+    expect(await svc().transcriptionAvailable()).toBe(true);
+  });
+});
+
 describe('a student enters the classroom', () => {
   const live = (over: Partial<Session> = {}): Session => ({
     id: 'ls1',

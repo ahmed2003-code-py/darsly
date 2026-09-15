@@ -342,9 +342,11 @@ payouts, live, coupons, quizzes... إلخ.
   بيبدأ باللغة اللي جاية من السيرفر (`lessonLanguage` من `TeacherProfile.language`،
   عربي افتراضياً) — من غير اللغة Deepgram بيفترض إنجليزي وبيطلّع نص فاضي لحصة
   عربية بالكامل.
-  > **لازم يتفعّل على حساب Daily، ومش مفعّل على الحساب الحالي.** الغرفة بتتعمل
-  > بـ`enable_transcription_storage` وبتنجح، وإنما `startTranscription` بيفشل
-  > جوّه الحصة والملف بيتخزّن فاضي (`WEBVTT` وبس). شوف `DEPLOYMENT.md`.
+  > **المزوّد بيتوصّل بدومين Daily من السيرفر** (`DailyService.ensureTranscriptionProvider`):
+  > إعداد على مستوى الدومين، بيتقرا ويتقارن بـ`DEEPGRAM_API_KEY` ويتحدّث لو مختلف —
+  > عند أول حصة، ومرّة واحدة لكل بروسيس. من غير المتغيّر الغرفة بتتعمل عادي
+  > (`enable_transcription_storage` بينجح)، وإنما `startTranscription` بيفشل جوّه
+  > الحصة والملف بيتخزّن فاضي (`WEBVTT` وبس). شوف `DEPLOYMENT.md`.
 - **السبب بيتقال صح، مش بيتخمّن.** نص فاضي ليه معنيين مختلفين تماماً — «محدش
   اتكلم» و«إحنا أصلاً مقدرناش نسمع» — والتاني مش ذنب المدرّس. فالمتصفّح بيبلّغ
   الفشل اللي شافه جوّه الحصة (`POST teacher/live/:id/transcription-failed`)،

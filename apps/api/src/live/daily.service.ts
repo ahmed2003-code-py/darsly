@@ -1,4 +1,4 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 
 /**
  * The video provider, and the only place its key exists.
@@ -54,11 +54,35 @@ export function plainTextFromVtt(raw: string): string | null {
 }
 
 @Injectable()
-export class DailyService {
+export class DailyService implements OnModuleInit {
   private readonly logger = new Logger(DailyService.name);
+
+  /**
+   * Wire the provider at boot, not only at the first class.
+   *
+   * So that the deploy log answers "did the variable take?" the moment the
+   * container is up, rather than at the next lesson — which is when the
+   * operator has stopped watching. Fire-and-forget: a slow provider must not
+   * hold up the application, and the first class re-asks anyway.
+   */
+  onModuleInit() {
+    if (this.deepgramKey) void this.ensureTranscriptionProvider();
+  }
 
   private get apiKey(): string | undefined {
     return process.env.DAILY_API_KEY?.trim() || undefined;
+  }
+
+  /**
+   * The transcription provider's key, if the operator has supplied one.
+   *
+   * Read here and handed to Daily by this service, so that it travels
+   * Railway → this process → Daily and nowhere else. The alternative — an
+   * operator pasting it into a curl command, or into a chat with whoever is
+   * helping them — is how the previous one leaked.
+   */
+  private get deepgramKey(): string | undefined {
+    return process.env.DEEPGRAM_API_KEY?.trim() || undefined;
   }
 
   /** Whether the platform is configured to host its own classrooms at all. */
@@ -100,7 +124,10 @@ export class DailyService {
       // Logged in full for us; never returned, because the body is Daily's
       // account-level detail and not something a student should read.
       const body = await res.text().catch(() => '');
-      this.logger.error(`Daily ${path} failed (${res.status}): ${body.slice(0, 500)}`);
+      // An error body may quote the property that was rejected — and one of
+      // our properties is a provider key.
+      const safe = body.replace(/deepgram:[A-Za-z0-9_-]+/g, 'deepgram:[redacted]');
+      this.logger.error(`Daily ${path} failed (${res.status}): ${safe.slice(0, 500)}`);
       throw new ServiceUnavailableException({
         message: 'تعذّر تجهيز غرفة البث. حاول بعد لحظات.',
         code: 'LIVE_PROVIDER_ERROR',
@@ -117,6 +144,10 @@ export class DailyService {
    * only ever mints for someone the caller has already authorised.
    */
   async createRoom(name: string, endsAtMs: number): Promise<DailyRoom> {
+    // The class is about to start: make sure the account can listen to it.
+    // Never fatal — a room without transcription is still a room, and the
+    // summary later says plainly why it has nothing to work from.
+    await this.ensureTranscriptionProvider();
     const exp = Math.floor(endsAtMs / 1000) + ROOM_GRACE_MIN * 60;
     const room = await this.call<{ name: string; url: string }>('/rooms', {
       method: 'POST',
@@ -252,6 +283,59 @@ export class DailyService {
   }
 
   /**
+   * Point the Daily domain at the transcription provider we were given.
+   *
+   * Transcription is not a room setting; it is enabled once on the domain, by
+   * telling Daily which Deepgram key to use. Left to a human that is a curl
+   * command run once and forgotten — until the key is rotated, when the
+   * domain quietly keeps the dead one and every class reports that
+   * transcription "failed to start". Done here instead: the domain is read,
+   * compared with the key in the environment, and updated only when they
+   * differ. Rotation becomes "change the variable and redeploy".
+   *
+   * Memoised per process so a busy afternoon does not read the domain config
+   * once per class; the memo is dropped on failure so the next class retries.
+   * Resolves to true when the domain is wired to our key, null when there is
+   * no key to wire or the provider could not be reached. The key is never
+   * logged, and neither is the domain config — Daily echoes the key back in
+   * it, in plain text.
+   */
+  ensureTranscriptionProvider(): Promise<boolean | null> {
+    const key = this.deepgramKey;
+    if (!key) return Promise.resolve(null);
+    if (!this.providerWiring) {
+      this.providerWiring = this.wireTranscriptionProvider(key).catch((e) => {
+        this.logger.error(`Could not wire the transcription provider to Daily: ${(e as Error).message}`);
+        this.providerWiring = undefined;
+        return null;
+      });
+    }
+    return this.providerWiring;
+  }
+
+  private providerWiring?: Promise<boolean | null>;
+
+  private async wireTranscriptionProvider(key: string): Promise<boolean> {
+    const wanted = `deepgram:${key}`;
+    const me = await this.call<{ config?: { enable_transcription?: string | null } }>('/', {
+      method: 'GET',
+    });
+    if (me.config?.enable_transcription === wanted) return true;
+    const after = await this.call<{ config?: { enable_transcription?: string | null } }>('/', {
+      method: 'POST',
+      body: JSON.stringify({ properties: { enable_transcription: wanted } }),
+    });
+    if (after.config?.enable_transcription !== wanted) {
+      throw new Error('Daily accepted the update but the domain does not show it');
+    }
+    // Said once, without the key: the operator reading the deploy log learns
+    // the variable was picked up, and nothing else.
+    this.logger.log('Transcription provider wired to the Daily domain from DEEPGRAM_API_KEY');
+    this.transcriptionCache = { value: true, until: Date.now() + DOMAIN_CACHE_MIN * 60_000 };
+    return true;
+  }
+
+  /**
    * Whether this Daily account can transcribe at all.
    *
    * Worth asking, because the alternative is guessing. A room created with
@@ -266,6 +350,9 @@ export class DailyService {
    * claim in either direction.
    */
   async transcriptionAvailable(): Promise<boolean | null> {
+    // If we were given a provider, wiring it is the authoritative answer —
+    // and fixes the domain on the way, rather than merely reporting on it.
+    if (this.deepgramKey && (await this.ensureTranscriptionProvider()) === true) return true;
     const now = Date.now();
     if (this.transcriptionCache && this.transcriptionCache.until > now) {
       return this.transcriptionCache.value;

@@ -993,7 +993,7 @@ export default function CourseBuilderPage() {
   );
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>

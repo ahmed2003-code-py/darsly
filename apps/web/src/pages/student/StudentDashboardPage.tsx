@@ -51,7 +51,7 @@ export default function StudentDashboardPage() {
   const resume = watching?.[0];
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <Reveal className="mb-6 border-s-2 border-primary ps-5">
         <h1 className="display text-on-surface">
           {t('dashboardStudent.greeting', { name: user?.fullName?.split(' ')[0] ?? '' })}

@@ -49,7 +49,7 @@ export default function TeacherWalletPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <div className="page">
         <Skeleton className="mb-6 h-40 w-full rounded-xl" />
         <div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-64 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>
       </div>
@@ -59,7 +59,7 @@ export default function TeacherWalletPage() {
   const minEgp = (wallet.payoutMinimumCents / 100).toFixed(0);
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader
         title={t('wallet.title')}
         subtitle={t('wallet.subtitle')}

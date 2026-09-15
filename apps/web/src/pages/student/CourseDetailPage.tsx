@@ -55,7 +55,7 @@ export default function CourseDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <div className="page">
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="min-w-0 flex-1 space-y-4">
             <Skeleton className="h-40 w-full rounded-xl" />
@@ -121,7 +121,7 @@ export default function CourseDetailPage() {
       (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess));
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <div className="flex flex-col gap-8 lg:flex-row">
         {/* Main column */}
         <div className="min-w-0 flex-1">

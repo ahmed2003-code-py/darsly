@@ -34,12 +34,12 @@ export default function WalletPage() {
     queryFn: async () => (await api.get('/wallet')).data,
   });
 
-  if (isLoading) return <div className="mx-auto max-w-container px-6 py-8 sm:px-8"><Spinner /></div>;
+  if (isLoading) return <div className="page"><Spinner /></div>;
 
   const pending = data?.pendingTopups?.[0];
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader
         eyebrow={t('nav.wallet')}
         title={t('walletStudent.title')}

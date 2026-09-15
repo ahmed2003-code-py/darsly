@@ -162,7 +162,7 @@ export default function TeacherCoursesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader
         title={t('teacher.courses.title')}
         subtitle={t('teacher.courses.subtitle')}

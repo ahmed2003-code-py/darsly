@@ -33,7 +33,7 @@ export default function AdminTeachersPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('admin.teachersTitle')} subtitle={t('admin.teachersSub')} />
 
       <div className="mb-6 flex gap-2">

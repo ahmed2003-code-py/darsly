@@ -59,7 +59,7 @@ export default function LiveSessionsPage() {
   const [recordFor, setRecordFor] = useState<string | null>(null);
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('live.title')} subtitle={t('live.subtitle')} />
       {isLoading ? (
         <CardGridSkeleton count={3} />

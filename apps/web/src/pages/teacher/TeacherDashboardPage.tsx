@@ -156,7 +156,7 @@ export default function TeacherDashboardPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader
         title={t('teacher.overviewTitle')}
         subtitle={`${t('dashboard.welcome', { name: user?.fullName })} — ${t('teacher.overviewSubtitle')}`}

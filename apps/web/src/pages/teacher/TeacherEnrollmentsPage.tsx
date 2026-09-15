@@ -240,7 +240,7 @@ export default function TeacherEnrollmentsPage() {
     setOpen(allExpanded ? {} : Object.fromEntries(groups.map((g) => [g.studentId, true])));
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('teacher.students.title')} subtitle={t('teacher.students.subtitle')} />
 
       {/* One toolbar: filters on top, search and sort beneath. The pending tab

@@ -190,6 +190,12 @@ export default {
       maxWidth: {
         container: '1200px',
       },
+      spacing: {
+        // The theme's own rhythm: a section gap and a card gap that follow
+        // `data-s-density`. `gap-card`, `space-y-section`, `mt-section`.
+        section: 'var(--s-section-gap, 2rem)',
+        card: 'var(--s-card-gap, 1rem)',
+      },
       transitionTimingFunction: {
         // easeOutExpo-ish — the single motion curve used everywhere.
         premium: 'cubic-bezier(0.16, 1, 0.3, 1)',

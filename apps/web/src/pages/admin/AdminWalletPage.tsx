@@ -40,7 +40,7 @@ export default function AdminWalletPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('walletAdmin.title')} subtitle={t('walletAdmin.subtitle')} />
       <ErrorNote error={approve.error || reject.error} />
 

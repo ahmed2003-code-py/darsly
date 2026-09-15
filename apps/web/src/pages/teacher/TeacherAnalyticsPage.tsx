@@ -40,7 +40,7 @@ export default function TeacherAnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <div className="page">
         <PageHeader title={t('analytics.title')} subtitle={t('analytics.subtitle')} />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
       </div>
@@ -55,7 +55,7 @@ export default function TeacherAnalyticsPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('analytics.title')} subtitle={t('analytics.subtitle')} />
 
       {/* KPIs */}

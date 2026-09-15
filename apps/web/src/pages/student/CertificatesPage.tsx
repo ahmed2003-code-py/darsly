@@ -13,7 +13,7 @@ export default function CertificatesPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('cert.myTitle')} subtitle={t('cert.mySubtitle')} />
       {isLoading ? (
         <CardGridSkeleton count={3} />

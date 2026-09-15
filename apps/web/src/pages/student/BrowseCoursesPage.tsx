@@ -1,10 +1,10 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { egp } from '../../lib/format';
-import { CardGridSkeleton, EmptyState, Stars } from '../../components/ui';
+import CourseCard from '../../components/CourseCard';
+import { CardGridSkeleton, EmptyState } from '../../components/ui';
 import { FilterBar, FilterSheet } from '../../components/FilterBar';
 import { Stagger, StaggerItem } from '../../components/motion';
 import Pager from '../../components/Pager';
@@ -140,7 +140,7 @@ export default function BrowseCoursesPage() {
   ].filter(Boolean) as { key: string; label: string }[];
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <header className="mb-8">
         <h1 className="display">{t('browse.title')}</h1>
         <p className="mt-2 max-w-prose text-on-surface-variant">{t('browse.subtitle')}</p>
@@ -184,7 +184,7 @@ export default function BrowseCoursesPage() {
               hint={active || get('q') ? t('browse.emptyFiltered') : t('browse.emptyAll')}
             />
           ) : (
-            <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <Stagger className="course-grid grid gap-card sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {data.items.map((c) => (
                 <StaggerItem key={c.id}>
                   <CourseCard course={c} ar={ar} t={t} name={name} />
@@ -200,97 +200,6 @@ export default function BrowseCoursesPage() {
   );
 }
 
-function CourseCard({
-  course: c,
-  ar,
-  t,
-  name,
-}: {
-  course: Course;
-  ar: boolean;
-  t: (k: string, o?: Record<string, unknown>) => string;
-  name: (x: { nameAr: string; nameEn: string } | null | undefined) => string;
-}) {
-  const hours = Math.floor(c.totalDurationSec / 3600);
-  const mins = Math.round((c.totalDurationSec % 3600) / 60);
-  return (
-    <Link
-      to={`/course/${c.id}`}
-      className="card card-hover flex h-full flex-col gap-3 p-0 overflow-hidden"
-    >
-      <div className="relative aspect-[16/10] w-full bg-surface-container">
-        {c.thumbnailUrl ? (
-          <img src={c.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <span className="grid h-full w-full place-items-center">
-            <span className="material-symbols-outlined text-4xl text-outline">menu_book</span>
-          </span>
-        )}
-        {c.freePreviewCount > 0 && (
-          <span className="absolute bottom-2 start-2 rounded-lg bg-surface-container-lowest/95 px-2 py-1 text-xs font-bold text-primary">
-            {t('browse.freePreview')}
-          </span>
-        )}
-      </div>
-
-      <div className="flex flex-1 flex-col gap-2 px-4 pb-4">
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-on-surface-variant">
-          {c.subject && <span className="rounded-md bg-primary-fixed px-2 py-0.5 font-semibold text-on-primary-fixed-variant">{name(c.subject)}</span>}
-          {(c.grades ?? []).map((g) => (
-            <span key={g.id} className="rounded-md bg-surface-container px-2 py-0.5">{name(g)}</span>
-          ))}
-        </div>
-
-        <h3 className="line-clamp-2 font-heading text-base font-bold leading-snug">{c.title}</h3>
-
-        <p className="flex items-center gap-1.5 text-sm text-on-surface-variant">
-          {c.teacher.fullName}
-          {c.teacher.verified && (
-            <span className="material-symbols-outlined text-[14px] text-primary">verified</span>
-          )}
-        </p>
-
-        {c.avgRating != null ? (
-          <span className="flex items-center gap-1.5 text-sm">
-            <Stars rating={c.avgRating} />
-            <span className="text-on-surface-variant">({c.reviewsCount})</span>
-          </span>
-        ) : (
-          <span className="text-sm text-outline">{t('browse.noReviews')}</span>
-        )}
-
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-[15px]">play_lesson</span>
-            {t('browse.lessons', { n: c.lessonsCount })}
-          </span>
-          {c.totalDurationSec > 0 && (
-            <span className="flex items-center gap-1">
-              <span className="material-symbols-outlined text-[15px]">schedule</span>
-              {hours ? `${hours}${ar ? 'س' : 'h'} ` : ''}{mins}{ar ? 'د' : 'm'}
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-[15px]">group</span>
-            {c.studentsCount}
-          </span>
-        </p>
-
-        <div className="mt-auto flex items-end justify-between gap-2 border-t border-outline-variant pt-3">
-          <span>
-            <span className="block text-[11px] text-on-surface-variant">
-              {c.pricingModel === 'MONTHLY_SUBSCRIPTION' ? t('browse.perMonth') : t('browse.price')}
-            </span>
-            <span className="font-heading text-lg font-bold">
-              {c.priceCents === 0 ? t('browse.free') : egp(c.priceCents)}
-            </span>
-          </span>
-          <span className="btn-secondary px-4 py-2 text-xs">{t('browse.view')}</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
 
 function SheetFilters({
   t, get, patch, grades, name,

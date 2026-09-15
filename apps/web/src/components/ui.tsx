@@ -149,7 +149,7 @@ export function Modal({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <m.div
-        className={`max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-outline-variant bg-surface-container-lowest p-6 shadow-modal ${wide ? 'max-w-3xl' : 'max-w-lg'}`}
+        className={`modal-panel max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-outline-variant bg-surface-container-lowest p-6 shadow-modal ${wide ? 'max-w-3xl' : 'max-w-lg'}`}
         initial={{ opacity: 0, y: 14, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}

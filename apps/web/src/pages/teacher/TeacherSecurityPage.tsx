@@ -29,7 +29,7 @@ export default function TeacherSecurityPage() {
   const critical = (events ?? []).filter((e: any) => e.severity === 'CRITICAL' && !e.resolvedAt);
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('security.title')} subtitle={t('security.subtitle')} />
 
       <div className="grid gap-6 lg:grid-cols-2">

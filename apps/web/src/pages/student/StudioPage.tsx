@@ -212,7 +212,7 @@ export default function StudioPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <div className="page">
         <PageHeader title={t('myStudio.title')} subtitle={t('myStudio.subtitle')} />
         <CardGridSkeleton count={6} />
       </div>
@@ -220,7 +220,7 @@ export default function StudioPage() {
   }
   if (error || !data) {
     return (
-      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <div className="page">
         <PageHeader title={t('myStudio.title')} subtitle={t('myStudio.subtitle')} />
         <ErrorNote error={error} />
       </div>
@@ -232,7 +232,7 @@ export default function StudioPage() {
   const shop = items.filter((i) => !i.owned);
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('myStudio.title')} subtitle={t('myStudio.subtitle')} />
 
       {previewing && (
@@ -701,7 +701,7 @@ function AcademyThemes({
     <div className="mb-5">
       <p className="mb-1 font-heading font-bold">{t('myStudio.teacherThemes')}</p>
       <p className="mb-3 text-sm text-on-surface-variant">{t('myStudio.teacherThemesHint')}</p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-card sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((row) => (
           <article
             key={row.academyId}
@@ -861,7 +861,7 @@ function ItemGrid({
   empty?: string;
 }) {
   const body = !items.length ? null : (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-card sm:grid-cols-2 lg:grid-cols-3">
       {items.map((item) => (
         <ItemCard
           key={item.key}

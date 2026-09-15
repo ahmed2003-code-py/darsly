@@ -22,7 +22,7 @@ export default function AdminGamificationPage() {
   const [tab, setTab] = useState<Tab>('analytics');
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('engagement.adminTitle')} subtitle={t('engagement.adminSubtitle')} />
 
       <div className="mb-6 -mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">

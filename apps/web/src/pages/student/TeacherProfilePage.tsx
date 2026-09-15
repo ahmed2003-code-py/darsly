@@ -20,7 +20,7 @@ export default function TeacherProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <div className="page">
         <Skeleton className="mb-10 h-64 w-full rounded-xl" />
         <Skeleton className="mb-4 h-8 w-48" />
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -34,7 +34,7 @@ export default function TeacherProfilePage() {
   if (!teacher) return <EmptyState icon="person_off" title={t('discovery.noResults')} />;
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       {/* Hero */}
       <section className="card mb-10 grid items-center gap-8 bg-surface-container-low p-8 lg:grid-cols-2">
         <div>

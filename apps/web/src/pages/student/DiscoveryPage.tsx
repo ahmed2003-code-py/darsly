@@ -136,7 +136,7 @@ export default function DiscoveryPage() {
   ].filter(Boolean) as { key: string; label: string }[];
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <header className="mb-8">
         <h1 className="display">{t('discovery.title')}</h1>
         <p className="mt-2 max-w-prose text-on-surface-variant">
@@ -210,7 +210,7 @@ export default function DiscoveryPage() {
           ) : !data?.items.length ? (
             <EmptyState icon="search_off" title={t('discovery.noResults')} hint={t('discovery.noResultsHint')} />
           ) : (
-            <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <Stagger className="grid gap-card sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {data.items.map((tc) => (
                 <StaggerItem key={tc.id} className="h-full">
                   <TeacherCard teacher={tc} t={t} name={name} />

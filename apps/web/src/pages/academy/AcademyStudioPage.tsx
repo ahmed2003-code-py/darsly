@@ -86,7 +86,7 @@ export default function AcademyStudioPage() {
 
   const ov = overview.data;
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       {/* One header band rather than a title, a subtitle and a thin status strip
           stacked on top of each other. The state of the page is the first thing
           a teacher needs and it belongs beside the name, not under it. */}

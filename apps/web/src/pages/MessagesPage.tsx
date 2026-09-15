@@ -174,7 +174,7 @@ export default function MessagesPage() {
   const grouped = useMemo(() => groupByDay(messages), [messages]);
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('messages.title')} subtitle={t('messages.subtitle')} />
 
       {/* Sized against the viewport so the composer is always on screen and the

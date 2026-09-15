@@ -74,7 +74,7 @@ export default function AdminDevicesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('adminDevices.title')} subtitle={t('adminDevices.subtitle')} />
       <ErrorNote error={mint.error || revoke.error} />
 

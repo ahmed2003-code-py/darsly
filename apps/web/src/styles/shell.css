@@ -39,6 +39,19 @@
   --s-card-gap: 1.5rem;
 }
 :root[data-s-width='narrow'] { --s-content-max: 880px; }
+
+/* The page wrapper. At the defaults this is exactly
+   `mx-auto max-w-container px-6 py-8 sm:px-8`, which is what 44 pages wrote
+   by hand; a theme that changes density or width now reaches all of them. */
+.page {
+  width: 100%;
+  margin-inline: auto;
+  max-width: var(--s-content-max);
+  padding: var(--s-page-y) var(--s-page-x);
+}
+@media (min-width: 640px) {
+  .page { padding-inline: var(--s-page-x-lg); }
+}
 :root[data-s-width='wide'] { --s-content-max: 1440px; }
 :root[data-s-width='full'] { --s-content-max: 100%; }
 
@@ -212,3 +225,76 @@
 @media (prefers-reduced-motion: reduce) {
   :root { --s-motion-scale: 0; --s-motion-dur: 0ms; }
 }
+
+/* ── Course card layouts ───────────────────────────────────────────────────
+   The card's children are flat (see `CourseCard.tsx`), so a layout is a grid
+   template and nothing else. `grid` is the base: a column, media on top. */
+
+/* Image-first: a taller picture with the title laid over its foot, the rest
+   tight beneath. Reads as a poster wall.
+
+   The title and the media share grid row 1 — that is the overlap. The body
+   becomes `display: contents` so its children are the card's grid items; each
+   then carries its own inline padding, since the body's is gone with it. */
+:root[data-s-card-layout='imageFirst'] .course-card {
+  display: grid;
+  grid-template-columns: 100%;
+  grid-template-rows: auto auto auto auto auto 1fr;
+  gap: 0.4rem;
+}
+:root[data-s-card-layout='imageFirst'] .course-body { display: contents; }
+:root[data-s-card-layout='imageFirst'] .course-media { grid-row: 1; grid-column: 1; aspect-ratio: 4 / 3; }
+:root[data-s-card-layout='imageFirst'] .course-media::after {
+  content: '';
+  position: absolute;
+  inset: 40% 0 0 0;
+  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.66));
+  pointer-events: none;
+}
+:root[data-s-card-layout='imageFirst'] .course-title {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  position: relative;
+  z-index: 1;
+  padding: 0 1rem 0.85rem;
+  color: #fff;
+  font-size: 1.05rem;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+}
+:root[data-s-card-layout='imageFirst'] .course-teacher { grid-row: 2; padding-inline: 1rem; }
+:root[data-s-card-layout='imageFirst'] .course-chips { grid-row: 3; padding-inline: 1rem; }
+:root[data-s-card-layout='imageFirst'] .course-rating { grid-row: 4; padding-inline: 1rem; }
+:root[data-s-card-layout='imageFirst'] .course-meta { grid-row: 5; padding-inline: 1rem; }
+:root[data-s-card-layout='imageFirst'] .course-price {
+  grid-row: 6;
+  align-self: end;
+  margin: 0 1rem 1rem;
+}
+
+/* Editorial: picture on the start side, text beside it, and the grid widens
+   to two columns so each card has the room a horizontal composition needs. */
+:root[data-s-card-layout='editorial'] .course-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+}
+:root[data-s-card-layout='editorial'] .course-card {
+  display: grid;
+  grid-template-columns: 38% 1fr;
+  gap: 0;
+}
+:root[data-s-card-layout='editorial'] .course-media { aspect-ratio: auto; height: 100%; min-height: 11rem; }
+:root[data-s-card-layout='editorial'] .course-body { padding: 1rem 1rem 1rem 0; }
+[dir='rtl']:root[data-s-card-layout='editorial'] .course-body,
+:root[data-s-card-layout='editorial'] [dir='rtl'] .course-body { padding: 1rem 0 1rem 1rem; }
+:root[data-s-card-layout='editorial'] .course-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
+:root[data-s-card-layout='editorial'] .course-meta { display: none; }
+
+/* ── Radius reaches the controls ───────────────────────────────────────────
+   `data-s-radius` shaped cards only; a round theme still had square inputs
+   and a square modal. Buttons keep their own `data-s-button` shape. */
+:root[data-s-radius='sharp'] .input,
+:root[data-s-radius='sharp'] .modal-panel { border-radius: 6px; }
+:root[data-s-radius='soft'] .input { border-radius: 14px; }
+:root[data-s-radius='soft'] .modal-panel { border-radius: 20px; }
+:root[data-s-radius='round'] .input { border-radius: 999px; }
+:root[data-s-radius='round'] .modal-panel { border-radius: 26px; }

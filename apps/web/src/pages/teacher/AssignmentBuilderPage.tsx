@@ -48,7 +48,7 @@ export default function AssignmentBuilderPage() {
   if (isLoading) return <div className="grid place-items-center py-20"><Spinner /></div>;
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       {/* Back to the lesson this assignment belongs to, panel still open. */}
       <Link to={backTo} className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
         <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.builder.backCourses')}

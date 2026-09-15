@@ -161,7 +161,7 @@ export default function QuizBuilderPage() {
     setQuestions((qs) => qs.map((q, j) => (j === i ? { ...q, ...patch } : q)));
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       {/* Back to the lesson this quiz belongs to, with its panel still open —
           the builder passes the course along precisely so this can return
           there rather than dumping the teacher at the course list. */}

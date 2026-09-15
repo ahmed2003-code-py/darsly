@@ -34,7 +34,7 @@ export default function LearningCenterPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-container space-y-4 px-6 py-8 sm:px-8">
+      <div className="page space-y-4">
         <Skeleton className="h-40 rounded-3xl" />
         <Skeleton className="h-64 rounded-3xl" />
       </div>
@@ -42,14 +42,14 @@ export default function LearningCenterPage() {
   }
   if (error || !g) {
     return (
-      <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+      <div className="page">
         <ErrorNote error={error} />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('gamification.title')} subtitle={t('gamification.subtitle')} />
 
       <div className="mb-6 space-y-4">

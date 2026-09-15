@@ -20,7 +20,7 @@ export default function AdminSecurityPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('admin.securityTitle')} subtitle={t('admin.securitySub')} />
 
       <div className="grid gap-6 lg:grid-cols-2">

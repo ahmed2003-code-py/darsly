@@ -55,7 +55,7 @@ export default function AdminPaymentsPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('apay.title')} subtitle={t('apay.subtitle')} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">

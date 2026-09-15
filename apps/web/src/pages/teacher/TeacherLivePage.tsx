@@ -71,7 +71,7 @@ export default function TeacherLivePage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <div className="flex items-center justify-between">
         <PageHeader title={t('live.teacherTitle')} subtitle={t('live.teacherSubtitle')} />
         <button className="btn-primary" onClick={() => setOpen(true)}>

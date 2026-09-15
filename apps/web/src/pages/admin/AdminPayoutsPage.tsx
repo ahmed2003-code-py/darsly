@@ -27,7 +27,7 @@ export default function AdminPayoutsPage() {
   });
 
   return (
-    <div className="mx-auto max-w-container px-6 py-8 sm:px-8">
+    <div className="page">
       <PageHeader title={t('admin.payoutsTitle')} subtitle={t('admin.payoutsSub')} />
 
       {isLoading ? (

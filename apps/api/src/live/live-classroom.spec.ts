@@ -22,6 +22,7 @@ function world(over: {
   booked?: boolean;
   staff?: boolean;
   teacherUserId?: string;
+  remoteRecording?: string;
 } = {}) {
   const session = {
     id: 'ls1',
@@ -80,6 +81,9 @@ function world(over: {
 
   const daily = {
     recordingLink: jest.fn(async () => ({ url: 'https://dl/x', expiresAt: new Date() })),
+    // What the provider says about a recording that has not finished yet,
+    // unless a test needs it to have finished.
+    recording: jest.fn(async () => ({ status: over.remoteRecording ?? 'in-progress' })),
     transcriptFor: jest.fn(async () => null),
   } as unknown as DailyService;
   const realtime = { emitToLive: jest.fn() } as any;
@@ -136,6 +140,41 @@ describe('the recording is not a public link', () => {
     });
     const err = await service.recordingLink('u_student', 'ls1').catch((e) => e);
     expect(err.getResponse()).toMatchObject({ code: 'RECORDING_NOT_SHARED' });
+  });
+
+  it('catches a finished recording up with the provider, without a webhook', async () => {
+    // Nothing tells us when processing ends, so the question is asked the
+    // moment someone opens the page that would show the recording.
+    const { service, session } = world({
+      teacherUserId: 'u_teacher',
+      session: { recordingStatus: 'PROCESSING', recordingId: 'r1' },
+      remoteRecording: 'finished',
+    });
+    const d = await service.sessionDetail('u_teacher', 'ls1');
+    expect(d.recording.status).toBe('READY');
+    expect(d.recording.available).toBe(true);
+    expect(session.recordingStatus).toBe('READY');
+  });
+
+  it('leaves it processing while the provider is still working', async () => {
+    const { service, session } = world({
+      teacherUserId: 'u_teacher',
+      session: { recordingStatus: 'PROCESSING', recordingId: 'r1' },
+      remoteRecording: 'in-progress',
+    });
+    const d = await service.sessionDetail('u_teacher', 'ls1');
+    expect(d.recording.status).toBe('PROCESSING');
+    expect(session.recordingStatus).toBe('PROCESSING');
+  });
+
+  it('marks a recording the provider gave up on as failed', async () => {
+    const { service } = world({
+      teacherUserId: 'u_teacher',
+      session: { recordingStatus: 'PROCESSING', recordingId: 'r1' },
+      remoteRecording: 'failed',
+    });
+    const d = await service.sessionDetail('u_teacher', 'ls1');
+    expect(d.recording.status).toBe('FAILED');
   });
 
   it('gives the teacher a link that expires', async () => {

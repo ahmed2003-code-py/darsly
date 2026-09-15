@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { LiveSessionStatus, Prisma } from '@prisma/client';
+import { LivePipelineStatus, LiveSessionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
@@ -523,8 +523,9 @@ export class LiveService {
     const { session, role } = await this.assertInSession(userId, sessionId);
     const full = await this.prisma.liveSession.findUnique({
       where: { id: sessionId },
-      select: { recordingId: true, recordingStatus: true, summaryForStudents: true },
+      select: { id: true, recordingId: true, recordingStatus: true, summaryForStudents: true },
     });
+    if (full) full.recordingStatus = await this.refreshRecording(full);
     if (!full?.recordingId || full.recordingStatus !== 'READY') {
       throw new BadRequestException({ message: 'التسجيل مش جاهز', code: 'RECORDING_NOT_READY' });
     }
@@ -587,6 +588,34 @@ export class LiveService {
     return updated;
   }
 
+  /**
+   * Catch a finished recording up with the provider.
+   *
+   * A recording is still being processed when the class ends, and there is no
+   * webhook telling us when that changes — so the question is asked the moment
+   * somebody opens the page that would show it. Self-healing, and it costs one
+   * request only while a recording is actually in flight.
+   */
+  private async refreshRecording(session: {
+    id: string;
+    recordingId: string | null;
+    recordingStatus: LivePipelineStatus;
+  }) {
+    if (session.recordingStatus !== 'PROCESSING' || !session.recordingId) return session.recordingStatus;
+    const remote = await this.daily.recording(session.recordingId);
+    if (!remote) return session.recordingStatus;
+    // Daily's own vocabulary; anything else means it is still working.
+    const done = /finish|complete/i.test(remote.status);
+    const failed = /fail|error|cancel/i.test(remote.status);
+    if (!done && !failed) return session.recordingStatus;
+    const next: LivePipelineStatus = done ? 'READY' : 'FAILED';
+    await this.prisma.liveSession.update({
+      where: { id: session.id },
+      data: { recordingStatus: next, ...(remote.duration ? { recordingDuration: remote.duration } : {}) },
+    });
+    return next;
+  }
+
   /** What a viewer is allowed to read about a finished session. */
   async sessionDetail(userId: string, sessionId: string) {
     const { role } = await this.assertInSession(userId, sessionId);
@@ -594,10 +623,12 @@ export class LiveService {
       where: { id: sessionId },
       select: {
         id: true, title: true, startsAt: true, durationMin: true, status: true,
-        recordingStatus: true, summaryStatus: true, summary: true,
+        recordingStatus: true, recordingId: true, recordingDuration: true,
+        summaryStatus: true, summary: true,
         summaryForStudents: true, transcriptStatus: true,
       },
     });
+    const recordingStatus = await this.refreshRecording(s);
     const canSeeSummary = role === 'TEACHER' || s.summaryForStudents;
     return {
       id: s.id,
@@ -607,9 +638,10 @@ export class LiveService {
       status: this.effectiveStatus(s),
       role,
       recording: {
-        status: s.recordingStatus,
+        status: recordingStatus,
+        durationSeconds: s.recordingDuration,
         // A student is told there is a recording only once it is theirs to see.
-        available: s.recordingStatus === 'READY' && (role === 'TEACHER' || s.summaryForStudents),
+        available: recordingStatus === 'READY' && (role === 'TEACHER' || s.summaryForStudents),
       },
       summary: {
         status: canSeeSummary ? s.summaryStatus : 'NOT_STARTED',

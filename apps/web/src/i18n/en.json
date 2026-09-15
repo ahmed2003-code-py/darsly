@@ -1985,6 +1985,12 @@
     "noneTopics": "No specific topics were identified.",
     "noneKeyPoints": "No key points were identified.",
     "noneQa": "No questions were asked in this session.",
-    "noneHomework": "No homework or action items were identified in this session."
+    "noneHomework": "No homework or action items were identified in this session.",
+    "recording": "Lesson recording",
+    "watch": "Watch recording",
+    "recProcessing": "Still being processed by the video service. Check back shortly.",
+    "recFailed": "The recording is not available.",
+    "recNotShared": "Students will see it once you share the lesson with them.",
+    "underMinute": "Under a minute"
   }
 }

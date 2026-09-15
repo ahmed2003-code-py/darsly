@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { Spinner } from '../../components/ui';
@@ -40,6 +41,73 @@ function Bullets({ items, empty }: { items: string[]; empty: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Minutes, except when there are none — "0 minutes" is not a length. */
+function lengthOf(totalSeconds: number, t: (k: string, o?: any) => string) {
+  const m = Math.round(totalSeconds / 60);
+  return m < 1 ? t('summary.underMinute') : t('live.minutes', { count: m });
+}
+
+/**
+ * Watching the lesson back.
+ *
+ * The link is asked for on the tap, not when the page loads: it expires on the
+ * provider's own schedule, so fetching it early only means fetching a link that
+ * has died by the time anyone presses play.
+ */
+function RecordingBlock({
+  sessionId,
+  recording,
+}: {
+  sessionId: string;
+  recording: { status: string; available: boolean; durationSeconds?: number | null };
+}) {
+  const { t } = useTranslation();
+  const [url, setUrl] = useState<string | null>(null);
+  const open = useMutation({
+    mutationFn: async () => (await api.get(`/live/${sessionId}/recording`)).data,
+    onSuccess: (d) => setUrl(d.url),
+  });
+
+  if (recording.status === 'NOT_STARTED') return null;
+
+  return (
+    <div className="mb-4 rounded-xl bg-surface-container-low p-3">
+      <div className="flex items-center gap-2">
+        <span className="material-symbols-outlined text-[20px] text-primary">smart_display</span>
+        <span className="flex-1 text-sm font-bold">{t('summary.recording')}</span>
+        {recording.durationSeconds ? (
+          <span className="text-xs text-outline">{lengthOf(recording.durationSeconds, t)}</span>
+        ) : null}
+      </div>
+
+      {recording.status === 'PROCESSING' && (
+        <p className="mt-1 text-xs text-outline">{t('summary.recProcessing')}</p>
+      )}
+      {recording.status === 'FAILED' && (
+        <p className="mt-1 text-xs text-outline">{t('summary.recFailed')}</p>
+      )}
+      {recording.status === 'READY' && !recording.available && (
+        <p className="mt-1 text-xs text-outline">{t('summary.recNotShared')}</p>
+      )}
+
+      {recording.available && !url && (
+        <button
+          className="btn-primary mt-2 w-full py-2 text-sm"
+          disabled={open.isPending}
+          onClick={() => open.mutate()}
+        >
+          <span className="material-symbols-outlined text-base">play_arrow</span>
+          {open.isPending ? t('common.loading') : t('summary.watch')}
+        </button>
+      )}
+      {open.isError && <p className="mt-1 text-xs text-error">{t('summary.recFailed')}</p>}
+      {url && (
+        <video src={url} controls playsInline className="mt-2 w-full rounded-lg bg-black" />
+      )}
+    </div>
   );
 }
 
@@ -89,6 +157,10 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
           </label>
         )}
       </div>
+
+      {/* The recording, where someone would actually look for it: on the record
+          of the lesson it belongs to, beside the notes. */}
+      <RecordingBlock sessionId={sessionId} recording={d.recording} />
 
       {status === 'PROCESSING' && (
         <p className="flex items-center gap-2 py-4 text-sm text-outline">

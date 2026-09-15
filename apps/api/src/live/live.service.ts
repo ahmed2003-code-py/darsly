@@ -367,6 +367,24 @@ export class LiveService {
       }),
     ]);
     if (session.roomName) await this.daily.deleteRoom(session.roomName);
+
+    // Tell the room, and tell the class.
+    //
+    // Deleting the Daily room drops everyone's connection, but that is the
+    // video going quiet — it is not an answer to "what happened?". Without
+    // this, a student sat looking at a dead meeting, and the listing behind it
+    // went on saying "live now, waiting for the teacher to start" until they
+    // thought to reload a page they had no reason to reload.
+    this.realtime.emitToLive(id, 'live:ended', { sessionId: id });
+    const booked = await this.prisma.liveBooking.findMany({
+      where: { sessionId: id },
+      select: { student: { select: { userId: true } } },
+    });
+    for (const b of booked) {
+      // Their personal room, which they are in whether or not they were ever
+      // inside the meeting — that is what the upcoming list listens on.
+      this.realtime.emitToUser(b.student.userId, 'live:ended', { sessionId: id });
+    }
     return { id, status: 'ENDED' as const, endedAt: now };
   }
 
@@ -624,7 +642,7 @@ export class LiveService {
       select: {
         id: true, title: true, startsAt: true, durationMin: true, status: true,
         recordingStatus: true, recordingId: true, recordingDuration: true,
-        summaryStatus: true, summary: true,
+        summaryStatus: true, summary: true, summaryError: true,
         summaryForStudents: true, transcriptStatus: true,
       },
     });
@@ -647,7 +665,10 @@ export class LiveService {
         status: canSeeSummary ? s.summaryStatus : 'NOT_STARTED',
         data: canSeeSummary && s.summaryStatus === 'READY' ? s.summary : null,
         sharedWithStudents: s.summaryForStudents,
-        ...(role === 'TEACHER' ? { transcriptStatus: s.transcriptStatus } : {}),
+        // Only the teacher is told why, and only they can act on it.
+        ...(role === 'TEACHER'
+          ? { transcriptStatus: s.transcriptStatus, error: s.summaryError }
+          : {}),
       },
     };
   }
@@ -781,6 +802,11 @@ export class LiveService {
       where: { sessionId: s.id },
       select: { student: { select: { userId: true } } },
     });
+    // So the listing turns from "waiting for the teacher" into a way in,
+    // without the student refreshing a page to find out.
+    for (const b of booked) {
+      this.realtime.emitToUser(b.student.userId, 'live:started', { sessionId: s.id });
+    }
     await Promise.all(
       booked.map((b) =>
         this.notifications.create({

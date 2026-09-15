@@ -169,16 +169,24 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
         </p>
       )}
 
-      {status === 'FAILED' && (
-        <div className="py-2">
-          <p className="mb-2 text-sm text-outline">{t('summary.failed')}</p>
-          {isTeacher && (
-            <button className="btn-ghost text-sm" disabled={generate.isPending} onClick={() => generate.mutate()}>
-              {t('summary.retry')}
-            </button>
-          )}
-        </div>
-      )}
+      {status === 'FAILED' &&
+        // Why it failed decides what to offer. "No transcript" is not something
+        // trying again can fix — the words were never captured — so offering a
+        // retry button there is offering a button that cannot work.
+        (d.summary.error === 'NO_TRANSCRIPT' ? (
+          <div className="py-2">
+            <p className="text-sm text-outline">{t('summary.noTranscript')}</p>
+          </div>
+        ) : (
+          <div className="py-2">
+            <p className="mb-2 text-sm text-outline">{t('summary.failed')}</p>
+            {isTeacher && (
+              <button className="btn-ghost text-sm" disabled={generate.isPending} onClick={() => generate.mutate()}>
+                {t('summary.retry')}
+              </button>
+            )}
+          </div>
+        ))}
 
       {status === 'NOT_STARTED' &&
         (isTeacher ? (

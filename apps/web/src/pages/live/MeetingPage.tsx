@@ -8,6 +8,7 @@ import { api } from '../../lib/api';
 import { useDailyMeeting, type Participant } from '../../lib/useDailyMeeting';
 import { useLiveChat } from '../../lib/useLiveChat';
 import { useAuthStore } from '../../stores/auth';
+import { getSocket } from '../../lib/socket';
 import { Spinner } from '../../components/ui';
 
 /**
@@ -202,10 +203,46 @@ export default function MeetingPage() {
     if (showChat) feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
   }, [chat.messages.length, showChat]);
 
+  /**
+   * The teacher ended it.
+   *
+   * Two ways to learn that, because either can arrive first: the socket says
+   * so, and the room disappearing underneath drops the connection. Whichever
+   * comes first, the student is told rather than left in an empty meeting —
+   * which is exactly what happened before, and reads as the app freezing.
+   */
+  useEffect(() => {
+    const sock = getSocket();
+    if (!sock) return;
+    const onEnded = (p: { sessionId: string }) => {
+      if (p?.sessionId === id) meeting.setEnded(true);
+    };
+    sock.on('live:ended', onEnded);
+    return () => { sock.off('live:ended', onEnded); };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const leaveAndGo = async () => {
     await meeting.leave();
     navigate(isTeacher ? '/teacher/live' : '/live', { replace: true });
   };
+
+  if (meeting.ended) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-surface px-6">
+        <div className="w-full max-w-sm text-center">
+          <span className="material-symbols-outlined mb-2 text-5xl text-outline">waving_hand</span>
+          <p className="mb-1 font-heading text-lg font-bold">{t('meeting.endedTitle')}</p>
+          <p className="mb-6 text-sm text-outline">{t('meeting.endedHint')}</p>
+          <button
+            className="btn-primary w-full"
+            onClick={() => navigate(isTeacher ? '/teacher/live' : '/live', { replace: true })}
+          >
+            {t('meeting.back')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (entry.isLoading) {
     return (
@@ -272,7 +309,11 @@ export default function MeetingPage() {
             className="btn-primary w-full py-3"
             disabled={!meeting.ready}
             onClick={async () => {
-              await meeting.join(entry.data.meeting.url, entry.data.meeting.token, { mic: wantMic, cam: wantCam });
+              await meeting.join(entry.data.meeting.url, entry.data.meeting.token, {
+                mic: wantMic,
+                cam: wantCam,
+                owner: entry.data.participant.role === 'TEACHER',
+              });
               setReady(true);
             }}
           >

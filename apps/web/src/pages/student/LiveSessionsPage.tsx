@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { getSocket } from '../../lib/socket';
 import { Markdown } from '../../lib/markdown';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Modal, PageHeader } from '../../components/ui';
 import SessionSummary from '../live/SessionSummary';
@@ -26,7 +27,25 @@ export default function LiveSessionsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['live-upcoming'],
     queryFn: async () => (await api.get('/live/upcoming')).data,
+    // A live listing goes stale by standing still: a class starts, or ends,
+    // without this page asking anything. The socket below is what makes it
+    // immediate; this is the backstop for a connection that dropped.
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
+
+  /** The teacher started or ended something — stop showing yesterday's answer. */
+  useEffect(() => {
+    const sock = getSocket();
+    if (!sock) return;
+    const refresh = () => qc.invalidateQueries({ queryKey: ['live-upcoming'] });
+    sock.on('live:ended', refresh);
+    sock.on('live:started', refresh);
+    return () => {
+      sock.off('live:ended', refresh);
+      sock.off('live:started', refresh);
+    };
+  }, [qc]);
 
   const book = useMutation({
     mutationFn: async (id: string) => (await api.post(`/live/${id}/book`)).data,
@@ -52,6 +71,10 @@ export default function LiveSessionsPage() {
             // The server works out whether the door is open — it owns the clock,
             // the booking and whether the teacher has actually started.
             const live = s.status === 'LIVE';
+            // A finished class is its own state. Without this it fell through to
+            // "not live yet" and advertised a countdown to a lesson that was
+            // already over, under a button waiting for a teacher who had left.
+            const over = s.status === 'ENDED';
             const soon = new Date(s.joinOpensAt).getTime() <= Date.now();
             const full = s.seatsLeft === 0 && !s.booked;
             return (
@@ -60,10 +83,14 @@ export default function LiveSessionsPage() {
                   <div className="min-w-0">
                     <div className="mb-1 flex items-center gap-2">
                       <span className="flex h-2.5 w-2.5 items-center justify-center">
-                        <span className={`h-2.5 w-2.5 rounded-full ${live ? 'animate-pulse bg-error' : 'bg-secondary'}`} />
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            live ? 'animate-pulse bg-error' : over ? 'bg-outline-variant' : 'bg-secondary'
+                          }`}
+                        />
                       </span>
                       <span className={`text-xs font-extrabold ${live ? 'text-error' : 'text-outline'}`}>
-                        {live ? t('live.liveNow') : startsInLabel(s.startsAt, t)}
+                        {live ? t('live.liveNow') : over ? t('live.ended') : startsInLabel(s.startsAt, t)}
                       </span>
                     </div>
                     <h3 className="font-heading text-lg font-bold">{s.title}</h3>
@@ -84,18 +111,13 @@ export default function LiveSessionsPage() {
 
                 {/* A finished lesson still has something in it: the notes, if
                     the teacher shared them. */}
-                {s.status === 'ENDED' && (
-                  <button
-                    className="flex items-center gap-1 self-start text-sm font-bold text-primary hover:underline"
-                    onClick={() => setRecordFor(s.id)}
-                  >
-                    <span className="material-symbols-outlined text-base">description</span>
-                    {t('live.viewSession')}
-                  </button>
-                )}
-
                 <div className="mt-auto flex gap-2">
-                  {s.booked ? (
+                  {over ? (
+                    <button className="btn-ghost flex-1 py-2.5 text-sm" onClick={() => setRecordFor(s.id)}>
+                      <span className="material-symbols-outlined text-base">description</span>
+                      {t('live.viewSession')}
+                    </button>
+                  ) : s.booked ? (
                     <>
                       <button
                         className="btn-primary flex-1 py-2.5 text-sm"

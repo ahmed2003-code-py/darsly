@@ -25,6 +25,32 @@ export interface DailyRoom {
   url: string;
 }
 
+/**
+ * The words out of a WebVTT file.
+ *
+ * Daily hands transcripts back as subtitles — a header, cue numbers and
+ * timecodes around the speech. A summary is written from what was said, so the
+ * scaffolding is dropped: it is noise to the model and it is paid for by the
+ * token.
+ *
+ * Speaker labels are kept where Deepgram wrote them ("Speaker 0: ..."), because
+ * who said a thing is what separates a student's question from the answer.
+ */
+export function plainTextFromVtt(raw: string): string | null {
+  const lines = raw.split(/\r?\n/);
+  const spoken: string[] = [];
+  for (const line of lines) {
+    const l = line.trim();
+    if (!l) continue;
+    if (l === 'WEBVTT' || l.startsWith('NOTE ')) continue;
+    // "00:00:01.000 --> 00:00:04.000", and the bare cue numbers beside them.
+    if (l.includes('-->') || /^\d+$/.test(l)) continue;
+    spoken.push(l);
+  }
+  const text = spoken.join('\n').trim();
+  return text || null;
+}
+
 @Injectable()
 export class DailyService {
   private readonly logger = new Logger(DailyService.name);
@@ -103,6 +129,11 @@ export class DailyService {
           // recorded without anyone asking is a class recorded without anyone
           // consenting. The room merely allows it.
           enable_recording: 'cloud',
+          // Without this Daily transcribes for live captions and throws the
+          // text away — the transcript exists for the length of the call and
+          // cannot be fetched afterwards, which is no use to a summary written
+          // after the lesson.
+          enable_transcription_storage: true,
           // Nobody is broadcast the instant they arrive: the pre-join screen is
           // where they decide, and the browser's own permission prompt is where
           // they mean it.
@@ -227,24 +258,30 @@ export class DailyService {
    */
   async transcriptFor(roomName: string): Promise<string | null> {
     try {
-      const list = await this.call<{ data?: { id: string; status: string; roomName?: string }[] }>(
-        `/transcript?roomName=${encodeURIComponent(roomName)}`,
-        { method: 'GET' },
-      );
+      // Listed, then filtered here: Daily's transcript endpoint rejects a
+      // `roomName` query outright ("roomName is not allowed"), and the 400 it
+      // answers with was being swallowed as "this lesson has no transcript" —
+      // which is how every summary came to fail.
+      const list = await this.call<{
+        data?: { transcriptId?: string; id?: string; status?: string; roomName?: string }[];
+      }>('/transcript', { method: 'GET' });
       // Daily prefixes these ("t_in_progress", "t_finished"), and has changed
       // the spelling before. Matching on the word rather than the exact string
       // means a rename does not silently turn every lesson into "no transcript".
-      const done = (list.data ?? []).find((t) => /finish/i.test(t.status ?? ''));
-      if (!done) return null;
+      const done = (list.data ?? []).find(
+        (t) => t.roomName === roomName && /finish/i.test(t.status ?? ''),
+      );
+      // The id lives under `transcriptId`; `id` is present but null.
+      const transcriptId = done?.transcriptId ?? done?.id;
+      if (!transcriptId) return null;
       const link = await this.call<{ link?: string }>(
-        `/transcript/${encodeURIComponent(done.id)}/access-link`,
+        `/transcript/${encodeURIComponent(transcriptId)}/access-link`,
         { method: 'GET' },
       );
       if (!link.link) return null;
       const res = await fetch(link.link, { signal: AbortSignal.timeout(20_000) });
       if (!res.ok) return null;
-      const text = await res.text();
-      return text.trim() || null;
+      return plainTextFromVtt(await res.text());
     } catch (e) {
       this.logger.warn(`No transcript for room ${roomName}: ${(e as Error).message}`);
       return null;

@@ -1966,7 +1966,9 @@
     "chatPh": "Write a message…",
     "send": "Send",
     "startRec": "Start recording",
-    "stopRec": "Stop recording"
+    "stopRec": "Stop recording",
+    "endedTitle": "The session has ended",
+    "endedHint": "The teacher ended the class. The recording and summary will appear in the session details."
   },
   "summary": {
     "title": "AI lesson summary",
@@ -1991,6 +1993,7 @@
     "recProcessing": "Still being processed by the video service. Check back shortly.",
     "recFailed": "The recording is not available.",
     "recNotShared": "Students will see it once you share the lesson with them.",
-    "underMinute": "Under a minute"
+    "underMinute": "Under a minute",
+    "noTranscript": "No speech was captured in this session, so there is nothing to summarise. Summaries are built from what was said during the class."
   }
 }

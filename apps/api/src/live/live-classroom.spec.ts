@@ -3,7 +3,7 @@ import { AiJobError } from '../academy-site/ai/ai-job.error';
 import { AiClient } from '../academy-site/ai/ai.client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { DailyService } from './daily.service';
+import { DailyService, plainTextFromVtt } from './daily.service';
 import { LiveService } from './live.service';
 import { LiveSummaryHandler } from './live-summary.handler';
 
@@ -253,6 +253,38 @@ describe('what each side is allowed to read', () => {
     const { service, notifications } = world({ session: { summaryStatus: 'READY' } });
     await service.setSummaryVisibility('t1', 'ls1', true);
     expect(notifications.create).toHaveBeenCalled();
+  });
+});
+
+describe('a transcript arrives as subtitles, and is read as speech', () => {
+  const VTT = [
+    'WEBVTT',
+    '',
+    'NOTE recorded by daily',
+    '',
+    '1',
+    '00:00:01.000 --> 00:00:04.000',
+    'Speaker 0: النهاردة هناخد المعادلة من الدرجة التانية.',
+    '',
+    '2',
+    '00:00:05.000 --> 00:00:07.500',
+    'Speaker 1: وإذا مقدرناش نحلل؟',
+  ].join('\n');
+
+  it('keeps the words and the speakers, and drops the timecodes', () => {
+    const out = plainTextFromVtt(VTT);
+    expect(out).toContain('المعادلة من الدرجة التانية');
+    expect(out).toContain('Speaker 1');
+    // The scaffolding is noise to the model and is paid for by the token.
+    expect(out).not.toContain('-->');
+    expect(out).not.toContain('WEBVTT');
+    expect(out).not.toMatch(/^\d+$/m);
+  });
+
+  it('reads a silent lesson as nothing, not as an empty string', () => {
+    // A class where nobody spoke returns a header and no cues. Null is what
+    // makes the summary say so instead of summarising a blank page.
+    expect(plainTextFromVtt('WEBVTT\n\n')).toBeNull();
   });
 });
 

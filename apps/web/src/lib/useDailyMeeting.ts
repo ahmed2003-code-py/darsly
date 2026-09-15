@@ -71,6 +71,8 @@ export function useDailyMeeting(liveSessionId: string) {
   const [recording, setRecording] = useState(false);
   const recIdResolve = useRef<((id: string | null) => void) | null>(null);
   const [transcribing, setTranscribing] = useState(false);
+  /** The meeting is over — the teacher ended it, or the room went away. */
+  const [ended, setEnded] = useState(false);
   /** A short, self-clearing line for the things that fail quietly. */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -135,6 +137,16 @@ export function useDailyMeeting(liveSessionId: string) {
     events.forEach((e) => c.on(e as any, sync));
     c.on('error', onError);
     c.on('left-meeting', () => setJoined(false));
+    // The room being deleted under everyone is how "end for all" reaches a
+    // student. Named, so the page can say what happened instead of showing a
+    // meeting with nobody in it.
+    const onEjected = () => {
+      setEnded(true);
+      setJoined(false);
+    };
+    c.on('participant-left' as any, (ev: any) => {
+      if (ev?.participant?.local) onEjected();
+    });
     // The provider's id for the recording arrives on the event, not from the
     // call that started it — so the promise `startRecording()` hands back is
     // settled here, where the id actually shows up.
@@ -171,11 +183,32 @@ export function useDailyMeeting(liveSessionId: string) {
   }, [call]);
 
   const join = useCallback(
-    async (url: string, token: string, opts: { mic: boolean; cam: boolean }) => {
+    async (url: string, token: string, opts: { mic: boolean; cam: boolean; owner?: boolean }) => {
       setError(null);
       if (!call) return;
       await call.join({ url, token, startVideoOff: !opts.cam, startAudioOff: !opts.mic });
       setJoined(true);
+      /**
+       * Transcription belongs to the lesson, not to the record button.
+       *
+       * It used to start only when the teacher pressed record — so a teacher
+       * who taught for an hour without recording had no transcript, and the
+       * summary they then asked for could only say it had failed. The lesson
+       * is the thing being summarised, so capturing its words begins when the
+       * lesson does.
+       *
+       * Owner only, because only an owner token may start it, and silent on
+       * failure: a plan without transcription still gets a class, and the
+       * session page is where the missing summary is explained.
+       */
+      if (opts.owner) {
+        try {
+          await call.startTranscription();
+          setTranscribing(true);
+        } catch {
+          setTranscribing(false);
+        }
+      }
     },
     [call],
   );
@@ -258,17 +291,6 @@ export function useDailyMeeting(liveSessionId: string) {
       setNotice('RECORDING_FAILED');
       return null;
     }
-    // Transcription rides along with the recording, because the teacher's
-    // intent is the same one: capture this lesson. It is a separate feature at
-    // the provider and may not be on every plan, so its failure is allowed to
-    // be silent — the recording is still running, and the only thing lost is
-    // the summary, which the session page reports on its own.
-    try {
-      await c.startTranscription();
-      setTranscribing(true);
-    } catch {
-      setTranscribing(false);
-    }
     return waitForId;
   }, []);
 
@@ -280,12 +302,6 @@ export function useDailyMeeting(liveSessionId: string) {
     } catch {
       setNotice('RECORDING_FAILED');
     }
-    try {
-      await c.stopTranscription();
-    } catch {
-      // Never started, or already stopped. Neither is worth reporting.
-    }
-    setTranscribing(false);
     setRecording(false);
   }, []);
 
@@ -318,6 +334,8 @@ export function useDailyMeeting(liveSessionId: string) {
   return {
     participants,
     joined,
+    ended,
+    setEnded,
     error,
     notice,
     canShare,

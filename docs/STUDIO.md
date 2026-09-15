@@ -377,21 +377,24 @@ which is also how the price is decided.
 
 | Rung | What it changes | Price | Gate |
 |---|---|---|---|
-| shapes (`button-*`, `card-*`, `nav-*`) | one slot, app-wide | 60–140 | none |
+| shapes (`button-*`, `card-*`, `nav-*`) | one slot, app-wide | 60–170 | none |
 | marks (`frame-*`, `effect-glow`) | your own avatar / the selected row | 90–450 | level 2–6 |
 | earned marks (`frame-scholar`, `frame-fire`, `frame-legendary`) | the same | **not for sale** | an achievement |
 | tints (`theme-mint`, `theme-ocean`, `theme-sunset`, `theme-grape`) | accent, second colour, wash, backdrop, typeface, shapes | 220–340 | level 2–4 |
-| skins (`theme-paper`, `theme-midnight`, `theme-rose-lavender`) | **the ground as well** | 480–750 | level 4–5 |
+| skins (`theme-paper`, `theme-midnight`) | **the ground as well** | 480–520 | level 4–5 |
+| legendary skins (`theme-rose-lavender`, `theme-egyptian-king`) | the same, and meant to be a season's work | 950–1200 | level 6–7 |
 
 The jump between a tint and a skin is the only price step that matters: a tint
 changes the light in the room, a skin replaces the room. Everything else follows
 from it.
 
-`theme-egyptian-king` sits outside the ladder at 100 coins with no gate. It was
-priced as the first skin anyone would ever see, before there was a ladder to be
-on. Repricing something students may already own is a product decision rather
-than a tidy-up, so it stays where it is and the test that checks the ladder
-names it as the exception.
+**Rarity is a promise about price.** Each band starts above where the one below
+it ends — COMMON 60–130, RARE 170–280, EPIC 320–520, LEGENDARY 950–1200 — and a
+test holds the bands apart, because "legendary" meaning 100 coins and 750 at the
+same time meant nothing. `theme-egyptian-king` was that 100: priced as a doorway
+when the shelf was empty. It is 1200 and level 7 now, the dearest thing in the
+shop. Anyone who already owns it keeps it — ownership is a row, and the price is
+read only at the moment of purchase.
 
 **Two things are deliberately not sold.** `AVATAR` styles and the `confetti`
 effect are names the engine accepts and the stylesheet has never drawn — selling
@@ -411,6 +414,21 @@ no ground of its own was seated against the platform's **page**, never its
 cards — so its accent text measured about 4.0:1 on the surface most of the
 product's text actually sits on. `PLATFORM_SEAT` in `studio-theme.ts` now gives
 the default ground the same deepest-panel seat `surfaceSeat` already gave skins.
+
+### A preview shows the thing, not its name
+
+Non-theme items had no drawing at all: the card printed the style's own value —
+`pill`, `paper` — so a whole rung advertised itself with an internal English
+identifier on an Arabic page. The first replacement drew each shape honestly and
+was still wrong, because six buttons differing by four pixels of corner is not a
+choice anyone can make from a grid.
+
+`StylePreview` now draws one property, large, exaggerated to the edge of honesty:
+a single wide button so the corner is unmistakable, a card with its real radius
+and shadow, three menu rows with the selected one shaped and spaced as that nav
+style would shape and space it. Frosted glass gets a coloured shape behind it,
+because translucency over a flat colour is invisible. The radii are the
+stylesheet's own; only the scale is generous.
 
 ### Frames were invisible
 

@@ -1114,12 +1114,13 @@ const FRAME_COLOUR: Record<string, string> = {
   legendary: '#a855f7',
 };
 
+/** The radii the stylesheet actually applies, so a preview cannot drift. */
 const BUTTON_RADIUS: Record<string, string> = {
-  classic: '8px',
-  rounded: '12px',
+  classic: '10px',
+  rounded: '14px',
   pill: '999px',
   sharp: '2px',
-  soft: '14px',
+  soft: '16px',
   elevated: '14px',
 };
 
@@ -1127,21 +1128,25 @@ const CARD_RADIUS: Record<string, string> = {
   minimal: '12px',
   soft: '20px',
   elevated: '16px',
-  paper: '8px',
+  paper: '6px',
   glass: '16px',
 };
 
 /**
- * What a shape actually looks like, rather than what it is called.
+ * What a shape does, drawn at a size where you can see it.
  *
- * This slot used to print the style's own value — "pill", "paper" — into the
- * card, so an entire rung of the shop advertised itself with an internal
- * English identifier on an Arabic page. A student buying a shape should see the
- * shape; the drawings below are the same lengths and radii the stylesheet
- * applies, in miniature.
+ * Two problems, one fix. This slot used to print the style's own value —
+ * "pill", "paper" — so a whole rung of the shop advertised itself with an
+ * internal English identifier on an Arabic page. And the first drawings that
+ * replaced it were too alike to choose between: six buttons differing by four
+ * pixels of corner is not a choice anybody can make from a grid.
+ *
+ * So each one is drawn large, with the thing it changes exaggerated to the edge
+ * of honesty — a real preview of one property, not a thumbnail of the app. The
+ * radii are the stylesheet's own; only the scale is generous.
  */
 function StylePreview({ category, style }: { category: Category; style: string }) {
-  const shell = 'grid h-24 w-full place-items-center rounded-xl bg-surface-container-high p-3';
+  const shell = 'relative grid h-24 w-full place-items-center overflow-hidden rounded-xl bg-surface-container-high p-3';
 
   if (category === 'FRAME') {
     const colour = FRAME_COLOUR[style] ?? '#9ca3af';
@@ -1149,8 +1154,8 @@ function StylePreview({ category, style }: { category: Category; style: string }
     return (
       <span className={shell}>
         <span
-          className="grid h-12 w-12 place-items-center rounded-full bg-surface-container-lowest font-heading font-bold text-on-surface-variant"
-          style={{ boxShadow: `0 0 0 2px ${colour}${halo ? `, 0 0 12px -2px ${colour}` : ''}` }}
+          className="grid h-14 w-14 place-items-center rounded-full bg-surface-container-lowest font-heading text-lg font-extrabold text-on-surface-variant"
+          style={{ boxShadow: `0 0 0 3px ${colour}${halo ? `, 0 0 16px -2px ${colour}` : ''}` }}
         >
           ط
         </span>
@@ -1159,35 +1164,64 @@ function StylePreview({ category, style }: { category: Category; style: string }
   }
 
   if (category === 'EFFECT') {
+    // Shown as what it actually decorates: the selected row in the menu.
     return (
-      <span className={shell}>
-        <span
-          className="rounded-lg bg-surface-container-lowest px-4 py-2 text-xs font-bold text-on-surface-variant"
-          style={{
-            boxShadow:
-              style === 'glow'
-                ? '0 0 0 1px rgb(var(--c-primary) / 0.35), 0 0 18px -4px rgb(var(--c-primary) / 0.55)'
-                : undefined,
-          }}
-        >
-          ●
+      <span className={`${shell} !place-items-stretch`}>
+        <span className="flex w-full flex-col justify-center gap-2">
+          <span
+            className="flex items-center gap-2 rounded-lg bg-surface-container-lowest px-2 py-1.5"
+            style={{
+              boxShadow:
+                style === 'glow'
+                  ? '0 0 0 1px rgb(var(--c-primary) / 0.45), 0 0 16px -2px rgb(var(--c-primary) / 0.65)'
+                  : undefined,
+            }}
+          >
+            <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+            <span className="h-1.5 w-1/2 rounded-full bg-on-surface/60" />
+          </span>
+          <span className="flex items-center gap-2 px-2 py-1.5 opacity-50">
+            <span className="h-2.5 w-2.5 rounded-full bg-on-surface/40" />
+            <span className="h-1.5 w-1/3 rounded-full bg-on-surface/30" />
+          </span>
         </span>
       </span>
     );
   }
 
   if (category === 'NAV_STYLE') {
-    const gap = style === 'compact' ? '4px' : '8px';
+    // The difference is the selected row's shape and how tightly rows sit, so
+    // both are shown at once: three rows, the first one selected.
+    const compact = style === 'compact';
     const radius = style === 'floating' ? '999px' : '8px';
     return (
-      <span className={`${shell} items-stretch`}>
-        <span className="flex w-full flex-col justify-center" style={{ gap }}>
-          {[0.9, 0.45, 0.45].map((o, i) => (
+      <span className={`${shell} !place-items-stretch`}>
+        <span
+          className="flex w-full flex-col justify-center"
+          style={{ gap: compact ? '3px' : '9px' }}
+        >
+          {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="h-3.5 w-full bg-surface-container-lowest"
-              style={{ borderRadius: radius, opacity: o }}
-            />
+              className="flex items-center gap-2 px-2"
+              style={{
+                borderRadius: radius,
+                paddingBlock: compact ? '3px' : '6px',
+                background: i === 0 ? 'rgb(var(--c-primary-fixed))' : 'transparent',
+              }}
+            >
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ background: i === 0 ? 'rgb(var(--c-primary))' : 'rgb(var(--c-on-surface) / 0.3)' }}
+              />
+              <span
+                className="h-1.5 rounded-full"
+                style={{
+                  width: i === 0 ? '55%' : i === 1 ? '40%' : '48%',
+                  background: i === 0 ? 'rgb(var(--c-primary))' : 'rgb(var(--c-on-surface) / 0.25)',
+                }}
+              />
+            </span>
           ))}
         </span>
       </span>
@@ -1195,44 +1229,63 @@ function StylePreview({ category, style }: { category: Category; style: string }
   }
 
   if (category === 'CARD_STYLE') {
+    const glass = style === 'glass';
     return (
       <span className={shell}>
+        {/* Something to see through. Frosted glass is invisible over a flat
+            colour, so the one style that is about translucency gets a shape
+            behind it to be translucent against. */}
+        {glass && (
+          <span
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(60% 80% at 20% 30%, rgb(var(--c-primary) / 0.55), transparent 70%), radial-gradient(50% 70% at 85% 75%, rgb(var(--c-primary) / 0.35), transparent 70%)',
+            }}
+          />
+        )}
         <span
-          className="flex h-full w-full flex-col justify-center gap-1.5 p-2"
+          className="relative flex h-[68px] w-[86%] flex-col justify-center gap-2 px-3"
           style={{
             borderRadius: CARD_RADIUS[style] ?? '12px',
-            background:
-              style === 'glass'
-                ? 'rgb(var(--c-surface-container-lowest) / 0.6)'
-                : 'rgb(var(--c-surface-container-lowest))',
-            backdropFilter: style === 'glass' ? 'blur(4px)' : undefined,
-            boxShadow: style === 'elevated' ? '0 8px 18px -10px rgb(0 0 0 / 0.5)' : undefined,
-            border: style === 'paper' ? '1px solid rgb(var(--c-line) / 0.25)' : undefined,
+            background: glass
+              ? 'rgb(var(--c-surface-container-lowest) / 0.6)'
+              : 'rgb(var(--c-surface-container-lowest))',
+            backdropFilter: glass ? 'blur(6px)' : undefined,
+            boxShadow: style === 'elevated' ? '0 12px 22px -10px rgb(0 0 0 / 0.6)' : undefined,
+            border:
+              style === 'paper' || style === 'minimal' || glass
+                ? '1px solid rgb(var(--c-line) / 0.3)'
+                : undefined,
           }}
         >
-          <span className="h-1.5 w-2/3 rounded-full bg-on-surface/70" />
-          <span className="h-1.5 w-1/3 rounded-full bg-on-surface/30" />
+          <span className="h-2 w-2/3 rounded-full bg-on-surface/70" />
+          <span className="h-1.5 w-2/5 rounded-full bg-on-surface/30" />
         </span>
       </span>
     );
   }
 
-  // BUTTON_STYLE
+  // BUTTON_STYLE — one big button, so the corner is unmistakable.
   const radius = BUTTON_RADIUS[style] ?? '10px';
   return (
     <span className={shell}>
-      <span className="flex items-center gap-2">
+      <span className="flex flex-col items-center gap-2">
         <span
-          className="h-7 w-16 bg-primary"
+          className="grid h-10 w-32 place-items-center bg-primary text-xs font-bold text-on-primary"
           style={{
             borderRadius: radius,
-            boxShadow: style === 'elevated' ? '0 6px 16px -6px rgb(0 0 0 / 0.55)' : undefined,
+            boxShadow: style === 'elevated' ? '0 10px 18px -6px rgb(0 0 0 / 0.65)' : undefined,
           }}
-        />
+        >
+          <span className="h-1.5 w-10 rounded-full bg-on-primary/70" />
+        </span>
         <span
-          className="h-7 w-12 border border-outline-variant bg-surface-container-lowest"
+          className="grid h-7 w-20 place-items-center border border-outline-variant bg-surface-container-lowest"
           style={{ borderRadius: radius }}
-        />
+        >
+          <span className="h-1.5 w-8 rounded-full bg-on-surface/35" />
+        </span>
       </span>
     </span>
   );

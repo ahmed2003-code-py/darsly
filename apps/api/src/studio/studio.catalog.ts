@@ -177,9 +177,17 @@ export const CATALOG: CatalogSeed[] = [
    * Nobody's name and nobody's badge is on it. The aesthetic is Egyptian
    * football; the players and the clubs belong to themselves.
    *
-   * A hundred coins: ten lessons, or two days of steady work. Priced to be had
-   * rather than saved for, because the first skin's job is to show what a skin
-   * is. No level gate for the same reason.
+   * The dearest thing in the shop, and the last one most students will own.
+   *
+   * It was a hundred coins once, priced as a doorway when there was nothing else
+   * on the shelf and the point was to show what a skin even is. There is a
+   * ladder now, and a full skin sitting below a card style made nonsense of it —
+   * so it goes where a legendary belongs: the top. Level 7 with it, because a
+   * price alone can be saved up to in a fortnight and this is meant to be a
+   * season's worth of work.
+   *
+   * Nobody who already bought it pays again: ownership is a row, and the price
+   * is only read at the moment of purchase.
    */
   theme(
     'theme-egyptian-king',
@@ -190,9 +198,10 @@ export const CATALOG: CatalogSeed[] = [
     'A whole stadium — deep navy by night or warm chalk by day, Egyptian crimson, and gold for everything earned.',
     '#dc2626',
     '#ef4444',
-    100,
+    1200,
     10,
     {
+      requiredLevel: 7,
       secondary: '#ee9800',
       secondaryDark: '#ffb95f',
       // Old gold on chalk, floodlit amber at night. The day value is picked to
@@ -232,10 +241,9 @@ export const CATALOG: CatalogSeed[] = [
   /**
    * Rose & Lavender — the second skin, and the expensive one.
    *
-   * Egyptian King was priced to be had: the first skin's job was to show what a
-   * skin is. This one's job is to be wanted, so it sits where the economy runs
-   * out — 750 coins and level 5, about two months of steady weeks. A shop with
-   * one price has no top shelf.
+   * Legendary, and priced like it: 950 coins and level 6. Only Egyptian King
+   * sits above it. A shop whose top shelf is within a week's reach has no top
+   * shelf.
    *
    * Two colours with two jobs, and the split is the design. Lavender is the
    * action: buttons, active nav, links, progress — everything the app asks you
@@ -264,10 +272,10 @@ export const CATALOG: CatalogSeed[] = [
     'A blush morning or a deep violet night, cards made of frosted glass, and not a trace of gold anywhere.',
     '#8b5cf6',
     '#a78bfa',
-    750,
+    950,
     20,
     {
-      requiredLevel: 5,
+      requiredLevel: 6,
       // Rose carries identity, not action: chips, rails, the streak, the second
       // orb. Softer at night, where the fuller rose goes heavy.
       secondary: '#ff6b8b',
@@ -342,7 +350,7 @@ export const CATALOG: CatalogSeed[] = [
   // Dearer than the rest of the rung: a blur is the one shape choice that costs
   // the phone something, so it is used sparingly and priced like it.
   style('CARD_STYLE', 'card-glass', 'glass', 'RARE', 'كروت زجاج', 'Frosted cards',
-    'شفافية وضبابية خفيفة — اللي تحت الكارت بيبان من ورا.', 'Translucent and lightly blurred — what is behind shows through.', 140, 112),
+    'شفافية وضبابية خفيفة — اللي تحت الكارت بيبان من ورا.', 'Translucent and lightly blurred — what is behind shows through.', 170, 112),
   style('NAV_STYLE', 'nav-floating', 'floating', 'COMMON', 'تنقّل عائم', 'Floating nav',
     'عناصر القائمة بتبقى كبسولات دايرة.', 'Menu items become rounded capsules.', 60, 120),
   style('NAV_STYLE', 'nav-compact', 'compact', 'COMMON', 'تنقّل مضغوط', 'Compact nav',
@@ -359,7 +367,7 @@ export const CATALOG: CatalogSeed[] = [
   style('FRAME', 'frame-bronze', 'bronze', 'COMMON', 'إطار برونزي', 'Bronze frame',
     'حلقة برونزي حوالين صورتك في كل مكان.', 'A bronze ring around your picture, everywhere it appears.', 90, 140),
   style('FRAME', 'frame-silver', 'silver', 'COMMON', 'إطار فضي', 'Silver frame',
-    'حلقة فضي حوالين صورتك في كل مكان.', 'A silver ring around your picture, everywhere it appears.', 150, 141,
+    'حلقة فضي حوالين صورتك في كل مكان.', 'A silver ring around your picture, everywhere it appears.', 130, 141,
     { requiredLevel: 2 }),
   style('FRAME', 'frame-gold', 'gold', 'RARE', 'إطار ذهبي', 'Gold frame',
     'حلقة ذهب حوالين صورتك في كل مكان.', 'A gold ring around your picture, everywhere it appears.', 260, 142,

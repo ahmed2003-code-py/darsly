@@ -580,11 +580,13 @@ describe('Egyptian King', () => {
     expect(item!.rarity).toBe('LEGENDARY');
   });
 
-  // A hundred coins is ten lessons: the first skin's job is to be had, not
-  // saved for. No level gate for the same reason.
-  it('costs a hundred, and is gated on nothing', () => {
-    expect(item!.costCoins).toBe(100);
-    expect(item!.requiredLevel).toBeUndefined();
+  // The top of the ladder. It was a doorway at 100 coins when the shelf was
+  // empty; with a ladder in place, a full skin priced below a card style made
+  // nonsense of it.
+  it('is the dearest thing in the shop, and gated on a level to match', () => {
+    expect(item!.costCoins).toBe(1200);
+    expect(item!.costCoins).toBe(Math.max(...CATALOG.map((c) => c.costCoins)));
+    expect(item!.requiredLevel).toBe(7);
     // Earned items carry no price; a bought one must not pretend to be earned.
     expect(item!.requiredAchievement).toBeUndefined();
     expect(item!.isStarter).toBeUndefined();
@@ -861,11 +863,12 @@ describe('Rose & Lavender', () => {
    * something. Still bought with coins and gated on a level — XP is never spent
    * anywhere in this platform, and a theme must not be the exception.
    */
-  it('is the expensive one, and still costs coins rather than XP', () => {
-    expect(item!.costCoins).toBe(750);
-    expect(item!.requiredLevel).toBe(5);
-    const king = CATALOG.find((c) => c.key === 'theme-egyptian-king')!;
-    expect(item!.costCoins).toBeGreaterThan(king.costCoins);
+  it('is legendary money, and still costs coins rather than XP', () => {
+    expect(item!.costCoins).toBe(950);
+    expect(item!.requiredLevel).toBe(6);
+    // Dearer than every epic, and behind only the King.
+    const epics = CATALOG.filter((c) => c.rarity === 'EPIC').map((c) => c.costCoins);
+    expect(item!.costCoins).toBeGreaterThan(Math.max(...epics));
     // Nothing here is earned rather than bought, and nothing is free.
     expect(item!.requiredAchievement).toBeUndefined();
     expect(item!.isStarter).toBeUndefined();
@@ -1097,19 +1100,8 @@ describe('every theme in the catalogue is legible', () => {
 describe('the catalogue is a ladder', () => {
   const priceOf = (key: string) => CATALOG.find((c) => c.key === key)!.costCoins;
 
-  /**
-   * Egyptian King is left out on purpose, and it is the one rung out of line:
-   * at 100 coins it is cheaper than a card style, because it was priced as the
-   * first skin anyone would ever see rather than as a place on this ladder.
-   * Repricing something students may already own is a product decision, not a
-   * tidy-up, so it stays — named here so the next reader knows it is deliberate.
-   */
   it('sells single-slot changes for less than any theme', () => {
-    const cheapest = Math.min(
-      ...CATALOG.filter((c) => c.category === 'THEME' && c.key !== 'theme-egyptian-king').map(
-        (c) => c.costCoins,
-      ),
-    );
+    const cheapest = Math.min(...CATALOG.filter((c) => c.category === 'THEME').map((c) => c.costCoins));
     for (const c of CATALOG.filter((c) =>
       ['BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE'].includes(c.category),
     )) {
@@ -1126,10 +1118,9 @@ describe('the catalogue is a ladder', () => {
     );
     expect(tint.length).toBeGreaterThan(0);
     expect(skin.length).toBeGreaterThan(0);
-    // The one deliberate exception is priced as a doorway, not as a skin.
-    const dearestTint = Math.max(...tint.map((c) => c.costCoins));
-    const skins = skin.filter((c) => c.key !== 'theme-egyptian-king');
-    expect(Math.min(...skins.map((c) => c.costCoins))).toBeGreaterThan(dearestTint);
+    expect(Math.min(...skin.map((c) => c.costCoins))).toBeGreaterThan(
+      Math.max(...tint.map((c) => c.costCoins)),
+    );
   });
 
   it('gates the dearer rungs on a level, and the cheapest on nothing', () => {
@@ -1168,6 +1159,22 @@ describe('the catalogue is a ladder', () => {
 
   it('never sells a plain accent colour, because mixing one is free', () => {
     expect(CATALOG.some((c) => c.category === 'ACCENT')).toBe(false);
+  });
+
+  /**
+   * Rarity is a promise about price, not a colour on a chip.
+   *
+   * "Legendary" meant 100 coins and 750 at the same time, which meant nothing.
+   * Each tier now has to start above where the one below it ends, so the word on
+   * the card and the number under it can never disagree again.
+   */
+  it('prices every tier above the one beneath it', () => {
+    const sold = CATALOG.filter((c) => !c.requiredAchievement);
+    const band = (r: string) => sold.filter((c) => c.rarity === r).map((c) => c.costCoins);
+    const tiers = ['COMMON', 'RARE', 'EPIC', 'LEGENDARY'].map(band).filter((b) => b.length);
+    for (let i = 1; i < tiers.length; i++) {
+      expect(Math.min(...tiers[i])).toBeGreaterThan(Math.max(...tiers[i - 1]));
+    }
   });
 
   it('gives every item a distinct key and a place in the order', () => {

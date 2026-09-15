@@ -1908,7 +1908,7 @@
     "teacherThemes": "Your teachers' looks",
     "teacherThemesHint": "The academy colours of every teacher you study with. Free and always yours — tap one to go back to your teacher's look.",
     "teacherTheme": "{{name}}'s theme",
-    "unlockFor": "Unlock for {{coins}}",
+    "unlockFor": "Unlock for {{coins}} coins",
     "bought": "Unlocked 🏆",
     "boughtHint": "“{{name}}” is yours. Put it on now?",
     "later": "Later",
@@ -1916,7 +1916,83 @@
     "storeThemes": "Store themes",
     "storeThemesHint": "A whole look for the app — the page, the menus and the buttons all change.",
     "ownedItems": "Your items",
-    "emptyBought": "You haven't bought anything from the shop yet — your teachers' themes above are always yours."
+    "emptyBought": "You haven't bought anything from the shop yet — your teachers' themes above are always yours.",
+    "previewingTheme": "Previewing the whole app in “{{name}}”",
+    "previewHint": "The sidebar, header and cards you see are the theme’s own — nothing has been saved.",
+    "backToStudio": "Back to the Studio",
+    "needsLevel": "Needs level {{level}}",
+    "notForSale": "Not for sale",
+    "previewMissing": "That theme does not exist.",
+    "fullPreview": "See the full experience",
+    "whatChanges": "What this theme changes",
+    "previewFooter": "You have {{coins}} coins. This is a preview — nothing changes until you press “unlock” or “equip”.",
+    "change": {
+      "nav": "Navigation",
+      "header": "Header",
+      "density": "Density",
+      "width": "Content width",
+      "cards": "Course cards",
+      "motion": "Motion",
+      "type": "Typeface",
+      "footer": "Footer"
+    },
+    "nav": {
+      "expanded": "Full sidebar",
+      "rail": "Icon rail",
+      "floating": "Floating sidebar",
+      "minimal": "Chromeless sidebar",
+      "glass": "Glass sidebar",
+      "hidden": "In the header, no sidebar"
+    },
+    "header": {
+      "standard": "Standard",
+      "minimal": "Transparent",
+      "floating": "Floating",
+      "glass": "Glass",
+      "compact": "Compact",
+      "centered": "Centered search",
+      "editorial": "Tall, with the page title"
+    },
+    "density": {
+      "comfortable": "Comfortable",
+      "compact": "Compact",
+      "spacious": "Spacious"
+    },
+    "width": {
+      "standard": "Standard",
+      "narrow": "Narrow",
+      "wide": "Wide",
+      "full": "Full"
+    },
+    "cardLayout": {
+      "grid": "Grid",
+      "imageFirst": "Image first",
+      "editorial": "Image beside text"
+    },
+    "motion": {
+      "subtle": "Subtle",
+      "still": "None",
+      "expressive": "Expressive"
+    },
+    "font": {
+      "default": "Default",
+      "display": "Display",
+      "tech": "Technical",
+      "round": "Rounded",
+      "serif": "Serif"
+    },
+    "footer": {
+      "none": "None",
+      "minimal": "Minimal",
+      "stats": "Your stats",
+      "bottomBar": "Bottom bar"
+    },
+    "sample": {
+      "levelName": "Level 7 — Expert",
+      "xp": "4,200 XP · 600 to the next",
+      "courses": "Course cards",
+      "controls": "Buttons and fields"
+    }
   },
   "subjects": {
     "searchPh": "Search for a subject…",

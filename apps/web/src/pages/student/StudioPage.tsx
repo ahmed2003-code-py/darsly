@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import {
   applyStudio,
@@ -957,6 +958,16 @@ function ItemCard({
         >
           {previewing ? t('myStudio.stopPreview') : t('myStudio.preview')}
         </button>
+        {/* A theme changes the whole app; a swatch cannot show that. */}
+        {item.category === 'THEME' && (
+          <Link
+            to={`/studio/preview/${item.key}`}
+            className="studio-btn flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-bold text-student-accent-ink transition hover:bg-student-accent-soft"
+          >
+            <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+            {t('myStudio.fullPreview')}
+          </Link>
+        )}
 
         {item.owned && !equipped && (
           <button

@@ -37,6 +37,7 @@ const LessonRouter = lazyPage(() => import('./pages/student/LessonRouter'));
 const WalletPage = lazyPage(() => import('./pages/student/WalletPage'));
 const LearningCenterPage = lazyPage(() => import('./pages/student/LearningCenterPage'));
 const StudioPage = lazyPage(() => import('./pages/student/StudioPage'));
+const ThemePreviewPage = lazyPage(() => import('./pages/student/ThemePreviewPage'));
 const AdminWalletPage = lazyPage(() => import('./pages/admin/AdminWalletPage'));
 const AdminDevicesPage = lazyPage(() => import('./pages/admin/AdminDevicesPage'));
 const AdminGamificationPage = lazyPage(() => import('./pages/admin/AdminGamificationPage'));
@@ -153,6 +154,7 @@ export default function App() {
       <Route path="/wallet" element={<RequireAuth role={Role.STUDENT}><WalletPage /></RequireAuth>} />
       <Route path="/learning" element={<RequireAuth role={Role.STUDENT}><LearningCenterPage /></RequireAuth>} />
       <Route path="/studio" element={<RequireAuth role={Role.STUDENT}><StudioPage /></RequireAuth>} />
+      <Route path="/studio/preview/:key" element={<RequireAuth role={Role.STUDENT}><ThemePreviewPage /></RequireAuth>} />
       <Route path="/certificate/:token" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
       <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />

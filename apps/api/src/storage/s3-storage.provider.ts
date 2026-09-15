@@ -8,15 +8,19 @@ import {
 } from './storage.provider';
 
 /**
- * S3-compatible driver (AWS S3, MinIO, DigitalOcean Spaces, Cloudflare R2).
- * Enabled with STORAGE_DRIVER=s3. The AWS SDK is loaded lazily so the local
- * driver carries no extra dependency; to use this driver, install it:
+ * S3-compatible driver (Cloudflare R2, AWS S3, MinIO, DigitalOcean Spaces).
+ * Enabled with STORAGE_DRIVER=s3.
  *
- *     npm i @aws-sdk/client-s3 --workspace=apps/api
+ * R2 is the intended production target and needs three things this driver
+ * now does on its own: the region is `auto` (R2 rejects a real region name),
+ * requests are path-style, and the endpoint is the account's
+ * `https://<account-id>.r2.cloudflarestorage.com`. Nothing else about R2 is
+ * different from S3 at the level this app uses.
  *
  * All objects stay private — the app issues its own short-lived signed URLs
  * through SignedUrlService and streams bytes itself, so bucket objects are
- * never made public and raw source keys are never handed to a client.
+ * never made public and raw source keys are never handed to a client. No
+ * bucket policy, no public access, no custom domain is needed.
  */
 @Injectable()
 export class S3StorageProvider extends StorageProvider {
@@ -36,15 +40,22 @@ export class S3StorageProvider extends StorageProvider {
         'STORAGE_DRIVER=s3 requires @aws-sdk/client-s3. Run: npm i @aws-sdk/client-s3 --workspace=apps/api',
       );
     }
+    const endpoint = process.env.S3_ENDPOINT;
+    const isR2 = /\.r2\.cloudflarestorage\.com/i.test(endpoint ?? '');
     this.client = new S3.S3Client({
-      region: process.env.S3_REGION ?? 'us-east-1',
-      endpoint: process.env.S3_ENDPOINT,
-      forcePathStyle: !!process.env.S3_ENDPOINT, // MinIO/R2 need path-style
+      // R2 only accepts `auto`; a real region name is a 400. Anyone who set
+      // one for an R2 endpoint gets the right thing rather than a puzzle.
+      region: isR2 ? 'auto' : (process.env.S3_REGION ?? 'us-east-1'),
+      endpoint,
+      forcePathStyle: !!endpoint, // MinIO and R2 want path-style
       credentials: {
         accessKeyId: process.env.S3_ACCESS_KEY ?? '',
         secretAccessKey: process.env.S3_SECRET_KEY ?? '',
       },
     });
+    if (!process.env.S3_ACCESS_KEY || !process.env.S3_SECRET_KEY) {
+      this.logger.error('STORAGE_DRIVER=s3 but S3_ACCESS_KEY / S3_SECRET_KEY are not set');
+    }
     this.client._cmds = S3;
     return this.client;
   }
@@ -105,14 +116,29 @@ export class S3StorageProvider extends StorageProvider {
     await s3.send(new s3._cmds.DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
+  /**
+   * Everything under a prefix — every page of it, a thousand at a time.
+   *
+   * The first version listed once and deleted one by one, which stops at the
+   * first thousand keys and makes a thousand requests to get there. A lesson's
+   * HLS folder can exceed that on its own, so the old folder would have been
+   * left half-deleted and billed forever.
+   */
   async deletePrefix(prefix: string): Promise<void> {
     const s3 = await this.s3();
-    const listed = await s3.send(
-      new s3._cmds.ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix }),
-    );
-    for (const obj of listed.Contents ?? []) {
-      await this.delete(obj.Key);
-    }
+    let token: string | undefined;
+    do {
+      const listed = await s3.send(
+        new s3._cmds.ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }),
+      );
+      const keys = (listed.Contents ?? []).map((o: { Key: string }) => ({ Key: o.Key }));
+      if (keys.length) {
+        await s3.send(
+          new s3._cmds.DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys, Quiet: true } }),
+        );
+      }
+      token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+    } while (token);
   }
 
   /** Remote objects have no local path — the pipeline stages through temp dirs. */

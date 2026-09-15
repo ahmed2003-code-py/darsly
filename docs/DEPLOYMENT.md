@@ -62,8 +62,10 @@ npm run dev:web                          # http://localhost:5173
 | ⭐ `ALLOWED_ORIGINS` | الدومين العام، مثال `https://darsly.up.railway.app` |
 | ⭐ `PAYMENT_LISTENER_KEY` | سر مشترك للـAndroid listener (لو فاضي، الـ endpoint بيرفض) |
 | `MAX_CONCURRENT_SESSIONS_DEFAULT` | مثال `3` |
-| `STORAGE_DRIVER` | `local` (افتراضي) أو `s3` |
-| `STORAGE_LOCAL_PATH` | `/data/storage` (قرص Railway الدائم) |
+| `STORAGE_DRIVER` | `local` (افتراضي) أو `s3`. **الإنتاج المستهدف: `s3` على Cloudflare R2** — شوف قسم 3b |
+| `STORAGE_LOCAL_PATH` | `/data/storage` (قرص Railway الدائم) — بيفضل مستخدم للتخزين المؤقت أثناء المعالجة حتى مع R2 |
+| `S3_ENDPOINT` | `https://<account-id>.r2.cloudflarestorage.com` — لما الدومين ده يتحط، الـregion بتبقى `auto` لوحدها |
+| `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` | اسم الـbucket ومفتاح R2 API بصلاحية Object Read & Write. **أسرار سيرفر.** |
 | `HLS_KEY_ROTATION_SECONDS`, `SIGNED_URL_TTL_SECONDS` | إعدادات الفيديو (اتركها افتراضية) |
 | ⚠️ `OTP_DEV_MODE` | **خلّيه `false` أو شيله في الإنتاج.** لو `true` بيرجّع توكن إعادة تعيين كلمة السر في الرد (للتجارب فقط) |
 | `DAILY_API_KEY` | مفتاح Daily للفصل المباشر. **سر سيرفر — عمره ما يروح للبراوزر**: اللي ماسكه يقدر يعمل غرف ويدخل أي حصة. من [dashboard.daily.co](https://dashboard.daily.co) → Developers. لو فاضي، الفصل الداخلي بيتعطّل والجلسات اللي فيها لينك زوم بتفضل شغّالة |
@@ -96,6 +98,48 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 7. كل `git push` على `main` بيعمل redeploy تلقائي.
 
 ---
+
+## 3b) النقل لـ Cloudflare R2 — الملفات التقيلة بره Postgres وبره القرص
+
+**إيه اللي بيروح فين بعد النقل:**
+
+```
+Railway
+├── الـAPI + الويب
+└── PostgreSQL — المدرّسين، الكورسات، الدروس، ومفاتيح الملفات (نص قصير)
+
+Cloudflare R2 (bucket خاص، مفيش وصول عام)
+├── source/          فيديو الدرس الخام
+├── hls/             الفيديو المعالَج (HLS مشفّر)
+├── attachments/     مرفقات الدروس
+├── academy-media/   صور وفيديوهات صفحات الأكاديميات
+├── chat-voice/      الرسائل الصوتية
+└── payment-proofs/  سكرينات إثبات الدفع — كانت base64 جوّه Postgres
+```
+
+الـbucket بيفضل **خاص**. الـAPI هو اللي بيقرا كل ملف ويبعته، وبيوقّع لينكات قصيرة العمر (١٠ دقايق لإثبات الدفع، `SIGNED_URL_TTL_SECONDS` للفيديو). مش محتاج bucket policy ولا دومين مخصّص.
+
+**التتابع — بالترتيب ده بالظبط، ومفيش خطوة بتتقفز:**
+
+1. **في Cloudflare:** R2 → Create bucket (اسمه مثلاً `darsly-media`) → Manage R2 API Tokens → token بصلاحية *Object Read & Write* على الـbucket ده بس. خد الـAccess Key والـSecret والـendpoint.
+2. **على Railway:** ضيف `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`. **متغيّرش `STORAGE_DRIVER` دلوقتي** — لسه `local`. Redeploy عشان الكونتينر يشوف المتغيّرات.
+3. **انقل الملفات** من جوّه الكونتينر (له القرص والمتغيّرات):
+   ```bash
+   railway run --service @darsly/api -- npm run storage:migrate --workspace=@darsly/api -- --verify
+   ```
+   السكربت بيمشي على `/data/storage` ويرفع كل ملف بنفس المفتاح، وينقل كل إثبات دفع `data:` من Postgres لـobject ويكتب المفتاح مكانه، وبعدين يتأكد إن كل ملف موجود بنفس الحجم. **آخر سطر لازم يبقى** `DONE — safe to set STORAGE_DRIVER=s3`. لو قال `PROBLEM(S)` اقرا الأسطر اللي فوقه ومتكمّلش.
+   - آمن تشغّله تاني: اللي اترفع بيتعدّى، واللي اتنقل بيتعدّى. `--dry-run` بيعدّ من غير ما يكتب.
+   - التطبيق لسه شغّال من القرص طول الوقت ده — مفيش انقطاع.
+4. **بدّل:** `STORAGE_DRIVER=s3` → Redeploy. من اللحظة دي كل قراءة وكتابة على R2.
+5. **اتأكد** — افتح درس فيه فيديو، نزّل مرفق، ارفع إثبات دفع جديد وشوفه من صفحة الأدمن، واسمع رسالة صوتية.
+6. **بعد أسبوع هادي:** القرص بقى نسخة احتياطية قديمة. ممكن يتصغّر أو يتشال — بس **بعد** ما تتأكد، مش قبل.
+
+**لو حصل مشكلة بعد الخطوة 4:** رجّع `STORAGE_DRIVER=local` وRedeploy. الملفات القديمة لسه على القرص. الملفات اللي اترفعت *بعد* التبديل بس هي اللي على R2 وحدها — عشان كده الخطوة 5 قبل ما تمسح حاجة.
+
+**ملاحظات:**
+- إثباتات الدفع اللي اتقدّمت قبل النقل بتتنقل بالسكربت؛ اللي بتتقدّم بعد الخطوة 4 بتروح R2 على طول. صفحات الأدمن مش بتتغيّر — بتستلم لينك موقّع بدل الـdata URL.
+- المعالجة (ffmpeg) لسه بتستخدم `/tmp` جوّه الكونتينر كمرحلة مؤقتة — القرص الدائم مش مطلوب ليها.
+- `deletePrefix` بيمسح مجلد HLS بالكامل على صفحات (١٠٠٠ مفتاح/طلب) — النسخة الأولى كانت بتقف عند أول ألف.
 
 ## 4) الميجريشنز — القاعدة الأهم
 

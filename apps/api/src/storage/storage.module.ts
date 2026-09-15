@@ -1,6 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { LocalStorageProvider } from './local-storage.provider';
 import { S3StorageProvider } from './s3-storage.provider';
+import { ProofFilesController } from './proof-files.controller';
+import { ProofStorageService } from './proof-storage.service';
 import { STORAGE_PROVIDER, StorageProvider } from './storage.provider';
 
 /**
@@ -9,7 +11,9 @@ import { STORAGE_PROVIDER, StorageProvider } from './storage.provider';
  */
 @Global()
 @Module({
+  controllers: [ProofFilesController],
   providers: [
+    ProofStorageService,
     LocalStorageProvider,
     S3StorageProvider,
     {
@@ -20,6 +24,6 @@ import { STORAGE_PROVIDER, StorageProvider } from './storage.provider';
     },
     { provide: StorageProvider, useExisting: STORAGE_PROVIDER },
   ],
-  exports: [StorageProvider, STORAGE_PROVIDER],
+  exports: [StorageProvider, STORAGE_PROVIDER, ProofStorageService],
 })
 export class StorageModule {}

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { validateImageDataUrl } from '../common/image.util';
+import { ProofStorageService } from '../storage/proof-storage.service';
 import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,6 +33,7 @@ export class WalletService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly notifications: NotificationsService,
+    private readonly proofs: ProofStorageService,
   ) {}
 
   // ── Student ─────────────────────────────────────────────────────────────────
@@ -71,7 +72,8 @@ export class WalletService {
   }
 
   async submitTopup(userId: string, dto: SubmitTopupDto) {
-    validateImageDataUrl(dto.proofImageUrl, PROOF_MAX_BYTES);
+    // An object, not a row: see ProofStorageService. Dropped if the row fails.
+    const proofKey = await this.proofs.store('topups', dto.proofImageUrl, PROOF_MAX_BYTES);
     const student = await this.studentOf(userId);
     const amount = Math.round(dto.amountCents);
     if (!Number.isFinite(amount) || amount < MIN_TOPUP_CENTS || amount > MAX_TOPUP_CENTS) {
@@ -89,13 +91,16 @@ export class WalletService {
         studentId: student.id,
         amountCents: amount,
         method: dto.method as any,
-        proofImageUrl: dto.proofImageUrl,
+        proofImageUrl: proofKey,
         // Same rule as a course payment: a top-up is the same transfer with no
         // course attached, matched on the same single identifier.
         reference: normalizePayerReference(dto.method, dto.reference),
         status: 'PENDING',
       },
       select: { id: true, amountCents: true, status: true, createdAt: true },
+    }).catch(async (e) => {
+      await this.proofs.discard(proofKey);
+      throw e;
     });
 
     await this.notifyAdmins(
@@ -141,7 +146,7 @@ export class WalletService {
       amountCents: r.amountCents,
       method: r.method,
       reference: r.reference,
-      proofImageUrl: r.proofImageUrl,
+      proofImageUrl: this.proofs.urlFor(r.proofImageUrl),
       status: r.status,
       rejectedReason: r.rejectedReason,
       createdAt: r.createdAt,

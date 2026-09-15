@@ -25,20 +25,21 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { VideoProcessingService } from '../video/video-processing.service';
 
-const STORAGE_ROOT = path.resolve(process.env.STORAGE_LOCAL_PATH ?? './storage');
+/**
+ * Where an upload lands first: the OS temp dir, never the storage root.
+ *
+ * Attachments used to be written by multer straight into `STORAGE_LOCAL_PATH`
+ * and read back with `fs`, around the storage provider entirely — which
+ * worked on a disk and would have silently kept working on the disk with
+ * `STORAGE_DRIVER=s3` set, while every other file went to the bucket. They
+ * stage here and go through `storage.put` like the videos do.
+ */
+const staged = diskStorage({ destination: os.tmpdir() });
 
-function storageFor(subdir: string) {
-  return diskStorage({
-    destination: (_req, _file, cb) => {
-      const dir = path.join(STORAGE_ROOT, subdir);
-      fs.mkdirSync(dir, { recursive: true });
-      cb(null, dir);
-    },
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase().slice(0, 10);
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`);
-    },
-  });
+/** A key that says what it is and cannot collide with another upload. */
+function attachmentKey(originalname: string): string {
+  const ext = path.extname(originalname).toLowerCase().slice(0, 10);
+  return `attachments/${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`;
 }
 
 const VIDEO_MIME = /^video\/(mp4|webm|quicktime|x-matroska)$/;
@@ -152,7 +153,7 @@ export class UploadsController {
   @ApiOperation({ summary: '[teacher] Attach a PDF/document/image to a lesson' })
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: storageFor('attachments'),
+      storage: staged,
       limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
       fileFilter: (_req, file, cb) =>
         ATTACHMENT_MIME.test(file.mimetype)
@@ -175,11 +176,17 @@ export class UploadsController {
     }
     // Multer decodes originalname as latin1; recover Arabic filenames.
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const storageKey = attachmentKey(file.originalname);
+    try {
+      await this.storage.put(storageKey, fs.createReadStream(file.path), { contentType: file.mimetype });
+    } finally {
+      fs.unlink(file.path, () => undefined);
+    }
     return this.prisma.attachment.create({
       data: {
         lessonId,
         fileName,
-        storageKey: path.relative(STORAGE_ROOT, file.path),
+        storageKey,
         mimeType: file.mimetype,
         sizeBytes: file.size,
       },
@@ -247,14 +254,16 @@ export class UploadsController {
     }
     if (!allowed) throw new NotFoundException('Attachment not found');
 
-    const filePath = path.join(STORAGE_ROOT, attachment.storageKey);
-    if (!fs.existsSync(filePath)) throw new NotFoundException('File missing from storage');
-
+    if (!(await this.storage.exists(attachment.storageKey))) {
+      throw new NotFoundException('File missing from storage');
+    }
+    const obj = await this.storage.getStream(attachment.storageKey);
     res.setHeader('Content-Type', attachment.mimeType);
+    if (obj.contentLength) res.setHeader('Content-Length', String(obj.contentLength));
     res.setHeader(
       'Content-Disposition',
       `attachment; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
     );
-    fs.createReadStream(filePath).pipe(res);
+    obj.stream.pipe(res);
   }
 }

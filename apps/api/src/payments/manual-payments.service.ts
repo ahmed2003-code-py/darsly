@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
-import { validateImageDataUrl } from '../common/image.util';
+import { ProofStorageService } from '../storage/proof-storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
@@ -42,6 +42,7 @@ export class ManualPaymentsService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly notifications: NotificationsService,
+    private readonly proofs: ProofStorageService,
   ) {}
 
   // ── Student: submit a proof of payment ──────────────────────────────────────
@@ -98,9 +99,13 @@ export class ManualPaymentsService {
     // for the WALLET method (nothing is transferred at all) and not when the
     // balance already covers the whole thing (same story, it just took a
     // course-priced coincidence to get there instead of a dedicated button).
-    if (!isWalletMethod && cashDueCents > 0) {
-      validateImageDataUrl(dto.proofImageUrl ?? '', PROOF_MAX_BYTES);
-    }
+    // Stored as an object first, so the transaction below only ever writes a
+    // key. If the transaction fails the object is dropped; a proof without a
+    // payment is nothing to keep.
+    const proofKey =
+      !isWalletMethod && cashDueCents > 0
+        ? await this.proofs.store('payments', dto.proofImageUrl ?? '', PROOF_MAX_BYTES)
+        : '';
 
     // Atomic: reserve the coupon slot (FIX: no longer at verify time — that let
     // many submits share a maxUses:1 coupon), upsert the PENDING_PAYMENT
@@ -133,7 +138,7 @@ export class ManualPaymentsService {
           currency: course.currency,
           gateway: 'manual',
           method: dto.method as any,
-          proofImageUrl: dto.proofImageUrl ?? '',
+          proofImageUrl: proofKey,
           reference,
           couponId,
           status: 'PENDING',
@@ -153,6 +158,9 @@ export class ManualPaymentsService {
       }
 
       return created;
+    }).catch(async (e) => {
+      if (proofKey) await this.proofs.discard(proofKey);
+      throw e;
     });
 
     // The wallet covered it entirely — there is no transfer to wait for, so
@@ -416,7 +424,7 @@ export class ManualPaymentsService {
       amountCents: p.amountCents,
       method: p.method,
       reference: p.reference,
-      proofImageUrl: p.proofImageUrl,
+      proofImageUrl: this.proofs.urlFor(p.proofImageUrl),
       rejectedReason: p.rejectedReason,
       createdAt: p.createdAt,
       studentName: p.student.user.fullName,

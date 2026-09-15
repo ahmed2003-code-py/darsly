@@ -12,7 +12,8 @@
     "db:backfill-academies": "ts-node --transpile-only scripts/backfill-academies.ts",
     "db:studio": "prisma studio",
     "test": "jest",
-    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand"
+    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
+    "storage:migrate": "ts-node --transpile-only scripts/migrate-storage-to-s3.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

@@ -233,7 +233,10 @@ export function useDailyMeeting(liveSessionId: string) {
           // lesson transcribes to nothing at all — which reads downstream as
           // "nobody spoke in this class".
           language: opts.language ?? 'ar',
-          model: 'nova-2',
+          // Nova-3, not Nova-2: Nova-2 has no Arabic at all, and Deepgram
+          // rejects the pair outright — the same "failed to start" as a dead
+          // key, which is how it hid behind one.
+          model: 'nova-3',
           punctuate: true,
         });
       }

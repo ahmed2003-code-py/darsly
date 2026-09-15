@@ -320,7 +320,12 @@ export class DailyService implements OnModuleInit {
     const me = await this.call<{ config?: { enable_transcription?: string | null } }>('/', {
       method: 'GET',
     });
-    if (me.config?.enable_transcription === wanted) return true;
+    if (me.config?.enable_transcription === wanted) {
+      // Said too, so the deploy log distinguishes "nothing to do" from
+      // "never ran" — silence was read as both, and cost an afternoon.
+      this.logger.log('Transcription provider already wired to the Daily domain');
+      return true;
+    }
     const after = await this.call<{ config?: { enable_transcription?: string | null } }>('/', {
       method: 'POST',
       body: JSON.stringify({ properties: { enable_transcription: wanted } }),

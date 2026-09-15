@@ -3,6 +3,7 @@ import { AiJob, AiJobType } from '@prisma/client';
 import { AiClient } from '../academy-site/ai/ai.client';
 import { AiJobError } from '../academy-site/ai/ai-job.error';
 import { AiJobHandler, AiJobResult } from '../academy-site/jobs/ai-job.handler';
+import { MAX_ATTEMPTS } from '../academy-site/jobs/ai-job.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DailyService } from './daily.service';
@@ -70,6 +71,15 @@ export interface LiveSummary {
 const MIN_TRANSCRIPT_CHARS = 200;
 /** Enough for a long class; the model's window is not the place to find out. */
 const MAX_TRANSCRIPT_CHARS = 120_000;
+/**
+ * How long one attempt waits for Daily to finish writing the transcript.
+ *
+ * The queue retries at once, not later, so waiting has to happen here: a
+ * teacher who ends the class and asks for the summary in the same breath is
+ * the normal case, and the file usually lands within a minute or two of the
+ * call. Mutable so a test does not have to sit through it.
+ */
+export const TRANSCRIPT_WAIT = { pollMs: 10_000, maxMs: 3 * 60_000 };
 
 @Injectable()
 export class LiveSummaryHandler implements AiJobHandler {
@@ -101,7 +111,7 @@ export class LiveSummaryHandler implements AiJobHandler {
     // button again while this was queued, must not spend a second model call.
     if (session.summaryStatus === 'READY') return;
 
-    const transcript = await this.transcriptFor(session);
+    const transcript = await this.transcriptFor(session, job.attempts);
     if (!transcript) {
       // Two different failures wear the same empty transcript, and the teacher
       // can only act on one of them. The browser reports the first one it sees
@@ -186,14 +196,46 @@ export class LiveSummaryHandler implements AiJobHandler {
    * The words, from our copy if we already have them.
    *
    * Stored on the first successful run so a regenerate does not depend on the
-   * provider still holding a transcript it expires on its own schedule.
+   * provider still holding a transcript it expires on its own schedule. When
+   * the provider is still writing it, this waits — and on the last attempt,
+   * leaves the session in a state the teacher can act on rather than one that
+   * spins forever.
    */
-  private async transcriptFor(session: { transcriptText: string | null; roomName: string | null }) {
+  private async transcriptFor(
+    session: { id: string; transcriptText: string | null; roomName: string | null },
+    attempt: number,
+  ): Promise<string | null> {
     const own = session.transcriptText?.trim();
     if (own && own.length >= MIN_TRANSCRIPT_CHARS) return own;
     if (!session.roomName) return null;
-    const fetched = await this.daily.transcriptFor(session.roomName);
-    if (!fetched || fetched.length < MIN_TRANSCRIPT_CHARS) return null;
-    return fetched;
+    const deadline = Date.now() + TRANSCRIPT_WAIT.maxMs;
+    for (;;) {
+      const found = await this.daily.transcriptFor(session.roomName);
+      if (found.state === 'ready') return found.text.length >= MIN_TRANSCRIPT_CHARS ? found.text : null;
+      if (found.state === 'none') return null;
+      if (found.state === 'error') {
+        await this.giveUpIfLast(session.id, attempt, 'PROVIDER_UNREACHABLE');
+        throw new AiJobError('Could not reach the transcript provider', 'RETRYABLE');
+      }
+      if (Date.now() >= deadline) {
+        await this.giveUpIfLast(session.id, attempt, 'TRANSCRIPT_PENDING');
+        throw new AiJobError('Transcript is still being processed by the provider', 'RETRYABLE');
+      }
+      await new Promise((r) => setTimeout(r, TRANSCRIPT_WAIT.pollMs));
+    }
+  }
+
+  /**
+   * The queue marks a job FAILED after its last retry, but knows nothing of
+   * the session — which would otherwise show "processing" until the end of
+   * time. On the final attempt the session is told too, with a reason the
+   * screen can turn into "try again in a bit".
+   */
+  private async giveUpIfLast(sessionId: string, attempt: number, reason: string) {
+    if (attempt < MAX_ATTEMPTS) return;
+    await this.prisma.liveSession.update({
+      where: { id: sessionId },
+      data: { summaryStatus: 'FAILED', summaryError: reason },
+    });
   }
 }

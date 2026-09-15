@@ -9,7 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AcademySiteConfig } from '../academy-site.config';
 import { AiErrorClass } from '../ai/ai-job.error';
 
-const MAX_ATTEMPTS = 3;
+export const MAX_ATTEMPTS = 3;
 
 /**
  * DB-backed job queue for AI work (no Redis). Jobs are claimed atomically with

@@ -28,6 +28,20 @@ export interface DailyRoom {
 }
 
 /**
+ * What the provider has for a room's words. Four answers, because the caller
+ * does four different things with them: summarise, wait, give up, or try
+ * later — and "give up" is the only one that should be rare.
+ */
+export type TranscriptLookup =
+  | { state: 'ready'; text: string }
+  /** Transcription ran and Daily is still writing the file. */
+  | { state: 'pending' }
+  /** No transcript was ever made for this room, or it came out empty. */
+  | { state: 'none' }
+  /** We could not ask. Says nothing about the transcript. */
+  | { state: 'error' };
+
+/**
  * The words out of a WebVTT file.
  *
  * Daily hands transcripts back as subtitles — a header, cue numbers and
@@ -382,11 +396,13 @@ export class DailyService implements OnModuleInit {
   /**
    * The words that were spoken, if the provider captured them.
    *
-   * Returns null rather than throwing when transcription is not on the plan —
-   * the summary is a bonus on top of a class that already happened, and a
-   * missing transcript must not read as a broken lesson.
+   * A room can have several transcripts — a teacher who dropped and rejoined
+   * started transcription twice — so every finished one is fetched and they
+   * are joined oldest first. And a transcript that is still being written is
+   * reported as such rather than as absent: the teacher who taps "summary"
+   * ten seconds after ending the class is the common case, not the edge.
    */
-  async transcriptFor(roomName: string): Promise<string | null> {
+  async transcriptFor(roomName: string): Promise<TranscriptLookup> {
     try {
       // Listed, then filtered here: Daily's transcript endpoint rejects a
       // `roomName` query outright ("roomName is not allowed"), and the 400 it
@@ -395,26 +411,35 @@ export class DailyService implements OnModuleInit {
       const list = await this.call<{
         data?: { transcriptId?: string; id?: string; status?: string; roomName?: string }[];
       }>('/transcript', { method: 'GET' });
+      const mine = (list.data ?? []).filter((t) => t.roomName === roomName);
+      if (!mine.length) return { state: 'none' };
       // Daily prefixes these ("t_in_progress", "t_finished"), and has changed
       // the spelling before. Matching on the word rather than the exact string
       // means a rename does not silently turn every lesson into "no transcript".
-      const done = (list.data ?? []).find(
-        (t) => t.roomName === roomName && /finish/i.test(t.status ?? ''),
-      );
-      // The id lives under `transcriptId`; `id` is present but null.
-      const transcriptId = done?.transcriptId ?? done?.id;
-      if (!transcriptId) return null;
-      const link = await this.call<{ link?: string }>(
-        `/transcript/${encodeURIComponent(transcriptId)}/access-link`,
-        { method: 'GET' },
-      );
-      if (!link.link) return null;
-      const res = await fetch(link.link, { signal: AbortSignal.timeout(20_000) });
-      if (!res.ok) return null;
-      return plainTextFromVtt(await res.text());
+      if (mine.some((t) => /progress|pending|queued|start/i.test(t.status ?? ''))) {
+        return { state: 'pending' };
+      }
+      const parts: string[] = [];
+      // Newest first from Daily; a lesson reads oldest first.
+      for (const t of mine.filter((t) => /finish/i.test(t.status ?? '')).reverse()) {
+        // The id lives under `transcriptId`; `id` is present but null.
+        const transcriptId = t.transcriptId ?? t.id;
+        if (!transcriptId) continue;
+        const link = await this.call<{ link?: string }>(
+          `/transcript/${encodeURIComponent(transcriptId)}/access-link`,
+          { method: 'GET' },
+        );
+        if (!link.link) continue;
+        const res = await fetch(link.link, { signal: AbortSignal.timeout(20_000) });
+        if (!res.ok) continue;
+        const text = plainTextFromVtt(await res.text());
+        if (text) parts.push(text);
+      }
+      const text = parts.join('\n').trim();
+      return text ? { state: 'ready', text } : { state: 'none' };
     } catch (e) {
-      this.logger.warn(`No transcript for room ${roomName}: ${(e as Error).message}`);
-      return null;
+      this.logger.warn(`Could not look up transcripts for room ${roomName}: ${(e as Error).message}`);
+      return { state: 'error' };
     }
   }
 

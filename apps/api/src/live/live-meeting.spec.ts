@@ -361,6 +361,55 @@ describe('the transcription provider is wired by the server, not by hand', () =>
   });
 });
 
+describe('a room\'s words are looked up, not assumed', () => {
+  const svc = () => new (require('./daily.service').DailyService)();
+  const vtt = (...lines: string[]) => ['WEBVTT', '', '1', '00:00:01.000 --> 00:00:02.000', ...lines].join('\n');
+
+  const daily = (transcripts: any[], files: Record<string, string>) => {
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/transcript')) return { ok: true, status: 200, json: async () => ({ data: transcripts }), text: async () => '' } as any;
+      const m = url.match(/\/transcript\/([^/]+)\/access-link$/);
+      if (m) return { ok: true, status: 200, json: async () => ({ link: `https://files/${m[1]}` }), text: async () => '' } as any;
+      const f = url.match(/^https:\/\/files\/(.+)$/);
+      if (f) return { ok: true, status: 200, text: async () => files[f[1]] } as any;
+      throw new Error(`unexpected ${url}`);
+    }) as any;
+  };
+
+  beforeEach(() => { process.env.DAILY_API_KEY = 'daily_test'; });
+  afterEach(() => { delete process.env.DAILY_API_KEY; jest.restoreAllMocks(); });
+
+  it('joins a rejoined teacher\'s two transcripts, oldest first', async () => {
+    daily(
+      [
+        { transcriptId: 'b', status: 't_finished', roomName: 'r1' },
+        { transcriptId: 'a', status: 't_finished', roomName: 'r1' },
+        { transcriptId: 'x', status: 't_finished', roomName: 'other' },
+      ],
+      { a: vtt('Speaker 0: أول جزء'), b: vtt('Speaker 0: تاني جزء') },
+    );
+    const got = await svc().transcriptFor('r1');
+    expect(got).toEqual({ state: 'ready', text: 'Speaker 0: أول جزء\nSpeaker 0: تاني جزء' });
+  });
+
+  it('says "pending" while any segment is still being written', async () => {
+    daily([{ transcriptId: 'a', status: 't_in_progress', roomName: 'r1' }], {});
+    expect(await svc().transcriptFor('r1')).toEqual({ state: 'pending' });
+  });
+
+  it('says "none" for a room that was never transcribed, and for an empty file', async () => {
+    daily([], {});
+    expect(await svc().transcriptFor('r1')).toEqual({ state: 'none' });
+    daily([{ transcriptId: 'a', status: 't_finished', roomName: 'r1' }], { a: 'WEBVTT\n' });
+    expect(await svc().transcriptFor('r1')).toEqual({ state: 'none' });
+  });
+
+  it('says "error", not "none", when the provider cannot be reached', async () => {
+    global.fetch = jest.fn(async () => { throw new Error('down'); }) as any;
+    expect(await svc().transcriptFor('r1')).toEqual({ state: 'error' });
+  });
+});
+
 describe('a student enters the classroom', () => {
   const live = (over: Partial<Session> = {}): Session => ({
     id: 'ls1',

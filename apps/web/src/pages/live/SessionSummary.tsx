@@ -181,6 +181,17 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
           <div className="py-2">
             <p className="text-sm text-outline">{t('summary.noTranscript')}</p>
           </div>
+        ) : d.summary.error === 'TRANSCRIPT_PENDING' || d.summary.error === 'PROVIDER_UNREACHABLE' ? (
+          // The words exist, or may well: the provider had not finished with
+          // them, or could not be asked. Trying again is exactly right here.
+          <div className="py-2">
+            <p className="mb-2 text-sm text-outline">{t('summary.transcriptPending')}</p>
+            {isTeacher && (
+              <button className="btn-ghost text-sm" disabled={generate.isPending} onClick={() => generate.mutate()}>
+                {t('summary.retry')}
+              </button>
+            )}
+          </div>
         ) : (
           <div className="py-2">
             <p className="mb-2 text-sm text-outline">{t('summary.failed')}</p>

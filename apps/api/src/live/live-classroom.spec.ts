@@ -84,7 +84,7 @@ function world(over: {
     // What the provider says about a recording that has not finished yet,
     // unless a test needs it to have finished.
     recording: jest.fn(async () => ({ status: over.remoteRecording ?? 'in-progress' })),
-    transcriptFor: jest.fn(async () => null),
+    transcriptFor: jest.fn(async () => ({ state: 'none' })),
   } as unknown as DailyService;
   const realtime = { emitToLive: jest.fn() } as any;
   const jobs = { enqueue: jest.fn(async () => ({ id: 'j1' })) } as any;
@@ -295,6 +295,7 @@ describe('the summary is written only from the transcript', () => {
       summaryStatus?: string;
       transcriptStatus?: string;
       transcriptionAvailable?: boolean | null;
+      lookup?: jest.Mock;
       ai?: any;
     } = {},
   ) => {
@@ -318,14 +319,14 @@ describe('the summary is written only from the transcript', () => {
       })),
     }) as unknown as AiClient;
     const daily = {
-      transcriptFor: jest.fn(async () => null),
+      transcriptFor: over.lookup ?? jest.fn(async () => ({ state: 'none' })),
       transcriptionAvailable: jest.fn(async () => over.transcriptionAvailable ?? true),
     } as unknown as DailyService;
     const notifications = { create: jest.fn(async () => ({})) } as unknown as NotificationsService;
     return { handler: new LiveSummaryHandler(prisma, ai, daily, notifications), ai, updated, notifications };
   };
 
-  const job = { id: 'j1', input: { liveSessionId: 'ls1' } } as any;
+  const job = { id: 'j1', attempts: 1, input: { liveSessionId: 'ls1' } } as any;
   const LESSON = 'المدرس: '.padEnd(400, 'ا');
 
   it('summarises a real transcript and stores it', async () => {
@@ -383,6 +384,55 @@ describe('the summary is written only from the transcript', () => {
     const { handler, ai } = handlerWith({ transcript: 'أهلاً' });
     await handler.handle(job).catch(() => undefined);
     expect(ai.completeStructured).not.toHaveBeenCalled();
+  });
+
+  describe('when the provider is still writing the transcript', () => {
+    const { TRANSCRIPT_WAIT } = require('./live-summary.handler');
+    const saved = { ...TRANSCRIPT_WAIT };
+    beforeEach(() => { TRANSCRIPT_WAIT.pollMs = 5; TRANSCRIPT_WAIT.maxMs = 40; });
+    afterEach(() => Object.assign(TRANSCRIPT_WAIT, saved));
+
+    it('waits for it rather than calling the lesson silent', async () => {
+      // The teacher ends the class and asks in the same breath. Daily is a
+      // few seconds behind; that is not "nobody spoke".
+      const lookup = jest
+        .fn()
+        .mockResolvedValueOnce({ state: 'pending' })
+        .mockResolvedValueOnce({ state: 'pending' })
+        .mockResolvedValue({ state: 'ready', text: LESSON });
+      const { handler, updated } = handlerWith({ lookup });
+      await handler.handle(job);
+      expect(lookup).toHaveBeenCalledTimes(3);
+      expect(updated.some((u) => u.summaryStatus === 'READY')).toBe(true);
+    });
+
+    it('hands the job back to the queue when the wait runs out, without failing the session', async () => {
+      const lookup = jest.fn(async () => ({ state: 'pending' }));
+      const { handler, updated } = handlerWith({ lookup });
+      const err = await handler.handle(job).catch((e) => e);
+      expect(err).toBeInstanceOf(AiJobError);
+      expect(err.errorClass).toBe('RETRYABLE');
+      // Still "processing" on the session: the queue will try again.
+      expect(updated.some((u) => u.summaryStatus === 'FAILED')).toBe(false);
+    });
+
+    it('on the last attempt, leaves the session somewhere the teacher can retry from', async () => {
+      // The queue marks the job FAILED but never touches the session, which
+      // would otherwise spin forever.
+      const lookup = jest.fn(async () => ({ state: 'pending' }));
+      const { handler, updated } = handlerWith({ lookup });
+      await handler.handle({ ...job, attempts: 3 }).catch(() => undefined);
+      expect(updated.some((u) => u.summaryStatus === 'FAILED' && u.summaryError === 'TRANSCRIPT_PENDING')).toBe(true);
+    });
+
+    it('treats "could not ask" as retryable, never as "no transcript"', async () => {
+      const lookup = jest.fn(async () => ({ state: 'error' }));
+      const { handler, updated, ai } = handlerWith({ lookup });
+      const err = await handler.handle(job).catch((e) => e);
+      expect(err.errorClass).toBe('RETRYABLE');
+      expect(ai.completeStructured).not.toHaveBeenCalled();
+      expect(updated.some((u) => u.summaryError === 'NO_TRANSCRIPT')).toBe(false);
+    });
   });
 
   it('does nothing at all for a session already summarised', async () => {

@@ -1995,7 +1995,8 @@
     "recFailed": "The recording is not available.",
     "recNotShared": "Students will see it once you share the lesson with them.",
     "underMinute": "Under a minute",
-    "noTranscript": "No speech was captured in this session, so there is nothing to summarise. Summaries are built from what was said during the class.",
-    "transcriptionOff": "Transcription is not enabled on the platform’s video account, so there is no text to summarise. This is a provider setting that needs turning on."
+    "noTranscript": "No speech was captured in this session, so there is nothing to summarise. Summaries are built from what was said during the class — check that the mic was on and that the lesson ran longer than a few seconds.",
+    "transcriptionOff": "Transcription is not enabled on the platform’s video account, so there is no text to summarise. This is a provider setting that needs turning on.",
+    "transcriptPending": "The lesson's transcript is still being prepared by the video provider. Give it a minute and try again."
   }
 }

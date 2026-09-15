@@ -178,6 +178,32 @@ describe('a teacher opens the classroom', () => {
     expect(session!.status).toBe('SCHEDULED');
   });
 
+  it('reopens a class the teacher ended by mistake, inside its window', async () => {
+    // Tapping "end for all" two minutes into an hour is a slip, not a decision
+    // to throw the lesson away and make everyone rebook.
+    const { service, daily } = build({
+      session: {
+        id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() - 2 * MIN),
+        durationMin: 60, status: 'ENDED', roomName: null, roomUrl: null,
+      },
+    });
+    const res = await service.start('t1', 'ls1', 'u');
+    expect(res.participant.role).toBe('TEACHER');
+    // The old room was deleted when it ended, so this is a fresh one.
+    expect(daily.createRoom).toHaveBeenCalled();
+  });
+
+  it('will not reopen one whose window has closed', async () => {
+    const { service } = build({
+      session: {
+        id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() - 5 * 3600_000),
+        status: 'ENDED',
+      },
+    });
+    const err = await service.start('t1', 'ls1', 'u').catch((e) => e);
+    expect(err.getResponse()).toMatchObject({ code: 'ENDED' });
+  });
+
   it('does not leave a session LIVE when the provider fails', async () => {
     const { service, session } = build({
       session: { id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },

@@ -262,7 +262,12 @@ export class LiveService {
    */
   async start(tenantId: string, id: string, actorUserId: string) {
     const session = await this.assertOwned(tenantId, id);
-    if (session.status === 'ENDED' || this.pastWindow(session)) {
+    // Only the clock closes a session for good. Pressing "end for all" two
+    // minutes into an hour-long class — by accident, or to clear a room that
+    // went wrong — must not cost the teacher the other fifty-eight and force
+    // every student to rebook. Inside its own window a class can be reopened,
+    // which creates a fresh room because the old one was deleted on the way out.
+    if (this.pastWindow(session)) {
       throw new BadRequestException({ message: 'انتهت هذه الجلسة', code: 'ENDED' });
     }
     if (Date.now() < session.startsAt.getTime() - JOIN_OPENS_MIN * 60_000) {
@@ -273,7 +278,9 @@ export class LiveService {
     }
 
     // Already running: starting twice is the same room, not a second one. This
-    // is the refresh case and the two-tabs case, and both should just work.
+    // is the refresh case and the two-tabs case, and both should just work. A
+    // session that was ended has no room any more, so it falls through and
+    // gets a new one.
     if (session.status === 'LIVE' && session.roomName) {
       return this.teacherEntry(session, actorUserId);
     }
@@ -282,7 +289,9 @@ export class LiveService {
     // so two taps a millisecond apart cannot both win it.
     const claimed = await this.prisma.liveSession.updateMany({
       where: { id, tenantId, status: { not: 'LIVE' }, deletedAt: null },
-      data: { status: 'LIVE', startedAt: new Date() },
+      // `endedAt` is cleared on the way back in, so a reopened class does not
+      // carry a finish time from the run before it.
+      data: { status: 'LIVE', startedAt: new Date(), endedAt: null },
     });
     if (claimed.count === 0) {
       const fresh = await this.assertOwned(tenantId, id);

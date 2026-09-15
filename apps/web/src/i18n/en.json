@@ -1948,6 +1948,13 @@
       "LIVE_PROVIDER_UNREACHABLE": "Could not reach the video service. Try again shortly.",
       "LIVE_PROVIDER_ERROR": "Could not prepare the meeting room. Try again shortly.",
       "GENERIC": "Could not enter the meeting. Check your booking and try again."
+    },
+    "shareUnsupported": "Screen sharing is not available on mobile",
+    "waitingStudents": "Waiting for students to join…",
+    "waitingTeacherInRoom": "Waiting for the teacher to join…",
+    "notice": {
+      "SHARE_UNSUPPORTED": "Mobile browsers cannot share a screen. Open the class on a computer to share yours.",
+      "SHARE_FAILED": "Could not start screen sharing. Try again."
     }
   }
 }

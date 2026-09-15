@@ -68,6 +68,8 @@ export function useDailyMeeting(liveSessionId: string) {
   const [micOn, setMicOn] = useState(false);
   const [camOn, setCamOn] = useState(false);
   const [sharing, setSharing] = useState(false);
+  /** A short, self-clearing line for the things that fail quietly. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Built in an effect rather than during render, and only once the previous
   // page's teardown has finished.
@@ -184,17 +186,34 @@ export function useDailyMeeting(liveSessionId: string) {
     setCamOn(next);
   }, []);
 
+  /**
+   * Whether this device can share a screen at all.
+   *
+   * Android has no `getDisplayMedia`: capturing the screen from a web page is
+   * not a thing the platform offers, and most students are on a phone. Asked
+   * once here so the page can say so, rather than showing a button that looks
+   * alive and does nothing when pressed — which is what it did before.
+   */
+  const canShare =
+    typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+
   const toggleShare = useCallback(async () => {
     const c = callRef.current;
     if (!c) return;
+    if (!canShare) {
+      setNotice('SHARE_UNSUPPORTED');
+      return;
+    }
     try {
       if (sharing) c.stopScreenShare();
       else await c.startScreenShare();
-    } catch {
-      // The browser refused, or the user cancelled the picker. Neither is an
-      // error worth interrupting a class for.
+    } catch (e: any) {
+      // Cancelling the picker is not a failure — it is the answer "no".
+      const name = e?.name ?? '';
+      if (name === 'NotAllowedError' || name === 'AbortError') return;
+      setNotice('SHARE_FAILED');
     }
-  }, [sharing]);
+  }, [sharing, canShare]);
 
   /** Owner-only, and the server decided who that is. */
   const muteParticipant = useCallback((sessionId: string) => {
@@ -214,10 +233,20 @@ export function useDailyMeeting(liveSessionId: string) {
     return () => clearInterval(h);
   }, [joined, liveSessionId]);
 
+  // Notices are transient: a class is not the place for a message that has to
+  // be dismissed before the video comes back.
+  useEffect(() => {
+    if (!notice) return;
+    const h = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(h);
+  }, [notice]);
+
   return {
     participants,
     joined,
     error,
+    notice,
+    canShare,
     micOn,
     camOn,
     sharing,

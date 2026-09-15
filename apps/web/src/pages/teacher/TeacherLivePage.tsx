@@ -163,15 +163,17 @@ export default function TeacherLivePage() {
           {!useExternal ? (
             <button
               type="button"
-              className="mt-2 text-xs font-bold text-primary hover:underline"
+              className="mt-2 text-xs font-bold text-primary underline underline-offset-2"
               onClick={() => setUseExternal(true)}
             >
               {t('live.useExternal')}
             </button>
           ) : (
-            <div className="mt-2">
+            // The way back has to look like a control. As a line of bold text
+            // it read as a caption, so the field could be opened and not shut.
+            <div className="mt-2 flex items-center gap-2">
               <input
-                className="input"
+                className="input flex-1"
                 dir="ltr"
                 value={form.joinUrl}
                 onChange={(e) => setForm({ ...form, joinUrl: e.target.value })}
@@ -179,10 +181,12 @@ export default function TeacherLivePage() {
               />
               <button
                 type="button"
-                className="mt-1.5 text-xs font-bold text-outline hover:text-on-surface"
+                aria-label={t('live.useBuiltIn')}
+                title={t('live.useBuiltIn')}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface-container-highest text-on-surface-variant transition active:scale-95"
                 onClick={() => { setUseExternal(false); setForm({ ...form, joinUrl: '' }); }}
               >
-                {t('live.useBuiltIn')}
+                <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
           )}

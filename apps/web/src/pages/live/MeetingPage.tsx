@@ -89,33 +89,48 @@ function Tile({
   );
 }
 
-/** One control. Round, large enough for a thumb, and labelled for screen readers. */
+/**
+ * One control. Round, thumb-sized, and its state readable at a glance.
+ *
+ * Four states rather than two, because they mean different things: neutral is
+ * "on and unremarkable", `off` is muted or dark (red, because it is the one
+ * you need to notice), `active` is doing something right now (screen share),
+ * and `dim` is a control this device cannot offer at all.
+ */
 function Ctl({
   icon,
-  on,
+  off,
+  active,
+  dim,
   danger,
   label,
   onClick,
 }: {
   icon: string;
-  on?: boolean;
+  off?: boolean;
+  active?: boolean;
+  dim?: boolean;
   danger?: boolean;
   label: string;
   onClick: () => void;
 }) {
+  const tone = danger
+    ? 'bg-error text-on-error shadow-sm'
+    : dim
+      ? 'bg-surface-container text-outline/60'
+      : active
+        ? 'bg-primary text-on-primary'
+        : off
+          ? 'bg-error-container text-on-error-container'
+          : 'bg-surface-container-highest text-on-surface';
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
+      aria-pressed={active ?? !off}
       title={label}
-      className={`grid h-12 w-12 shrink-0 place-items-center rounded-full transition active:scale-95 sm:h-11 sm:w-11 ${
-        danger
-          ? 'bg-error text-on-error'
-          : on
-            ? 'bg-surface-container-highest text-on-surface'
-            : 'bg-error-container text-on-error-container'
-      }`}
+      className={`grid h-12 w-12 shrink-0 place-items-center rounded-full transition active:scale-95 ${tone}`}
     >
       <span className="material-symbols-outlined text-[22px]">{icon}</span>
     </button>
@@ -224,8 +239,8 @@ export default function MeetingPage() {
           </div>
 
           <div className="mb-5 flex justify-center gap-3">
-            <Ctl icon={wantMic ? 'mic' : 'mic_off'} on={wantMic} label={t('meeting.mic')} onClick={() => setWantMic((v) => !v)} />
-            <Ctl icon={wantCam ? 'videocam' : 'videocam_off'} on={wantCam} label={t('meeting.cam')} onClick={() => setWantCam((v) => !v)} />
+            <Ctl icon={wantMic ? 'mic' : 'mic_off'} off={!wantMic} label={t('meeting.mic')} onClick={() => setWantMic((v) => !v)} />
+            <Ctl icon={wantCam ? 'videocam' : 'videocam_off'} off={!wantCam} label={t('meeting.cam')} onClick={() => setWantCam((v) => !v)} />
           </div>
 
           <button
@@ -285,6 +300,18 @@ export default function MeetingPage() {
           ) : (
             <Initial name={stage?.name ?? ''} />
           )}
+
+          {/* Alone. Says what is happening instead of showing a dark rectangle
+              and letting the teacher wonder whether it is broken. */}
+          {others.length === 0 && (
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 text-center">
+              <div className="mx-auto max-w-xs rounded-2xl bg-on-surface/55 px-4 py-3 backdrop-blur-sm">
+                <p className="font-heading text-sm font-bold text-surface">
+                  {amOwner ? t('meeting.waitingStudents') : t('meeting.waitingTeacherInRoom')}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
             <span className="text-xs font-bold text-white">
               {screener ? t('meeting.sharingScreen', { name: screener.name }) : (stage?.local ? t('meeting.you') : stage?.name ?? '')}
@@ -306,16 +333,37 @@ export default function MeetingPage() {
         )}
       </main>
 
+      <AnimatePresence>
+        {meeting.notice && (
+          <m.p
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="mx-3 mb-1 rounded-xl bg-on-surface/85 px-3 py-2 text-center text-xs font-bold text-surface"
+          >
+            {t(`meeting.notice.${meeting.notice}`)}
+          </m.p>
+        )}
+      </AnimatePresence>
+
       {/* Controls sit above the home indicator, always reachable with a thumb. */}
       <footer className="flex flex-wrap items-center justify-center gap-2.5 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1">
-        <Ctl icon={meeting.micOn ? 'mic' : 'mic_off'} on={meeting.micOn} label={t('meeting.mic')} onClick={meeting.toggleMic} />
-        <Ctl icon={meeting.camOn ? 'videocam' : 'videocam_off'} on={meeting.camOn} label={t('meeting.cam')} onClick={meeting.toggleCam} />
-        <Ctl icon="present_to_all" on={!meeting.sharing} label={t('meeting.share')} onClick={meeting.toggleShare} />
-        <Ctl icon="group" on label={t('meeting.people')} onClick={() => setShowPeople((v) => !v)} />
+        <Ctl icon={meeting.micOn ? 'mic' : 'mic_off'} off={!meeting.micOn} label={t('meeting.mic')} onClick={meeting.toggleMic} />
+        <Ctl icon={meeting.camOn ? 'videocam' : 'videocam_off'} off={!meeting.camOn} label={t('meeting.cam')} onClick={meeting.toggleCam} />
+        {/* Dimmed rather than hidden on a phone: a teacher who expects to share
+            should be told their device cannot, not left hunting for a button. */}
+        <Ctl
+          icon={meeting.sharing ? 'cancel_presentation' : 'present_to_all'}
+          active={meeting.sharing}
+          dim={!meeting.canShare}
+          label={meeting.canShare ? t('meeting.share') : t('meeting.shareUnsupported')}
+          onClick={meeting.toggleShare}
+        />
+        <Ctl icon="group" label={t('meeting.people')} onClick={() => setShowPeople((v) => !v)} />
         <Ctl icon="call_end" danger label={t('meeting.leave')} onClick={leaveAndGo} />
         {amOwner && (
           <button
-            className="rounded-full bg-error-container px-4 py-3 text-xs font-extrabold text-on-error-container sm:py-2.5"
+            className="h-12 rounded-full bg-error-container px-4 text-xs font-extrabold text-on-error-container transition active:scale-95"
             onClick={() => window.confirm(t('meeting.endConfirm')) && end.mutate()}
           >
             {t('meeting.endForAll')}

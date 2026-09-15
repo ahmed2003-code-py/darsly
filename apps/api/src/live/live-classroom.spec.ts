@@ -289,11 +289,20 @@ describe('a transcript arrives as subtitles, and is read as speech', () => {
 });
 
 describe('the summary is written only from the transcript', () => {
-  const handlerWith = (over: { transcript?: string | null; summaryStatus?: string; ai?: any } = {}) => {
+  const handlerWith = (
+    over: {
+      transcript?: string | null;
+      summaryStatus?: string;
+      transcriptStatus?: string;
+      transcriptionAvailable?: boolean | null;
+      ai?: any;
+    } = {},
+  ) => {
     const session = {
       id: 'ls1', tenantId: 't1', title: 'الجبر', roomName: 'darsly-ls1',
       transcriptText: over.transcript ?? null,
       summaryStatus: over.summaryStatus ?? 'PROCESSING',
+      transcriptStatus: over.transcriptStatus ?? 'NOT_STARTED',
       teacher: { userId: 'u_teacher' },
     };
     const updated: any[] = [];
@@ -308,7 +317,10 @@ describe('the summary is written only from the transcript', () => {
         data: { summary: 's', topics: [], keyPoints: [], questionsAndAnswers: [], actionItems: [] },
       })),
     }) as unknown as AiClient;
-    const daily = { transcriptFor: jest.fn(async () => null) } as unknown as DailyService;
+    const daily = {
+      transcriptFor: jest.fn(async () => null),
+      transcriptionAvailable: jest.fn(async () => over.transcriptionAvailable ?? true),
+    } as unknown as DailyService;
     const notifications = { create: jest.fn(async () => ({})) } as unknown as NotificationsService;
     return { handler: new LiveSummaryHandler(prisma, ai, daily, notifications), ai, updated, notifications };
   };
@@ -333,6 +345,38 @@ describe('the summary is written only from the transcript', () => {
     expect(err.errorClass).toBe('TERMINAL');
     expect(ai.completeStructured).not.toHaveBeenCalled();
     expect(updated.some((u) => u.summaryError === 'NO_TRANSCRIPT')).toBe(true);
+  });
+
+  it('says transcription was unavailable when the account cannot transcribe at all', async () => {
+    // The lesson happened and the teacher talked through it; telling them "no
+    // speech was captured" blames them for the platform's own gap. The account
+    // is the authority here, and it is asked even when the browser reported
+    // nothing — the teacher may well have closed the tab before the error.
+    const { handler, updated } = handlerWith({ transcript: null, transcriptionAvailable: false });
+    await handler.handle(job).catch(() => undefined);
+    expect(updated.some((u) => u.summaryError === 'TRANSCRIPTION_UNAVAILABLE')).toBe(true);
+  });
+
+  it('still says "no transcript" when transcription works and nobody spoke', async () => {
+    const { handler, updated } = handlerWith({ transcript: null, transcriptionAvailable: true });
+    await handler.handle(job).catch(() => undefined);
+    expect(updated.some((u) => u.summaryError === 'NO_TRANSCRIPT')).toBe(true);
+  });
+
+  it('does not invent a cause when the provider cannot be reached', async () => {
+    // Unknown is not "unavailable": an outage while we ask must not tell the
+    // teacher their account is missing a feature it may well have.
+    const { handler, updated } = handlerWith({ transcript: null, transcriptionAvailable: null });
+    await handler.handle(job).catch(() => undefined);
+    expect(updated.some((u) => u.summaryError === 'NO_TRANSCRIPT')).toBe(true);
+  });
+
+  it('believes the lesson itself when the browser reported a failure', async () => {
+    const { handler, updated } = handlerWith({
+      transcript: null, transcriptStatus: 'FAILED', transcriptionAvailable: true,
+    });
+    await handler.handle(job).catch(() => undefined);
+    expect(updated.some((u) => u.summaryError === 'TRANSCRIPTION_UNAVAILABLE')).toBe(true);
   });
 
   it('treats a near-empty transcript as no transcript', async () => {

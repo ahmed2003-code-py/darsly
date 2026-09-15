@@ -91,7 +91,7 @@ export class LiveSummaryHandler implements AiJobHandler {
       where: { id: liveSessionId },
       select: {
         id: true, tenantId: true, title: true, roomName: true,
-        transcriptText: true, summaryStatus: true,
+        transcriptText: true, summaryStatus: true, transcriptStatus: true,
         teacher: { select: { userId: true } },
       },
     });
@@ -103,6 +103,15 @@ export class LiveSummaryHandler implements AiJobHandler {
 
     const transcript = await this.transcriptFor(session);
     if (!transcript) {
+      // Two different failures wear the same empty transcript, and the teacher
+      // can only act on one of them. The browser reports the first one it sees
+      // mid-lesson, but a teacher who closed the tab reports nothing — so the
+      // account itself is asked as well, and is believed when it says the
+      // platform was never able to listen.
+      const reason =
+        session.transcriptStatus === 'FAILED' || (await this.daily.transcriptionAvailable()) === false
+          ? 'TRANSCRIPTION_UNAVAILABLE'
+          : 'NO_TRANSCRIPT';
       // Not a failure of ours, and not retryable: the words were never
       // captured, and asking again tomorrow will not capture them.
       await this.prisma.liveSession.update({
@@ -110,10 +119,10 @@ export class LiveSummaryHandler implements AiJobHandler {
         data: {
           transcriptStatus: 'FAILED',
           summaryStatus: 'FAILED',
-          summaryError: 'NO_TRANSCRIPT',
+          summaryError: reason,
         },
       });
-      throw new AiJobError('No transcript available for this session', 'TERMINAL');
+      throw new AiJobError(`No transcript available for this session (${reason})`, 'TERMINAL');
     }
 
     let data: LiveSummary;

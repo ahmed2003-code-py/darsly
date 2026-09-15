@@ -313,6 +313,7 @@ export default function MeetingPage() {
                 mic: wantMic,
                 cam: wantCam,
                 owner: entry.data.participant.role === 'TEACHER',
+                language: entry.data.meeting.language,
               });
               setReady(true);
             }}

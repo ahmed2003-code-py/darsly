@@ -19,6 +19,8 @@ const API = 'https://api.daily.co/v1';
 const ROOM_GRACE_MIN = 30;
 /** Long enough to sit through the class, short enough to be worth stealing. */
 const TOKEN_GRACE_MIN = 30;
+/** Account settings change when a human changes them — not by the minute. */
+const DOMAIN_CACHE_MIN = 10;
 
 export interface DailyRoom {
   name: string;
@@ -248,6 +250,42 @@ export class DailyService {
       return null;
     }
   }
+
+  /**
+   * Whether this Daily account can transcribe at all.
+   *
+   * Worth asking, because the alternative is guessing. A room created with
+   * `enable_transcription_storage` is accepted whether or not the account has
+   * transcription — the call only fails later, mid-lesson, in the browser. So
+   * an empty transcript has two very different meanings ("nobody spoke" versus
+   * "we were never able to listen") and only the account settings separate
+   * them. Getting that wrong tells a teacher who talked for an hour that they
+   * said nothing.
+   *
+   * `null` means we could not find out; the caller must not turn that into a
+   * claim in either direction.
+   */
+  async transcriptionAvailable(): Promise<boolean | null> {
+    const now = Date.now();
+    if (this.transcriptionCache && this.transcriptionCache.until > now) {
+      return this.transcriptionCache.value;
+    }
+    try {
+      const me = await this.call<{ config?: { enable_transcription?: string | null } }>('/', {
+        method: 'GET',
+      });
+      // A provider name ("deepgram") when it is on; null or empty when the
+      // account has never had it enabled.
+      const value = !!me.config?.enable_transcription;
+      this.transcriptionCache = { value, until: now + DOMAIN_CACHE_MIN * 60_000 };
+      return value;
+    } catch {
+      // Not cached: an outage now must not decide what we believe for an hour.
+      return null;
+    }
+  }
+
+  private transcriptionCache?: { value: boolean; until: number };
 
   /**
    * The words that were spoken, if the provider captured them.

@@ -173,7 +173,11 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
         // Why it failed decides what to offer. "No transcript" is not something
         // trying again can fix — the words were never captured — so offering a
         // retry button there is offering a button that cannot work.
-        (d.summary.error === 'NO_TRANSCRIPT' ? (
+        (d.summary.error === 'TRANSCRIPTION_UNAVAILABLE' ? (
+          <div className="py-2">
+            <p className="text-sm text-outline">{t('summary.transcriptionOff')}</p>
+          </div>
+        ) : d.summary.error === 'NO_TRANSCRIPT' ? (
           <div className="py-2">
             <p className="text-sm text-outline">{t('summary.noTranscript')}</p>
           </div>

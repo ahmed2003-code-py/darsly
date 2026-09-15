@@ -673,6 +673,25 @@ export class LiveService {
     };
   }
 
+  /**
+   * The classroom reporting that transcription did not come up.
+   *
+   * Recorded because the alternative is a lie: without it, a lesson taught for
+   * an hour with transcription switched off at the provider produces an empty
+   * transcript, and the summary tells the teacher that nobody spoke. The
+   * difference between "you said nothing" and "we could not listen" is the
+   * difference between a puzzled teacher and an operator who knows to enable
+   * transcription on the Daily account.
+   */
+  async reportTranscriptionFailure(tenantId: string, id: string) {
+    await this.assertOwned(tenantId, id);
+    await this.prisma.liveSession.update({
+      where: { id },
+      data: { transcriptStatus: 'FAILED' },
+    });
+    return { ok: true };
+  }
+
   /** Who actually turned up, for the teacher's own session. */
   async attendanceFor(tenantId: string, id: string) {
     await this.assertOwned(tenantId, id);
@@ -733,6 +752,22 @@ export class LiveService {
     }
   }
 
+  /**
+   * The language this academy teaches in.
+   *
+   * Already on the teacher's profile and set at sign-up, so the classroom does
+   * not ask a question the platform has an answer to. Arabic when unset, which
+   * is what most of this platform is.
+   */
+  private async lessonLanguage(tenantId?: string): Promise<string> {
+    if (!tenantId) return 'ar';
+    const t = await this.prisma.teacherProfile.findUnique({
+      where: { id: tenantId },
+      select: { language: true },
+    });
+    return t?.language === 'en' ? 'en' : 'ar';
+  }
+
   /** The shape both sides of the classroom read the session from. */
   private meetingSession(s: {
     id: string;
@@ -753,7 +788,7 @@ export class LiveService {
 
   /** The teacher's own way in: an owner token, which is what allows moderation. */
   private async teacherEntry(
-    s: { id: string; title: string; startsAt: Date; durationMin: number; status: LiveSessionStatus; roomName: string | null; roomUrl: string | null },
+    s: { id: string; tenantId?: string; title: string; startsAt: Date; durationMin: number; status: LiveSessionStatus; roomName: string | null; roomUrl: string | null },
     actorUserId: string,
   ) {
     if (!s.roomName || !s.roomUrl) {
@@ -776,7 +811,16 @@ export class LiveService {
     return {
       session: this.meetingSession(s),
       externalUrl: null,
-      meeting: { provider: 'daily' as const, url: s.roomUrl, token },
+      meeting: {
+        provider: 'daily' as const,
+        url: s.roomUrl,
+        token,
+        // What language to listen for. Transcription was starting with no
+        // language at all, so the provider assumed English and heard nothing
+        // in an Arabic lesson — which is how a class that was taught came to
+        // report that nobody spoke in it.
+        language: await this.lessonLanguage(s.tenantId),
+      },
       participant: { role: 'TEACHER' as const },
     };
   }

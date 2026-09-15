@@ -196,6 +196,14 @@ export class LiveController {
     return this.live.stopRecording(ctx.academyId, id);
   }
 
+  /** The classroom saying transcription never came up at the provider. */
+  @Post('teacher/live/:id/transcription-failed')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Record that transcription could not start' })
+  transcriptionFailed(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.reportTranscriptionFailure(ctx.academyId, id);
+  }
+
   @Post('teacher/live/:id/summary')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Queue an AI summary of the lesson' })

@@ -156,8 +156,23 @@ export function useDailyMeeting(liveSessionId: string) {
       recIdResolve.current = null;
     };
     const onRecStopped = () => setRecording(false);
+    // What the provider actually did with the request, rather than what the
+    // call that made it returned — which was nothing.
+    const onTransStarted = () => setTranscribing(true);
+    const onTransError = () => {
+      setTranscribing(false);
+      setNotice('TRANSCRIPTION_FAILED');
+      // Told to the server as well as to the teacher: an empty transcript and
+      // a transcript that was never allowed to start look identical afterwards,
+      // and only one of them is the teacher's fault.
+      void api.post(`/teacher/live/${liveSessionId}/transcription-failed`).catch(() => undefined);
+    };
+    const onTransStopped = () => setTranscribing(false);
     c.on('recording-started', onRecStarted);
     c.on('recording-stopped', onRecStopped);
+    c.on('transcription-started' as any, onTransStarted);
+    c.on('transcription-error' as any, onTransError);
+    c.on('transcription-stopped' as any, onTransStopped);
     // Sync once on attach: a call object that already existed (the reused
     // instance) has participants this page has not heard the events for.
     sync();
@@ -166,6 +181,9 @@ export function useDailyMeeting(liveSessionId: string) {
       c.off('error', onError);
       c.off('recording-started', onRecStarted);
       c.off('recording-stopped', onRecStopped);
+      c.off('transcription-started' as any, onTransStarted);
+      c.off('transcription-error' as any, onTransError);
+      c.off('transcription-stopped' as any, onTransStopped);
     };
   }, [call]);
 
@@ -183,7 +201,11 @@ export function useDailyMeeting(liveSessionId: string) {
   }, [call]);
 
   const join = useCallback(
-    async (url: string, token: string, opts: { mic: boolean; cam: boolean; owner?: boolean }) => {
+    async (
+      url: string,
+      token: string,
+      opts: { mic: boolean; cam: boolean; owner?: boolean; language?: string },
+    ) => {
       setError(null);
       if (!call) return;
       await call.join({ url, token, startVideoOff: !opts.cam, startAudioOff: !opts.mic });
@@ -202,12 +224,18 @@ export function useDailyMeeting(liveSessionId: string) {
        * session page is where the missing summary is explained.
        */
       if (opts.owner) {
-        try {
-          await call.startTranscription();
-          setTranscribing(true);
-        } catch {
-          setTranscribing(false);
-        }
+        // `startTranscription` returns void and reports through events, so the
+        // try/catch this used to sit in could never have caught anything. What
+        // actually happened is observed below, on `transcription-started` and
+        // `transcription-error`.
+        call.startTranscription({
+          // Without a language the provider assumes English, and an Arabic
+          // lesson transcribes to nothing at all — which reads downstream as
+          // "nobody spoke in this class".
+          language: opts.language ?? 'ar',
+          model: 'nova-2',
+          punctuate: true,
+        });
       }
     },
     [call],

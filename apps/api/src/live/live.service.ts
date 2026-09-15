@@ -10,6 +10,12 @@ import { AiJobService } from '../academy-site/jobs/ai-job.service';
 /** How long before the scheduled time the doors open. */
 export const JOIN_OPENS_MIN = 15;
 /**
+ * The dialect the provider is asked to listen for. This is an Egyptian
+ * platform, and the recogniser has an Egyptian model: "ar" hears Modern
+ * Standard Arabic, which is not what anyone teaches a class in.
+ */
+const ARABIC_LESSON = 'ar-EG';
+/**
  * How long a silence may last before it counts as absence rather than a
  * stutter. Comfortably longer than the heartbeat interval, so one dropped
  * request does not cost a student the minutes they were actually sitting there.
@@ -760,12 +766,12 @@ export class LiveService {
    * is what most of this platform is.
    */
   private async lessonLanguage(tenantId?: string): Promise<string> {
-    if (!tenantId) return 'ar';
+    if (!tenantId) return ARABIC_LESSON;
     const t = await this.prisma.teacherProfile.findUnique({
       where: { id: tenantId },
       select: { language: true },
     });
-    return t?.language === 'en' ? 'en' : 'ar';
+    return t?.language === 'en' ? 'en' : ARABIC_LESSON;
   }
 
   /** The shape both sides of the classroom read the session from. */

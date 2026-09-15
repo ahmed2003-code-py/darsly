@@ -209,6 +209,14 @@ export function useDailyMeeting(liveSessionId: string) {
       setError(null);
       if (!call) return;
       await call.join({ url, token, startVideoOff: !opts.cam, startAudioOff: !opts.mic });
+      // Said again, explicitly. The preview already started the devices (mic
+      // off, camera on), and once devices are running Daily ignores the
+      // start*Off flags on join — so a teacher who switched the mic on in the
+      // pre-join screen walked in muted, and only the icon had changed.
+      call.setLocalAudio(opts.mic);
+      call.setLocalVideo(opts.cam);
+      setMicOn(opts.mic);
+      setCamOn(opts.cam);
       setJoined(true);
       /**
        * Transcription belongs to the lesson, not to the record button.

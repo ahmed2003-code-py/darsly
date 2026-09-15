@@ -281,6 +281,21 @@ describe('a transcript arrives as subtitles, and is read as speech', () => {
     expect(out).not.toMatch(/^\d+$/m);
   });
 
+  it('reads Daily\'s own format: cue ids and voice tags become "Name: words"', () => {
+    // As Daily actually writes it — "transcript:0" identifiers and the speaker
+    // inside a <v> tag. Both were reaching the model as text, and were being
+    // counted as lesson.
+    const daily = [
+      'WEBVTT', '',
+      'transcript:0', '00:00:06.631 --> 00:00:11.301', '<v>عمرو فاروق:</v>المعادلة شكلها أف س تربيع', '',
+      'transcript:1', '00:00:09.189 --> 00:00:12.059', '<v>عمرو فاروق:</v>زائد ج يساوي صفر', '',
+    ].join('\n');
+    expect(plainTextFromVtt(daily)).toBe('عمرو فاروق: المعادلة شكلها أف س تربيع\nعمرو فاروق: زائد ج يساوي صفر');
+    // And the standard spelling of the same thing.
+    const std = ['WEBVTT', '', '1', '00:00:01.000 --> 00:00:02.000', '<v Speaker 0>hello there</v>', ''].join('\n');
+    expect(plainTextFromVtt(std)).toBe('Speaker 0: hello there');
+  });
+
   it('reads a silent lesson as nothing, not as an empty string', () => {
     // A class where nobody spoke returns a header and no cues. Null is what
     // makes the summary say so instead of summarising a blank page.

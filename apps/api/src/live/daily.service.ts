@@ -55,13 +55,34 @@ export type TranscriptLookup =
 export function plainTextFromVtt(raw: string): string | null {
   const lines = raw.split(/\r?\n/);
   const spoken: string[] = [];
+  let afterTiming = false;
   for (const line of lines) {
     const l = line.trim();
-    if (!l) continue;
+    if (!l) {
+      afterTiming = false;
+      continue;
+    }
     if (l === 'WEBVTT' || l.startsWith('NOTE ')) continue;
-    // "00:00:01.000 --> 00:00:04.000", and the bare cue numbers beside them.
-    if (l.includes('-->') || /^\d+$/.test(l)) continue;
-    spoken.push(l);
+    // "00:00:01.000 --> 00:00:04.000": what follows, until a blank line, is
+    // the cue's text.
+    if (l.includes('-->')) {
+      afterTiming = true;
+      continue;
+    }
+    // A cue identifier sits on the line before the timing — "1", or Daily's
+    // "transcript:0". Anything outside a cue that is not speech is one.
+    if (!afterTiming) continue;
+    // Voice spans carry the speaker: "<v Name>words</v>", or as Daily writes
+    // it, "<v>Name:</v>words". Either way the name is what separates a
+    // student's question from the teacher's answer, so it is kept as a prefix.
+    const text = l
+      .replace(/<v\s+([^>]+)>/g, '$1: ')
+      .replace(/<\/?v[^>]*>/g, ' ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/:\s*:/g, ':')
+      .trim();
+    if (text) spoken.push(text);
   }
   const text = spoken.join('\n').trim();
   return text || null;

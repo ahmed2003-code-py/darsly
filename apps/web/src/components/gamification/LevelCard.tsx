@@ -54,7 +54,7 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-outline-variant/50 pt-4 text-center">
-        <Stat icon="local_fire_department" value={g.streak.current} label={t('gamification.streak')} tone="gold" />
+        <Stat icon="local_fire_department" value={g.streak.current} label={t('gamification.streak')} tone="streak" />
         <Stat icon="leaderboard" value={`#${g.rank.weekly}`} label={t('gamification.rank')} tone="gold" />
         <Stat icon="toll" value={compactNum(g.coins)} label={t('gamification.coins')} tone="gold" />
       </div>
@@ -62,11 +62,36 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
   );
 }
 
-function Stat({ icon, value, label, tone }: { icon: string; value: string | number; label: string; tone?: 'gold' }) {
+/**
+ * Gold means earned; the streak is not.
+ *
+ * Coins and rank are winnings — they belong to the platform's one "earned"
+ * colour, which is what makes a medal read as a medal on any theme. A streak is
+ * a habit: it is not spent, not ranked and not won, and painting it gold put
+ * three golds in a row and made the whole card one colour. It takes the theme's
+ * second colour instead — which until now nothing on any screen used, so a
+ * theme that named two colours only ever showed one.
+ */
+const TONES: Record<string, string> = {
+  gold: 'text-student-gold-ink',
+  streak: 'text-student-secondary-ink',
+};
+
+function Stat({
+  icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: string;
+  value: string | number;
+  label: string;
+  tone?: 'gold' | 'streak';
+}) {
   return (
     <div>
       <span
-        className={`material-symbols-outlined text-[20px] ${tone === 'gold' ? 'text-student-gold-ink' : 'text-primary'}`}
+        className={`material-symbols-outlined text-[20px] ${(tone && TONES[tone]) ?? 'text-primary'}`}
         style={{ fontVariationSettings: "'FILL' 1" }}
       >
         {icon}
@@ -88,13 +113,13 @@ export function StreakAtRisk({ g }: { g: GamificationSnapshot }) {
   const { t } = useTranslation();
   if (!g.streak.atRisk) return null;
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-student-gold/25 bg-student-gold-soft px-4 py-3 text-sm text-student-gold-ink">
+    <div className="flex items-center gap-3 rounded-xl border border-student-secondary/25 bg-student-secondary-soft px-4 py-3 text-sm text-student-secondary-ink">
       <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
         local_fire_department
       </span>
       <span className="flex-1 font-semibold">{t('gamification.streakAtRisk')}</span>
       {g.streak.freezes > 0 && (
-        <span className="hidden shrink-0 rounded-full bg-student-gold-soft px-2.5 py-1 text-xs font-bold sm:block">
+        <span className="hidden shrink-0 rounded-full bg-student-secondary-soft px-2.5 py-1 text-xs font-bold sm:block">
           {t('gamification.streakFreezes', { count: g.streak.freezes })}
         </span>
       )}

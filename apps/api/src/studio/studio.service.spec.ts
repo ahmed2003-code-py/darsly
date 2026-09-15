@@ -836,3 +836,195 @@ describe('Egyptian King', () => {
     expect(themes.styles.font).toBeNull();
   });
 });
+
+/**
+ * The second skin, and the first one priced to be wanted.
+ *
+ * Tested the same way as the first — as data, because the price, the gate and
+ * every name in `config` are what the server enforces. The engine drops a name
+ * it does not recognise without complaining, so a typo here would ship a theme
+ * that quietly does less than the shop says it does.
+ */
+describe('Rose & Lavender', () => {
+  const item = CATALOG.find((c) => c.key === 'theme-rose-lavender');
+  const themes = () => deriveStudioThemes({ themeConfig: item!.config as any });
+
+  it('is in the catalogue, as a legendary theme', () => {
+    expect(item).toBeDefined();
+    expect(item!.category).toBe('THEME');
+    expect(item!.rarity).toBe('LEGENDARY');
+  });
+
+  /**
+   * The top shelf. Egyptian King is 100 coins because the first skin has to be
+   * had; this one sits where the economy runs out, so that owning it means
+   * something. Still bought with coins and gated on a level — XP is never spent
+   * anywhere in this platform, and a theme must not be the exception.
+   */
+  it('is the expensive one, and still costs coins rather than XP', () => {
+    expect(item!.costCoins).toBe(750);
+    expect(item!.requiredLevel).toBe(5);
+    const king = CATALOG.find((c) => c.key === 'theme-egyptian-king')!;
+    expect(item!.costCoins).toBeGreaterThan(king.costCoins);
+    // Nothing here is earned rather than bought, and nothing is free.
+    expect(item!.requiredAchievement).toBeUndefined();
+    expect(item!.isStarter).toBeUndefined();
+  });
+
+  it('brings its own ground at both ends, and neither is the platform grey', () => {
+    const t = themes();
+    const light = fromTriple(t.light.brand['--c-background']);
+    const dark = fromTriple(t.dark.brand['--c-background']);
+    expect(light).not.toBe(dark);
+    expect(relLum(light)).toBeGreaterThan(0.7);
+    expect(relLum(dark)).toBeLessThan(0.05);
+    // Neither end is neutral: green is the lowest channel at both, which is
+    // what makes one a blush and the other an aubergine rather than a grey.
+    for (const bg of [light, dark]) {
+      const n = parseInt(bg.slice(1), 16);
+      const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      expect(b).toBeGreaterThan(g);
+      expect(r).toBeGreaterThan(g);
+    }
+  });
+
+  it('keeps every kind of text readable on whichever ground it lays down', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const brand = themes()[mode].brand;
+      const bg = fromTriple(brand['--c-background']);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
+      const card = fromTriple(brand['--c-surface-container-highest']);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), card)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  /**
+   * Lavender acts, rose identifies.
+   *
+   * The whole design rests on that split: if rose took the buttons this would
+   * be a pink app with purple trim, which is exactly the "girly means pink"
+   * reading it is meant to avoid. So the primary fill has to stay violet at
+   * both ends, and the second colour has to stay a genuinely different hue.
+   */
+  it('presses in lavender and identifies in rose, at both ends', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const { brand, tokens } = themes()[mode];
+      const [pr, pg, pb] = brand['--c-primary'].split(' ').map(Number);
+      // Violet: blue leads, red follows, green last.
+      expect(pb).toBeGreaterThan(pr);
+      expect(pr).toBeGreaterThan(pg);
+      // Rose: red leads by a distance.
+      const [sr, sg, sb] = tokens['--s-secondary'].split(' ').map(Number);
+      expect(sr).toBeGreaterThan(sg + 40);
+      expect(sr).toBeGreaterThan(sb + 20);
+      // And they are not the same colour wearing two names.
+      expect(tokens['--s-secondary']).not.toBe(brand['--c-primary']);
+    }
+  });
+
+  it('keeps the brand readable as a label and violet as a fill', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      const brand = themes()[mode].brand;
+      const card = fromTriple(brand['--c-surface-container-highest']);
+      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(brand['--c-primary-text']), fromTriple(brand['--c-background'])),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(brand['--c-on-primary']), fromTriple(brand['--c-primary'])),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(brand['--c-on-primary-fixed']), fromTriple(brand['--c-primary-fixed'])),
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  /**
+   * There is no gold on this theme, and that is the point.
+   *
+   * The slot is still the platform's "earned" semantic — XP, coins, rank and
+   * the level bar all read from it — but a pale page forces any gold down into
+   * copper, and one warm brown bar makes a page of pink and lavender look
+   * dirty. So "earned" is a rose here. This is the test that stops a later edit
+   * quietly putting a metal back: not warm, not yellow, pink at both ends.
+   */
+  it('has no gold in it anywhere — "earned" is a rose at both ends', () => {
+    const t = themes();
+    const day = fromTriple(t.light.tokens['--s-gold']);
+    const night = fromTriple(t.dark.tokens['--s-gold']);
+    expect(day).not.toBe(night);
+    expect(relLum(night)).toBeGreaterThan(relLum(day));
+    for (const hex of [day, night]) {
+      const n = parseInt(hex.slice(1), 16);
+      const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      // Rose: red leads and blue is second. Gold is the other way round —
+      // green second — so this fails the moment anyone reaches for an amber.
+      expect(r).toBeGreaterThan(b);
+      expect(b).toBeGreaterThan(g);
+    }
+  });
+
+  it('keeps "earned" legible wherever it is drawn', () => {
+    const t = themes();
+    for (const mode of ['light', 'dark'] as const) {
+      const { tokens, brand } = t[mode];
+      for (const on of ['--c-background', '--c-surface-container-highest']) {
+        expect(contrastRatio(fromTriple(tokens['--s-gold-ink']), fromTriple(brand[on]))).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(
+        contrastRatio(fromTriple(tokens['--s-on-gold']), fromTriple(tokens['--s-gold'])),
+      ).toBeGreaterThanOrEqual(4.5);
+      // Earned and the streak are both roses now, so they have to stay told
+      // apart by depth — otherwise a coin and a flame are the same colour.
+      expect(relLum(fromTriple(tokens['--s-gold']))).not.toBeCloseTo(
+        relLum(fromTriple(tokens['--s-secondary'])),
+        2,
+      );
+    }
+  });
+
+  it('is a blush page by day, not a white one', () => {
+    const bg = fromTriple(themes().light.brand['--c-background']);
+    const n = parseInt(bg.slice(1), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    // Warm and pink: red at the top, green lowest.
+    expect(r).toBeGreaterThan(g);
+    expect(b).toBeGreaterThan(g);
+    expect(relLum(bg)).toBeGreaterThan(0.85);
+  });
+
+  /**
+   * The shapes are the other half of the skin.
+   *
+   * Every one of these is a name the engine has to recognise; an unknown one is
+   * dropped silently, so the shop would promise frosted glass and ship a plain
+   * card. Asserted by name rather than by rendering.
+   */
+  it('asks only for shapes the engine knows, and the same ones at both ends', () => {
+    const t = themes();
+    expect(t.styles).toMatchObject({
+      card: 'glass',
+      button: 'pill',
+      nav: 'floating',
+      font: 'round',
+      radius: 'round',
+      pattern: 'halftone',
+      glow: true,
+    });
+    // One skin, not two: the ground moves between day and night and nothing else.
+    expect(t.light.styles).toEqual(t.dark.styles);
+  });
+
+  it('is a different look from the first skin, not a recolour of it', () => {
+    const king = CATALOG.find((c) => c.key === 'theme-egyptian-king')!;
+    const a = deriveStudioThemes({ themeConfig: king.config as any }).styles;
+    const b = themes().styles;
+    // Nothing structural in common: corners, typeface, cards, buttons, backdrop.
+    for (const k of ['card', 'button', 'font', 'radius', 'pattern'] as const) {
+      expect(b[k]).not.toBe(a[k]);
+    }
+  });
+});

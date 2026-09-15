@@ -228,4 +228,94 @@ export const CATALOG: CatalogSeed[] = [
       button: 'sharp',
     },
   ),
+
+  /**
+   * Rose & Lavender — the second skin, and the expensive one.
+   *
+   * Egyptian King was priced to be had: the first skin's job was to show what a
+   * skin is. This one's job is to be wanted, so it sits where the economy runs
+   * out — 750 coins and level 5, about two months of steady weeks. A shop with
+   * one price has no top shelf.
+   *
+   * Two colours with two jobs, and the split is the design. Lavender is the
+   * action: buttons, active nav, links, progress — everything the app asks you
+   * to press. Rose is identity: the chips, the rails, the streak, the warmth.
+   * Reversing them would make a pink app with purple buttons, which is the
+   * "girly means pink" failure the brief is against.
+   *
+   * And no gold. The "earned" semantic is still there — XP, coins, rank and
+   * level progress all read from it — but on this theme it is a deep rose. A
+   * pale page forces any gold down into copper, and one brown bar is enough to
+   * make everything around it look dirty; so "earned" is a third rose here,
+   * darker than the streak's, rather than a metal visiting a palette it does
+   * not suit.
+   *
+   * Frosted cards, pill buttons, 26px corners, a rounded typeface and two
+   * drifting orbs — lavender in one corner, rose in the other — over a fine dot
+   * field. Every one of those is a name the theme engine already knows; none of
+   * it is new CSS, which is why it is the same weight as every other theme.
+   */
+  theme(
+    'theme-rose-lavender',
+    'LEGENDARY',
+    'وردة اللافندر',
+    'Rose & Lavender',
+    'صبح وردي فاتح أو ليل بنفسجي عميق، كروت من زجاج، ومفيش أصفر ولا ذهبي في أي حتة.',
+    'A blush morning or a deep violet night, cards made of frosted glass, and not a trace of gold anywhere.',
+    '#8b5cf6',
+    '#a78bfa',
+    750,
+    20,
+    {
+      requiredLevel: 5,
+      // Rose carries identity, not action: chips, rails, the streak, the second
+      // orb. Softer at night, where the fuller rose goes heavy.
+      secondary: '#ff6b8b',
+      secondaryDark: '#fda4af',
+      // There is no gold in this theme. The slot is still the platform's
+      // "earned" semantic — XP, coins, rank and level progress all read from
+      // it — but here it is a deep rose rather than a metal.
+      //
+      // Not a decoration choice. On a pale page any gold has to fall below
+      // roughly 0.28 luminance to stay legible against the deepest card, so it
+      // comes back a copper or a mud-brown, and one warm brown bar is enough to
+      // make a page of pink and lavender look dirty. A deep rose clears the
+      // same floors with room to spare and belongs to the palette instead of
+      // fighting it.
+      //
+      // It sits a step deeper than `secondary`, so the two still tell things
+      // apart: earned reads darker, the streak reads softer.
+      gold: '#c2185b',
+      goldDark: '#ffb3c1',
+      wash: '#fff5f7',
+      washDark: '#170f28',
+      // Night: deep aubergine rather than black or navy. The ink is the
+      // theme's own soft lavender, so even the text belongs to the skin.
+      surfaces: {
+        background: '#170f28',
+        surface: '#211536',
+        ink: '#ede9fe',
+        line: '#4c4370',
+      },
+      // Day is the one the look was drawn for: a blush ground rather than a
+      // white one, white cards on top of it, and the night's own indigo kept as
+      // the ink so the two ends read as one skin.
+      surfacesLight: {
+        background: '#fff5f7',
+        surface: '#ffffff',
+        ink: '#1e1b4b',
+        line: '#efdfe6',
+      },
+      // A fine dot field, not a poster: at the pattern layer's own low alpha it
+      // reads as dust rather than as polka dots.
+      pattern: 'halftone',
+      // The two orbs — lavender and rose, opposite corners, slowly drifting.
+      glow: true,
+      font: 'round',
+      radius: 'round',
+      card: 'glass',
+      button: 'pill',
+      nav: 'floating',
+    },
+  ),
 ];

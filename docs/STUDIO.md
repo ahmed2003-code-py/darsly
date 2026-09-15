@@ -312,6 +312,11 @@ upsert on `key`, so editing a row and redeploying updates it in place.
 The catalogue was deliberately **emptied** once (`a997a3e`) after a first pass
 the user rejected, with every owner refunded. It is rebuilt one item at a time.
 
+Prices are in **coins**, always. A brief may ask for a theme priced in XP; XP is
+progression and is never spent anywhere in this platform — `requiredLevel` is how
+it gates instead, so unlocking a theme can never cost a student the level they
+earned. "2,499 XP" becomes *"expensive in coins, and gated on a level"*.
+
 ### Currently shipped
 
 **الملك المصري / Egyptian King** — `theme-egyptian-king`, LEGENDARY, **100
@@ -330,6 +335,53 @@ Plus `pattern: 'stadium'` (pitch markings, floodlights, a tactical grid),
 
 The daytime gold is chosen to clear its floors **untouched**: a brighter gold
 gets darkened into olive, and a medal that looks olive is not a medal.
+
+**وردة اللافندر / Rose & Lavender** — `theme-rose-lavender`, LEGENDARY, **750
+coins, level 5**.
+
+| | Night | Day |
+|---|---|---|
+| ground | `#170f28` deep aubergine | `#fff5f7` blush |
+| surface | `#211536` | `#ffffff` |
+| ink | `#ede9fe` | `#1e1b4b` |
+| accent (lavender) | `#a78bfa` | `#8b5cf6` |
+| secondary (rose) | `#fda4af` | `#ff6b8b` |
+| "earned" | `#ffb3c1` blush | `#c2185b` deep rose |
+
+Plus `pattern: 'halftone'` (a fine dot field), `glow: true` (two drifting orbs —
+lavender in one corner, rose in the other), `font: 'round'`, `radius: 'round'`,
+`card: 'glass'`, `button: 'pill'`, `nav: 'floating'`.
+
+**Lavender acts, rose identifies.** Lavender takes the buttons, the active nav,
+the links and the progress; rose takes the streak and the chips. Reversing them
+gives a pink app with purple buttons, which is the "girly means pink" reading the
+theme exists to avoid.
+
+**There is no gold on this theme.** The `gold` slot is still the platform's
+"earned" semantic — XP, coins, rank and the level bar all read from it — but here
+it holds a rose. That is not decoration: on a pale page a gold has to sit below
+roughly `0.28` luminance to clear 3:1 against the deepest card, so anything
+bright enough to look like bullion is darkened by the engine and comes back a
+copper or a mud-brown, and one warm brown bar makes a page of pink and lavender
+look dirty. A deep rose clears the same floors with room to spare.
+
+Earned and the streak are therefore both roses, and are told apart by **depth**:
+`#c2185b` against `#ff6b8b` by day. A test holds that gap, and another asserts
+red-then-blue channel order at both ends — which fails the moment anyone reaches
+for an amber again.
+
+### The second colour has a job
+
+Until this theme, `--s-secondary` was derived by the server, exposed in Tailwind
+as `student-secondary-*` — and used by exactly one rule in the whole app: the
+second background orb. A theme could name two colours and only ever show one.
+
+The **streak** is now that job. Coins and rank are winnings and stay gold; a
+streak is a habit — not spent, not ranked, not won — and painting it gold put
+three golds in a row and made the level card one colour. It reads from the
+theme's second colour instead, on the level card, the at-risk banner and the
+Studio's own stat row. With no theme equipped it falls back to the academy's
+`--c-secondary`, so nothing changes for a student who has bought nothing.
 
 ### Gold as a semantic
 

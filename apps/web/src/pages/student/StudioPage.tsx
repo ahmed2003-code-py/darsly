@@ -445,16 +445,33 @@ function ProfileCard({ data, t, ar }: { data: any; t: any; ar: boolean }) {
       <div className="mt-4 grid grid-cols-3 gap-3 border-t border-outline-variant pt-4">
         <Stat icon="star" value={b.xp} label={t('myStudio.xp')} />
         <Stat icon="paid" value={b.coins} label={t('myStudio.coins')} />
-        <Stat icon="local_fire_department" value={data.student.streak} label={t('myStudio.streak')} />
+        <Stat icon="local_fire_department" value={data.student.streak} label={t('myStudio.streak')} tone="streak" />
       </div>
     </div>
   );
 }
 
-function Stat({ icon, value, label }: { icon: string; value: number; label: string }) {
+function Stat({
+  icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: string;
+  value: number;
+  label: string;
+  // The streak is a habit, not a winning — the same split the level card makes.
+  tone?: 'streak';
+}) {
   return (
     <span className="text-center">
-      <span className="material-symbols-outlined block text-[22px] text-student-gold-ink">{icon}</span>
+      <span
+        className={`material-symbols-outlined block text-[22px] ${
+          tone === 'streak' ? 'text-student-secondary-ink' : 'text-student-gold-ink'
+        }`}
+      >
+        {icon}
+      </span>
       <span className="block font-heading text-lg font-extrabold tabular-nums">{value}</span>
       <span className="block text-xs text-on-surface-variant">{label}</span>
     </span>

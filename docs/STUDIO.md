@@ -304,6 +304,109 @@ took away the one tap back — a dead end, guarded by a test now.
 
 ---
 
+## 6b. A theme shapes the app, not only its colour
+
+Since `68c6e9c`…`4194fd7` a theme can change the **structure** of the platform.
+The rule is the same one the shapes always followed: a theme says a *name*
+from a closed list, the server validates it, the client writes it as a
+`data-s-*` attribute on `<html>`, and the stylesheet and the shell decide what
+the name means. A theme cannot ask for a width in pixels or a component by file.
+
+```
+CosmeticItem.config.layout (DB, JSON)
+        ↓  studio-theme.ts — deriveLayout(): pick from lists, defaults = today's app
+StudioStyles.layout / motion / icons / cardLayout / typeScale
+        ↓  lib/studio.ts — data-s-nav-desktop, data-s-header, data-s-density, … (only when off-default)
+        ↓  lib/useThemeLayout.ts — MutationObserver on <html>, so React re-renders on equip/preview
+Layout.tsx (the Shell) → <Sidebar> <TopBar variant> <Footer variant> <BottomNav>
+.page / gap-card / <CourseCard> / .input / .modal-panel — read the same attributes
+```
+
+### What a theme can say
+
+| Field | Names | Default |
+|---|---|---|
+| `layout.nav.desktop` | expanded · rail · floating · minimal · glass · hidden | expanded |
+| `layout.nav.tablet` | drawer · expanded · rail | drawer |
+| `layout.nav.mobile` | bottom · drawer | bottom |
+| `layout.nav.labels` / `.active` | boolean · bar · pill · glow · underline | true · bar |
+| `layout.header.variant` / `.sticky` | standard · minimal · floating · glass · compact · centered · editorial | standard · true |
+| `layout.footer` | none · minimal · stats · bottomBar | none |
+| `layout.density` | comfortable · compact · spacious | comfortable |
+| `layout.width` | standard (1200) · narrow (880) · wide (1440) · full | standard |
+| `motion` | subtle · still · expressive | subtle |
+| `icons` | `{ fill: 0\|1, weight: 300\|400\|500\|600 }` — Material Symbols' own axes | filled, 400 |
+| `cardLayout` | grid · imageFirst · editorial | grid |
+| `typeScale` | default · compact · editorial | default |
+| `font` | default · display · tech · round · **serif** | default |
+| `card` | minimal · soft · elevated · paper · glass · **outlined** | minimal |
+
+`glass` is allowed on the nav or the header, never both — two full-screen blurs
+stacked is what makes a "premium" theme feel slow. `deriveLayout` demotes the
+header to `standard` if both are asked for.
+
+### The invariant, and its proof
+
+**A theme that says nothing about layout renders the app byte-for-byte as it
+was.** Attributes are written only when a value is off the default, so an
+untouched app carries none and the base stylesheet applies — which is also what
+makes "remove the theme" put everything back exactly. Teachers and admins read
+the same attributes and find nothing there.
+
+Proved, not asserted: twelve screenshots (student and teacher, desktop and
+phone, six pages) diffed against the previous commit with no theme on — **zero
+differing pixels** — after each of the shell, `<Page>` and `<CourseCard>`
+changes. Two things that check caught: an `@import` placed after `@tailwind` is
+invalid CSS and PostCSS drops it silently; and the base stylesheet gives every
+`span` a 1.6 line-height, so wrapping a nav label that had been a bare text
+node grew every row by 2.4px.
+
+### One component per surface
+
+No `Theme1Sidebar.tsx`. `components/shell/Sidebar.tsx` is one sidebar; a rail
+is the same sidebar told not to render labels, and what a rail *looks like* is
+`styles/shell.css` keyed to the attribute. When the sidebar is `hidden`, the
+header carries the five primary destinations — the same five the phone's bar
+carries — and the drawer holds the rest; eleven links do not fit across a
+header. `<CourseCard>` has a flat DOM (media, chips, title, teacher, rating,
+meta, price as direct children) so the three layouts are grid areas alone.
+
+### The five experiences
+
+Each deliberately unlike the others in structure before colour. All 1,800
+coins, level 6, below only the King.
+
+| | nav | header | footer | density / width | cards | type | motion |
+|---|---|---|---|---|---|---|---|
+| **Midnight Pro** | rail, glow | glass | minimal | spacious / wide | elevated, grid | default, outlined icons | subtle |
+| **Aurora** | floating, pill | floating | bottomBar | comfortable / standard | soft, imageFirst | round, filled icons | expressive |
+| **Editorial** | minimal, underline | editorial (page title), not sticky | minimal | spacious / narrow | paper, editorial | serif, editorial scale | still |
+| **Cyber Academy** | rail, glow | compact (folded search) | stats | compact / wide | outlined, grid | tech, thin icons | subtle |
+| **Luxury Minimal** | hidden (nav in header) | centered | none | spacious / narrow | minimal, grid | default, editorial scale | still |
+
+### Preview
+
+`/studio/preview/:key` renders inside the **real** shell and paints the
+candidate theme onto the root on mount, exactly as equipping it would — the
+sidebar, header, footer and bottom bar around the page are the theme's own.
+The page shows what the shell does not: greeting, a "what this theme changes"
+grid, the stats card, three courses through the real `CourseCard`, buttons, a
+field, the profile row. Leaving restores; nothing is written until unlock or
+equip. Every theme card links to it.
+
+### Verified
+
+14 (13 themes + none) × 3 widths × 2 modes = **84 screenshots**, each checked
+for horizontal overflow, the shell parts being present, and leaked i18n keys:
+zero failures. All 26 theme-modes pass every contrast floor. `914` API tests.
+
+### Removed
+
+Avatar styles and the `confetti` effect — names the engine accepted and the
+stylesheet never drew — are gone from the rendering path. The `avatarKey`
+column stays: it is storage, and dropping a Postgres enum value is a migration
+for nothing.
+
 ## 7. The catalogue
 
 `apps/api/src/studio/studio.catalog.ts` is the single source. It is seeded by

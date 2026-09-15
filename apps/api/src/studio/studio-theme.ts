@@ -27,7 +27,6 @@ export interface StudioStyles {
   card: string;
   nav: string;
   frame: string | null;
-  avatar: string | null;
   effect: string | null;
   /** The backdrop the theme draws behind the page. */
   pattern: string | null;
@@ -36,6 +35,42 @@ export interface StudioStyles {
   /** The typeface pairing and the corner sharpness the theme asks for. */
   font: string | null;
   radius: string | null;
+  /**
+   * The shape of the app itself.
+   *
+   * This is what separates a skin from a colour scheme. A theme that only
+   * repaints leaves the same sidebar in the same place at the same width, and
+   * the student reads it as "the purple went blue". Everything here is a name
+   * the shell knows how to be — never a length, never a component — and every
+   * default is the app exactly as it is today, so a theme that says nothing
+   * about layout changes nothing about it.
+   */
+  layout: LayoutStyles;
+  /** How much the interface moves. Reduced-motion always wins over it. */
+  motion: (typeof MOTION_LEVELS)[number];
+  /** Material Symbols' own axes: filled or outlined, and stroke weight. */
+  icons: { fill: 0 | 1; weight: (typeof ICON_WEIGHTS)[number] };
+  /** How a course card composes its image, title and meta. */
+  cardLayout: (typeof CARD_LAYOUTS)[number];
+  /** The size and voice of headings. */
+  typeScale: (typeof TYPE_SCALES)[number];
+}
+
+export interface LayoutStyles {
+  nav: {
+    desktop: (typeof NAV_DESKTOP)[number];
+    tablet: (typeof NAV_TABLET)[number];
+    mobile: (typeof NAV_MOBILE)[number];
+    labels: boolean;
+    active: (typeof NAV_ACTIVE)[number];
+  };
+  header: {
+    variant: (typeof HEADER_VARIANTS)[number];
+    sticky: boolean;
+  };
+  footer: (typeof FOOTER_VARIANTS)[number];
+  density: (typeof DENSITIES)[number];
+  width: (typeof WIDTHS)[number];
 }
 
 export interface StudioTheme {
@@ -70,7 +105,38 @@ export const NAV_STYLES = ['classic', 'compact', 'floating'] as const;
 export const FRAME_STYLES = [
   'none', 'bronze', 'silver', 'gold', 'diamond', 'fire', 'lightning', 'scholar', 'legendary',
 ] as const;
-export const EFFECT_STYLES = ['none', 'glow', 'confetti'] as const;
+export const EFFECT_STYLES = ['none', 'glow'] as const;
+
+/**
+ * The shapes the shell can take.
+ *
+ * Names, like everything else a theme says: the shell decides what "rail" is,
+ * and a theme cannot ask for a width in pixels or a component by file. Each
+ * list's first entry is the app as it is today.
+ */
+export const NAV_DESKTOP = ['expanded', 'rail', 'floating', 'minimal', 'glass', 'hidden'] as const;
+export const NAV_TABLET = ['drawer', 'expanded', 'rail'] as const;
+export const NAV_MOBILE = ['bottom', 'drawer'] as const;
+export const NAV_ACTIVE = ['bar', 'pill', 'glow', 'underline'] as const;
+export const HEADER_VARIANTS = [
+  'standard', 'minimal', 'floating', 'glass', 'compact', 'centered', 'editorial',
+] as const;
+export const FOOTER_VARIANTS = ['none', 'minimal', 'stats', 'bottomBar'] as const;
+export const DENSITIES = ['comfortable', 'compact', 'spacious'] as const;
+export const WIDTHS = ['standard', 'narrow', 'wide', 'full'] as const;
+export const MOTION_LEVELS = ['subtle', 'still', 'expressive'] as const;
+export const ICON_WEIGHTS = [400, 300, 500, 600] as const;
+export const CARD_LAYOUTS = ['grid', 'imageFirst', 'editorial'] as const;
+export const TYPE_SCALES = ['default', 'compact', 'editorial'] as const;
+
+/** What the app is when no theme has said otherwise. */
+export const DEFAULT_LAYOUT: LayoutStyles = {
+  nav: { desktop: 'expanded', tablet: 'drawer', mobile: 'bottom', labels: true, active: 'bar' },
+  header: { variant: 'standard', sticky: true },
+  footer: 'none',
+  density: 'comfortable',
+  width: 'standard',
+};
 /**
  * Backdrops, drawn entirely in CSS.
  *
@@ -94,9 +160,6 @@ export const FONTS = ['default', 'display', 'tech', 'round'] as const;
 
 /** How sharp the corners are, as a name. */
 export const RADII = ['default', 'sharp', 'soft', 'round'] as const;
-export const AVATAR_STYLES = [
-  'initial', 'orbit', 'wave', 'grid', 'bloom', 'prism',
-] as const;
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -290,6 +353,18 @@ export interface ThemeConfig {
   button?: string;
   card?: string;
   nav?: string;
+  /** The shape of the shell. Partial: anything unsaid stays as it is today. */
+  layout?: {
+    nav?: { desktop?: string; tablet?: string; mobile?: string; labels?: boolean; active?: string };
+    header?: { variant?: string; sticky?: boolean };
+    footer?: string;
+    density?: string;
+    width?: string;
+  };
+  motion?: string;
+  icons?: { fill?: number; weight?: number };
+  cardLayout?: string;
+  typeScale?: string;
   /**
    * A whole ground of its own.
    *
@@ -340,7 +415,6 @@ export function deriveStudioThemes(input: {
   card?: string | null;
   nav?: string | null;
   frame?: string | null;
-  avatar?: string | null;
   effect?: string | null;
 }): StudioThemes {
   // The theme sets the shape of things; an explicitly equipped slot overrides
@@ -351,12 +425,22 @@ export function deriveStudioThemes(input: {
     card: pick(input.card ?? theme.card, CARD_STYLES, 'minimal'),
     nav: pick(input.nav ?? theme.nav, NAV_STYLES, 'classic'),
     frame: pickOrNull(input.frame, FRAME_STYLES),
-    avatar: pickOrNull(input.avatar, AVATAR_STYLES),
     effect: pickOrNull(input.effect, EFFECT_STYLES),
     pattern: pickOrNull(theme.pattern, PATTERNS),
     glow: theme.glow === true,
     font: pickOrNull(theme.font, FONTS),
     radius: pickOrNull(theme.radius, RADII),
+    layout: deriveLayout(theme.layout),
+    motion: pick(theme.motion, MOTION_LEVELS, 'subtle'),
+    icons: {
+      // Filled is the app's own default; a theme opts *out* to outlined.
+      fill: theme.icons?.fill === 0 ? 0 : 1,
+      weight: (ICON_WEIGHTS as readonly number[]).includes(theme.icons?.weight ?? -1)
+        ? (theme.icons!.weight as (typeof ICON_WEIGHTS)[number])
+        : 400,
+    },
+    cardLayout: pick(theme.cardLayout, CARD_LAYOUTS, 'grid'),
+    typeScale: pick(theme.typeScale, TYPE_SCALES, 'default'),
   };
 
   // A colour the student picked beats the one their theme came with: it is the
@@ -589,6 +673,38 @@ export const BRAND_OVERRIDE_NAMES = [
   ...Object.keys(deriveBrand('#4a32c9', 'light')),
   ...Object.keys(deriveSurfaces({})),
 ];
+
+/**
+ * The shell's shape, from what the theme said and the defaults for the rest.
+ *
+ * Every field is picked from its list or falls back — a theme cannot name a
+ * variant the shell does not have, and an old row with no `layout` at all
+ * resolves to the app as it is today. `glass` is allowed on the nav or the
+ * header, never both: a blur costs the phone something on every scroll, and
+ * two of them stacked is what makes a "premium" theme feel slow.
+ */
+export function deriveLayout(cfg: ThemeConfig['layout'] | undefined): LayoutStyles {
+  const d = DEFAULT_LAYOUT;
+  const nav = {
+    desktop: pick(cfg?.nav?.desktop, NAV_DESKTOP, d.nav.desktop),
+    tablet: pick(cfg?.nav?.tablet, NAV_TABLET, d.nav.tablet),
+    mobile: pick(cfg?.nav?.mobile, NAV_MOBILE, d.nav.mobile),
+    labels: typeof cfg?.nav?.labels === 'boolean' ? cfg.nav.labels : d.nav.labels,
+    active: pick(cfg?.nav?.active, NAV_ACTIVE, d.nav.active),
+  };
+  let header = pick(cfg?.header?.variant, HEADER_VARIANTS, d.header.variant);
+  if (nav.desktop === 'glass' && header === 'glass') header = 'standard';
+  return {
+    nav,
+    header: {
+      variant: header,
+      sticky: typeof cfg?.header?.sticky === 'boolean' ? cfg.header.sticky : d.header.sticky,
+    },
+    footer: pick(cfg?.footer, FOOTER_VARIANTS, d.footer),
+    density: pick(cfg?.density, DENSITIES, d.density),
+    width: pick(cfg?.width, WIDTHS, d.width),
+  };
+}
 
 function pick<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)

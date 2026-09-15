@@ -23,19 +23,43 @@ import { resolveMode } from './colorMode';
 
 export type StudioMode = 'light' | 'dark';
 
+export interface LayoutStyles {
+  nav: { desktop: string; tablet: string; mobile: string; labels: boolean; active: string };
+  header: { variant: string; sticky: boolean };
+  footer: string;
+  density: string;
+  width: string;
+}
+
 export interface StudioStyles {
   button: string;
   card: string;
   nav: string;
   frame: string | null;
-  avatar: string | null;
   effect: string | null;
   /** The backdrop the theme draws behind the page. */
   pattern: string | null;
   glow: boolean;
   font: string | null;
   radius: string | null;
+  /** The shape of the shell. Names only; the stylesheet and the shell decide
+   *  what each one is. The default is the app exactly as it was before any
+   *  theme could touch layout. */
+  layout: LayoutStyles;
+  motion: string;
+  icons: { fill: 0 | 1; weight: number };
+  cardLayout: string;
+  typeScale: string;
 }
+
+/** What the app is when no theme has said otherwise. Mirrors the server's. */
+export const DEFAULT_LAYOUT: LayoutStyles = {
+  nav: { desktop: 'expanded', tablet: 'drawer', mobile: 'bottom', labels: true, active: 'bar' },
+  header: { variant: 'standard', sticky: true },
+  footer: 'none',
+  density: 'comfortable',
+  width: 'standard',
+};
 
 export interface StudioTheme {
   tokens: Record<string, string>;
@@ -168,6 +192,18 @@ function ensureFont(name: string | null): void {
 }
 
 const BUTTONS = ['classic', 'rounded', 'pill', 'sharp', 'soft', 'elevated'];
+const NAV_DESKTOP = ['expanded', 'rail', 'floating', 'minimal', 'glass', 'hidden'];
+const NAV_TABLET = ['drawer', 'expanded', 'rail'];
+const NAV_MOBILE = ['bottom', 'drawer'];
+const NAV_ACTIVE = ['bar', 'pill', 'glow', 'underline'];
+const HEADERS = ['standard', 'minimal', 'floating', 'glass', 'compact', 'centered', 'editorial'];
+const FOOTERS = ['none', 'minimal', 'stats', 'bottomBar'];
+const DENSITIES = ['comfortable', 'compact', 'spacious'];
+const WIDTHS = ['standard', 'narrow', 'wide', 'full'];
+const MOTIONS = ['subtle', 'still', 'expressive'];
+const ICON_WEIGHTS = [300, 400, 500, 600];
+const CARD_LAYOUTS = ['grid', 'imageFirst', 'editorial'];
+const TYPE_SCALES = ['default', 'compact', 'editorial'];
 const CARDS = ['minimal', 'soft', 'elevated', 'paper', 'glass'];
 const NAVS = ['classic', 'compact', 'floating'];
 const PATTERNS = [
@@ -184,12 +220,43 @@ function styles(input: unknown): StudioStyles {
     card: pick(s.card, CARDS, 'minimal'),
     nav: pick(s.nav, NAVS, 'classic'),
     frame: typeof s.frame === 'string' && /^[a-z]+$/.test(s.frame) ? s.frame : null,
-    avatar: typeof s.avatar === 'string' && /^[a-z]+$/.test(s.avatar) ? s.avatar : null,
     effect: typeof s.effect === 'string' && /^[a-z]+$/.test(s.effect) ? s.effect : null,
     pattern: typeof s.pattern === 'string' && PATTERNS.includes(s.pattern) ? s.pattern : null,
     glow: s.glow === true,
     font: typeof s.font === 'string' && FONTS[s.font] ? s.font : null,
     radius: typeof s.radius === 'string' && RADII.includes(s.radius) ? s.radius : null,
+    layout: layoutStyles(s.layout),
+    motion: pick(s.motion, MOTIONS, 'subtle'),
+    icons: {
+      fill: s.icons?.fill === 0 ? 0 : 1,
+      weight: typeof s.icons?.weight === 'number' && ICON_WEIGHTS.includes(s.icons.weight) ? s.icons.weight : 400,
+    },
+    cardLayout: pick(s.cardLayout, CARD_LAYOUTS, 'grid'),
+    typeScale: pick(s.typeScale, TYPE_SCALES, 'default'),
+  };
+}
+
+/** The shell's shape, from a closed list per field, or today's app. */
+function layoutStyles(input: unknown): LayoutStyles {
+  const l = (input ?? {}) as Partial<LayoutStyles>;
+  const d = DEFAULT_LAYOUT;
+  const pick = (v: unknown, allowed: string[], fallback: string) =>
+    typeof v === 'string' && allowed.includes(v) ? v : fallback;
+  return {
+    nav: {
+      desktop: pick(l.nav?.desktop, NAV_DESKTOP, d.nav.desktop),
+      tablet: pick(l.nav?.tablet, NAV_TABLET, d.nav.tablet),
+      mobile: pick(l.nav?.mobile, NAV_MOBILE, d.nav.mobile),
+      labels: typeof l.nav?.labels === 'boolean' ? l.nav.labels : d.nav.labels,
+      active: pick(l.nav?.active, NAV_ACTIVE, d.nav.active),
+    },
+    header: {
+      variant: pick(l.header?.variant, HEADERS, d.header.variant),
+      sticky: typeof l.header?.sticky === 'boolean' ? l.header.sticky : d.header.sticky,
+    },
+    footer: pick(l.footer, FOOTERS, d.footer),
+    density: pick(l.density, DENSITIES, d.density),
+    width: pick(l.width, WIDTHS, d.width),
   };
 }
 
@@ -241,9 +308,7 @@ function paint(input: StudioThemes | null): void {
   for (const name of written) root.style.removeProperty(name);
   written = [];
   if (!themes) {
-    for (const attr of ['button', 'card', 'nav', 'frame', 'avatar', 'effect', 'pattern', 'font', 'radius', 'glow']) {
-      root.removeAttribute(`data-s-${attr}`);
-    }
+    for (const attr of SHELL_ATTRS) root.removeAttribute(`data-s-${attr}`);
     return;
   }
   const side = themes[resolveMode()];
@@ -264,7 +329,7 @@ function paint(input: StudioThemes | null): void {
   root.setAttribute('data-s-card', s.card);
   root.setAttribute('data-s-nav', s.nav);
   for (const [attr, value] of [
-    ['frame', s.frame], ['avatar', s.avatar], ['effect', s.effect],
+    ['frame', s.frame], ['effect', s.effect],
     ['pattern', s.pattern], ['font', s.font], ['radius', s.radius],
   ] as const) {
     if (value) root.setAttribute(`data-s-${attr}`, value);
@@ -272,8 +337,42 @@ function paint(input: StudioThemes | null): void {
   }
   if (s.glow) root.setAttribute('data-s-glow', 'on');
   else root.removeAttribute('data-s-glow');
+  // The shell. Written only when a theme moved something off the default, so
+  // an untouched app carries no attribute and the base stylesheet applies —
+  // which is also what makes "remove the theme" put everything back exactly.
+  const l = s.layout;
+  const shell: [string, string | null][] = [
+    ['nav-desktop', l.nav.desktop === DEFAULT_LAYOUT.nav.desktop ? null : l.nav.desktop],
+    ['nav-tablet', l.nav.tablet === DEFAULT_LAYOUT.nav.tablet ? null : l.nav.tablet],
+    ['nav-mobile', l.nav.mobile === DEFAULT_LAYOUT.nav.mobile ? null : l.nav.mobile],
+    ['nav-labels', l.nav.labels ? null : 'off'],
+    ['nav-active', l.nav.active === DEFAULT_LAYOUT.nav.active ? null : l.nav.active],
+    ['header', l.header.variant === DEFAULT_LAYOUT.header.variant ? null : l.header.variant],
+    ['header-sticky', l.header.sticky ? null : 'off'],
+    ['footer', l.footer === DEFAULT_LAYOUT.footer ? null : l.footer],
+    ['density', l.density === DEFAULT_LAYOUT.density ? null : l.density],
+    ['width', l.width === DEFAULT_LAYOUT.width ? null : l.width],
+    ['motion', s.motion === 'subtle' ? null : s.motion],
+    ['card-layout', s.cardLayout === 'grid' ? null : s.cardLayout],
+    ['type', s.typeScale === 'default' ? null : s.typeScale],
+  ];
+  for (const [attr, value] of shell) {
+    if (value) root.setAttribute(`data-s-${attr}`, value);
+    else root.removeAttribute(`data-s-${attr}`);
+  }
+  // Material Symbols is a variable font; these two axes are what "icon style"
+  // honestly means here. Both default to the app's own values.
+  root.style.setProperty('--s-icon-fill', String(s.icons.fill));
+  root.style.setProperty('--s-icon-wght', String(s.icons.weight));
   ensureFont(s.font);
 }
+
+/** Every attribute this module may write on the root, so a clear is a clear. */
+const SHELL_ATTRS = [
+  'button', 'card', 'nav', 'frame', 'effect', 'pattern', 'font', 'radius', 'glow',
+  'nav-desktop', 'nav-tablet', 'nav-mobile', 'nav-labels', 'nav-active',
+  'header', 'header-sticky', 'footer', 'density', 'width', 'motion', 'card-layout', 'type',
+];
 
 /**
  * The moment a skin goes on.

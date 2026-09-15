@@ -38,11 +38,11 @@ const TABS: Tab[] = ['style', 'collection', 'shop'];
  * things a fourteen-year-old has to have an opinion about.
  */
 const CATEGORIES = [
-  'THEME', 'ACCENT', 'BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'AVATAR', 'FRAME', 'EFFECT',
+  'THEME', 'ACCENT', 'BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'FRAME', 'EFFECT',
 ] as const;
 type Category = (typeof CATEGORIES)[number];
 
-const PRIMARY: Category[] = ['THEME', 'ACCENT', 'AVATAR', 'FRAME'];
+const PRIMARY: Category[] = ['THEME', 'ACCENT', 'FRAME'];
 const ADVANCED: Category[] = ['BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'EFFECT'];
 
 const SLOT: Record<Category, string> = {
@@ -51,7 +51,6 @@ const SLOT: Record<Category, string> = {
   BUTTON_STYLE: 'buttonKey',
   CARD_STYLE: 'cardKey',
   NAV_STYLE: 'navKey',
-  AVATAR: 'avatarKey',
   FRAME: 'frameKey',
   EFFECT: 'effectKey',
 };

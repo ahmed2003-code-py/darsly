@@ -414,7 +414,15 @@
  * word inside is clipped rather than allowed to decide the layout.
  */
 .material-symbols-outlined {
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  /* A theme may set the two axes that read as "icon style" — filled or
+     outlined, and stroke weight. Both default to the app's own values, so an
+     untouched app is pixel-identical. Inline `fontVariationSettings` on an
+     element still wins, which is how a single icon is deliberately filled. */
+  font-variation-settings:
+    'FILL' var(--s-icon-fill, 1),
+    'wght' var(--s-icon-wght, 400),
+    'GRAD' 0,
+    'opsz' 24;
   line-height: 1;
   display: inline-block;
   width: 1em;

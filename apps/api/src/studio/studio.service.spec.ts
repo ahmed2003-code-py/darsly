@@ -12,6 +12,7 @@ import {
   safeHex,
 } from './studio-theme';
 import { contrastRatio } from '../academy-site/renderer/color.util';
+import { DEFAULT_LAYOUT, deriveLayout } from './studio-theme';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -1224,5 +1225,94 @@ describe('the catalogue is a ladder', () => {
   it('gives every item a distinct key and a place in the order', () => {
     expect(new Set(CATALOG.map((c) => c.key)).size).toBe(CATALOG.length);
     expect(new Set(CATALOG.map((c) => c.sortOrder)).size).toBe(CATALOG.length);
+  });
+});
+
+/**
+ * The shape of the app, as a theme may ask for it.
+ *
+ * The rule that matters most is the first test: a theme that says nothing
+ * about layout — every theme that existed before layout was a thing — resolves
+ * to the app exactly as it is today. Everything else is the usual: a name the
+ * shell does not know is dropped, not guessed at.
+ */
+describe('a theme can shape the shell', () => {
+  it('resolves to today\'s app when it says nothing', () => {
+    expect(deriveLayout(undefined)).toEqual(DEFAULT_LAYOUT);
+    expect(deriveLayout({})).toEqual(DEFAULT_LAYOUT);
+    const t = deriveStudioThemes({ themeConfig: { accent: '#4a32c9' } });
+    expect(t.styles.layout).toEqual(DEFAULT_LAYOUT);
+    expect(t.styles.motion).toBe('subtle');
+    // Filled: that is what the app's icons are today, and a theme that says
+    // nothing must not un-fill them.
+    expect(t.styles.icons).toEqual({ fill: 1, weight: 400 });
+    expect(t.styles.cardLayout).toBe('grid');
+    expect(t.styles.typeScale).toBe('default');
+  });
+
+  it('takes every variant it knows, and only those', () => {
+    const l = deriveLayout({
+      nav: { desktop: 'rail', tablet: 'rail', mobile: 'drawer', labels: false, active: 'pill' },
+      header: { variant: 'floating', sticky: false },
+      footer: 'stats',
+      density: 'spacious',
+      width: 'wide',
+    });
+    expect(l.nav).toEqual({ desktop: 'rail', tablet: 'rail', mobile: 'drawer', labels: false, active: 'pill' });
+    expect(l.header).toEqual({ variant: 'floating', sticky: false });
+    expect(l.footer).toBe('stats');
+    expect(l.density).toBe('spacious');
+    expect(l.width).toBe('wide');
+  });
+
+  it('drops a name the shell does not have rather than guessing', () => {
+    const l = deriveLayout({
+      nav: { desktop: 'Theme7Sidebar' as any, active: '300px' as any },
+      header: { variant: '<script>' as any },
+      footer: 'huge' as any,
+      density: 3 as any,
+      width: 'calc(100vw)' as any,
+    });
+    expect(l).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it('allows glass on the nav or the header, never both', () => {
+    // Two full-screen blurs stacked is what makes a "premium" theme feel slow.
+    const both = deriveLayout({ nav: { desktop: 'glass' }, header: { variant: 'glass' } });
+    expect(both.nav.desktop).toBe('glass');
+    expect(both.header.variant).toBe('standard');
+    const headerOnly = deriveLayout({ header: { variant: 'glass' } });
+    expect(headerOnly.header.variant).toBe('glass');
+  });
+
+  it('reads motion, icons and card layout from the theme, floored to known values', () => {
+    const t = deriveStudioThemes({
+      themeConfig: {
+        accent: '#4a32c9',
+        motion: 'expressive',
+        icons: { fill: 0, weight: 300 },
+        cardLayout: 'editorial',
+        typeScale: 'editorial',
+      },
+    });
+    expect(t.styles.motion).toBe('expressive');
+    expect(t.styles.icons).toEqual({ fill: 0, weight: 300 });
+    expect(t.styles.cardLayout).toBe('editorial');
+    expect(t.styles.typeScale).toBe('editorial');
+    const bad = deriveStudioThemes({
+      themeConfig: { accent: '#4a32c9', motion: 'wild', icons: { fill: 7, weight: 900 }, cardLayout: 'x' } as any,
+    });
+    expect(bad.styles.motion).toBe('subtle');
+    expect(bad.styles.icons).toEqual({ fill: 1, weight: 400 });
+    expect(bad.styles.cardLayout).toBe('grid');
+  });
+
+  it('no longer carries a slot nothing draws', () => {
+    // Avatar styles and confetti were names the engine accepted and the
+    // stylesheet never implemented. Gone from the engine, so they cannot come
+    // back through a row.
+    const t = deriveStudioThemes({ themeConfig: { accent: '#4a32c9' }, effect: 'confetti' });
+    expect(t.styles.effect).toBeNull();
+    expect('avatar' in t.styles).toBe(false);
   });
 });

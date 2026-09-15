@@ -315,7 +315,6 @@ export class StudioService implements OnModuleInit {
       card: item.category === 'CARD_STYLE' ? style : null,
       nav: item.category === 'NAV_STYLE' ? style : null,
       frame: item.category === 'FRAME' ? style : null,
-      avatar: item.category === 'AVATAR' ? style : null,
       effect: item.category === 'EFFECT' ? style : null,
     });
   }
@@ -337,7 +336,6 @@ export class StudioService implements OnModuleInit {
       card: cfg(worn.cardKey).style as string,
       nav: cfg(worn.navKey).style as string,
       frame: cfg(worn.frameKey).style as string,
-      avatar: cfg(worn.avatarKey).style as string,
       effect: cfg(worn.effectKey).style as string,
     });
   }

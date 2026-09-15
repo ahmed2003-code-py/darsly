@@ -987,7 +987,11 @@
     "waitingTeacher": "Waiting for the teacher to start",
     "startMeeting": "Start meeting",
     "continueMeeting": "Join meeting",
-    "startOpensSoon": "Opens 15 minutes before"
+    "startOpensSoon": "Opens 15 minutes before",
+    "builtInTitle": "The classroom is built in",
+    "builtInHint": "No link needed — press “Start meeting” at the time and students join from inside the app.",
+    "useExternal": "I would rather use an external link (Zoom / Meet)",
+    "useBuiltIn": "Use the Darsly classroom instead"
   },
   "analytics": {
     "title": "Analytics",

@@ -109,7 +109,37 @@ export class DailyService {
         },
       }),
     });
+    this.assertExpectedDomain(room.url);
     return { name: room.name, url: room.url };
+  }
+
+  /**
+   * The room came back on the domain we think we are using.
+   *
+   * A key belongs to a team, and a team owns a domain — so pasting the wrong
+   * key does not fail, it quietly hosts your classes somewhere else. That is
+   * the one provider mistake that looks like success, and it is most likely to
+   * happen in the minute after someone rotates a key. Checked rather than
+   * assumed, and skipped entirely when the variable is unset so the platform
+   * still runs for anyone who never set it.
+   */
+  private assertExpectedDomain(url: string) {
+    const expected = process.env.DAILY_DOMAIN?.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    if (!expected) return;
+    let host: string;
+    try {
+      host = new URL(url).host;
+    } catch {
+      return;
+    }
+    if (host === expected) return;
+    this.logger.error(
+      `Daily returned a room on "${host}" but DAILY_DOMAIN is "${expected}" — the API key probably belongs to a different Daily team`,
+    );
+    throw new ServiceUnavailableException({
+      message: 'إعدادات خدمة البث غير متطابقة. راجع إعدادات المنصّة.',
+      code: 'LIVE_DOMAIN_MISMATCH',
+    });
   }
 
   /**

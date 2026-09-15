@@ -190,6 +190,41 @@ describe('a teacher opens the classroom', () => {
   });
 });
 
+describe('the configured domain is checked, not assumed', () => {
+  // Uses the real service, because this is about what it does with the
+  // provider's answer rather than about how the call is wired.
+  const svc = () => new (require('./daily.service').DailyService)();
+  const check = (s: any, url: string) => s['assertExpectedDomain'](url);
+
+  afterEach(() => {
+    delete process.env.DAILY_DOMAIN;
+  });
+
+  it('accepts a room on the domain we expect', () => {
+    process.env.DAILY_DOMAIN = 'darsly.daily.co';
+    expect(() => check(svc(), 'https://darsly.daily.co/darsly-ls1')).not.toThrow();
+  });
+
+  it('refuses a room on somebody else\'s domain', () => {
+    // The mistake that otherwise looks like success: a key from another team
+    // works perfectly and hosts your classes somewhere you do not control.
+    process.env.DAILY_DOMAIN = 'darsly.daily.co';
+    const err = (() => { try { check(svc(), 'https://someoneelse.daily.co/x'); } catch (e) { return e as any; } })();
+    expect(err.getResponse()).toMatchObject({ code: 'LIVE_DOMAIN_MISMATCH' });
+  });
+
+  it('tolerates the variable being written as a URL', () => {
+    process.env.DAILY_DOMAIN = 'https://darsly.daily.co/';
+    expect(() => check(svc(), 'https://darsly.daily.co/darsly-ls1')).not.toThrow();
+  });
+
+  it('checks nothing when the variable is unset', () => {
+    // Nothing to compare against is not the same as a mismatch, and refusing
+    // here would break every deployment that never set it.
+    expect(() => check(svc(), 'https://anything.daily.co/x')).not.toThrow();
+  });
+});
+
 describe('a student enters the classroom', () => {
   const live = (over: Partial<Session> = {}): Session => ({
     id: 'ls1',

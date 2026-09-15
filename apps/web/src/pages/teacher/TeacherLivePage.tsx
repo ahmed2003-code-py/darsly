@@ -17,6 +17,8 @@ export default function TeacherLivePage() {
   const [open, setOpen] = useState(false);
   const [bookingsFor, setBookingsFor] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', description: '', startsAt: '', durationMin: '60', capacity: '', joinUrl: '' });
+  // Off by default: the built-in classroom is what a new session gets.
+  const [useExternal, setUseExternal] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-live'],
@@ -35,6 +37,7 @@ export default function TeacherLivePage() {
       })).data,
     onSuccess: () => {
       setOpen(false);
+      setUseExternal(false);
       setForm({ title: '', description: '', startsAt: '', durationMin: '60', capacity: '', joinUrl: '' });
       qc.invalidateQueries({ queryKey: ['teacher-live'] });
     },
@@ -143,13 +146,46 @@ export default function TeacherLivePage() {
             <input className="input" inputMode="numeric" value={form.durationMin} onChange={(e) => setForm({ ...form, durationMin: e.target.value.replace(/\D/g, '') })} />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('live.fCapacity')} hint={t('live.fCapacityHint')}>
-            <input className="input" inputMode="numeric" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value.replace(/\D/g, '') })} />
-          </Field>
-          <Field label={t('live.fJoinUrl')}>
-            <input className="input" dir="ltr" value={form.joinUrl} onChange={(e) => setForm({ ...form, joinUrl: e.target.value })} placeholder="https://meet…" />
-          </Field>
+        <Field label={t('live.fCapacity')} hint={t('live.fCapacityHint')}>
+          <input className="input" inputMode="numeric" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value.replace(/\D/g, '') })} />
+        </Field>
+
+        {/* The classroom is Darsly's now, so the form says so instead of asking
+            for a link. The external field stays reachable but folded away: a
+            teacher who has a paid Zoom they would rather use is a real case,
+            and it is the wrong default rather than a wrong answer. */}
+        <div className="mt-1 rounded-xl bg-primary-fixed/40 px-3.5 py-3">
+          <p className="flex items-center gap-2 text-sm font-bold text-on-primary-fixed">
+            <span className="material-symbols-outlined text-[18px]">videocam</span>
+            {t('live.builtInTitle')}
+          </p>
+          <p className="mt-0.5 text-xs text-on-primary-fixed/80">{t('live.builtInHint')}</p>
+          {!useExternal ? (
+            <button
+              type="button"
+              className="mt-2 text-xs font-bold text-primary hover:underline"
+              onClick={() => setUseExternal(true)}
+            >
+              {t('live.useExternal')}
+            </button>
+          ) : (
+            <div className="mt-2">
+              <input
+                className="input"
+                dir="ltr"
+                value={form.joinUrl}
+                onChange={(e) => setForm({ ...form, joinUrl: e.target.value })}
+                placeholder="https://meet…"
+              />
+              <button
+                type="button"
+                className="mt-1.5 text-xs font-bold text-outline hover:text-on-surface"
+                onClick={() => { setUseExternal(false); setForm({ ...form, joinUrl: '' }); }}
+              >
+                {t('live.useBuiltIn')}
+              </button>
+            </div>
+          )}
         </div>
         <ErrorNote error={create.error} />
         <button className="btn-primary mt-2 w-full" disabled={create.isPending || !form.title.trim() || !form.startsAt} onClick={() => create.mutate()}>

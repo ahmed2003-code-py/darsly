@@ -56,7 +56,6 @@ const theme = (
     radius?: string;
     button?: string;
     card?: string;
-    nav?: string;
     layout?: Prisma.InputJsonObject;
     motion?: string;
     icons?: { fill?: number; weight?: number };
@@ -90,7 +89,6 @@ const theme = (
     ...(extra.radius ? { radius: extra.radius } : {}),
     ...(extra.button ? { button: extra.button } : {}),
     ...(extra.card ? { card: extra.card } : {}),
-    ...(extra.nav ? { nav: extra.nav } : {}),
     // The shape of the app. Absent, the shell stays as it is today.
     ...(extra.layout ? { layout: extra.layout } : {}),
     ...(extra.motion ? { motion: extra.motion } : {}),
@@ -335,7 +333,8 @@ export const CATALOG: CatalogSeed[] = [
       radius: 'round',
       card: 'glass',
       button: 'pill',
-      nav: 'floating',
+      // Pill-shaped rows in the sidebar: the shell's own way of saying it.
+      layout: { nav: { active: 'pill' } },
     },
   ),
 
@@ -527,10 +526,35 @@ export const CATALOG: CatalogSeed[] = [
   // the phone something, so it is used sparingly and priced like it.
   style('CARD_STYLE', 'card-glass', 'glass', 'RARE', 'كروت زجاج', 'Frosted cards',
     'شفافية وضبابية خفيفة — اللي تحت الكارت بيبان من ورا.', 'Translucent and lightly blurred — what is behind shows through.', 120, 35),
-  style('NAV_STYLE', 'nav-floating', 'floating', 'COMMON', 'تنقّل عائم', 'Floating nav',
-    'عناصر القائمة بتبقى كبسولات دايرة.', 'Menu items become rounded capsules.', 40, 36),
-  style('NAV_STYLE', 'nav-compact', 'compact', 'COMMON', 'تنقّل مضغوط', 'Compact nav',
-    'مسافات أقل في القائمة — حاجات أكتر من غير نزول.', 'Tighter spacing in the menu — more of it without scrolling.', 40, 37),
+  // ── The shell, piece by piece ────────────────────────────────────────────
+  //
+  // A sidebar shape and a header shape, each bought on its own and worn over
+  // whatever theme is on. This is what lets a student with Egyptian King put
+  // a rail on it: the slot wins over the theme, the same rule the buttons and
+  // the cards have always followed. The two old "nav" items — which moved the
+  // padding of one element — are replaced by shapes that move the whole app.
+  style('NAV_STYLE', 'nav-rail', 'rail', 'COMMON', 'شريط أيقونات', 'Icon rail',
+    'القائمة تبقى عمود رفيع من الأيقونات، والاسم يظهر لما تقف عليها.', 'The sidebar becomes a slim column of icons; the name shows on hover.', 60, 36),
+  style('NAV_STYLE', 'nav-minimal', 'minimal', 'COMMON', 'قائمة بلا إطار', 'Chromeless sidebar',
+    'من غير خلفية ولا حد — الصفحة بتكمل وراها.', 'No background and no edge — the page runs on behind it.', 60, 37),
+  style('NAV_STYLE', 'nav-floating', 'floating', 'COMMON', 'قائمة عائمة', 'Floating sidebar',
+    'منفصلة عن الحافة، مدوّرة، ومرفوعة بظل.', 'Detached from the edge, rounded, and lifted on a shadow.', 80, 38),
+  style('NAV_STYLE', 'nav-hidden', 'hidden', 'COMMON', 'من غير قائمة', 'No sidebar',
+    'التنقّل الأساسي يطلع في الهيدر والباقي ورا زرار القائمة.', 'The primary destinations move into the header; the rest sit behind the menu button.', 100, 39),
+  style('NAV_STYLE', 'nav-glass', 'glass', 'RARE', 'قائمة زجاجية', 'Glass sidebar',
+    'شفافة وضبابية — الخلفية بتبان من وراها.', 'Translucent and blurred — the backdrop shows through.', 120, 40),
+  style('HEADER_STYLE', 'header-minimal', 'minimal', 'COMMON', 'هيدر شفاف', 'Transparent header',
+    'من غير خلفية ولا خط تحته، والبحث أيقونة لحد ما تدوس.', 'No background and no line beneath; the search is an icon until pressed.', 60, 41),
+  style('HEADER_STYLE', 'header-compact', 'compact', 'COMMON', 'هيدر قصير', 'Compact header',
+    'أقصر بالتلت، والبحث أيقونة لحد ما تدوس.', 'A third shorter; the search is an icon until pressed.', 60, 42),
+  style('HEADER_STYLE', 'header-centered', 'centered', 'COMMON', 'البحث في النص', 'Centered search',
+    'البحث ياخد النص كله.', 'The search takes the whole middle.', 60, 43),
+  style('HEADER_STYLE', 'header-floating', 'floating', 'COMMON', 'هيدر عائم', 'Floating header',
+    'منفصل عن الحافة، كبسولة مدوّرة بظل.', 'Detached from the edge — a rounded capsule on a shadow.', 80, 44),
+  style('HEADER_STYLE', 'header-editorial', 'editorial', 'COMMON', 'هيدر باسم الصفحة', 'Tall header',
+    'أعلى، وفيه اسم الصفحة اللي انت فيها.', 'Taller, carrying the name of the page you are on.', 100, 45),
+  style('HEADER_STYLE', 'header-glass', 'glass', 'RARE', 'هيدر زجاجي', 'Glass header',
+    'شفاف وضبابي — الصفحة بتبان من وراه وهي بتتحرك.', 'Translucent and blurred — the page shows through as it scrolls.', 120, 46),
 
   // ── Rung two: the mark on your own face ──────────────────────────────────
   //
@@ -538,20 +562,20 @@ export const CATALOG: CatalogSeed[] = [
   // is the one slot where the ladder is a ladder: bronze is an afternoon,
   // diamond is level six, and the last three cannot be bought at any price.
   style('EFFECT', 'effect-glow', 'glow', 'RARE', 'وهج', 'Glow',
-    'هالة خفيفة حوالين الحاجة المختارة في القائمة.', 'A soft halo around whatever is selected in the menu.', 130, 42,
+    'هالة خفيفة حوالين الحاجة المختارة في القائمة.', 'A soft halo around whatever is selected in the menu.', 130, 52,
     { requiredLevel: 2 }),
   style('FRAME', 'frame-bronze', 'bronze', 'COMMON', 'إطار برونزي', 'Bronze frame',
-    'حلقة برونزي حوالين صورتك في كل مكان.', 'A bronze ring around your picture, everywhere it appears.', 70, 40),
+    'حلقة برونزي حوالين صورتك في كل مكان.', 'A bronze ring around your picture, everywhere it appears.', 70, 50),
   style('FRAME', 'frame-silver', 'silver', 'COMMON', 'إطار فضي', 'Silver frame',
-    'حلقة فضي حوالين صورتك في كل مكان.', 'A silver ring around your picture, everywhere it appears.', 100, 41),
+    'حلقة فضي حوالين صورتك في كل مكان.', 'A silver ring around your picture, everywhere it appears.', 100, 51),
   style('FRAME', 'frame-gold', 'gold', 'RARE', 'إطار ذهبي', 'Gold frame',
-    'حلقة ذهب حوالين صورتك في كل مكان.', 'A gold ring around your picture, everywhere it appears.', 220, 43,
+    'حلقة ذهب حوالين صورتك في كل مكان.', 'A gold ring around your picture, everywhere it appears.', 220, 53,
     { requiredLevel: 2 }),
   style('FRAME', 'frame-lightning', 'lightning', 'RARE', 'إطار برق', 'Lightning frame',
-    'حلقة صفرا لامعة حوالين صورتك.', 'A bright yellow ring around your picture.', 300, 44,
+    'حلقة صفرا لامعة حوالين صورتك.', 'A bright yellow ring around your picture.', 300, 54,
     { requiredLevel: 3 }),
   style('FRAME', 'frame-diamond', 'diamond', 'EPIC', 'إطار ألماس', 'Diamond frame',
-    'حلقة سماوي بهالة حواليها.', 'A cyan ring with a halo around it.', 550, 45,
+    'حلقة سماوي بهالة حواليها.', 'A cyan ring with a halo around it.', 550, 55,
     { requiredLevel: 5 }),
 
   // Earned, not sold. Nothing on this rung has a price, because a mark that can
@@ -559,18 +583,22 @@ export const CATALOG: CatalogSeed[] = [
   // the only things in the whole shop that are a claim rather than a taste.
   style('FRAME', 'frame-scholar', 'scholar', 'RARE', 'إطار العالِم', 'Scholar frame',
     'مش بيتباع. بيجي لوحده مع إنجاز «عالِم» — تلات شهادات.',
-    'Not for sale. It arrives with the "Scholar" achievement — three certificates.', 0, 46,
+    'Not for sale. It arrives with the "Scholar" achievement — three certificates.', 0, 56,
     { requiredAchievement: 'scholar' }),
   style('FRAME', 'frame-fire', 'fire', 'EPIC', 'إطار النار', 'Fire frame',
     'مش بيتباع. بيجي لوحده مع إنجاز «شهر كامل» — ٣٠ يوم متواصلين.',
-    'Not for sale. It arrives with the "A whole month" achievement — a 30-day streak.', 0, 47,
+    'Not for sale. It arrives with the "A whole month" achievement — a 30-day streak.', 0, 57,
     { requiredAchievement: 'streak_30' }),
   style('FRAME', 'frame-legendary', 'legendary', 'LEGENDARY', 'إطار الأسطورة', 'Legendary frame',
     'مش بيتباع، ومحدش يقدر يشتريه. مية يوم متواصلين وبس.',
-    'Not for sale, and no amount of coins will do. A hundred-day streak, and nothing else.', 0, 48,
+    'Not for sale, and no amount of coins will do. A hundred-day streak, and nothing else.', 0, 58,
     { requiredAchievement: 'streak_100' }),
 
   // ── Rung three: a colour over the platform, not instead of it ────────────
+  //
+  // Named as stones, not flavours. "Mint" and "Grape" read as a menu; a set of
+  // gems reads as a collection, which is what a shop shelf is. The keys stay:
+  // a key is an identity, and renaming one would orphan what students own.
   //
   // The middle of the ladder, and the rung that explains the top of it. These
   // bring an accent, a second colour, a wash, a backdrop, a typeface and a set
@@ -580,7 +608,7 @@ export const CATALOG: CatalogSeed[] = [
   // That is the whole difference in the price: a skin replaces where you are, a
   // tint changes the light in it.
   theme(
-    'theme-mint', 'RARE', 'نعناع', 'Mint',
+    'theme-mint', 'RARE', 'زمرّد', 'Emerald',
     'أخضر هادي وخلفية فاتحة — شكل مريح للقراءة الطويلة.',
     'A calm green over a light wash — easy on a long evening of reading.',
     '#0f766e', '#2dd4bf', 180, 10,
@@ -592,7 +620,7 @@ export const CATALOG: CatalogSeed[] = [
     },
   ),
   theme(
-    'theme-ocean', 'RARE', 'محيط', 'Ocean',
+    'theme-ocean', 'RARE', 'ياقوت', 'Sapphire',
     'أزرق عميق مع ضوء بيتحرك في الخلفية.',
     'A deep blue with a light that drifts behind the page.',
     '#1d4ed8', '#60a5fa', 200, 11,
@@ -604,7 +632,7 @@ export const CATALOG: CatalogSeed[] = [
     },
   ),
   theme(
-    'theme-sunset', 'EPIC', 'غروب', 'Sunset',
+    'theme-sunset', 'EPIC', 'كهرمان', 'Amber',
     'برتقالي دافي وخطوط مايلة في الخلفية.',
     'A warm orange with slanted lines running behind everything.',
     '#c2410c', '#fb923c', 350, 12,
@@ -616,7 +644,7 @@ export const CATALOG: CatalogSeed[] = [
     },
   ),
   theme(
-    'theme-grape', 'EPIC', 'عنب', 'Grape',
+    'theme-grape', 'EPIC', 'جمشت', 'Amethyst',
     'بنفسجي غامق وشبكة رفيعة بالكاد تتشاف.',
     'A deep violet over a grid you can only just see.',
     '#6d28d9', '#a78bfa', 400, 13,
@@ -649,7 +677,7 @@ export const CATALOG: CatalogSeed[] = [
     },
   ),
   theme(
-    'theme-midnight', 'EPIC', 'منتصف الليل', 'Midnight',
+    'theme-midnight', 'EPIC', 'سديم', 'Nebula',
     'أزرق ليلي في الوضعين — الفاتح نفسه ليل، بس أهدى.',
     'Night blue at both ends — the light side is still night, only quieter.',
     '#2563eb', '#7dd3fc', 800, 15,

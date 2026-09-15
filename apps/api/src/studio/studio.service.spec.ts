@@ -12,7 +12,7 @@ import {
   safeHex,
 } from './studio-theme';
 import { contrastRatio } from '../academy-site/renderer/color.util';
-import { DEFAULT_LAYOUT, deriveLayout } from './studio-theme';
+import { DEFAULT_LAYOUT, deriveLayout, withSlots } from './studio-theme';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -434,7 +434,6 @@ describe('studio theme derivation', () => {
     });
     expect(themes.styles.button).toBe('classic');
     expect(themes.styles.card).toBe('minimal');
-    expect(themes.styles.nav).toBe('classic');
   });
 
   /**
@@ -1011,12 +1010,12 @@ describe('Rose & Lavender', () => {
     expect(t.styles).toMatchObject({
       card: 'glass',
       button: 'pill',
-      nav: 'floating',
       font: 'round',
       radius: 'round',
       pattern: 'halftone',
       glow: true,
     });
+    expect(t.styles.layout.nav.active).toBe('pill');
     // One skin, not two: the ground moves between day and night and nothing else.
     expect(t.light.styles).toEqual(t.dark.styles);
   });
@@ -1314,5 +1313,58 @@ describe('a theme can shape the shell', () => {
     const t = deriveStudioThemes({ themeConfig: { accent: '#4a32c9' }, effect: 'confetti' });
     expect(t.styles.effect).toBeNull();
     expect('avatar' in t.styles).toBe(false);
+  });
+});
+
+/**
+ * A sidebar or a header bought on its own, worn over any theme.
+ *
+ * The rule the buttons and cards have always followed, applied to the shell:
+ * the equipped slot wins over what the theme asked for, and only that field
+ * moves. A student wearing Egyptian King who buys a rail gets a rail on
+ * Egyptian King — not a rail on the default theme.
+ */
+describe('a bought sidebar or header stacks on the theme', () => {
+  const king = CATALOG.find((c) => c.key === 'theme-egyptian-king')!.config as any;
+
+  it('puts a rail on Egyptian King and leaves the rest of the King alone', () => {
+    const t = deriveStudioThemes({ themeConfig: king, nav: 'rail' });
+    expect(t.styles.layout.nav.desktop).toBe('rail');
+    expect(t.styles.layout.nav.tablet).toBe('rail');
+    expect(t.styles.layout.nav.labels).toBe(false);
+    // Still the King: crimson, stadium, display face, sharp corners.
+    expect(t.styles.pattern).toBe('stadium');
+    expect(t.styles.font).toBe('display');
+    expect(t.styles.radius).toBe('sharp');
+    expect(t.styles.layout.header.variant).toBe(DEFAULT_LAYOUT.header.variant);
+  });
+
+  it('puts a header on a theme that named its own, and wins', () => {
+    const aurora = CATALOG.find((c) => c.key === 'theme-aurora')!.config as any;
+    const t = deriveStudioThemes({ themeConfig: aurora, header: 'compact' });
+    expect(t.styles.layout.header.variant).toBe('compact');
+    // Aurora's own sidebar is untouched by a header purchase.
+    expect(t.styles.layout.nav.desktop).toBe('floating');
+  });
+
+  it('refuses a name the shell does not have, and keeps the theme\'s', () => {
+    const t = deriveStudioThemes({ themeConfig: king, nav: 'Theme7Sidebar', header: '<script>' });
+    expect(t.styles.layout).toEqual(deriveLayout(king.layout));
+  });
+
+  it('keeps glass to one surface even across a theme and a slot', () => {
+    const glassNav = deriveLayout({ nav: { desktop: 'glass' } });
+    expect(withSlots(glassNav, null, 'glass').header.variant).toBe('standard');
+    const glassHeader = deriveLayout({ header: { variant: 'glass' } });
+    expect(withSlots(glassHeader, 'glass', null).header.variant).toBe('standard');
+    expect(withSlots(glassHeader, 'glass', null).nav.desktop).toBe('glass');
+  });
+
+  it('sells every sidebar and header shape the shell can draw, and no other', () => {
+    const navs = CATALOG.filter((c) => c.category === 'NAV_STYLE').map((c) => (c.config as any).style).sort();
+    expect(navs).toEqual(['floating', 'glass', 'hidden', 'minimal', 'rail']);
+    const headers = CATALOG.filter((c) => c.category === 'HEADER_STYLE').map((c) => (c.config as any).style).sort();
+    expect(headers).toEqual(['centered', 'compact', 'editorial', 'floating', 'glass', 'minimal']);
+    // `expanded` and `standard` are the defaults — there is nothing to sell.
   });
 });

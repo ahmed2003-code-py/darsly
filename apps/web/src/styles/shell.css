@@ -282,12 +282,18 @@
   grid-template-columns: 38% 1fr;
   gap: 0;
 }
-:root[data-s-card-layout='editorial'] .course-media { aspect-ratio: auto; height: 100%; min-height: 11rem; }
-:root[data-s-card-layout='editorial'] .course-body { padding: 1rem 1rem 1rem 0; }
-[dir='rtl']:root[data-s-card-layout='editorial'] .course-body,
-:root[data-s-card-layout='editorial'] [dir='rtl'] .course-body { padding: 1rem 0 1rem 1rem; }
-:root[data-s-card-layout='editorial'] .course-title { font-size: 1.15rem; -webkit-line-clamp: 3; }
-:root[data-s-card-layout='editorial'] .course-meta { display: none; }
+:root[data-s-card-layout='editorial'] .course-media { aspect-ratio: auto; height: 100%; min-height: 15rem; }
+/* Padding on the text side only; the picture runs to the card's edge. Logical
+   properties, so it is the same card in either direction. */
+:root[data-s-card-layout='editorial'] .course-body {
+  padding-block: 1.5rem;
+  padding-inline: 1.5rem 0;
+  gap: 0.75rem;
+}
+:root[data-s-card-layout='editorial'] .course-title { font-size: 1.3rem; line-height: 1.3; -webkit-line-clamp: 3; }
+:root[data-s-card-layout='editorial'] .course-teacher { font-size: 0.95rem; }
+:root[data-s-card-layout='editorial'] .course-price { padding-top: 1rem; margin-top: auto; }
+:root[data-s-card-layout='editorial'] .course-grid { gap: calc(var(--s-card-gap, 1rem) * 1.5); }
 
 /* ── Radius reaches the controls ───────────────────────────────────────────
    `data-s-radius` shaped cards only; a round theme still had square inputs

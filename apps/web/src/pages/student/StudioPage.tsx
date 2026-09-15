@@ -39,12 +39,14 @@ const TABS: Tab[] = ['style', 'collection', 'shop'];
  * things a fourteen-year-old has to have an opinion about.
  */
 const CATEGORIES = [
-  'THEME', 'ACCENT', 'BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'FRAME', 'EFFECT',
+  'THEME', 'ACCENT', 'NAV_STYLE', 'HEADER_STYLE', 'BUTTON_STYLE', 'CARD_STYLE', 'FRAME', 'EFFECT',
 ] as const;
 type Category = (typeof CATEGORIES)[number];
 
-const PRIMARY: Category[] = ['THEME', 'ACCENT', 'FRAME'];
-const ADVANCED: Category[] = ['BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'EFFECT'];
+// The sidebar and the header are primary: they are the two things a student
+// sees on every screen, and the two a theme is most likely to be argued with.
+const PRIMARY: Category[] = ['THEME', 'NAV_STYLE', 'HEADER_STYLE', 'ACCENT', 'FRAME'];
+const ADVANCED: Category[] = ['BUTTON_STYLE', 'CARD_STYLE', 'EFFECT'];
 
 const SLOT: Record<Category, string> = {
   THEME: 'themeKey',
@@ -52,6 +54,7 @@ const SLOT: Record<Category, string> = {
   BUTTON_STYLE: 'buttonKey',
   CARD_STYLE: 'cardKey',
   NAV_STYLE: 'navKey',
+  HEADER_STYLE: 'headerKey',
   FRAME: 'frameKey',
   EFFECT: 'effectKey',
 };
@@ -1221,39 +1224,103 @@ function StylePreview({ category, style }: { category: Category; style: string }
   }
 
   if (category === 'NAV_STYLE') {
-    // The difference is the selected row's shape and how tightly rows sit, so
-    // both are shown at once: three rows, the first one selected.
-    const compact = style === 'compact';
-    const radius = style === 'floating' ? '999px' : '8px';
+    // A miniature of the whole screen: the sidebar in this shape on the start
+    // side, the page beside it. What changes between shapes is the sidebar's
+    // width, chrome and where it sits — so that is what is drawn.
+    const rail = style === 'rail';
+    const hidden = style === 'hidden';
+    const floating = style === 'floating';
+    const minimal = style === 'minimal';
+    const glass = style === 'glass';
     return (
-      <span className={`${shell} !place-items-stretch`}>
-        <span
-          className="flex w-full flex-col justify-center"
-          style={{ gap: compact ? '3px' : '9px' }}
-        >
-          {[0, 1, 2].map((i) => (
+      <span className={`${shell} !place-items-stretch !p-2`}>
+        <span className="relative flex h-full w-full gap-1.5 overflow-hidden rounded-lg bg-surface-container-lowest p-1.5">
+          {glass && (
+            <span className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 80% at 15% 30%, rgb(var(--c-primary) / 0.45), transparent 70%)' }} />
+          )}
+          {!hidden && (
             <span
-              key={i}
-              className="flex items-center gap-2 px-2"
+              className="relative flex shrink-0 flex-col items-center gap-1.5 py-1.5"
               style={{
-                borderRadius: radius,
-                paddingBlock: compact ? '3px' : '6px',
-                background: i === 0 ? 'rgb(var(--c-primary-fixed))' : 'transparent',
+                width: rail ? '14%' : '32%',
+                borderRadius: floating ? '8px' : '4px',
+                margin: floating ? '2px' : 0,
+                background: minimal ? 'transparent' : glass ? 'rgb(var(--c-surface-container-lowest) / 0.55)' : 'rgb(var(--c-surface-container-high))',
+                backdropFilter: glass ? 'blur(4px)' : undefined,
+                boxShadow: floating ? '0 6px 14px -8px rgb(0 0 0 / 0.5)' : undefined,
+                borderInlineEnd: minimal ? '1px solid rgb(var(--c-line) / 0.25)' : undefined,
               }}
             >
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ background: i === 0 ? 'rgb(var(--c-primary))' : 'rgb(var(--c-on-surface) / 0.3)' }}
-              />
-              <span
-                className="h-1.5 rounded-full"
-                style={{
-                  width: i === 0 ? '55%' : i === 1 ? '40%' : '48%',
-                  background: i === 0 ? 'rgb(var(--c-primary))' : 'rgb(var(--c-on-surface) / 0.25)',
-                }}
-              />
+              <span className="h-3 w-3 rounded-sm bg-primary" />
+              {[0, 1, 2, 3].map((i) => (
+                <span key={i} className={`flex w-full items-center gap-1 px-1 ${rail ? 'justify-center' : ''}`}>
+                  <span className={`h-2 w-2 shrink-0 rounded-sm ${i === 0 ? 'bg-primary' : 'bg-on-surface/30'}`} />
+                  {!rail && <span className={`h-1 flex-1 rounded-full ${i === 0 ? 'bg-primary' : 'bg-on-surface/20'}`} />}
+                </span>
+              ))}
             </span>
-          ))}
+          )}
+          <span className="relative flex min-w-0 flex-1 flex-col gap-1.5">
+            <span className="flex h-4 items-center gap-1 rounded-sm bg-surface-container-high px-1">
+              {hidden && [0, 1, 2].map((i) => <span key={i} className={`h-1.5 w-4 rounded-full ${i === 0 ? 'bg-primary' : 'bg-on-surface/25'}`} />)}
+              <span className="ms-auto h-2 w-6 rounded-full bg-on-surface/20" />
+            </span>
+            <span className="h-2 w-2/3 rounded-full bg-on-surface/50" />
+            <span className="grid flex-1 grid-cols-2 gap-1">
+              <span className="rounded-sm bg-surface-container-high" />
+              <span className="rounded-sm bg-surface-container-high" />
+            </span>
+          </span>
+        </span>
+      </span>
+    );
+  }
+
+  if (category === 'HEADER_STYLE') {
+    // The header in this shape over a page: its height, whether it floats,
+    // and where the search sits are the differences, so those are drawn.
+    const compact = style === 'compact';
+    const floating = style === 'floating';
+    const minimal = style === 'minimal';
+    const glass = style === 'glass';
+    const centered = style === 'centered';
+    const editorial = style === 'editorial';
+    const folded = compact || minimal;
+    return (
+      <span className={`${shell} !place-items-stretch !p-2`}>
+        <span className="relative flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-lg bg-surface-container-lowest p-1.5">
+          {glass && (
+            <span className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(70% 60% at 70% 20%, rgb(var(--c-primary) / 0.45), transparent 70%)' }} />
+          )}
+          <span
+            className="relative flex items-center gap-1.5 px-1.5"
+            style={{
+              height: compact ? '10px' : editorial ? '22px' : '14px',
+              margin: floating ? '2px 4px 0' : 0,
+              borderRadius: floating ? '999px' : '3px',
+              background: minimal ? 'transparent' : glass ? 'rgb(var(--c-surface-container-lowest) / 0.55)' : 'rgb(var(--c-surface-container-high))',
+              backdropFilter: glass ? 'blur(4px)' : undefined,
+              boxShadow: floating ? '0 6px 14px -8px rgb(0 0 0 / 0.5)' : undefined,
+              borderBottom: minimal ? '0' : undefined,
+            }}
+          >
+            {editorial && <span className="h-2.5 w-1/3 rounded-full bg-on-surface/70" />}
+            {folded ? (
+              <span className="h-2 w-2 rounded-full bg-on-surface/40" />
+            ) : (
+              <span className={`h-2 rounded-full bg-surface-container-lowest ${centered ? 'mx-auto w-1/2' : editorial ? 'ms-auto w-1/5' : 'w-2/5'}`} style={{ border: '1px solid rgb(var(--c-line) / 0.3)' }} />
+            )}
+            <span className="ms-auto flex gap-1">
+              <span className="h-2 w-2 rounded-full bg-on-surface/30" />
+              <span className="h-2 w-2 rounded-full bg-primary" />
+            </span>
+          </span>
+          <span className="h-2 w-1/2 rounded-full bg-on-surface/50" />
+          <span className="grid flex-1 grid-cols-3 gap-1">
+            <span className="rounded-sm bg-surface-container-high" />
+            <span className="rounded-sm bg-surface-container-high" />
+            <span className="rounded-sm bg-surface-container-high" />
+          </span>
         </span>
       </span>
     );

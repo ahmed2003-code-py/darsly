@@ -34,7 +34,6 @@ export interface LayoutStyles {
 export interface StudioStyles {
   button: string;
   card: string;
-  nav: string;
   frame: string | null;
   effect: string | null;
   /** The backdrop the theme draws behind the page. */
@@ -208,7 +207,6 @@ const ICON_WEIGHTS = [300, 400, 500, 600];
 const CARD_LAYOUTS = ['grid', 'imageFirst', 'editorial'];
 const TYPE_SCALES = ['default', 'compact', 'editorial'];
 const CARDS = ['minimal', 'soft', 'elevated', 'paper', 'glass', 'outlined'];
-const NAVS = ['classic', 'compact', 'floating'];
 const PATTERNS = [
   'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays', 'stadium',
 ];
@@ -221,7 +219,6 @@ function styles(input: unknown): StudioStyles {
   return {
     button: pick(s.button, BUTTONS, 'classic'),
     card: pick(s.card, CARDS, 'minimal'),
-    nav: pick(s.nav, NAVS, 'classic'),
     frame: typeof s.frame === 'string' && /^[a-z]+$/.test(s.frame) ? s.frame : null,
     effect: typeof s.effect === 'string' && /^[a-z]+$/.test(s.effect) ? s.effect : null,
     pattern: typeof s.pattern === 'string' && PATTERNS.includes(s.pattern) ? s.pattern : null,
@@ -330,7 +327,6 @@ function paint(input: StudioThemes | null): void {
   const s = themes.styles;
   root.setAttribute('data-s-button', s.button);
   root.setAttribute('data-s-card', s.card);
-  root.setAttribute('data-s-nav', s.nav);
   for (const [attr, value] of [
     ['frame', s.frame], ['effect', s.effect],
     ['pattern', s.pattern], ['font', s.font], ['radius', s.radius],
@@ -373,6 +369,8 @@ function paint(input: StudioThemes | null): void {
 /** Every attribute this module may write on the root, so a clear is a clear. */
 const SHELL_ATTRS = [
   'button', 'card', 'nav', 'frame', 'effect', 'pattern', 'font', 'radius', 'glow',
+  // `nav` above is the retired shape attribute, still cleared for anyone whose
+  // cached copy predates the shell.
   'nav-desktop', 'nav-tablet', 'nav-mobile', 'nav-labels', 'nav-active',
   'header', 'header-sticky', 'footer', 'density', 'width', 'motion', 'card-layout', 'type',
 ];

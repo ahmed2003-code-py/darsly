@@ -1862,10 +1862,11 @@
       "ACCENT": "Colours",
       "BUTTON_STYLE": "Buttons",
       "CARD_STYLE": "Cards",
-      "NAV_STYLE": "Navigation",
+      "NAV_STYLE": "Sidebar",
       "AVATAR": "Avatar",
       "FRAME": "Frame",
-      "EFFECT": "Effects"
+      "EFFECT": "Effects",
+      "HEADER_STYLE": "Header"
     },
     "rarity": {
       "COMMON": "Common",

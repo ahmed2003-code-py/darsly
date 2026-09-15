@@ -2240,6 +2240,7 @@ enum CosmeticCategory {
   BUTTON_STYLE
   CARD_STYLE
   NAV_STYLE
+  HEADER_STYLE
   AVATAR
   FRAME
   EFFECT
@@ -2335,6 +2336,9 @@ model StudentCustomization {
   buttonKey String?
   cardKey   String?
   navKey    String?
+  /// The header's shape, bought and worn over whatever theme is on — the same
+  /// rule as the sidebar and the buttons.
+  headerKey String?
   avatarKey String?
   frameKey  String?
   effectKey String?

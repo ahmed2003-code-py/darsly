@@ -576,9 +576,8 @@
   border-color: rgb(var(--s-accent, var(--c-primary)) / 0.6);
 }
 
-/* ── Navigation ──────────────────────────────────────────────────────────── */
-:root[data-s-nav='compact'] .studio-nav-item { padding-block: 0.4rem; }
-:root[data-s-nav='floating'] .studio-nav-item { border-radius: 999px; }
+/* ── Navigation ───────────────────────────────────────────────────────────
+   The sidebar's shapes live in `styles/shell.css`, keyed to the layout. */
 
 /* ── Effects ─────────────────────────────────────────────────────────────── */
 :root[data-s-effect='glow'] .studio-active {

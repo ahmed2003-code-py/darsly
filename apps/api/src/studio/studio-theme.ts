@@ -25,7 +25,6 @@ export type StudioMode = 'light' | 'dark';
 export interface StudioStyles {
   button: string;
   card: string;
-  nav: string;
   frame: string | null;
   effect: string | null;
   /** The backdrop the theme draws behind the page. */
@@ -101,7 +100,6 @@ export interface StudioThemes {
 /** What a slot may hold. Anything else is refused before it reaches a token. */
 export const BUTTON_STYLES = ['classic', 'rounded', 'pill', 'sharp', 'soft', 'elevated'] as const;
 export const CARD_STYLES = ['minimal', 'soft', 'elevated', 'paper', 'glass', 'outlined'] as const;
-export const NAV_STYLES = ['classic', 'compact', 'floating'] as const;
 export const FRAME_STYLES = [
   'none', 'bronze', 'silver', 'gold', 'diamond', 'fire', 'lightning', 'scholar', 'legendary',
 ] as const;
@@ -352,7 +350,6 @@ export interface ThemeConfig {
   radius?: string;
   button?: string;
   card?: string;
-  nav?: string;
   /** The shape of the shell. Partial: anything unsaid stays as it is today. */
   layout?: {
     nav?: { desktop?: string; tablet?: string; mobile?: string; labels?: boolean; active?: string };
@@ -413,7 +410,16 @@ export function deriveStudioThemes(input: {
   accentHex?: string | null;
   button?: string | null;
   card?: string | null;
+  /**
+   * A sidebar shape and a header shape, bought on their own.
+   *
+   * These are what let a student wearing Egyptian King put a rail on it: an
+   * equipped slot wins over what the theme asked for, the same rule the
+   * buttons and cards have always followed. Names from the shell's own lists,
+   * so a bought sidebar can only be one the shell knows how to be.
+   */
   nav?: string | null;
+  header?: string | null;
   frame?: string | null;
   effect?: string | null;
 }): StudioThemes {
@@ -423,14 +429,13 @@ export function deriveStudioThemes(input: {
   const styles: StudioStyles = {
     button: pick(input.button ?? theme.button, BUTTON_STYLES, 'classic'),
     card: pick(input.card ?? theme.card, CARD_STYLES, 'minimal'),
-    nav: pick(input.nav ?? theme.nav, NAV_STYLES, 'classic'),
     frame: pickOrNull(input.frame, FRAME_STYLES),
     effect: pickOrNull(input.effect, EFFECT_STYLES),
     pattern: pickOrNull(theme.pattern, PATTERNS),
     glow: theme.glow === true,
     font: pickOrNull(theme.font, FONTS),
     radius: pickOrNull(theme.radius, RADII),
-    layout: deriveLayout(theme.layout),
+    layout: withSlots(deriveLayout(theme.layout), input.nav, input.header),
     motion: pick(theme.motion, MOTION_LEVELS, 'subtle'),
     icons: {
       // Filled is the app's own default; a theme opts *out* to outlined.
@@ -692,18 +697,46 @@ export function deriveLayout(cfg: ThemeConfig['layout'] | undefined): LayoutStyl
     labels: typeof cfg?.nav?.labels === 'boolean' ? cfg.nav.labels : d.nav.labels,
     active: pick(cfg?.nav?.active, NAV_ACTIVE, d.nav.active),
   };
-  let header = pick(cfg?.header?.variant, HEADER_VARIANTS, d.header.variant);
-  if (nav.desktop === 'glass' && header === 'glass') header = 'standard';
-  return {
+  return oneGlass({
     nav,
     header: {
-      variant: header,
+      variant: pick(cfg?.header?.variant, HEADER_VARIANTS, d.header.variant),
       sticky: typeof cfg?.header?.sticky === 'boolean' ? cfg.header.sticky : d.header.sticky,
     },
     footer: pick(cfg?.footer, FOOTER_VARIANTS, d.footer),
     density: pick(cfg?.density, DENSITIES, d.density),
     width: pick(cfg?.width, WIDTHS, d.width),
-  };
+  });
+}
+
+/**
+ * A bought sidebar or header, laid over the theme's.
+ *
+ * A rail bought on its own also becomes the tablet's rail — a student who
+ * chose icons chose icons — and drops the labels, since a rail has nowhere to
+ * put them. Anything not overridden is the theme's, untouched.
+ */
+export function withSlots(layout: LayoutStyles, nav?: string | null, header?: string | null): LayoutStyles {
+  const out: LayoutStyles = { ...layout, nav: { ...layout.nav }, header: { ...layout.header } };
+  const navPick = pickOrNull(nav, NAV_DESKTOP);
+  if (navPick) {
+    out.nav.desktop = navPick;
+    if (navPick === 'rail') {
+      out.nav.tablet = 'rail';
+      out.nav.labels = false;
+    }
+  }
+  const headerPick = pickOrNull(header, HEADER_VARIANTS);
+  if (headerPick) out.header.variant = headerPick;
+  return oneGlass(out);
+}
+
+/** Glass on the nav or the header, never both. The header yields. */
+function oneGlass(l: LayoutStyles): LayoutStyles {
+  if (l.nav.desktop === 'glass' && l.header.variant === 'glass') {
+    return { ...l, header: { ...l.header, variant: 'standard' } };
+  }
+  return l;
 }
 
 function pick<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {

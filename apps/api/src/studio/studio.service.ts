@@ -43,6 +43,7 @@ const SLOT: Record<CosmeticCategory, keyof EquipSlots> = {
   BUTTON_STYLE: 'buttonKey',
   CARD_STYLE: 'cardKey',
   NAV_STYLE: 'navKey',
+  HEADER_STYLE: 'headerKey',
   AVATAR: 'avatarKey',
   FRAME: 'frameKey',
   EFFECT: 'effectKey',
@@ -56,6 +57,7 @@ interface EquipSlots {
   buttonKey: string | null;
   cardKey: string | null;
   navKey: string | null;
+  headerKey: string | null;
   avatarKey: string | null;
   frameKey: string | null;
   effectKey: string | null;
@@ -104,6 +106,16 @@ export class StudioService implements OnModuleInit {
         })
         .catch(() => undefined);
     }
+    // A key that has left the catalogue leaves the shelf. Upserting alone
+    // left a retired item on sale forever: `nav-compact` was still for sale
+    // with a shape the engine no longer knew, and quietly did nothing when
+    // worn. Ownership rows are untouched — what a student bought stays theirs.
+    await this.prisma.cosmeticItem
+      .updateMany({
+        where: { key: { notIn: CATALOG.map((c) => c.key) }, isActive: true },
+        data: { isActive: false },
+      })
+      .catch(() => undefined);
   }
 
   // ── Identity ──────────────────────────────────────────────────────────────
@@ -259,6 +271,7 @@ export class StudioService implements OnModuleInit {
       buttonKey: row?.buttonKey ?? null,
       cardKey: row?.cardKey ?? null,
       navKey: row?.navKey ?? null,
+      headerKey: row?.headerKey ?? null,
       avatarKey: row?.avatarKey ?? null,
       frameKey: row?.frameKey ?? null,
       effectKey: row?.effectKey ?? null,
@@ -314,6 +327,7 @@ export class StudioService implements OnModuleInit {
       button: item.category === 'BUTTON_STYLE' ? style : null,
       card: item.category === 'CARD_STYLE' ? style : null,
       nav: item.category === 'NAV_STYLE' ? style : null,
+      header: item.category === 'HEADER_STYLE' ? style : null,
       frame: item.category === 'FRAME' ? style : null,
       effect: item.category === 'EFFECT' ? style : null,
     });
@@ -335,6 +349,7 @@ export class StudioService implements OnModuleInit {
       button: cfg(worn.buttonKey).style as string,
       card: cfg(worn.cardKey).style as string,
       nav: cfg(worn.navKey).style as string,
+      header: cfg(worn.headerKey).style as string,
       frame: cfg(worn.frameKey).style as string,
       effect: cfg(worn.effectKey).style as string,
     });
@@ -346,7 +361,7 @@ export class StudioService implements OnModuleInit {
     const worn = await this.customizationOf(studentId);
     const keys = [
       worn.themeKey, worn.accentKey, worn.buttonKey, worn.cardKey,
-      worn.navKey, worn.avatarKey, worn.frameKey, worn.effectKey,
+      worn.navKey, worn.headerKey, worn.avatarKey, worn.frameKey, worn.effectKey,
     ].filter((k): k is string => !!k);
     const items = keys.length
       ? await this.prisma.cosmeticItem.findMany({ where: { key: { in: keys } } })
@@ -563,7 +578,7 @@ export class StudioService implements OnModuleInit {
       update: {
         academyId: null,
         themeKey: null, accentKey: null, accentHex: null, buttonKey: null,
-        cardKey: null, navKey: null, avatarKey: null, frameKey: null, effectKey: null,
+        cardKey: null, navKey: null, headerKey: null, avatarKey: null, frameKey: null, effectKey: null,
       },
       create: { studentId },
     });

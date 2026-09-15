@@ -371,6 +371,33 @@ carries — and the drawer holds the rest; eleven links do not fit across a
 header. `<CourseCard>` has a flat DOM (media, chips, title, teacher, rating,
 meta, price as direct children) so the three layouts are grid areas alone.
 
+### The sidebar and the header are slots
+
+A student wearing Egyptian King who wants a rail buys `nav-rail` and wears it
+*on* the King. The equipped slot wins over what the theme asked for, and only
+that field moves — the rule the buttons and cards have always followed, applied
+to the shell (`withSlots()` in `studio-theme.ts`). A bought rail also becomes
+the tablet's rail and drops the labels; a bought header changes only the header.
+Glass stays on one surface even across a theme and a slot: the header yields.
+
+`NAV_STYLE` (an existing category whose two old items moved the padding of one
+element) now sells the five sidebar shapes; `HEADER_STYLE` is new — an additive
+migration adds the enum value and a nullable `headerKey`. `expanded` and
+`standard` are the defaults and are not sold. Both categories are primary in
+the Studio's picker, with a miniature of the whole screen as the preview.
+
+**The seeder retires what leaves the catalogue.** It upserted by key and never
+deactivated, so the retired `nav-compact` stayed on sale with a shape the
+engine no longer knew and quietly did nothing when worn. Keys not in `CATALOG`
+are set inactive on boot; ownership rows are untouched.
+
+### The tints are stones
+
+`نعناع/محيط/غروب/عنب` became `زمرّد/ياقوت/كهرمان/جمشت` (Emerald, Sapphire,
+Amber, Amethyst) and `منتصف الليل` became `سديم` (Nebula) so it no longer
+clashes with Midnight Pro. Keys are unchanged: a key is an identity, and
+renaming one would orphan what students own.
+
 ### The five experiences
 
 Each deliberately unlike the others in structure before colour. All 1,800

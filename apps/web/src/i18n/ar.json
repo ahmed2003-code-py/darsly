@@ -1862,10 +1862,11 @@
       "ACCENT": "الألوان",
       "BUTTON_STYLE": "الأزرار",
       "CARD_STYLE": "الكروت",
-      "NAV_STYLE": "القايمة",
+      "NAV_STYLE": "القائمة الجانبية",
       "AVATAR": "الصورة",
       "FRAME": "الإطار",
-      "EFFECT": "التأثيرات"
+      "EFFECT": "التأثيرات",
+      "HEADER_STYLE": "الهيدر"
     },
     "rarity": {
       "COMMON": "عادي",

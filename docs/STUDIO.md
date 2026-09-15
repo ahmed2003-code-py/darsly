@@ -377,43 +377,42 @@ which is also how the price is decided.
 
 | Rung | What it changes | Price | Gate |
 |---|---|---|---|
-| shapes (`button-*`, `card-*`, `nav-*`) | one slot, app-wide | 60–170 | none |
-| marks (`frame-*`, `effect-glow`) | your own avatar / the selected row | 90–450 | level 2–6 |
+| shapes (`button-*`, `card-*`, `nav-*`) | one slot, app-wide | 40–120 | none |
+| marks (`frame-*`, `effect-glow`) | your own avatar / the selected row | 70–300 | level 2–4 |
 | earned marks (`frame-scholar`, `frame-fire`, `frame-legendary`) | the same | **not for sale** | an achievement |
-| tints (`theme-mint`, `theme-ocean`, `theme-sunset`, `theme-grape`) | accent, second colour, wash, backdrop, typeface, shapes | 220–340 | level 2–4 |
-| skins (`theme-paper`, `theme-midnight`) | **the ground as well** | 480–520 | level 4–5 |
-| legendary skins (`theme-rose-lavender`, `theme-egyptian-king`) | the same, and meant to be a season's work | 950–1200 | level 6–7 |
+| tints (`theme-mint`, `theme-ocean`, `theme-sunset`, `theme-grape`) | accent, second colour, wash, backdrop, typeface, shapes | 180–260 | level 2–3 |
+| skins (`theme-paper`, `theme-midnight`) | **the ground as well** | 340–380 | level 3–4 |
+| legendary skins (`theme-rose-lavender`, `theme-egyptian-king`) | the same, and the top of the shop | 500–600 | level 4–5 |
 
 The jump between a tint and a skin is the only price step that matters: a tint
 changes the light in the room, a skin replaces the room. Everything else follows
 from it.
 
+**Everything is reachable.** A moderate student — two daily missions and two
+weekly ones — earns about **585 coins a week**, and level 5 is 1800 XP. So the
+bottom rung is an afternoon (40 coins), a tint is a few days, and the dearest
+thing in the shop is about a week. Nothing asks for a level past 5. A test holds
+both ends of that: no item above roughly one week's coins, none gated past level
+5, and the cheapest under an eighth of a week.
+
+`theme-egyptian-king` has moved twice and the history is the point. It was 100
+coins as a doorway when the shelf was empty; it became 1200 and level 7 when the
+ladder arrived, which put the top shelf out of reach; it is 600 and level 5 now.
+A top shelf nobody reaches is a top shelf nobody looks at. Anyone who already
+owns it keeps it either way — ownership is a row, and the price is read only at
+the moment of purchase.
+
 **Rarity is a promise about price.** Each band starts above where the one below
-it ends — COMMON 60–130, RARE 170–280, EPIC 320–520, LEGENDARY 950–1200 — and a
+it ends — COMMON 40–100, RARE 120–200, EPIC 240–380, LEGENDARY 500–600 — and a
 test holds the bands apart, because "legendary" meaning 100 coins and 750 at the
-same time meant nothing. `theme-egyptian-king` was that 100: priced as a doorway
-when the shelf was empty. It is 1200 and level 7 now, the dearest thing in the
-shop. Anyone who already owns it keeps it — ownership is a row, and the price is
-read only at the moment of purchase.
+same time meant nothing.
 
-**Two things are deliberately not sold.** `AVATAR` styles and the `confetti`
-effect are names the engine accepts and the stylesheet has never drawn — selling
-either would be selling nothing, and a test asserts the catalogue contains
-neither. Plain accent colours are not sold either, because mixing one is already
-free in the Studio.
+### The shop is ordered cheapest first
 
-### Every theme is held to the floors
-
-`studio.service.spec.ts` sweeps the whole catalogue rather than testing themes
-one by one: for each theme, in both modes, body text clears 7:1 on its ground and
-4.5:1 on its deepest card, and the brand, accent, second colour and "earned"
-families each clear 4.5:1 as a label and as a fill.
-
-It earned its keep immediately. All four tints failed on first run: a theme with
-no ground of its own was seated against the platform's **page**, never its
-cards — so its accent text measured about 4.0:1 on the surface most of the
-product's text actually sits on. `PLATFORM_SEAT` in `studio-theme.ts` now gives
-the default ground the same deepest-panel seat `surfaceSeat` already gave skins.
+`sortOrder` runs low price to high inside every category, with the earned items
+last. It did not: the themes tab opened on the two dearest items in the
+catalogue, so the first thing a student saw was the thing they could not afford.
+A test now asserts the order within each category is non-decreasing in price.
 
 ### A preview shows the thing, not its name
 

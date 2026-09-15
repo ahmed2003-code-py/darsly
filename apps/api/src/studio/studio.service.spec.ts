@@ -580,13 +580,13 @@ describe('Egyptian King', () => {
     expect(item!.rarity).toBe('LEGENDARY');
   });
 
-  // The top of the ladder. It was a doorway at 100 coins when the shelf was
-  // empty; with a ladder in place, a full skin priced below a card style made
-  // nonsense of it.
-  it('is the dearest thing in the shop, and gated on a level to match', () => {
-    expect(item!.costCoins).toBe(1200);
+  // The top of the ladder — and reachable. At roughly 585 coins in a moderate
+  // week, the dearest thing in the shop is about a week's work rather than a
+  // season's: a top shelf nobody reaches is a top shelf nobody looks at.
+  it('is the dearest thing in the shop, and still about a week away', () => {
+    expect(item!.costCoins).toBe(600);
     expect(item!.costCoins).toBe(Math.max(...CATALOG.map((c) => c.costCoins)));
-    expect(item!.requiredLevel).toBe(7);
+    expect(item!.requiredLevel).toBe(5);
     // Earned items carry no price; a bought one must not pretend to be earned.
     expect(item!.requiredAchievement).toBeUndefined();
     expect(item!.isStarter).toBeUndefined();
@@ -864,8 +864,8 @@ describe('Rose & Lavender', () => {
    * anywhere in this platform, and a theme must not be the exception.
    */
   it('is legendary money, and still costs coins rather than XP', () => {
-    expect(item!.costCoins).toBe(950);
-    expect(item!.requiredLevel).toBe(6);
+    expect(item!.costCoins).toBe(500);
+    expect(item!.requiredLevel).toBe(4);
     // Dearer than every epic, and behind only the King.
     const epics = CATALOG.filter((c) => c.rarity === 'EPIC').map((c) => c.costCoins);
     expect(item!.costCoins).toBeGreaterThan(Math.max(...epics));
@@ -1175,6 +1175,45 @@ describe('the catalogue is a ladder', () => {
     for (let i = 1; i < tiers.length; i++) {
       expect(Math.min(...tiers[i])).toBeGreaterThan(Math.max(...tiers[i - 1]));
     }
+  });
+
+  /**
+   * The shop is read top to bottom, so it has to be ordered cheapest first.
+   *
+   * It was not: the themes tab opened on the two dearest items in the
+   * catalogue, which is the opposite of a ladder — the first thing a student
+   * saw was the thing they could not afford.
+   */
+  it('lists every category cheapest first', () => {
+    const cats = new Set(CATALOG.map((c) => c.category));
+    for (const cat of cats) {
+      const inOrder = CATALOG.filter((c) => c.category === cat).sort((a, b) => a.sortOrder - b.sortOrder);
+      // Earned items carry no price and sit at the end of their own rung.
+      const priced = inOrder.filter((c) => !c.requiredAchievement).map((c) => c.costCoins);
+      expect(priced).toEqual([...priced].sort((a, b) => a - b));
+      const earnedFirstIndex = inOrder.findIndex((c) => c.requiredAchievement);
+      if (earnedFirstIndex !== -1) {
+        expect(inOrder.slice(earnedFirstIndex).every((c) => c.requiredAchievement)).toBe(true);
+      }
+    }
+  });
+
+  /**
+   * Everything has to be reachable, or the ladder is decoration.
+   *
+   * A moderate student — two daily missions and two weekly ones — earns about
+   * 585 coins a week, and the level tiers put level 5 at 1800 XP. Nothing in
+   * the shop may sit beyond roughly a week of that, and nothing may ask for a
+   * level past 5.
+   */
+  it('keeps the whole ladder within about a week of ordinary play', () => {
+    const WEEK = 585;
+    for (const c of CATALOG) {
+      expect(c.costCoins).toBeLessThanOrEqual(WEEK * 1.05);
+      expect(c.requiredLevel ?? 1).toBeLessThanOrEqual(5);
+    }
+    // And the bottom rung is an afternoon, not a week.
+    expect(Math.min(...CATALOG.filter((c) => c.costCoins > 0).map((c) => c.costCoins))).toBeLessThan(WEEK / 8);
   });
 
   it('gives every item a distinct key and a place in the order', () => {

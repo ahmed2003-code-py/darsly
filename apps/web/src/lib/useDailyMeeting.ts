@@ -73,6 +73,14 @@ export function useDailyMeeting(liveSessionId: string) {
   const [transcribing, setTranscribing] = useState(false);
   /** The meeting is over — the teacher ended it, or the room went away. */
   const [ended, setEnded] = useState(false);
+  /**
+   * What the person chose on the pre-join screen. Kept so it can be applied
+   * more than once: right after `join()` resolves, and again when the room
+   * confirms the join — because the room and the token both carry
+   * "start muted" defaults that the provider may apply on its own schedule,
+   * and a default that lands after our call silently wins.
+   */
+  const wanted = useRef<{ mic: boolean; cam: boolean } | null>(null);
   /** A short, self-clearing line for the things that fail quietly. */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -135,6 +143,13 @@ export function useDailyMeeting(liveSessionId: string) {
       'track-stopped',
     ] as const;
     events.forEach((e) => c.on(e as any, sync));
+    const onJoined = () => {
+      const w = wanted.current;
+      if (!w) return;
+      c.setLocalAudio(w.mic);
+      c.setLocalVideo(w.cam);
+    };
+    c.on('joined-meeting', onJoined);
     c.on('error', onError);
     c.on('left-meeting', () => setJoined(false));
     // The room being deleted under everyone is how "end for all" reaches a
@@ -178,6 +193,7 @@ export function useDailyMeeting(liveSessionId: string) {
     sync();
     return () => {
       events.forEach((e) => c.off(e as any, sync));
+      c.off('joined-meeting', onJoined);
       c.off('error', onError);
       c.off('recording-started', onRecStarted);
       c.off('recording-stopped', onRecStopped);
@@ -208,6 +224,7 @@ export function useDailyMeeting(liveSessionId: string) {
     ) => {
       setError(null);
       if (!call) return;
+      wanted.current = { mic: opts.mic, cam: opts.cam };
       await call.join({ url, token, startVideoOff: !opts.cam, startAudioOff: !opts.mic });
       // Said again, explicitly. The preview already started the devices (mic
       // off, camera on), and once devices are running Daily ignores the

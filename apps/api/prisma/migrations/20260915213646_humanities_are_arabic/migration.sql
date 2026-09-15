@@ -53,3 +53,12 @@ WHERE code IN ('history-gen', 'geography-gen', 'philosophy-gen', 'psych-gen');
 UPDATE "Subject"
 SET "isActive" = false
 WHERE code IN ('history-lang', 'geography-lang', 'philosophy-lang', 'psych-lang');
+
+-- ── …and they sit with the shared subjects, not among the sciences ──────────
+-- The list is read in `sortOrder`. Left at 30–33 they appeared in the middle
+-- of the general track's block, which is exactly the grouping this migration
+-- exists to undo. Right after social studies, which is their neighbour.
+UPDATE "Subject" SET "sortOrder" = 8  WHERE code = 'history-gen';
+UPDATE "Subject" SET "sortOrder" = 9  WHERE code = 'geography-gen';
+UPDATE "Subject" SET "sortOrder" = 10 WHERE code = 'philosophy-gen';
+UPDATE "Subject" SET "sortOrder" = 11 WHERE code = 'psych-gen';

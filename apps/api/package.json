@@ -13,7 +13,8 @@
     "db:studio": "prisma studio",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
-    "storage:migrate": "ts-node --transpile-only scripts/migrate-storage-to-s3.ts"
+    "storage:migrate": "ts-node --transpile-only scripts/migrate-storage-to-s3.ts",
+    "proof:read": "ts-node -r tsconfig-paths/register scripts/read-proof.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

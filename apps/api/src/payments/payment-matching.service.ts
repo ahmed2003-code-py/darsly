@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { namesAgree, parseIdentities, parsePayerName } from '../device/sms-parser';
+import { receiptMatchesTransfer } from './proof-check';
+import { ProofReading } from './proof-reader.service';
 import { ManualPaymentsService } from './manual-payments.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -138,6 +140,7 @@ export class PaymentMatchingService {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, reference: true, status: true, amountCents: true, walletCents: true,
+          proofReading: true,
           // Who the platform thinks is paying, to weigh against who the provider
           // says actually sent the money.
           student: { select: { user: { select: { fullName: true } } } },
@@ -159,7 +162,7 @@ export class PaymentMatchingService {
       },
       orderBy: { createdAt: 'desc' },
       select: {
-        id: true, reference: true,
+        id: true, reference: true, proofReading: true,
         student: { select: { user: { select: { fullName: true } } } },
       },
     });
@@ -171,15 +174,19 @@ export class PaymentMatchingService {
       status?: string;
       /** The name on the account that owes this money. */
       owner: string;
+      /** What the receipt the student uploaded says, when it could be read. */
+      reading: ProofReading | null;
     };
     const candidates: Candidate[] = [
       ...payments.map((p) => ({
         kind: 'payment' as const, id: p.id, reference: p.reference, status: p.status,
         owner: p.student?.user?.fullName ?? '',
+        reading: (p.proofReading as ProofReading | null) ?? null,
       })),
       ...topups.map((t) => ({
         kind: 'topup' as const, id: t.id, reference: t.reference,
         owner: t.student?.user?.fullName ?? '',
+        reading: (t.proofReading as ProofReading | null) ?? null,
       })),
     ];
 
@@ -200,10 +207,45 @@ export class PaymentMatchingService {
       status = 'UNMATCHED';
       note = 'no pending/unsettled payment or wallet top-up with this amount/method in the time window';
     } else {
+      /**
+       * The receipt as the identity, for the rails that share no reference.
+       *
+       * An InstaPay student's receipt and the bank's SMS carry different
+       * reference numbers, so the strong evidence here is not a string both
+       * sides print — it is the transfer itself: the same piastre amount sent
+       * in the same minute. Two people sending an identical amount within the
+       * same quarter-hour is what `length === 1` guards; more than one is
+       * ambiguous and goes to a human, exactly as a shared reference would be.
+       *
+       * Checked before the reference, because where a receipt was read it is
+       * the better evidence: the student typed the reference, the bank and the
+       * sender's own app produced these.
+       */
+      const receiptMatches = candidates.filter((c) =>
+        receiptMatchesTransfer(c.reading, { amountCents: dto.amountCents, occurredAt }),
+      );
       const refMatches = candidates.filter((c) =>
         identities.some((identity) => refExact(normRef(c.reference), identity)),
       );
-      if (refMatches.length === 1) {
+      if (receiptMatches.length === 1 && refMatches.length <= 1) {
+        // A reference that points somewhere else is a contradiction, not a
+        // tie-break: when both speak and they disagree, neither is trusted.
+        if (refMatches.length === 1 && refMatches[0].id !== receiptMatches[0].id) {
+          status = 'AMBIGUOUS';
+          note =
+            'the uploaded receipt matches one top-up and the typed reference another — they cannot both be this transfer';
+        } else {
+          chosen = receiptMatches[0];
+          status = 'MATCHED';
+          note = `matched by the uploaded receipt (same amount, sent ${chosen.reading?.sentAtText ?? 'at the same time'})`;
+          if (payerName && chosen.owner && !namesAgree(payerName, chosen.owner)) {
+            note += `; the transfer is in the name of "${payerName}" and the account is "${chosen.owner}" — worth a look`;
+          }
+        }
+      } else if (receiptMatches.length > 1) {
+        status = 'AMBIGUOUS';
+        note = 'more than one receipt describes a transfer of this amount at this time';
+      } else if (refMatches.length === 1) {
         chosen = refMatches[0];
         status = 'MATCHED';
         // The reference is the strong evidence and stands on its own. The name

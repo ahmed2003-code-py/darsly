@@ -9,6 +9,8 @@ import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePayerReference } from '../payments/payer-reference';
+import { checkProofAgainstClaim } from '../payments/proof-check';
+import { ProofReaderService } from '../payments/proof-reader.service';
 
 const PROOF_MAX_BYTES = 1_200 * 1024; // ~1.2 MB screenshot
 const MIN_TOPUP_CENTS = 1_000; // 10 EGP
@@ -34,6 +36,7 @@ export class WalletService {
     private readonly ledger: LedgerService,
     private readonly notifications: NotificationsService,
     private readonly proofs: ProofStorageService,
+    private readonly proofReader: ProofReaderService,
   ) {}
 
   // ── Student ─────────────────────────────────────────────────────────────────
@@ -86,13 +89,37 @@ export class WalletService {
   }
 
   async submitTopup(userId: string, dto: SubmitTopupDto) {
-    // An object, not a row: see ProofStorageService. Dropped if the row fails.
-    const proofKey = await this.proofs.store('topups', dto.proofImageUrl, PROOF_MAX_BYTES);
     const student = await this.studentOf(userId);
     const amount = Math.round(dto.amountCents);
     if (!Number.isFinite(amount) || amount < MIN_TOPUP_CENTS || amount > MAX_TOPUP_CENTS) {
       throw new BadRequestException({ message: 'Invalid top-up amount', code: 'INVALID_AMOUNT' });
     }
+
+    /**
+     * What the receipt says, before anything is stored.
+     *
+     * Read from the image the student is holding: the amount on it, the minute
+     * it was sent, and which account it went to. A receipt that contradicts the
+     * form — 2,000 on the picture against 500 typed, or a transfer made out to
+     * somebody else's InstaPay address — is refused here, in front of them,
+     * while they can still fix it. It is also what identifies the transfer
+     * later, since InstaPay gives the two sides different references.
+     *
+     * A receipt we could not read is not an obstacle: it lands as PENDING with
+     * no reading, exactly as every top-up did before.
+     */
+    const reading = await this.proofReader.read(dto.proofImageUrl);
+    const check = checkProofAgainstClaim(reading, { amountCents: amount }, await this.receivingHandles());
+    if (check.verdict === 'DISAGREES') {
+      throw new BadRequestException({
+        message: check.problems.join(' '),
+        code: 'PROOF_DISAGREES',
+        problems: check.problems,
+      });
+    }
+
+    // An object, not a row: see ProofStorageService. Dropped if the row fails.
+    const proofKey = await this.proofs.store('topups', dto.proofImageUrl, PROOF_MAX_BYTES);
     const existing = await this.prisma.walletTopup.findFirst({
       where: { studentId: student.id, status: 'PENDING' },
     });
@@ -109,6 +136,7 @@ export class WalletService {
         // Same rule as a course payment: a top-up is the same transfer with no
         // course attached, matched on the same single identifier.
         reference: normalizePayerReference(dto.method, dto.reference, await this.receivingHandles()),
+        proofReading: (reading ?? undefined) as never,
         status: 'PENDING',
       },
       select: { id: true, amountCents: true, status: true, createdAt: true },

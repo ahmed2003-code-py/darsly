@@ -6,6 +6,15 @@ import { AiJobError } from './ai-job.error';
 export interface AiMessage {
   role: 'user' | 'assistant';
   content: string;
+  /**
+   * Images to read alongside the text, as `data:` URLs.
+   *
+   * Used to read a transfer receipt a student uploaded: the numbers on it are
+   * evidence, and there is no other way to get at them. Passed through to the
+   * Responses API as `input_image` parts on the same message, so the model sees
+   * the picture and the instruction together.
+   */
+  images?: string[];
 }
 
 export interface AiCompletion {
@@ -22,7 +31,10 @@ export interface AiStructuredResult<T> {
   costCents: number;
 }
 
-type InputMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+type ContentPart =
+  | { type: 'input_text'; text: string }
+  | { type: 'input_image'; image_url: string; detail: 'auto' | 'low' | 'high' };
+type InputMessage = { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] };
 
 /** GPT-5 / o-series are reasoning models: they use the default temperature only
  *  (a custom value returns 400) and benefit from an explicit reasoning effort. */
@@ -131,7 +143,19 @@ export class AiClient {
 
     const input: InputMessage[] = [];
     if (opts.system) input.push({ role: 'system', content: opts.system });
-    for (const m of opts.messages) input.push({ role: m.role, content: m.content });
+    for (const m of opts.messages) {
+      input.push(
+        m.images?.length
+          ? {
+              role: m.role,
+              content: [
+                { type: 'input_text', text: m.content },
+                ...m.images.map((image_url) => ({ type: 'input_image' as const, image_url, detail: 'high' as const })),
+              ],
+            }
+          : { role: m.role, content: m.content },
+      );
+    }
 
     const params: Record<string, unknown> = {
       model,

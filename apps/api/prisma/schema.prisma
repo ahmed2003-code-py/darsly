@@ -897,6 +897,8 @@ model Payment {
   method         PaymentMethod?
   proofImageUrl  String? // client-resized screenshot (data URL)
   reference      String? // transaction/reference id or sender number
+  /// What the uploaded receipt says — see WalletTopup.proofReading.
+  proofReading   Json?
   rejectedReason String?
   verifiedById   String? // user id of the teacher/admin who verified
 
@@ -1077,6 +1079,10 @@ model WalletTopup {
   method         PaymentMethod
   proofImageUrl  String
   reference      String?
+  /// What the uploaded receipt says, as read from the image — the amount, the
+  /// time it was sent, and who it was sent to. Evidence, never proof: the bank's
+  /// SMS is what says money arrived; this says whose it is. See proof-check.ts.
+  proofReading   Json?
   status         WalletTopupStatus @default(PENDING)
   rejectedReason String?
   reviewedById   String? // admin user id who approved/rejected

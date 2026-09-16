@@ -46,6 +46,16 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
    * asks for the same thing.
    */
   const refKind = method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
+  /**
+   * Only Vodafone Cash can be asked for an identifier.
+   *
+   * InstaPay and bank transfers give the two sides different reference numbers
+   * — the student's receipt says «المرجع 770916345902», the SMS we receive says
+   * «برقم مرجعي 3979e788» — so the field could never match anything. Those are
+   * identified from the receipt itself (amount + the minute it was sent), which
+   * the student is uploading anyway.
+   */
+  const refRequired = method === 'VODAFONE_CASH';
   const refDigits = reference.replace(/[^\d]/g, '');
   const referenceLooksRight =
     refKind === 'WALLET_NUMBER'
@@ -74,8 +84,8 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
   if (hasPending) blockers.push(t('walletStudent.blockPending'));
   if (!(amountCents >= 1000)) blockers.push(t('walletStudent.blockAmount'));
   if (!method) blockers.push(t('walletStudent.blockMethod'));
-  if (method && ownNumber) blockers.push(t('walletStudent.blockOwnNumber'));
-  else if (method && !referenceLooksRight) blockers.push(t(`walletStudent.blockRef.${refKind}`));
+  if (refRequired && method && ownNumber) blockers.push(t('walletStudent.blockOwnNumber'));
+  else if (refRequired && method && !referenceLooksRight) blockers.push(t(`walletStudent.blockRef.${refKind}`));
   if (!proof) blockers.push(t('walletStudent.blockProof'));
   const valid = blockers.length === 0;
 
@@ -158,12 +168,18 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
                 <option value="OTHER">{t('method.OTHER')}</option>
               </select>
             </Field>
-            {method && (
+            {method && refRequired && (
               <Field label={t(`pay.ref.${refKind}`)} hint={t(`pay.ref.${refKind}Hint`)}>
                 <input className="input" dir="ltr" inputMode={refKind === 'WALLET_NUMBER' ? 'tel' : 'text'}
                   value={reference} onChange={(e) => setReference(e.target.value)}
                   placeholder={refKind === 'WALLET_NUMBER' ? '01xxxxxxxxx' : '05b6efa4'} />
               </Field>
+            )}
+            {method && !refRequired && (
+              <p className="mb-3 flex items-start gap-2 rounded-xl border border-outline-variant/60 bg-surface-container-low/60 p-3 text-xs leading-5 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[16px] leading-5 text-primary">auto_awesome</span>
+                {t('walletStudent.receiptIsTheProof')}
+              </p>
             )}
             <Field label={t('walletStudent.proof')}>
               <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"

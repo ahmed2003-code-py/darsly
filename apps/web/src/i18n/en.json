@@ -21,6 +21,7 @@
     "blockMethod": "Pick the method you transferred with.",
     "blockOwnNumber": "That number is ours — enter the wallet number you transferred FROM.",
     "blockProof": "Upload a picture of the transfer receipt.",
+    "receiptIsTheProof": "No reference needed — we read the receipt itself and match it by amount and time.",
     "blockRef": {
       "WALLET_NUMBER": "Enter the wallet number you transferred from (01xxxxxxxxx).",
       "TRANSACTION_REFERENCE": "Enter the reference from your transfer message."

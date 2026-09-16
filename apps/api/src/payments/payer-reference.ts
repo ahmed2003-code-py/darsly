@@ -30,6 +30,24 @@ const EG_MOBILE = /^(?:\+?20|0)?1[0125]\d{8}$/;
 
 export type ReferenceKind = 'WALLET_NUMBER' | 'TRANSACTION_REFERENCE';
 
+/**
+ * Whether the student can actually be asked for this identifier.
+ *
+ * Vodafone Cash: yes. The SMS prints the sending wallet's number and the student
+ * knows it by heart.
+ *
+ * InstaPay and bank transfers: **no**, and asking anyway was the bug. The two
+ * sides carry different references — the student's receipt says «المرجع
+ * 770916345902», the bank's SMS says «برقم مرجعي 3979e788» — issued by different
+ * systems, never equal. A required field that cannot match anything sent every
+ * transfer to a human and taught students to type whatever got the form to
+ * submit, most often our own number off the screen in front of them. Those
+ * transfers are identified by the receipt instead: amount and minute sent.
+ */
+export function referenceRequiredFor(method: string): boolean {
+  return method === 'VODAFONE_CASH';
+}
+
 /** Which identifier this method's SMS will actually carry. */
 export function referenceKindFor(method: string): ReferenceKind {
   return method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
@@ -52,6 +70,12 @@ export function normalizePayerReference(
 ): string {
   const value = (raw ?? '').trim();
   const kind = referenceKindFor(method);
+
+  if (!value && !referenceRequiredFor(method)) {
+    // Nothing to check, and nothing that could have been checked. The receipt
+    // carries the identity for this rail.
+    return '';
+  }
 
   if (!value) {
     throw new BadRequestException({

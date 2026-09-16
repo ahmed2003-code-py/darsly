@@ -68,17 +68,37 @@ describe('a transfer reference', () => {
 });
 
 describe('leaving it out', () => {
-  it('is refused for every method, with the right thing to ask for', () => {
+  it('is refused for Vodafone Cash, which really does share one', () => {
     const kindOf = (method: string) => {
       try { normalizePayerReference(method, ''); } catch (e: any) { return e.getResponse(); }
     };
     expect(kindOf('VODAFONE_CASH')).toMatchObject({ code: 'REFERENCE_REQUIRED', kind: 'WALLET_NUMBER' });
-    expect(kindOf('INSTAPAY')).toMatchObject({ code: 'REFERENCE_REQUIRED', kind: 'TRANSACTION_REFERENCE' });
     expect(kindOf('VODAFONE_CASH')).toMatchObject({ message: expect.stringContaining('wallet number') });
   });
 
   it('treats whitespace as leaving it out', () => {
-    expect(() => normalizePayerReference('INSTAPAY', '   ')).toThrow();
+    expect(() => normalizePayerReference('VODAFONE_CASH', '   ')).toThrow();
+  });
+
+  /**
+   * The rule this file used to enforce, and why it is gone.
+   *
+   * There is no reference an InstaPay sender and an InstaPay receiver both see:
+   * the student's receipt says «المرجع 770916345902» and the bank's SMS says
+   * «برقم مرجعي 3979e788». Demanding one meant demanding something that could
+   * never match, so every such transfer went to a human — and students typed
+   * whatever let the form submit, most often our own number off the screen in
+   * front of them. The receipt identifies these instead (proof-check.ts).
+   */
+  it('is accepted as empty on a rail with no shared reference', () => {
+    expect(normalizePayerReference('INSTAPAY', '')).toBe('');
+    expect(normalizePayerReference('INSTAPAY', '   ')).toBe('');
+    expect(normalizePayerReference('BANK_TRANSFER', undefined)).toBe('');
+  });
+
+  it('still checks a reference the student did supply', () => {
+    expect(normalizePayerReference('INSTAPAY', '770916345902')).toBe('770916345902');
+    expect(() => normalizePayerReference('INSTAPAY', 'ab')).toThrow();
   });
 
   /**

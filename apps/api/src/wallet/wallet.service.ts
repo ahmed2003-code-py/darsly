@@ -183,6 +183,22 @@ export class WalletService {
       take: 100,
       include: { student: { select: { user: { select: { fullName: true, phone: true } } } } },
     });
+
+    // Who signed off, so the owner can see it was a person and which one — or
+    // that nobody did and the bank's own SMS matched it. `reviewedById` carries
+    // no relation, so the names are resolved in one extra query rather than by
+    // reshaping the schema for a label.
+    const reviewerIds = [...new Set(rows.map((r) => r.reviewedById).filter((v): v is string => !!v))];
+    const reviewers = new Map(
+      reviewerIds.length
+        ? (
+            await this.prisma.user.findMany({
+              where: { id: { in: reviewerIds } },
+              select: { id: true, fullName: true },
+            })
+          ).map((u) => [u.id, u.fullName])
+        : [],
+    );
     return rows.map((r) => ({
       id: r.id,
       amountCents: r.amountCents,
@@ -194,6 +210,11 @@ export class WalletService {
       createdAt: r.createdAt,
       studentName: r.student.user.fullName,
       studentPhone: r.student.user.phone,
+      proofReading: r.proofReading,
+      reviewedAt: r.reviewedAt,
+      /** Null on an APPROVED row means the transfer matched itself. */
+      reviewedByName: r.reviewedById ? (reviewers.get(r.reviewedById) ?? null) : null,
+      reviewedAutomatically: r.status !== 'PENDING' && !r.reviewedById,
     }));
   }
 
@@ -237,12 +258,43 @@ export class WalletService {
       });
     });
 
+    // Crediting somebody's money is an act, and an act needs a record: which
+    // top-up, how much, and who decided — or that nobody did and the bank's own
+    // SMS matched it. Outside the transaction on purpose: a failure to write
+    // the log must not roll back a credit that already reached the student.
+    await this.audit(adminId, 'wallet.topup.approve', topup.id, {
+      amountCents: topup.amountCents,
+      method: topup.method,
+      studentId: topup.studentId,
+      by: adminId ? 'admin' : 'auto-match',
+    });
+
     await this.notifyStudent(
       topup.studentId,
       'تم شحن محفظتك ✅',
       `تمت إضافة ${(topup.amountCents / 100).toFixed(2)} ج.م إلى رصيدك.`,
     );
     return { ok: true };
+  }
+
+  /**
+   * One line in the ledger of who did what. Never throws into the caller: the
+   * money has already moved by the time this runs, and losing the log is bad
+   * where losing the credit would be worse.
+   */
+  private async audit(
+    actorUserId: string | null,
+    action: string,
+    entityId: string,
+    meta: Record<string, unknown>,
+  ) {
+    try {
+      await this.prisma.auditLog.create({
+        data: { actorUserId, action, entity: 'WalletTopup', entityId, meta: meta as never },
+      });
+    } catch {
+      // Logged by Prisma; not worth failing a completed credit over.
+    }
   }
 
   async rejectTopup(adminId: string, id: string, reason?: string) {
@@ -260,6 +312,13 @@ export class WalletService {
     if (flip.count === 0) {
       throw new BadRequestException({ message: 'Top-up is not pending', code: 'NOT_PENDING' });
     }
+    await this.audit(adminId, 'wallet.topup.reject', topup.id, {
+      amountCents: topup.amountCents,
+      method: topup.method,
+      studentId: topup.studentId,
+      reason: reason?.trim() || null,
+    });
+
     await this.notifyStudent(
       topup.studentId,
       'لم يتم تأكيد شحن المحفظة ❌',

@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { domAnimation, LazyMotion } from 'framer-motion';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,6 +8,7 @@ import './i18n';
 import './index.css';
 import { bootColorMode } from './lib/colorMode';
 import { bootStudio } from './lib/studio';
+import { queryClient } from './lib/queryClient';
 import { bootTheme } from './lib/theme';
 
 // Replay the academy's colours before the first paint. Waiting for React and a
@@ -20,10 +21,6 @@ import { bootTheme } from './lib/theme';
 bootColorMode();
 bootTheme();
 bootStudio();
-
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
-});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -387,19 +387,29 @@ export class PaymentMatchingService {
   async reconcileTopup(topupId: string) {
     const topup = await this.prisma.walletTopup.findUnique({
       where: { id: topupId },
-      select: { id: true, status: true, method: true, amountCents: true, reference: true, createdAt: true },
+      select: {
+        id: true, status: true, method: true, amountCents: true, reference: true,
+        createdAt: true, proofReading: true,
+      },
     });
     if (!topup || topup.status !== 'PENDING') return { status: 'SKIPPED' as const };
 
     const ref = normRef(topup.reference);
-    if (!ref) return { status: 'NO_REFERENCE' as const };
+    const reading = (topup.proofReading as ProofReading | null) ?? null;
+    // Either kind of evidence will do. An InstaPay top-up has no reference to
+    // give — the two sides print different ones — and its receipt is what
+    // identifies it instead. With neither, there is nothing to reconcile on.
+    if (!ref && !reading) return { status: 'NO_REFERENCE' as const };
 
     const events = await this.prisma.paymentEvent.findMany({
       where: {
         status: 'UNMATCHED',
         matchedPaymentId: null,
         matchedTopupId: null,
-        provider: topup.method as any,
+        // The same pooling as `ingest`: an InstaPay transfer is announced by the
+        // receiving *bank*, so the event says BANK_TRANSFER while the student
+        // said INSTAPAY.
+        provider: { in: methodsFor(topup.method) as any[] },
         amountCents: topup.amountCents,
         occurredAt: {
           gte: new Date(topup.createdAt.getTime() - WINDOW_BEFORE_MS),
@@ -411,6 +421,11 @@ export class PaymentMatchingService {
     });
 
     const hits = events.filter((event) => {
+      // The receipt: the same amount (already filtered) sent in the same minute.
+      if (receiptMatchesTransfer(reading, { amountCents: topup.amountCents, occurredAt: event.occurredAt })) {
+        return true;
+      }
+      if (!ref) return false;
       const derived = parseIdentities(event.rawMessage ?? '').map(normRef).filter(Boolean);
       const identities = derived.length ? derived : [normRef(event.reference)];
       return identities.some((identity) => refExact(identity, ref));

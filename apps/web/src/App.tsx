@@ -77,11 +77,24 @@ function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Rol
   if (!accessToken) {
     return <Navigate to={loginUrlFor(location.pathname, location.search)} replace />;
   }
-  if (role && user?.role !== role && user?.role !== Role.SUPER_ADMIN) {
-    return <Navigate to={user?.role === Role.TEACHER ? '/teacher' : '/'} replace />;
+  // A route built for one role is not opened for another, and that includes the
+  // super admin. The blanket exemption that used to sit here meant an admin who
+  // signed in behind a student landed on `/wallet` — a page that says "my
+  // balance" and means the signed-in person's — and read it as if it were
+  // theirs. An admin has their own console for every one of these (`/admin/…`);
+  // being able to walk into the student's own pages was never the point.
+  if (role && user?.role !== role) {
+    return <Navigate to={homeFor(user?.role)} replace />;
   }
   if (bare) return <>{children}</>;
   return <Layout>{children}</Layout>;
+}
+
+/** Where a role belongs when it is somewhere it does not. */
+function homeFor(role?: Role): string {
+  if (role === Role.TEACHER) return '/teacher';
+  if (role === Role.SUPER_ADMIN) return '/admin';
+  return '/';
 }
 
 /** Each role lands on its own home. */

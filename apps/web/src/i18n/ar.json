@@ -54,7 +54,11 @@
     "method": "الوسيلة",
     "reference": "المرجع",
     "proof": "الإثبات",
-    "rejectReason": "سبب الرفض (اختياري)"
+    "rejectReason": "سبب الرفض (اختياري)",
+    "fromReceipt": "من الإيصال",
+    "reviewedAuto": "اتأكد تلقائيًا من رسالة البنك",
+    "reviewedBy": "أكّدها {{name}}",
+    "tab": { "PENDING": "قيد المراجعة", "APPROVED": "اتأكدت", "REJECTED": "مرفوضة" }
   },
   "brand": "درسلي",
   "brandTagline": "مرحباً بك في رحلتك التعليمية",

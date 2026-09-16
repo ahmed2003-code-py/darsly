@@ -211,3 +211,94 @@ describe('matching on the receipt, where no shared reference exists', () => {
     expect(wallet.approveTopup).toHaveBeenCalled();
   });
 });
+
+/**
+ * The race that actually happened, 16 Sep 2026 19:51.
+ *
+ * The bank's SMS landed at 19:51:27 and the student finished the form at
+ * 19:51:42 — fifteen seconds later. The event was filed UNMATCHED because there
+ * was nothing yet to match, and `reconcileTopup` (which exists for exactly this)
+ * then refused to look, twice over: it returns early when the top-up has no
+ * reference, and an InstaPay top-up has none by design; and it searched for
+ * events whose provider equalled INSTAPAY, while the bank had filed a
+ * BANK_TRANSFER.
+ */
+describe('the transfer arrives before the form is finished', () => {
+  const topupRow = {
+    id: 'top1',
+    status: 'PENDING',
+    method: 'INSTAPAY',
+    amountCents: 200000,
+    reference: '',
+    createdAt: new Date('2026-09-16T04:55:42Z'),
+    proofReading: RECEIPT,
+  };
+  const eventRow = {
+    id: 'evt1',
+    provider: 'BANK_TRANSFER',
+    amountCents: 200000,
+    reference: '3979e788',
+    occurredAt: new Date('2026-09-16T04:55:27Z'),
+    rawMessage: 'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك برقم مرجعي 3979e788',
+  };
+
+  function reconcileCtx(topup: any, events: any[]) {
+    const seen: any = {};
+    const prisma: any = {
+      walletTopup: { findUnique: jest.fn().mockResolvedValue(topup) },
+      paymentEvent: {
+        findMany: jest.fn(async (args: any) => {
+          seen.where = args.where;
+          return events;
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const wallet: any = { approveTopup: jest.fn().mockResolvedValue({}) };
+    return {
+      svc: new PaymentMatchingService(prisma, { systemVerify: jest.fn(), settle: jest.fn() } as any, wallet),
+      wallet,
+      seen,
+    };
+  }
+
+  it('finds the transfer that arrived first and credits it', async () => {
+    const { svc, wallet, seen } = reconcileCtx(topupRow, [eventRow]);
+    const r = await svc.reconcileTopup('top1');
+    expect(seen.where.provider).toEqual({ in: ['INSTAPAY', 'BANK_TRANSFER'] });
+    expect(r.status).toBe('MATCHED');
+    expect(wallet.approveTopup).toHaveBeenCalledWith(null, 'top1');
+  });
+
+  it('does not credit a transfer sent at a different time', async () => {
+    const far = { ...eventRow, occurredAt: new Date('2026-09-16T06:30:00Z') };
+    const { svc, wallet } = reconcileCtx(topupRow, [far]);
+    expect((await svc.reconcileTopup('top1')).status).toBe('UNMATCHED');
+    expect(wallet.approveTopup).not.toHaveBeenCalled();
+  });
+
+  it('refuses when two unmatched transfers both fit', async () => {
+    const { svc, wallet } = reconcileCtx(topupRow, [eventRow, { ...eventRow, id: 'evt2' }]);
+    expect((await svc.reconcileTopup('top1')).status).toBe('AMBIGUOUS');
+    expect(wallet.approveTopup).not.toHaveBeenCalled();
+  });
+
+  it('has nothing to go on with neither a reference nor a readable receipt', async () => {
+    const { svc } = reconcileCtx({ ...topupRow, proofReading: null }, [eventRow]);
+    expect((await svc.reconcileTopup('top1')).status).toBe('NO_REFERENCE');
+  });
+
+  it('still reconciles a Vodafone top-up by its wallet number', async () => {
+    const vf = { ...topupRow, method: 'VODAFONE_CASH', reference: '01284120292', proofReading: null };
+    const vfEvent = {
+      ...eventRow,
+      provider: 'VODAFONE_CASH',
+      reference: '01284120292',
+      rawMessage: 'تم استلام مبلغ 2000.00 جنيه من 01284120292',
+    };
+    const { svc, wallet, seen } = reconcileCtx(vf, [vfEvent]);
+    expect((await svc.reconcileTopup('top1')).status).toBe('MATCHED');
+    expect(seen.where.provider).toEqual({ in: ['VODAFONE_CASH'] });
+    expect(wallet.approveTopup).toHaveBeenCalled();
+  });
+});

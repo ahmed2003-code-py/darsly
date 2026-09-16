@@ -54,7 +54,11 @@
     "method": "Method",
     "reference": "Reference",
     "proof": "Proof",
-    "rejectReason": "Reject reason (optional)"
+    "rejectReason": "Reject reason (optional)",
+    "fromReceipt": "From the receipt",
+    "reviewedAuto": "Confirmed automatically from the bank message",
+    "reviewedBy": "Confirmed by {{name}}",
+    "tab": { "PENDING": "Pending", "APPROVED": "Confirmed", "REJECTED": "Rejected" }
   },
   "brand": "Darsly",
   "brandTagline": "Welcome to your learning journey",

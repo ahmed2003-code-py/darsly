@@ -106,6 +106,27 @@ export class ProofReaderService {
   constructor(private readonly ai: AiClient) {}
 
   /**
+   * How long a student waits at the submit button for this.
+   *
+   * Reading the receipt happens inside the request because its whole value is
+   * telling them *now* that the picture says 2,000 and they typed 500. But a
+   * form that sits on "جارٍ الحفظ…" for half a minute is its own bug, and a
+   * slow model must never be the reason a real transfer cannot be filed — past
+   * the deadline the top-up is simply filed without a reading, which is where
+   * every top-up was before this existed.
+   */
+  private static readonly DEADLINE_MS = 12_000;
+
+  private withDeadline<T>(p: Promise<T>): Promise<T> {
+    return Promise.race([
+      p,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('reading the receipt took too long')), ProofReaderService.DEADLINE_MS).unref?.(),
+      ),
+    ]);
+  }
+
+  /**
    * Read one receipt. Returns null when the model is unavailable or refuses —
    * never throws into a payment flow. A receipt we could not read is simply a
    * top-up with no extra evidence, which is exactly where we were before.
@@ -113,7 +134,7 @@ export class ProofReaderService {
   async read(imageDataUrl: string): Promise<ProofReading | null> {
     if (!imageDataUrl?.startsWith('data:image/')) return null;
     try {
-      const res = await this.ai.completeStructured<ProofReading>({
+      const res = await this.withDeadline(this.ai.completeStructured<ProofReading>({
         system: SYSTEM,
         messages: [
           {
@@ -124,7 +145,7 @@ export class ProofReaderService {
         ],
         schemaName: 'transfer_receipt',
         schema: SCHEMA as unknown as Record<string, unknown>,
-      });
+      }));
       return res.data;
     } catch (e) {
       // Deliberately swallowed: this is corroboration, not a precondition.

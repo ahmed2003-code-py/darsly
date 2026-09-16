@@ -162,6 +162,27 @@ describe('isIncomingTransfer — money in, not money out', () => {
     expect(isIncomingTransfer('EGP 100 debited from your account')).toBe(false);
   });
 
+  it('accepts a bank transfer executed INTO the account', () => {
+    // Production, 16 Sep 2026: InstaPay/CIB never say "received" — an arrival is
+    // "a transfer was executed to your account". Every InstaPay top-up was being
+    // dropped before it reached matching.
+    expect(
+      isIncomingTransfer(
+        'يرجى العلم انه تم تنفيذ تحويل لحظي بمبلغ 5.00 جم إلى حسابك المنتهي بـ **7717 من احمد عبدالعزيز هريدى على برقم مرجعي 3979e788',
+      ),
+    ).toBe(true);
+    expect(isIncomingTransfer('EGP 250 was transferred to your account')).toBe(true);
+  });
+
+  it('still refuses the same bank wording when the money is leaving', () => {
+    // The two differ by one preposition, and only one of them may credit anyone.
+    expect(
+      isIncomingTransfer(
+        'تم تنفيذ تحويل لحظي بمبلغ 15.00 جم من حسابك المنتهي بـ **7717 إلى ادهم محمد برقم مرجعي aa11bb22',
+      ),
+    ).toBe(false);
+  });
+
   it('rejects anything that is not clearly incoming', () => {
     expect(isIncomingTransfer('رصيدك الحالي 250 جنيه')).toBe(false);
     expect(isIncomingTransfer('')).toBe(false);

@@ -26,6 +26,15 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
     queryFn: async () => (await api.get('/payment-accounts')).data,
     enabled: open,
   });
+  // One top-up may be under review at a time (the server refuses a second).
+  // Learning that from a rejected request after filling the whole form is a
+  // worse way to find out than being told before starting.
+  const { data: wallet } = useQuery({
+    queryKey: ['wallet'],
+    queryFn: async () => (await api.get('/wallet')).data,
+    enabled: open,
+  });
+  const hasPending = (wallet?.pendingTopups?.length ?? 0) > 0;
 
   const amountCents = Math.round(parseFloat(amount || '0') * 100);
   /**
@@ -37,11 +46,38 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
    * asks for the same thing.
    */
   const refKind = method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
+  const refDigits = reference.replace(/[^\d]/g, '');
   const referenceLooksRight =
     refKind === 'WALLET_NUMBER'
-      ? /^(?:\+?20|0)?1[0125]\d{8}$/.test(reference.replace(/[^\d]/g, ''))
+      ? /^(?:\+?20|0)?1[0125]\d{8}$/.test(refDigits)
       : reference.replace(/[^0-9a-z]/gi, '').length >= 4;
-  const valid = amountCents >= 1000 && !!method && !!proof && referenceLooksRight;
+  // The number on the card they are reading is OURS, and it is the one that
+  // gets copied. It can never match an SMS — the parser drops the receiving
+  // number from the identities because it appears in every message — so it is
+  // refused here, in front of them, rather than by the server afterwards.
+  const ownNumber =
+    refKind === 'WALLET_NUMBER' &&
+    refDigits.length >= 10 &&
+    (accounts ?? []).some(
+      (a: any) => (a.handle ?? '').replace(/[^\d]/g, '').slice(-10) === refDigits.slice(-10),
+    );
+
+  /**
+   * Why the button cannot be pressed, in the student's words.
+   *
+   * A disabled button that explains nothing is the whole bug: the amount was
+   * below the minimum and the only sign of it was grey hint text far up the
+   * form. Every condition in `valid` names itself here, so the form can never
+   * again be silently un-submittable.
+   */
+  const blockers: string[] = [];
+  if (hasPending) blockers.push(t('walletStudent.blockPending'));
+  if (!(amountCents >= 1000)) blockers.push(t('walletStudent.blockAmount'));
+  if (!method) blockers.push(t('walletStudent.blockMethod'));
+  if (method && ownNumber) blockers.push(t('walletStudent.blockOwnNumber'));
+  else if (method && !referenceLooksRight) blockers.push(t(`walletStudent.blockRef.${refKind}`));
+  if (!proof) blockers.push(t('walletStudent.blockProof'));
+  const valid = blockers.length === 0;
 
   const submit = useMutation({
     mutationFn: async () =>
@@ -141,6 +177,16 @@ export default function WalletTopupModal({ open, onClose }: { open: boolean; onC
             </Field>
             {proof && <img src={proof} alt="" className="mb-3 max-h-40 rounded-lg border border-outline-variant/50 object-contain" />}
             <ErrorNote error={submit.error} />
+            {blockers.length > 0 && (
+              <ul className="mb-3 space-y-1 rounded-xl border border-outline-variant/60 bg-surface-container-low/60 p-3 text-xs text-on-surface-variant">
+                {blockers.map((b) => (
+                  <li key={b} className="flex items-start gap-2">
+                    <span className="material-symbols-outlined text-[16px] leading-5 text-outline">radio_button_unchecked</span>
+                    <span className="leading-5">{b}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <button className="btn-primary w-full" disabled={submit.isPending || !valid} onClick={() => submit.mutate()}>
               {submit.isPending ? t('common.saving') : t('walletStudent.submit')}
             </button>

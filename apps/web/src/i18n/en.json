@@ -16,6 +16,15 @@
     "uploadProof": "Upload the receipt",
     "proofPicked": "Image selected",
     "submit": "Send request",
+    "blockPending": "You already have a top-up under review — wait for it before sending another.",
+    "blockAmount": "Enter an amount of 10 EGP or more.",
+    "blockMethod": "Pick the method you transferred with.",
+    "blockOwnNumber": "That number is ours — enter the wallet number you transferred FROM.",
+    "blockProof": "Upload a picture of the transfer receipt.",
+    "blockRef": {
+      "WALLET_NUMBER": "Enter the wallet number you transferred from (01xxxxxxxxx).",
+      "TRANSACTION_REFERENCE": "Enter the reference from your transfer message."
+    },
     "submittedTitle": "Top-up request sent ✅",
     "submittedBody": "We'll confirm the transfer and add the balance to your wallet shortly.",
     "history": "Transactions",

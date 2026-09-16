@@ -79,7 +79,7 @@ export class ManualPaymentsService {
     // checked against the shape the chosen method's SMS will actually carry —
     // see payer-reference.ts. A blank or malformed one could never match, and
     // every payment carrying one went to an admin to resolve by hand.
-    const reference = normalizePayerReference(dto.method, dto.reference);
+    const reference = normalizePayerReference(dto.method, dto.reference, await this.receivingHandles());
 
     const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
 
@@ -198,6 +198,16 @@ export class ManualPaymentsService {
    * coupon reservation, the enrolment upsert, the teacher's ledger credit and
    * the invoice are all the ones that already work.
    */
+  /** See wallet.service: our own numbers are not an answer to "from where". */
+  private async receivingHandles(): Promise<string[]> {
+    try {
+      const accounts = await this.prisma.platformPaymentAccount.findMany({ select: { handle: true } });
+      return accounts.map((a) => a.handle);
+    } catch {
+      return [];
+    }
+  }
+
   async payFromWallet(userId: string, dto: { courseId: string; couponCode?: string }) {
     const student = await this.studentOf(userId);
     const course = await this.prisma.course.findFirst({

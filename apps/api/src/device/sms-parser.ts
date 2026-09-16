@@ -129,7 +129,15 @@ export function isIncomingTransfer(body: string): boolean {
   if (outgoing.test(body)) return false;
   const incoming =
     /(?:تم\s*استلام|استلمت|تم\s*إضافة|تم\s*اضافة|أضيف|اضيف|received|credited|deposit)/i;
-  return incoming.test(body);
+  if (incoming.test(body)) return true;
+  // A bank does not say "received". InstaPay and CIB announce an arrival as a
+  // transfer that was *executed into* your account — «تم تنفيذ تحويل لحظي
+  // بمبلغ 5.00 جم إلى حسابك المنتهي بـ **7717 من ...». The direction is carried
+  // entirely by the preposition, and the outgoing test above has already taken
+  // «من حسابك» off the table, so this cannot turn a debit into a credit.
+  return /(?:إلى|الى|ل)\s*(?:حساب|محفظة|محفظت)[كك]|(?:to|into)\s+your\s+(?:account|wallet)/i.test(
+    body,
+  );
 }
 
 /**
@@ -310,6 +318,27 @@ export function namesAgree(a: string, b: string): boolean {
  * Returns null rather than a guess. A wrong name is worse than no name, because
  * the matcher weighs a mismatch as evidence against.
  */
+/**
+ * Words that are never the last part of somebody's name.
+ *
+ * The bank pattern takes the name greedily up to «برقم», and a real CIB message
+ * puts a preposition in between — «من احمد عبدالعزيز هريدى **على** برقم مرجعي
+ * 3979e788». That preposition then rode into the name, and `namesAgree` refused
+ * the student's own account because the transfer looked like it came from a
+ * four-part person who does not exist. Trailing particles are dropped, one at a
+ * time; nothing in the middle is touched, because «عبد» belongs there.
+ */
+const NAME_TAIL_WORDS = new Set(['على', 'علي', 'عل', 'عن', 'من', 'في', 'لدى', 'الى', 'إلى', 'ب', 'بـ']);
+
+function trimNameTail(name: string | undefined): string | undefined {
+  if (!name) return name;
+  const parts = name.split(/\s+/);
+  while (parts.length > 2 && NAME_TAIL_WORDS.has(normalizeArabicName(parts[parts.length - 1]))) {
+    parts.pop();
+  }
+  return parts.join(' ');
+}
+
 export function parsePayerName(body: string): string | null {
   if (!body) return null;
 
@@ -326,7 +355,7 @@ export function parsePayerName(body: string): string | null {
   ];
 
   for (const re of patterns) {
-    const name = body.match(re)?.[1]?.trim().replace(/\s+/g, ' ');
+    const name = trimNameTail(body.match(re)?.[1]?.trim().replace(/\s+/g, ' '));
     // Two parts minimum: a single word is as likely to be a stray preposition
     // as a name, and namesAgree would refuse it anyway.
     if (name && nameParts(name).length >= 2) return name;

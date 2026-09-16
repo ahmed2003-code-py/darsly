@@ -80,4 +80,26 @@ describe('leaving it out', () => {
   it('treats whitespace as leaving it out', () => {
     expect(() => normalizePayerReference('INSTAPAY', '   ')).toThrow();
   });
+
+  /**
+   * Seen in production: the number printed on the "transfer to" card is the one
+   * that gets copied into "which number did you transfer from". It can never
+   * match — the SMS parser deliberately drops the receiving number from a
+   * message's identities — so the top-up would have sat in manual review.
+   */
+  it('refuses our own receiving number as the sender', () => {
+    const ours = ['01002589923'];
+    try {
+      normalizePayerReference('VODAFONE_CASH', '01002589923', ours);
+      throw new Error('should have refused');
+    } catch (e: any) {
+      expect(e.getResponse()).toMatchObject({ code: 'OWN_NUMBER', kind: 'WALLET_NUMBER' });
+    }
+    // Same number, spelled with a country code, is still ours.
+    expect(() => normalizePayerReference('VODAFONE_CASH', '+201002589923', ours)).toThrow();
+    // Anyone else's number still goes through.
+    expect(normalizePayerReference('VODAFONE_CASH', '01284120292', ours)).toBe('01284120292');
+    // And with no handles known, nothing is refused on this ground.
+    expect(normalizePayerReference('VODAFONE_CASH', '01002589923')).toBe('01002589923');
+  });
 });

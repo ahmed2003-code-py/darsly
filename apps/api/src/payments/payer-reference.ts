@@ -44,7 +44,12 @@ export function referenceKindFor(method: string): ReferenceKind {
  * their own characters — a bank's reference is not ours to reshape — and only
  * lose surrounding whitespace.
  */
-export function normalizePayerReference(method: string, raw: string | undefined): string {
+export function normalizePayerReference(
+  method: string,
+  raw: string | undefined,
+  /** The platform's own handles, so a student cannot hand us our own number. */
+  receivingHandles: string[] = [],
+): string {
   const value = (raw ?? '').trim();
   const kind = referenceKindFor(method);
 
@@ -70,7 +75,19 @@ export function normalizePayerReference(method: string, raw: string | undefined)
     }
     // The last ten digits are the number itself; a leading 0 or +20 is not part
     // of it, and the SMS prints only one of the three spellings.
-    return `0${digits.slice(-10)}`;
+    const local = `0${digits.slice(-10)}`;
+    // The number printed on the screen they are looking at is *ours*, and it is
+    // the one people copy. It can never match: the SMS parser drops the
+    // receiving number from the identities precisely because it appears in
+    // every message. Caught here, while they can still fix it.
+    if (receivingHandles.some((h) => h.replace(/[^\d]/g, '').slice(-10) === digits.slice(-10))) {
+      throw new BadRequestException({
+        message: 'That is our number — enter the wallet number you transferred FROM',
+        code: 'OWN_NUMBER',
+        kind,
+      });
+    }
+    return local;
   }
 
   // A reference has to have enough to it to identify one transfer. Four

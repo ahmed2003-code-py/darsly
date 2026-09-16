@@ -37,6 +37,26 @@ export interface PaymentEventDto {
 const WINDOW_BEFORE_MS = 72 * 3600_000;
 const WINDOW_AFTER_MS = 30 * 60_000;
 
+/**
+ * Which payment methods one provider's message may settle.
+ *
+ * InstaPay is a rail between bank accounts, not a wallet: the money lands in a
+ * bank account and it is the *bank* that sends the SMS («تم تنفيذ تحويل لحظي …
+ * إلى حسابك المنتهي بـ **7717»). Meanwhile the student, reading a card labelled
+ * «إنستاباي درسلي», picks INSTAPAY. Neither side is wrong, and an exact equality
+ * on method meant the two never met — every InstaPay transfer went to an admin.
+ *
+ * Only the bank family is pooled. A wallet is a different rail with a different
+ * SMS and must stay separate. Pooling widens the *candidate set* and nothing
+ * else: a match still needs an exact reference, and two candidates sharing one
+ * reference are still refused as ambiguous.
+ */
+function methodsFor(provider: string): string[] {
+  return provider === 'INSTAPAY' || provider === 'BANK_TRANSFER'
+    ? ['INSTAPAY', 'BANK_TRANSFER']
+    : [provider];
+}
+
 function normRef(r?: string | null): string {
   return (r ?? '').replace(/[^0-9a-z]/gi, '').toLowerCase();
 }
@@ -111,7 +131,7 @@ export class PaymentMatchingService {
       await this.prisma.payment.findMany({
         where: {
           gateway: 'manual',
-          method: dto.provider as any,
+          method: { in: methodsFor(dto.provider) as any[] },
           createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
           OR: [{ status: 'PENDING' }, { status: 'PAID', settledAt: null }],
         },
@@ -134,7 +154,7 @@ export class PaymentMatchingService {
       where: {
         status: 'PENDING',
         amountCents: dto.amountCents,
-        method: dto.provider as any,
+        method: { in: methodsFor(dto.provider) as any[] },
         createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
       },
       orderBy: { createdAt: 'desc' },

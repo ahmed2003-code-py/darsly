@@ -102,6 +102,17 @@ describe('deciding whether two names are one person', () => {
     expect(namesAgree('احمد عبدالعزيز هريدى', 'محمود عبدالعزيز هريدى')).toBe(false);
   });
 
+  it('keeps the preposition that follows a bank name out of the name', () => {
+    // «من احمد عبدالعزيز هريدى على برقم مرجعي …» — the greedy capture used to
+    // take «على» as a fourth part of the name, and namesAgree then refused the
+    // payer's own account.
+    const name = parsePayerName(
+      'تم تنفيذ تحويل لحظي بمبلغ 5.00 جم إلى حسابك المنتهي بـ **7717 من احمد عبدالعزيز هريدى على برقم مرجعي 3979e788 بتاريخ 16-09-2026 16:57',
+    );
+    expect(name).toBe('احمد عبدالعزيز هريدى');
+    expect(namesAgree(name!, 'أحمد عبد العزيز هريدي')).toBe(true);
+  });
+
   it('treats a single-word name as no evidence rather than a match', () => {
     expect(namesAgree('احمد', 'احمد عبدالعزيز هريدى')).toBe(false);
     expect(namesAgree('', 'احمد عبدالعزيز هريدى')).toBe(false);

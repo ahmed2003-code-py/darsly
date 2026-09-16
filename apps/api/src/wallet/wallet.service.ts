@@ -71,6 +71,20 @@ export class WalletService {
     };
   }
 
+  /**
+   * The handles we ask people to transfer TO — never a valid answer to "which
+   * number did you transfer FROM". An enrichment, not a precondition: if the
+   * lookup fails the reference is simply checked without it.
+   */
+  private async receivingHandles(): Promise<string[]> {
+    try {
+      const accounts = await this.prisma.platformPaymentAccount.findMany({ select: { handle: true } });
+      return accounts.map((a) => a.handle);
+    } catch {
+      return [];
+    }
+  }
+
   async submitTopup(userId: string, dto: SubmitTopupDto) {
     // An object, not a row: see ProofStorageService. Dropped if the row fails.
     const proofKey = await this.proofs.store('topups', dto.proofImageUrl, PROOF_MAX_BYTES);
@@ -94,7 +108,7 @@ export class WalletService {
         proofImageUrl: proofKey,
         // Same rule as a course payment: a top-up is the same transfer with no
         // course attached, matched on the same single identifier.
-        reference: normalizePayerReference(dto.method, dto.reference),
+        reference: normalizePayerReference(dto.method, dto.reference, await this.receivingHandles()),
         status: 'PENDING',
       },
       select: { id: true, amountCents: true, status: true, createdAt: true },

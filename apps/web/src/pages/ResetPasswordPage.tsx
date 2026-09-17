@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { OtpInput } from '../components/OtpInput';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell, { AuthField } from '../components/AuthShell';
@@ -86,9 +87,10 @@ export default function ResetPasswordPage() {
           {resent && (
             <p className="mb-4 rounded-xl bg-secondary-container/40 px-4 py-2.5 text-sm text-on-secondary-container" role="status">{resent}</p>
           )}
-          <AuthField icon="pin" type="text" dir="ltr" label={t('auth.resetCode')} placeholder="000000"
-            value={code} onChange={setCode} autoComplete="one-time-code" inputMode="numeric"
-            pattern="[0-9]{6}" title={t('auth.resetCodeHint')} maxLength={6} />
+          {/* Six boxes in a row is the dull way to ask for a code; this deals
+              them as a hand and lands a card per digit. See OtpInput. */}
+          <label className="mb-1.5 block text-sm font-bold">{t('auth.resetCode')}</label>
+          <OtpInput value={code} onChange={setCode} length={6} ariaLabel={t('auth.resetCode')} autoFocus />
           <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.newPassword')}
             placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
             reveal revealed={show} onReveal={() => setShow((s) => !s)} />

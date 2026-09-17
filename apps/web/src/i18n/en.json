@@ -633,7 +633,8 @@
     "currencyShort": "EGP",
     "optional": "optional",
     "add": "Add",
-    "clear": "Clear"
+    "clear": "Clear",
+    "confirmDelete": "Sure?"
   },
   "wallet": {
     "title": "Wallet",

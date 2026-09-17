@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { DeleteButton } from '../../components/DeleteButton';
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
@@ -123,12 +124,11 @@ export default function TeacherCouponsPage() {
                           {c.isActive ? t('teacher.coupons.active') : t('teacher.coupons.inactive')}
                         </Badge>
                       </button>
-                      <button
-                        className="text-outline hover:text-error"
-                        onClick={() => window.confirm(t('teacher.coupons.deleteConfirm')) && remove.mutate(c.id)}
-                      >
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
+                      <DeleteButton
+                        compact
+                        className="border-0 px-2 py-1"
+                        onConfirm={() => remove.mutateAsync(c.id)}
+                      />
                     </div>
                   </td>
                 </tr>

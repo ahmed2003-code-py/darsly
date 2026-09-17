@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { DeleteButton } from '../../components/DeleteButton';
 import Hls from 'hls.js';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -1246,13 +1247,13 @@ export default function CourseBuilderPage() {
                     ? t('teacher.builder.lessonsMetaMissing', { count: u.lessons.length, missing: gap })
                     : t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
                 </span>
-                <button
-                  title={t('common.delete')}
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-outline transition hover:bg-error-container hover:text-on-error-container sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/unit:opacity-100"
-                  onClick={() => window.confirm(t('teacher.builder.deleteUnitConfirm')) && removeUnit.mutate(u.id)}
-                >
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                </button>
+                {/* Arms on the first press instead of stopping the page with a
+                    dialog nobody reads — see DeleteButton. */}
+                <DeleteButton
+                  compact
+                  className="shrink-0 border-0 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/unit:opacity-100"
+                  onConfirm={() => removeUnit.mutateAsync(u.id)}
+                />
               </div>
 
               {!shut && (

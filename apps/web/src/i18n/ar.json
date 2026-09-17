@@ -633,7 +633,8 @@
     "currencyShort": "ج.م",
     "optional": "اختياري",
     "add": "إضافة",
-    "clear": "مسح"
+    "clear": "مسح",
+    "confirmDelete": "متأكد؟"
   },
   "wallet": {
     "title": "المحفظة",

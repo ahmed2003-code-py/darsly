@@ -60,6 +60,27 @@ export class GradingController {
     return this.grading.fixKey(u.tenantId!, u.sub, id, dto.correctOptionIds);
   }
 
+  @Get('teacher/grading/quizzes/:lessonId/students')
+  @Roles(Role.TEACHER)
+  @ApiOperation({ summary: '[teacher] Who sat this paper, and how it went for each' })
+  quizStudents(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string) {
+    return this.grading.quizStudents(u.tenantId!, lessonId);
+  }
+
+  @Get('teacher/grading/assignments/:lessonId/students')
+  @Roles(Role.TEACHER)
+  @ApiOperation({ summary: '[teacher] Who handed this assignment in' })
+  assignmentStudents(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string) {
+    return this.grading.assignmentStudents(u.tenantId!, lessonId);
+  }
+
+  @Get('teacher/grading/quiz-attempts/:id/review')
+  @Roles(Role.TEACHER)
+  @ApiOperation({ summary: "[teacher] One student's paper: what they chose, what was right" })
+  review(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.grading.attemptReview(u.tenantId!, id);
+  }
+
   @Post('teacher/grading/reports/:id/dismiss')
   @Roles(Role.TEACHER)
   @ApiOperation({ summary: '[teacher] The question was right after all' })

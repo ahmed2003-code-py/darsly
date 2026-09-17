@@ -209,6 +209,10 @@ export function ProgressBar({ pct, tone }: { pct: number; tone?: 'accent' | 'pri
  * carry — a count, a list — so the copy lives here and the payload supplies
  * the detail.
  */
+/**
+ * The handful of codes whose Arabic wording predates the convention below and
+ * cannot be derived from the code alone.
+ */
 const ERROR_CODES: Record<string, string> = {
   MEDIA_NOT_READY: 'err.mediaNotReady',
   HTML_LOCKED: 'err.htmlLocked',
@@ -218,14 +222,36 @@ const ERROR_CODES: Record<string, string> = {
   COURSE_OTHER_YEAR: 'err.courseOtherYear',
 };
 
+/**
+ * `BAD_REMEDIAL_LESSON` → `err.eBadRemedialLesson`.
+ *
+ * The map above had six entries against the API's eighty-seven codes, so
+ * eighty-one of them fell through to the provider's own English sentence and
+ * showed it to an Arabic reader — "The remedial lesson must be a video in this
+ * course" under a page that is Arabic throughout. Deriving the key from the
+ * code instead of listing it means a new code is translated by adding one
+ * string, and never by remembering to edit this file too.
+ */
+function keyForCode(code: string): string {
+  return `err.e${code.toLowerCase().replace(/_(.)/g, (_, c: string) => c.toUpperCase()).replace(/^(.)/, (_, c: string) => c.toUpperCase())}`;
+}
+
 export function ErrorNote({ error }: { error: unknown }) {
   const { t } = useTranslation();
   if (!error) return null;
   const data = (error as any)?.response?.data;
-  const key = data?.code ? ERROR_CODES[data.code] : undefined;
-  const message = key
-    ? t(key, { count: Array.isArray(data.mediaIds) ? data.mediaIds.length : 0 })
-    : data?.message?.toString?.() ?? (error as any)?.message ?? String(error);
+  const count = Array.isArray(data?.mediaIds) ? data.mediaIds.length : 0;
+  const explicit = data?.code ? ERROR_CODES[data.code] : undefined;
+  const derived = data?.code ? keyForCode(data.code) : undefined;
+  // The server's own sentence is the last resort, not the first: it is written
+  // for a log, in English, and this is the only place a reader ever sees it.
+  const translated = explicit
+    ? t(explicit, { count })
+    : derived
+      ? t(derived, { count, defaultValue: '' })
+      : '';
+  const message =
+    translated || data?.message?.toString?.() || (error as any)?.message || String(error);
   return (
     <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
       {message}

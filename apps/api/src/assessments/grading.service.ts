@@ -319,7 +319,28 @@ export class GradingService {
     });
     const openByQuestion = new Map(reportCounts.map((r) => [r.questionId, r._count]));
 
-    const courses = new Map<string, { courseId: string; courseTitle: string; quizzes: unknown[] }>();
+    // Assignments sit beside the papers but are counted separately: an exam and
+    // a piece of written work are not the same thing to a teacher, and a single
+    // mixed list was the first thing that made this screen hard to read.
+    const assignments = await this.prisma.assignment.findMany({
+      where: { lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } } },
+      select: {
+        lessonId: true,
+        maxScore: true,
+        lesson: {
+          select: {
+            title: true,
+            unit: { select: { title: true, course: { select: { id: true, title: true } } } },
+          },
+        },
+        submissions: { select: { score: true, gradedAt: true } },
+      },
+    });
+
+    const courses = new Map<
+      string,
+      { courseId: string; courseTitle: string; quizzes: unknown[]; assignments: unknown[] }
+    >();
     for (const q of quizzes) {
       const scored = q.attempts.filter((a) => !a.needsManualGrading && a.scorePct != null);
       const openReports = q.questions.reduce((n, qq) => n + (openByQuestion.get(qq.id) ?? 0), 0);
@@ -327,7 +348,9 @@ export class GradingService {
       // nothing, and a list of those buries the ones that do.
       if (!q.attempts.length && !openReports) continue;
       const course = q.lesson.unit.course;
-      const row = courses.get(course.id) ?? { courseId: course.id, courseTitle: course.title, quizzes: [] };
+      const row = courses.get(course.id) ?? {
+        courseId: course.id, courseTitle: course.title, quizzes: [], assignments: [],
+      };
       row.quizzes.push({
         lessonId: q.lessonId,
         lessonTitle: q.lesson.title,
@@ -338,9 +361,32 @@ export class GradingService {
           ? Math.round(scored.reduce((n, a) => n + (a.scorePct ?? 0), 0) / scored.length)
           : null,
         openReports,
+        pendingGrading: q.attempts.filter((a) => a.needsManualGrading).length,
       });
       courses.set(course.id, row);
     }
+
+    for (const a of assignments) {
+      if (!a.submissions.length) continue;
+      const course = a.lesson.unit.course;
+      const row = courses.get(course.id) ?? {
+        courseId: course.id, courseTitle: course.title, quizzes: [], assignments: [],
+      };
+      const marked = a.submissions.filter((s) => s.gradedAt && s.score != null);
+      row.assignments.push({
+        lessonId: a.lessonId,
+        lessonTitle: a.lesson.title,
+        unitTitle: a.lesson.unit.title,
+        maxScore: a.maxScore,
+        submissions: a.submissions.length,
+        avgScore: marked.length
+          ? Math.round(marked.reduce((n, s) => n + (s.score ?? 0), 0) / marked.length)
+          : null,
+        pendingGrading: a.submissions.filter((s) => !s.gradedAt).length,
+      });
+      courses.set(course.id, row);
+    }
+
     return [...courses.values()];
   }
 
@@ -566,6 +612,172 @@ export class GradingService {
       // A mark that moved matters; a notification that did not is not worth
       // rolling it back for.
     }
+  }
+
+
+  /**
+   * Who sat this paper, and how it went for each of them.
+   *
+   * The list a teacher actually wants after "how did the class do": names, not
+   * an average. Ordered worst first — a teacher scanning this is looking for
+   * who needs help, and that person is at the bottom of an alphabetical list.
+   */
+  async quizStudents(tenantId: string, lessonId: string) {
+    const quiz = await this.prisma.quiz.findFirst({
+      where: { lessonId, lesson: { unit: { course: { tenantId } } } },
+      select: {
+        passingScore: true,
+        lesson: { select: { title: true, unit: { select: { course: { select: { title: true } } } } } },
+        attempts: {
+          where: { voidedAt: null, submittedAt: { not: null } },
+          orderBy: { submittedAt: 'desc' },
+          select: {
+            id: true, scorePct: true, passed: true, needsManualGrading: true,
+            submittedAt: true, gradedAt: true,
+            student: { select: { id: true, user: { select: { fullName: true } } } },
+          },
+        },
+      },
+    });
+    if (!quiz) throw new NotFoundException('Quiz not found');
+    return {
+      lessonId,
+      lessonTitle: quiz.lesson.title,
+      courseTitle: quiz.lesson.unit.course.title,
+      passingScore: quiz.passingScore,
+      students: quiz.attempts
+        .map((a) => ({
+          attemptId: a.id,
+          studentId: a.student.id,
+          studentName: a.student.user.fullName,
+          scorePct: a.scorePct,
+          passed: a.passed,
+          needsManualGrading: a.needsManualGrading,
+          submittedAt: a.submittedAt,
+        }))
+        // Waiting to be marked first — they are the ones needing a decision —
+        // then the lowest marks, because that is who the teacher is looking for.
+        .sort((x, y) => {
+          if (x.needsManualGrading !== y.needsManualGrading) return x.needsManualGrading ? -1 : 1;
+          return (x.scorePct ?? 0) - (y.scorePct ?? 0);
+        }),
+    };
+  }
+
+  /** The same for a written assignment. */
+  async assignmentStudents(tenantId: string, lessonId: string) {
+    const assignment = await this.prisma.assignment.findFirst({
+      where: { lessonId, lesson: { unit: { course: { tenantId } } } },
+      select: {
+        maxScore: true,
+        lesson: { select: { title: true, unit: { select: { course: { select: { title: true } } } } } },
+        submissions: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true, score: true, gradedAt: true, createdAt: true,
+            student: { select: { id: true, user: { select: { fullName: true } } } },
+          },
+        },
+      },
+    });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    return {
+      lessonId,
+      lessonTitle: assignment.lesson.title,
+      courseTitle: assignment.lesson.unit.course.title,
+      maxScore: assignment.maxScore,
+      students: assignment.submissions
+        .map((s) => ({
+          submissionId: s.id,
+          studentId: s.student.id,
+          studentName: s.student.user.fullName,
+          score: s.score,
+          needsGrading: !s.gradedAt,
+          submittedAt: s.createdAt,
+        }))
+        .sort((x, y) => {
+          if (x.needsGrading !== y.needsGrading) return x.needsGrading ? -1 : 1;
+          return (x.score ?? 0) - (y.score ?? 0);
+        }),
+    };
+  }
+
+  /**
+   * One student's paper, whole: every question, what they chose, what was
+   * right, and whether it counted.
+   *
+   * Different from `quizAttempt`, which returns only what still needs a
+   * decision. This is for reading a finished paper — the question a teacher is
+   * answering here is "why did this student get this mark", and that cannot be
+   * answered by the questions they were marked on by hand alone.
+   */
+  async attemptReview(tenantId: string, attemptId: string) {
+    const attempt = await this.prisma.quizAttempt.findFirst({
+      where: { id: attemptId, quiz: { lesson: { unit: { course: { tenantId } } } } },
+      select: {
+        id: true, answers: true, aiFeedback: true, scorePct: true, passed: true,
+        submittedAt: true, gradedAt: true, needsManualGrading: true,
+        student: { select: { user: { select: { fullName: true } } } },
+        quiz: {
+          select: {
+            passingScore: true,
+            lesson: { select: { id: true, title: true, unit: { select: { course: { select: { title: true } } } } } },
+            questions: {
+              orderBy: { sortOrder: 'asc' },
+              select: {
+                id: true, type: true, prompt: true, options: true, points: true,
+                correctOptionId: true, correctOptionIds: true, modelAnswer: true, explanation: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!attempt) throw new NotFoundException('Attempt not found');
+
+    const answers = (attempt.answers ?? {}) as Record<string, unknown>;
+    const ai = (attempt.aiFeedback ?? {}) as Record<string, { similarityPct?: number; reason?: string }>;
+    return {
+      attemptId: attempt.id,
+      studentName: attempt.student.user.fullName,
+      scorePct: attempt.scorePct,
+      passed: attempt.passed,
+      needsManualGrading: attempt.needsManualGrading,
+      submittedAt: attempt.submittedAt,
+      passingScore: attempt.quiz.passingScore,
+      lessonId: attempt.quiz.lesson.id,
+      lessonTitle: attempt.quiz.lesson.title,
+      courseTitle: attempt.quiz.lesson.unit.course.title,
+      questions: attempt.quiz.questions.map((q) => {
+        const given = answers[q.id];
+        const key = q.correctOptionIds?.length
+          ? q.correctOptionIds
+          : q.correctOptionId
+            ? [q.correctOptionId]
+            : [];
+        const chosen = Array.isArray(given)
+          ? given.filter((v): v is string => typeof v === 'string')
+          : typeof given === 'string'
+            ? [given]
+            : [];
+        return {
+          id: q.id,
+          type: q.type,
+          prompt: q.prompt,
+          points: q.points,
+          options: (q.options ?? []) as { id: string; text: string }[],
+          correctOptionIds: key,
+          chosenOptionIds: chosen,
+          // A written answer is not right or wrong here — a person decided what
+          // it was worth, and saying "wrong" about it would be inventing that.
+          correct: q.type === 'SHORT_ANSWER' ? null : isCorrectAnswer(q, given),
+          writtenAnswer: q.type === 'SHORT_ANSWER' ? (typeof given === 'string' ? given : '') : null,
+          modelAnswer: q.modelAnswer,
+          explanation: q.explanation,
+          ai: ai[q.id] ?? null,
+        };
+      }),
+    };
   }
 
 }

@@ -359,35 +359,93 @@ function ScoreField({ value, max, onChange }: { value: string; max: number; onCh
 }
 
 /**
- * How each paper actually landed, and where students say it is wrong.
+ * Results, read the way a teacher looks for them: course, then paper, then
+ * student, then that student's paper.
  *
- * The number that does the work here is how the class spread across the
- * options. A question three quarters of them answered the same wrong way is
- * usually not a class that failed to revise — it is a key with the wrong letter
- * in it, and this is the screen where a teacher can see that and fix it.
+ * The first version put every paper from every course in one flat list and
+ * opened a modal on top of it. That answers "how did the class do" and nothing
+ * else — there was no way to reach one student, and exams and written work sat
+ * mixed together as though they were the same thing. This drills instead, with
+ * a trail back, and a search box at each level that has enough rows to need one.
  */
-interface QuizRow {
+interface PaperRow {
   lessonId: string;
   lessonTitle: string;
   unitTitle: string;
-  questionCount: number;
-  attempts: number;
-  avgPct: number | null;
-  openReports: number;
+  attempts?: number;
+  submissions?: number;
+  avgPct?: number | null;
+  avgScore?: number | null;
+  maxScore?: number;
+  openReports?: number;
+  pendingGrading: number;
 }
 interface AnalysisCourse {
   courseId: string;
   courseTitle: string;
-  quizzes: QuizRow[];
+  quizzes: PaperRow[];
+  assignments: PaperRow[];
+}
+type Paper = { kind: 'QUIZ' | 'ASSIGNMENT'; lessonId: string; lessonTitle: string };
+
+/** One search box, used at every level. Hidden when there is nothing to sift. */
+function Search({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <div className="relative mb-4">
+      <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 grid place-items-center text-[20px] text-outline">
+        search
+      </span>
+      <input
+        className="input ps-11"
+        dir="auto"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+      />
+    </div>
+  );
+}
+
+/** The trail back. Always shows where you are, and every step is a way out. */
+function Crumbs({ steps }: { steps: { label: string; onClick?: () => void }[] }) {
+  return (
+    <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm">
+      {steps.map((s, i) => (
+        <span key={i} className="flex items-center gap-1">
+          {i > 0 && <span className="material-symbols-outlined text-[18px] text-outline">chevron_left</span>}
+          {s.onClick ? (
+            <button onClick={s.onClick} className="rounded px-1 font-bold text-primary hover:underline">
+              {s.label}
+            </button>
+          ) : (
+            <span className="px-1 text-on-surface-variant">{s.label}</span>
+          )}
+        </span>
+      ))}
+    </nav>
+  );
 }
 
 function Analysis() {
   const { t } = useTranslation();
-  const [open, setOpen] = useState<QuizRow | null>(null);
+  const [course, setCourse] = useState<AnalysisCourse | null>(null);
+  const [paper, setPaper] = useState<Paper | null>(null);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+
   const { data, isLoading } = useQuery<AnalysisCourse[]>({
     queryKey: ['grading-analysis'],
     queryFn: async () => (await api.get('/teacher/grading/analysis')).data,
   });
+
+  // The trail is rebuilt from the state rather than remembered, so there is no
+  // way for it to describe somewhere you are not.
+  const crumbs = [
+    { label: t('grading.allCourses'), onClick: course ? () => { setCourse(null); setPaper(null); setAttemptId(null); setQ(''); } : undefined },
+    ...(course ? [{ label: course.courseTitle, onClick: paper ? () => { setPaper(null); setAttemptId(null); setQ(''); } : undefined }] : []),
+    ...(paper ? [{ label: paper.lessonTitle, onClick: attemptId ? () => { setAttemptId(null); setQ(''); } : undefined }] : []),
+  ];
 
   if (isLoading) {
     return (
@@ -400,44 +458,339 @@ function Analysis() {
     return <EmptyState icon="query_stats" title={t('grading.noResults')} hint={t('grading.noResultsHint')} />;
   }
 
-  return (
-    <div className="space-y-4">
-      {data.map((c) => (
-        <section key={c.courseId} className="card">
-          <h3 className="mb-3 font-heading font-bold">{c.courseTitle}</h3>
-          <ul className="space-y-2">
-            {c.quizzes.map((q) => (
-              <li key={q.lessonId}>
-                <button
-                  onClick={() => setOpen(q)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-outline-variant/60 p-3 text-start transition-colors hover:bg-surface-container-low"
-                >
-                  <span className="material-symbols-outlined text-[20px] text-outline">quiz</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-bold">{q.lessonTitle}</span>
-                    <span className="block text-xs text-on-surface-variant">
-                      {t('grading.attemptsN', { count: q.attempts })}
-                      {q.avgPct != null ? ` · ${t('grading.avg', { pct: q.avgPct })}` : ''}
-                    </span>
-                  </span>
-                  {q.openReports > 0 && (
-                    <Badge tone="error">{t('grading.reportsN', { count: q.openReports })}</Badge>
-                  )}
-                  <span className="material-symbols-outlined text-outline">chevron_left</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+  if (attemptId) {
+    return (
+      <>
+        <Crumbs steps={crumbs} />
+        <AttemptReview attemptId={attemptId} />
+      </>
+    );
+  }
 
-      <Modal open={!!open} onClose={() => setOpen(null)} title={open?.lessonTitle ?? ''} wide>
-        {open && <QuizAnalysis lessonId={open.lessonId} />}
-      </Modal>
-    </div>
+  if (paper) {
+    return (
+      <>
+        <Crumbs steps={crumbs} />
+        <PaperView paper={paper} search={q} onSearch={setQ} onOpenAttempt={setAttemptId} />
+      </>
+    );
+  }
+
+  if (course) {
+    return (
+      <>
+        <Crumbs steps={crumbs} />
+        <CourseView course={course} search={q} onSearch={setQ} onOpen={setPaper} />
+      </>
+    );
+  }
+
+  const courses = data.filter((c) => c.courseTitle.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <>
+      {data.length > 4 && <Search value={q} onChange={setQ} placeholder={t('grading.searchCourses')} />}
+      {!courses.length ? (
+        <EmptyState icon="search_off" title={t('grading.noMatch')} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {courses.map((c) => {
+            const waiting =
+              c.quizzes.reduce((n, p) => n + p.pendingGrading, 0) +
+              c.assignments.reduce((n, p) => n + p.pendingGrading, 0);
+            const reports = c.quizzes.reduce((n, p) => n + (p.openReports ?? 0), 0);
+            return (
+              <button
+                key={c.courseId}
+                onClick={() => { setCourse(c); setQ(''); }}
+                className="card flex items-center gap-3 text-start transition-colors hover:bg-surface-container-low"
+              >
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary-container text-on-primary-container">
+                  <span className="material-symbols-outlined">menu_book</span>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-heading font-bold">{c.courseTitle}</span>
+                  <span className="mt-0.5 block text-xs text-on-surface-variant">
+                    {t('grading.papersN', { count: c.quizzes.length })} · {t('grading.workN', { count: c.assignments.length })}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  {waiting > 0 && <Badge tone="warn">{t('grading.waitingN', { count: waiting })}</Badge>}
+                  {reports > 0 && <Badge tone="error">{t('grading.reportsN', { count: reports })}</Badge>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
+/** A course's papers, with exams and written work kept apart. */
+function CourseView({
+  course, search, onSearch, onOpen,
+}: { course: AnalysisCourse; search: string; onSearch: (v: string) => void; onOpen: (p: Paper) => void }) {
+  const { t } = useTranslation();
+  const [kind, setKind] = useState<'QUIZ' | 'ASSIGNMENT'>(course.quizzes.length ? 'QUIZ' : 'ASSIGNMENT');
+  const rows = (kind === 'QUIZ' ? course.quizzes : course.assignments).filter((p) =>
+    `${p.lessonTitle} ${p.unitTitle}`.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+
+  return (
+    <>
+      <div className="mb-4 flex gap-2">
+        {(['QUIZ', 'ASSIGNMENT'] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => setKind(k)}
+            className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
+              kind === k ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            {t(`grading.kindPlural.${k}`)}
+            <span className="ms-2 tabular-nums opacity-70">
+              {k === 'QUIZ' ? course.quizzes.length : course.assignments.length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {(kind === 'QUIZ' ? course.quizzes : course.assignments).length > 5 && (
+        <Search value={search} onChange={onSearch} placeholder={t('grading.searchPapers')} />
+      )}
+
+      {!rows.length ? (
+        <EmptyState icon="inbox" title={t('grading.noPapers')} />
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((p) => (
+            <li key={p.lessonId}>
+              <button
+                onClick={() => onOpen({ kind, lessonId: p.lessonId, lessonTitle: p.lessonTitle })}
+                className="card flex w-full items-center gap-3 text-start transition-colors hover:bg-surface-container-low"
+              >
+                <span className="material-symbols-outlined text-outline">
+                  {kind === 'QUIZ' ? 'quiz' : 'assignment'}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-bold">{p.lessonTitle}</span>
+                  <span className="block truncate text-xs text-on-surface-variant">
+                    {p.unitTitle} · {t('grading.attemptsN', { count: p.attempts ?? p.submissions ?? 0 })}
+                    {p.avgPct != null ? ` · ${t('grading.avg', { pct: p.avgPct })}` : ''}
+                    {p.avgScore != null ? ` · ${t('grading.avgScore', { score: p.avgScore, max: p.maxScore ?? 100 })}` : ''}
+                  </span>
+                </span>
+                {p.pendingGrading > 0 && <Badge tone="warn">{t('grading.waitingN', { count: p.pendingGrading })}</Badge>}
+                {(p.openReports ?? 0) > 0 && <Badge tone="error">{t('grading.reportsN', { count: p.openReports })}</Badge>}
+                <span className="material-symbols-outlined text-outline">chevron_left</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** One paper: who sat it, and — for an exam — how each question landed. */
+function PaperView({
+  paper, search, onSearch, onOpenAttempt,
+}: { paper: Paper; search: string; onSearch: (v: string) => void; onOpenAttempt: (id: string) => void }) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<'students' | 'questions'>('students');
+  const isQuiz = paper.kind === 'QUIZ';
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ['grading-students', paper.kind, paper.lessonId],
+    queryFn: async () =>
+      (await api.get(
+        isQuiz
+          ? `/teacher/grading/quizzes/${paper.lessonId}/students`
+          : `/teacher/grading/assignments/${paper.lessonId}/students`,
+      )).data,
+  });
+
+  if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
+
+  const students = (data.students ?? []).filter((s: any) =>
+    s.studentName.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+
+  return (
+    <>
+      {isQuiz && (
+        <div className="mb-4 flex gap-2">
+          {(['students', 'questions'] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
+                tab === k ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              {t(`grading.paperTab.${k}`)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isQuiz && tab === 'questions' ? (
+        <QuizAnalysis lessonId={paper.lessonId} />
+      ) : (
+        <>
+          {(data.students ?? []).length > 6 && (
+            <Search value={search} onChange={onSearch} placeholder={t('grading.searchStudents')} />
+          )}
+          {!students.length ? (
+            <EmptyState icon="group_off" title={t('grading.noStudents')} />
+          ) : (
+            <ul className="space-y-2">
+              {students.map((s: any) => {
+                const pending = s.needsManualGrading || s.needsGrading;
+                const mark = isQuiz
+                  ? s.scorePct != null ? `${s.scorePct}%` : '—'
+                  : s.score != null ? `${s.score}/${data.maxScore ?? 100}` : '—';
+                return (
+                  <li key={s.attemptId ?? s.submissionId}>
+                    <button
+                      disabled={!isQuiz}
+                      onClick={() => isQuiz && onOpenAttempt(s.attemptId)}
+                      className={`card flex w-full items-center gap-3 text-start transition-colors ${
+                        isQuiz ? 'hover:bg-surface-container-low' : 'cursor-default'
+                      }`}
+                    >
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-container-high text-sm font-bold">
+                        {s.studentName.trim().charAt(0)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-bold">{s.studentName}</span>
+                        {s.submittedAt && (
+                          <span className="block text-xs text-outline">{dateShort(s.submittedAt)}</span>
+                        )}
+                      </span>
+                      {pending ? (
+                        <Badge tone="warn">{t('grading.pending')}</Badge>
+                      ) : (
+                        <Badge tone={isQuiz ? (s.passed ? 'neutral' : 'error') : 'neutral'}>{mark}</Badge>
+                      )}
+                      {isQuiz && <span className="material-symbols-outlined text-outline">chevron_left</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/**
+ * One student's paper, question by question.
+ *
+ * The question this answers is "why did they get this mark", so every question
+ * is here — not only the ones marked by hand — with what they chose against
+ * what was right. A written answer is shown without a verdict: a person decided
+ * what it was worth, and printing "wrong" beside it would be inventing that.
+ */
+function AttemptReview({ attemptId }: { attemptId: string }) {
+  const { t } = useTranslation();
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ['grading-review', attemptId],
+    queryFn: async () => (await api.get(`/teacher/grading/quiz-attempts/${attemptId}/review`)).data,
+  });
+  if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="card flex flex-wrap items-center gap-3">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-surface-container-high font-bold">
+          {data.studentName.trim().charAt(0)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-heading text-lg font-bold">{data.studentName}</span>
+          <span className="block text-xs text-on-surface-variant">
+            {data.courseTitle} · {data.lessonTitle}
+          </span>
+        </span>
+        {data.needsManualGrading ? (
+          <Badge tone="warn">{t('grading.pending')}</Badge>
+        ) : (
+          <span className="text-end">
+            <span className="block font-heading text-2xl font-extrabold tabular-nums" dir="ltr">{data.scorePct}%</span>
+            <span className="text-xs text-on-surface-variant">
+              {t(data.passed ? 'grading.passed' : 'grading.failed', { pct: data.passingScore })}
+            </span>
+          </span>
+        )}
+      </div>
+
+      <ol className="space-y-3">
+        {data.questions.map((q: any, i: number) => (
+          <li
+            key={q.id}
+            className={`card border-s-4 ${
+              q.correct === true ? 'border-s-secondary' : q.correct === false ? 'border-s-error' : 'border-s-outline-variant'
+            }`}
+          >
+            <div className="mb-2 flex items-start gap-2">
+              <p className="min-w-0 flex-1 font-bold" dir="auto">
+                <span className="text-outline">{i + 1}.</span> {q.prompt}
+              </p>
+              {q.correct === true && <Badge tone="neutral">{t('grading.right', { n: q.points })}</Badge>}
+              {q.correct === false && <Badge tone="error">{t('grading.wrong')}</Badge>}
+              {q.correct === null && <Badge tone="primary">{t('grading.written')}</Badge>}
+            </div>
+
+            {q.correct === null ? (
+              <>
+                <div className="whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm" dir="auto">
+                  {q.writtenAnswer || <span className="text-outline">{t('grading.blank')}</span>}
+                </div>
+                {q.modelAnswer && (
+                  <p className="mt-2 rounded-xl border border-secondary/30 bg-secondary-container/25 px-3 py-2 text-xs" dir="auto">
+                    <b>{t('grading.modelAnswer')}: </b>{q.modelAnswer}
+                  </p>
+                )}
+              </>
+            ) : (
+              <ul className="space-y-1.5">
+                {q.options.map((o: any) => {
+                  const chose = q.chosenOptionIds.includes(o.id);
+                  const right = q.correctOptionIds.includes(o.id);
+                  return (
+                    <li
+                      key={o.id}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                        right
+                          ? 'border-secondary bg-secondary-container/35'
+                          : chose
+                            ? 'border-error bg-error-container/30'
+                            : 'border-outline-variant/50'
+                      }`}
+                    >
+                      <span className={`material-symbols-outlined text-[18px] ${right ? 'text-secondary' : chose ? 'text-error' : 'text-outline/40'}`}>
+                        {right ? 'check_circle' : chose ? 'cancel' : 'radio_button_unchecked'}
+                      </span>
+                      <span className="min-w-0 flex-1" dir="auto">{o.text}</span>
+                      {chose && <span className="shrink-0 text-xs font-bold">{t('grading.theirPick')}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {q.explanation && (
+              <p className="mt-2 rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant" dir="auto">
+                <b>{t('assess.take.explanation')}: </b>{q.explanation}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 function QuizAnalysis({ lessonId }: { lessonId: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();

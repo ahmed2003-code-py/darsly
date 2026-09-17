@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
 import { ProofStorageService } from '../storage/proof-storage.service';
@@ -40,6 +34,8 @@ export interface SubmitPaymentDto {
 
 @Injectable()
 export class ManualPaymentsService {
+  private readonly logger = new Logger(ManualPaymentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
@@ -193,7 +189,13 @@ export class ManualPaymentsService {
     // this settles immediately exactly like a dedicated WALLET payment would.
     if (wantsWallet && cashDueCents === 0) {
       await this.applyVerification(
-        { id: payment.id, status: payment.status, courseId: course.id, enrollmentId: payment.enrollmentId, studentId: student.id, couponId: couponId ?? null },
+        {
+          id: payment.id, status: payment.status, courseId: course.id,
+          enrollmentId: payment.enrollmentId, studentId: student.id, couponId: couponId ?? null,
+          // Paid entirely from the wallet, so the price re-check deliberately
+          // skips it: the escrow is reserved against this exact total.
+          amountCents: payment.amountCents, walletCents: payment.walletCents,
+        },
         'system',
         true,
         true,
@@ -304,8 +306,52 @@ export class ManualPaymentsService {
     return this.applyVerification(payment, 'system', true, true);
   }
 
+  /**
+   * What this payment is worth TODAY, at the price the course carries now.
+   *
+   * Deliberately re-derived rather than trusted from the row: a teacher can
+   * change a price between the moment a student presses pay and the moment the
+   * bank's message arrives, and the second moment is the one that decides how
+   * much money moves. The same coupon is reapplied — by id, without
+   * re-validating expiry, because that coupon was already accepted and its slot
+   * already reserved; letting it lapse here would quietly charge the student
+   * more than they were quoted.
+   */
+  private async priceNowFor(payment: { courseId: string; couponId: string | null }) {
+    const course = await this.prisma.course.findUnique({
+      where: { id: payment.courseId },
+      select: { priceCents: true, tenantId: true },
+    });
+    if (!course) return null;
+
+    let discount = 0;
+    if (payment.couponId) {
+      const coupon = await this.prisma.coupon.findUnique({ where: { id: payment.couponId } });
+      if (coupon) {
+        discount = coupon.percentOff
+          ? Math.round((course.priceCents * coupon.percentOff) / 100)
+          : Math.min(coupon.amountOffCents ?? 0, course.priceCents);
+      }
+    }
+    const netCents = Math.max(0, course.priceCents - discount);
+    let feeCents = 0;
+    if (netCents > 0) {
+      const academy = await this.prisma.academy.findUnique({
+        where: { id: course.tenantId },
+        select: { feeType: true, feeValue: true },
+      });
+      feeCents = academy
+        ? computeServiceFee(academy.feeType, academy.feeValue, netCents)
+        : computeServiceFee('PERCENT', 20, netCents);
+    }
+    return { netCents, feeCents, totalCents: netCents + feeCents };
+  }
+
   private async applyVerification(
-    payment: { id: string; status: string; courseId: string; enrollmentId: string | null; studentId: string; couponId: string | null },
+    payment: {
+      id: string; status: string; courseId: string; enrollmentId: string | null;
+      studentId: string; couponId: string | null; amountCents: number; walletCents: number;
+    },
     verifierId: string,
     auto: boolean,
     settle: boolean,
@@ -323,6 +369,36 @@ export class ManualPaymentsService {
       ? new Date(Date.now() + 30 * 86_400_000)
       : null;
 
+    /**
+     * The price is checked again HERE, not at the moment the student paid.
+     *
+     * A teacher can drop a price — to zero, even — between a student pressing
+     * pay and the bank's message arriving, and this is the moment the money
+     * actually moves. Verifying against the old figure took the difference for
+     * a course that no longer costs it: the teacher was credited the old
+     * amount, and the student had transferred real money out of a real bank
+     * account for it.
+     *
+     * So whatever they are over by goes to their wallet, and the payment is
+     * rewritten to today's price before the ledger reads it — the teacher earns
+     * what the course costs now, and nobody is out of pocket. A price that went
+     * UP is not chased: they paid what was on the screen.
+     *
+     * Only for payments with no wallet portion, which is every ordinary one.
+     * A mixed wallet+transfer payment has money reserved in escrow against this
+     * exact total, and rewriting the total underneath it is escrow surgery — it
+     * is left alone and flagged for a human instead of guessed at.
+     */
+    const now = await this.priceNowFor(payment);
+    const overpaid = now ? payment.amountCents - now.totalCents : 0;
+    const adjust = !!now && overpaid > 0 && payment.walletCents === 0;
+    if (now && overpaid > 0 && payment.walletCents > 0) {
+      this.logger.warn(
+        `Payment ${payment.id}: the course now costs ${now.totalCents} but ${payment.amountCents} was paid, ` +
+          `and ${payment.walletCents} of it is a wallet portion — left for a human to settle.`,
+      );
+    }
+
     // Atomic: the status flip and the enrollment activation commit together (no
     // "PAID but student not activated" window). The conditional updateMany guards
     // against a double-verify race (teacher + auto-matcher, or two verifiers) —
@@ -337,9 +413,36 @@ export class ManualPaymentsService {
           paidAt: new Date(),
           verifiedById: verifierId,
           ...(settle ? { settledAt: new Date() } : {}),
+          // Rewritten before recordPayment below reads it, so the academy is
+          // credited today's price rather than the one on the old row. A course
+          // that is now free lands on 0, and recordPayment books nothing.
+          ...(adjust && now
+            ? { amountCents: now.totalCents, netCents: now.netCents, feeCents: now.feeCents }
+            : {}),
         },
       });
       if (flip.count === 0) return false; // another caller already handled it
+
+      if (adjust) {
+        // Back to the student, in the same transaction as the payment it came
+        // from: there is no moment where the money has left the payment and not
+        // yet arrived in the wallet.
+        const ledgerTxnId = await this.ledger.creditWallet(
+          payment.studentId,
+          overpaid,
+          `price dropped after payment ${payment.id}`,
+          tx,
+        );
+        await tx.walletTransaction.create({
+          data: {
+            studentId: payment.studentId,
+            kind: 'REFUND',
+            amountCents: overpaid,
+            description: 'فرق سعر الدورة',
+            ledgerTxnId,
+          },
+        });
+      }
 
       if (payment.enrollmentId) {
         await tx.enrollment.update({
@@ -356,6 +459,31 @@ export class ManualPaymentsService {
     if (!handled) {
       if (auto) return { ok: true, alreadyHandled: true };
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
+    }
+
+    if (adjust) {
+      await this.notifyStudent(
+        payment.studentId,
+        'ENROLLMENT_APPROVED',
+        'رجّعنالك فرق السعر 💰',
+        `سعر «${course?.title ?? 'الدورة'}» نزل قبل ما نأكّد تحويلك، ف${(overpaid / 100).toFixed(2)} ج.م رجعت لمحفظتك.`,
+      );
+      await this.prisma.auditLog
+        .create({
+          data: {
+            actorUserId: auto ? null : verifierId,
+            action: 'payment.price.adjusted',
+            entity: 'Payment',
+            entityId: payment.id,
+            meta: {
+              paidCents: payment.amountCents,
+              nowCents: now?.totalCents ?? null,
+              refundedCents: overpaid,
+              studentId: payment.studentId,
+            } as never,
+          },
+        })
+        .catch(() => undefined);
     }
 
     // Non-critical follow-ups (a failure here never un-credits the teacher).

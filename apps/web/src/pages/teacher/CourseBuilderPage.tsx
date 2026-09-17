@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { UploadPanel } from '../../components/UploadPanel';
 import { DeleteButton } from '../../components/DeleteButton';
 import Hls from 'hls.js';
 import { ReactNode, useEffect, useRef, useState } from 'react';
@@ -8,7 +9,7 @@ import { PlaybackTicket } from '@darsly/shared-types';
 import { api, apiOrigin } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
-import { Badge, ErrorNote, Modal, ProgressBar, Spinner } from '../../components/ui';
+import { Badge, ErrorNote, Modal, Spinner } from '../../components/ui';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
 
 /**
@@ -71,6 +72,15 @@ export default function CourseBuilderPage() {
     });
 
   const [videoPct, setVideoPct] = useState<number | null>(null);
+  /**
+   * What is going up, and the handle to stop it.
+   *
+   * The bar knew a percentage and nothing else — not the name of the file, not
+   * its size, and crucially no way to abort. A teacher who picked the wrong
+   * 400MB video had to sit and watch it finish.
+   */
+  const [videoUp, setVideoUp] = useState<{ name: string; size: number } | null>(null);
+  const videoAbort = useRef<AbortController | null>(null);
   // Which lesson the upload belongs to. Without it the bar followed whichever
   // lesson happened to be open, so opening a second one while a video uploaded
   // showed that lesson filling up with someone else's progress.
@@ -79,6 +89,8 @@ export default function CourseBuilderPage() {
   // render behind on whether a file is currently going up.
   const uploadingRef = useRef(false);
   const [filePct, setFilePct] = useState<number | null>(null);
+  const [fileUp, setFileUp] = useState<{ name: string; size: number } | null>(null);
+  const fileAbort = useRef<AbortController | null>(null);
   // The course's own intro clip, which is marketing rather than a lesson and so
   // has its own upload, its own progress, and its own errors.
   const [introPct, setIntroPct] = useState<number | null>(null);
@@ -390,15 +402,19 @@ export default function CourseBuilderPage() {
     const lessonId = selectedLessonId;
     if (!lessonId) return;
     setVideoPct(0);
+    setVideoUp({ name: file.name, size: file.size });
     setUploadingLessonId(lessonId);
     uploadingRef.current = true;
     const onPct = throttledPct(setVideoPct);
     setVideoError(null);
+    const ac = new AbortController();
+    videoAbort.current = ac;
     try {
       const fd = new FormData();
       fd.append('file', file);
       const { data: asset } = await api.post('/uploads/videos', fd, {
         onUploadProgress: (e) => onPct(e, file.size),
+        signal: ac.signal,
       });
       await api.patch(`/teacher/lessons/${lessonId}`, { videoAssetId: asset.id });
       invalidate();
@@ -407,10 +423,14 @@ export default function CourseBuilderPage() {
       // refused file — too large, wrong type, a network that dropped — put the
       // page back to "upload a video" as though nothing had been attempted.
       // Silence is the worst of the three possible answers.
-      setVideoError(err);
+      // Cancelling is a decision, not a failure: saying "upload failed" to
+      // somebody who just pressed stop is the app arguing with them.
+      if (!ac.signal.aborted) setVideoError(err);
     } finally {
       uploadingRef.current = false;
+      videoAbort.current = null;
       setVideoPct(null);
+      setVideoUp(null);
       setUploadingLessonId(null);
     }
   }
@@ -464,18 +484,24 @@ export default function CourseBuilderPage() {
     const lessonId = selectedLessonId;
     if (!lessonId) return;
     setFilePct(0);
+    setFileUp({ name: file.name, size: file.size });
     uploadingRef.current = true;
     const onPct = throttledPct(setFilePct);
+    const ac = new AbortController();
+    fileAbort.current = ac;
     try {
       const fd = new FormData();
       fd.append('file', file);
       await api.post(`/uploads/lessons/${lessonId}/attachments`, fd, {
         onUploadProgress: (e) => onPct(e, file.size),
+        signal: ac.signal,
       });
       invalidate();
     } finally {
       uploadingRef.current = false;
+      fileAbort.current = null;
       setFilePct(null);
+      setFileUp(null);
     }
   }
 
@@ -688,12 +714,13 @@ export default function CourseBuilderPage() {
             {videoError != null && <ErrorNote error={videoError} />}
 
             {videoPct != null && uploadingLessonId === selectedLessonId ? (
-              <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-3">
-                <p className="mb-1.5 text-xs font-bold text-on-surface-variant">
-                  {t('teacher.builder.uploading', { pct: videoPct })}
-                </p>
-                <ProgressBar pct={videoPct} tone="primary" />
-              </div>
+              <UploadPanel
+                phase="uploading"
+                pct={videoPct}
+                fileName={videoUp?.name}
+                fileSize={videoUp?.size}
+                onCancel={() => videoAbort.current?.abort()}
+              />
             ) : !selectedVideo ? (
               <button
                 className="flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-outline-variant py-8 text-sm text-on-surface-variant transition hover:border-primary hover:text-primary"
@@ -716,14 +743,11 @@ export default function CourseBuilderPage() {
                 />
               </div>
             ) : selectedVideo.status !== 'READY' ? (
-              <div className="rounded-xl border border-outline-variant/60 bg-surface-container-lowest p-3">
-                <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-on-surface-variant">
-                  <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
-                  {t('teacher.builder.videoProcessing')}
-                </p>
-                {/* Indeterminate: the transcoder reports no percentage, and a
-                    fake one that stalls at 90% is worse than an honest pulse. */}
-                <div className="skeleton mb-3 h-1.5 w-full rounded-full" />
+              <div className="space-y-3">
+                {/* Indeterminate on purpose: the transcoder reports no
+                    percentage, and a fake one that stalls at 90% is worse than
+                    an honest sweep — see UploadPanel. */}
+                <UploadPanel phase="working" note={t('teacher.builder.videoProcessing')} />
                 <VideoActions
                   onDelete={() => window.confirm(t('teacher.builder.videoDeleteConfirm')) && removeVideo.mutate()}
                   busy={removeVideo.isPending}
@@ -952,10 +976,13 @@ export default function CourseBuilderPage() {
             <input ref={fileInput} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.zip,.doc,.docx,.txt"
               className="hidden" onChange={(e) => e.target.files?.[0] && uploadAttachment(e.target.files[0])} />
             {filePct != null ? (
-              <div>
-                <p className="mb-1 text-xs text-outline">{t('teacher.builder.uploading', { pct: filePct })}</p>
-                <ProgressBar pct={filePct} />
-              </div>
+              <UploadPanel
+                phase="uploading"
+                pct={filePct}
+                fileName={fileUp?.name}
+                fileSize={fileUp?.size}
+                onCancel={() => fileAbort.current?.abort()}
+              />
             ) : (
               <button
                 className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-outline-variant py-2.5 text-sm text-on-surface-variant transition hover:border-primary hover:text-primary"

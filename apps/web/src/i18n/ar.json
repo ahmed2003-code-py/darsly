@@ -2264,5 +2264,13 @@
     "theRightAnswer": "الإجابة الصحيحة",
     "markedByTeacher": "إنت صحّحتها: {{n}} من {{max}}",
     "markedByAi": "تصحيح تلقائي: {{n}} من {{max}}"
+  },
+  "upload": {
+    "file": "ملف",
+    "uploading": "بيترفع…",
+    "working": "بنجهّزه…",
+    "done": "تم",
+    "failed": "الرفع فشل",
+    "retry": "جرّب تاني"
   }
 }

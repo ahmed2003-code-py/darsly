@@ -2264,5 +2264,13 @@
     "theRightAnswer": "the right answer",
     "markedByTeacher": "You marked it: {{n}} of {{max}}",
     "markedByAi": "Marked automatically: {{n}} of {{max}}"
+  },
+  "upload": {
+    "file": "File",
+    "uploading": "Uploading…",
+    "working": "Processing…",
+    "done": "Done",
+    "failed": "Upload failed",
+    "retry": "Try again"
   }
 }

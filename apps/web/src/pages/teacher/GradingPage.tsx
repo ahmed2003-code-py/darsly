@@ -684,14 +684,25 @@ function PaperView({
     </>
   );
 }
-
 /**
  * One student's paper, question by question.
  *
  * The question this answers is "why did they get this mark", so every question
- * is here — not only the ones marked by hand — with what they chose against
- * what was right. A written answer is shown without a verdict: a person decided
- * what it was worth, and printing "wrong" beside it would be inventing that.
+ * is here — not only the ones marked by hand — with what they chose set against
+ * what was right.
+ *
+ * Right and wrong are **green and red literally**, not through the theme's own
+ * colours. Everything else on this screen is repainted by whatever palette the
+ * academy published, and the first version used the theme's `secondary` for a
+ * correct answer — which on a lavender academy made the right answer lavender
+ * and the whole point unreadable. Correctness is not a brand decision; a tick
+ * is green in every classroom on earth and must stay green in all of them.
+ *
+ * A written answer carries its mark and the name of whoever gave it. A mark
+ * with no author is a mark nobody can argue with, and the two authors are not
+ * worth the same: a teacher's is a judgement, the automatic marker's is a
+ * measurement against the model answer, and a student deserves to know which
+ * one they got.
  */
 function AttemptReview({ attemptId }: { attemptId: string }) {
   const { t } = useTranslation();
@@ -701,96 +712,177 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
   });
   if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
 
+  const earned = data.questions.reduce(
+    (n: number, q: any) => n + (q.correct === true ? q.points : q.awardedPoints ?? 0),
+    0,
+  );
+  const outOf = data.questions.reduce((n: number, q: any) => n + q.points, 0);
+
   return (
     <div className="space-y-4">
-      <div className="card flex flex-wrap items-center gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-surface-container-high font-bold">
+      {/* Who, and how it went, before any of the detail. */}
+      <div className="card flex flex-wrap items-center gap-4">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-surface-container-high font-heading text-lg font-bold">
           {data.studentName.trim().charAt(0)}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-heading text-lg font-bold">{data.studentName}</span>
-          <span className="block text-xs text-on-surface-variant">
+          <span className="block truncate text-xs text-on-surface-variant">
             {data.courseTitle} · {data.lessonTitle}
           </span>
         </span>
         {data.needsManualGrading ? (
           <Badge tone="warn">{t('grading.pending')}</Badge>
         ) : (
-          <span className="text-end">
-            <span className="block font-heading text-2xl font-extrabold tabular-nums" dir="ltr">{data.scorePct}%</span>
-            <span className="text-xs text-on-surface-variant">
-              {t(data.passed ? 'grading.passed' : 'grading.failed', { pct: data.passingScore })}
+          <span className="flex items-center gap-4">
+            <span className="text-end">
+              <span className="block font-heading text-sm font-bold tabular-nums text-on-surface-variant" dir="ltr">
+                {earned} / {outOf}
+              </span>
+              <span className="text-xs text-outline">{t('grading.marksEarned')}</span>
+            </span>
+            <span
+              className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-center ${
+                data.passed ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+              }`}
+            >
+              <span className="font-heading text-xl font-extrabold tabular-nums" dir="ltr">{data.scorePct}%</span>
             </span>
           </span>
         )}
       </div>
 
       <ol className="space-y-3">
-        {data.questions.map((q: any, i: number) => (
-          <li
-            key={q.id}
-            className={`card border-s-4 ${
-              q.correct === true ? 'border-s-secondary' : q.correct === false ? 'border-s-error' : 'border-s-outline-variant'
-            }`}
-          >
-            <div className="mb-2 flex items-start gap-2">
-              <p className="min-w-0 flex-1 font-bold" dir="auto">
-                <span className="text-outline">{i + 1}.</span> {q.prompt}
-              </p>
-              {q.correct === true && <Badge tone="neutral">{t('grading.right', { n: q.points })}</Badge>}
-              {q.correct === false && <Badge tone="error">{t('grading.wrong')}</Badge>}
-              {q.correct === null && <Badge tone="primary">{t('grading.written')}</Badge>}
-            </div>
+        {data.questions.map((q: any, i: number) => {
+          // A written answer is "right" here only in the sense of having earned
+          // its marks; nobody called it correct, somebody awarded it something.
+          const full = q.correct === true || (q.awardedPoints != null && q.awardedPoints >= q.points);
+          const none = q.correct === false || (q.awardedPoints != null && q.awardedPoints === 0);
+          return (
+            <li
+              key={q.id}
+              className={`card border-s-4 ${
+                full ? 'border-s-emerald-500' : none ? 'border-s-rose-500' : 'border-s-outline-variant'
+              }`}
+            >
+              <div className="mb-3 flex items-start gap-2">
+                <p className="min-w-0 flex-1 font-bold" dir="auto">
+                  <span className="text-outline">{i + 1}.</span> {q.prompt}
+                </p>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums ${
+                    full
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                      : none
+                        ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                        : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                  }`}
+                  dir="ltr"
+                >
+                  {q.correct !== null
+                    ? `${q.correct ? q.points : 0} / ${q.points}`
+                    : q.awardedPoints != null
+                      ? `${q.awardedPoints} / ${q.points}`
+                      : `— / ${q.points}`}
+                </span>
+              </div>
 
-            {q.correct === null ? (
-              <>
-                <div className="whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm" dir="auto">
-                  {q.writtenAnswer || <span className="text-outline">{t('grading.blank')}</span>}
-                </div>
-                {q.modelAnswer && (
-                  <p className="mt-2 rounded-xl border border-secondary/30 bg-secondary-container/25 px-3 py-2 text-xs" dir="auto">
-                    <b>{t('grading.modelAnswer')}: </b>{q.modelAnswer}
-                  </p>
-                )}
-              </>
-            ) : (
-              <ul className="space-y-1.5">
-                {q.options.map((o: any) => {
-                  const chose = q.chosenOptionIds.includes(o.id);
-                  const right = q.correctOptionIds.includes(o.id);
-                  return (
-                    <li
-                      key={o.id}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                        right
-                          ? 'border-secondary bg-secondary-container/35'
-                          : chose
-                            ? 'border-error bg-error-container/30'
-                            : 'border-outline-variant/50'
-                      }`}
-                    >
-                      <span className={`material-symbols-outlined text-[18px] ${right ? 'text-secondary' : chose ? 'text-error' : 'text-outline/40'}`}>
-                        {right ? 'check_circle' : chose ? 'cancel' : 'radio_button_unchecked'}
+              {q.correct === null ? (
+                <>
+                  <p className="mb-1 text-xs font-bold text-on-surface-variant">{t('grading.studentAnswer')}</p>
+                  <div className="whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm" dir="auto">
+                    {q.writtenAnswer || <span className="text-outline">{t('grading.blank')}</span>}
+                  </div>
+
+                  {/* The mark, and whose it is. */}
+                  {q.markedBy && (
+                    <p className="mt-2 flex items-center gap-2 text-xs text-on-surface-variant">
+                      <span className="material-symbols-outlined text-[16px]">
+                        {q.markedBy === 'AI' ? 'auto_awesome' : 'person'}
                       </span>
-                      <span className="min-w-0 flex-1" dir="auto">{o.text}</span>
-                      {chose && <span className="shrink-0 text-xs font-bold">{t('grading.theirPick')}</span>}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                      {t(q.markedBy === 'AI' ? 'grading.markedByAi' : 'grading.markedByTeacher', {
+                        n: q.awardedPoints,
+                        max: q.points,
+                      })}
+                      {q.ai?.similarityPct != null && ` · ${t('grading.aiSaid', { pct: q.ai.similarityPct })}`}
+                    </p>
+                  )}
+                  {q.ai?.reason && (
+                    <p className="mt-1 text-xs leading-5 text-outline" dir="auto">{q.ai.reason}</p>
+                  )}
 
-            {q.explanation && (
-              <p className="mt-2 rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant" dir="auto">
-                <b>{t('assess.take.explanation')}: </b>{q.explanation}
-              </p>
-            )}
-          </li>
-        ))}
+                  {q.modelAnswer && (
+                    <p className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs" dir="auto">
+                      <b>{t('grading.modelAnswer')}: </b>{q.modelAnswer}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <ul className="space-y-1.5">
+                  {q.options.map((o: any) => {
+                    const chose = q.chosenOptionIds.includes(o.id);
+                    const right = q.correctOptionIds.includes(o.id);
+                    // Four states, and each one says what it is in words as well
+                    // as colour — a teacher checking a mark should not have to
+                    // work out what a shade of green meant.
+                    return (
+                      <li
+                        key={o.id}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                          right
+                            ? 'border-emerald-500/60 bg-emerald-500/10'
+                            : chose
+                              ? 'border-rose-500/60 bg-rose-500/10'
+                              : 'border-outline-variant/50'
+                        }`}
+                      >
+                        <span
+                          className={`material-symbols-outlined text-[20px] ${
+                            right
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : chose
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : 'text-outline/40'
+                          }`}
+                        >
+                          {right ? 'check_circle' : chose ? 'cancel' : 'radio_button_unchecked'}
+                        </span>
+                        <span className="min-w-0 flex-1" dir="auto">{o.text}</span>
+                        {chose && (
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                              right
+                                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-rose-500/20 text-rose-700 dark:text-rose-300'
+                            }`}
+                          >
+                            {t('grading.theirPick')}
+                          </span>
+                        )}
+                        {right && !chose && (
+                          <span className="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                            {t('grading.theRightAnswer')}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {q.explanation && (
+                <p className="mt-2 rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant" dir="auto">
+                  <b>{t('assess.take.explanation')}: </b>{q.explanation}
+                </p>
+              )}
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
 }
+
 function QuizAnalysis({ lessonId }: { lessonId: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();

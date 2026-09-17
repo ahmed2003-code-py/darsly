@@ -715,8 +715,8 @@ export class GradingService {
     const attempt = await this.prisma.quizAttempt.findFirst({
       where: { id: attemptId, quiz: { lesson: { unit: { course: { tenantId } } } } },
       select: {
-        id: true, answers: true, aiFeedback: true, scorePct: true, passed: true,
-        submittedAt: true, gradedAt: true, needsManualGrading: true,
+        id: true, answers: true, aiFeedback: true, manualScores: true, scorePct: true,
+        passed: true, submittedAt: true, gradedAt: true, needsManualGrading: true,
         student: { select: { user: { select: { fullName: true } } } },
         quiz: {
           select: {
@@ -736,7 +736,11 @@ export class GradingService {
     if (!attempt) throw new NotFoundException('Attempt not found');
 
     const answers = (attempt.answers ?? {}) as Record<string, unknown>;
-    const ai = (attempt.aiFeedback ?? {}) as Record<string, { similarityPct?: number; reason?: string }>;
+    const ai = (attempt.aiFeedback ?? {}) as Record<
+      string,
+      { similarityPct?: number; reason?: string; awarded?: boolean }
+    >;
+    const manual = (attempt.manualScores ?? {}) as Record<string, number>;
     return {
       attemptId: attempt.id,
       studentName: attempt.student.user.fullName,
@@ -772,6 +776,21 @@ export class GradingService {
           // it was worth, and saying "wrong" about it would be inventing that.
           correct: q.type === 'SHORT_ANSWER' ? null : isCorrectAnswer(q, given),
           writtenAnswer: q.type === 'SHORT_ANSWER' ? (typeof given === 'string' ? given : '') : null,
+          /**
+           * What a written answer actually earned, and who decided.
+           *
+           * A mark with no author is a mark nobody can argue with. The two
+           * differ in what they are worth as an answer to "why this mark": a
+           * teacher's is a judgement, the marker's is a measurement against the
+           * model answer, and a student deserves to know which one they got.
+           */
+          ...(q.type === 'SHORT_ANSWER'
+            ? manual[q.id] != null
+              ? { awardedPoints: manual[q.id], markedBy: 'TEACHER' as const }
+              : ai[q.id]?.awarded != null
+                ? { awardedPoints: ai[q.id].awarded ? q.points : 0, markedBy: 'AI' as const }
+                : { awardedPoints: null, markedBy: null }
+            : { awardedPoints: null, markedBy: null }),
           modelAnswer: q.modelAnswer,
           explanation: q.explanation,
           ai: ai[q.id] ?? null,

@@ -2257,6 +2257,10 @@
     "right": "صح · {{n}}",
     "wrong": "غلط",
     "written": "مقالي",
-    "theirPick": "اختياره"
+    "theirPick": "اختياره",
+    "marksEarned": "الدرجات",
+    "theRightAnswer": "الإجابة الصحيحة",
+    "markedByTeacher": "إنت صحّحتها: {{n}} من {{max}}",
+    "markedByAi": "تصحيح تلقائي: {{n}} من {{max}}"
   }
 }

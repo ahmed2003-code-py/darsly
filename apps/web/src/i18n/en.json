@@ -2257,6 +2257,10 @@
     "right": "Correct · {{n}}",
     "wrong": "Wrong",
     "written": "Written",
-    "theirPick": "their pick"
+    "theirPick": "their pick",
+    "marksEarned": "marks",
+    "theRightAnswer": "the right answer",
+    "markedByTeacher": "You marked it: {{n}} of {{max}}",
+    "markedByAi": "Marked automatically: {{n}} of {{max}}"
   }
 }

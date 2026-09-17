@@ -1320,6 +1320,13 @@ model QuizAttempt {
   /// check and time limit ignores it, so a student who ran out of attempts on a
   /// gated course is not locked out of a course they paid for with no way back.
   voidedAt           DateTime?
+  /// What the teacher awarded each written question: {questionId: points}.
+  ///
+  /// Only the final percentage used to be kept, so a marked paper could not say
+  /// what any single answer had earned — not to the teacher rereading it, not
+  /// to the student, and not to a regrade trying to recompute the paper. The
+  /// mark was made and then thrown away.
+  manualScores       Json?
   /// Per-question verdicts from the AI marker, so a teacher regrading can see
   /// what it judged and why: {questionId: {similarityPct, reason}}.
   aiFeedback         Json?

@@ -190,11 +190,17 @@ export class QuizzesService {
     const answers = (attempt.answers ?? {}) as Record<string, string>;
     let earned = 0;
     let total = 0;
+    // Kept, not just added up. Without this a marked paper could not say what
+    // any single written answer had earned — the number was used once and
+    // dropped, so the teacher rereading it, the student asking why, and any
+    // later regrade all had nothing but the final percentage.
+    const manualScores: Record<string, number> = {};
     for (const q of attempt.quiz.questions) {
       total += q.points;
       if (q.type === 'SHORT_ANSWER') {
-        const awarded = Number(dto.scores?.[q.id] ?? 0);
-        earned += Math.max(0, Math.min(q.points, awarded));
+        const awarded = Math.max(0, Math.min(q.points, Number(dto.scores?.[q.id] ?? 0)));
+        manualScores[q.id] = awarded;
+        earned += awarded;
       } else if (isCorrectAnswer(q, answers[q.id])) {
         earned += q.points;
       }
@@ -210,6 +216,7 @@ export class QuizzesService {
         needsManualGrading: false,
         gradedAt: new Date(),
         gradedBy: gradedByUserId,
+        manualScores,
       },
     });
     await this.notifyGraded(attempt.studentId, attempt.quiz.lesson.title, scorePct, passed);

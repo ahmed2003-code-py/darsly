@@ -18,12 +18,21 @@ export const queryClient = new QueryClient({
  *
  * `darsly-studio` is the cached copy of the look. It is deliberately kept — see
  * `releaseStudio` — so the app does not flash back to platform indigo in the
- * moment between signing out and signing back in. It carries no personal data:
- * colours, shapes and the keys of owned cosmetics. `darsly-studio-owner` is NOT
- * kept: it is the device's claim on whose look that is, and it is exactly what
- * makes a *different* account arriving drop the look.
+ * moment between signing out and signing back in.
+ *
+ * `darsly-studio-owner` is kept **with it, and must be**. It is the id the look
+ * belongs to, and `claimStudio` drops the look by comparing it against whoever
+ * just arrived. Removing it as "user data" left that comparison with nothing to
+ * compare: the look stopped being dropped at all, and one student's theme was
+ * worn by the next teacher and admin to sign in. The look and its owner are one
+ * fact and are kept or dropped together.
  */
-const DEVICE_KEYS = new Set(['darsly-color-mode', 'darsly-theme', 'darsly-studio']);
+const DEVICE_KEYS = new Set([
+  'darsly-color-mode',
+  'darsly-theme',
+  'darsly-studio',
+  'darsly-studio-owner',
+]);
 
 /**
  * Forget the person who was just signed in.

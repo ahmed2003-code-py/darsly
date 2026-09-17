@@ -494,7 +494,12 @@ function owner(): string | null {
  */
 export function claimStudio(userId: string | null): void {
   if (!userId) return;
-  if (owner() && owner() !== userId) clearStudio();
+  // Not `owner() && owner() !== userId`. A look with no owner recorded is a
+  // look nobody has claimed, and wearing it is the failure that matters — one
+  // student's theme on the next person's screen. So anything that is not a
+  // positive match drops it, including a missing owner, and the only way to
+  // keep a look across a sign-out is to keep its owner alongside it.
+  if (owner() !== userId) clearStudio();
   try {
     localStorage.setItem(OWNER_KEY, userId);
   } catch {

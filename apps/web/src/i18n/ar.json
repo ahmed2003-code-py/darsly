@@ -1425,7 +1425,8 @@
         "publishH": "انشر صفحتك."
       }
     },
-    "continue": "متابعة"
+    "continue": "متابعة",
+    "stepOf": "الخطوة {{n}} من {{total}}"
   },
   "adminStudio": {
     "title": "استوديو الأكاديميات",

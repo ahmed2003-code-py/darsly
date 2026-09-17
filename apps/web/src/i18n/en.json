@@ -1425,7 +1425,8 @@
         "publishH": "Publish your page."
       }
     },
-    "continue": "Continue"
+    "continue": "Continue",
+    "stepOf": "Step {{n}} of {{total}}"
   },
   "adminStudio": {
     "title": "Academy Studios",

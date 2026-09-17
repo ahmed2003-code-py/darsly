@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
@@ -46,6 +46,15 @@ export default function AcademyStudioPage() {
   const { t } = useTranslation();
   const { academy, isLoading } = useOwnedAcademy();
   const [tab, setTab] = useState<TabKey>('facts');
+  /**
+   * The strip scrolls on a phone, so moving a step has to bring it into view —
+   * otherwise "next" appears to do nothing until you swipe after it.
+   */
+  const stripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stripRef.current?.querySelector(`[data-step="${tab}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [tab]);
   const [settingsSub, setSettingsSub] = useState<'branding' | 'team'>('branding');
   const [mode, setMode] = useState<'wizard' | 'tabs' | null>(null);
 
@@ -130,8 +139,23 @@ export default function AcademyStudioPage() {
           {/* The build flow is a sequence, so it is drawn as one: a numbered
               track you move along, not seven loose pills of equal weight. The
               settings tab sits outside it, because it is not a step. */}
-          <nav className="mb-8 flex flex-wrap items-stretch gap-y-3">
-            <div className="flex min-w-0 flex-1 flex-wrap items-stretch overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
+          {/* Six steps do not fit across a phone, and they were asked to: each
+              button took an equal share of a 390px row, could not shrink past
+              its own label, and the strip clipped what was left — so the names
+              ran into each other and the step you were on collapsed to a dark
+              square. It scrolls sideways below `sm` instead, the way every
+              other strip in this app does (`.scroll-x`, which fades its edges
+              so a cut-off row reads as more to swipe to), and only spreads
+              itself evenly once there is room. */}
+          <nav className="mb-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch">
+            <p className="text-xs font-semibold text-on-surface-variant sm:hidden">
+              {t('studio.stepOf', { n: FLOW.indexOf(tab) + 1, total: FLOW.length })}
+            </p>
+            <div className="scroll-x -mx-6 px-6 sm:mx-0 sm:min-w-0 sm:flex-1 sm:px-0">
+            <div
+              ref={stripRef}
+              className="flex w-max items-stretch rounded-xl border border-outline-variant bg-surface-container-lowest sm:w-full sm:overflow-hidden"
+            >
               {FLOW.map((key, i) => {
                 const meta = TABS.find((x) => x.key === key)!;
                 const on = tab === key;
@@ -141,7 +165,8 @@ export default function AcademyStudioPage() {
                     key={key}
                     onClick={() => setTab(key)}
                     aria-current={on ? 'step' : undefined}
-                    className={`relative flex flex-1 items-center justify-center gap-2 px-4 py-3 font-heading text-sm font-semibold transition-colors ${
+                    data-step={key}
+                    className={`relative flex shrink-0 items-center justify-center gap-2 px-4 py-3 font-heading text-sm font-semibold transition-colors sm:flex-1 sm:shrink ${
                       on
                         ? 'bg-primary text-on-primary'
                         : done
@@ -159,7 +184,8 @@ export default function AcademyStudioPage() {
                 );
               })}
             </div>
-            <div className="flex items-center gap-2 ps-3">
+            </div>
+            <div className="flex items-center gap-2 sm:ps-3">
               <button
                 onClick={() => setTab('settings')}
                 title={t('studio.tabs.settings')}

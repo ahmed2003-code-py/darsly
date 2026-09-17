@@ -9,6 +9,7 @@ import { EntryExamService } from './entry-exam.service';
 import { AcademyMediaService } from '../academy-site/media/academy-media.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { VideoProcessingService } from '../video/video-processing.service';
+import { LessonDescriptionService } from '../video/lesson-description.service';
 import { VideoSource, YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
@@ -45,6 +46,7 @@ export class CoursesService {
     private readonly storage: StorageProvider,
     private readonly videoProcessing: VideoProcessingService,
     private readonly youtubeImport: YoutubeImportService,
+    private readonly lessonDescription: LessonDescriptionService,
     private readonly media: AcademyMediaService,
     private readonly entryExam: EntryExamService,
   ) {}
@@ -696,6 +698,15 @@ export class CoursesService {
         results.push({ url, error: 'METADATA_FAILED', detail: String(err.message ?? '').slice(0, 300) });
         continue;
       }
+
+      // What YouTube calls a description is written for a feed, not for a
+      // lesson: an episode number, a plea to subscribe, a row of hashtags. The
+      // rule pass took the links and the credits out; this turns what is left
+      // into the two sentences a student wants before pressing play — and
+      // returns nothing at all when the source never said what the video
+      // teaches. An empty field a teacher fills in beats a full one nobody
+      // wrote.
+      meta = { ...meta, description: await this.lessonDescription.write({ title: meta.title, cleaned: meta.description }) };
 
       // A teacher who retries the same link after a failed download (there's
       // no way to tell them apart from a genuinely new video — nothing here

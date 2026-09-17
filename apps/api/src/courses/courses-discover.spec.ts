@@ -5,6 +5,7 @@ import { StudentPriceService } from '../payments/student-price.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { VideoProcessingService } from '../video/video-processing.service';
 import { YoutubeImportService } from '../video/youtube-import.service';
+import { LessonDescriptionService } from '../video/lesson-description.service';
 import { CoursesService } from './courses.service';
 
 // Discovery never touches storage, transcoding, YouTube import or media —
@@ -12,6 +13,8 @@ import { CoursesService } from './courses.service';
 const noStorage = {} as unknown as StorageProvider;
 const noVideoProcessing = {} as unknown as VideoProcessingService;
 const noYoutubeImport = {} as unknown as YoutubeImportService;
+// Discovery never imports anything; the writer only runs on the import path.
+const noLessonDescription = {} as unknown as LessonDescriptionService;
 const noMedia = {} as unknown as AcademyMediaService;
 
 /**
@@ -50,7 +53,7 @@ function build(rows: unknown[] = [], total = rows.length) {
   // Nothing is hidden here: exclusivity has its own suite, and letting it
   // return anything would make every assertion below depend on it.
   const openToEveryone = { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService;
-  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport, noMedia, entryExamMock), prisma, calls };
+  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport, noLessonDescription, noMedia, entryExamMock), prisma, calls };
 }
 
 const course = (over: Record<string, unknown> = {}) => ({
@@ -294,6 +297,7 @@ describe('prices carry the platform fee', () => {
       noStorage,
       noVideoProcessing,
       noYoutubeImport,
+      noLessonDescription,
       noMedia,
       entryExamMock,
     );
@@ -333,6 +337,7 @@ describe('a student is not shown the catalogues of their teacher\'s rivals', () 
       noStorage,
       noVideoProcessing,
       noYoutubeImport,
+      noLessonDescription,
       noMedia,
       entryExamMock,
     );

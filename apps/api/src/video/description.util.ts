@@ -114,3 +114,36 @@ export function cleanYoutubeDescription(raw: string, maxChars = 1000): string {
   const stop = Math.max(cut.lastIndexOf('.'), cut.lastIndexOf('۔'), cut.lastIndexOf('\n'));
   return (stop > maxChars * 0.6 ? cut.slice(0, stop + 1) : cut).trim();
 }
+
+/**
+ * Is what survived the clean actually worth showing a student?
+ *
+ * The rules above remove noise line by line, and on a description that was
+ * *all* noise they leave debris: two stray words, a leftover fragment of a
+ * credits block, a row of dashes with a name after it. That debris then became
+ * the lesson's description, which is worse than an empty one — a teacher sees a
+ * filled field and does not think to write anything, and the student reads
+ * somebody's abandoned hashtag.
+ *
+ * So the output has to clear a floor to be used at all. Nothing here tries to
+ * judge whether the prose is *good*; it only refuses text that is plainly not
+ * prose.
+ */
+export function looksUsableDescription(text: string): boolean {
+  const t = (text ?? '').trim();
+  if (t.length < 40) return false; // a fragment, not a description
+
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length < 8) return false;
+
+  // Mostly symbols and emoji rather than letters: decoration that survived
+  // because it had a digit in it.
+  const letters = (t.match(/[\p{L}]/gu) ?? []).length;
+  if (letters / t.length < 0.5) return false;
+
+  // A wall of very short lines is a list of handles or credits, not a paragraph.
+  const lines = t.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length >= 3 && lines.every((l) => l.split(/\s+/).length <= 3)) return false;
+
+  return true;
+}

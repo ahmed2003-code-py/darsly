@@ -1,4 +1,4 @@
-import { cleanYoutubeDescription } from './description.util';
+import { cleanYoutubeDescription, looksUsableDescription } from './description.util';
 
 /**
  * The sample is the shape the real ones take: two sentences that belong to the
@@ -72,5 +72,27 @@ Zaid Mohamed
   it('survives an empty or all-noise description', () => {
     expect(cleanYoutubeDescription('')).toBe('');
     expect(cleanYoutubeDescription('#a #b\n🔗\n/ handle')).toBe('');
+  });
+});
+
+describe('is what survived worth showing', () => {
+  const ok = 'في الدرس ده هنشرح قانون نيوتن التاني، ونحل كام مسألة على الكتلة والتسارع خطوة بخطوة عشان تبقى جاهز للامتحان.';
+
+  it('accepts a real paragraph', () => {
+    expect(looksUsableDescription(ok)).toBe(true);
+  });
+
+  it('refuses the debris a fully-noisy description leaves behind', () => {
+    expect(looksUsableDescription('')).toBe(false);
+    expect(looksUsableDescription('عادل حسن')).toBe(false);
+    expect(looksUsableDescription('- - -\nأحمد\nمحمد')).toBe(false);
+  });
+
+  it('refuses a column of handles that each survived on their own', () => {
+    expect(looksUsableDescription('محمد علي\nأحمد سيد\nمنة الله\nعمرو خالد')).toBe(false);
+  });
+
+  it('refuses text that is mostly decoration', () => {
+    expect(looksUsableDescription('🔥🔥🔥 2026 🔥🔥🔥 ⭐⭐⭐ !!!! ⭐⭐⭐ 🎬🎬 ##')).toBe(false);
   });
 });

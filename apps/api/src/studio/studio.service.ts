@@ -1,3 +1,4 @@
+import { EARNED_LOOK_STATUSES } from '../academy/earned-academy-look';
 import {
   BadRequestException,
   ForbiddenException,
@@ -199,7 +200,7 @@ export class StudioService implements OnModuleInit {
     wornThemeKey: string | null,
   ) {
     const rows = await this.prisma.enrollment.findMany({
-      where: { studentId, status: { in: ['ACTIVE', 'PENDING_PAYMENT'] } },
+      where: { studentId, status: { in: EARNED_LOOK_STATUSES } },
       select: { tenantId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -247,7 +248,7 @@ export class StudioService implements OnModuleInit {
     // The gate: a student may only wear the colours of an academy they actually
     // study at. An id from a request is not a relationship.
     const enrolled = await this.prisma.enrollment.findFirst({
-      where: { studentId, tenantId: academyId, status: { in: ['ACTIVE', 'PENDING_PAYMENT'] } },
+      where: { studentId, tenantId: academyId, status: { in: EARNED_LOOK_STATUSES } },
       select: { id: true },
     });
     if (!enrolled) throw new ForbiddenException({ message: 'Not your academy', code: 'NOT_ENROLLED' });

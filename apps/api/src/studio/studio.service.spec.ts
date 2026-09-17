@@ -1368,3 +1368,67 @@ describe('a bought sidebar or header stacks on the theme', () => {
     // `expanded` and `standard` are the defaults — there is nothing to sell.
   });
 });
+
+/**
+ * Which enrolments earn a teacher's colours.
+ *
+ * The rule the whole feature rests on: a look, once earned, is kept. A course
+ * ending is the most ordinary thing that happens to an enrolment and is not the
+ * student doing anything wrong — but it used to take the look away, so a
+ * student's Darsly repainted itself from their teacher's colours back to
+ * platform indigo on the day the course lapsed, with nothing on screen to
+ * explain it and no way to get it back.
+ */
+describe('StudioService — a teacher\'s look, once earned', () => {
+  const enrolled = () => {
+    const prisma = makePrisma();
+    prisma.enrollment.findMany.mockResolvedValue([{ tenantId: 'a1', createdAt: new Date() }]);
+    prisma.academy.findMany.mockResolvedValue([
+      { id: 'a1', name: 'Academy', colorPrimary: '#2f5fe0', colorAccent: '#7c3aed', brandTokens: null, owner: { fullName: 'Amr' } },
+    ]);
+    prisma.cosmeticItem.findMany.mockResolvedValue([]);
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 's1', currentStreak: 0, user: { fullName: 'Student', avatarUrl: null },
+    });
+    return prisma;
+  };
+
+  const statusesAskedFor = (prisma: any) =>
+    prisma.enrollment.findMany.mock.calls[0][0].where.status.in;
+
+  it('counts a course that has ended — the look is kept', async () => {
+    const prisma = enrolled();
+    await svc(prisma).overview('u1');
+    expect(statusesAskedFor(prisma)).toContain('EXPIRED');
+  });
+
+  it('counts one still being paid for, so it appears at the moment of buying', async () => {
+    const prisma = enrolled();
+    await svc(prisma).overview('u1');
+    expect(statusesAskedFor(prisma)).toContain('PENDING_PAYMENT');
+    expect(statusesAskedFor(prisma)).toContain('ACTIVE');
+  });
+
+  it('counts neither a refused payment nor revoked access', async () => {
+    // REVOKED is a refund, a chargeback or abuse: the cosmetic goes with the
+    // access. REJECTED never bought anything in the first place.
+    const prisma = enrolled();
+    await svc(prisma).overview('u1');
+    expect(statusesAskedFor(prisma)).not.toContain('REJECTED');
+    expect(statusesAskedFor(prisma)).not.toContain('REVOKED');
+  });
+
+  it('lets a student wear the colours of a course that has ended', async () => {
+    const prisma = enrolled();
+    prisma.enrollment.findFirst.mockResolvedValue({ id: 'e1' });
+    prisma.studentCustomization.upsert = jest.fn().mockResolvedValue({ academyId: 'a1', themeKey: null });
+    await svc(prisma).equipAcademy('u1', 'a1');
+    expect(prisma.enrollment.findFirst.mock.calls[0][0].where.status.in).toContain('EXPIRED');
+  });
+
+  it('still refuses an academy the student never enrolled with', async () => {
+    const prisma = enrolled();
+    prisma.enrollment.findFirst.mockResolvedValue(null);
+    await expect(svc(prisma).equipAcademy('u1', 'someone-else')).rejects.toThrow();
+  });
+});

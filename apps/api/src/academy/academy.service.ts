@@ -1,3 +1,4 @@
+import { EARNED_LOOK_STATUSES } from './earned-academy-look';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AcademyRole } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
@@ -88,7 +89,7 @@ export class AcademyService {
     if (!student) return [];
 
     const rows = await this.prisma.enrollment.findMany({
-      where: { studentId: student.id, status: { in: ['ACTIVE', 'PENDING_PAYMENT'] } },
+      where: { studentId: student.id, status: { in: EARNED_LOOK_STATUSES } },
       select: { tenantId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });

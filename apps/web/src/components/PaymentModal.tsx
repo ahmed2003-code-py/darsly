@@ -50,6 +50,18 @@ export default function PaymentModal({
    * they are still looking at it, instead of from a rejection afterwards.
    */
   const refKind = method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
+  /**
+   * Only Vodafone Cash can be asked for an identifier — the same rule the
+   * wallet top-up follows, and the same reason.
+   *
+   * InstaPay and bank transfers give the two sides different reference numbers:
+   * the student's receipt says «المرجع 770916345902» and the SMS the platform
+   * receives says «برقم مرجعي 3979e788». Asking for one here while the wallet
+   * asked for nothing made the same transfer behave two different ways
+   * depending on which screen it was started from. The receipt identifies these
+   * — the amount and the minute it was sent — and it is uploaded either way.
+   */
+  const refRequired = method === 'VODAFONE_CASH';
   const referenceLooksRight =
     refKind === 'WALLET_NUMBER'
       ? /^(?:\+?20|0)?1[0125]\d{8}$/.test(reference.replace(/[^\d]/g, ''))
@@ -299,12 +311,18 @@ export default function PaymentModal({
                 us: a Vodafone Cash SMS names the sending wallet and carries no
                 transaction id, a bank's names a reference and carries no phone
                 number. Asking for the wrong one guarantees no match. */}
-            {method && (
+            {method && refRequired && (
               <Field label={t(`pay.ref.${refKind}`)} hint={t(`pay.ref.${refKind}Hint`)}>
                 <input className="input" dir="ltr" inputMode={refKind === 'WALLET_NUMBER' ? 'tel' : 'text'}
                   value={reference} onChange={(e) => setReference(e.target.value)}
                   placeholder={refKind === 'WALLET_NUMBER' ? '01xxxxxxxxx' : '05b6efa4'} />
               </Field>
+            )}
+            {method && !refRequired && (
+              <p className="mb-3 flex items-start gap-2 rounded-xl border border-outline-variant/60 bg-surface-container-low/60 p-3 text-xs leading-5 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[16px] leading-5 text-primary">auto_awesome</span>
+                {t('walletStudent.receiptIsTheProof')}
+              </p>
             )}
             <Field label={t('pay.proof')}>
               <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
@@ -319,7 +337,7 @@ export default function PaymentModal({
             {proof && <img src={proof} alt="" className="mb-3 max-h-40 rounded-lg border border-outline-variant/50 object-contain" />}
             <ErrorNote error={submit.error} />
             <button className="btn-primary w-full"
-              disabled={submit.isPending || !method || !proof || !transferred || !referenceLooksRight}
+              disabled={submit.isPending || !method || !proof || !transferred || (refRequired && !referenceLooksRight)}
               onClick={() => submit.mutate()}>
               {submit.isPending ? t('common.saving') : t('pay.submit')}
             </button>

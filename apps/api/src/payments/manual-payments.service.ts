@@ -13,6 +13,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
 import { assertCourseTrack } from '../catalog/subject-track';
 import { normalizePayerReference } from './payer-reference';
+import { checkProofAgainstClaim } from './proof-check';
+import { ProofReaderService } from './proof-reader.service';
 import { activateBundleChildren } from '../enrollments/bundle';
 import { releaseCouponUse, reserveCouponUse } from './coupon-use';
 import { computeServiceFee } from './fee.util';
@@ -43,6 +45,7 @@ export class ManualPaymentsService {
     private readonly ledger: LedgerService,
     private readonly notifications: NotificationsService,
     private readonly proofs: ProofStorageService,
+    private readonly proofReader: ProofReaderService,
   ) {}
 
   // ── Student: submit a proof of payment ──────────────────────────────────────
@@ -102,10 +105,32 @@ export class ManualPaymentsService {
     // Stored as an object first, so the transaction below only ever writes a
     // key. If the transaction fails the object is dropped; a proof without a
     // payment is nothing to keep.
-    const proofKey =
-      !isWalletMethod && cashDueCents > 0
-        ? await this.proofs.store('payments', dto.proofImageUrl ?? '', PROOF_MAX_BYTES)
-        : '';
+    /**
+     * The receipt, read before anything is stored — the same treatment a wallet
+     * top-up gets, and for the same reason.
+     *
+     * A course payment IS a transfer with a course attached: it is matched
+     * against the same bank SMS by the same rules, so it needs the same
+     * evidence. Leaving it out meant the two halves of one flow behaved
+     * differently — the wallet knew the picture said 2,000 while the checkout
+     * did not, and only the checkout still demanded a reference nobody has.
+     */
+    const needsProof = !isWalletMethod && cashDueCents > 0;
+    const reading = needsProof ? await this.proofReader.read(dto.proofImageUrl ?? '') : null;
+    if (needsProof) {
+      const check = checkProofAgainstClaim(reading, { amountCents: cashDueCents }, await this.receivingHandles());
+      if (check.verdict === 'DISAGREES') {
+        throw new BadRequestException({
+          message: check.problems.join(' '),
+          code: 'PROOF_DISAGREES',
+          problems: check.problems,
+        });
+      }
+    }
+
+    const proofKey = needsProof
+      ? await this.proofs.store('payments', dto.proofImageUrl ?? '', PROOF_MAX_BYTES)
+      : '';
 
     // Atomic: reserve the coupon slot (FIX: no longer at verify time — that let
     // many submits share a maxUses:1 coupon), upsert the PENDING_PAYMENT
@@ -139,6 +164,7 @@ export class ManualPaymentsService {
           gateway: 'manual',
           method: dto.method as any,
           proofImageUrl: proofKey,
+          proofReading: (reading ?? undefined) as never,
           reference,
           couponId,
           status: 'PENDING',

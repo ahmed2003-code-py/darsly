@@ -268,8 +268,29 @@ export class CoursesService {
 
   // ── Teacher CRUD ─────────────────────────────────────────────────────────
 
-  listMine(tenantId: string) {
-    return this.prisma.course.findMany({
+  /**
+   * A course's years, in the one shape the app is written for.
+   *
+   * Prisma returns the join rows — `{ courseId, gradeId, grade }` — and the
+   * screens all read `grade.id` / `grade.nameAr` straight off the list, so a
+   * course carrying raw rows came back with every year named `undefined`.
+   * Worse, the edit form seeds itself from that list: reopening a course sent
+   * `gradeIds: [undefined]` and the save was refused with "each value in
+   * gradeIds must be a string", which is a true sentence about a value the
+   * teacher never typed. Flattened once here, for every read.
+   */
+  private static flattenGrades<G, T extends { grades?: { grade: G }[] }>(
+    row: T,
+  ): Omit<T, 'grades'> & { grades: G[] } {
+    const rows = row?.grades;
+    return {
+      ...row,
+      grades: Array.isArray(rows) ? rows.map((g) => (g?.grade ?? g) as G) : ([] as G[]),
+    };
+  }
+
+  async listMine(tenantId: string) {
+    const rows = await this.prisma.course.findMany({
       where: { tenantId },
       include: {
         subject: true,
@@ -279,6 +300,7 @@ export class CoursesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return rows.map((r) => CoursesService.flattenGrades(r));
   }
 
   async getMine(tenantId: string, courseId: string) {
@@ -308,7 +330,7 @@ export class CoursesService {
     if (!course) throw new NotFoundException('Course not found');
     // BigInt (sizeBytes) doesn't survive JSON.stringify — stringify it here.
     return JSON.parse(
-      JSON.stringify(course, (_, v) => (typeof v === 'bigint' ? Number(v) : v)),
+      JSON.stringify(CoursesService.flattenGrades(course), (_, v) => (typeof v === 'bigint' ? Number(v) : v)),
     );
   }
 
@@ -507,10 +529,43 @@ export class CoursesService {
       }
     }
 
-    const { gradeIds, subjectId: wantedSubject, ...rest } = dto;
-    // Only re-checked when the teacher actually changed it, so an edit that
-    // touches the title alone never has to restate where the course is aimed.
-    const reach = gradeIds || wantedSubject ? await this.reachOf(tenantId, gradeIds, wantedSubject) : null;
+    const { gradeIds, subjectId: sentSubject, ...rest } = dto;
+    /**
+     * A subject is only checked when it is actually being changed.
+     *
+     * The comment here used to claim that and the code did not do it: the edit
+     * form restates every field it loaded, so a teacher changing nothing but
+     * the price still sent the course's existing subject, and that went through
+     * the "did you sign up to teach this?" gate every time. A teacher whose
+     * subject list has since moved — an admin edited it, or the catalogue
+     * changed underneath them — was then locked out of their own course
+     * entirely, refused with a sentence about a subject they had not touched.
+     *
+     * Re-aiming a course at a subject that is not theirs is still refused; it
+     * is only leaving it where it already is that stopped counting as a change.
+     */
+    const current =
+      sentSubject || gradeIds
+        ? await this.prisma.course.findUnique({
+            where: { id: courseId },
+            select: { subjectId: true, grades: { select: { gradeId: true } } },
+          })
+        : null;
+    const wantedSubject = sentSubject && sentSubject !== current?.subjectId ? sentSubject : undefined;
+
+    // The years get the same treatment, and for the same reason: the form
+    // restates the ones the course already has, and re-validating those locked
+    // a teacher out whenever the stages they teach had moved. Compared as sets
+    // — the order a teacher ticks boxes in is not a change.
+    const sameYears =
+      !!gradeIds &&
+      !!current &&
+      gradeIds.length === current.grades.length &&
+      new Set(gradeIds).size === new Set(current.grades.map((g) => g.gradeId)).size &&
+      gradeIds.every((id) => current.grades.some((g) => g.gradeId === id));
+    const wantedYears = sameYears ? undefined : gradeIds;
+
+    const reach = wantedYears || wantedSubject ? await this.reachOf(tenantId, wantedYears, wantedSubject) : null;
     return this.prisma.course.update({
       where: { id: courseId },
       data: {
@@ -519,7 +574,7 @@ export class CoursesService {
         // Replaced wholesale, and only when the teacher actually sent a list:
         // moving a course to another subject must not silently re-aim it at
         // every year they teach.
-        ...(reach && gradeIds
+        ...(reach && wantedYears
           ? { grades: { deleteMany: {}, create: reach.gradeIds.map((gradeId) => ({ gradeId })) } }
           : {}),
       },

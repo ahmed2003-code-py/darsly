@@ -16,23 +16,15 @@ export const queryClient = new QueryClient({
  * person: which end of the palette this screen is on, and the look that was
  * last painted. Everything else is somebody's data and goes.
  *
- * `darsly-studio` is the cached copy of the look. It is deliberately kept — see
- * `releaseStudio` — so the app does not flash back to platform indigo in the
- * moment between signing out and signing back in.
- *
- * `darsly-studio-owner` is kept **with it, and must be**. It is the id the look
- * belongs to, and `claimStudio` drops the look by comparing it against whoever
- * just arrived. Removing it as "user data" left that comparison with nothing to
- * compare: the look stopped being dropped at all, and one student's theme was
- * worn by the next teacher and admin to sign in. The look and its owner are one
- * fact and are kept or dropped together.
+ * Looks are kept too, but each under its own account's key — `darsly-studio:<id>`
+ * (see `studioKeyFor`). They survive a sign-out so somebody returning finds
+ * their own exactly as they left it and sees no repaint, and they cannot reach
+ * anyone else because no other account ever reads that key. The single shared
+ * `darsly-studio` this replaced is deliberately NOT in the list: any device
+ * still carrying one drops it on the next boot.
  */
-const DEVICE_KEYS = new Set([
-  'darsly-color-mode',
-  'darsly-theme',
-  'darsly-studio',
-  'darsly-studio-owner',
-]);
+const DEVICE_KEYS = new Set(['darsly-color-mode', 'darsly-theme']);
+const DEVICE_PREFIXES = ['darsly-studio:'];
 
 /**
  * Forget the person who was just signed in.
@@ -54,7 +46,8 @@ export function forgetUserData(): void {
   queryClient.clear();
   try {
     for (const key of Object.keys(localStorage)) {
-      if (!DEVICE_KEYS.has(key)) localStorage.removeItem(key);
+      const keep = DEVICE_KEYS.has(key) || DEVICE_PREFIXES.some((p) => key.startsWith(p));
+      if (!keep) localStorage.removeItem(key);
     }
     sessionStorage.clear();
   } catch {

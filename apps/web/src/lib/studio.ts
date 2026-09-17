@@ -73,21 +73,57 @@ export interface StudioThemes {
   styles: StudioStyles;
 }
 
-const CACHE_KEY = 'darsly-studio';
 /**
- * Whose look the cached one is.
+ * Every account on this device keeps its own look, under its own key.
  *
- * Signing out is not the same moment as somebody else signing in, and the two
- * want opposite things. The person who just signed out is usually about to sign
- * back in, and repainting the screen out from under them — red to their
- * teacher's blue, mid-glance — is the one moment the app changes colour while
- * they are looking at it. A different account signing in is the moment that
- * genuinely must not inherit a stranger's colours.
+ * There used to be ONE cached look plus a note saying whose it was, and every
+ * arrival compared the two. That comparison is a thing that can be wrong, and
+ * twice it was: a student's Egyptian King turned up on their teacher's console
+ * because the note had been cleared, and the look had nobody to be checked
+ * against. The note is gone. A look now lives at `darsly-studio:<userId>`, so a
+ * teacher signing in reads the teacher's key, finds nothing, and wears nothing.
+ * There is no comparison left to get wrong.
  *
- * So the look is kept on sign-out and released on arrival, and this is how the
- * difference is told: the id it belongs to, remembered alongside it.
+ * It also gives the two moments what each wants without a special case: the
+ * person who signs out and back in finds their own look exactly where they left
+ * it and sees no repaint, and a different account never had access to it in the
+ * first place.
  */
-const OWNER_KEY = 'darsly-studio-owner';
+const CACHE_PREFIX = 'darsly-studio:';
+
+/** The single shared key this replaced, and its note. Deleted on sight. */
+const LEGACY_KEYS = ['darsly-studio', 'darsly-studio-owner'];
+
+export function studioKeyFor(userId: string): string {
+  return `${CACHE_PREFIX}${userId}`;
+}
+
+/**
+ * Who is signed in, read straight from the persisted session.
+ *
+ * `bootStudio` runs before React and therefore before any store is wired up,
+ * but the look it replays is somebody's in particular — so it has to know whose
+ * before it paints anything.
+ */
+function signedInUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('darsly-auth');
+    if (!raw) return null;
+    const id = JSON.parse(raw)?.state?.user?.id;
+    return typeof id === 'string' && id ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Drop the shared cache this module used to keep, once, on any device that has it. */
+function dropLegacyCache(): void {
+  try {
+    for (const key of LEGACY_KEYS) localStorage.removeItem(key);
+  } catch {
+    /* nothing to drop */
+  }
+}
 
 /** What is equipped, as opposed to what is being tried on. */
 let equipped: StudioThemes | null = null;
@@ -401,8 +437,12 @@ export function applyStudio(input: unknown): void {
   equipped = themes;
   paint(themes);
   try {
-    if (themes) localStorage.setItem(CACHE_KEY, JSON.stringify(themes));
-    else localStorage.removeItem(CACHE_KEY);
+    // Saved under the signed-in account, or not saved at all — a look with
+    // nobody's name on it is exactly what used to end up on the wrong screen.
+    const id = signedInUserId();
+    if (!id) return;
+    if (themes) localStorage.setItem(studioKeyFor(id), JSON.stringify(themes));
+    else localStorage.removeItem(studioKeyFor(id));
   } catch {
     // A full or blocked storage costs the next load its head start, nothing more.
   }
@@ -437,14 +477,23 @@ export function repaintStudioForMode(): void {
  * flash.
  */
 export function bootStudio(): void {
+  dropLegacyCache();
+  const id = signedInUserId();
+  // Nobody is signed in: the sign-in screen belongs to the academy, never to
+  // the last student who used this browser.
+  if (!id) return;
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(studioKeyFor(id));
     if (!raw) return;
     const themes = pair(JSON.parse(raw));
     equipped = themes;
     paint(themes);
   } catch {
-    localStorage.removeItem(CACHE_KEY);
+    try {
+      localStorage.removeItem(studioKeyFor(id));
+    } catch {
+      /* nothing to remove */
+    }
   }
 }
 
@@ -479,32 +528,37 @@ export function rememberAcademy(id: string | null): void {
   }
 }
 
-function owner(): string | null {
-  try {
-    return localStorage.getItem(OWNER_KEY) || null;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Somebody arrived. If it is not who the cached look belongs to, drop it before
- * their own is fetched, so a stranger's colours are never on screen while the
- * request is in flight.
+ * Somebody arrived: put the screen into *their* look, whatever was on it.
+ *
+ * This is the whole of the isolation now, and it is a lookup rather than a
+ * comparison. Whoever just signed in has a key or they do not: a student who
+ * bought Egyptian King reads it back and wears it, and a teacher — who cannot
+ * buy one at all — reads nothing and is repainted to the academy's own colours.
+ * The stranger's look is not "detected and dropped"; it was never theirs to
+ * read.
+ *
+ * Runs on every arrival, for every role, before anything is fetched.
  */
 export function claimStudio(userId: string | null): void {
-  if (!userId) return;
-  // Not `owner() && owner() !== userId`. A look with no owner recorded is a
-  // look nobody has claimed, and wearing it is the failure that matters — one
-  // student's theme on the next person's screen. So anything that is not a
-  // positive match drops it, including a missing owner, and the only way to
-  // keep a look across a sign-out is to keep its owner alongside it.
-  if (owner() !== userId) clearStudio();
-  try {
-    localStorage.setItem(OWNER_KEY, userId);
-  } catch {
-    /* the worst case is one stale repaint on a device nobody shares */
+  if (!userId) {
+    paint(null);
+    equipped = null;
+    return;
   }
+  let themes: StudioThemes | null = null;
+  try {
+    const raw = localStorage.getItem(studioKeyFor(userId));
+    if (raw) themes = pair(JSON.parse(raw));
+  } catch {
+    themes = null;
+  }
+  equipped = themes;
+  paint(themes);
+  // A look belongs with the academy it was chosen against; arriving as somebody
+  // else drops that choice too, rather than leaving the app wearing a teacher
+  // this person may not even study with.
+  if (!themes) rememberAcademy(null);
 }
 
 /** Fetch and apply what this student is wearing. */
@@ -534,8 +588,9 @@ export function clearStudio(): void {
   paint(null);
   rememberAcademy(null);
   try {
-    localStorage.removeItem(CACHE_KEY);
-    localStorage.removeItem(OWNER_KEY);
+    const id = signedInUserId();
+    if (id) localStorage.removeItem(studioKeyFor(id));
+    dropLegacyCache();
   } catch {
     /* nothing to clear */
   }

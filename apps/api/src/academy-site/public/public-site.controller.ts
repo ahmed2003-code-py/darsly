@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { PublicSiteService } from './public-site.service';
+import { withSignedInCta } from './signed-in-cta';
 
 function clampLimit(raw: unknown, def = 6): number {
   const n = parseInt(String(raw ?? ''), 10);
@@ -31,7 +32,10 @@ export class PublicSiteController {
     }
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=600');
-    res.type('html').send(published.html);
+    // A student who is already signed in gets a way into the app instead of a
+    // sign-up form for an account they have. See signed-in-cta.ts for why this
+    // is applied here and not in the template.
+    res.type('html').send(withSignedInCta(published.html));
   }
 
   @Get('a/:slug/site-status')

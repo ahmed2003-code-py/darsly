@@ -5,6 +5,8 @@ import { AssignmentsController } from './assignments.controller';
 import { AssignmentsService } from './assignments.service';
 import { CertificatesController } from './certificates.controller';
 import { CertificatesService } from './certificates.service';
+import { GradingController } from './grading.controller';
+import { GradingService } from './grading.service';
 import { LessonAccessService } from './lesson-access.service';
 import { QuizzesController } from './quizzes.controller';
 import { QuizzesService } from './quizzes.service';
@@ -21,8 +23,8 @@ import { QuizzesService } from './quizzes.service';
 @Global()
 @Module({
   imports: [AcademySiteModule],
-  controllers: [QuizzesController, AssignmentsController, CertificatesController],
-  providers: [LessonAccessService, QuizzesService, AssignmentsService, CertificatesService, AiGraderService],
+  controllers: [QuizzesController, AssignmentsController, CertificatesController, GradingController],
+  providers: [LessonAccessService, QuizzesService, AssignmentsService, CertificatesService, AiGraderService, GradingService],
   exports: [CertificatesService],
 })
 export class AssessmentsModule {}

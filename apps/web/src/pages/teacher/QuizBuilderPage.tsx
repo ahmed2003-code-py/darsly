@@ -59,7 +59,6 @@ export default function QuizBuilderPage() {
   const [aiThresholdPct, setAiThresholdPct] = useState(60);
   const [showAnswers, setShowAnswers] = useState(true);
   const [questions, setQuestions] = useState<Q[]>([]);
-  const [gradingId, setGradingId] = useState<string | null>(null);
 
   // The course's video lessons, so the remedy is picked rather than typed.
   const { data: courseData } = useQuery({
@@ -147,12 +146,6 @@ export default function QuizBuilderPage() {
       return saved;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tquiz', lessonId] }),
-  });
-
-  const grade = useMutation({
-    mutationFn: async ({ attemptId, scores }: { attemptId: string; scores: Record<string, number> }) =>
-      (await api.post(`/teacher/quiz-attempts/${attemptId}/grade`, { scores })).data,
-    onSuccess: () => { setGradingId(null); qc.invalidateQueries({ queryKey: ['tquiz', lessonId] }); },
   });
 
   if (isLoading) return <div className="grid place-items-center py-20"><Spinner /></div>;
@@ -432,15 +425,13 @@ export default function QuizBuilderPage() {
                         <Badge tone={a.passed ? 'neutral' : 'error'}>{a.scorePct}%</Badge>
                       )}
                     </div>
+                    {/* Marking happens on its own screen now. Doing it here meant
+                        reading a student's essay in a sidebar column and typing a
+                        mark into an unlabelled box — see pages/teacher/GradingPage. */}
                     {a.needsManualGrading && (
-                      gradingId === a.id ? (
-                        <ManualGrade attempt={a} quizQuestions={data.questions ?? []} onCancel={() => setGradingId(null)}
-                          onSubmit={(scores) => grade.mutate({ attemptId: a.id, scores })} pending={grade.isPending} />
-                      ) : (
-                        <button className="mt-1 text-xs text-primary hover:underline" onClick={() => setGradingId(a.id)}>
-                          {t('assess.q.gradeNow')}
-                        </button>
-                      )
+                      <Link to="/teacher/grading" className="mt-1 block text-xs text-primary hover:underline">
+                        {t('assess.q.gradeNow')}
+                      </Link>
                     )}
                   </li>
                 ))}
@@ -448,32 +439,6 @@ export default function QuizBuilderPage() {
             )}
           </div>
         </aside>
-      </div>
-    </div>
-  );
-}
-
-function ManualGrade({ attempt, quizQuestions, onSubmit, onCancel, pending }: {
-  attempt: any; quizQuestions: any[]; onSubmit: (scores: Record<string, number>) => void; onCancel: () => void; pending: boolean;
-}) {
-  const { t } = useTranslation();
-  const shortQs = quizQuestions.filter((q: any) => q.type === 'SHORT_ANSWER');
-  const answers = attempt.answers ?? {};
-  const [scores, setScores] = useState<Record<string, number>>({});
-  return (
-    <div className="mt-2 space-y-2 border-t border-outline-variant/40 pt-2">
-      {shortQs.length === 0 && <p className="text-xs text-outline">{t('assess.q.gradeGeneric')}</p>}
-      {shortQs.map((q: any) => (
-        <div key={q.id}>
-          <p className="text-xs font-bold" dir="auto">{q.prompt}</p>
-          <p className="rounded bg-surface-container-low px-2 py-1 text-xs" dir="auto">{answers[q.id] || '—'}</p>
-          <input className="input mt-1 w-full py-1 text-xs" placeholder={t('assess.q.awardPoints', { max: q.points })}
-            inputMode="numeric" onChange={(e) => setScores((s) => ({ ...s, [q.id]: Number(e.target.value.replace(/\D/g, '')) || 0 }))} />
-        </div>
-      ))}
-      <div className="flex gap-2">
-        <button className="btn-primary flex-1 py-1.5 text-xs" disabled={pending} onClick={() => onSubmit(scores)}>{t('assess.q.finalize')}</button>
-        <button className="btn-ghost py-1.5 text-xs" onClick={onCancel}>{t('common.cancel')}</button>
       </div>
     </div>
   );

@@ -58,7 +58,11 @@
     "fromReceipt": "From the receipt",
     "reviewedAuto": "Confirmed automatically from the bank message",
     "reviewedBy": "Confirmed by {{name}}",
-    "tab": { "PENDING": "Pending", "APPROVED": "Confirmed", "REJECTED": "Rejected" }
+    "tab": {
+      "PENDING": "Pending",
+      "APPROVED": "Confirmed",
+      "REJECTED": "Rejected"
+    }
   },
   "brand": "Darsly",
   "brandTagline": "Welcome to your learning journey",
@@ -99,6 +103,7 @@
     "dashboard": "Dashboard",
     "courseBuilder": "Course builder",
     "myStudents": "My students",
+    "grading": "Marking",
     "coupons": "Coupons",
     "wallet": "Wallet",
     "security": "Security",
@@ -2091,5 +2096,35 @@
     "noTranscript": "No speech was captured in this session, so there is nothing to summarise. Summaries are built from what was said during the class — check that the mic was on and that the lesson ran longer than a few seconds.",
     "transcriptionOff": "Transcription is not enabled on the platform’s video account, so there is no text to summarise. This is a provider setting that needs turning on.",
     "transcriptPending": "The lesson's transcript is still being prepared by the video provider. Give it a minute and try again."
+  },
+  "grading": {
+    "title": "Marking",
+    "subtitleN": "{{count}} papers are waiting for you.",
+    "subtitleNone": "Everything is marked.",
+    "allDone": "Nothing waiting to be marked 🎉",
+    "allDoneHint": "As soon as a student hands in work that needs marking, it shows up here.",
+    "waitingN": "{{count}} waiting",
+    "mark": "Mark",
+    "markTitle": "Marking",
+    "kind": {
+      "QUIZ": "Quiz",
+      "ASSIGNMENT": "Assignment"
+    },
+    "studentAnswer": "The student's answer",
+    "modelAnswer": "Model answer",
+    "noModel": "No model answer was written.",
+    "blank": "Left blank.",
+    "prompt": "The task",
+    "hasFile": "The student attached a file.",
+    "feedback": "Feedback for the student (optional)",
+    "feedbackPh": "A line or two they can use.",
+    "award": "Mark",
+    "outOf": "out of {{max}}",
+    "full": "Full marks",
+    "zero": "Zero",
+    "aiSaid": "Automatic marking saw a {{pct}}% match",
+    "unmarkedN": "{{count}} still unmarked.",
+    "nothingToMark": "No written questions on this paper — just confirm the result.",
+    "finalize": "Confirm the result"
   }
 }

@@ -26,7 +26,7 @@ function svc(attempts: any[], submissions: any[]) {
     quizAttempt: { findMany: jest.fn(async (a: any) => { seen.attemptWhere = a.where; return attempts; }) },
     assignmentSubmission: { findMany: jest.fn(async (a: any) => { seen.subWhere = a.where; return submissions; }) },
   };
-  return { s: new GradingService(prisma), seen };
+  return { s: new GradingService(prisma, { create: jest.fn() } as any), seen };
 }
 
 describe('the marking queue', () => {

@@ -37,7 +37,33 @@ interface QueueCourse {
   items: QueueItem[];
 }
 
+type View = 'queue' | 'analysis';
+
 export default function GradingPage() {
+  const { t } = useTranslation();
+  const [view, setView] = useState<View>('queue');
+  return (
+    <div className="page">
+      <PageHeader title={t('grading.title')} subtitle={t('grading.pageSubtitle')} />
+      <div className="mb-5 flex gap-2">
+        {(['queue', 'analysis'] as View[]).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
+              view === v ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            {t(`grading.view.${v}`)}
+          </button>
+        ))}
+      </div>
+      {view === 'queue' ? <Queue /> : <Analysis />}
+    </div>
+  );
+}
+
+function Queue() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [open, setOpen] = useState<QueueItem | null>(null);
@@ -54,12 +80,10 @@ export default function GradingPage() {
   const expanded = openCourse ?? (queue?.length === 1 ? queue[0].courseId : null);
 
   return (
-    <div className="page">
-      <PageHeader
-        title={t('grading.title')}
-        subtitle={total > 0 ? t('grading.subtitleN', { count: total }) : t('grading.subtitleNone')}
-      />
-
+    <>
+      {total > 0 && (
+        <p className="mb-3 text-sm text-on-surface-variant">{t('grading.subtitleN', { count: total })}</p>
+      )}
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
@@ -136,7 +160,7 @@ export default function GradingPage() {
           />
         )}
       </Modal>
-    </div>
+    </>
   );
 }
 
@@ -330,6 +354,240 @@ function ScoreField({ value, max, onChange }: { value: string; max: number; onCh
       <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => onChange('0')}>
         {t('grading.zero')}
       </button>
+    </div>
+  );
+}
+
+/**
+ * How each paper actually landed, and where students say it is wrong.
+ *
+ * The number that does the work here is how the class spread across the
+ * options. A question three quarters of them answered the same wrong way is
+ * usually not a class that failed to revise — it is a key with the wrong letter
+ * in it, and this is the screen where a teacher can see that and fix it.
+ */
+interface QuizRow {
+  lessonId: string;
+  lessonTitle: string;
+  unitTitle: string;
+  questionCount: number;
+  attempts: number;
+  avgPct: number | null;
+  openReports: number;
+}
+interface AnalysisCourse {
+  courseId: string;
+  courseTitle: string;
+  quizzes: QuizRow[];
+}
+
+function Analysis() {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState<QuizRow | null>(null);
+  const { data, isLoading } = useQuery<AnalysisCourse[]>({
+    queryKey: ['grading-analysis'],
+    queryFn: async () => (await api.get('/teacher/grading/analysis')).data,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
+      </div>
+    );
+  }
+  if (!data?.length) {
+    return <EmptyState icon="query_stats" title={t('grading.noResults')} hint={t('grading.noResultsHint')} />;
+  }
+
+  return (
+    <div className="space-y-4">
+      {data.map((c) => (
+        <section key={c.courseId} className="card">
+          <h3 className="mb-3 font-heading font-bold">{c.courseTitle}</h3>
+          <ul className="space-y-2">
+            {c.quizzes.map((q) => (
+              <li key={q.lessonId}>
+                <button
+                  onClick={() => setOpen(q)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-outline-variant/60 p-3 text-start transition-colors hover:bg-surface-container-low"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-outline">quiz</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-bold">{q.lessonTitle}</span>
+                    <span className="block text-xs text-on-surface-variant">
+                      {t('grading.attemptsN', { count: q.attempts })}
+                      {q.avgPct != null ? ` · ${t('grading.avg', { pct: q.avgPct })}` : ''}
+                    </span>
+                  </span>
+                  {q.openReports > 0 && (
+                    <Badge tone="error">{t('grading.reportsN', { count: q.openReports })}</Badge>
+                  )}
+                  <span className="material-symbols-outlined text-outline">chevron_left</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      <Modal open={!!open} onClose={() => setOpen(null)} title={open?.lessonTitle ?? ''} wide>
+        {open && <QuizAnalysis lessonId={open.lessonId} />}
+      </Modal>
+    </div>
+  );
+}
+
+function QuizAnalysis({ lessonId }: { lessonId: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ['grading-quiz', lessonId],
+    queryFn: async () => (await api.get(`/teacher/grading/quizzes/${lessonId}`)).data,
+  });
+  const [editing, setEditing] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['grading-quiz', lessonId] });
+    qc.invalidateQueries({ queryKey: ['grading-analysis'] });
+  };
+  const fixKey = useMutation({
+    mutationFn: async (questionId: string) =>
+      (await api.post(`/teacher/grading/questions/${questionId}/key`, { correctOptionIds: picked })).data,
+    onSuccess: () => { setEditing(null); refresh(); },
+  });
+  const dismiss = useMutation({
+    mutationFn: async (reportId: string) =>
+      (await api.post(`/teacher/grading/reports/${reportId}/dismiss`)).data,
+    onSuccess: refresh,
+  });
+
+  if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
+  if (!data.questions.length) return <p className="text-sm text-on-surface-variant">{t('grading.noKeyed')}</p>;
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-on-surface-variant">
+        {data.courseTitle} · {t('grading.attemptsN', { count: data.attempts })}
+      </p>
+
+      {data.questions.map((q: any, i: number) => {
+        const isEditing = editing === q.id;
+        const topCount = Math.max(1, ...Object.values(q.byOption).map((n) => Number(n)));
+        return (
+          <div key={q.id} className="rounded-2xl border border-outline-variant/60 p-4">
+            <div className="mb-3 flex items-start gap-2">
+              <p className="min-w-0 flex-1 font-bold" dir="auto">
+                <span className="text-outline">{i + 1}.</span> {q.prompt}
+              </p>
+              {/* A question almost nobody got right is the signal worth seeing
+                  from across the room — it is usually the key, not the class. */}
+              <Badge tone={q.correctPct >= 50 ? 'neutral' : 'error'}>
+                {t('grading.correctPct', { pct: q.correctPct })}
+              </Badge>
+            </div>
+
+            <ul className="space-y-1.5">
+              {q.options.map((o: any) => {
+                const n = Number(q.byOption[o.id] ?? 0);
+                const isKey = q.correctOptionIds.includes(o.id);
+                return (
+                  <li key={o.id} className="flex items-center gap-2">
+                    {isEditing ? (
+                      <input
+                        type="checkbox"
+                        className="accent-primary"
+                        checked={picked.includes(o.id)}
+                        onChange={(e) =>
+                          setPicked((p) => (e.target.checked ? [...p, o.id] : p.filter((x) => x !== o.id)))
+                        }
+                        aria-label={o.text}
+                      />
+                    ) : (
+                      <span className={`material-symbols-outlined text-[18px] ${isKey ? 'text-secondary' : 'text-outline/40'}`}>
+                        {isKey ? 'check_circle' : 'radio_button_unchecked'}
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{o.text}</span>
+                    {/* The bar is the point: a crowd on one wrong option is a
+                        wrong key far more often than it is a hard question. */}
+                    <span className="h-2 w-28 overflow-hidden rounded-full bg-surface-container-high sm:w-40">
+                      <span
+                        className={`block h-full rounded-full ${isKey ? 'bg-secondary' : 'bg-outline/40'}`}
+                        style={{ width: `${Math.round((n / topCount) * 100)}%` }}
+                      />
+                    </span>
+                    <span className="w-8 shrink-0 text-end text-xs tabular-nums text-on-surface-variant" dir="ltr">{n}</span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {q.reports.length > 0 && (
+              <ul className="mt-3 space-y-1.5">
+                {q.reports.map((r: any) => (
+                  <li
+                    key={r.id}
+                    className={`flex items-start gap-2 rounded-xl px-3 py-2 text-xs leading-5 ${
+                      r.status === 'OPEN' ? 'bg-error-container/30' : 'bg-surface-container-low text-on-surface-variant'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px] leading-5">flag</span>
+                    <span className="min-w-0 flex-1">
+                      <b>{r.studentName}</b>
+                      {r.note ? ` — ${r.note}` : ` — ${t('grading.reportNoNote')}`}
+                      {r.status !== 'OPEN' && ` · ${t(`grading.reportStatus.${r.status}`)}`}
+                    </span>
+                    {r.status === 'OPEN' && (
+                      <button
+                        className="shrink-0 text-xs font-bold text-primary hover:underline"
+                        disabled={dismiss.isPending}
+                        onClick={() => dismiss.mutate(r.id)}
+                      >
+                        {t('grading.dismiss')}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {isEditing ? (
+                <>
+                  <button
+                    className="btn-primary py-1.5 text-xs"
+                    disabled={fixKey.isPending || picked.length === 0}
+                    onClick={() => fixKey.mutate(q.id)}
+                  >
+                    {fixKey.isPending ? t('common.saving') : t('grading.saveKey')}
+                  </button>
+                  <button className="btn-ghost py-1.5 text-xs" onClick={() => setEditing(null)}>
+                    {t('common.cancel')}
+                  </button>
+                  <span className="text-xs text-on-surface-variant">{t('grading.keyHint')}</span>
+                </>
+              ) : (
+                <button
+                  className="btn-ghost py-1.5 text-xs"
+                  onClick={() => { setEditing(q.id); setPicked(q.correctOptionIds); }}
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                  {t('grading.fixKey')}
+                </button>
+              )}
+            </div>
+
+            {fixKey.isSuccess && editing === null && fixKey.variables === q.id && (
+              <p className="mt-2 text-xs text-secondary">
+                {t('grading.raisedN', { count: fixKey.data?.raised ?? 0 })}
+              </p>
+            )}
+          </div>
+        );
+      })}
+      <ErrorNote error={fixKey.error || dismiss.error} />
     </div>
   );
 }

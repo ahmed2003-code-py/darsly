@@ -2125,6 +2125,32 @@
     "aiSaid": "Automatic marking saw a {{pct}}% match",
     "unmarkedN": "{{count}} still unmarked.",
     "nothingToMark": "No written questions on this paper — just confirm the result.",
-    "finalize": "Confirm the result"
+    "finalize": "Confirm the result",
+    "pageSubtitle": "Mark what is waiting, and see the questions your class tripped on.",
+    "view": {
+      "queue": "Waiting",
+      "analysis": "Question results"
+    },
+    "noResults": "No papers have been sat yet",
+    "noResultsHint": "Once students sit a paper you will see how each question landed, and who reported one.",
+    "attemptsN": "{{count}} attempts",
+    "avg": "average {{pct}}%",
+    "reportsN": "{{count}} reported",
+    "correctPct": "{{pct}}% got it right",
+    "noKeyed": "Every question on this paper is written — there is no key to correct.",
+    "fixKey": "Correct the answer",
+    "saveKey": "Save and re-mark",
+    "keyHint": "Tick the right answer. Marks go up for those who chose it, and nobody's mark goes down.",
+    "raisedN": "{{count}} students had their mark raised.",
+    "dismiss": "Question is fine",
+    "reportNoNote": "Thinks this question is wrong.",
+    "reportStatus": {
+      "ACCEPTED": "Corrected",
+      "DISMISSED": "Checked — it was right"
+    },
+    "reportQuestion": "Report this question",
+    "reportSent": "Sent to your teacher.",
+    "reportNotePh": "What looks wrong? (optional)",
+    "send": "Send"
   }
 }

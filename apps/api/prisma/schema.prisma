@@ -308,6 +308,7 @@ model StudentProfile {
   notes            VideoNote[]
   bookmarks        VideoBookmark[]
   quizAttempts     QuizAttempt[]
+  questionReports  QuestionReport[]
   submissions      AssignmentSubmission[]
   reviews          Review[]
   certificates     Certificate[]
@@ -1259,6 +1260,44 @@ model QuizQuestion {
   explanation     String       @default("")
   points          Int          @default(1)
   sortOrder       Int          @default(0)
+  reports         QuestionReport[]
+}
+
+/// A student saying "this question is wrong".
+///
+/// A key typed in by hand is a key that is sometimes typed in wrong, and the
+/// people who find out are the students who answered correctly and were marked
+/// down for it. Until now they had nowhere to say so: the only route was a
+/// message to the teacher, if that teacher accepted messages, and nothing tied
+/// the complaint to the question it was about.
+///
+/// One report per student per question — a student is registering a doubt, not
+/// voting, and letting them file ten does not make the question more wrong.
+model QuestionReport {
+  id         String               @id @default(cuid())
+  questionId String
+  question   QuizQuestion         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    StudentProfile       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// The attempt they were looking at, for the teacher reading the complaint.
+  attemptId  String?
+  note       String               @default("")
+  status     QuestionReportStatus @default(OPEN)
+  resolvedAt DateTime?
+  /// The teacher's user id, so "who decided this" survives.
+  resolvedBy String?
+  createdAt  DateTime             @default(now())
+
+  @@unique([questionId, studentId])
+  @@index([status, createdAt])
+}
+
+enum QuestionReportStatus {
+  OPEN
+  /// The teacher agreed: the key was changed and the paper re-marked.
+  ACCEPTED
+  /// The teacher looked and the question was right after all.
+  DISMISSED
 }
 
 model QuizAttempt {

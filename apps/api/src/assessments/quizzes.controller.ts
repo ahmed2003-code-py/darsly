@@ -4,6 +4,7 @@ import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { QuizzesService } from './quizzes.service';
+import { ReportQuestionDto } from './dto/grading.dto';
 import {
   GradeAttemptDto,
   SetQuizQuestionsDto,
@@ -78,5 +79,17 @@ export class QuizzesController {
   @ApiOperation({ summary: '[student] Submit answers — auto-graded, short-answer pends' })
   submit(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string, @Body() dto: SubmitAttemptDto) {
     return this.quizzes.submit(u.sub, lessonId, dto);
+  }
+
+  @Post('lessons/:lessonId/quiz/questions/:questionId/report')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Tell the teacher a question looks wrong' })
+  report(
+    @CurrentUser() u: JwtPayload,
+    @Param('lessonId') lessonId: string,
+    @Param('questionId') questionId: string,
+    @Body() dto: ReportQuestionDto,
+  ) {
+    return this.quizzes.reportQuestion(u.sub, lessonId, questionId, dto.note);
   }
 }

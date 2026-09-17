@@ -293,6 +293,11 @@ export default function QuizTakerPage() {
                   <span className="font-bold">{t('assess.take.explanation')}: </span>{rev.explanation}
                 </p>
               )}
+
+              {/* The one thing a student can do about a key with the wrong
+                  letter in it. Only once the paper is sat and only on a keyed
+                  question — there is nothing to be wrong about in an essay. */}
+              {done && q.type !== 'SHORT_ANSWER' && lessonId && <ReportQuestion lessonId={lessonId} questionId={q.id} />}
             </div>
           );
         })}
@@ -307,6 +312,63 @@ export default function QuizTakerPage() {
       ) : (
         <Link to={`/course/${courseId}`} className="btn-primary mt-6 block w-full text-center">{t('assess.take.backCourse')}</Link>
       )}
+    </div>
+  );
+}
+
+/**
+ * "This question is wrong."
+ *
+ * A key is typed in by hand, so a key is sometimes typed in wrong, and the
+ * people who find out are the students who answered correctly and were marked
+ * down for it. Before this the only route was a message to the teacher — if
+ * that teacher accepted messages — and nothing tied the complaint to the
+ * question it was about. It lands in the teacher's marking screen instead,
+ * against the question, next to what the rest of the class chose.
+ */
+function ReportQuestion({ lessonId, questionId }: { lessonId: string; questionId: string }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const send = useMutation({
+    mutationFn: async () =>
+      (await api.post(`/lessons/${lessonId}/quiz/questions/${questionId}/report`, {
+        note: note.trim() || undefined,
+      })).data,
+  });
+
+  if (send.isSuccess) {
+    return <p className="mt-2 text-xs font-bold text-secondary">{t('grading.reportSent')}</p>;
+  }
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="mt-2 flex items-center gap-1 text-xs text-outline hover:text-error hover:underline"
+        onClick={() => setOpen(true)}
+      >
+        <span className="material-symbols-outlined text-[16px]">flag</span>
+        {t('grading.reportQuestion')}
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2 rounded-xl border border-outline-variant/60 p-3">
+      <textarea
+        className="input min-h-16 text-sm"
+        dir="auto"
+        maxLength={500}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder={t('grading.reportNotePh')}
+      />
+      <div className="mt-2 flex gap-2">
+        <button className="btn-primary py-1.5 text-xs" disabled={send.isPending} onClick={() => send.mutate()}>
+          {send.isPending ? t('common.saving') : t('grading.send')}
+        </button>
+        <button className="btn-ghost py-1.5 text-xs" onClick={() => setOpen(false)}>{t('common.cancel')}</button>
+      </div>
+      <ErrorNote error={send.error} />
     </div>
   );
 }

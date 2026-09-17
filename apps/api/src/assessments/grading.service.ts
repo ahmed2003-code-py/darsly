@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { isCorrectAnswer } from './quizzes.service';
 
 /**
  * Everything of this teacher's that is waiting to be marked, in one place.
@@ -17,9 +19,37 @@ import { PrismaService } from '../prisma/prisma.service';
  * Scoping is by `course.tenantId`, the teacher's own id, on every query here.
  * There is no path through this service that reads another teacher's work.
  */
+/**
+ * How a paper reads once everyone has sat it, and what to do when it is wrong.
+ *
+ * A key is typed in by hand, so a key is sometimes typed in wrong. The people
+ * who find out are the students who answered correctly and were marked down for
+ * it, and until now the only signal was a question every single student got
+ * wrong — which nobody was looking at, because there was no screen that showed
+ * it.
+ */
+export interface QuestionStat {
+  id: string;
+  prompt: string;
+  points: number;
+  options: { id: string; text: string }[];
+  correctOptionIds: string[];
+  answered: number;
+  correct: number;
+  /** Share who got it right, of those who answered. */
+  correctPct: number;
+  /** How many chose each option, so a wrong key stands out as a crowd. */
+  byOption: Record<string, number>;
+  openReports: number;
+  reports: { id: string; studentName: string; note: string; status: string; createdAt: Date }[];
+}
+
 @Injectable()
 export class GradingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /** A safety rail, not a page size: nobody has this much waiting. */
   private static readonly MAX_ITEMS = 400;
@@ -254,4 +284,288 @@ export class GradingService {
       lessonTitle: lesson.title,
     };
   }
+
+  /**
+   * Which papers have been sat, and where the trouble is.
+   *
+   * Grouped by course like the marking queue, because a teacher thinks in
+   * courses. `openReports` is what makes this worth opening: it is the only
+   * place a student's "this question is wrong" surfaces at all.
+   */
+  async analysis(tenantId: string) {
+    const quizzes = await this.prisma.quiz.findMany({
+      where: { lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } } },
+      select: {
+        id: true,
+        lessonId: true,
+        lesson: {
+          select: {
+            title: true,
+            unit: { select: { title: true, course: { select: { id: true, title: true } } } },
+          },
+        },
+        questions: { select: { id: true } },
+        attempts: {
+          where: { voidedAt: null, submittedAt: { not: null } },
+          select: { scorePct: true, needsManualGrading: true },
+        },
+      },
+    });
+
+    const reportCounts = await this.prisma.questionReport.groupBy({
+      by: ['questionId'],
+      where: { status: 'OPEN', question: { quiz: { lesson: { unit: { course: { tenantId } } } } } },
+      _count: true,
+    });
+    const openByQuestion = new Map(reportCounts.map((r) => [r.questionId, r._count]));
+
+    const courses = new Map<string, { courseId: string; courseTitle: string; quizzes: unknown[] }>();
+    for (const q of quizzes) {
+      const scored = q.attempts.filter((a) => !a.needsManualGrading && a.scorePct != null);
+      const openReports = q.questions.reduce((n, qq) => n + (openByQuestion.get(qq.id) ?? 0), 0);
+      // A paper nobody has sat and nobody has complained about tells a teacher
+      // nothing, and a list of those buries the ones that do.
+      if (!q.attempts.length && !openReports) continue;
+      const course = q.lesson.unit.course;
+      const row = courses.get(course.id) ?? { courseId: course.id, courseTitle: course.title, quizzes: [] };
+      row.quizzes.push({
+        lessonId: q.lessonId,
+        lessonTitle: q.lesson.title,
+        unitTitle: q.lesson.unit.title,
+        questionCount: q.questions.length,
+        attempts: q.attempts.length,
+        avgPct: scored.length
+          ? Math.round(scored.reduce((n, a) => n + (a.scorePct ?? 0), 0) / scored.length)
+          : null,
+        openReports,
+      });
+      courses.set(course.id, row);
+    }
+    return [...courses.values()];
+  }
+
+  /**
+   * One paper, question by question: what the class chose, who got it right,
+   * and who says it is wrong.
+   *
+   * `byOption` is the number that does the work. A question where three
+   * quarters of the class picked the same wrong option is usually not a class
+   * that failed to revise — it is a key with the wrong letter in it.
+   */
+  async quizAnalysis(tenantId: string, lessonId: string) {
+    const quiz = await this.prisma.quiz.findFirst({
+      where: { lessonId, lesson: { unit: { course: { tenantId } } } },
+      select: {
+        id: true,
+        lesson: {
+          select: {
+            title: true,
+            unit: { select: { title: true, course: { select: { id: true, title: true } } } },
+          },
+        },
+        questions: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true, type: true, prompt: true, points: true, options: true,
+            correctOptionId: true, correctOptionIds: true,
+            reports: {
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true, note: true, status: true, createdAt: true,
+                student: { select: { user: { select: { fullName: true } } } },
+              },
+            },
+          },
+        },
+        attempts: {
+          where: { voidedAt: null, submittedAt: { not: null } },
+          select: { answers: true },
+        },
+      },
+    });
+    if (!quiz) throw new NotFoundException('Quiz not found');
+
+    const questions: QuestionStat[] = quiz.questions
+      .filter((q) => q.type !== 'SHORT_ANSWER')
+      .map((q) => {
+        const options = (q.options ?? []) as { id: string; text: string }[];
+        const key = q.correctOptionIds?.length
+          ? q.correctOptionIds
+          : q.correctOptionId
+            ? [q.correctOptionId]
+            : [];
+        const byOption: Record<string, number> = Object.fromEntries(options.map((o) => [o.id, 0]));
+        let answered = 0;
+        let correct = 0;
+        for (const a of quiz.attempts) {
+          const given = ((a.answers ?? {}) as Record<string, unknown>)[q.id];
+          const picked = Array.isArray(given) ? given : given != null ? [given] : [];
+          if (!picked.length) continue;
+          answered++;
+          for (const p of picked) if (typeof p === 'string' && p in byOption) byOption[p]++;
+          if (isCorrectAnswer(q, given)) correct++;
+        }
+        return {
+          id: q.id,
+          prompt: q.prompt,
+          points: q.points,
+          options,
+          correctOptionIds: key,
+          answered,
+          correct,
+          correctPct: answered ? Math.round((correct / answered) * 100) : 0,
+          byOption,
+          openReports: q.reports.filter((r) => r.status === 'OPEN').length,
+          reports: q.reports.map((r) => ({
+            id: r.id,
+            studentName: r.student.user.fullName,
+            note: r.note,
+            status: r.status,
+            createdAt: r.createdAt,
+          })),
+        };
+      });
+
+    return {
+      lessonId,
+      lessonTitle: quiz.lesson.title,
+      unitTitle: quiz.lesson.unit.title,
+      courseId: quiz.lesson.unit.course.id,
+      courseTitle: quiz.lesson.unit.course.title,
+      attempts: quiz.attempts.length,
+      questions,
+    };
+  }
+
+  /**
+   * Correct the key, and give back the marks it cost.
+   *
+   * The regrade works on the DIFFERENCE this one question makes, not by
+   * re-marking the paper: a mixed paper's written questions were marked by hand
+   * and only the final percentage was ever stored, so there is nothing to
+   * recompute them from. What this question was worth before and what it is
+   * worth now is knowable exactly, and that is what moves.
+   *
+   * **A correction never lowers anybody's mark.** Students who picked the
+   * option the old key called right did nothing wrong; taking their marks away
+   * to fix our typo punishes them for it. Students who picked the option that
+   * was right all along get what they earned. Papers still waiting to be marked
+   * are left alone — they have not been scored yet and will be scored against
+   * the new key when they are.
+   */
+  async fixKey(tenantId: string, userId: string, questionId: string, correctOptionIds: string[]) {
+    const question = await this.prisma.quizQuestion.findFirst({
+      where: { id: questionId, quiz: { lesson: { unit: { course: { tenantId } } } } },
+      select: {
+        id: true, type: true, points: true, options: true,
+        correctOptionId: true, correctOptionIds: true,
+        quiz: {
+          select: {
+            id: true, passingScore: true, lessonId: true,
+            lesson: { select: { title: true } },
+            questions: { select: { points: true } },
+          },
+        },
+      },
+    });
+    if (!question) throw new NotFoundException('Question not found');
+    if (question.type === 'SHORT_ANSWER') {
+      throw new BadRequestException({
+        message: 'A written question has no key to correct',
+        code: 'NOT_A_KEYED_QUESTION',
+      });
+    }
+
+    const options = (question.options ?? []) as { id: string }[];
+    const valid = new Set(options.map((o) => o.id));
+    const key = [...new Set(correctOptionIds)].filter((id) => valid.has(id));
+    if (!key.length) {
+      throw new BadRequestException({
+        message: 'Name at least one option from this question',
+        code: 'BAD_KEY',
+      });
+    }
+
+    const before = { type: question.type, correctOptionId: question.correctOptionId, correctOptionIds: question.correctOptionIds };
+    const after = { type: question.type, correctOptionId: key[0], correctOptionIds: key };
+    const total = question.quiz.questions.reduce((n, q) => n + q.points, 0);
+
+    await this.prisma.quizQuestion.update({
+      where: { id: questionId },
+      data: { correctOptionIds: key, correctOptionId: key[0] },
+    });
+
+    // Only papers that already carry a mark: one still waiting to be marked has
+    // no score to move, and will meet the corrected key when it is marked.
+    const attempts = await this.prisma.quizAttempt.findMany({
+      where: {
+        quizId: question.quiz.id,
+        voidedAt: null,
+        submittedAt: { not: null },
+        needsManualGrading: false,
+        scorePct: { not: null },
+      },
+      select: { id: true, answers: true, scorePct: true, studentId: true },
+    });
+
+    let raised = 0;
+    for (const a of attempts) {
+      const given = ((a.answers ?? {}) as Record<string, unknown>)[question.id];
+      const was = isCorrectAnswer(before, given);
+      const now = isCorrectAnswer(after, given);
+      if (was === now) continue;
+      const delta = (now ? question.points : 0) - (was ? question.points : 0);
+      if (delta <= 0 || !total) continue; // never downward — see above
+      const next = Math.max(0, Math.min(100, Math.round((a.scorePct ?? 0) + (delta / total) * 100)));
+      if (next <= (a.scorePct ?? 0)) continue;
+      await this.prisma.quizAttempt.update({
+        where: { id: a.id },
+        data: { scorePct: next, passed: next >= question.quiz.passingScore },
+      });
+      raised++;
+      await this.notifyRaised(a.studentId, question.quiz.lesson.title, next);
+    }
+
+    // The complaint is answered by the fix, so it stops being a complaint.
+    const resolved = await this.prisma.questionReport.updateMany({
+      where: { questionId, status: 'OPEN' },
+      data: { status: 'ACCEPTED', resolvedAt: new Date(), resolvedBy: userId },
+    });
+
+    return { ok: true, correctOptionIds: key, regraded: attempts.length, raised, reportsAccepted: resolved.count };
+  }
+
+  /** The teacher looked and the question was right after all. */
+  async dismissReport(tenantId: string, userId: string, reportId: string) {
+    const report = await this.prisma.questionReport.findFirst({
+      where: { id: reportId, question: { quiz: { lesson: { unit: { course: { tenantId } } } } } },
+      select: { id: true },
+    });
+    if (!report) throw new NotFoundException('Report not found');
+    await this.prisma.questionReport.update({
+      where: { id: reportId },
+      data: { status: 'DISMISSED', resolvedAt: new Date(), resolvedBy: userId },
+    });
+    return { ok: true };
+  }
+
+  private async notifyRaised(studentId: string, lessonTitle: string, scorePct: number) {
+    try {
+      const s = await this.prisma.studentProfile.findUnique({
+        where: { id: studentId },
+        select: { userId: true },
+      });
+      if (!s) return;
+      await this.notifications.create({
+        userId: s.userId,
+        type: 'ANNOUNCEMENT',
+        title: 'اتعدّلت درجتك 📈',
+        body: `صحّحنا سؤال في «${lessonTitle}» واترفعت درجتك لـ ${scorePct}%.`,
+      });
+    } catch {
+      // A mark that moved matters; a notification that did not is not worth
+      // rolling it back for.
+    }
+  }
+
 }

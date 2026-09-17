@@ -280,6 +280,47 @@ export class QuizzesService {
   // ── Student attempts ───────────────────────────────────────────────────────
 
   /** Quiz as the student sees it — correct answers/explanations stripped. */
+  /**
+   * A student saying a question is wrong.
+   *
+   * The only thing they can do about a key with the wrong letter in it. Access
+   * is the same check as taking the paper, and it is refused unless they have
+   * actually sat it — a complaint from somebody who never answered is not
+   * evidence about the question, and it is the shape abuse would take.
+   *
+   * One report per student per question, enforced by the table: registering a
+   * doubt twice does not make the question more wrong. Filing again replaces
+   * the note, so a student can say it better rather than being told to stop.
+   */
+  async reportQuestion(userId: string, lessonId: string, questionId: string, note?: string) {
+    const { studentId } = await this.access.requireStudentAccess(userId, lessonId);
+    const question = await this.prisma.quizQuestion.findFirst({
+      where: { id: questionId, quiz: { lessonId } },
+      select: { id: true },
+    });
+    if (!question) throw new NotFoundException('Question not found');
+
+    const sat = await this.prisma.quizAttempt.findFirst({
+      where: { quiz: { lessonId }, studentId, voidedAt: null, submittedAt: { not: null } },
+      orderBy: { submittedAt: 'desc' },
+      select: { id: true },
+    });
+    if (!sat) {
+      throw new BadRequestException({
+        message: 'Sit the paper before reporting a question on it',
+        code: 'NOT_ATTEMPTED',
+      });
+    }
+
+    const clean = (note ?? '').trim().slice(0, 500);
+    await this.prisma.questionReport.upsert({
+      where: { questionId_studentId: { questionId, studentId } },
+      update: { note: clean, status: 'OPEN', resolvedAt: null, resolvedBy: null },
+      create: { questionId, studentId, attemptId: sat.id, note: clean },
+    });
+    return { ok: true };
+  }
+
   async getForStudent(userId: string, lessonId: string) {
     const { studentId } = await this.access.requireStudentAccess(userId, lessonId);
     const quiz = await this.prisma.quiz.findUnique({

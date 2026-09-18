@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { namesAgree, parseIdentities, parsePayerName } from '../device/sms-parser';
+import { isIncomingTransfer, namesAgree, parseIdentities, parsePayerName } from '../device/sms-parser';
 import { receiptMatchesTransfer } from './proof-check';
 import { ProofReading } from './proof-reader.service';
 import { ManualPaymentsService } from './manual-payments.service';
@@ -111,6 +111,31 @@ export class PaymentMatchingService {
       if (prior) {
         return { eventId: prior.id, status: 'DUPLICATE' as const, matchedPaymentId: prior.matchedPaymentId };
       }
+    }
+
+    /**
+     * Money arriving, or money leaving?
+     *
+     * The listener sits on a phone that both receives and sends, so a bank's
+     * "تم تنفيذ تحويل لحظي بمبلغ 120.00 جم **من حسابك**" is the platform's own
+     * money going out. Booking that as an incoming payment settles a pending
+     * enrolment nobody paid for.
+     *
+     * The check existed and was enforced one layer up, in the device route
+     * only. This is the common engine both routes reach, and the key-
+     * authenticated route came in underneath it — so an outgoing debit
+     * submitted there was matched and settled. Verified against a running API:
+     * an outgoing SMS of the right amount turned a PENDING payment into PAID.
+     *
+     * Enforced here because this is where money is decided, not at one of the
+     * two doors. Silence is not treated as outgoing: an event with no raw
+     * message cannot be judged either way and keeps its existing behaviour,
+     * which is to be recorded and matched on its other evidence.
+     */
+    if (dto.rawMessage?.trim() && !isIncomingTransfer(dto.rawMessage)) {
+      const r = await this.record(dto, occurredAt, dedupeKey, 'UNMATCHED', null,
+        'the message describes money leaving the account, not arriving — never auto-verified');
+      return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
     }
 
     // No sender identity ⇒ NEVER auto-verify, even when the event itself is

@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import * as crypto from 'crypto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -29,6 +29,29 @@ class PaymentEventDto {
   // The raw bank SMS, kept for the matcher's audit trail.
   @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) rawMessage?: string;
   @IsOptionalId() deviceId?: string;
+  /**
+   * A globally unique id for the transfer event itself — the listener's SMS
+   * hash. It is what the matcher prefers for idempotency, and it could not be
+   * sent: this DTO never declared it, and the global pipe rejects unknown
+   * fields, so any caller supplying one got a 400 and any caller omitting it
+   * fell back to the weaker `provider:reference:amount` key.
+   *
+   * That fallback is not equivalent. A wallet SMS carries no transaction id, so
+   * the reference is the sender's mobile number, which is the same on every
+   * transfer they make — and keying on provider+reference+amount then reads a
+   * student's *second* transfer of the same amount (a monthly renewal, or a
+   * second course at the same price) as a duplicate of the first, and silently
+   * never credits it. The in-process device route has always passed this;
+   * only this key-authenticated route could not.
+   */
+  @IsOptional() @IsString() @MaxLength(200) externalId?: string;
+  /**
+   * Every identifier the raw message could be matched on. Same story: the
+   * matcher reads it, the wire could not carry it, so this route matched on
+   * `reference` alone while the device route matched on all of them.
+   */
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(120, { each: true })
+  identities?: string[];
 }
 
 @ApiTags('payments')

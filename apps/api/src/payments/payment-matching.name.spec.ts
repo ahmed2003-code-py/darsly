@@ -129,3 +129,73 @@ describe('every event records who sent the money', () => {
     expect(events[0].payerName).toBe('احمد عبدالعزيز هريدى');
   });
 });
+
+/**
+ * Money leaving the account must never settle a payment.
+ *
+ * The listener sits on a phone that both receives and sends. A bank's
+ * «تم تنفيذ تحويل لحظي بمبلغ 120.00 جم من حسابك» is the platform's own money
+ * going out, and booking it as an incoming payment settles an enrolment nobody
+ * paid for.
+ *
+ * `isIncomingTransfer` has always existed and was enforced in the device route
+ * only. This is the common engine both routes reach, and the key-authenticated
+ * route came in underneath it — so an outgoing debit submitted there was
+ * matched and settled. Demonstrated against a running API: an outgoing SMS for
+ * the right amount turned a PENDING payment into PAID.
+ */
+describe('the direction of the transfer', () => {
+  const OUTGOING = [
+    'يرجى العلم انه تم تنفيذ تحويل لحظي بمبلغ 100.00 جم من حسابك المنتهي بـ 7717********',
+    'برقم مرجعي aaaa1111 بتاريخ 2026-09-18 12:00',
+  ].join('\n');
+
+  const INCOMING = [
+    'تم استلام مبلغ 100.00 جنيه من 01284120292؛',
+    'المسجل بإسم أحمد عبد العزيز هريدي على',
+    'على رقم محفظتك 01002589923 بتاريخ 18-09-26 12:00.',
+    'رقم العملية: 023683598446',
+  ].join('\n');
+
+  const event = (rawMessage: string | undefined) => ({
+    provider: 'VODAFONE_CASH' as const,
+    amountCents: 10000,
+    reference: '01284120292',
+    identities: ['01284120292'],
+    externalId: `direction-${Math.random()}`,
+    rawMessage,
+  });
+
+  it('refuses to settle anything from an outgoing debit', async () => {
+    const { svc, manual } = ctx({ paymentRef: '01284120292' });
+    const r = await svc.ingest(event(OUTGOING));
+    expect(r.status).toBe('UNMATCHED');
+    // The reference matches a pending payment exactly. Without the direction
+    // check that is enough to settle it, which is the whole defect.
+    expect(manual.systemVerify).not.toHaveBeenCalled();
+  });
+
+  it('says why, so an admin is not left guessing', async () => {
+    const { svc, events } = ctx({ paymentRef: '01284120292' });
+    await svc.ingest(event(OUTGOING));
+    expect(events[0].note).toContain('leaving the account');
+  });
+
+  it('still settles a genuine incoming transfer', async () => {
+    // The guard must not swallow the case it exists to let through.
+    const { svc, manual } = ctx({ paymentRef: '01284120292' });
+    const r = await svc.ingest(event(INCOMING));
+    expect(r.status).toBe('MATCHED');
+    expect(manual.systemVerify).toHaveBeenCalledWith('pay1');
+  });
+
+  it('does not treat a missing message as outgoing', async () => {
+    // An event with no raw message cannot be judged either way. Refusing it
+    // here would break every caller that sends only structured fields, so it
+    // keeps its existing behaviour and is matched on its other evidence.
+    const { svc, manual } = ctx({ paymentRef: '01284120292' });
+    const r = await svc.ingest({ ...event(''), rawMessage: undefined });
+    expect(r.status).toBe('MATCHED');
+    expect(manual.systemVerify).toHaveBeenCalledWith('pay1');
+  });
+});

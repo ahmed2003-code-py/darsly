@@ -47,8 +47,15 @@ export class PaymentEventsController {
     if (!expected) {
       throw new ServiceUnavailableException({ message: 'Listener not configured', code: 'LISTENER_UNSET' });
     }
-    const ok = !!key && key.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+    // Compared as bytes, because that is what timingSafeEqual measures. The
+    // guard used to compare string lengths, and a header of the same character
+    // length but a different UTF-8 byte length ("…é") got past it and made
+    // timingSafeEqual throw RangeError — a 500 where the answer is 401. It
+    // failed closed either way, but an unauthenticated caller could put noise
+    // in the error monitoring of a money endpoint at will.
+    const given = Buffer.from(key ?? '', 'utf8');
+    const want = Buffer.from(expected, 'utf8');
+    const ok = given.length === want.length && crypto.timingSafeEqual(given, want);
     if (!ok) throw new UnauthorizedException('Invalid listener key');
     return this.matching.ingest(dto);
   }

@@ -347,10 +347,70 @@ export class ManualPaymentsService {
     return { netCents, feeCents, totalCents: netCents + feeCents };
   }
 
+  /**
+   * How isolated a settlement has to be.
+   *
+   * Booking the ledger for a wallet-funded payment reads the student's balance
+   * and then writes a debit against it. Under Postgres's default READ COMMITTED
+   * that pair is not atomic across transactions: two concurrent purchases both
+   * read the same balance, both pass the check, and both write their debit —
+   * the student gets two courses and the wallet goes negative. Nothing else
+   * catches it, because the two purchases are different payment rows, so the
+   * per-payment compare-and-swap guards below never collide.
+   *
+   * SERIALIZABLE is what makes the read and the write one unit: Postgres
+   * predicate-locks the range the balance aggregate scanned, sees the
+   * concurrent insert into it, and aborts one of the two — surfaced as P2034
+   * and returned to the loser as a retryable conflict.
+   *
+   * This is the same hazard, and the same remedy, as a teacher withdrawing
+   * twice at once — see PayoutsService.request, which has always been
+   * serializable for exactly this reason. Only the wallet path needs it: a
+   * payment settled from a bank transfer reads no balance, and paying the
+   * serialization cost on every settlement would buy nothing.
+   */
+  private static readonly SERIALIZABLE = {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  } as const;
+
+  /** Whether settling this payment will read a balance before writing to it. */
+  private static drawsOnWallet(payment: { method?: string | null; walletCents?: number | null }): boolean {
+    return payment.method === 'WALLET' || (payment.walletCents ?? 0) > 0;
+  }
+
+  /**
+   * Run a settlement, at the isolation its funding actually requires, and turn
+   * a serialization abort into an answer the caller can use.
+   *
+   * Postgres aborts the loser of two conflicting serializable transactions with
+   * 40001, which Prisma reports as P2034. That is not a failure of the request
+   * — it means a concurrent purchase got there first — so it is surfaced as a
+   * conflict to retry rather than a 500. The same translation PayoutsService
+   * makes for the same error.
+   */
+  private async runSettlement<T>(serializable: boolean, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(
+        work,
+        serializable ? ManualPaymentsService.SERIALIZABLE : undefined,
+      );
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
+        throw new ConflictException({
+          message: 'Another payment from your wallet was being processed — please try again',
+          code: 'WALLET_CONCURRENT_WRITE',
+        });
+      }
+      throw e;
+    }
+  }
+
   private async applyVerification(
     payment: {
       id: string; status: string; courseId: string; enrollmentId: string | null;
       studentId: string; couponId: string | null; amountCents: number; walletCents: number;
+      // How it was funded, so settlement can pick its isolation level.
+      method?: string | null;
     },
     verifierId: string,
     auto: boolean,
@@ -405,7 +465,11 @@ export class ManualPaymentsService {
     // exactly one caller proceeds. The ledger credit only happens when `settle` is
     // true (trusted event / admin); a self-verify defers it to settlement. The
     // coupon slot was already reserved at submit time, so it is NOT touched here.
-    const handled = await this.prisma.$transaction(async (tx) => {
+    // Serializable only when this settlement will read a wallet balance before
+    // debiting it — see SERIALIZABLE above for why that pair is not otherwise
+    // atomic, and why every other payment is fine without it.
+    const needsSerial = settle && ManualPaymentsService.drawsOnWallet(payment);
+    const handled = await this.runSettlement(needsSerial, async (tx) => {
       const flip = await tx.payment.updateMany({
         where: { id: payment.id, status: 'PENDING' },
         data: {
@@ -455,6 +519,7 @@ export class ManualPaymentsService {
       if (settle) await this.ledger.recordPayment(payment.id, tx);
       return true;
     });
+
 
     if (!handled) {
       if (auto) return { ok: true, alreadyHandled: true };
@@ -509,7 +574,10 @@ export class ManualPaymentsService {
     }
     if (payment.settledAt) return { ok: true, alreadySettled: true };
 
-    await this.prisma.$transaction(async (tx) => {
+    // Same rule as applyVerification: a settlement that reads a wallet balance
+    // before debiting it has to be serializable, or two concurrent purchases
+    // can both spend the same money.
+    await this.runSettlement(ManualPaymentsService.drawsOnWallet(payment), async (tx) => {
       const flip = await tx.payment.updateMany({
         where: { id: paymentId, status: 'PAID', settledAt: null },
         data: { settledAt: new Date() },

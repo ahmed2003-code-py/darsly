@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -206,9 +206,22 @@ export class LedgerService {
     if (paidFully) {
       // Checked here, inside the settlement transaction, so a balance spent by a
       // concurrent purchase fails this one rather than overdrawing the wallet.
+      //
+      // A typed refusal, not a bare Error. This is reached when a concurrent
+      // purchase drained the wallet first — which is the system working, and is
+      // the same answer the pre-check in payFromWallet already gives. Thrown
+      // untyped it reached Nest's default filter as a 500, so a student who
+      // simply could not afford a second course was shown "Internal server
+      // error", and a payments endpoint reported server failures for a
+      // condition that is not one. Seen as `201, 500, 409` in a three-way race.
       const balance = await this.walletBalance(payment.studentId, db);
       if (balance < payment.amountCents) {
-        throw new Error(`insufficient wallet balance for payment ${paymentId}`);
+        throw new BadRequestException({
+          message: 'Wallet balance is not enough',
+          code: 'INSUFFICIENT_BALANCE',
+          balanceCents: balance,
+          requiredCents: payment.amountCents,
+        });
       }
     }
     const cashCents = paidFully ? 0 : payment.amountCents - walletCents;

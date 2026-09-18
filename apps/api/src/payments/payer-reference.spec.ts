@@ -1,4 +1,4 @@
-import { normalizePayerReference, referenceKindFor } from './payer-reference';
+import { normalizePayerReference, referenceKindFor, referenceRequiredFor } from './payer-reference';
 
 /**
  * What the student has to tell us about their transfer.
@@ -121,5 +121,59 @@ describe('leaving it out', () => {
     expect(normalizePayerReference('VODAFONE_CASH', '01284120292', ours)).toBe('01284120292');
     // And with no handles known, nothing is refused on this ground.
     expect(normalizePayerReference('VODAFONE_CASH', '01002589923')).toBe('01002589923');
+  });
+});
+
+/**
+ * Paying from a wallet balance.
+ *
+ * This is the regression that broke every wallet purchase in production.
+ *
+ * Requiring a transfer reference was right for the methods that have one, and
+ * wrong for the one that does not. Money in a wallet is already inside the
+ * platform: no bank is involved, no SMS arrives, and there is nothing for the
+ * matcher to match. `payFromWallet` fills the payment form in on the student's
+ * behalf and has no reference to give — so the requirement refused the request
+ * before any money moved.
+ *
+ * It was invisible to the unit suite because nothing exercised payFromWallet
+ * end to end; it took a real request against a running API to surface it:
+ *
+ *   POST /payments/from-wallet
+ *   400  {"code":"REFERENCE_REQUIRED","kind":"TRANSACTION_REFERENCE"}
+ */
+describe('a wallet payment has no transfer to reference', () => {
+  /**
+   * The runtime regression this guards.
+   *
+   * Money in a wallet is already inside the platform: no bank is involved, no
+   * SMS arrives, and there is nothing for the matcher to match. When every
+   * method was required to carry a reference, `payFromWallet` — which fills the
+   * payment form in on the student's behalf and has none to give — was refused
+   * before any money moved, and every wallet purchase returned:
+   *
+   *   POST /payments/from-wallet
+   *   400  {"code":"REFERENCE_REQUIRED","kind":"TRANSACTION_REFERENCE"}
+   *
+   * No unit test saw it; it took a real request against a running API. The
+   * requirement is now narrowed to the one rail whose SMS actually carries a
+   * matchable identifier, which covers this case too — so these assert the
+   * behaviour rather than the mechanism, and hold however it is implemented.
+   */
+  it('is not required to carry one', () => {
+    expect(referenceRequiredFor('WALLET')).toBe(false);
+  });
+
+  it('is accepted with nothing supplied', () => {
+    expect(normalizePayerReference('WALLET', undefined)).toBe('');
+    expect(normalizePayerReference('WALLET', '')).toBe('');
+  });
+
+  it('is still required from the one rail that can actually be matched on it', () => {
+    // Vodafone Cash prints the sending wallet in its SMS, so the student can be
+    // asked for it and the answer can be checked. This is the guard the wallet
+    // exemption must not widen into.
+    expect(referenceRequiredFor('VODAFONE_CASH')).toBe(true);
+    expect(() => normalizePayerReference('VODAFONE_CASH', '')).toThrow();
   });
 });

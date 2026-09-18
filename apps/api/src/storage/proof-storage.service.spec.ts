@@ -15,7 +15,11 @@ describe('proof screenshots as objects', () => {
   const getStream = jest.fn(async () => ({ stream: {} as any, contentType: 'image/png', contentLength: 3, totalSize: 3 }));
   const storage = { put, delete: del, getStream } as unknown as StorageProvider;
   const svc = new ProofStorageService(storage);
-  const png = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64');
+  // The complete 8-byte PNG signature. It used to be the first four, which is
+  // not a PNG: uploads are now checked against the declared type's magic
+  // number, so a truncated one is rejected the same way a mislabelled HEIF is.
+  const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const png = 'data:image/png;base64,' + Buffer.from(PNG_MAGIC).toString('base64');
 
   beforeAll(() => {
     process.env.VIDEO_SIGNING_SECRET = 'test-secret';
@@ -28,7 +32,7 @@ describe('proof screenshots as objects', () => {
     expect(key).toMatch(/^payment-proofs\/topups\/[0-9a-f-]{36}\.png$/);
     expect(put).toHaveBeenCalledWith(key, expect.any(Buffer), expect.objectContaining({ contentType: 'image/png' }));
     // The body is the decoded bytes, not the data URL text.
-    expect((put.mock.calls[0] as any)[1]).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    expect((put.mock.calls[0] as any)[1]).toEqual(Buffer.from(PNG_MAGIC));
   });
 
   it('refuses anything that is not an image data URL, and stores nothing', async () => {

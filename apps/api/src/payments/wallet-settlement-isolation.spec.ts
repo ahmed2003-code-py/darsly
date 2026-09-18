@@ -50,7 +50,11 @@ function ctx(over: { method?: string; walletCents?: number; status?: string; set
   };
   const ledger: any = { recordPayment: jest.fn().mockResolvedValue(undefined), ensureInvoice: jest.fn().mockResolvedValue(undefined) };
   const notifications: any = { create: jest.fn().mockResolvedValue({}) };
-  const svc = new ManualPaymentsService(prisma, ledger, notifications);
+  // Proof storage and the proof reader are not reached on any path these cases
+  // exercise — the subject here is which transaction gets opened, not receipts.
+  const proofs: any = { put: jest.fn(), remove: jest.fn() };
+  const proofReader: any = { read: jest.fn() };
+  const svc = new ManualPaymentsService(prisma, ledger, notifications, proofs, proofReader);
   return { svc, prisma, ledger, opened, payment };
 }
 

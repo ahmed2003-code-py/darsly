@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { assertMagicMatchesMime } from '../../common/image.util';
 import { execFile } from 'child_process';
 import { createHash, randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
@@ -116,6 +117,12 @@ export class AcademyMediaProcessor {
     if (!ACCEPTED_INPUT.test(mimeType)) {
       throw new BadRequestException('Only PNG, JPEG and WebP images are accepted');
     }
+    // The line above checks the *declared* type; this checks the bytes. sharp
+    // picks its decoder from the magic number and never consults the MIME, so
+    // without this an upload declared image/png carrying HEIF bytes passed the
+    // gate and was handed to libheif — the decoder behind this project's own
+    // HIGH-severity advisories, and one no upload path is meant to reach.
+    assertMagicMatchesMime(mimeType, input);
     const contentHash = createHash('sha256').update(input).digest('hex');
 
     let meta: any;

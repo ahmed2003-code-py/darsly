@@ -126,3 +126,63 @@ describe('losing the race', () => {
     await expect(svc.systemVerify('pay1')).rejects.toThrow('connection reset');
   });
 });
+
+/**
+ * Two submissions for the same course, at the same moment.
+ *
+ * The "already enrolled" guard is a read, so both callers pass it and both
+ * reach the enrolment create. `@@unique([studentId, courseId])` is what stops
+ * the second becoming a second enrolment and a second charge — so the money has
+ * always been right, and the wallet gate never caught this.
+ *
+ * What was wrong is the answer. An unhandled P2002 reached Nest's default
+ * filter as a 500, on a payment endpoint, for what is usually a double-click.
+ * Seen at runtime as `500, 201` from two simultaneous purchases of one course —
+ * intermittent, because only the caller that loses the index race sees it.
+ */
+describe('losing the enrolment race', () => {
+  function submitCtx() {
+    const prisma: any = {
+      studentProfile: { findUnique: jest.fn().mockResolvedValue({ id: 's1', userId: 'u1', gradeId: null, track: null, user: { fullName: 'S' } }) },
+      course: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'c1', tenantId: 't1', title: 'X', priceCents: 10000, currency: 'EGP', status: 'PUBLISHED',
+        }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1', priceCents: 10000 }),
+      },
+      courseGrade: { findMany: jest.fn().mockResolvedValue([]) },
+      enrollment: { findUnique: jest.fn().mockResolvedValue(null) },
+      payment: { findFirst: jest.fn().mockResolvedValue(null) },
+      academy: { findUnique: jest.fn().mockResolvedValue({ feeType: 'PERCENT', feeValue: 20 }) },
+      // The loser of the unique-index race: Prisma reports P2002.
+      $transaction: jest.fn(async () => {
+        throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002', clientVersion: 'test', meta: { target: ['studentId', 'courseId'] },
+        });
+      }),
+    };
+    const svc = new ManualPaymentsService(
+      prisma,
+      { recordPayment: jest.fn(), ensureInvoice: jest.fn() } as any,
+      { create: jest.fn() } as any,
+      { store: jest.fn() } as any,
+      { read: jest.fn() } as any,
+    );
+    return { svc, prisma };
+  }
+
+  it('is told it is already enrolled, not that the server broke', async () => {
+    const { svc } = submitCtx();
+    const err = await svc
+      .submit('u1', { courseId: 'c1', method: 'WALLET' } as any)
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err.getResponse()).toMatchObject({ code: 'ALREADY_ENROLLED' });
+  });
+
+  it('does not swallow an unrelated database failure as a conflict', async () => {
+    const { svc, prisma } = submitCtx();
+    prisma.$transaction.mockRejectedValue(new Error('connection reset'));
+    await expect(svc.submit('u1', { courseId: 'c1', method: 'WALLET' } as any)).rejects.toThrow('connection reset');
+  });
+});

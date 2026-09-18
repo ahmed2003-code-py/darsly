@@ -134,7 +134,25 @@ export class ManualPaymentsService {
     // any) out of the student's spendable balance — together. Any failure
     // (incl. the coupon being exhausted, or the balance moving under a
     // concurrent submit) rolls the whole thing back.
-    const payment = await this.prisma.$transaction(async (tx) => {
+    /**
+     * Two submissions for the same course, at the same moment.
+     *
+     * The "already enrolled" check above is a read, so both callers pass it and
+     * both reach the create below. `@@unique([studentId, courseId])` is what
+     * stops the second becoming a second enrolment — and a second charge — so
+     * the money has always been right. What was wrong is the answer: an
+     * unhandled P2002 reached Nest's default filter as a **500**, on a payment
+     * endpoint, for a double-click.
+     *
+     * Observed as `500, 201` from two simultaneous purchases of one course.
+     * Intermittent by nature: whichever caller loses the index race is the one
+     * that saw it, and a slower machine never reproduces it.
+     *
+     * Translated to the same 409 the pre-check already returns, so the client
+     * sees one answer however the race resolves — the same treatment P2034 gets
+     * in runSettlement.
+     */
+    const payment = await this.submitTransaction(async (tx) => {
       if (couponId) await reserveCouponUse(tx, couponId, couponMaxUses);
 
       const enr = enrollment
@@ -376,6 +394,22 @@ export class ManualPaymentsService {
   /** Whether settling this payment will read a balance before writing to it. */
   private static drawsOnWallet(payment: { method?: string | null; walletCents?: number | null }): boolean {
     return payment.method === 'WALLET' || (payment.walletCents ?? 0) > 0;
+  }
+
+  /**
+   * Open the submit transaction, and turn a lost unique-index race into the
+   * answer the caller expects rather than a server error. See the call site for
+   * how two simultaneous purchases of one course reach it.
+   */
+  private async submitTransaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(work);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException({ message: 'Already enrolled', code: 'ALREADY_ENROLLED' });
+      }
+      throw e;
+    }
   }
 
   /**

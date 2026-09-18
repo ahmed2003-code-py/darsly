@@ -194,8 +194,16 @@ export class AcademyService {
 
   private mapCard(c: any) {
     const lessonsCount = (c.units ?? []).reduce((s: number, u: any) => s + u._count.lessons, 0);
-    const { units, teacher, ...rest } = c;
-    return { ...rest, lessonsCount, teacherName: teacher?.user?.fullName ?? null };
+    const { units, teacher, grades, ...rest } = c;
+    return {
+      ...rest,
+      // Flattened to the plain years, so a caller reads `grades[0].nameAr`
+      // rather than `grades[0].grade.nameAr` — the join row is an artefact of
+      // how it is stored, not something a course card should expose.
+      grades: (grades ?? []).map((g: any) => g.grade).filter(Boolean),
+      lessonsCount,
+      teacherName: teacher?.user?.fullName ?? null,
+    };
   }
 
   private courseCardSelect() {
@@ -203,7 +211,13 @@ export class AcademyService {
       id: true, title: true, description: true, thumbnailUrl: true,
       priceCents: true, currency: true, pricingModel: true, status: true, createdAt: true,
       subject: { select: { nameAr: true, nameEn: true } },
-      grade: { select: { nameAr: true, nameEn: true } },
+      // `grades`, not `grade`: a course is offered to a LIST of years through
+      // the CourseGrade join, and Course has no singular `grade` field at all.
+      // Selecting one made Prisma reject the query outright — every call to
+      // this select threw, which took both the academy console AND the public
+      // storefront listing to a 500. Same shape the rest of the codebase uses
+      // (see COURSE_REACH in courses.service.ts).
+      grades: { select: { grade: { select: { nameAr: true, nameEn: true } } } },
       teacher: { select: { user: { select: { fullName: true } } } },
       units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
     };

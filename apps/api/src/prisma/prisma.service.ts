@@ -67,6 +67,34 @@ const READ_ACTIONS = new Set([
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  /**
+   * Query logging, off unless asked for.
+   *
+   * `PRISMA_QUERY_LOG=true` prints one line per statement with its duration.
+   * It exists so an N+1 can be counted rather than guessed at: the signal is a
+   * single request emitting a query per row, and that is invisible from the
+   * outside — the endpoint just feels slow. Left switched off in normal running
+   * because it prints a line for every statement the process makes.
+   *
+   * Deliberately not tied to NODE_ENV: profiling a realistic dataset means
+   * doing it against something production-shaped.
+   */
+  constructor() {
+    super(
+      process.env.PRISMA_QUERY_LOG === 'true'
+        ? { log: [{ emit: 'event', level: 'query' }] }
+        : {},
+    );
+    if (process.env.PRISMA_QUERY_LOG === 'true') {
+      // `as never` because the event name is only on the generated client type
+      // when a log config was passed, and this constructor decides that at runtime.
+      (this as never as { $on: (e: string, cb: (q: { duration: number; query: string }) => void) => void }).$on(
+        'query',
+        (q) => console.log(`[sql ${String(q.duration).padStart(4)}ms] ${q.query.slice(0, 160)}`),
+      );
+    }
+  }
+
   async onModuleInit() {
     // Centralised soft delete: `delete`/`deleteMany` on a soft-delete model
     // stamps `deletedAt` instead of removing the row (fast, reversible, keeps

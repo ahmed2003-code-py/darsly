@@ -59,8 +59,36 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
     }
   }
 
+  /**
+   * The authenticated user behind this socket, if the token is still alive.
+   *
+   * The handshake verifies the JWT once. A socket then lives as long as the tab
+   * does, so without this the connection kept whatever authority it was opened
+   * with — long after the 15-minute access token behind it had expired. Proved
+   * at runtime: a socket opened with a 2-second token was still writing chat
+   * messages four seconds later.
+   *
+   * That is not an authentication bypass (a valid token is still needed to get
+   * in) but it defeats the point of a short-lived one: signing out, or having a
+   * session revoked, left an open socket acting on the old authority until the
+   * user happened to close the page.
+   *
+   * Checked here because every handler that does anything already comes through
+   * this method, so there is exactly one place to get it right. It is a
+   * timestamp comparison on a payload already verified at the handshake — no
+   * crypto, no database — so it costs nothing per event. The socket is closed
+   * rather than merely ignored, so the client reconnects with a fresh token
+   * instead of silently doing nothing.
+   */
   private user(client: Socket): JwtPayload | null {
-    return client.data.user ?? null;
+    const payload = client.data.user as (JwtPayload & { exp?: number }) | undefined;
+    if (!payload) return null;
+    if (typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now()) {
+      client.emit('error', 'token expired');
+      client.disconnect(true);
+      return null;
+    }
+    return payload;
   }
 
   @SubscribeMessage(RealtimeEvents.JOIN_THREAD)

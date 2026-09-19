@@ -38,6 +38,26 @@ services:
       timeout: 3s
       retries: 10
 
+  # Shared state across the two production replicas: distributed login/
+  # forgot-password rate limiting and the Socket.IO room adapter both read
+  # this. A single local instance works fine without it (both fall back to
+  # in-memory, which is correct with one process) — this is here so local
+  # dev/testing can exercise the real distributed path if you want to.
+  redis:
+    image: redis:7-alpine
+    container_name: darsly-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - darsly_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   darsly_pgdata:
   darsly_minio:
+  darsly_redis:

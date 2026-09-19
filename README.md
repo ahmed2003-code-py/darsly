@@ -45,6 +45,9 @@ Start with whichever question you actually have.
 ```bash
 cp .env.example .env && cp .env.example apps/api/.env
 docker compose up -d postgres     # minio too once the video pipeline lands (Phase 3)
+                                   # redis too if you want to exercise the real
+                                   # distributed rate-limit/Socket.IO path locally
+                                   # — optional with one instance, see "Deployment"
 npm install
 npm run db:migrate                # prisma migrate dev
 npm run db:seed                   # super admin + 2 teachers + 5 students + courses
@@ -204,7 +207,11 @@ and the API serves `apps/web/dist` at `/` (SPA fallback; API stays under
 - Required variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}`,
   `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL`,
   `JWT_REFRESH_TTL`, `OTP_*`, `MAX_CONCURRENT_SESSIONS_DEFAULT`,
-  `ALLOWED_ORIGINS` (the public domain)
+  `ALLOWED_ORIGINS` (the public domain), `REDIS_URL` (`${{Redis.REDIS_URL}}` —
+  **required with more than one replica**: shared login/forgot-password rate
+  limiting and the Socket.IO room adapter both need it, or each replica
+  enforces limits and fans out rooms independently. Boot fails fast in
+  production without it. See [docs/DEPLOYMENT.md §3c](./docs/DEPLOYMENT.md).)
 - Seed once from a dev machine:
   `DATABASE_URL=<DATABASE_PUBLIC_URL> npm run db:seed --workspace=@darsly/api`
 - ⚠ `OTP_DEV_MODE=true` accepts the universal code `0000` — demo only.

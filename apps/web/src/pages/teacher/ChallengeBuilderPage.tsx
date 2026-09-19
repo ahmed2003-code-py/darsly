@@ -77,7 +77,24 @@ export default function ChallengeBuilderPage() {
     setLeaderboardEnabled(challenge.leaderboardEnabled);
     setAnswerReveal(challenge.answerReveal);
     setRandomize(challenge.randomize);
-    setQuestions(challenge.questions ?? []);
+    // Loaded rows carry DB-only fields (id, challengeId, sortOrder, createdAt,
+    // updatedAt) the save DTO doesn't declare — sending them back verbatim on
+    // the next save is rejected by the whitelist validator. Keep local state
+    // to exactly the shape the editor (and the DTO) actually own.
+    setQuestions(
+      (challenge.questions ?? []).map((q) => ({
+        type: q.type,
+        prompt: q.prompt,
+        imageUrl: q.imageUrl,
+        options: q.options,
+        correctOptionIds: q.correctOptionIds,
+        explanation: q.explanation,
+        points: q.points,
+        timeLimitSec: q.timeLimitSec,
+        topic: q.topic,
+        difficulty: q.difficulty,
+      })),
+    );
   }, [challenge]);
 
   const { data: profile } = useQuery({
@@ -132,7 +149,16 @@ export default function ChallengeBuilderPage() {
       qc.invalidateQueries({ queryKey: ['teacher-challenge', id] });
       qc.invalidateQueries({ queryKey: ['teacher-challenges'] });
     },
-    onError: (e: any) => setPublishErrors(e?.response?.data?.errors ?? [e?.response?.data?.message ?? String(e)]),
+    onError: (e: any) => {
+      // Two different shapes can land here: our own publish validation
+      // ({errors: string[]}), or a raw NestJS ValidationPipe 400 (whose
+      // `message` is itself an array of per-field strings, not a single
+      // string) — flatten both into one clean list rather than rendering an
+      // array-inside-an-array as one run-on bullet.
+      const data = e?.response?.data;
+      const msg = data?.errors ?? data?.message ?? String(e);
+      setPublishErrors(Array.isArray(msg) ? msg : [msg]);
+    },
   });
 
   const unpublish = useMutation({

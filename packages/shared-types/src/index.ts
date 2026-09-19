@@ -99,6 +99,48 @@ export enum EnrollmentStatus {
   REVOKED = 'REVOKED',
 }
 
+// ── Challenges (gamified) ──────────────────────────────────────────────────
+// Student-facing name is always "Challenge", never "Exam".
+
+export enum ChallengeType {
+  PRACTICE = 'PRACTICE',
+  RANKED = 'RANKED',
+}
+
+export enum ChallengeStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ACTIVE = 'ACTIVE',
+  CLOSED = 'CLOSED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum ChallengeScoring {
+  STANDARD = 'STANDARD',
+  SPEED_BASED = 'SPEED_BASED',
+}
+
+export enum ChallengeAnswerReveal {
+  IMMEDIATE = 'IMMEDIATE',
+  AFTER_SUBMISSION = 'AFTER_SUBMISSION',
+  AFTER_CLOSE = 'AFTER_CLOSE',
+  NEVER = 'NEVER',
+}
+
+export enum ChallengeRandomize {
+  NONE = 'NONE',
+  QUESTIONS = 'QUESTIONS',
+  ANSWERS = 'ANSWERS',
+  BOTH = 'BOTH',
+}
+
+export enum ChallengeAttemptStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  TIMED_OUT = 'TIMED_OUT',
+  ABANDONED = 'ABANDONED',
+}
+
 // ── Payments & ledger ──────────────────────────────────────────────────────
 
 export enum LedgerEntryType {

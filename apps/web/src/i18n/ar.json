@@ -124,6 +124,7 @@
     "browse": "تصفّح الدورات",
     "adminDevices": "أجهزة الاستقبال",
     "learning": "مركز التعلّم",
+    "challenges": "التحديات",
     "adminGamification": "التحفيز",
     "myStudio": "استوديو الطالب"
   },
@@ -1779,6 +1780,187 @@
     "cta": {
       "open": "افتح مركز التعلّم",
       "viewAll": "شوف الكل"
+    }
+  },
+  "challenges": {
+    "title": "التحديات",
+    "subtitle": "تعلّم والعب في نفس الوقت — أسئلة سريعة، نقاط، وترتيب.",
+    "tabs": { "available": "متاحة", "in_progress": "جارية", "completed": "مكتملة" },
+    "empty": {
+      "available": "مفيش تحديات متاحة دلوقتي.",
+      "in_progress": "مفيش تحدي شغّال حاليًا.",
+      "completed": "لسه ما خلّصتش أي تحدي."
+    },
+    "card": {
+      "questions": "{{count}} سؤال",
+      "practice": "تدريب",
+      "ranked": "تنافسي",
+      "bestScore": "أفضل نتيجة: {{score}}",
+      "attemptsLeft": "{{count}} محاولة متبقية",
+      "noAttemptsLeft": "خلّصت محاولاتك",
+      "unlimitedAttempts": "محاولات بلا حدود",
+      "play": "ابدأ",
+      "resume": "كمّل",
+      "review": "راجع النتيجة"
+    },
+    "detail": {
+      "attempts": "المحاولات: {{used}} / {{max}}",
+      "unlimitedMax": "بلا حدود",
+      "start": "ابدأ التحدي",
+      "resume": "كمّل المحاولة",
+      "noAttemptsLeft": "خلّصت كل محاولاتك في التحدي ده"
+    },
+    "play": {
+      "question": "سؤال {{n}} من {{total}}",
+      "timeLeft": "الوقت المتبقي",
+      "submit": "تأكيد الإجابة",
+      "next": "التالي",
+      "correct": "إجابة صحيحة! 🎉",
+      "wrong": "إجابة غير صحيحة",
+      "outOfTime": "خلص الوقت",
+      "loading": "بيتجهّز...",
+      "leaveConfirm": "هتخرج من التحدي؟ إجاباتك محفوظة وهتقدر تكمّل بعدين.",
+      "finishing": "بنحسب نتيجتك..."
+    },
+    "result": {
+      "title": "نتيجة التحدي",
+      "score": "النتيجة",
+      "accuracy": "الدقة",
+      "speed": "السرعة",
+      "correctOf": "{{correct}} من {{total}} صح",
+      "rank": "ترتيبك في التحدي ده",
+      "perfectScore": "درجة نهائية! 🏆",
+      "timedOut": "خلص الوقت قبل ما تخلّص",
+      "mistakesTitle": "تعلّم من أخطائك",
+      "noMistakes": "إجابتك كانت صح في كل الأسئلة 🎉",
+      "yourAnswer": "إجابتك",
+      "correctAnswer": "الإجابة الصحيحة",
+      "retryMistakes": "أعد محاولة الأسئلة الخطأ",
+      "backToChallenges": "رجوع للتحديات",
+      "viewLeaderboard": "شوف لوحة الصدارة"
+    },
+    "leaderboard": {
+      "title": "لوحة صدارة التحدي",
+      "you": "انت",
+      "empty": "محدّش خلّص التحدي ده لسه."
+    },
+    "teacher": {
+      "title": "التحديات",
+      "subtitle": "اعمل تحديات تفاعلية لطلابك — تدريب أو تنافسي.",
+      "create": "تحدي جديد",
+      "empty": "لسه ما عملتش أي تحدي.",
+      "status": {
+        "DRAFT": "مسودة",
+        "PUBLISHED": "منشور",
+        "ACTIVE": "شغّال",
+        "CLOSED": "مقفول",
+        "ARCHIVED": "مؤرشف"
+      },
+      "questionsCount": "{{count}} سؤال",
+      "attemptsCount": "{{count}} محاولة",
+      "edit": "تعديل",
+      "duplicate": "نسخ",
+      "delete": "حذف",
+      "archive": "أرشفة",
+      "publish": "نشر",
+      "unpublish": "إلغاء النشر",
+      "close": "إقفال",
+      "viewSubmissions": "النتائج",
+      "viewAnalytics": "التحليلات",
+      "steps": { "basic": "معلومات أساسية", "settings": "الإعدادات", "questions": "الأسئلة", "preview": "معاينة", "publish": "نشر" },
+      "basic": {
+        "title": "عنوان التحدي",
+        "titlePh": "مثال: مراجعة الوحدة الأولى",
+        "description": "الوصف",
+        "descriptionPh": "وصف مختصر للتحدي (اختياري)",
+        "type": "نوع التحدي",
+        "typePractice": "تدريب",
+        "typePracticeHint": "تفسير للإجابات، إعادة محاولة، بدون ضغط تنافسي",
+        "typeRanked": "تنافسي",
+        "typeRankedHint": "مؤقّت، مكافأة سرعة، لوحة صدارة، يضيف لترتيبك",
+        "difficulty": "المستوى",
+        "course": "الدورة (اختياري)",
+        "courseNone": "بدون دورة محدّدة",
+        "subject": "المادة",
+        "grade": "الصف",
+        "topic": "الموضوع",
+        "coverIcon": "الأيقونة"
+      },
+      "settings": {
+        "duration": "مدة التحدي كله",
+        "durationNone": "بدون حد زمني",
+        "durationHint": "بالدقايق — يشمل كل الأسئلة",
+        "questionTime": "وقت السؤال الواحد",
+        "questionTimeNone": "بدون مؤقّت",
+        "questionTimeHint": "بالثواني",
+        "scoring": "طريقة التقييم",
+        "scoringStandard": "ثابتة",
+        "scoringStandardHint": "نفس النقاط لأي إجابة صح، بغض النظر عن السرعة",
+        "scoringSpeed": "حسب السرعة",
+        "scoringSpeedHint": "كل ما تجاوب أسرع، تكسب نقط أكتر",
+        "maxAttempts": "عدد المحاولات المسموحة",
+        "unlimited": "بلا حدود",
+        "leaderboard": "إظهار لوحة الصدارة",
+        "answerReveal": "متى تظهر الإجابة الصحيحة",
+        "revealImmediate": "فورًا بعد كل سؤال",
+        "revealAfterSubmission": "بعد إنهاء التحدي",
+        "revealAfterClose": "بعد إقفال التحدي",
+        "revealNever": "أبدًا",
+        "randomize": "الترتيب العشوائي",
+        "randomizeNone": "بدون",
+        "randomizeQuestions": "ترتيب الأسئلة",
+        "randomizeAnswers": "ترتيب الإجابات",
+        "randomizeBoth": "الأسئلة والإجابات"
+      },
+      "q": {
+        "addMcq": "+ اختيار من متعدد",
+        "addTrueFalse": "+ صح / خطأ",
+        "prompt": "نص السؤال",
+        "promptPh": "اكتب السؤال هنا",
+        "points": "نقاط الإجابة الصحيحة",
+        "timeLimit": "مؤقّت هذا السؤال",
+        "timeLimitInherit": "استخدام المؤقّت الافتراضي",
+        "topic": "الموضوع",
+        "difficulty": "الصعوبة",
+        "explanation": "التفسير (يظهر بعد الإجابة)",
+        "addOption": "+ إضافة اختيار",
+        "pickCorrect": "حدّد الإجابة الصحيحة",
+        "empty": "لسه مفيش أسئلة — أضف واحد للبدء.",
+        "locked": "الأسئلة مقفولة لأن التحدي منشور. ألغِ النشر الأول عشان تعدّلها."
+      },
+      "preview": {
+        "title": "كده هيشوف الطالب التحدي",
+        "hint": "معاينة فقط — مفيش نقط أو حفظ هنا."
+      },
+      "publishStep": {
+        "title": "جاهز للنشر؟",
+        "notReady": "لازم تصلّح المشاكل دي الأول:",
+        "ready": "كل حاجة تمام — جاهز للنشر.",
+        "confirm": "انشر التحدي"
+      },
+      "submissions": {
+        "title": "نتائج الطلاب",
+        "student": "الطالب",
+        "score": "النتيجة",
+        "accuracy": "الدقة",
+        "speed": "السرعة",
+        "xp": "النقاط",
+        "completedAt": "تاريخ الإنهاء",
+        "empty": "محدّش خلّص التحدي ده لسه."
+      },
+      "analytics": {
+        "title": "التحليلات",
+        "participants": "المشاركون",
+        "completed": "أكملوا",
+        "completionRate": "نسبة الإكمال",
+        "avgScore": "متوسط النتيجة",
+        "avgAccuracy": "متوسط الدقة",
+        "avgSpeed": "متوسط السرعة",
+        "avgXp": "متوسط النقاط",
+        "hardest": "أصعب سؤال",
+        "easiest": "أسهل سؤال",
+        "perQuestion": "أداء الأسئلة"
+      }
     }
   },
   "engagement": {

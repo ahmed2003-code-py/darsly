@@ -124,6 +124,7 @@
     "browse": "Browse courses",
     "adminDevices": "Listener devices",
     "learning": "Learning Center",
+    "challenges": "Challenges",
     "adminGamification": "Gamification",
     "myStudio": "My Studio"
   },
@@ -1779,6 +1780,187 @@
     "cta": {
       "open": "Open Learning Center",
       "viewAll": "View all"
+    }
+  },
+  "challenges": {
+    "title": "Challenges",
+    "subtitle": "Learn and play at once — quick questions, points, and rank.",
+    "tabs": { "available": "Available", "in_progress": "In progress", "completed": "Completed" },
+    "empty": {
+      "available": "No challenges available right now.",
+      "in_progress": "No challenge in progress.",
+      "completed": "You haven't finished a challenge yet."
+    },
+    "card": {
+      "questions": "{{count}} questions",
+      "practice": "Practice",
+      "ranked": "Ranked",
+      "bestScore": "Best score: {{score}}",
+      "attemptsLeft": "{{count}} attempts left",
+      "noAttemptsLeft": "No attempts left",
+      "unlimitedAttempts": "Unlimited attempts",
+      "play": "Play",
+      "resume": "Resume",
+      "review": "Review result"
+    },
+    "detail": {
+      "attempts": "Attempts: {{used}} / {{max}}",
+      "unlimitedMax": "unlimited",
+      "start": "Start Challenge",
+      "resume": "Resume attempt",
+      "noAttemptsLeft": "You've used every attempt on this challenge"
+    },
+    "play": {
+      "question": "Question {{n}} of {{total}}",
+      "timeLeft": "Time left",
+      "submit": "Submit answer",
+      "next": "Next",
+      "correct": "Correct! 🎉",
+      "wrong": "Not quite",
+      "outOfTime": "Time's up",
+      "loading": "Getting ready...",
+      "leaveConfirm": "Leave the challenge? Your answers are saved and you can resume later.",
+      "finishing": "Calculating your result..."
+    },
+    "result": {
+      "title": "Challenge Result",
+      "score": "Score",
+      "accuracy": "Accuracy",
+      "speed": "Speed",
+      "correctOf": "{{correct}} of {{total}} correct",
+      "rank": "Your rank on this challenge",
+      "perfectScore": "Perfect score! 🏆",
+      "timedOut": "Time ran out before you finished",
+      "mistakesTitle": "Learn from your mistakes",
+      "noMistakes": "You got every question right 🎉",
+      "yourAnswer": "Your answer",
+      "correctAnswer": "Correct answer",
+      "retryMistakes": "Retry the wrong ones",
+      "backToChallenges": "Back to Challenges",
+      "viewLeaderboard": "View leaderboard"
+    },
+    "leaderboard": {
+      "title": "Challenge Leaderboard",
+      "you": "you",
+      "empty": "Nobody has finished this challenge yet."
+    },
+    "teacher": {
+      "title": "Challenges",
+      "subtitle": "Build interactive challenges for your students — practice or ranked.",
+      "create": "New Challenge",
+      "empty": "You haven't created a challenge yet.",
+      "status": {
+        "DRAFT": "Draft",
+        "PUBLISHED": "Published",
+        "ACTIVE": "Active",
+        "CLOSED": "Closed",
+        "ARCHIVED": "Archived"
+      },
+      "questionsCount": "{{count}} questions",
+      "attemptsCount": "{{count}} attempts",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "archive": "Archive",
+      "publish": "Publish",
+      "unpublish": "Unpublish",
+      "close": "Close",
+      "viewSubmissions": "Results",
+      "viewAnalytics": "Analytics",
+      "steps": { "basic": "Basic Info", "settings": "Settings", "questions": "Questions", "preview": "Preview", "publish": "Publish" },
+      "basic": {
+        "title": "Challenge title",
+        "titlePh": "e.g. Unit 1 Review",
+        "description": "Description",
+        "descriptionPh": "A short description (optional)",
+        "type": "Challenge type",
+        "typePractice": "Practice",
+        "typePracticeHint": "Explanations shown, retry allowed, no competitive pressure",
+        "typeRanked": "Ranked",
+        "typeRankedHint": "Timed, speed bonus, leaderboard, counts toward your rank",
+        "difficulty": "Difficulty",
+        "course": "Course (optional)",
+        "courseNone": "No specific course",
+        "subject": "Subject",
+        "grade": "Grade",
+        "topic": "Topic",
+        "coverIcon": "Icon"
+      },
+      "settings": {
+        "duration": "Whole-challenge duration",
+        "durationNone": "No time limit",
+        "durationHint": "In minutes — covers every question",
+        "questionTime": "Per-question timer",
+        "questionTimeNone": "No timer",
+        "questionTimeHint": "In seconds",
+        "scoring": "Scoring",
+        "scoringStandard": "Standard",
+        "scoringStandardHint": "Same points for any correct answer, regardless of speed",
+        "scoringSpeed": "Speed-based",
+        "scoringSpeedHint": "The faster you answer, the more you earn",
+        "maxAttempts": "Attempts allowed",
+        "unlimited": "Unlimited",
+        "leaderboard": "Show leaderboard",
+        "answerReveal": "When to reveal the correct answer",
+        "revealImmediate": "Right after each question",
+        "revealAfterSubmission": "After finishing the challenge",
+        "revealAfterClose": "After the challenge closes",
+        "revealNever": "Never",
+        "randomize": "Randomize",
+        "randomizeNone": "None",
+        "randomizeQuestions": "Question order",
+        "randomizeAnswers": "Answer order",
+        "randomizeBoth": "Questions and answers"
+      },
+      "q": {
+        "addMcq": "+ Multiple choice",
+        "addTrueFalse": "+ True / False",
+        "prompt": "Question text",
+        "promptPh": "Write the question here",
+        "points": "Points for a correct answer",
+        "timeLimit": "This question's timer",
+        "timeLimitInherit": "Use the default timer",
+        "topic": "Topic",
+        "difficulty": "Difficulty",
+        "explanation": "Explanation (shown after answering)",
+        "addOption": "+ Add option",
+        "pickCorrect": "Mark the correct answer",
+        "empty": "No questions yet — add one to get started.",
+        "locked": "Questions are locked because this challenge is published. Unpublish it first to edit them."
+      },
+      "preview": {
+        "title": "This is what a student will see",
+        "hint": "Preview only — nothing here is scored or saved."
+      },
+      "publishStep": {
+        "title": "Ready to publish?",
+        "notReady": "Fix these first:",
+        "ready": "Everything looks good — ready to publish.",
+        "confirm": "Publish Challenge"
+      },
+      "submissions": {
+        "title": "Student Results",
+        "student": "Student",
+        "score": "Score",
+        "accuracy": "Accuracy",
+        "speed": "Speed",
+        "xp": "XP",
+        "completedAt": "Completed",
+        "empty": "Nobody has finished this challenge yet."
+      },
+      "analytics": {
+        "title": "Analytics",
+        "participants": "Participants",
+        "completed": "Completed",
+        "completionRate": "Completion rate",
+        "avgScore": "Average score",
+        "avgAccuracy": "Average accuracy",
+        "avgSpeed": "Average speed",
+        "avgXp": "Average XP",
+        "hardest": "Hardest question",
+        "easiest": "Easiest question",
+        "perQuestion": "Per-question performance"
+      }
     }
   },
   "engagement": {

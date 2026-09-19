@@ -21,6 +21,7 @@ import * as argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { ensureGamificationReferenceData } from '../gamification/gamification-reference-data';
 
 type Db = PrismaClient;
 
@@ -164,6 +165,16 @@ async function wipe(prisma: Db) {
 export async function seedDatabase(prisma: Db, log: (m: string) => void = () => {}) {
   const wiped = await wipe(prisma);
   log(`wiped ${wiped} tables`);
+
+  // The blanket wipe above takes the gamification engine's config with it —
+  // XpRule/LevelTier/Achievement/Reward/Title were only ever populated once,
+  // by migration-time SQL, so without this a reseed would silently leave XP,
+  // levels, achievements and the coin store completely unconfigured. Restored
+  // here from the one canonical copy of this data (see gamification-reference-
+  // data.ts) rather than a second copy of these numbers.
+  await ensureGamificationReferenceData(prisma);
+  log('restored gamification reference data (XP rules, levels, achievements, titles, rewards)');
+
   const hash = await argon2.hash(DEMO_PASSWORD);
 
   const subjects: Record<string, string> = {};

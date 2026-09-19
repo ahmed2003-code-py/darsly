@@ -55,8 +55,8 @@ model User {
   academyMemberships AcademyMembership[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt          DateTime?
-  liveAttendance   LiveAttendance[]
-  liveMessages     LiveChatMessage[]
+  liveAttendance     LiveAttendance[]
+  liveMessages       LiveChatMessage[]
 }
 
 // ─────────────────────────── Academy (Workspace) ───────────────────────────
@@ -113,9 +113,9 @@ model Academy {
   tagline      String  @default("")
 
   // Settings (moved off TeacherProfile at migration time).
-  language                   String  @default("ar")
-  currency                   String  @default("EGP")
-  maxConcurrentSessions      Int     @default(2)
+  language              String @default("ar")
+  currency              String @default("EGP")
+  maxConcurrentSessions Int    @default(2)
 
   // Revenue: additive platform service fee the STUDENT pays on top of the price.
   feeType  FeeType @default(PERCENT)
@@ -242,8 +242,8 @@ model TeacherProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  slug                   String        @unique
-  bio                    String        @default("")
+  slug                   String           @unique
+  bio                    String           @default("")
   /// Everything this teacher teaches. A set rather than one subject, because a
   /// maths teacher usually takes both school systems — "الرياضيات" for the
   /// national one and "Math" for the language schools — and being asked to pick
@@ -256,18 +256,18 @@ model TeacherProfile {
   /// Whether this academy is reachable by message at all. Turning it off closes
   /// the conversation in both directions: the student cannot write, the teacher
   /// cannot either, and neither of them is shown a chat that goes nowhere.
-  acceptsStudentMessages Boolean       @default(true)
+  acceptsStudentMessages Boolean          @default(true)
   // Language of instruction ("ar" | "en") — a discovery filter.
-  language               String        @default("ar")
-  status                 TeacherStatus @default(PENDING)
+  language               String           @default("ar")
+  status                 TeacherStatus    @default(PENDING)
   verifiedAt             DateTime?
   // Platform cut, percent 0–100; set per-teacher by super admin.
-  commissionPercent      Int           @default(20)
+  commissionPercent      Int              @default(20)
   // Teacher-Security defaults applied to their students
-  maxConcurrentSessions  Int           @default(2)
-  settings               Json          @default("{}")
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
+  maxConcurrentSessions  Int              @default(2)
+  settings               Json             @default("{}")
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   grades         TeacherGrade[]
   courses        Course[]
@@ -279,16 +279,17 @@ model TeacherProfile {
   liveSessions   LiveSession[]
   reviews        Review[]
   chatThreads    ChatThread[]
+  challenges     Challenge[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt      DateTime?
 }
 
 model StudentProfile {
-  id      String      @id @default(cuid())
-  userId  String      @unique
-  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id      String        @id @default(cuid())
+  userId  String        @unique
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   gradeId String?
-  grade   GradeLevel? @relation(fields: [gradeId], references: [id])
+  grade   GradeLevel?   @relation(fields: [gradeId], references: [id])
   /// Which school system this student is in — GENERAL or LANGUAGES, never BOTH
   /// (that value describes a subject, not a student). Null for anyone who
   /// signed up before the question existed: like an unset year, it means the
@@ -302,24 +303,25 @@ model StudentProfile {
   lastActivityDate  DateTime?
   weeklyGoalLessons Int       @default(5)
 
-  interests        StudentInterest[]
-  enrollments      Enrollment[]
-  progress         LessonProgress[]
-  notes            VideoNote[]
-  bookmarks        VideoBookmark[]
-  quizAttempts     QuizAttempt[]
-  questionReports  QuestionReport[]
-  submissions      AssignmentSubmission[]
-  reviews          Review[]
-  certificates     Certificate[]
-  payments         Payment[]
-  playbackSessions PlaybackSession[]
-  securityEvents   SecurityEvent[]
-  chatThreads      ChatThread[]
-  liveBookings     LiveBooking[]
-  savedCourses     SavedCourse[]
-  walletTxns       WalletTransaction[]
-  walletTopups     WalletTopup[]
+  interests         StudentInterest[]
+  enrollments       Enrollment[]
+  progress          LessonProgress[]
+  notes             VideoNote[]
+  bookmarks         VideoBookmark[]
+  quizAttempts      QuizAttempt[]
+  questionReports   QuestionReport[]
+  challengeAttempts ChallengeAttempt[]
+  submissions       AssignmentSubmission[]
+  reviews           Review[]
+  certificates      Certificate[]
+  payments          Payment[]
+  playbackSessions  PlaybackSession[]
+  securityEvents    SecurityEvent[]
+  chatThreads       ChatThread[]
+  liveBookings      LiveBooking[]
+  savedCourses      SavedCourse[]
+  walletTxns        WalletTransaction[]
+  walletTopups      WalletTopup[]
 
   // Gamification (additive — a student without a row is simply at zero).
   gamification    StudentGamification?
@@ -368,23 +370,24 @@ enum SubjectTrack {
 }
 
 model Subject {
-  id        String  @id @default(cuid())
+  id        String       @id @default(cuid())
   /// Stable key for the platform's own catalogue, so seeding it again updates
   /// the rows teachers and courses already point at instead of duplicating them.
-  code      String? @unique
+  code      String?      @unique
   nameAr    String
   nameEn    String
   icon      String?
-  sortOrder Int     @default(0)
-  isActive  Boolean @default(true)
+  sortOrder Int          @default(0)
+  isActive  Boolean      @default(true)
   /// Defaults to BOTH so a subject that predates this field, or one an admin
   /// adds without thinking about systems, is shown to everybody rather than
   /// disappearing from half the platform.
   track     SubjectTrack @default(BOTH)
 
-  teachers  TeacherSubject[]
-  courses   Course[]
-  interests StudentInterest[]
+  teachers   TeacherSubject[]
+  courses    Course[]
+  interests  StudentInterest[]
+  challenges Challenge[]
 }
 
 /// What a teacher teaches. Many-to-many: see `TeacherProfile.subjects`.
@@ -413,20 +416,21 @@ enum EducationStage {
 }
 
 model GradeLevel {
-  id        String  @id @default(cuid())
+  id        String          @id @default(cuid())
   nameAr    String
   nameEn    String
   // e.g. "secondary-3" (الصف الثالث الثانوي)
-  code      String  @unique
-  sortOrder Int     @default(0)
-  isActive  Boolean @default(true)
+  code      String          @unique
+  sortOrder Int             @default(0)
+  isActive  Boolean         @default(true)
   /// Which band this year belongs to, so a course offered to a stage reaches
   /// every student sitting in one of its years.
   stage     EducationStage?
 
-  students StudentProfile[]
-  courses  CourseGrade[]
-  teachers TeacherGrade[]
+  students   StudentProfile[]
+  courses    CourseGrade[]
+  teachers   TeacherGrade[]
+  challenges Challenge[]
 }
 
 /// Which years a course is offered to.
@@ -490,14 +494,14 @@ model Course {
   tenantId String
   teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  title        String
-  description  String      @default("")
-  thumbnailUrl String?
+  title         String
+  description   String  @default("")
+  thumbnailUrl  String?
   /// A short clip the teacher records to sell the course. It is marketing, not
   /// a lesson: stored as a plain public MP4 like the cover image, so a visitor
   /// who is not logged in can watch it. Lesson video goes through the
   /// encrypted-HLS pipeline instead and never through here.
-  introVideoUrl     String?
+  introVideoUrl String?
 
   /// The one exam for this course, and the one assignment.
   ///
@@ -509,25 +513,25 @@ model Course {
   /// Naming an exam also gates the course: until a student passes it, the only
   /// things they can open are the exam itself and whatever it sends them to
   /// watch. A course that names none behaves exactly as it always did.
-  examLessonId       String? @unique
-  examLesson         Lesson? @relation("courseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
+  examLessonId       String?        @unique
+  examLesson         Lesson?        @relation("courseExam", fields: [examLessonId], references: [id], onDelete: SetNull)
   /// What the exam is for. A teacher writing their first course usually means a
   /// final test of what was studied, not a door to get in — so FINAL is the
   /// default and GATE is the deliberate choice.
   examMode           CourseExamMode @default(FINAL)
-  assignmentLessonId String? @unique
-  assignmentLesson   Lesson? @relation("courseAssignment", fields: [assignmentLessonId], references: [id], onDelete: SetNull)
+  assignmentLessonId String?        @unique
+  assignmentLesson   Lesson?        @relation("courseAssignment", fields: [assignmentLessonId], references: [id], onDelete: SetNull)
   /// The AcademyMedia row behind introVideoUrl, kept so replacing or removing
   /// the clip can delete the stored object instead of orphaning it.
-  introVideoMediaId String?
-  subjectId    String?
-  subject      Subject?    @relation(fields: [subjectId], references: [id])
+  introVideoMediaId  String?
+  subjectId          String?
+  subject            Subject?       @relation(fields: [subjectId], references: [id])
   /// The exact years this course is for. A teacher picks from the years inside
   /// the stages they teach, so "second baccalaureate" reaches those students
   /// and nobody else — a listing full of courses for other years is the thing
   /// this replaces. Empty means every year they teach: never narrowed, which
   /// is not the same as for nobody.
-  grades       CourseGrade[]
+  grades             CourseGrade[]
 
   status       CourseStatus       @default(DRAFT)
   pricingModel CoursePricingModel @default(ONE_TIME)
@@ -537,9 +541,9 @@ model Course {
 
   // Access rules (Teacher-Security suite B)
   // lesson access expires N days after unlock; null = never
-  accessWindowDays           Int?
+  accessWindowDays Int?
   // max plays per lesson per student; null = unlimited
-  defaultViewsCap            Int?
+  defaultViewsCap  Int?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -555,6 +559,7 @@ model Course {
   bundleParents BundleItem[]  @relation("bundleChild")
   bundleItems   BundleItem[]  @relation("bundleParent")
   savedBy       SavedCourse[]
+  challenges    Challenge[]
 
   @@index([tenantId, status])
   @@index([subjectId, status])
@@ -594,18 +599,18 @@ enum LessonType {
 }
 
 model Lesson {
-  id          String     @id @default(cuid())
-  unitId      String
-  unit        CourseUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  id                 String     @id @default(cuid())
+  unitId             String
+  unit               CourseUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
   /// Back-references for the three roles a lesson can be given by name.
-  examOfCourse       Course? @relation("courseExam")
-  assignmentOfCourse Course? @relation("courseAssignment")
-  remedialForQuizzes Quiz[]  @relation("quizRemedial")
-  title       String
+  examOfCourse       Course?    @relation("courseExam")
+  assignmentOfCourse Course?    @relation("courseAssignment")
+  remedialForQuizzes Quiz[]     @relation("quizRemedial")
+  title              String
   // What the lesson covers, shown to the student above the player.
-  description String?
-  type        LessonType @default(VIDEO)
-  sortOrder   Int        @default(0)
+  description        String?
+  type               LessonType @default(VIDEO)
+  sortOrder          Int        @default(0)
 
   videoAssetId String?     @unique
   videoAsset   VideoAsset? @relation(fields: [videoAssetId], references: [id])
@@ -721,7 +726,7 @@ model Enrollment {
   /// record that money changed hands, so it is never deleted. Reads filter on
   /// status as well, which is what makes re-enrolling put the course back
   /// without any code path having to remember to clear this.
-  hiddenAt  DateTime?
+  hiddenAt DateTime?
 
   payments  Payment[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.
@@ -1236,31 +1241,31 @@ enum QuestionType {
 }
 
 model QuizQuestion {
-  id              String       @id @default(cuid())
-  quizId          String
-  quiz            Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  type            QuestionType @default(MCQ)
-  prompt          String
-  options         Json         @default("[]") // [{id, text}]
+  id               String           @id @default(cuid())
+  quizId           String
+  quiz             Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  type             QuestionType     @default(MCQ)
+  prompt           String
+  options          Json             @default("[]") // [{id, text}]
   /// Kept in step with the first entry of `correctOptionIds`, so code that has
   /// not been deployed yet still grades a single-answer question correctly.
   /// Everything reads the array.
-  correctOptionId String?
+  correctOptionId  String?
   /// Every option that counts as right. One for most questions; a question can
   /// ask for more, and then the student has to name all of them.
-  correctOptionIds String[] @default([])
+  correctOptionIds String[]         @default([])
   /// How many the student may pick. The teacher sets it, because "choose two"
   /// is a different question from "choose the one that is true" even when the
   /// options are identical.
-  maxSelections   Int          @default(1)
+  maxSelections    Int              @default(1)
   /// What a good answer looks like, for the questions a machine cannot mark.
   /// The teacher reads it while grading instead of recalling it, and it is what
   /// the student is shown afterwards.
-  modelAnswer     String       @default("")
-  explanation     String       @default("")
-  points          Int          @default(1)
-  sortOrder       Int          @default(0)
-  reports         QuestionReport[]
+  modelAnswer      String           @default("")
+  explanation      String           @default("")
+  points           Int              @default(1)
+  sortOrder        Int              @default(0)
+  reports          QuestionReport[]
 }
 
 /// A student saying "this question is wrong".
@@ -1362,6 +1367,216 @@ model AssignmentSubmission {
   @@unique([assignmentId, studentId])
 }
 
+// ─────────────────────────── Challenges (gamified) ─────────────────────────
+//
+// The student-facing "Challenge" — never "Exam" in any UI copy. Deliberately
+// not built on Quiz: a Quiz is bound 1:1 to a Lesson, is single-player, and has
+// no notion of speed, topic tags or per-question difficulty. A Challenge is a
+// standalone, replayable, gamified question set a teacher publishes; it can
+// optionally reference a course for context but never requires one.
+//
+// Async and self-paced by design (Quizizz/Blooket-solo style), not a live
+// Kahoot-hosted synchronized room — docs/GAMIFICATION.md already documents
+// that matchmaking/live-battle infrastructure was deliberately deferred, and
+// nothing in this shape needs it: XP, coins and rank flow through the existing
+// gamification engine exactly like a quiz does.
+
+enum ChallengeType {
+  PRACTICE
+  RANKED
+}
+
+enum ChallengeStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum ChallengeScoring {
+  STANDARD
+  SPEED_BASED
+}
+
+enum ChallengeAnswerReveal {
+  IMMEDIATE
+  AFTER_SUBMISSION
+  AFTER_CLOSE
+  NEVER
+}
+
+enum ChallengeRandomize {
+  NONE
+  QUESTIONS
+  ANSWERS
+  BOTH
+}
+
+enum ChallengeAttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+  TIMED_OUT
+  ABANDONED
+}
+
+model Challenge {
+  id       String         @id @default(cuid())
+  tenantId String
+  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String          @default("")
+  /// Material Symbols icon name, shown on the challenge card.
+  coverIcon   String          @default("bolt")
+  type        ChallengeType   @default(PRACTICE)
+  status      ChallengeStatus @default(DRAFT)
+  /// 1 (easiest) – 5 (hardest). Shown to students on the card; never scored.
+  difficulty  Int             @default(1)
+
+  courseId  String?
+  course    Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  subjectId String?
+  subject   Subject?    @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  gradeId   String?
+  grade     GradeLevel? @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  /// Free-text unit/topic label — a course isn't mandatory, so this is how a
+  /// teacher tags what a standalone challenge is about.
+  topic     String?
+
+  /// Whole-challenge time budget in seconds; null = no overall limit.
+  durationSec        Int?
+  /// Default per-question time budget in seconds; null = no per-question
+  /// timer unless a question overrides it. Server-authoritative, same pattern
+  /// as Quiz.timeLimitSec — the client countdown is a courtesy, not the rule.
+  questionTimeSec    Int?
+  scoring            ChallengeScoring      @default(STANDARD)
+  /// 0 = unlimited attempts.
+  maxAttempts        Int                   @default(1)
+  leaderboardEnabled Boolean               @default(true)
+  answerReveal       ChallengeAnswerReveal @default(AFTER_SUBMISSION)
+  randomize          ChallengeRandomize    @default(NONE)
+
+  publishedAt DateTime?
+  closesAt    DateTime?
+  archivedAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
+
+  questions ChallengeQuestion[]
+  attempts  ChallengeAttempt[]
+
+  @@index([tenantId, status])
+  @@index([status, publishedAt])
+  @@index([courseId])
+}
+
+model ChallengeQuestion {
+  id          String    @id @default(cuid())
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  type             QuestionType @default(MCQ)
+  prompt           String
+  imageUrl         String?
+  options          Json         @default("[]") // [{id, text}]
+  correctOptionIds String[]     @default([])
+  explanation      String       @default("")
+
+  /// Base XP this question is worth when answered correctly — the input to
+  /// the scoring engine's speed-bonus multiplier (see ChallengeScoringService),
+  /// not a raw quiz "point".
+  points       Int     @default(100)
+  /// Overrides Challenge.questionTimeSec for this one question; null = inherit.
+  timeLimitSec Int?
+  topic        String?
+  /// 1–5, independent of the challenge's own difficulty — lets a teacher mix
+  /// easy warm-ups with a few hard questions in one challenge.
+  difficulty   Int     @default(1)
+  sortOrder    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers ChallengeAnswer[]
+
+  @@index([challengeId, sortOrder])
+}
+
+model ChallengeAttempt {
+  id          String         @id @default(cuid())
+  challengeId String
+  challenge   Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  attemptNumber Int                    @default(1)
+  status        ChallengeAttemptStatus @default(IN_PROGRESS)
+
+  /// The exact question ids and order this attempt is playing, decided once at
+  /// creation (applying the challenge's randomize setting) and never
+  /// recomputed — so a reload or reconnect sees the same order instead of a
+  /// fresh shuffle. Also what a "retry my mistakes" attempt uses to restrict
+  /// play to a specific subset of questions (see retryOfAttemptId).
+  questionIds      String[] @default([])
+  /// Set when this attempt only exists to retry the wrong answers of an
+  /// earlier completed attempt — see ChallengesService.retryMistakes.
+  retryOfAttemptId String?
+
+  /// Anchors the server-authoritative timer — same role as QuizAttempt.startedAt.
+  startedAt   DateTime  @default(now())
+  /// Server deadline computed from Challenge.durationSec at start; null = no
+  /// whole-attempt limit. A submission after this is rejected as TIMED_OUT.
+  deadlineAt  DateTime?
+  completedAt DateTime?
+
+  /// Sum of per-answer xpAwarded — the "final score" shown on the result screen.
+  score        Int  @default(0)
+  correctCount Int  @default(0)
+  wrongCount   Int  @default(0)
+  accuracyPct  Int? // correctCount / questions answered, 0-100
+  /// Average of (1 - timeUsed/timeAllowed) across answered questions, 0-100.
+  speedPct     Int?
+
+  /// What was actually handed to GamificationService.record() for this attempt.
+  xpAwarded    Int @default(0)
+  coinsAwarded Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers ChallengeAnswer[]
+
+  @@unique([challengeId, studentId, attemptNumber])
+  @@index([challengeId, status])
+  @@index([studentId, status])
+  @@index([challengeId, score])
+}
+
+model ChallengeAnswer {
+  id         String            @id @default(cuid())
+  attemptId  String
+  attempt    ChallengeAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId String
+  question   ChallengeQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  selectedOptionIds String[] @default([])
+  isCorrect         Boolean  @default(false)
+  /// Milliseconds from the question becoming visible to the server receiving
+  /// this answer. Clamped server-side against the allowed time — never trusted
+  /// from the client beyond that clamp (see ChallengeScoringService).
+  timeTakenMs       Int?
+  xpAwarded         Int      @default(0)
+
+  answeredAt DateTime @default(now())
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+}
+
 // ─────────────────────────── Social & Comms ────────────────────────────────
 
 model Review {
@@ -1421,14 +1636,14 @@ model ChatThread {
 }
 
 model ChatMessage {
-  id        String     @id @default(cuid())
-  threadId  String
-  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  senderId  String
-  sender    User       @relation(fields: [senderId], references: [id])
+  id       String     @id @default(cuid())
+  threadId String
+  thread   ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  senderId String
+  sender   User       @relation(fields: [senderId], references: [id])
   /// Empty only when the message is a voice note, which carries no text.
-  body      String
-  readAt    DateTime?
+  body     String
+  readAt   DateTime?
 
   /// The message this one answers. Kept as a relation rather than a copied
   /// snippet so an edit or a delete upstream is reflected, and self-referential
@@ -1453,7 +1668,7 @@ model ChatMessage {
   audioBytes       Int?
   audioMimeType    String?
 
-  createdAt DateTime   @default(now())
+  createdAt DateTime  @default(now())
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 
@@ -1518,14 +1733,14 @@ enum LiveSessionStatus {
 }
 
 model LiveSession {
-  id          String         @id @default(cuid())
+  id          String            @id @default(cuid())
   tenantId    String
-  teacher     TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  teacher     TeacherProfile    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   courseId    String?
   title       String
-  description String         @default("")
+  description String            @default("")
   startsAt    DateTime
-  durationMin Int            @default(60)
+  durationMin Int               @default(60)
   // null = unlimited seats
   capacity    Int?
   /// An external meeting link (Zoom, Meet) the teacher pasted in themselves.
@@ -1536,7 +1751,7 @@ model LiveSession {
   /// The Daily room backing this session. Created when the teacher starts it,
   /// not when they schedule it — a room booked weeks ahead is a room sitting
   /// open weeks ahead, and the session may never run at all.
-  roomName    String?        @unique
+  roomName    String?           @unique
   roomUrl     String?
   startedAt   DateTime?
   endedAt     DateTime?
@@ -1545,11 +1760,11 @@ model LiveSession {
   /// each carries its own state rather than one flag trying to describe all of
   /// them. A class can be recorded and never summarised, or summarised from a
   /// transcript whose recording has since been deleted.
-  recordingStatus  LivePipelineStatus @default(NOT_STARTED)
+  recordingStatus    LivePipelineStatus @default(NOT_STARTED)
   /// Daily's id for the recording. The download link is fetched fresh and
   /// short-lived when someone is allowed to watch — never stored, because a
   /// stored URL is a permanent public one the moment it leaks.
-  recordingId      String?
+  recordingId        String?
   recordingStartedAt DateTime?
   /// Seconds, as the provider reported them once processing finished.
   recordingDuration  Int?
@@ -1559,18 +1774,18 @@ model LiveSession {
   /// regenerated and the provider's copy expires.
   transcriptText   String?
 
-  summaryStatus    LivePipelineStatus @default(NOT_STARTED)
+  summaryStatus      LivePipelineStatus @default(NOT_STARTED)
   /// The structured summary, exactly as the schema the model was held to.
-  summary          Json?
-  summaryError     String?
+  summary            Json?
+  summaryError       String?
   /// Off by default. A summary is the teacher's notes on their own lesson
   /// until they decide otherwise — and a bad first draft should not be
   /// published to a class before they have read it.
-  summaryForStudents Boolean @default(false)
+  summaryForStudents Boolean            @default(false)
 
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  deletedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   bookings   LiveBooking[]
   attendance LiveAttendance[]
@@ -1778,7 +1993,7 @@ model AcademySite {
   /// it back is reversible. Without this the handover was one-way: the compiled
   /// markup overwrote the page someone had written, and there was nothing to
   /// put back.
-  handAuthoredHtml String?
+  handAuthoredHtml   String?
   moderationApproved Boolean           @default(false)
   moderatedById      String?
   moderationReason   String?
@@ -2019,17 +2234,20 @@ model StudentGamification {
 
   /// Counters the achievement engine evaluates against. Denormalised so
   /// unlocking never fans out into a dozen count() queries per event.
-  lessonsCompleted  Int @default(0)
-  quizzesPassed     Int @default(0)
-  perfectQuizzes    Int @default(0)
-  coursesCompleted  Int @default(0)
-  assignmentsDone   Int @default(0)
-  liveAttended      Int @default(0)
-  reviewsWritten    Int @default(0)
-  missionsCompleted Int @default(0)
-  earlyBirdSessions Int @default(0)
-  nightOwlSessions  Int @default(0)
-  weekendSessions   Int @default(0)
+  lessonsCompleted    Int @default(0)
+  quizzesPassed       Int @default(0)
+  perfectQuizzes      Int @default(0)
+  challengesCompleted Int @default(0)
+  challengesWon       Int @default(0)
+  perfectChallenges   Int @default(0)
+  coursesCompleted    Int @default(0)
+  assignmentsDone     Int @default(0)
+  liveAttended        Int @default(0)
+  reviewsWritten      Int @default(0)
+  missionsCompleted   Int @default(0)
+  earlyBirdSessions   Int @default(0)
+  nightOwlSessions    Int @default(0)
+  weekendSessions     Int @default(0)
 
   /// Streak protection. The streak itself stays on StudentProfile — this is
   /// only the inventory and the record of the last day a freeze was spent.

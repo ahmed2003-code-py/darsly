@@ -29,6 +29,7 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { AdminModule } from './admin/admin.module';
 import { SecurityModule } from './security/security.module';
 import { AssessmentsModule } from './assessments/assessments.module';
+import { ChallengesModule } from './challenges/challenges.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { LiveModule } from './live/live.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -116,6 +117,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     AdminModule,
     SecurityModule,
     AssessmentsModule,
+    ChallengesModule,
     ReviewsModule,
     LiveModule,
     AnalyticsModule,

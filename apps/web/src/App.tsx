@@ -52,6 +52,10 @@ const AdminAcademyStudioPage = lazyPage(() => import('./pages/admin/AdminAcademy
 const TeacherAnalyticsPage = lazyPage(() => import('./pages/teacher/TeacherAnalyticsPage'));
 const QuizBuilderPage = lazyPage(() => import('./pages/teacher/QuizBuilderPage'));
 const TeacherCoursesPage = lazyPage(() => import('./pages/teacher/TeacherCoursesPage'));
+const ChallengesPage = lazyPage(() => import('./pages/student/ChallengesPage'));
+const ChallengePlayPage = lazyPage(() => import('./pages/student/ChallengePlayPage'));
+const TeacherChallengesPage = lazyPage(() => import('./pages/teacher/TeacherChallengesPage'));
+const ChallengeBuilderPage = lazyPage(() => import('./pages/teacher/ChallengeBuilderPage'));
 const GradingPage = lazyPage(() => import('./pages/teacher/GradingPage'));
 const TeacherCouponsPage = lazyPage(() => import('./pages/teacher/TeacherCouponsPage'));
 const TeacherDashboardPage = lazyPage(() => import('./pages/teacher/TeacherDashboardPage'));
@@ -167,6 +171,8 @@ export default function App() {
       <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
       <Route path="/wallet" element={<RequireAuth role={Role.STUDENT}><WalletPage /></RequireAuth>} />
       <Route path="/learning" element={<RequireAuth role={Role.STUDENT}><LearningCenterPage /></RequireAuth>} />
+      <Route path="/challenges" element={<RequireAuth role={Role.STUDENT}><ChallengesPage /></RequireAuth>} />
+      <Route path="/challenges/:id/play" element={<RequireAuth role={Role.STUDENT}><ChallengePlayPage /></RequireAuth>} />
       <Route path="/studio" element={<RequireAuth role={Role.STUDENT}><StudioPage /></RequireAuth>} />
       <Route path="/studio/preview/:key" element={<RequireAuth role={Role.STUDENT}><ThemePreviewPage /></RequireAuth>} />
       <Route path="/certificate/:token" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
@@ -181,6 +187,8 @@ export default function App() {
       <Route path="/teacher/courses/:id" element={<RequireAuth role={Role.TEACHER}><CourseBuilderPage /></RequireAuth>} />
       <Route path="/teacher/lessons/:lessonId/quiz" element={<RequireAuth role={Role.TEACHER}><QuizBuilderPage /></RequireAuth>} />
       <Route path="/teacher/lessons/:lessonId/assignment" element={<RequireAuth role={Role.TEACHER}><AssignmentBuilderPage /></RequireAuth>} />
+      <Route path="/teacher/challenges" element={<RequireAuth role={Role.TEACHER}><TeacherChallengesPage /></RequireAuth>} />
+      <Route path="/teacher/challenges/:id" element={<RequireAuth role={Role.TEACHER}><ChallengeBuilderPage /></RequireAuth>} />
       <Route path="/teacher/students" element={<RequireAuth role={Role.TEACHER}><TeacherEnrollmentsPage /></RequireAuth>} />
       <Route path="/teacher/grading" element={<RequireAuth role={Role.TEACHER}><GradingPage /></RequireAuth>} />
       <Route path="/teacher/live" element={<RequireAuth role={Role.TEACHER}><TeacherLivePage /></RequireAuth>} />

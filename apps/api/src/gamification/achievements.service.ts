@@ -86,6 +86,9 @@ export class AchievementsService {
       lessonsCompleted: agg.lessonsCompleted,
       quizzesPassed: agg.quizzesPassed,
       perfectQuizzes: agg.perfectQuizzes,
+      challengesCompleted: agg.challengesCompleted,
+      challengesWon: agg.challengesWon,
+      perfectChallenges: agg.perfectChallenges,
       coursesCompleted: agg.coursesCompleted,
       assignmentsDone: agg.assignmentsDone,
       liveAttended: agg.liveAttended,
@@ -138,7 +141,8 @@ export class AchievementsService {
 
     const blank = { lessonsCompleted: 0, quizzesPassed: 0, perfectQuizzes: 0, coursesCompleted: 0,
       assignmentsDone: 0, liveAttended: 0, reviewsWritten: 0, missionsCompleted: 0, earlyBirdSessions: 0,
-      nightOwlSessions: 0, weekendSessions: 0, xp: 0, level: 1, bestRank: null } as unknown as StudentGamification;
+      nightOwlSessions: 0, weekendSessions: 0, challengesCompleted: 0, challengesWon: 0, perfectChallenges: 0,
+      xp: 0, level: 1, bestRank: null } as unknown as StudentGamification;
     const metrics = await this.metrics(studentId, agg ?? blank, new Set(defs.map((d) => d.metric)));
 
     return defs.map((d) => {

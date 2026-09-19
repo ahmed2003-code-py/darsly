@@ -23,7 +23,15 @@ export const GamificationEventType = {
   MISSION_COMPLETED: 'MISSION_COMPLETED',
   WEEKLY_QUEST_COMPLETED: 'WEEKLY_QUEST_COMPLETED',
   REVIEW_SUBMITTED: 'REVIEW_SUBMITTED',
+  /** Finished a Challenge attempt — practice or ranked, any result. Pays the
+   *  score the scoring engine computed (via xpOverride), every attempt,
+   *  daily-capped like QUIZ_COMPLETED rather than gated per-entity. */
+  CHALLENGE_COMPLETED: 'CHALLENGE_COMPLETED',
+  /** Completed a RANKED challenge specifically — the "won" bonus this event
+   *  type was seeded for before this feature existed. Gated per-challenge. */
   CHALLENGE_WON: 'CHALLENGE_WON',
+  /** 100% accuracy on a challenge attempt — mirrors QUIZ_PERFECT. */
+  CHALLENGE_PERFECT: 'CHALLENGE_PERFECT',
   LEVEL_UP: 'LEVEL_UP',
   ACHIEVEMENT_UNLOCKED: 'ACHIEVEMENT_UNLOCKED',
   REWARD_REDEEMED: 'REWARD_REDEEMED',
@@ -47,6 +55,9 @@ export const EVENT_COUNTER: Partial<Record<GamificationEventType, string>> = {
   LIVE_ATTENDED: 'liveAttended',
   REVIEW_SUBMITTED: 'reviewsWritten',
   MISSION_COMPLETED: 'missionsCompleted',
+  CHALLENGE_COMPLETED: 'challengesCompleted',
+  CHALLENGE_WON: 'challengesWon',
+  CHALLENGE_PERFECT: 'perfectChallenges',
 };
 
 export interface RecordEventInput {

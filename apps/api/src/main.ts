@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { json, urlencoded } from 'express';
 import helmet from 'helmet';
@@ -13,7 +14,20 @@ async function bootstrap() {
   validateConfig();
 
   const isProd = process.env.NODE_ENV === 'production';
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Production sits entirely behind Railway's edge — nothing reaches this
+  // process except through it, so trusting the whole X-Forwarded-For chain is
+  // safe (there is no direct-internet path a client could use to spoof it).
+  // Without this, Express reads req.ip from the raw TCP peer, which is
+  // Railway's own proxy layer, not the real client — and login rate limiting
+  // is keyed on it. Confirmed live: x-ratelimit-remaining on 5 consecutive
+  // requests from the same client read 15, 19, 17, 16, 19 — non-monotonic,
+  // proving each request was being tracked as a different identity, so no
+  // single one ever reached the limit. This was the actual cause of the
+  // "rate limiter never blocks in production" bug — Redis was never the
+  // problem.
+  app.set('trust proxy', true);
 
   // Baseline security headers (HSTS, X-Content-Type-Options, frame-deny, etc.).
   // contentSecurityPolicy is disabled: the API also serves the built SPA and an

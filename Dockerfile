@@ -27,6 +27,17 @@ RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
 
 WORKDIR /app
 
+# redis-memory-server (apps/api devDependency — used only by the standalone
+# scripts/audit-multi-replica.mjs a developer runs by hand locally, never by
+# this image) tries to download/compile a real Redis binary in its own
+# postinstall. This image has no `make`, so that compile step is the one
+# devDependency install that must not run here. Every other devDependency
+# genuinely IS needed below — typescript, @nestjs/cli etc. build the app in
+# this same stage — so `--omit=dev` isn't the fix; skipping just this one
+# package's postinstall, the way its own maintainers built it to be skipped
+# in CI, is.
+ENV REDISMS_DISABLE_POSTINSTALL=1
+
 # Install with full workspaces (the shared-types "prepare" script compiles on
 # install, so the whole source tree must be present first).
 COPY . .

@@ -139,11 +139,20 @@ export class AcademyMediaProcessor {
     }
 
     const maxDim = KIND_MAX_DIM[kind];
-    const { data, info } = await this.sharp(input)
-      .rotate() // auto-orient from EXIF, then metadata is dropped
-      .resize({ width: maxDim, height: maxDim, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toBuffer({ resolveWithObject: true });
+    // metadata() above only reads the header — a truncated or corrupted body
+    // (a valid signature, damaged pixel data) passes it and only fails here,
+    // during the real decode. Caught the same way: a bad upload, not a server
+    // fault.
+    let data: Buffer, info: { width: number; height: number };
+    try {
+      ({ data, info } = await this.sharp(input)
+        .rotate() // auto-orient from EXIF, then metadata is dropped
+        .resize({ width: maxDim, height: maxDim, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer({ resolveWithObject: true }));
+    } catch {
+      throw new BadRequestException('File is not a valid image');
+    }
 
     const blurhash = await this.blurhashFor(data);
     return {

@@ -78,6 +78,19 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     warnings.push('PAYMENT_LISTENER_KEY unset — automatic payment verification endpoint will reject all events');
   }
 
+  // Production runs more than one replica. Login/forgot-password throttling and
+  // the Socket.IO room fan-out both need state shared across instances — without
+  // Redis each replica counts and rooms independently, which is a security
+  // regression (the effective rate limit multiplies by replica count) and a
+  // correctness one (a chat message sent on one instance never reaches a
+  // recipient connected to another). Fatal rather than a warning: this is not
+  // safe to silently degrade into in production.
+  if (isProd && !env.REDIS_URL) {
+    errors.push(
+      'REDIS_URL is required in production — distributed rate limiting and the Socket.IO Redis adapter both need it across replicas',
+    );
+  }
+
   // ── Academy Studio (AI site) ──────────────────────────────────────────────
   // The feature is a kill-switch (AI_ACADEMY_ENABLED). All of the strict checks
   // below only apply when it is ON, so a prod deploy with the flag OFF (the

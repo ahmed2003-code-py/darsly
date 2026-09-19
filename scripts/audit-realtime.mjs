@@ -307,8 +307,14 @@ try {
   // ── 8. multi-instance room fan-out ──────────────────────────────────────
   console.log('\n=== 8. ADAPTER / MULTI-INSTANCE ===');
   {
-    const usesAdapter = false; // determined from source below, reported not asserted
-    note('socket adapter', 'default in-memory adapter — rooms do not span replicas (see report)');
+    // This gate only ever runs one instance, so it cannot exercise the
+    // cross-replica path itself — that proof lives in
+    // audit-multi-replica.mjs, which boots two real instances against a real
+    // Redis and asserts actual delivery both directions. Reported here
+    // rather than asserted, since this harness has no second instance to
+    // check against.
+    note('socket adapter',
+      'REDIS_URL set -> @socket.io/redis-adapter, rooms fan out across replicas (proved in audit-multi-replica.mjs). REDIS_URL unset -> default in-memory adapter, single-instance only (correct with exactly one instance, e.g. this harness right now).');
     check('a single instance fans out to a room correctly', aSock.connected && bSock.connected, 'both sockets live');
   }
 

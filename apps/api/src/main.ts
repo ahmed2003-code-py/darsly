@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { JSON_BODY_LIMIT } from './common/validation';
 import { validateConfig } from './common/config.validation';
+import { RedisIoAdapter } from './redis/redis-io.adapter';
 
 async function bootstrap() {
   // Fail fast on forgeable secrets / dev backdoors before anything binds a port.
@@ -42,6 +43,14 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
+
+  // Rooms/broadcasts fan out across every Railway replica via Redis pub/sub —
+  // see redis/redis-io.adapter.ts. Falls open to the default in-memory
+  // adapter (single-instance-only fan-out, same as before this change) if
+  // Redis is unreachable, rather than failing to boot.
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis();
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // Swagger exposes the full endpoint surface (incl. every /admin route). Serve the
   // interactive docs in non-production only; production keeps the API surface unlisted.

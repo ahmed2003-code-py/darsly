@@ -8,6 +8,9 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
 import { AcademyThemeMiddleware } from './branding/academy-theme.middleware';
 import { AuthModule } from './auth/auth.module';
+import { RedisModule } from './redis/redis.module';
+import { RedisService } from './redis/redis.service';
+import { RedisThrottlerStorageService } from './redis/redis-throttler-storage.service';
 import { CatalogModule } from './catalog/catalog.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -77,7 +80,17 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
           }),
         ]
       : []),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    RedisModule,
+    ThrottlerModule.forRootAsync({
+      inject: [RedisService],
+      useFactory: (redis: RedisService) => ({
+        throttlers: [{ ttl: 60_000, limit: 120 }],
+        // Shared across every replica via Redis; falls open to "not limited"
+        // if Redis is unreachable rather than in-memory per-process counting
+        // (see RedisThrottlerStorageService for why).
+        storage: new RedisThrottlerStorageService(redis),
+      }),
+    }),
     PrismaModule,
     MailModule,
     AuditModule,

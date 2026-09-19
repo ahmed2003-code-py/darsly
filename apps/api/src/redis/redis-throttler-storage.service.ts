@@ -12,55 +12,28 @@ export interface ThrottlerRecord {
 }
 
 /**
- * KEYS[1] = hit counter, KEYS[2] = block flag. Mirrors the in-memory
- * ThrottlerStorageService's semantics exactly: while blocked, hits do not
- * accumulate further; the block key's own TTL is the authority on when a
- * client is unblocked, independent of the hit counter's window.
- */
-const INCREMENT_SCRIPT = `
-local hitsKey = KEYS[1]
-local blockKey = KEYS[2]
-local ttl = tonumber(ARGV[1])
-local limit = tonumber(ARGV[2])
-local blockDuration = tonumber(ARGV[3])
-
-local blockPttl = redis.call('PTTL', blockKey)
-if blockPttl > 0 then
-  return {0, blockPttl, 1, blockPttl}
-end
-
-local hits = redis.call('INCR', hitsKey)
-if hits == 1 then
-  redis.call('PEXPIRE', hitsKey, ttl)
-end
-local pttl = redis.call('PTTL', hitsKey)
-if pttl < 0 then
-  redis.call('PEXPIRE', hitsKey, ttl)
-  pttl = ttl
-end
-
-if hits > limit then
-  redis.call('SET', blockKey, '1', 'PX', blockDuration)
-  return {hits, pttl, 1, blockDuration}
-end
-
-return {hits, pttl, 0, 0}
-`;
-
-/**
  * Distributed replacement for @nestjs/throttler's default in-memory storage.
  * Both Railway replicas share the same Redis-held counters, so a limit like
  * "20 login attempts/minute" is the limit across the whole deployment — not
  * per instance, which is what let it become ~40 in practice before this.
  *
- * Fails OPEN: if Redis is unreachable, increment() resolves as "not limited"
- * rather than rejecting the request or throwing into the request pipeline.
- * Deliberate, not an oversight — see docs/SYSTEM.md "Rate limiting" section.
- * The alternative (fail closed) turns a transient Redis blip into a total
- * login outage for every user, which is worse than a brief window of
- * unenforced throttling; argon2 password hashing and the account model
- * itself remain the durable defenses against brute force, this limiter is a
- * second layer on top of them, not the only one.
+ * Deliberately built on plain INCR/PEXPIRE/SET, not a Lua EVAL script. The
+ * first version used one atomic script, which is the textbook-correct way to
+ * do this — but several managed "Redis-compatible" offerings restrict or
+ * reject EVAL for multi-tenant safety while every basic command works fine,
+ * and that combination is invisible from here: this service has no way to
+ * know which flavor of Redis it's been pointed at. Rather than depend on a
+ * capability that may silently be unavailable on some provider, this uses
+ * only the commands the whole Redis-compatible ecosystem supports
+ * unconditionally — the same INCR+EXPIRE pattern Redis's own docs present as
+ * the standard simple rate limiter. The cost is a few real-but-narrow race
+ * windows under concurrent requests from the *same* identity in the *same*
+ * millisecond (a hit could in principle land between the block check and the
+ * INCR, or two requests could both observe hits > limit and both write the
+ * block key) — acceptable for a defense-in-depth throttle that sits on top
+ * of argon2 password hashing and the account model, not in place of them,
+ * and a better trade than a rate limiter that silently never engages because
+ * the one command it depends on is blocked.
  */
 @Injectable()
 export class RedisThrottlerStorageService implements ThrottlerStorage {
@@ -82,21 +55,34 @@ export class RedisThrottlerStorageService implements ThrottlerStorage {
     const hitsKey = `throttle:${key}:${throttlerName}`;
     const blockKey = `throttle:${key}:${throttlerName}:blocked`;
     try {
-      const [hits, pttl, isBlocked, blockPttl] = (await client.eval(
-        INCREMENT_SCRIPT,
-        2,
-        hitsKey,
-        blockKey,
-        ttl,
-        limit,
-        blockDuration,
-      )) as [number, number, number, number];
-      return {
-        totalHits: hits,
-        timeToExpire: Math.ceil(pttl / 1000),
-        isBlocked: isBlocked === 1,
-        timeToBlockExpire: Math.ceil(blockPttl / 1000),
-      };
+      // Mirrors the in-memory ThrottlerStorageService: while blocked, hits
+      // don't accumulate further, and the block's own TTL — not the hit
+      // window — decides when a client is unblocked.
+      const blockPttl = await client.pttl(blockKey);
+      if (blockPttl > 0) {
+        const blockSec = Math.ceil(blockPttl / 1000);
+        return { totalHits: 0, timeToExpire: blockSec, isBlocked: true, timeToBlockExpire: blockSec };
+      }
+
+      const hits = await client.incr(hitsKey);
+      if (hits === 1) {
+        await client.pexpire(hitsKey, ttl);
+      }
+      let pttl = await client.pttl(hitsKey);
+      if (pttl < 0) {
+        // INCR on a key that raced past its own expiry between the calls
+        // above — reassert the window rather than let the counter live
+        // forever.
+        await client.pexpire(hitsKey, ttl);
+        pttl = ttl;
+      }
+
+      if (hits > limit) {
+        await client.set(blockKey, '1', 'PX', blockDuration);
+        return { totalHits: hits, timeToExpire: Math.ceil(pttl / 1000), isBlocked: true, timeToBlockExpire: Math.ceil(blockDuration / 1000) };
+      }
+
+      return { totalHits: hits, timeToExpire: Math.ceil(pttl / 1000), isBlocked: false, timeToBlockExpire: 0 };
     } catch (e) {
       const now = Date.now();
       if (now - this.lastErrorLoggedAt > 10_000) {

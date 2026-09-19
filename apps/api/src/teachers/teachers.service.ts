@@ -37,21 +37,26 @@ export class TeachersService {
   async discover(query: DiscoverTeachersQuery, viewerUserId?: string) {
     // A student already studying a subject is not shown the other teachers of
     // it — see SubjectExclusivityService for why the rule is drawn this way.
-    const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
-    const stage = await viewerStage(this.prisma, query, viewerUserId);
-    // The card counts and prices the same courses the teacher's page will list,
-    // which is the student's own year — teachers are matched on the band, but a
-    // course is for a year. Counting every published course instead told a
-    // third-secondary student a teacher had one course, and then showed them an
-    // empty page when they opened it.
-    const gradeId = await viewerGrade(this.prisma, query, viewerUserId);
+    // Four independent lookups run together rather than as four sequential
+    // round-trips — none reads another's result, only `query`/`viewerUserId`.
+    const [hidden, stage, gradeId, track] = await Promise.all([
+      this.exclusivity.hiddenTeacherIds(viewerUserId),
+      viewerStage(this.prisma, query, viewerUserId),
+      // The card counts and prices the same courses the teacher's page will
+      // list, which is the student's own year — teachers are matched on the
+      // band, but a course is for a year. Counting every published course
+      // instead told a third-secondary student a teacher had one course, and
+      // then showed them an empty page when they opened it.
+      viewerGrade(this.prisma, query, viewerUserId),
+      // A teacher of the other school system teaches a syllabus this student
+      // does not sit, so they are not a teacher for them. One who takes both
+      // systems has a subject on this side too, and stays.
+      viewerTrack(this.prisma, viewerUserId),
+    ]);
     const forMyYear = gradeId
       ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
       : {};
-    // A teacher of the other school system teaches a syllabus this student does
-    // not sit, so they are not a teacher for them. One who takes both systems
-    // has a subject on this side too, and stays.
-    const tracks = trackFilter(await viewerTrack(this.prisma, viewerUserId));
+    const tracks = trackFilter(track);
     const where: Prisma.TeacherProfileWhereInput = {
       status: 'APPROVED',
       user: { isActive: true },

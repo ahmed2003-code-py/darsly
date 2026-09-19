@@ -70,9 +70,16 @@ export class CoursesService {
     // A student already studying a subject is not shown the other teachers of
     // it. Empty for everyone else, and the clause is only added when it has
     // something in it — `notIn: []` is not a filter worth generating.
-    const hidden = await this.exclusivity.hiddenTeacherIds(viewerUserId);
-    const gradeId = await viewerGrade(this.prisma, query, viewerUserId);
-    const tracks = trackFilter(await viewerTrack(this.prisma, viewerUserId));
+    // Three independent lookups — none reads another's result — so they run
+    // together rather than as three sequential round-trips per request. Under
+    // concurrency this is where the extra latency was: each request held a
+    // connection through three serial queries before its main query even began.
+    const [hidden, gradeId, track] = await Promise.all([
+      this.exclusivity.hiddenTeacherIds(viewerUserId),
+      viewerGrade(this.prisma, query, viewerUserId),
+      viewerTrack(this.prisma, viewerUserId),
+    ]);
+    const tracks = trackFilter(track);
 
     const priceFilter: Prisma.IntFilter = {};
     if (query.free) priceFilter.equals = 0;

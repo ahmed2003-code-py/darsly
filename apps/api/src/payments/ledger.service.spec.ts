@@ -26,7 +26,8 @@ function makePrisma() {
         return Promise.resolve({ id: 'tx' });
       }),
     },
-    ledgerEntry: { aggregate: jest.fn() },
+    ledgerEntry: { aggregate: jest.fn(), groupBy: jest.fn() },
+    $queryRaw: jest.fn(),
   } as any;
 }
 
@@ -77,5 +78,44 @@ describe('LedgerService', () => {
       .mockResolvedValueOnce({ _sum: { amountCents: 30000 } }); // debits
     const svc = new LedgerService(prisma);
     expect(await svc.teacherBalance('t1')).toBe(70000);
+  });
+
+  describe('academyRevenueBatch', () => {
+    it('batches net + fee for every requested academy in exactly two queries, never one per academy', async () => {
+      const prisma = makePrisma();
+      prisma.ledgerEntry.groupBy
+        .mockResolvedValueOnce([{ tenantId: 't1', _sum: { amountCents: 80000 } }]) // net
+        .mockResolvedValueOnce([{ tenantId: 't1', _sum: { amountCents: 20000 } }]); // fee
+      const svc = new LedgerService(prisma);
+      const result = await svc.academyRevenueBatch(['t1', 't2', 't3']);
+
+      expect(prisma.ledgerEntry.groupBy).toHaveBeenCalledTimes(2);
+      expect(result.get('t1')).toEqual({ netCents: 80000, feeCents: 20000 });
+      // academies with no ledger activity still come back as a zero row, not missing
+      expect(result.get('t2')).toEqual({ netCents: 0, feeCents: 0 });
+      expect(result.get('t3')).toEqual({ netCents: 0, feeCents: 0 });
+    });
+
+    it('returns an empty map without querying for an empty id list', async () => {
+      const prisma = makePrisma();
+      const svc = new LedgerService(prisma);
+      const result = await svc.academyRevenueBatch([]);
+      expect(result.size).toBe(0);
+      expect(prisma.ledgerEntry.groupBy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revenueTrend', () => {
+    it('zero-fills days with no ledger activity', async () => {
+      const prisma = makePrisma();
+      const today = new Date();
+      prisma.$queryRaw.mockResolvedValue([
+        { day: today, gross: 50000n, fee: 10000n },
+      ]);
+      const svc = new LedgerService(prisma);
+      const trend = await svc.revenueTrend(7);
+      expect(trend).toHaveLength(1);
+      expect(trend[0]).toEqual({ date: today.toISOString().slice(0, 10), grossCents: 50000, feeCents: 10000 });
+    });
   });
 });

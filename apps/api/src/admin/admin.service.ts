@@ -19,15 +19,19 @@ export class AdminService {
   async overview() {
     const [
       students, teachersApproved, teachersPending, coursesPublished,
-      activeEnrollments, pendingPayouts, totals,
+      activeEnrollments, totalEnrollments, pendingPayouts, totals,
+      totalAcademies, activeAcademies,
     ] = await Promise.all([
       this.prisma.user.count({ where: { role: 'STUDENT' } }),
       this.prisma.teacherProfile.count({ where: { status: 'APPROVED' } }),
       this.prisma.teacherProfile.count({ where: { status: 'PENDING' } }),
       this.prisma.course.count({ where: { status: 'PUBLISHED' } }),
       this.prisma.enrollment.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.enrollment.count(),
       this.prisma.payoutRequest.count({ where: { status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } } }),
       this.ledger.platformTotals(),
+      this.prisma.academy.count(),
+      this.prisma.academy.count({ where: { status: 'ACTIVE' } }),
     ]);
     return {
       students,
@@ -35,9 +39,12 @@ export class AdminService {
       teachersPending,
       coursesPublished,
       activeEnrollments,
+      totalEnrollments,
       pendingPayouts,
       grossCents: totals.grossCents,
       commissionCents: totals.commissionCents,
+      totalAcademies,
+      activeAcademies,
     };
   }
 

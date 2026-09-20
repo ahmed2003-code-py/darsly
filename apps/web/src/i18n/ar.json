@@ -108,6 +108,7 @@
     "wallet": "المحفظة",
     "security": "الأمان",
     "adminOverview": "النظرة العامة",
+    "adminAcademies": "الأكاديميات",
     "adminTeachers": "اعتماد المعلمين",
     "adminPayouts": "طلبات السحب",
     "adminSecurity": "الأمان والنزاهة",
@@ -709,7 +710,53 @@
     "empty": "لا توجد بيانات",
     "studioTile": "استوديو الأكاديميات",
     "studioTileValue": "مراجعة",
-    "rejectReason": "رفض من الإدارة"
+    "rejectReason": "رفض من الإدارة",
+    "academiesTotal": "إجمالي الأكاديميات",
+    "academiesActive": "أكاديميات نشطة",
+    "totalEnrollments": "إجمالي الاشتراكات",
+    "trends": "الاتجاهات",
+    "rangeDays": "{{count}} يوم",
+    "revenueTrend": "إجمالي الإيرادات",
+    "enrollmentTrend": "اشتراكات جديدة",
+    "academiesTitle": "الأكاديميات",
+    "academiesSub": "كل أكاديمية على المنصة — ابحث وفلتر وادخل للتفاصيل",
+    "academiesSearchPlaceholder": "ابحث بالاسم أو الرابط أو صاحب الأكاديمية…",
+    "academiesEmpty": "لا توجد أكاديميات مطابقة",
+    "academyStatus": {
+      "PENDING": "قيد المراجعة",
+      "ACTIVE": "نشطة",
+      "SUSPENDED": "موقوفة",
+      "ARCHIVED": "مؤرشفة"
+    },
+    "staff": "فريق العمل",
+    "netRevenue": "صافي الإيراد",
+    "platformFee": "عمولة المنصة",
+    "pageOf": "صفحة {{page}} من {{total}}",
+    "backToAcademies": "العودة للأكاديميات",
+    "createdOn": "أُنشئت في {{date}}",
+    "academyTab": {
+      "overview": "نظرة عامة",
+      "staff": "فريق العمل",
+      "flags": "الميزات"
+    },
+    "owner": "صاحب الأكاديمية",
+    "lastActivity": "آخر نشاط",
+    "noActivityYet": "لا يوجد نشاط بعد",
+    "feePlan": "خطة عمولة المنصة",
+    "domains": "نطاقات مخصصة",
+    "noCustomDomain": "لا يوجد",
+    "staffRole": {
+      "OWNER": "صاحب الأكاديمية",
+      "TEACHER": "معلم",
+      "ASSISTANT": "مساعد"
+    },
+    "featureFlag": {
+      "attendance": { "label": "الحضور", "hint": "تتبع حضور الجلسات وتنبيهات المتابعة" },
+      "scheduling": { "label": "الجدولة", "hint": "التقويم والقاعات وكشف التعارضات" },
+      "groups": { "label": "المجموعات", "hint": "مجموعات وفصول الطلاب" },
+      "enrollmentApprovalMode": { "label": "موافقة الاشتراك اليدوية", "hint": "المعلم أو الإدارة يوافقون على الاشتراك بدلاً من التفعيل الفوري" },
+      "adminStudio": { "label": "استوديو الإدارة", "hint": "وصول إدارة المنصة للثيمات بدون شراء" }
+    }
   },
   "security": {
     "title": "مراقبة الأمان والنزاهة",

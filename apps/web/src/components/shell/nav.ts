@@ -44,6 +44,7 @@ export const TEACHER_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
+  { to: '/admin/academies', icon: 'apartment', labelKey: 'nav.adminAcademies' },
   { to: '/admin/teachers', icon: 'verified_user', labelKey: 'nav.adminTeachers' },
   { to: '/admin/academy-studio', icon: 'auto_awesome', labelKey: 'nav.adminStudio' },
   { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },

@@ -108,6 +108,7 @@
     "wallet": "Wallet",
     "security": "Security",
     "adminOverview": "Overview",
+    "adminAcademies": "Academies",
     "adminTeachers": "Teacher approvals",
     "adminPayouts": "Payouts",
     "adminSecurity": "Security",
@@ -709,7 +710,53 @@
     "empty": "No data",
     "studioTile": "Academy Studio",
     "studioTileValue": "Review",
-    "rejectReason": "Rejected by the platform"
+    "rejectReason": "Rejected by the platform",
+    "academiesTotal": "Total academies",
+    "academiesActive": "Active academies",
+    "totalEnrollments": "Total enrollments",
+    "trends": "Trends",
+    "rangeDays": "{{count}}d",
+    "revenueTrend": "Gross revenue",
+    "enrollmentTrend": "New enrollments",
+    "academiesTitle": "Academies",
+    "academiesSub": "Every academy on the platform — search, filter, and drill in",
+    "academiesSearchPlaceholder": "Search by name, slug, or owner…",
+    "academiesEmpty": "No academies match",
+    "academyStatus": {
+      "PENDING": "Pending",
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "ARCHIVED": "Archived"
+    },
+    "staff": "Staff",
+    "netRevenue": "Net revenue",
+    "platformFee": "Platform fee",
+    "pageOf": "Page {{page}} of {{total}}",
+    "backToAcademies": "Back to academies",
+    "createdOn": "Created {{date}}",
+    "academyTab": {
+      "overview": "Overview",
+      "staff": "Staff",
+      "flags": "Feature flags"
+    },
+    "owner": "Owner",
+    "lastActivity": "Last activity",
+    "noActivityYet": "No activity yet",
+    "feePlan": "Platform fee plan",
+    "domains": "Custom domains",
+    "noCustomDomain": "None",
+    "staffRole": {
+      "OWNER": "Owner",
+      "TEACHER": "Teacher",
+      "ASSISTANT": "Assistant"
+    },
+    "featureFlag": {
+      "attendance": { "label": "Attendance", "hint": "Session attendance tracking and Needs Attention" },
+      "scheduling": { "label": "Scheduling", "hint": "Calendar, rooms, and conflict detection" },
+      "groups": { "label": "Groups", "hint": "Student groups and cohorts" },
+      "enrollmentApprovalMode": { "label": "Manual enrollment approval", "hint": "Teacher/admin approve enrollments instead of instant activation" },
+      "adminStudio": { "label": "Admin Studio", "hint": "Platform-admin access to themes without purchase" }
+    }
   },
   "security": {
     "title": "Security & integrity",

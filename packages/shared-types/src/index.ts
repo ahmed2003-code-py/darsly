@@ -109,6 +109,13 @@ export enum AcademyRole {
   STUDENT = 'STUDENT',
 }
 
+export enum AcademyStatus {
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  ARCHIVED = 'ARCHIVED',
+}
+
 // ── Challenges (gamified) ──────────────────────────────────────────────────
 // Student-facing name is always "Challenge", never "Exam".
 

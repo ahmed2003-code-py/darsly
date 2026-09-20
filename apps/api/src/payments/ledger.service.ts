@@ -337,6 +337,68 @@ export class LedgerService {
   }
 
   /**
+   * What each academy has earned, batched for a page of academies at once —
+   * never one query per academy. Same account convention as recordPayment:
+   * CREDIT on `teacher:<id>:balance` is net revenue, CREDIT on
+   * `platform:commission` (scoped by tenantId) is the fee taken from it.
+   */
+  async academyRevenueBatch(tenantIds: string[]): Promise<Map<string, { netCents: number; feeCents: number }>> {
+    const map = new Map<string, { netCents: number; feeCents: number }>();
+    for (const id of tenantIds) map.set(id, { netCents: 0, feeCents: 0 });
+    if (tenantIds.length === 0) return map;
+
+    const [netRows, feeRows] = await Promise.all([
+      this.prisma.ledgerEntry.groupBy({
+        by: ['tenantId'],
+        where: { tenantId: { in: tenantIds }, direction: 'CREDIT', account: { startsWith: 'teacher:' } },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.ledgerEntry.groupBy({
+        by: ['tenantId'],
+        where: { tenantId: { in: tenantIds }, direction: 'CREDIT', account: 'platform:commission' },
+        _sum: { amountCents: true },
+      }),
+    ]);
+    for (const r of netRows) if (r.tenantId) map.get(r.tenantId)!.netCents = r._sum.amountCents ?? 0;
+    for (const r of feeRows) if (r.tenantId) map.get(r.tenantId)!.feeCents = r._sum.amountCents ?? 0;
+    return map;
+  }
+
+  /**
+   * Daily platform gross + fee for the last N days, zero-filled so a quiet day
+   * still draws a point instead of leaving a gap in the trend line.
+   */
+  async revenueTrend(days: number): Promise<{ date: string; grossCents: number; feeCents: number }[]> {
+    const rows = await this.prisma.$queryRaw<{ day: Date; gross: bigint; fee: bigint }[]>`
+      WITH days AS (
+        SELECT generate_series(
+          date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day',
+          date_trunc('day', now()),
+          INTERVAL '1 day'
+        ) AS day
+      ), agg AS (
+        SELECT
+          date_trunc('day', "createdAt") AS day,
+          SUM(CASE WHEN account = 'platform:cash' AND direction = 'DEBIT' THEN "amountCents" ELSE 0 END) AS gross,
+          SUM(CASE WHEN account = 'platform:commission' AND direction = 'CREDIT' THEN "amountCents" ELSE 0 END) AS fee
+        FROM "LedgerEntry"
+        WHERE "createdAt" >= date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day'
+          AND account IN ('platform:cash', 'platform:commission')
+          AND "deletedAt" IS NULL
+        GROUP BY day
+      )
+      SELECT d.day AS day, COALESCE(a.gross, 0) AS gross, COALESCE(a.fee, 0) AS fee
+      FROM days d LEFT JOIN agg a ON a.day = d.day
+      ORDER BY d.day ASC
+    `;
+    return rows.map((r) => ({
+      date: r.day.toISOString().slice(0, 10),
+      grossCents: Number(r.gross),
+      feeCents: Number(r.fee),
+    }));
+  }
+
+  /**
    * DRS-INV-YYYY-NNNNNN invoice on first paid record. Idempotent per payment.
    * Deriving the serial from count() can race two concurrent payments onto the
    * same serial, so we retry on a unique-constraint conflict (on either the

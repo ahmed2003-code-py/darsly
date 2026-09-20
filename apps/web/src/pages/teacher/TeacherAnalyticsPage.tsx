@@ -2,34 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
-import { PageHeader, Skeleton } from '../../components/ui';
+import { BarChart, PageHeader, Skeleton } from '../../components/ui';
 import { EngagementPanel } from '../../components/gamification/EngagementPanel';
-
-/** Dependency-free SVG bar chart (keeps the bundle lean). */
-function BarChart({ data, format }: { data: { label: string; value: number }[]; format?: (v: number) => string }) {
-  const max = Math.max(1, ...data.map((d) => d.value));
-  return (
-    <div className="flex h-44 items-end gap-3 pt-6">
-      {data.map((d, i) => {
-        const h = (d.value / max) * 100;
-        return (
-          <div key={i} className="group flex flex-1 flex-col items-center gap-2">
-            <div className="relative flex w-full flex-1 items-end">
-              <div
-                className="w-full rounded-t-lg bg-primary transition-all duration-500 group-hover:opacity-90"
-                style={{ height: `${Math.max(2, h)}%` }}
-              />
-              <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold text-on-surface-variant opacity-0 transition group-hover:opacity-100">
-                {format ? format(d.value) : d.value}
-              </span>
-            </div>
-            <span className="text-xs text-outline">{d.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function TeacherAnalyticsPage() {
   const { t } = useTranslation();

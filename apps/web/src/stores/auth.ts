@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { forgetUserData } from '../lib/queryClient';
 import { releaseStudio } from '../lib/studio';
+import { useStaffAcademyStore } from './staffAcademy';
 
 export interface AuthUser {
   id: string;
@@ -35,7 +36,10 @@ export const useAuthStore = create<AuthState>()(
         // signed in when the tokens were replaced, a refresh that resolved into
         // another session. Same person signing back in keeps their cache.
         const previous = useAuthStore.getState().user;
-        if (previous && previous.id !== user.id) forgetUserData();
+        if (previous && previous.id !== user.id) {
+          forgetUserData();
+          useStaffAcademyStore.getState().clear();
+        }
         set({ user });
       },
       clear: () => {
@@ -46,6 +50,7 @@ export const useAuthStore = create<AuthState>()(
         // drops the old look then — before that account's own is fetched, so
         // nobody ever sees a stranger's colours.
         releaseStudio();
+        useStaffAcademyStore.getState().clear();
         set({ accessToken: null, refreshToken: null, user: null });
         // Everything else this person left behind. The look above is the one
         // exception, and it is kept on purpose; the react-query cache is the

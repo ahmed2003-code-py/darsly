@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { useAuthStore } from '../stores/auth';
+import { useStaffAcademyStore } from '../stores/staffAcademy';
 import { api } from './api';
 import type { AppTheme } from './theme';
 
@@ -111,4 +113,61 @@ export function useMyAcademies() {
 export function useOwnedAcademy() {
   const q = useMyAcademies();
   return { ...q, academy: q.data?.find((a) => a.role === 'OWNER') };
+}
+
+/**
+ * Keeps stores/staffAcademy.ts in sync with reality: a staff member who owns
+ * no academy of their own (TEACHER/ASSISTANT membership only) needs SOME
+ * academy selected before any /teacher/* call can resolve — see lib/api.ts's
+ * request interceptor. Auto-picks the first non-owner active membership.
+ * With more than one, this keeps whichever was already selected (or the
+ * first, on a fresh login) rather than silently reassigning mid-session — a
+ * real academy switcher is future work, not something to fake here.
+ */
+export function useSyncStaffAcademy() {
+  const { data } = useMyAcademies();
+  const { academyId, setAcademyId } = useStaffAcademyStore();
+  useEffect(() => {
+    if (!data) return;
+    const ownsOne = data.some((a) => a.role === 'OWNER');
+    if (ownsOne) {
+      if (academyId) setAcademyId(null); // an owner never needs this — their JWT already resolves it
+      return;
+    }
+    const stillValid = academyId && data.some((a) => a.academyId === academyId);
+    if (stillValid) return;
+    const first = data[0];
+    setAcademyId(first ? first.academyId : null);
+  }, [data, academyId, setAcademyId]);
+}
+
+// ── Staff invitations (a center owner invites; the invited person decides) ──
+
+export interface MyInvitation {
+  id: string;
+  role: 'TEACHER' | 'ASSISTANT';
+  createdAt: string;
+  academy: { id: string; name: string; slug: string; logoUrl: string | null };
+}
+
+export function useMyInvitations() {
+  const token = useAuthStore((s) => s.accessToken);
+  return useQuery<MyInvitation[]>({
+    queryKey: ['my-invitations'],
+    queryFn: async () => (await api.get('/me/invitations')).data,
+    enabled: !!token,
+    staleTime: 30_000,
+  });
+}
+
+export function useRespondToInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, accept }: { id: string; accept: boolean }) =>
+      (await api.post(`/me/invitations/${id}/${accept ? 'accept' : 'decline'}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-invitations'] });
+      qc.invalidateQueries({ queryKey: ['my-academies'] });
+    },
+  });
 }

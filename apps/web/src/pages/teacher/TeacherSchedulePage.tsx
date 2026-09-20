@@ -5,6 +5,7 @@ import { useGroupDetail, useGroups } from '../../lib/academyOps';
 import {
   ConflictErrorBody,
   Room,
+  ScheduleSession,
   useCancelSession,
   useCreateRoom,
   useCreateSession,
@@ -17,7 +18,7 @@ import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Skeleton } from '../..
 
 const TABS = ['calendar', 'rooms'] as const;
 type Tab = (typeof TABS)[number];
-type ViewMode = 'day' | 'week';
+type ViewMode = 'month' | 'week' | 'day';
 
 // Cairo-local day math, mirroring the server's own convention
 // (gamification/period.util.ts) without pulling in a date library.
@@ -37,8 +38,20 @@ function startOfWeek(d: Date): Date {
   const sinceSaturday = (day + 1) % 7;
   return startOfDay(addDays(d, -sinceSaturday));
 }
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function addMonths(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+/** The 6×7 grid a real calendar app shows — the visible month plus enough
+ *  of the neighbouring months to fill whole weeks, Saturday-start. */
+function monthGrid(anchor: Date): Date[] {
+  const first = startOfWeek(startOfMonth(anchor));
+  return Array.from({ length: 42 }, (_, i) => addDays(first, i));
 }
 
 const CONFLICT_KEY: Record<string, string> = {
@@ -127,24 +140,56 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
+/** One session chip — the small, colored, always-legible unit both the
+ *  month grid and the day-detail panel are built from. */
+function SessionChip({ s, onCancel, cancelling, dense }: { s: ScheduleSession; onCancel: () => void; cancelling: boolean; dense?: boolean }) {
+  const { t, i18n } = useTranslation();
+  const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (dense) {
+    return (
+      <p className={`truncate rounded-md px-1.5 py-0.5 text-[11px] font-bold ${s.status === 'CANCELLED' ? 'bg-surface-container-high text-outline line-through' : 'bg-primary-fixed text-on-primary-fixed-variant'}`}>
+        <span dir="ltr">{timeLabel(s.startAt)}</span> {s.group.name}
+      </p>
+    );
+  }
+  return (
+    <div className={`card p-3 ${s.status === 'CANCELLED' ? 'opacity-50' : ''}`}>
+      <p className="truncate font-heading text-sm font-bold">{s.group.name}</p>
+      <p className="text-xs text-on-surface-variant tabular-nums" dir="ltr">{timeLabel(s.startAt)}–{timeLabel(s.endAt)}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        {s.room && <Badge tone="neutral">{s.room.name}</Badge>}
+        {s.teacher && <Badge tone="primary">{s.teacher.fullName}</Badge>}
+        {s.status === 'CANCELLED' && <Badge tone="error">{t('schedule.cancelled')}</Badge>}
+      </div>
+      {s.status === 'SCHEDULED' && (
+        <button className="mt-2 text-xs font-bold text-error hover:underline" onClick={onCancel} disabled={cancelling}>
+          {t('schedule.cancel')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function CalendarTab() {
   const { t, i18n } = useTranslation();
   const slug = useMyHomeAcademySlug();
-  const [view, setView] = useState<ViewMode>('week');
+  const [view, setView] = useState<ViewMode>('month');
   const [anchor, setAnchor] = useState(() => new Date());
+  const [selectedDay, setSelectedDay] = useState(() => isoDate(new Date()));
   const [showCreate, setShowCreate] = useState(false);
   const cancelSession = useCancelSession();
+  const locale = i18n.language === 'ar' ? 'ar-EG' : 'en-GB';
 
-  const rangeStart = view === 'day' ? startOfDay(anchor) : startOfWeek(anchor);
-  const rangeEnd = view === 'day' ? addDays(rangeStart, 1) : addDays(rangeStart, 7);
-  const days = useMemo(
-    () => Array.from({ length: view === 'day' ? 1 : 7 }, (_, i) => addDays(rangeStart, i)),
-    [rangeStart, view],
-  );
+  const rangeStart = view === 'day' ? startOfDay(anchor) : view === 'week' ? startOfWeek(anchor) : startOfWeek(startOfMonth(anchor));
+  const rangeEnd = view === 'day' ? addDays(rangeStart, 1) : view === 'week' ? addDays(rangeStart, 7) : addDays(rangeStart, 42);
+  const days = useMemo(() => {
+    if (view === 'month') return monthGrid(anchor);
+    return Array.from({ length: view === 'day' ? 1 : 7 }, (_, i) => addDays(rangeStart, i));
+  }, [rangeStart, view, anchor]);
   const { data: sessions, isLoading } = useSchedule(slug, rangeStart.toISOString(), rangeEnd.toISOString());
 
   const byDay = useMemo(() => {
-    const map = new Map<string, typeof sessions>();
+    const map = new Map<string, ScheduleSession[]>();
     for (const d of days) map.set(isoDate(d), []);
     for (const s of sessions ?? []) {
       const key = isoDate(new Date(s.startAt));
@@ -153,26 +198,43 @@ function CalendarTab() {
     return map;
   }, [sessions, days]);
 
-  const dayLabel = (d: Date) => d.toLocaleDateString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-  const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+  const step = (dir: 1 | -1) => {
+    if (view === 'day') setAnchor((a) => addDays(a, dir));
+    else if (view === 'week') setAnchor((a) => addDays(a, 7 * dir));
+    else setAnchor((a) => addMonths(a, dir));
+  };
+  const goToday = () => { const now = new Date(); setAnchor(now); setSelectedDay(isoDate(now)); };
+
+  const headerLabel =
+    view === 'month'
+      ? anchor.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
+      : view === 'week'
+        ? `${rangeStart.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} – ${addDays(rangeStart, 6).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}`
+        : anchor.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const weekdayLabels = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(new Date()), i).toLocaleDateString(locale, { weekday: 'short' }));
+  const todayIso = isoDate(new Date());
+  const dayNumLabel = (d: Date) => d.toLocaleDateString(locale, { day: 'numeric' });
+  const dayLabel = (d: Date) => d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button className="btn-secondary px-3 py-2" onClick={() => setAnchor((a) => addDays(a, view === 'day' ? -1 : -7))}>
+          <button className="btn-secondary px-3 py-2" onClick={() => step(-1)}>
             <span className="material-symbols-outlined">chevron_right</span>
           </button>
-          <button className="rounded-lg border border-outline px-3 py-2 text-sm font-bold hover:bg-surface-container-low" onClick={() => setAnchor(new Date())}>
+          <button className="rounded-lg border border-outline px-3 py-2 text-sm font-bold hover:bg-surface-container-low" onClick={goToday}>
             {t('schedule.today')}
           </button>
-          <button className="btn-secondary px-3 py-2" onClick={() => setAnchor((a) => addDays(a, view === 'day' ? 1 : 7))}>
+          <button className="btn-secondary px-3 py-2" onClick={() => step(1)}>
             <span className="material-symbols-outlined">chevron_left</span>
           </button>
+          <p className="ms-2 font-heading text-lg font-bold">{headerLabel}</p>
         </div>
         <div className="flex gap-2">
           <div className="flex gap-1 rounded-full bg-surface-container-lowest p-1 shadow-card">
-            {(['day', 'week'] as const).map((v) => (
+            {(['month', 'week', 'day'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -190,6 +252,61 @@ function CalendarTab() {
 
       {isLoading ? (
         <Skeleton className="h-96 rounded-2xl" />
+      ) : view === 'month' ? (
+        <>
+          <div className="overflow-hidden rounded-2xl border border-outline-variant/50">
+            <div className="grid grid-cols-7 border-b border-outline-variant/50 bg-surface-container-lowest">
+              {weekdayLabels.map((w) => (
+                <p key={w} className="p-2 text-center text-xs font-bold text-on-surface-variant">{w}</p>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {days.map((d, i) => {
+                const iso = isoDate(d);
+                const inMonth = d.getMonth() === anchor.getMonth();
+                const daySessions = byDay.get(iso) ?? [];
+                const isToday = iso === todayIso;
+                const isSelected = iso === selectedDay;
+                return (
+                  <button
+                    key={iso}
+                    onClick={() => setSelectedDay(iso)}
+                    className={`min-h-24 border-b border-e border-outline-variant/30 p-1.5 text-start align-top transition last:border-e-0 [&:nth-child(7n)]:border-e-0 ${
+                      inMonth ? 'bg-surface' : 'bg-surface-container-lowest/40'
+                    } ${isSelected ? 'ring-2 ring-inset ring-primary' : ''} hover:bg-surface-container-low`}
+                    style={i >= 35 ? { borderBottomWidth: 0 } : undefined}
+                  >
+                    <span
+                      className={`mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
+                        isToday ? 'bg-primary text-on-primary' : inMonth ? 'text-on-surface' : 'text-outline'
+                      }`}
+                    >
+                      {dayNumLabel(d)}
+                    </span>
+                    <div className="space-y-0.5">
+                      {daySessions.slice(0, 2).map((s) => <SessionChip key={s!.id} s={s!} dense onCancel={() => {}} cancelling={false} />)}
+                      {daySessions.length > 2 && (
+                        <p className="px-1.5 text-[11px] font-bold text-on-surface-variant">{t('schedule.moreSessions', { count: daySessions.length - 2 })}</p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <p className="mb-3 font-heading text-lg font-bold">
+              {new Date(selectedDay).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+            <div className="grid gap-2">
+              {!(byDay.get(selectedDay) ?? []).length && <p className="text-sm text-outline">{t('schedule.noSessions')}</p>}
+              {(byDay.get(selectedDay) ?? []).map((s) => (
+                <SessionChip key={s!.id} s={s!} onCancel={() => cancelSession.mutate(s!.id)} cancelling={cancelSession.isPending} />
+              ))}
+            </div>
+          </div>
+        </>
       ) : (
         <div className={`grid gap-4 ${view === 'week' ? 'md:grid-cols-7' : ''}`}>
           {days.map((d) => (
@@ -198,24 +315,7 @@ function CalendarTab() {
               <div className="grid gap-2">
                 {(byDay.get(isoDate(d)) ?? []).length === 0 && <p className="text-center text-xs text-outline">{t('schedule.noSessions')}</p>}
                 {(byDay.get(isoDate(d)) ?? []).map((s) => (
-                  <div key={s!.id} className={`card p-3 ${s!.status === 'CANCELLED' ? 'opacity-50' : ''}`}>
-                    <p className="truncate font-heading text-sm font-bold">{s!.group.name}</p>
-                    <p className="text-xs text-on-surface-variant tabular-nums" dir="ltr">{timeLabel(s!.startAt)}–{timeLabel(s!.endAt)}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {s!.room && <Badge tone="neutral">{s!.room.name}</Badge>}
-                      {s!.teacher && <Badge tone="primary">{s!.teacher.fullName}</Badge>}
-                      {s!.status === 'CANCELLED' && <Badge tone="error">{t('schedule.cancelled')}</Badge>}
-                    </div>
-                    {s!.status === 'SCHEDULED' && (
-                      <button
-                        className="mt-2 text-xs font-bold text-error hover:underline"
-                        onClick={() => cancelSession.mutate(s!.id)}
-                        disabled={cancelSession.isPending}
-                      >
-                        {t('schedule.cancel')}
-                      </button>
-                    )}
-                  </div>
+                  <SessionChip key={s!.id} s={s!} onCancel={() => cancelSession.mutate(s!.id)} cancelling={cancelSession.isPending} />
                 ))}
               </div>
             </div>

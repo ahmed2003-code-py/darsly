@@ -105,19 +105,66 @@ async function main() {
 
   // ── Staff management (reuses the existing owner-facing member routes —
   //    SUPER_ADMIN gets a full OWNER AcademyContext for the named academy) ──
-  console.log('\n-- Staff management (Admin Studio → Academy Detail → Staff) --');
-  const beforeAudit = await prisma.auditLog.count({ where: { academyId: academy1, action: 'member.add' } });
+  // Invite-then-accept: an owner naming someone is not the same as that
+  // person joining — see AcademyService.addMember. This whole section was
+  // rewritten after a real product bug surfaced during manual testing on
+  // 2026-09-20 (an ASSISTANT's own web session 404'd on every /teacher/*
+  // page, because their JWT carries no tenantId — only an OWNER's does —
+  // and nothing told the server which academy they meant). The fix has two
+  // halves, both covered below: the INVITED-first membership lifecycle
+  // (this section), and the client always sending an academy id once
+  // active (proven directly against the guard, not just inferred).
+  console.log('\n-- Staff invitations (invite → pending → accept, not instant) --');
+  const beforeAudit = await prisma.auditLog.count({ where: { academyId: academy1, action: 'member.invite' } });
   const addMember = await api(`/academies/${academyRow.slug}/members`, { token: adminToken, method: 'POST', body: { email: newStaffUser.email, role: 'ASSISTANT' } });
-  check('admin adds a new staff member to academy1 by email', addMember.status < 300 && addMember.body?.role === 'ASSISTANT');
+  check('admin invites a new staff member to academy1 by email', addMember.status < 300 && addMember.body?.role === 'ASSISTANT');
+  check('the membership starts INVITED, not ACTIVE — an invite is not automatic membership', addMember.body?.status === 'INVITED');
   const membershipId = addMember.body.id;
-  const afterAddAudit = await prisma.auditLog.count({ where: { academyId: academy1, action: 'member.add' } });
-  check('member.add is audited, scoped to this academy', afterAddAudit === beforeAudit + 1);
+  const afterAddAudit = await prisma.auditLog.count({ where: { academyId: academy1, action: 'member.invite' } });
+  check('member.invite is audited, scoped to this academy', afterAddAudit === beforeAudit + 1);
 
-  // Prove the membership is REAL, not just a 2xx: the new staff user can now
-  // sign in and reach an academy-staff-gated endpoint for academy1.
   const newStaffToken = await login(newStaffUser.email);
+  const blockedBeforeAccept = await api(`/academies/${academyRow.slug}/members`, { token: newStaffToken });
+  check('before accepting, the invited user has ZERO access — an INVITED row grants nothing (buildContext only trusts ACTIVE)', blockedBeforeAccept.status === 404, `status=${blockedBeforeAccept.status}`);
+
+  const myInvites = await api('/me/invitations', { token: newStaffToken });
+  check('the invited user can see their own pending invitation', myInvites.status === 200 && myInvites.body.some((i) => i.id === membershipId));
+
+  const foreignAcceptsSomeoneElsesInvite = await api(`/me/invitations/${membershipId}/accept`, { token: tokenB, method: 'POST' });
+  check("an unrelated teacher cannot accept SOMEONE ELSE's invitation (IDOR)", foreignAcceptsSomeoneElsesInvite.status === 404);
+
+  const accept = await api(`/me/invitations/${membershipId}/accept`, { token: newStaffToken, method: 'POST' });
+  check('the invited user accepts their own invitation', accept.status < 300 && accept.body?.status === 'ACTIVE');
+  const acceptAudit = await prisma.auditLog.findFirst({ where: { action: 'member.invite.accept', entityId: membershipId } });
+  check('member.invite.accept is audited', !!acceptAudit);
+
+  const doubleAccept = await api(`/me/invitations/${membershipId}/accept`, { token: newStaffToken, method: 'POST' });
+  check('accepting an already-accepted invitation is refused, not silently re-applied', doubleAccept.status === 404);
+
+  // Prove the membership is REAL now, not just a 2xx: the staff user can
+  // reach an academy-staff-gated endpoint for academy1 — but ONLY once they
+  // identify which academy (their own JWT still carries no tenantId; the
+  // real client does this via X-Academy-Id — see lib/api.ts's interceptor
+  // and lib/academy.ts's useSyncStaffAcademy — this proves the guard side
+  // of that fix, independent of the browser-only client code).
   const newStaffReachesRoster = await api(`/academies/${academyRow.slug}/members`, { token: newStaffToken });
-  check('the newly-added ASSISTANT can reach academy1 as staff (real access, not a fake row)', [200, 403].includes(newStaffReachesRoster.status), `status=${newStaffReachesRoster.status}`);
+  check('once ACTIVE, the staff member reaches academy1 by slug (real access, not a fake row)', [200, 403].includes(newStaffReachesRoster.status), `status=${newStaffReachesRoster.status}`);
+  const newStaffWithAcademyHeader = await api('/teacher/rooms', { token: newStaffToken, headers: { 'X-Academy-Id': academy1 } });
+  check('...and by X-Academy-Id header on a header-only route — this is exactly what the web client now sends automatically', [200, 403].includes(newStaffWithAcademyHeader.status), `status=${newStaffWithAcademyHeader.status}`);
+  const newStaffWithoutHeader = await api('/teacher/rooms', { token: newStaffToken });
+  check('...but with NO academy identified at all, still refused (a non-owner JWT alone is never enough)', newStaffWithoutHeader.status === 404);
+
+  // Decline path, on a second fresh invite (a different real person — teacherB,
+  // who owns their own separate academy elsewhere — being invited as staff
+  // here is an independent scenario) — never touches the first membership.
+  const secondInvite = await api(`/academies/${academyRow.slug}/members`, { token: adminToken, method: 'POST', body: { email: teacherB.user.email, role: 'ASSISTANT' } });
+  cleanup.push(() => prisma.academyMembership.delete({ where: { id: secondInvite.body.id } }).catch(() => {}));
+  const decline = await api(`/me/invitations/${secondInvite.body.id}/decline`, { token: tokenB, method: 'POST' });
+  check('a different invited user can decline their own invitation', decline.status < 300);
+  const declinedRow = await prisma.academyMembership.findUnique({ where: { id: secondInvite.body.id } });
+  check('a declined invitation ends as LEFT (state transition, never deleted)', declinedRow?.status === 'LEFT');
+  const declineAudit = await prisma.auditLog.findFirst({ where: { action: 'member.invite.decline', entityId: secondInvite.body.id } });
+  check('member.invite.decline is audited', !!declineAudit);
 
   const updateMember = await api(`/academies/${academyRow.slug}/members/${membershipId}`, { token: adminToken, method: 'PATCH', body: { status: 'SUSPENDED' } });
   check('admin suspends the new member', updateMember.status < 300 && updateMember.body?.status === 'SUSPENDED');

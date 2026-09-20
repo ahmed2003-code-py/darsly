@@ -414,7 +414,17 @@ export class AcademyService {
     }));
   }
 
-  /** Add an existing user as staff (TEACHER/ASSISTANT). Owner role is never granted here. */
+  /**
+   * Invite an existing user as staff (TEACHER/ASSISTANT). Owner role is never
+   * granted here. Creates the membership as INVITED, not ACTIVE — a center
+   * owner naming someone is not the same as that person actually joining.
+   * `buildContext()` already only grants access to `status === 'ACTIVE'`
+   * memberships, so an INVITED row carries zero access until the invited
+   * person accepts it themselves (see acceptInvitation).
+   *
+   * Re-inviting someone already ACTIVE (e.g. to change their role) keeps
+   * them ACTIVE — only a brand-new membership starts at INVITED.
+   */
   async addMember(academyId: string, dto: AddMemberDto) {
     const email = dto.email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
@@ -429,9 +439,48 @@ export class AcademyService {
     }
     return this.prisma.academyMembership.upsert({
       where: { userId_academyId: { userId: user.id, academyId } },
-      update: { role: dto.role as AcademyRole, status: 'ACTIVE' },
-      create: { userId: user.id, academyId, role: dto.role as AcademyRole, status: 'ACTIVE', joinedAt: new Date() },
+      update: { role: dto.role as AcademyRole, ...(existing?.status === 'ACTIVE' ? {} : { status: 'INVITED' }) },
+      create: { userId: user.id, academyId, role: dto.role as AcademyRole, status: 'INVITED' },
     });
+  }
+
+  /** Invitations waiting on the signed-in user's own decision — never anyone else's. */
+  async myInvitations(userId: string) {
+    const rows = await this.prisma.academyMembership.findMany({
+      where: { userId, status: 'INVITED' },
+      orderBy: { createdAt: 'desc' },
+      include: { academy: { select: { id: true, name: true, slug: true, logoUrl: true } } },
+    });
+    return rows.map((m) => ({
+      id: m.id, role: m.role, createdAt: m.createdAt,
+      academy: m.academy,
+    }));
+  }
+
+  private async assertOwnInvitation(userId: string, membershipId: string) {
+    const m = await this.prisma.academyMembership.findFirst({ where: { id: membershipId, userId, status: 'INVITED' } });
+    if (!m) throw new NotFoundException('Invitation not found');
+    return m;
+  }
+
+  async acceptInvitation(userId: string, membershipId: string) {
+    await this.assertOwnInvitation(userId, membershipId);
+    const flip = await this.prisma.academyMembership.updateMany({
+      where: { id: membershipId, userId, status: 'INVITED' },
+      data: { status: 'ACTIVE', joinedAt: new Date() },
+    });
+    if (flip.count === 0) throw new NotFoundException('Invitation not found');
+    return this.prisma.academyMembership.findUniqueOrThrow({ where: { id: membershipId } });
+  }
+
+  async declineInvitation(userId: string, membershipId: string) {
+    await this.assertOwnInvitation(userId, membershipId);
+    const flip = await this.prisma.academyMembership.updateMany({
+      where: { id: membershipId, userId, status: 'INVITED' },
+      data: { status: 'LEFT' },
+    });
+    if (flip.count === 0) throw new NotFoundException('Invitation not found');
+    return { id: membershipId, declined: true };
   }
 
   private async assertManageableMember(academyId: string, membershipId: string) {

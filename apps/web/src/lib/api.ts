@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth';
+import { useStaffAcademyStore } from '../stores/staffAcademy';
 
 // Production build is served by the API itself -> same-origin relative calls.
 // Local dev (vite on :5173) talks to the API on :4000 unless VITE_API_URL says otherwise.
@@ -18,6 +19,14 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // A non-owner staff member (TEACHER/ASSISTANT membership) has no tenantId
+  // in their own JWT — only an academy OWNER does — so without this every
+  // /teacher/* call for them had nothing to resolve an academy from. See
+  // stores/staffAcademy.ts. Never overrides a header a caller already set.
+  const staffAcademyId = useStaffAcademyStore.getState().academyId;
+  if (staffAcademyId && !config.headers['X-Academy-Id']) {
+    config.headers['X-Academy-Id'] = staffAcademyId;
+  }
   return config;
 });
 

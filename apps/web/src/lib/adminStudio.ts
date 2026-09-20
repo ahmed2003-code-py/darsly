@@ -2,7 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AcademyRole } from '@darsly/shared-types';
 import { api } from './api';
-import { applyAdminTheme, findAdminTheme, resetAdminTheme } from './adminTheme';
+import { ADMIN_THEME_PRESETS, applyAdminTheme, findAdminTheme, stripAdminThemeFromDom } from './adminTheme';
+
+/**
+ * The platform default look for SUPER_ADMIN — applied automatically the
+ * moment someone signs in as SUPER_ADMIN, even before they've ever opened
+ * Theme Studio. A super admin's console must never be visually
+ * indistinguishable from a teacher's own console (the two carry very
+ * different authority), so "no preference chosen yet" still means
+ * *something* distinct, not nothing.
+ */
+const DEFAULT_ADMIN_THEME = ADMIN_THEME_PRESETS[0]; // "Darsly Dark"
 
 // ── Theme ────────────────────────────────────────────────────────────────
 
@@ -34,10 +44,18 @@ export function useSetAdminTheme() {
 export function useSyncAdminTheme(isSuperAdmin: boolean) {
   const { data } = useAdminThemePreference(isSuperAdmin);
   useEffect(() => {
-    if (!isSuperAdmin || !data) return;
-    const theme = findAdminTheme(data.themeId);
-    if (theme) applyAdminTheme(theme);
-    else resetAdminTheme();
+    // A continuous invariant, not a one-time cleanup: whoever is NOT
+    // SUPER_ADMIN right now never carries the admin look, however they got
+    // here — a different account signing in on the same browser without a
+    // hard reload, a session that started as admin and switched, etc.
+    if (!isSuperAdmin) {
+      stripAdminThemeFromDom();
+      return;
+    }
+    if (!data) return;
+    // No explicit choice yet → the platform default, not "undecorated".
+    const theme = findAdminTheme(data.themeId) ?? DEFAULT_ADMIN_THEME;
+    applyAdminTheme(theme);
   }, [isSuperAdmin, data]);
 }
 

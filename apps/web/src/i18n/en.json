@@ -1653,18 +1653,24 @@
       "previewInput": "Search academies…"
     },
     "staff": {
-      "addTitle": "Add staff member",
+      "addTitle": "Invite staff member",
       "email": "Email",
       "role": "Role",
-      "add": "Add member",
+      "add": "Send invitation",
       "suspend": "Suspend",
       "reactivate": "Reactivate",
-      "remove": "Remove"
+      "remove": "Remove",
+      "invited": "Invited — awaiting response"
     },
     "activity": {
       "empty": "No recorded activity for this academy yet",
       "system": "System"
     }
+  },
+  "invitations": {
+    "text": "You've been invited to join {{academy}} as {{role}}.",
+    "accept": "Accept",
+    "decline": "Decline"
   },
   "academy": {
     "none": "Academy",
@@ -2662,6 +2668,8 @@
     "noStaff": "No staff assigned",
     "name": "Name",
     "description": "Description",
+    "pickStudents": "Students",
+    "pickerHint": "{{count}} selected — only students already enrolled with you, in any course, show up here.",
     "rosterSearch": "Search by name or email…",
     "rosterEmpty": "No students found",
     "active": "Active",
@@ -2691,7 +2699,8 @@
     "title": "Schedule",
     "subtitle": "Sessions, rooms, and conflict-free scheduling for your academy",
     "tab": { "calendar": "Calendar", "rooms": "Rooms" },
-    "view": { "day": "Day", "week": "Week" },
+    "view": { "month": "Month", "day": "Day", "week": "Week" },
+    "moreSessions": "+{{count}} more",
     "today": "Today",
     "createSession": "New session",
     "group": "Group",

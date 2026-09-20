@@ -31,6 +31,31 @@ export class AcademyController {
     return this.academy.listMyMemberships(user.sub);
   }
 
+  /** Staff invitations waiting on my own decision — never anyone else's. */
+  @Get('me/invitations')
+  @ApiOperation({ summary: 'My pending academy staff invitations' })
+  myInvitations(@CurrentUser() user: JwtPayload) {
+    return this.academy.myInvitations(user.sub);
+  }
+
+  @Post('me/invitations/:membershipId/accept')
+  @ApiOperation({ summary: 'Accept a staff invitation — I decide when I actually join' })
+  async acceptInvitation(@CurrentUser() user: JwtPayload, @Param('membershipId') id: string) {
+    const membership = await this.academy.acceptInvitation(user.sub, id);
+    await this.audit.log({
+      actorUserId: user.sub, action: 'member.invite.accept', entity: 'AcademyMembership', entityId: id, academyId: membership.academyId,
+    });
+    return membership;
+  }
+
+  @Post('me/invitations/:membershipId/decline')
+  @ApiOperation({ summary: 'Decline a staff invitation' })
+  async declineInvitation(@CurrentUser() user: JwtPayload, @Param('membershipId') id: string) {
+    const result = await this.academy.declineInvitation(user.sub, id);
+    await this.audit.log({ actorUserId: user.sub, action: 'member.invite.decline', entity: 'AcademyMembership', entityId: id });
+    return result;
+  }
+
   /** Public branding for an academy landing page (no membership required). */
   @Public()
   @Get('academies/:slug')
@@ -126,12 +151,12 @@ export class AcademyController {
   @Post('academies/:slug/members')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
-  @ApiOperation({ summary: '[academy] Add an existing user as staff (teacher/assistant)' })
+  @ApiOperation({ summary: '[academy] Invite an existing user as staff (teacher/assistant) — pending until they accept' })
   async addMember(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMemberDto) {
     const member = await this.academy.addMember(ctx.academyId, dto);
     await this.audit.log({
       actorUserId: user.sub,
-      action: 'member.add',
+      action: 'member.invite',
       entity: 'AcademyMembership',
       entityId: member.id,
       academyId: ctx.academyId,

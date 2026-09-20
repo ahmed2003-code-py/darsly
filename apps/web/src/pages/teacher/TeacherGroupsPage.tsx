@@ -2,27 +2,112 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { dateShort } from '../../lib/format';
+import { api } from '../../lib/api';
 import { useCreateGroup, useGroups, useNeedsAttention, useRoster } from '../../lib/academyOps';
+import { useQueryClient } from '@tanstack/react-query';
 import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Skeleton } from '../../components/ui';
 
 const TABS = ['groups', 'roster', 'attention'] as const;
 type Tab = (typeof TABS)[number];
 
+/** A teacher picks a group's students from their own real roster (whoever is
+ *  already enrolled with them, in any course) — never a bare description
+ *  field standing in for the thing that actually matters. */
+function StudentPicker({ selected, onToggle }: { selected: Set<string>; onToggle: (id: string) => void }) {
+  const { t } = useTranslation();
+  const [search, setSearch] = useState('');
+  const { data, isLoading } = useRoster({ search, pageSize: 50 });
+
+  return (
+    <div>
+      <div className="relative mb-3">
+        <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-lg text-outline">search</span>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t('groups.rosterSearch') as string}
+          className="w-full rounded-full border border-outline-variant bg-surface-container-lowest py-2 ps-10 pe-4 text-sm outline-none focus:border-primary"
+        />
+      </div>
+      <div className="max-h-64 overflow-y-auto rounded-xl border border-outline-variant/50">
+        {isLoading ? (
+          <div className="p-4"><Skeleton className="h-32 rounded-lg" /></div>
+        ) : !data?.students.length ? (
+          <p className="p-6 text-center text-sm text-on-surface-variant">{t('groups.noCandidates')}</p>
+        ) : (
+          <ul className="divide-y divide-outline-variant/40">
+            {data.students.map((s) => {
+              const checked = selected.has(s.id);
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => onToggle(s.id)}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-start transition hover:bg-surface-container-low ${checked ? 'bg-primary-fixed/40' : ''}`}
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-sm font-bold text-on-primary-fixed">
+                      {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="h-full w-full object-cover" /> : s.fullName?.trim()?.charAt(0)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">{s.fullName}</p>
+                      <p className="truncate text-xs text-outline" dir="ltr">{s.email}</p>
+                    </span>
+                    <span
+                      className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${checked ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant'}`}
+                    >
+                      {checked && <span className="material-symbols-outlined text-sm">check</span>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      <p className="mt-2 text-xs text-outline">{t('groups.pickerHint', { count: selected.size })}</p>
+    </div>
+  );
+}
+
 function GroupsTab() {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const { data, isLoading } = useGroups({ page, pageSize: 20 });
   const createGroup = useCreateGroup();
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [addError, setAddError] = useState<unknown>(null);
 
-  const submit = (e: React.FormEvent) => {
+  const toggleStudent = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const resetForm = () => { setName(''); setSelected(new Set()); setAddError(null); };
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    createGroup.mutate({ name: name.trim(), description: description.trim() || undefined }, {
-      onSuccess: () => { setShowCreate(false); setName(''); setDescription(''); },
-    });
+    setAddError(null);
+    try {
+      const group = await createGroup.mutateAsync({ name: name.trim() });
+      if (selected.size) {
+        await api.post(`/teacher/groups/${group.id}/members`, { studentIds: [...selected] });
+      }
+      qc.invalidateQueries({ queryKey: ['teacher-groups'] });
+      setShowCreate(false);
+      resetForm();
+    } catch (err) {
+      // The group itself may already be created even if adding members
+      // failed — never silently lose that, just surface the real error and
+      // let them retry adding members from the group's own page.
+      setAddError(err);
+    }
   };
 
   if (isLoading) return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-36 rounded-2xl" />)}</div>;
@@ -63,18 +148,20 @@ function GroupsTab() {
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title={t('groups.create')}>
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); resetForm(); }} title={t('groups.create')} wide>
         <form onSubmit={submit} className="grid gap-4">
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('groups.name')}</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" required />
+            <input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" required autoFocus />
           </label>
-          <label className="grid gap-1.5">
-            <span className="text-sm font-bold">{t('groups.description')}</span>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" />
-          </label>
-          <button type="submit" className="btn-primary py-2.5" disabled={createGroup.isPending}>{t('common.save')}</button>
-          <ErrorNote error={createGroup.error} />
+          <div>
+            <span className="mb-1.5 block text-sm font-bold">{t('groups.pickStudents')}</span>
+            <StudentPicker selected={selected} onToggle={toggleStudent} />
+          </div>
+          <button type="submit" className="btn-primary py-2.5" disabled={createGroup.isPending || !name.trim()}>
+            {createGroup.isPending ? t('common.saving') : t('common.save')}
+          </button>
+          <ErrorNote error={createGroup.error ?? addError} />
         </form>
       </Modal>
     </div>

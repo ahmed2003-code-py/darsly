@@ -212,6 +212,7 @@ export default function AdminAcademyDetailPage() {
           <div className="grid gap-3">
             {(members.data ?? data.staff).map((s: any) => {
               const isOwner = s.role === 'OWNER';
+              const isInvited = s.status === 'INVITED';
               return (
                 <div key={s.id} className="card flex items-center gap-4 p-4">
                   <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
@@ -221,18 +222,21 @@ export default function AdminAcademyDetailPage() {
                     <p className="truncate font-heading font-bold">{s.fullName}</p>
                     <p className="truncate text-xs text-outline" dir="ltr">{s.email}</p>
                   </div>
+                  {isInvited && <Badge tone="warn">{t('adminControlStudio.staff.invited')}</Badge>}
                   <Badge tone={isOwner ? 'primary' : s.status === 'SUSPENDED' ? 'error' : 'neutral'}>
                     {t(`admin.staffRole.${s.role}`)}
                   </Badge>
                   {!isOwner && s.id && members.data && (
                     <div className="flex items-center gap-1">
-                      <button
-                        className="rounded-lg px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:bg-surface-container-low"
-                        disabled={updateMember.isPending}
-                        onClick={() => updateMember.mutate({ membershipId: s.id, status: s.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' })}
-                      >
-                        {s.status === 'SUSPENDED' ? t('adminControlStudio.staff.reactivate') : t('adminControlStudio.staff.suspend')}
-                      </button>
+                      {!isInvited && (
+                        <button
+                          className="rounded-lg px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:bg-surface-container-low"
+                          disabled={updateMember.isPending}
+                          onClick={() => updateMember.mutate({ membershipId: s.id, status: s.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' })}
+                        >
+                          {s.status === 'SUSPENDED' ? t('adminControlStudio.staff.reactivate') : t('adminControlStudio.staff.suspend')}
+                        </button>
+                      )}
                       <button
                         className="rounded-lg px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
                         disabled={removeMember.isPending}

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { egp } from '../../lib/format';
-import { ADMIN_THEME_PRESETS, applyAdminTheme, resetAdminTheme } from '../../lib/adminTheme';
+import { ADMIN_THEME_PRESETS, applyAdminTheme } from '../../lib/adminTheme';
 import { useAdminThemePreference, useSetAdminTheme } from '../../lib/adminStudio';
 import { Badge, BarChart, PageHeader, ProgressBar, Skeleton } from '../../components/ui';
 
@@ -142,7 +142,7 @@ export default function AdminStudioPage() {
 
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-heading text-xl font-extrabold">{t('adminControlStudio.theme.gallery')}</h2>
-        <button className="btn-secondary px-4 py-1.5 text-sm" onClick={() => { resetAdminTheme(); setTheme.mutate(null); }}>
+        <button className="btn-secondary px-4 py-1.5 text-sm" onClick={() => { applyAdminTheme(ADMIN_THEME_PRESETS[0]); setTheme.mutate(null); }}>
           {t('adminControlStudio.theme.reset')}
         </button>
       </div>

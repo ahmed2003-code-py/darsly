@@ -178,15 +178,25 @@ export function applyAdminTheme(theme: AdminTheme): void {
   }
 }
 
-/** Back to the platform default admin look — removes every `--adm-*`
- *  property and the gating attribute, so the remap block goes inert and
- *  the shell falls back to its own stylesheet defaults. */
-export function resetAdminTheme(): void {
+/** Strips the admin look from the current page only — `--adm-*` properties
+ *  and the gating attribute — without touching the saved preference. Safe
+ *  to call for ANY non-admin render (a student or teacher on a browser that
+ *  also has an admin account signed in elsewhere): it never destroys that
+ *  other account's cached choice, since it doesn't touch storage. */
+export function stripAdminThemeFromDom(): void {
   const root = document.documentElement;
   for (const name of Array.from(root.style).filter((n) => n.startsWith('--adm-'))) {
     root.style.removeProperty(name);
   }
   root.removeAttribute(ATTR);
+}
+
+/** Back to the platform default admin look for THIS admin — removes the
+ *  saved preference too, so a future login (or boot replay) doesn't bring
+ *  it back. Only ever called from a SUPER_ADMIN session about their own
+ *  preference — see useSetAdminTheme's "reset" action. */
+export function resetAdminTheme(): void {
+  stripAdminThemeFromDom();
   try {
     localStorage.removeItem(CACHE_KEY);
   } catch {
@@ -207,10 +217,14 @@ export function bootAdminTheme(isSuperAdmin: boolean): void {
   if (!isSuperAdmin) return;
   try {
     const id = localStorage.getItem(CACHE_KEY);
-    const theme = findAdminTheme(id);
-    if (theme) applyAdminTheme(theme);
+    // No cache yet (first admin session on this browser) → the platform
+    // default, not undecorated — a SUPER_ADMIN console must look distinct
+    // from a teacher's from the very first paint, before useSyncAdminTheme's
+    // server round-trip even lands.
+    applyAdminTheme(findAdminTheme(id) ?? ADMIN_THEME_PRESETS[0]);
   } catch {
-    // No cache reachable — the Admin Studio just opens undecorated.
+    // No storage reachable at all — falls back to whatever useSyncAdminTheme
+    // applies once React mounts and the server round-trip resolves.
   }
 }
 

@@ -140,8 +140,12 @@ export class AdminService {
     });
   }
 
-  auditLogs() {
+  /** Platform-wide by default; an academyId narrows it to that academy's own
+   *  activity — the per-academy "Activity" tab reuses this, not a second
+   *  audit read path. */
+  auditLogs(academyId?: string) {
     return this.prisma.auditLog.findMany({
+      where: academyId ? { academyId } : {},
       orderBy: { createdAt: 'desc' },
       take: 60,
       include: { actor: { select: { fullName: true, role: true } } },

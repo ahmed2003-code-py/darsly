@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../lib/api';
+import { useSyncAdminTheme } from '../lib/adminStudio';
 import { claimStudio, loadStudio } from '../lib/studio';
 import { useRealtime } from '../lib/useRealtime';
 import { useThemeLayout } from '../lib/useThemeLayout';
@@ -39,6 +40,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const layout = useThemeLayout();
+  useSyncAdminTheme(user?.role === Role.SUPER_ADMIN); // converges a live login with the server's saved Admin Studio theme
   useRealtime(); // live bell + chat list on every authenticated page
   useWebNotifications(navigate); // ...and as OS notifications, clickable, when the tab is away
   // A teacher who has closed messaging keeps no chat destination: the page

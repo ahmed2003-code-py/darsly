@@ -6,10 +6,13 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './i18n';
 import './index.css';
+import { Role } from '@darsly/shared-types';
+import { bootAdminTheme } from './lib/adminTheme';
 import { bootColorMode } from './lib/colorMode';
 import { bootStudio } from './lib/studio';
 import { queryClient } from './lib/queryClient';
 import { bootTheme } from './lib/theme';
+import { useAuthStore } from './stores/auth';
 
 // Replay the academy's colours before the first paint. Waiting for React and a
 // query to resolve would show the platform indigo first and then swap it, which
@@ -21,6 +24,9 @@ import { bootTheme } from './lib/theme';
 bootColorMode();
 bootTheme();
 bootStudio();
+// SUPER_ADMIN-gated: a no-op for every Student/Teacher session, even one
+// that happens to share a browser profile with an admin — see adminTheme.ts.
+bootAdminTheme(useAuthStore.getState().user?.role === Role.SUPER_ADMIN);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

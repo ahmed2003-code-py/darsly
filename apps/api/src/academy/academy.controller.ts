@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
+import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AcademyService } from './academy.service';
@@ -18,7 +19,10 @@ import { CAPABILITIES } from './permissions';
 @ApiBearerAuth()
 @Controller()
 export class AcademyController {
-  constructor(private readonly academy: AcademyService) {}
+  constructor(
+    private readonly academy: AcademyService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** Every academy I belong to (for the academy switcher / home academy). */
   @Get('me/academies')
@@ -123,23 +127,50 @@ export class AcademyController {
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
   @ApiOperation({ summary: '[academy] Add an existing user as staff (teacher/assistant)' })
-  addMember(@CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMemberDto) {
-    return this.academy.addMember(ctx.academyId, dto);
+  async addMember(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMemberDto) {
+    const member = await this.academy.addMember(ctx.academyId, dto);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'member.add',
+      entity: 'AcademyMembership',
+      entityId: member.id,
+      academyId: ctx.academyId,
+      meta: { email: dto.email, role: dto.role, viaPlatformAdmin: ctx.isPlatformAdmin },
+    });
+    return member;
   }
 
   @Patch('academies/:slug/members/:membershipId')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
   @ApiOperation({ summary: '[academy] Change a member role/status' })
-  updateMember(@CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string, @Body() dto: UpdateMemberDto) {
-    return this.academy.updateMember(ctx.academyId, id, dto);
+  async updateMember(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string, @Body() dto: UpdateMemberDto) {
+    const member = await this.academy.updateMember(ctx.academyId, id, dto);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'member.update',
+      entity: 'AcademyMembership',
+      entityId: id,
+      academyId: ctx.academyId,
+      meta: { role: dto.role, status: dto.status, viaPlatformAdmin: ctx.isPlatformAdmin },
+    });
+    return member;
   }
 
   @Delete('academies/:slug/members/:membershipId')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
   @ApiOperation({ summary: '[academy] Remove a member' })
-  removeMember(@CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string) {
-    return this.academy.removeMember(ctx.academyId, id);
+  async removeMember(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string) {
+    const result = await this.academy.removeMember(ctx.academyId, id);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'member.remove',
+      entity: 'AcademyMembership',
+      entityId: id,
+      academyId: ctx.academyId,
+      meta: { viaPlatformAdmin: ctx.isPlatformAdmin },
+    });
+    return result;
   }
 }

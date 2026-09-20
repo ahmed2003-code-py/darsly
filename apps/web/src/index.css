@@ -2,6 +2,7 @@
    First, because an @import anywhere else is invalid CSS and is dropped
    without a word — which is exactly what happened the first time. */
 @import './styles/shell.css';
+@import './styles/admin-theme.css';
 
 @tailwind base;
 @tailwind components;

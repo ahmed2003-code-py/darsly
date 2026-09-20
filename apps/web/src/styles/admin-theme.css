@@ -1,0 +1,97 @@
+/**
+ * Phase 7: Platform Admin theme remap.
+ *
+ * Everything in the shared shell (Sidebar, TopBar, Footer) and every shared
+ * component in components/ui.tsx (Badge, Modal, BarChart, Skeleton,
+ * EmptyState, PageHeader, ProgressBar, ErrorNote, tables, forms) already
+ * runs on the app's own `--c-*` tokens via Tailwind's rgb(var(--c-x) /
+ * <alpha-value>) convention (see tailwind.config.ts). Rather than forking
+ * any of those files for an admin-only variant, this block redefines the
+ * `--c-*` tokens themselves — but only inside `[data-admin-theme]`, an
+ * attribute lib/adminTheme.ts sets on <html> only for a SUPER_ADMIN session
+ * with a theme applied. Every existing admin page and component re-skins
+ * automatically; nothing here is ever active for a Student or Teacher
+ * session, since the attribute is never set on one.
+ */
+[data-admin-theme] {
+  --c-background: var(--adm-background);
+  --c-surface: var(--adm-surface);
+  --c-surface-bright: var(--adm-surface-elevated);
+  --c-surface-dim: var(--adm-background);
+  --c-surface-tint: var(--adm-primary);
+  --c-surface-variant: var(--adm-surface-elevated);
+  --c-surface-container: var(--adm-surface);
+  --c-surface-container-low: var(--adm-surface);
+  --c-surface-container-lowest: var(--adm-sidebar);
+  --c-surface-container-high: var(--adm-surface-elevated);
+  --c-surface-container-highest: var(--adm-surface-elevated);
+  --c-inverse-surface: var(--adm-text);
+  --c-inverse-on-surface: var(--adm-background);
+
+  --c-on-background: var(--adm-text);
+  --c-on-surface: var(--adm-text);
+  --c-on-surface-variant: var(--adm-text-muted);
+  --c-outline: var(--adm-text-muted);
+  --c-line: var(--adm-border);
+  --c-shadow: 0 0 0;
+
+  --c-primary: var(--adm-primary);
+  --c-primary-hover: var(--adm-primary);
+  --c-on-primary: var(--adm-background);
+  --c-primary-container: var(--adm-primary);
+  --c-on-primary-container: var(--adm-background);
+  --c-primary-fixed: var(--adm-surface-elevated);
+  --c-primary-fixed-dim: var(--adm-surface-elevated);
+  --c-on-primary-fixed: var(--adm-primary);
+  --c-on-primary-fixed-variant: var(--adm-primary);
+  --c-inverse-primary: var(--adm-primary);
+  --c-brand-accent: var(--adm-accent);
+  --c-on-brand-accent: var(--adm-background);
+
+  --c-secondary: var(--adm-secondary);
+  --c-on-secondary: var(--adm-background);
+  --c-secondary-container: var(--adm-surface-elevated);
+  --c-on-secondary-container: var(--adm-text);
+  --c-secondary-fixed: var(--adm-surface-elevated);
+  --c-secondary-fixed-dim: var(--adm-surface-elevated);
+  --c-on-secondary-fixed: var(--adm-secondary);
+  --c-on-secondary-fixed-variant: var(--adm-secondary);
+
+  --c-tertiary: var(--adm-accent);
+  --c-on-tertiary: var(--adm-background);
+  --c-tertiary-container: var(--adm-surface-elevated);
+  --c-on-tertiary-container: var(--adm-text);
+
+  --c-error: var(--adm-danger);
+  --c-on-error: var(--adm-background);
+  --c-error-container: var(--adm-surface-elevated);
+  --c-on-error-container: var(--adm-danger);
+
+  --c-gold: var(--adm-warning);
+  --c-gold-ink: var(--adm-background);
+  --c-gold-soft: var(--adm-surface-elevated);
+  --c-on-gold: var(--adm-background);
+
+  --c-accent-50: var(--adm-surface-elevated);
+  --c-accent-100: var(--adm-surface-elevated);
+  --c-accent-200: var(--adm-border);
+  --c-accent-300: var(--adm-secondary);
+  --c-accent-400: var(--adm-secondary);
+  --c-accent-500: var(--adm-primary);
+  --c-accent-600: var(--adm-primary);
+  --c-accent-700: var(--adm-primary);
+  --c-accent-800: var(--adm-primary);
+  --c-accent-900: var(--adm-text);
+}
+
+/* Sidebar / topbar get their own admin-specific surface, distinct from
+   ordinary cards, matching the "sidebar"/"topbar" tokens the preset shape
+   asks for — a plain --c-surface-container-lowest remap alone would tie
+   them to the same value as every other low-elevation surface. */
+[data-admin-theme] .shell-aside,
+[data-admin-theme] .shell-drawer {
+  background-color: rgb(var(--adm-sidebar));
+}
+[data-admin-theme] header[data-variant] {
+  background-color: rgb(var(--adm-topbar));
+}

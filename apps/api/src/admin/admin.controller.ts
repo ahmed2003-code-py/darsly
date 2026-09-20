@@ -107,8 +107,8 @@ export class AdminController {
   }
 
   @Get('audit-logs')
-  @ApiOperation({ summary: '[admin] Recent audit log' })
-  audit() {
-    return this.admin.auditLogs();
+  @ApiOperation({ summary: '[admin] Recent audit log — optionally scoped to one academy' })
+  audit(@Query('academyId') academyId?: string) {
+    return this.admin.auditLogs(academyId);
   }
 }

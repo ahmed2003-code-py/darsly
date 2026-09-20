@@ -35,6 +35,11 @@ model User {
   avatarUrl    String?
   locale       String    @default("ar")
   isActive     Boolean   @default(true)
+  /// Phase 7: SUPER_ADMIN's own Admin Studio theme choice ({themeId,
+  /// customTokens?}). Null = platform default. Nobody else reads or writes
+  /// this — scoped to the caller's own id everywhere it's touched, and it
+  /// never influences Student/Teacher/Academy rendering.
+  adminThemePreference Json?
   // Brute-force defense: consecutive failures soft-lock the account.
   failedLogins Int       @default(0)
   lockedUntil  DateTime?

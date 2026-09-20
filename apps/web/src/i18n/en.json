@@ -124,6 +124,7 @@
     "academy": "Academy",
     "studio": "Academy Studio",
     "adminStudio": "Academy Studio",
+    "adminControlStudio": "Admin Studio",
     "browse": "Browse courses",
     "adminDevices": "Listener devices",
     "learning": "Learning Center",
@@ -753,7 +754,8 @@
     "academyTab": {
       "overview": "Overview",
       "staff": "Staff",
-      "flags": "Feature flags"
+      "flags": "Feature flags",
+      "activity": "Activity"
     },
     "owner": "Owner",
     "lastActivity": "Last activity",
@@ -1616,6 +1618,52 @@
         "down": "The AI service is down right now ({{status}}) — a rerun will work once it is back",
         "request": "The AI service rejected the request ({{status}}) — this is a platform bug, not missing teacher data"
       }
+    }
+  },
+  "adminControlStudio": {
+    "title": "Admin Studio",
+    "subtitle": "Platform configuration, control, and your own Admin Studio theme.",
+    "actions": {
+      "academies": "Academies",
+      "security": "Security & audit",
+      "payouts": "Payouts",
+      "suspendAcademy": "Suspend academy",
+      "reactivateAcademy": "Reactivate academy",
+      "suspendConfirm": "Suspend {{name}}? Its owner is signed out of teaching until reactivated — students keep any access they already have.",
+      "reactivateConfirm": "Reactivate {{name}}? Its owner regains full access immediately."
+    },
+    "theme": {
+      "gallery": "Theme gallery",
+      "reset": "Reset to default",
+      "apply": "Apply",
+      "dark": "Dark",
+      "light": "Light",
+      "hint": "Click a theme to preview it live across the Admin Studio — nothing is saved until you press Apply.",
+      "livePreview": "Live preview",
+      "previewKpi1": "Platform revenue",
+      "previewKpi2": "Active academies",
+      "previewBadgeActive": "Active",
+      "previewBadgeWarn": "Pending",
+      "previewPending": "Pending",
+      "previewChart": "Weekly enrollments",
+      "previewTable": "Academies",
+      "previewName": "Name",
+      "previewStatus": "Status",
+      "previewForm": "Form controls",
+      "previewInput": "Search academies…"
+    },
+    "staff": {
+      "addTitle": "Add staff member",
+      "email": "Email",
+      "role": "Role",
+      "add": "Add member",
+      "suspend": "Suspend",
+      "reactivate": "Reactivate",
+      "remove": "Remove"
+    },
+    "activity": {
+      "empty": "No recorded activity for this academy yet",
+      "system": "System"
     }
   },
   "academy": {

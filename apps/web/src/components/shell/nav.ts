@@ -49,6 +49,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/academies', icon: 'apartment', labelKey: 'nav.adminAcademies' },
   { to: '/admin/teachers', icon: 'verified_user', labelKey: 'nav.adminTeachers' },
   { to: '/admin/academy-studio', icon: 'auto_awesome', labelKey: 'nav.adminStudio' },
+  { to: '/admin/studio', icon: 'tune', labelKey: 'nav.adminControlStudio' },
   { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },
   { to: '/admin/wallet', icon: 'account_balance_wallet', labelKey: 'nav.adminWallet' },
   { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },

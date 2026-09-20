@@ -226,7 +226,7 @@ export default function ChallengeBuilderPage() {
       </div>
 
       {step === 'basic' && (
-        <div className="card max-w-2xl space-y-4">
+        <div className="card max-w-4xl space-y-5">
           <label className="block">
             <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.basic.title')}</span>
             <input className="input" dir="auto" value={title} placeholder={t('challenges.teacher.basic.titlePh')}
@@ -243,7 +243,7 @@ export default function ChallengeBuilderPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               {(['PRACTICE', 'RANKED'] as const).map((ty) => (
                 <button key={ty} type="button" onClick={() => applyType(ty)}
-                  className={`rounded-xl border p-3 text-start transition ${type === ty ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant'}`}>
+                  className={`rounded-xl border p-4 text-start transition ${type === ty ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant'}`}>
                   <span className="block font-heading font-bold">{t(`challenges.teacher.basic.type${ty === 'PRACTICE' ? 'Practice' : 'Ranked'}`)}</span>
                   <span className="mt-1 block text-xs text-on-surface-variant">{t(`challenges.teacher.basic.type${ty === 'PRACTICE' ? 'Practice' : 'Ranked'}Hint`)}</span>
                 </button>
@@ -251,31 +251,32 @@ export default function ChallengeBuilderPage() {
             </div>
           </div>
 
-          <div>
-            <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.basic.difficulty')}</span>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((d) => (
-                <button key={d} type="button" onClick={() => setDifficulty(d)}
-                  className={`h-9 w-9 rounded-full font-bold transition ${difficulty === d ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                  {d}
-                </button>
-              ))}
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.basic.difficulty')}</span>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((d) => (
+                  <button key={d} type="button" onClick={() => setDifficulty(d)}
+                    className={`h-9 w-9 rounded-full font-bold transition ${difficulty === d ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.basic.coverIcon')}</span>
+              <div className="flex flex-wrap gap-2">
+                {COVER_ICONS.map((ic) => (
+                  <button key={ic} type="button" onClick={() => setCoverIcon(ic)}
+                    className={`grid h-10 w-10 place-items-center rounded-full transition ${coverIcon === ic ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                    <span className="material-symbols-outlined text-[20px]">{ic}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div>
-            <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.basic.coverIcon')}</span>
-            <div className="flex flex-wrap gap-2">
-              {COVER_ICONS.map((ic) => (
-                <button key={ic} type="button" onClick={() => setCoverIcon(ic)}
-                  className={`grid h-10 w-10 place-items-center rounded-full transition ${coverIcon === ic ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                  <span className="material-symbols-outlined text-[20px]">{ic}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block">
               <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.basic.course')}</span>
               <select className="input" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
@@ -308,7 +309,7 @@ export default function ChallengeBuilderPage() {
       )}
 
       {step === 'settings' && (
-        <div className="card max-w-2xl space-y-4">
+        <div className="card max-w-4xl space-y-4">
           <div>
             <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.settings.maxAttempts')}</span>
             <div className="flex gap-2">
@@ -330,53 +331,57 @@ export default function ChallengeBuilderPage() {
           </button>
 
           {showAdvanced && (
-            <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} transition={{ duration: 0.22 }} className="space-y-4 overflow-hidden">
-              <label className="block">
-                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.duration')}</span>
-                <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.durationNone')}
-                  value={durationMin} onChange={(e) => setDurationMin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
-                <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.durationHint')}</span>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.questionTime')}</span>
-                <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.questionTimeNone')}
-                  value={questionTimeSec} onChange={(e) => setQuestionTimeSec(e.target.value.replace(/\D/g, '').slice(0, 4))} />
-                <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.questionTimeHint')}</span>
-              </label>
+            <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} transition={{ duration: 0.22 }} className="space-y-5 overflow-hidden">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.duration')}</span>
+                  <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.durationNone')}
+                    value={durationMin} onChange={(e) => setDurationMin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                  <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.durationHint')}</span>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.questionTime')}</span>
+                  <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.questionTimeNone')}
+                    value={questionTimeSec} onChange={(e) => setQuestionTimeSec(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                  <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.questionTimeHint')}</span>
+                </label>
+              </div>
               <div>
                 <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.settings.scoring')}</span>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {(['STANDARD', 'SPEED_BASED'] as const).map((sc) => (
                     <button key={sc} type="button" onClick={() => setScoring(sc)}
-                      className={`rounded-xl border p-3 text-start transition ${scoring === sc ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant'}`}>
+                      className={`rounded-xl border p-4 text-start transition ${scoring === sc ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant'}`}>
                       <span className="block font-heading font-bold">{t(`challenges.teacher.settings.scoring${sc === 'STANDARD' ? 'Standard' : 'Speed'}`)}</span>
                       <span className="mt-1 block text-xs text-on-surface-variant">{t(`challenges.teacher.settings.scoring${sc === 'STANDARD' ? 'Standard' : 'Speed'}Hint`)}</span>
                     </button>
                   ))}
                 </div>
               </div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.answerReveal')}</span>
+                  <select className="input" value={answerReveal} onChange={(e) => setAnswerReveal(e.target.value)}>
+                    <option value="IMMEDIATE">{t('challenges.teacher.settings.revealImmediate')}</option>
+                    <option value="AFTER_SUBMISSION">{t('challenges.teacher.settings.revealAfterSubmission')}</option>
+                    <option value="AFTER_CLOSE">{t('challenges.teacher.settings.revealAfterClose')}</option>
+                    <option value="NEVER">{t('challenges.teacher.settings.revealNever')}</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.randomize')}</span>
+                  <select className="input" value={randomize} onChange={(e) => setRandomize(e.target.value)}>
+                    <option value="NONE">{t('challenges.teacher.settings.randomizeNone')}</option>
+                    <option value="QUESTIONS">{t('challenges.teacher.settings.randomizeQuestions')}</option>
+                    <option value="ANSWERS">{t('challenges.teacher.settings.randomizeAnswers')}</option>
+                    <option value="BOTH">{t('challenges.teacher.settings.randomizeBoth')}</option>
+                  </select>
+                </label>
+              </div>
               <label className="flex items-start gap-2 text-sm">
                 <input type="checkbox" className="mt-0.5 accent-primary" checked={leaderboardEnabled}
                   onChange={(e) => setLeaderboardEnabled(e.target.checked)} />
                 <span className="font-bold">{t('challenges.teacher.settings.leaderboard')}</span>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.answerReveal')}</span>
-                <select className="input" value={answerReveal} onChange={(e) => setAnswerReveal(e.target.value)}>
-                  <option value="IMMEDIATE">{t('challenges.teacher.settings.revealImmediate')}</option>
-                  <option value="AFTER_SUBMISSION">{t('challenges.teacher.settings.revealAfterSubmission')}</option>
-                  <option value="AFTER_CLOSE">{t('challenges.teacher.settings.revealAfterClose')}</option>
-                  <option value="NEVER">{t('challenges.teacher.settings.revealNever')}</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.randomize')}</span>
-                <select className="input" value={randomize} onChange={(e) => setRandomize(e.target.value)}>
-                  <option value="NONE">{t('challenges.teacher.settings.randomizeNone')}</option>
-                  <option value="QUESTIONS">{t('challenges.teacher.settings.randomizeQuestions')}</option>
-                  <option value="ANSWERS">{t('challenges.teacher.settings.randomizeAnswers')}</option>
-                  <option value="BOTH">{t('challenges.teacher.settings.randomizeBoth')}</option>
-                </select>
               </label>
             </m.div>
           )}

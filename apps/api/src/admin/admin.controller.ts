@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, ForbiddenException, Get, Logger,
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, PayoutStatus, Role, TeacherStatus } from '@darsly/shared-types';
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { AuditService } from '../audit/audit.service';
 import { seedDatabase } from '../common/demo-seed';
 import { LIMITS } from '../common/validation';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -31,6 +32,7 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly payouts: PayoutsService,
     private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -85,8 +87,17 @@ export class AdminController {
 
   @Patch('payouts/:id')
   @ApiOperation({ summary: '[admin] Advance a payout (APPROVED/PROCESSING/COMPLETED/REJECTED)' })
-  processPayout(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: ProcessPayoutDto) {
-    return this.payouts.process(id, dto.status, user.sub, dto.note);
+  async processPayout(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: ProcessPayoutDto) {
+    const result = await this.payouts.process(id, dto.status, user.sub, dto.note);
+    await this.auditService.log({
+      actorUserId: user.sub,
+      action: `payout.${dto.status.toLowerCase()}`,
+      entity: 'PayoutRequest',
+      entityId: id,
+      academyId: result.tenantId,
+      meta: { note: dto.note },
+    });
+    return result;
   }
 
   @Get('security-events')

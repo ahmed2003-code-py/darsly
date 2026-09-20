@@ -11,6 +11,9 @@ export class AuditService {
     action: string;
     entity: string;
     entityId?: string;
+    /** Academy this action belongs to, when it's academy-scoped. Left unset
+     *  for platform-level or student-level actions. */
+    academyId?: string | null;
     meta?: Record<string, unknown>;
     ip?: string;
   }) {
@@ -20,6 +23,7 @@ export class AuditService {
         action: input.action,
         entity: input.entity,
         entityId: input.entityId,
+        academyId: input.academyId ?? undefined,
         meta: (input.meta ?? {}) as object,
         ip: input.ip,
       },

@@ -4,6 +4,7 @@ import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'c
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
+import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -51,6 +52,7 @@ export class ManualPaymentsController {
     private readonly payments: ManualPaymentsService,
     private readonly accounts: PaymentAccountsService,
     private readonly matching: PaymentMatchingService,
+    private readonly audit: AuditService,
   ) {}
 
   // ── Receiving accounts ──────────────────────────────────────────────────────
@@ -126,16 +128,33 @@ export class ManualPaymentsController {
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
   @ApiOperation({ summary: '[admin] Confirm any payment' })
-  adminVerify(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.payments.verify(u, id);
+  async adminVerify(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    const result = await this.payments.verify(u, id);
+    await this.audit.log({
+      actorUserId: u.sub,
+      action: 'payment.admin_verify',
+      entity: 'Payment',
+      entityId: id,
+      academyId: await this.payments.academyIdFor(id),
+    });
+    return result;
   }
 
   @Post('admin/payments/:id/reject')
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
   @ApiOperation({ summary: '[admin] Reject any payment' })
-  adminReject(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: RejectDto) {
-    return this.payments.reject(u, id, dto.reason);
+  async adminReject(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: RejectDto) {
+    const result = await this.payments.reject(u, id, dto.reason);
+    await this.audit.log({
+      actorUserId: u.sub,
+      action: 'payment.admin_reject',
+      entity: 'Payment',
+      entityId: id,
+      academyId: await this.payments.academyIdFor(id),
+      meta: { reason: dto.reason },
+    });
+    return result;
   }
 
   /**
@@ -171,8 +190,16 @@ export class ManualPaymentsController {
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
   @ApiOperation({ summary: '[admin] Settle a self-verified payment → credits withdrawable balance' })
-  adminSettle(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.payments.settle(id, u.sub);
+  async adminSettle(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    const result = await this.payments.settle(id, u.sub);
+    await this.audit.log({
+      actorUserId: u.sub,
+      action: 'payment.admin_settle',
+      entity: 'Payment',
+      entityId: id,
+      academyId: await this.payments.academyIdFor(id),
+    });
+    return result;
   }
 
   // ── Admin: manage receiving accounts ────────────────────────────────────────

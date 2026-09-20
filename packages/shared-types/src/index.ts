@@ -92,11 +92,21 @@ export enum QuestionType {
 }
 
 export enum EnrollmentStatus {
-  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  /** A payment has been submitted and is waiting to be confirmed. */
+  PENDING_PAYMENT = 'PENDING_PAYMENT',
   ACTIVE = 'ACTIVE',
   REJECTED = 'REJECTED',
   EXPIRED = 'EXPIRED',
   REVOKED = 'REVOKED',
+}
+
+// ── Academy (multi-tenant SaaS) ───────────────────────────────────────────
+
+export enum AcademyRole {
+  OWNER = 'OWNER',
+  TEACHER = 'TEACHER',
+  ASSISTANT = 'ASSISTANT',
+  STUDENT = 'STUDENT',
 }
 
 // ── Challenges (gamified) ──────────────────────────────────────────────────

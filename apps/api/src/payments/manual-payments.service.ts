@@ -306,6 +306,12 @@ export class ManualPaymentsService {
 
   // ── Verify / reject (teacher for own courses, admin for any) ────────────────
 
+  /** For audit-log attribution — tenantId already equals academyId. */
+  async academyIdFor(paymentId: string): Promise<string | null> {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId }, select: { tenantId: true } });
+    return payment?.tenantId ?? null;
+  }
+
   async verify(user: { sub: string; role: string; tenantId?: string }, paymentId: string) {
     const payment = await this.authorizePayment(user, paymentId);
     // Separation of duties: an admin is an independent party, so their verify

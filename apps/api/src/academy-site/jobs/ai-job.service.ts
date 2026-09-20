@@ -119,7 +119,9 @@ export class AiJobService {
   }
 
   /** Fail a job. RETRYABLE errors below the attempt cap go back to QUEUED;
-   *  everything else is terminal. */
+   *  everything else is terminal. Not academy-scoped: jobId here is always
+   *  `job.id` from a job this worker itself claimed via claimNext(), never
+   *  user input. */
   async fail(jobId: string, err: { message: string; errorClass: AiErrorClass }): Promise<void> {
     const job = await this.prisma.aiJob.findUnique({ where: { id: jobId } });
     if (!job) return;
@@ -135,7 +137,11 @@ export class AiJobService {
     });
   }
 
-  /** Admin: re-queue a FAILED job for another attempt (fresh attempt counter). */
+  /** Admin: re-queue a FAILED job for another attempt (fresh attempt counter).
+   *  Intentionally not academy-scoped: the only caller is
+   *  AdminAcademyStudioController, gated `@Roles(Role.SUPER_ADMIN)` at the
+   *  controller level — a platform admin is meant to manage any academy's
+   *  jobs here, same as every other route on that controller. */
   async rerunFailed(jobId: string): Promise<AiJob> {
     const job = await this.prisma.aiJob.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');

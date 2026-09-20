@@ -125,8 +125,9 @@ model Academy {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete
 
-  memberships AcademyMembership[]
-  domains     AcademyDomain[]
+  memberships  AcademyMembership[]
+  domains      AcademyDomain[]
+  featureFlags AcademyFeatureFlag[]
 
   // Academy Studio (AI site) — Phase 1. All additive.
   siteFacts AcademyProfileFacts?
@@ -136,6 +137,23 @@ model Academy {
   claims    AcademyClaim[]
 
   @@index([status])
+}
+
+// Per-academy feature toggles. A missing row means "default for that key" (see
+// FeatureFlagsService.DEFAULT_ENABLED / FEATURE_FLAG_KEYS), not "off" — so
+// shipping a new flag never requires backfilling every academy. Platform-admin
+// managed only.
+model AcademyFeatureFlag {
+  id        String   @id @default(cuid())
+  academyId String
+  academy   Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  key       String
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  updatedBy String? // userId of the platform admin who last changed it
+
+  @@unique([academyId, key])
+  @@index([academyId])
 }
 
 // Custom / subdomain hosts that resolve to this academy (verified only).
@@ -160,7 +178,9 @@ model AcademyMembership {
   academy     Academy          @relation(fields: [academyId], references: [id], onDelete: Cascade)
   role        AcademyRole
   status      MembershipStatus @default(ACTIVE)
-  // A student's single primary academy; one true per user (enforced in code + backfill).
+  // A student's single primary academy; one true per user. Enforced in application code
+  // AND at the DB level via a partial unique index (migration 20260920040600 — not
+  // representable here since Prisma's DSL has no WHERE-qualified @@unique).
   isHome      Boolean          @default(false)
   // Optional named-capability overrides layered on top of the role defaults.
   permissions Json             @default("[]")
@@ -1893,12 +1913,17 @@ model AuditLog {
   action      String // e.g. teacher.approve, payout.complete, enrollment.revoke
   entity      String
   entityId    String?
+  // Nullable: not every audited action is academy-scoped (e.g. a student's own
+  // WalletTopup, or global catalog Subject/GradeLevel edits), and older rows
+  // predate this column — backfilled where derivable, left null otherwise.
+  academyId   String?
   meta        Json     @default("{}")
   ip          String?
   createdAt   DateTime @default(now())
 
   @@index([action, createdAt])
   @@index([entity, entityId])
+  @@index([academyId, createdAt])
 }
 
 // Global key-value platform settings editable by super admin.

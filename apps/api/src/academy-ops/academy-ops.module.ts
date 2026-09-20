@@ -36,5 +36,10 @@ import { SessionsService } from './sessions.service';
     RoomsService,
     SessionsService,
   ],
+  // Phase 6: AnalyticsService composes the existing at-risk-attendance rule
+  // (NeedsAttentionService), resource-scope check (AcademyOpsAccessService),
+  // and group listing (GroupsService, for staff-batched group metadata)
+  // rather than re-deriving any of them.
+  exports: [NeedsAttentionService, AcademyOpsAccessService, GroupsService],
 })
 export class AcademyOpsModule {}

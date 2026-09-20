@@ -725,6 +725,13 @@
     "totalEnrollments": "Total enrollments",
     "trends": "Trends",
     "rangeDays": "{{count}}d",
+    "platformAnalytics": {
+      "title": "Platform analytics",
+      "attendanceRate": "Attendance rate",
+      "activeAcademyRate": "{{n}} of {{of}} academies active",
+      "conversion": "Payment conversion",
+      "pendingReview": "Payments pending review"
+    },
     "revenueTrend": "Gross revenue",
     "enrollmentTrend": "New enrollments",
     "academiesTitle": "Academies",
@@ -1089,7 +1096,80 @@
     "views": "{{count}} views",
     "rating": "Average rating",
     "totalEnrollments": "Total enrollments",
-    "pending": "Pending approval"
+    "pending": "Pending approval",
+    "tabs": {
+      "overview": "Overview",
+      "growth": "Growth",
+      "enrollments": "Enrollments",
+      "attendance": "Attendance",
+      "groups": "Groups",
+      "scheduling": "Scheduling",
+      "courses": "Courses",
+      "teachers": "Staff",
+      "financial": "Financial"
+    },
+    "students": {
+      "total": "Total students",
+      "active": "Active students",
+      "new": "New students",
+      "returning": "Returning (week over week)",
+      "inactive": "Inactive students",
+      "inactiveHint": "Inactive means an enrolled student with no recorded activity in the last {{days}} days."
+    },
+    "growth": {
+      "newStudents": "New students",
+      "newEnrollments": "New enrollment requests",
+      "activated": "Enrollments activated",
+      "courseActivity": "Lessons completed"
+    },
+    "enrollments": {
+      "byStatus": "By status",
+      "bySource": "Active enrollments by source",
+      "bySourceHint": "\"Automatic\" covers both an instant free enrollment and a verified paid one — neither is staff-granted.",
+      "demo": "Demo"
+    },
+    "attendance": {
+      "rate": "Attendance rate",
+      "trend": "Attendance rate trend",
+      "byGroup": "By group",
+      "atRisk": "At-risk students",
+      "noAtRisk": "No students currently at risk",
+      "streak": "{{count}} absences in a row"
+    },
+    "groups": {
+      "empty": "No groups yet",
+      "students": "Students",
+      "sessions": "Sessions",
+      "sessionsBreakdown": "{{done}} done · {{cancelled}} cancelled · {{upcoming}} upcoming"
+    },
+    "scheduling": {
+      "completed": "Completed sessions",
+      "cancelled": "Cancelled sessions",
+      "upcoming": "Upcoming sessions",
+      "roomUsage": "Room usage",
+      "roomUsageHint": "Scheduled minutes and session count — not a percentage, since rooms have no set operating hours to divide by.",
+      "sessionsMinutes": "{{sessions}} sessions · {{minutes}} min",
+      "teacherLoad": "Staff load",
+      "groupLoad": "Group load"
+    },
+    "courses": {
+      "empty": "No courses yet",
+      "course": "Course"
+    },
+    "teachers": {
+      "empty": "No staff members yet",
+      "name": "Name",
+      "role": "Role",
+      "groups": "Groups",
+      "sessions": "Sessions"
+    },
+    "financial": {
+      "lifetime": "Lifetime net earnings",
+      "paid": "Paid transactions",
+      "pending": "Pending payments",
+      "trend": "Net revenue trend",
+      "byCourse": "Revenue by course"
+    }
   },
   "saved": {
     "title": "Saved courses",

@@ -28,4 +28,22 @@ export class AdminAnalyticsController {
   revenue(@Query('range') range?: string) {
     return this.analytics.revenueTrend(parseRange(range));
   }
+
+  @Get('attendance')
+  @ApiOperation({ summary: '[admin] Platform-wide attendance rate + trend' })
+  attendance(@Query('range') range?: string) {
+    return this.analytics.attendanceAggregate(parseRange(range));
+  }
+
+  @Get('financial')
+  @ApiOperation({ summary: '[admin] Platform gross/commission + payment conversion' })
+  financial(@Query('range') range?: string) {
+    return this.analytics.financialOverview(parseRange(range));
+  }
+
+  @Get('active-academies')
+  @ApiOperation({ summary: '[admin] Share of ACTIVE academies with a recent enrollment' })
+  activeAcademies(@Query('range') range?: string) {
+    return this.analytics.activeAcademyRate(parseRange(range));
+  }
 }

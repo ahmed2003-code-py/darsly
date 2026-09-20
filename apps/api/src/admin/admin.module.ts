@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
 import { AdminAcademiesController } from './admin-academies.controller';
 import { AdminAcademiesService } from './admin-academies.service';
@@ -8,7 +9,10 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 @Module({
-  imports: [FeatureFlagsModule],
+  // AnalyticsModule: platform-wide attendance/course-activity reuse
+  // AnalyticsService's tenantId-nullable methods (see AdminAnalyticsService)
+  // instead of a second implementation.
+  imports: [FeatureFlagsModule, AnalyticsModule],
   controllers: [AdminController, AdminAcademiesController, AdminAnalyticsController],
   providers: [AdminService, AdminAcademiesService, AdminAnalyticsService],
 })

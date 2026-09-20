@@ -399,6 +399,36 @@ export class LedgerService {
   }
 
   /**
+   * An academy's own net-revenue trend — CREDIT activity on its
+   * teacher:<tenantId>:balance account, day by day, zero-filled. The
+   * per-academy counterpart to revenueTrend (platform-wide gross + fee): an
+   * academy sees only what it earns, never gross or the platform's
+   * commission — see teacherEarnings() above for why.
+   */
+  async academyRevenueTrend(tenantId: string, days: number): Promise<{ date: string; netCents: number }[]> {
+    const account = this.teacherAccount(tenantId);
+    const rows = await this.prisma.$queryRaw<{ day: Date; net: bigint }[]>`
+      WITH days AS (
+        SELECT generate_series(
+          date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day',
+          date_trunc('day', now()),
+          INTERVAL '1 day'
+        ) AS day
+      ), agg AS (
+        SELECT date_trunc('day', "createdAt") AS day, SUM("amountCents") AS net
+        FROM "LedgerEntry"
+        WHERE "createdAt" >= date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day'
+          AND account = ${account} AND direction = 'CREDIT' AND "deletedAt" IS NULL
+        GROUP BY day
+      )
+      SELECT d.day AS day, COALESCE(a.net, 0) AS net
+      FROM days d LEFT JOIN agg a ON a.day = d.day
+      ORDER BY d.day ASC
+    `;
+    return rows.map((r) => ({ date: r.day.toISOString().slice(0, 10), netCents: Number(r.net) }));
+  }
+
+  /**
    * DRS-INV-YYYY-NNNNNN invoice on first paid record. Idempotent per payment.
    * Deriving the serial from count() can race two concurrent payments onto the
    * same serial, so we retry on a unique-constraint conflict (on either the

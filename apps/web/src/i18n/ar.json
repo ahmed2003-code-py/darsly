@@ -725,6 +725,13 @@
     "totalEnrollments": "إجمالي الاشتراكات",
     "trends": "الاتجاهات",
     "rangeDays": "{{count}} يوم",
+    "platformAnalytics": {
+      "title": "تحليلات المنصة",
+      "attendanceRate": "نسبة الحضور",
+      "activeAcademyRate": "{{n}} من أصل {{of}} أكاديمية نشطة",
+      "conversion": "نسبة تحويل الدفعات",
+      "pendingReview": "دفعات بانتظار المراجعة"
+    },
     "revenueTrend": "إجمالي الإيرادات",
     "enrollmentTrend": "اشتراكات جديدة",
     "academiesTitle": "الأكاديميات",
@@ -1089,7 +1096,80 @@
     "views": "{{count}} مشاهدة",
     "rating": "متوسط التقييم",
     "totalEnrollments": "إجمالي الالتحاقات",
-    "pending": "بانتظار الموافقة"
+    "pending": "بانتظار الموافقة",
+    "tabs": {
+      "overview": "نظرة عامة",
+      "growth": "النمو",
+      "enrollments": "الالتحاقات",
+      "attendance": "الحضور",
+      "groups": "المجموعات",
+      "scheduling": "الجدولة",
+      "courses": "الدورات",
+      "teachers": "الطاقم",
+      "financial": "المالية"
+    },
+    "students": {
+      "total": "إجمالي الطلاب",
+      "active": "طلاب نشطون",
+      "new": "طلاب جدد",
+      "returning": "العائدون (أسبوع مقابل أسبوع)",
+      "inactive": "طلاب غير نشطين",
+      "inactiveHint": "غير نشط تعني طالبًا ملتحقًا لم يُسجَّل له أي نشاط خلال آخر {{days}} يومًا."
+    },
+    "growth": {
+      "newStudents": "طلاب جدد",
+      "newEnrollments": "طلبات التحاق جديدة",
+      "activated": "التحاقات مُفعَّلة",
+      "courseActivity": "دروس مكتملة"
+    },
+    "enrollments": {
+      "byStatus": "حسب الحالة",
+      "bySource": "الالتحاقات النشطة حسب المصدر",
+      "bySourceHint": "\"تلقائي\" يشمل كلًا من الالتحاق المجاني الفوري والالتحاق المدفوع المؤكَّد — كلاهما ليس ممنوحًا من الطاقم.",
+      "demo": "تجريبي"
+    },
+    "attendance": {
+      "rate": "نسبة الحضور",
+      "trend": "اتجاه نسبة الحضور",
+      "byGroup": "حسب المجموعة",
+      "atRisk": "طلاب بحاجة لمتابعة",
+      "noAtRisk": "لا يوجد طلاب بحاجة لمتابعة حاليًا",
+      "streak": "{{count}} غياب متتالٍ"
+    },
+    "groups": {
+      "empty": "لا توجد مجموعات بعد",
+      "students": "الطلاب",
+      "sessions": "الجلسات",
+      "sessionsBreakdown": "{{done}} منتهية · {{cancelled}} ملغاة · {{upcoming}} قادمة"
+    },
+    "scheduling": {
+      "completed": "جلسات منتهية",
+      "cancelled": "جلسات ملغاة",
+      "upcoming": "جلسات قادمة",
+      "roomUsage": "استخدام القاعات",
+      "roomUsageHint": "دقائق الجدولة وعدد الجلسات — وليست نسبة مئوية، إذ لا تملك القاعات ساعات تشغيل محددة لتُقسَم عليها.",
+      "sessionsMinutes": "{{sessions}} جلسة · {{minutes}} دقيقة",
+      "teacherLoad": "عبء الطاقم",
+      "groupLoad": "عبء المجموعات"
+    },
+    "courses": {
+      "empty": "لا توجد دورات بعد",
+      "course": "الدورة"
+    },
+    "teachers": {
+      "empty": "لا يوجد أعضاء طاقم بعد",
+      "name": "الاسم",
+      "role": "الدور",
+      "groups": "المجموعات",
+      "sessions": "الجلسات"
+    },
+    "financial": {
+      "lifetime": "إجمالي الأرباح الصافية",
+      "paid": "معاملات مدفوعة",
+      "pending": "دفعات بانتظار المراجعة",
+      "trend": "اتجاه الإيرادات الصافية",
+      "byCourse": "الإيرادات حسب الدورة"
+    }
   },
   "saved": {
     "title": "الدورات المحفوظة",

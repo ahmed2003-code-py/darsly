@@ -1,14 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
+import { INACTIVITY_DAYS } from '../analytics/analytics.constants';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Consecutive-absence records required to flag a student. Deliberately a
  *  plain count of real records, not a score. */
 const REPEATED_ABSENCE_STREAK = 3;
-/** Days without a recorded gamification event before an actively-enrolled
- *  student is flagged as inactive. */
-const INACTIVITY_DAYS = 14;
 /** Days without any attendance session before a group is flagged as not
  *  having attendance taken. */
 const STALE_ATTENDANCE_DAYS = 14;

@@ -1,26 +1,18 @@
-import { Controller, Get, Module } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { Module } from '@nestjs/common';
 import { AcademyModule } from '../academy/academy.module';
-import { AcademyStaff } from '../academy/academy-staff.decorator';
+import { AcademyOpsModule } from '../academy-ops/academy-ops.module';
+import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 
-@ApiTags('analytics')
-@AcademyStaff('analytics.read')
-@Controller('teacher/analytics')
-class AnalyticsController {
-  constructor(private readonly analytics: AnalyticsService) {}
-
-  @Get()
-  @ApiOperation({ summary: '[academy] Teaching KPIs + revenue/enrollment trends' })
-  overview(@CurrentAcademy() ctx: AcademyContext) {
-    return this.analytics.teacherOverview(ctx.academyId);
-  }
-}
-
 @Module({
-  imports: [AcademyModule],
+  // AcademyModule supplies the membership/permission guards behind
+  // @AcademyStaff. AcademyOpsModule supplies NeedsAttentionService (at-risk
+  // attendance) and GroupsService (batched group + staff metadata) — see the
+  // reuse note atop AnalyticsService's Phase 6 section. GamificationAnalyticsService
+  // and LedgerService are both @Global() providers and need no import here.
+  imports: [AcademyModule, AcademyOpsModule],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
+  exports: [AnalyticsService],
 })
 export class AnalyticsModule {}

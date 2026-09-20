@@ -8,9 +8,70 @@ import {
   useAdminOverview,
   useAdminRevenueTrend,
 } from '../../lib/adminCommandCenter';
+import { useActiveAcademyRate, usePlatformAttendance, usePlatformFinancial } from '../../lib/analytics';
 import { BarChart, PageHeader, Skeleton } from '../../components/ui';
 
 const RANGES: GrowthRange[] = [7, 30, 90];
+
+/** Phase 6: platform-wide attendance, payment conversion, and academy
+ *  activity — additive to the Phase 2 Command Center, not a rebuild of it. */
+function PlatformAnalyticsSection() {
+  const { t } = useTranslation();
+  const [range, setRange] = useState<GrowthRange>(30);
+  const attendance = usePlatformAttendance(range);
+  const financial = usePlatformFinancial(range);
+  const activeAcademies = useActiveAcademyRate(range);
+  const loading = attendance.isLoading || financial.isLoading || activeAcademies.isLoading;
+
+  return (
+    <section className="card mb-6 p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-heading text-lg font-bold">{t('admin.platformAnalytics.title')}</h2>
+        <div className="flex gap-1 rounded-full bg-surface-container-lowest p-1 shadow-card">
+          {RANGES.map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
+                range === r ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-low'
+              }`}
+            >
+              {t('admin.rangeDays', { count: r })}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <Skeleton className="h-32 rounded-xl" />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="card">
+            <p className="font-heading text-2xl font-extrabold tabular-nums">{attendance.data?.attendanceRatePct ?? '—'}%</p>
+            <p className="text-xs text-outline">{t('admin.platformAnalytics.attendanceRate')}</p>
+          </div>
+          <div className="card">
+            <p className="font-heading text-2xl font-extrabold tabular-nums">{activeAcademies.data?.ratePct ?? '—'}%</p>
+            <p className="text-xs text-outline">
+              {t('admin.platformAnalytics.activeAcademyRate', {
+                n: activeAcademies.data?.academiesWithRecentEnrollment ?? 0,
+                of: activeAcademies.data?.totalActiveAcademies ?? 0,
+              })}
+            </p>
+          </div>
+          <div className="card">
+            <p className="font-heading text-2xl font-extrabold tabular-nums">{financial.data?.paymentConversion.convertedPct ?? '—'}%</p>
+            <p className="text-xs text-outline">{t('admin.platformAnalytics.conversion')}</p>
+          </div>
+          <div className="card">
+            <p className="font-heading text-2xl font-extrabold tabular-nums">{financial.data?.paymentConversion.pending ?? 0}</p>
+            <p className="text-xs text-outline">{t('admin.platformAnalytics.pendingReview')}</p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function TrendSection() {
   const { t, i18n } = useTranslation();
@@ -139,6 +200,7 @@ export default function AdminOverviewPage() {
       </div>
 
       <TrendSection />
+      <PlatformAnalyticsSection />
     </div>
   );
 }

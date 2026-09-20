@@ -31,6 +31,15 @@ import { StudentGamificationService } from './student-gamification.service';
     StudentGamificationService,
     GamificationAnalyticsService,
   ],
-  exports: [GamificationService, GamificationConfigService, LeaderboardService, AchievementsService, MissionsService],
+  exports: [
+    GamificationService,
+    GamificationConfigService,
+    LeaderboardService,
+    AchievementsService,
+    MissionsService,
+    // Phase 6: academy/platform analytics compose engagement + retention from
+    // here rather than re-deriving them — see AnalyticsService.
+    GamificationAnalyticsService,
+  ],
 })
 export class GamificationModule {}

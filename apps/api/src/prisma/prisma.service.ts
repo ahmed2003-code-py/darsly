@@ -54,6 +54,14 @@ const SOFT_DELETE_MODELS = new Set([
   'AiJob',
   'AcademySiteSnapshot',
   'AcademyProfileFacts',
+  // Academy Operations (SaaS Evolution Phase 3) — attendance history in
+  // particular is reachable directly by studentId, not only through a still-
+  // existing Group, so it needs to be hideable in its own right too.
+  'Group',
+  'GroupMembership',
+  'GroupAssignment',
+  'AttendanceSession',
+  'AttendanceRecord',
 ]);
 
 const READ_ACTIONS = new Set([

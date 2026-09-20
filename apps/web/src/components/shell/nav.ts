@@ -33,6 +33,7 @@ export const TEACHER_NAV: NavItem[] = [
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/teacher/challenges', icon: 'social_leaderboard', labelKey: 'nav.challenges' },
   { to: '/teacher/students', icon: 'groups', labelKey: 'nav.myStudents' },
+  { to: '/teacher/groups', icon: 'diversity_3', labelKey: 'nav.groups' },
   { to: '/teacher/grading', icon: 'grading', labelKey: 'nav.grading' },
   { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
   { to: '/teacher/live', icon: 'sensors', labelKey: 'nav.live' },

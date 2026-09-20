@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { m } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
@@ -52,12 +53,31 @@ export default function ChallengeBuilderPage() {
   const [durationMin, setDurationMin] = useState('');
   const [questionTimeSec, setQuestionTimeSec] = useState('');
   const [scoring, setScoring] = useState<'STANDARD' | 'SPEED_BASED'>('STANDARD');
-  const [maxAttempts, setMaxAttempts] = useState('1');
-  const [leaderboardEnabled, setLeaderboardEnabled] = useState(true);
-  const [answerReveal, setAnswerReveal] = useState('AFTER_SUBMISSION');
+  const [maxAttempts, setMaxAttempts] = useState('3');
+  const [leaderboardEnabled, setLeaderboardEnabled] = useState(false);
+  const [answerReveal, setAnswerReveal] = useState('IMMEDIATE');
   const [randomize, setRandomize] = useState('NONE');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [questions, setQuestions] = useState<ChallengeQuestionRow[]>([]);
   const [publishErrors, setPublishErrors] = useState<string[] | null>(null);
+
+  /**
+   * Picking a type is the one decision that actually matters — everything
+   * else in Advanced is a sensible default from that point on (mirrors
+   * ChallengesService.defaultsFor on the backend, so create() would have
+   * chosen the same values anyway; this just keeps the builder's own state,
+   * and therefore its Preview, in sync with what Publish will actually save).
+   */
+  const applyType = (ty: 'PRACTICE' | 'RANKED') => {
+    setType(ty);
+    if (ty === 'RANKED') {
+      setScoring('SPEED_BASED'); setQuestionTimeSec('20'); setMaxAttempts('1');
+      setLeaderboardEnabled(true); setAnswerReveal('AFTER_SUBMISSION'); setRandomize('QUESTIONS');
+    } else {
+      setScoring('STANDARD'); setQuestionTimeSec(''); setMaxAttempts('3');
+      setLeaderboardEnabled(false); setAnswerReveal('IMMEDIATE'); setRandomize('NONE');
+    }
+  };
 
   useEffect(() => {
     if (!challenge) return;
@@ -222,7 +242,7 @@ export default function ChallengeBuilderPage() {
             <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.basic.type')}</span>
             <div className="grid gap-3 sm:grid-cols-2">
               {(['PRACTICE', 'RANKED'] as const).map((ty) => (
-                <button key={ty} type="button" onClick={() => setType(ty)}
+                <button key={ty} type="button" onClick={() => applyType(ty)}
                   className={`rounded-xl border p-3 text-start transition ${type === ty ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant'}`}>
                   <span className="block font-heading font-bold">{t(`challenges.teacher.basic.type${ty === 'PRACTICE' ? 'Practice' : 'Ranked'}`)}</span>
                   <span className="mt-1 block text-xs text-on-surface-variant">{t(`challenges.teacher.basic.type${ty === 'PRACTICE' ? 'Practice' : 'Ranked'}Hint`)}</span>
@@ -289,59 +309,77 @@ export default function ChallengeBuilderPage() {
 
       {step === 'settings' && (
         <div className="card max-w-2xl space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.duration')}</span>
-            <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.durationNone')}
-              value={durationMin} onChange={(e) => setDurationMin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
-            <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.durationHint')}</span>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.questionTime')}</span>
-            <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.questionTimeNone')}
-              value={questionTimeSec} onChange={(e) => setQuestionTimeSec(e.target.value.replace(/\D/g, '').slice(0, 4))} />
-            <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.questionTimeHint')}</span>
-          </label>
           <div>
-            <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.settings.scoring')}</span>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(['STANDARD', 'SPEED_BASED'] as const).map((sc) => (
-                <button key={sc} type="button" onClick={() => setScoring(sc)}
-                  className={`rounded-xl border p-3 text-start transition ${scoring === sc ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant'}`}>
-                  <span className="block font-heading font-bold">{t(`challenges.teacher.settings.scoring${sc === 'STANDARD' ? 'Standard' : 'Speed'}`)}</span>
-                  <span className="mt-1 block text-xs text-on-surface-variant">{t(`challenges.teacher.settings.scoring${sc === 'STANDARD' ? 'Standard' : 'Speed'}Hint`)}</span>
+            <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.settings.maxAttempts')}</span>
+            <div className="flex gap-2">
+              {(['1', '2', '3', '0'] as const).map((n) => (
+                <button key={n} type="button" onClick={() => setMaxAttempts(n)}
+                  className={`h-10 min-w-10 rounded-full px-3 font-bold transition ${maxAttempts === n ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                  {n === '0' ? '∞' : n}
                 </button>
               ))}
             </div>
           </div>
-          <label className="block">
-            <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.maxAttempts')}</span>
-            <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.unlimited')}
-              value={maxAttempts === '0' ? '' : maxAttempts}
-              onChange={(e) => setMaxAttempts(e.target.value.replace(/\D/g, '').slice(0, 2) || '0')} />
-          </label>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-0.5 accent-primary" checked={leaderboardEnabled}
-              onChange={(e) => setLeaderboardEnabled(e.target.checked)} />
-            <span className="font-bold">{t('challenges.teacher.settings.leaderboard')}</span>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.answerReveal')}</span>
-            <select className="input" value={answerReveal} onChange={(e) => setAnswerReveal(e.target.value)}>
-              <option value="IMMEDIATE">{t('challenges.teacher.settings.revealImmediate')}</option>
-              <option value="AFTER_SUBMISSION">{t('challenges.teacher.settings.revealAfterSubmission')}</option>
-              <option value="AFTER_CLOSE">{t('challenges.teacher.settings.revealAfterClose')}</option>
-              <option value="NEVER">{t('challenges.teacher.settings.revealNever')}</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.randomize')}</span>
-            <select className="input" value={randomize} onChange={(e) => setRandomize(e.target.value)}>
-              <option value="NONE">{t('challenges.teacher.settings.randomizeNone')}</option>
-              <option value="QUESTIONS">{t('challenges.teacher.settings.randomizeQuestions')}</option>
-              <option value="ANSWERS">{t('challenges.teacher.settings.randomizeAnswers')}</option>
-              <option value="BOTH">{t('challenges.teacher.settings.randomizeBoth')}</option>
-            </select>
-          </label>
+
+          <button type="button" onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-1.5 border-t border-outline-variant/50 pt-4 text-sm font-bold text-primary">
+            <span className={`material-symbols-outlined text-[18px] transition-transform ${showAdvanced ? 'rotate-90' : ''}`}>
+              chevron_left
+            </span>
+            {t('challenges.teacher.settings.advanced')}
+          </button>
+
+          {showAdvanced && (
+            <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} transition={{ duration: 0.22 }} className="space-y-4 overflow-hidden">
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.duration')}</span>
+                <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.durationNone')}
+                  value={durationMin} onChange={(e) => setDurationMin(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.durationHint')}</span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.questionTime')}</span>
+                <input className="input" inputMode="numeric" placeholder={t('challenges.teacher.settings.questionTimeNone')}
+                  value={questionTimeSec} onChange={(e) => setQuestionTimeSec(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+                <span className="mt-1 block text-xs text-outline">{t('challenges.teacher.settings.questionTimeHint')}</span>
+              </label>
+              <div>
+                <span className="mb-2 block text-sm font-bold">{t('challenges.teacher.settings.scoring')}</span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(['STANDARD', 'SPEED_BASED'] as const).map((sc) => (
+                    <button key={sc} type="button" onClick={() => setScoring(sc)}
+                      className={`rounded-xl border p-3 text-start transition ${scoring === sc ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant'}`}>
+                      <span className="block font-heading font-bold">{t(`challenges.teacher.settings.scoring${sc === 'STANDARD' ? 'Standard' : 'Speed'}`)}</span>
+                      <span className="mt-1 block text-xs text-on-surface-variant">{t(`challenges.teacher.settings.scoring${sc === 'STANDARD' ? 'Standard' : 'Speed'}Hint`)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-0.5 accent-primary" checked={leaderboardEnabled}
+                  onChange={(e) => setLeaderboardEnabled(e.target.checked)} />
+                <span className="font-bold">{t('challenges.teacher.settings.leaderboard')}</span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.answerReveal')}</span>
+                <select className="input" value={answerReveal} onChange={(e) => setAnswerReveal(e.target.value)}>
+                  <option value="IMMEDIATE">{t('challenges.teacher.settings.revealImmediate')}</option>
+                  <option value="AFTER_SUBMISSION">{t('challenges.teacher.settings.revealAfterSubmission')}</option>
+                  <option value="AFTER_CLOSE">{t('challenges.teacher.settings.revealAfterClose')}</option>
+                  <option value="NEVER">{t('challenges.teacher.settings.revealNever')}</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold">{t('challenges.teacher.settings.randomize')}</span>
+                <select className="input" value={randomize} onChange={(e) => setRandomize(e.target.value)}>
+                  <option value="NONE">{t('challenges.teacher.settings.randomizeNone')}</option>
+                  <option value="QUESTIONS">{t('challenges.teacher.settings.randomizeQuestions')}</option>
+                  <option value="ANSWERS">{t('challenges.teacher.settings.randomizeAnswers')}</option>
+                  <option value="BOTH">{t('challenges.teacher.settings.randomizeBoth')}</option>
+                </select>
+              </label>
+            </m.div>
+          )}
 
           <SaveBar mutation={saveSettings} />
         </div>

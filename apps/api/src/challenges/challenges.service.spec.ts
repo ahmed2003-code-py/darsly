@@ -31,6 +31,7 @@ function makeCtx(opts: { challenge?: Partial<typeof CHALLENGE> } = {}) {
     challenge: {
       findUnique: jest.fn().mockResolvedValue(challenge),
       findUniqueOrThrow: jest.fn().mockResolvedValue(challenge),
+      create: jest.fn((args: any) => Promise.resolve({ id: 'newch', ...args.data })),
     },
     challengeQuestion: {
       findMany: jest.fn().mockResolvedValue(QUESTIONS),
@@ -114,12 +115,43 @@ function makeCtx(opts: { challenge?: Partial<typeof CHALLENGE> } = {}) {
   return { svc, prisma, access, gamification, progress, notifications, attempts, answers, challenge };
 }
 
+describe('ChallengesService — type-aware creation defaults', () => {
+  it('a RANKED challenge with no settings given gets competitive defaults', async () => {
+    const { svc } = makeCtx();
+    const c = await svc.create('t1', { title: 'r', type: 'RANKED' } as any);
+    expect(c.scoring).toBe('SPEED_BASED');
+    expect(c.questionTimeSec).toBe(20);
+    expect(c.maxAttempts).toBe(1);
+    expect(c.leaderboardEnabled).toBe(true);
+    expect(c.answerReveal).toBe('AFTER_SUBMISSION');
+  });
+
+  it('a PRACTICE challenge with no settings given gets low-pressure defaults', async () => {
+    const { svc } = makeCtx();
+    const c = await svc.create('t1', { title: 'p', type: 'PRACTICE' } as any);
+    expect(c.scoring).toBe('STANDARD');
+    expect(c.questionTimeSec).toBeNull();
+    expect(c.maxAttempts).toBe(3);
+    expect(c.leaderboardEnabled).toBe(false);
+    expect(c.answerReveal).toBe('IMMEDIATE');
+  });
+
+  it('an explicitly-set field always wins over the type default', async () => {
+    const { svc } = makeCtx();
+    const c = await svc.create('t1', { title: 'r', type: 'RANKED', maxAttempts: 5, leaderboardEnabled: false } as any);
+    expect(c.maxAttempts).toBe(5);
+    expect(c.leaderboardEnabled).toBe(false);
+    expect(c.scoring).toBe('SPEED_BASED'); // untouched fields still default
+  });
+});
+
 describe('ChallengesService — attempt lifecycle & anti-cheat', () => {
   it('starts a fresh attempt with every question in it, answers stripped of correct-answer data', async () => {
     const { svc } = makeCtx();
     const state = await svc.startAttempt('u1', 'ch1');
     expect(state.totalQuestions).toBe(2);
     expect(state.questions[0]).not.toHaveProperty('correctOptionIds');
+    expect(state.questions[0].points).toBe(100); // shown for the live XP ticker — not a security concern
     expect(state.status).toBe('IN_PROGRESS');
   });
 

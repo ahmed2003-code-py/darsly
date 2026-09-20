@@ -1900,6 +1900,7 @@
         "scoringSpeedHint": "كل ما تجاوب أسرع، تكسب نقط أكتر",
         "maxAttempts": "عدد المحاولات المسموحة",
         "unlimited": "بلا حدود",
+        "advanced": "إعدادات متقدمة (اختياري)",
         "leaderboard": "إظهار لوحة الصدارة",
         "answerReveal": "متى تظهر الإجابة الصحيحة",
         "revealImmediate": "فورًا بعد كل سؤال",

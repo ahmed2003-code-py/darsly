@@ -1900,6 +1900,7 @@
         "scoringSpeedHint": "The faster you answer, the more you earn",
         "maxAttempts": "Attempts allowed",
         "unlimited": "Unlimited",
+        "advanced": "Advanced settings (optional)",
         "leaderboard": "Show leaderboard",
         "answerReveal": "When to reveal the correct answer",
         "revealImmediate": "Right after each question",

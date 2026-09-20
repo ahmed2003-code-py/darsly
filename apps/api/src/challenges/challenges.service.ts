@@ -25,26 +25,46 @@ export class ChallengesService {
 
   // ── Teacher authoring ──────────────────────────────────────────────────────
 
+  /**
+   * What a teacher gets without touching a single settings field.
+   *
+   * A teacher who just picks a type, adds questions and publishes should get
+   * a coherent, working challenge — not a half-configured one. Practice reads
+   * as low-pressure practice (untimed by default, standard scoring, the key
+   * shown right away, several tries); Ranked reads as competitive (timed,
+   * speed bonus live, one shot, on the leaderboard) — without asking the
+   * teacher to know what "answerReveal" or "randomize" mean. Anything the
+   * teacher DID set explicitly always wins; this only fills in what they left
+   * out — see UpsertChallengeDto and the builder's collapsed "Advanced" panel.
+   */
+  private defaultsFor(type: 'PRACTICE' | 'RANKED') {
+    return type === 'RANKED'
+      ? { scoring: 'SPEED_BASED' as const, questionTimeSec: 20, maxAttempts: 1, leaderboardEnabled: true, answerReveal: 'AFTER_SUBMISSION' as const, randomize: 'QUESTIONS' as const }
+      : { scoring: 'STANDARD' as const, questionTimeSec: null, maxAttempts: 3, leaderboardEnabled: false, answerReveal: 'IMMEDIATE' as const, randomize: 'NONE' as const };
+  }
+
   async create(tenantId: string, dto: UpsertChallengeDto) {
+    const type = dto.type ?? 'PRACTICE';
+    const d = this.defaultsFor(type);
     return this.prisma.challenge.create({
       data: {
         tenantId,
         title: dto.title,
         description: dto.description ?? '',
         coverIcon: dto.coverIcon ?? 'bolt',
-        type: dto.type ?? 'PRACTICE',
+        type,
         difficulty: dto.difficulty ?? 1,
         courseId: dto.courseId ?? null,
         subjectId: dto.subjectId ?? null,
         gradeId: dto.gradeId ?? null,
         topic: dto.topic ?? null,
         durationSec: dto.durationSec ?? null,
-        questionTimeSec: dto.questionTimeSec ?? null,
-        scoring: dto.scoring ?? 'STANDARD',
-        maxAttempts: dto.maxAttempts ?? 1,
-        leaderboardEnabled: dto.leaderboardEnabled ?? true,
-        answerReveal: dto.answerReveal ?? 'AFTER_SUBMISSION',
-        randomize: dto.randomize ?? 'NONE',
+        questionTimeSec: dto.questionTimeSec !== undefined ? dto.questionTimeSec : d.questionTimeSec,
+        scoring: dto.scoring ?? d.scoring,
+        maxAttempts: dto.maxAttempts ?? d.maxAttempts,
+        leaderboardEnabled: dto.leaderboardEnabled ?? d.leaderboardEnabled,
+        answerReveal: dto.answerReveal ?? d.answerReveal,
+        randomize: dto.randomize ?? d.randomize,
       },
     });
   }
@@ -762,7 +782,7 @@ export class ChallengesService {
   private async attemptState(
     challenge: { id: string; durationSec: number | null; questionTimeSec: number | null; answerReveal: string },
     attempt: { id: string; status: string; startedAt: Date; deadlineAt: Date | null; questionIds: string[] },
-    allQuestions: { id: string; type: string; prompt: string; imageUrl: string | null; options: unknown; timeLimitSec: number | null }[],
+    allQuestions: { id: string; type: string; prompt: string; imageUrl: string | null; options: unknown; timeLimitSec: number | null; points: number }[],
   ) {
     const byId = new Map(allQuestions.map((q) => [q.id, q]));
     const ordered = attempt.questionIds.map((id) => byId.get(id)).filter((q): q is NonNullable<typeof q> => !!q);
@@ -785,6 +805,11 @@ export class ChallengesService {
         imageUrl: q.imageUrl,
         options: q.options,
         timeLimitSec: q.timeLimitSec ?? challenge.questionTimeSec,
+        // Shown to the student as "worth N XP" and to animate the live
+        // countdown ticker — never a security concern (unlike the answer key,
+        // knowing a question's point value ahead of time is exactly what a
+        // gamified quiz is supposed to show).
+        points: q.points,
       })),
     };
   }

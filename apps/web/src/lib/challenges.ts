@@ -98,6 +98,8 @@ export interface PlayQuestion {
   imageUrl: string | null;
   options: { id: string; text: string }[];
   timeLimitSec: number | null;
+  /** Base XP if answered correctly — drives the live "worth N XP" ticker. */
+  points: number;
 }
 
 export interface AttemptState {

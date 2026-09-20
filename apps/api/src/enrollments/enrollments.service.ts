@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Coupon, Course, Enrollment } from '@prisma/client';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { reserveCouponUse } from '../payments/coupon-use';
 import { computeServiceFee } from '../payments/fee.util';
@@ -41,6 +42,7 @@ export class EnrollmentsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly ledger: LedgerService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   private async studentProfileOf(userId: string) {
@@ -133,10 +135,14 @@ export class EnrollmentsService {
   }
 
   /**
-   * Enrol in a course. A free course activates immediately unless its teacher
-   * asked for approval, in which case it waits. Paid courses go through the
-   * manual proof-of-payment flow (POST /payments): this endpoint returns
-   * PAYMENT_REQUIRED with the quote so the client opens the pay screen.
+   * Enrol in a course. A free course activates immediately, UNLESS its
+   * academy is in MANUAL/DEMO enrollmentMode (and the enrollmentApprovalMode
+   * flag is on), in which case it waits for staff sign-off — see approve().
+   * Paid courses go through the manual proof-of-payment flow (POST
+   * /payments) in every mode: this endpoint returns PAYMENT_REQUIRED with
+   * the quote so the client opens the pay screen. enrollmentMode has no
+   * effect there — payment verification is already the human-gated step for
+   * money, in every mode, unchanged.
    */
   async enroll(userId: string, courseId: string, couponCode?: string) {
     const student = await this.studentProfileOf(userId);
@@ -152,6 +158,9 @@ export class EnrollmentsService {
     if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
       throw new ConflictException('Already enrolled in this course');
     }
+    if (existing?.status === 'PENDING_APPROVAL') {
+      throw new ConflictException('An enrollment request for this course is already pending');
+    }
     // Before the price, because a student whose year this course is not for
     // should be told that rather than handed a payment screen for something
     // they were never going to be allowed to open.
@@ -159,35 +168,72 @@ export class EnrollmentsService {
     await assertCourseTrack(this.prisma, courseId, student.track, existing);
     const quote = await this.quote(courseId, couponCode);
 
-    // Paid → must pay first (manual proof + verification).
+    // Paid → must pay first (manual proof + verification), in every
+    // enrollmentMode — unchanged.
     if (quote.totalCents > 0) {
       throw new BadRequestException({ message: 'Payment required', code: 'PAYMENT_REQUIRED', quote });
     }
 
-    // Free course, so the student is in. There is no longer a queue in front of
-    // this: a teacher who wants to sell access prices the course, and one who
-    // wants it open leaves it free. Making them tick an extra box afterwards
-    // only produced a waiting room nobody was watching.
-    const data = {
-      status: 'ACTIVE' as const,
-      approvedAt: new Date(),
-      expiresAt: this.expiryFor(course),
-      revokedReason: null,
-      // Coming back is a fresh start: if they had taken the old, dead enrolment
-      // off their list, the new one is not carrying that with it.
-      hiddenAt: null,
-    };
+    // AUTOMATIC (the default — byte-for-byte the existing behavior) needs no
+    // academy lookup at all. Only MANUAL/DEMO change anything here, and a
+    // disabled feature flag falls back to AUTOMATIC rather than ever leaving
+    // a student with no path to activation.
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: course.tenantId },
+      select: { enrollmentMode: true },
+    });
+    const needsApproval =
+      academy?.enrollmentMode && academy.enrollmentMode !== 'AUTOMATIC'
+        ? await this.flags.isEnabled(course.tenantId, 'enrollmentApprovalMode')
+        : false;
+
+    const data = needsApproval
+      ? {
+          status: 'PENDING_APPROVAL' as const,
+          approvedAt: null,
+          expiresAt: null,
+          revokedReason: null,
+          hiddenAt: null,
+        }
+      : {
+          // Free course, so the student is in. There is no longer a queue in
+          // front of this by default: a teacher who wants to sell access
+          // prices the course, and one who wants it open leaves it free.
+          status: 'ACTIVE' as const,
+          approvedAt: new Date(),
+          expiresAt: this.expiryFor(course),
+          revokedReason: null,
+          // Coming back is a fresh start: if they had taken the old, dead enrolment
+          // off their list, the new one is not carrying that with it.
+          hiddenAt: null,
+        };
     // A coupon that made the course free is still a use of that coupon — taken
     // in the same transaction as the enrolment, so a one-use code cannot enrol
-    // a whole class, and a failed enrolment gives the slot back.
+    // a whole class, and a failed enrolment gives the slot back. Deliberately
+    // NOT reserved for a PENDING_APPROVAL row: nothing on Enrollment records
+    // which coupon a request quoted, so a reject() could never release it
+    // again. A request that needs staff sign-off simply does not consume the
+    // coupon — narrow edge case (a coupon discounting a paid course to
+    // exactly 0 while the academy also requires approval), not a financial
+    // risk, and far simpler than threading a pending reservation through the
+    // approval workflow.
     const enrollment = await this.prisma.$transaction(async (tx) => {
-      if (quote.coupon) await reserveCouponUse(tx, quote.coupon.id, quote.coupon.maxUses);
+      if (quote.coupon && !needsApproval) await reserveCouponUse(tx, quote.coupon.id, quote.coupon.maxUses);
       return existing
         ? tx.enrollment.update({ where: { id: existing.id }, data })
         : tx.enrollment.create({
             data: { studentId: student.id, courseId, tenantId: course.tenantId, ...data },
           });
     });
+
+    if (needsApproval) {
+      await this.notifyTeacher(
+        course,
+        'طلب التحاق جديد ⏳',
+        `${student.user.fullName} طلب الالتحاق بدورة «${course.title}» — بانتظار موافقتك.`,
+      );
+      return { ...enrollment, quote };
+    }
 
     await this.notifyTeacher(
       course,
@@ -382,5 +428,144 @@ export class EnrollmentsService {
       meta: { courseId: enrollment.courseId },
     });
     return updated;
+  }
+
+  // ── Phase 5: MANUAL-mode approval queue (free courses only — see enroll()) ─
+
+  /** Approve a PENDING_APPROVAL request. Never touches Payment or the ledger
+   *  — a paid course never reaches this state (see enroll()), so there is
+   *  nothing financial for this action to settle. */
+  async approve(tenantId: string, id: string) {
+    const enrollment = await this.assertTenantEnrollment(tenantId, id);
+    if (enrollment.status !== 'PENDING_APPROVAL') {
+      throw new BadRequestException({ message: 'Only a pending request can be approved', code: 'NOT_PENDING_APPROVAL' });
+    }
+    const expiresAt = this.expiryFor(enrollment.course);
+    // Conditional update is the idempotency guard: two simultaneous approve
+    // calls (or an approve racing a reject) both pass the check above, but
+    // only one matches here — the loser gets a clean 400, never a second
+    // activation.
+    const flip = await this.prisma.enrollment.updateMany({
+      where: { id, status: 'PENDING_APPROVAL' },
+      data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt, source: 'MANUAL_APPROVAL' },
+    });
+    if (flip.count === 0) {
+      throw new BadRequestException({ message: 'Only a pending request can be approved', code: 'NOT_PENDING_APPROVAL' });
+    }
+    const updated = await this.prisma.enrollment.findUniqueOrThrow({ where: { id } });
+    await activateBundleChildren(this.prisma, enrollment.course, enrollment.studentId, expiresAt);
+    await this.notifications.create({
+      userId: enrollment.student.user.id,
+      type: 'ENROLLMENT_APPROVED',
+      title: 'تم تفعيل اشتراكك',
+      body: `أصبح بإمكانك الآن الوصول إلى «${enrollment.course.title}»`,
+      meta: { courseId: enrollment.courseId },
+    });
+    return updated;
+  }
+
+  /** Reject a PENDING_APPROVAL request. No coupon to release — see enroll(). */
+  async reject(tenantId: string, id: string, reason?: string) {
+    const enrollment = await this.assertTenantEnrollment(tenantId, id);
+    if (enrollment.status !== 'PENDING_APPROVAL') {
+      throw new BadRequestException({ message: 'Only a pending request can be rejected', code: 'NOT_PENDING_APPROVAL' });
+    }
+    const flip = await this.prisma.enrollment.updateMany({
+      where: { id, status: 'PENDING_APPROVAL' },
+      data: { status: 'REJECTED', revokedReason: reason ?? null },
+    });
+    if (flip.count === 0) {
+      throw new BadRequestException({ message: 'Only a pending request can be rejected', code: 'NOT_PENDING_APPROVAL' });
+    }
+    const updated = await this.prisma.enrollment.findUniqueOrThrow({ where: { id } });
+    await this.notifications.create({
+      userId: enrollment.student.user.id,
+      type: 'ANNOUNCEMENT',
+      title: 'تم رفض طلب الالتحاق',
+      body: `عذراً، رُفض طلب التحاقك بدورة «${enrollment.course.title}»${reason ? ` — ${reason}` : ''}`,
+      meta: { courseId: enrollment.courseId },
+    });
+    return updated;
+  }
+
+  // ── Phase 5: DEMO mode — explicit staff-granted access, zero financial effect ─
+
+  /**
+   * Staff-initiated enrollment with NO Payment row and NO ledger effect,
+   * for a free OR paid course. Available when the academy's enrollmentMode
+   * is MANUAL or DEMO (not the default AUTOMATIC — this is an explicit
+   * departure from the academy's normal flow, not something available
+   * silently underneath it) and the enrollmentApprovalMode flag is on.
+   */
+  async demoEnroll(tenantId: string, identify: { studentUserId?: string; studentEmail?: string }, courseId: string) {
+    const academy = await this.prisma.academy.findUnique({ where: { id: tenantId }, select: { enrollmentMode: true } });
+    if (!academy || academy.enrollmentMode === 'AUTOMATIC') {
+      throw new BadRequestException({
+        message: 'Demo enrollment is only available when this academy is in MANUAL or DEMO enrollment mode',
+        code: 'ENROLLMENT_MODE_MISMATCH',
+      });
+    }
+
+    // Email lookup exists for exactly the case the roster can't help with: a
+    // student who isn't enrolled anywhere at this academy yet (a genuinely
+    // new "free onboarding" demo), so there is nothing to pick from a list.
+    const student = await this.prisma.studentProfile.findFirst({
+      where: identify.studentUserId ? { userId: identify.studentUserId } : { user: { email: identify.studentEmail?.toLowerCase().trim() } },
+      include: { user: { select: { id: true, fullName: true } } },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    const course = await this.prisma.course.findFirst({
+      where: { id: courseId, tenantId, status: 'PUBLISHED' },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
+    const existing = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId: student.id, courseId } },
+    });
+    if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
+      throw new ConflictException('Already enrolled in this course');
+    }
+    // A live payment attempt exists for this exact pair — refuse rather than
+    // leave it dangling. If it is later matched/verified, applyVerification
+    // would try to activate an already-demo-active enrollment and (with
+    // settle=true) book a real ledger credit for a course the student
+    // already has for free: a double grant of access AND real revenue on
+    // top of a zero-cost demo. Resolve the payment first (verify or reject
+    // it) before demo-enrolling this pair.
+    const pendingPayment = await this.prisma.payment.findFirst({
+      where: { studentId: student.id, courseId, status: 'PENDING' },
+      select: { id: true },
+    });
+    if (pendingPayment) {
+      throw new ConflictException({
+        message: 'A payment is already pending for this student and course — resolve it before demo-enrolling',
+        code: 'PAYMENT_PENDING',
+      });
+    }
+
+    const data = {
+      status: 'ACTIVE' as const,
+      approvedAt: new Date(),
+      expiresAt: this.expiryFor(course),
+      revokedReason: null,
+      hiddenAt: null,
+      source: 'DEMO' as const,
+    };
+    const enrollment = existing
+      ? await this.prisma.enrollment.update({ where: { id: existing.id }, data })
+      : await this.prisma.enrollment.create({
+          data: { studentId: student.id, courseId, tenantId, ...data },
+        });
+
+    await activateBundleChildren(this.prisma, course, enrollment.studentId, enrollment.expiresAt);
+    await this.notifications.create({
+      userId: student.user.id,
+      type: 'ENROLLMENT_APPROVED',
+      title: 'تم تفعيل اشتراكك',
+      body: `أصبح بإمكانك الآن الوصول إلى «${course.title}»`,
+      meta: { courseId, demo: true },
+    });
+    return enrollment;
   }
 }

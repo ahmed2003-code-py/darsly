@@ -74,6 +74,7 @@ export function BrandingTab({ slug }: { slug: string }) {
       colorPrimary: form.colorPrimary, colorAccent: form.colorPrimary,
       language: form.language,
       maxConcurrentSessions: Number(form.maxConcurrentSessions),
+      enrollmentMode: form.enrollmentMode,
     })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['academy-settings', slug] });
@@ -129,6 +130,14 @@ export function BrandingTab({ slug }: { slug: string }) {
 
         <Field label={t('academy.maxDevices')}>
           <input type="number" min={1} max={10} className="input w-28" value={form.maxConcurrentSessions} onChange={(e) => set('maxConcurrentSessions', e.target.value)} />
+        </Field>
+
+        <Field label={t('academy.enrollmentMode.label')} hint={t(`academy.enrollmentMode.hint.${form.enrollmentMode ?? 'AUTOMATIC'}`)}>
+          <select className="input" value={form.enrollmentMode ?? 'AUTOMATIC'} onChange={(e) => set('enrollmentMode', e.target.value)}>
+            <option value="AUTOMATIC">{t('academy.enrollmentMode.AUTOMATIC')}</option>
+            <option value="MANUAL">{t('academy.enrollmentMode.MANUAL')}</option>
+            <option value="DEMO">{t('academy.enrollmentMode.DEMO')}</option>
+          </select>
         </Field>
 
         <ErrorNote error={save.error} />

@@ -539,12 +539,18 @@
       "title": "My students",
       "subtitle": "Enrollment requests and student subscriptions",
       "tabs": {
-        "PENDING_PAYMENT": "Pending approval",
+        "PENDING_PAYMENT": "Awaiting payment",
+        "PENDING_APPROVAL": "Awaiting your approval",
         "ACTIVE": "Active",
         "ALL": "All"
       },
       "approve": "Approve",
       "reject": "Reject",
+      "demoEnroll": "Demo enroll",
+      "demoEnrollHint": "Grants access immediately — no payment, no revenue, no commission. Only available while this academy is in Manual or Demo enrollment mode.",
+      "demoStudentEmail": "Student email",
+      "demoCourse": "Course",
+      "demoSelectCourse": "Select a course",
       "revoke": "Revoke access",
       "revokeConfirm": "Revoke this student's access to the course?",
       "empty": "No enrollments in this list",
@@ -572,6 +578,7 @@
       "status": {
         "ACTIVE": "Active",
         "PENDING_PAYMENT": "Awaiting payment",
+        "PENDING_APPROVAL": "Awaiting approval",
         "REJECTED": "Rejected",
         "REVOKED": "Revoked",
         "EXPIRED": "Expired"
@@ -1552,6 +1559,17 @@
     "coverUpload": "Upload cover",
     "requireReview": "Enrolling in a course requires payment review",
     "maxDevices": "Maximum concurrent devices per student",
+    "enrollmentMode": {
+      "label": "Enrollment mode",
+      "AUTOMATIC": "Automatic",
+      "MANUAL": "Manual approval",
+      "DEMO": "Manual + demo enrollment",
+      "hint": {
+        "AUTOMATIC": "A free course activates instantly. A paid course still needs payment confirmation, exactly as today — this setting has no effect there.",
+        "MANUAL": "A free-course request waits for you to approve or reject it before the student gets access. Paid courses are unaffected.",
+        "DEMO": "Same as Manual, plus you can grant any student access to any course — free or paid — with no payment involved, for demos and onboarding."
+      }
+    },
     "saving": "Saving…",
     "save": "Save changes",
     "saved": "Saved ✓",

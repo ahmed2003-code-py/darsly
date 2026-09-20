@@ -36,6 +36,7 @@ export class AcademyService {
           select: {
             id: true, slug: true, name: true, status: true,
             logoUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true,
+            enrollmentMode: true,
           },
         },
       },
@@ -48,6 +49,7 @@ export class AcademyService {
         role: m.role,
         isHome: m.isHome,
         status: m.academy.status,
+        enrollmentMode: m.academy.enrollmentMode,
         // brandTokens carries the published design system, so the console can
         // dress itself in the academy's own look rather than the platform default.
         branding: {
@@ -266,6 +268,7 @@ export class AcademyService {
         logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true,
         language: true, currency: true,
         maxConcurrentSessions: true, feeType: true, feeValue: true,
+        enrollmentMode: true,
       },
     });
   }
@@ -384,8 +387,9 @@ export class AcademyService {
         ...(dto.colorAccent !== undefined ? { colorAccent: dto.colorAccent } : {}),
         ...(dto.language !== undefined ? { language: dto.language } : {}),
         ...(dto.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: dto.maxConcurrentSessions } : {}),
+        ...(dto.enrollmentMode !== undefined ? { enrollmentMode: dto.enrollmentMode } : {}),
       },
-      select: { id: true, slug: true, name: true, colorPrimary: true },
+      select: { id: true, slug: true, name: true, colorPrimary: true, enrollmentMode: true },
     });
   }
 

@@ -33,6 +33,7 @@ export class UpdateAcademyDto {
   @IsOptional() @IsString() @Matches(HEX, { message: 'colorAccent must be a #RRGGBB hex' }) colorAccent?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptional() @IsInt() @Min(1) @Max(10) maxConcurrentSessions?: number;
+  @IsOptional() @IsIn(['AUTOMATIC', 'MANUAL', 'DEMO']) enrollmentMode?: 'AUTOMATIC' | 'MANUAL' | 'DEMO';
 }
 
 export class AddMemberDto {

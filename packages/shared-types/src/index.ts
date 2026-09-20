@@ -94,10 +94,19 @@ export enum QuestionType {
 export enum EnrollmentStatus {
   /** A payment has been submitted and is waiting to be confirmed. */
   PENDING_PAYMENT = 'PENDING_PAYMENT',
+  /** A free-course request under an academy's MANUAL/DEMO enrollmentMode,
+   *  waiting on staff approval. Never used for a paid course. */
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
   ACTIVE = 'ACTIVE',
   REJECTED = 'REJECTED',
   EXPIRED = 'EXPIRED',
   REVOKED = 'REVOKED',
+}
+
+export enum AcademyEnrollmentMode {
+  AUTOMATIC = 'AUTOMATIC',
+  MANUAL = 'MANUAL',
+  DEMO = 'DEMO',
 }
 
 // ── Academy (multi-tenant SaaS) ───────────────────────────────────────────

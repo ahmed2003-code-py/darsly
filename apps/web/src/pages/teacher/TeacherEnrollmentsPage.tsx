@@ -4,14 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
-import { Badge, EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
+import { useOwnedAcademy } from '../../lib/academy';
+import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Spinner } from '../../components/ui';
 
-const TABS = ['ALL', 'PENDING_PAYMENT', 'ACTIVE'] as const;
+const TABS = ['ALL', 'PENDING_PAYMENT', 'PENDING_APPROVAL', 'ACTIVE'] as const;
 const SORTS = ['recent', 'name', 'spend'] as const;
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
   ACTIVE: 'teal',
   PENDING_PAYMENT: 'warn',
+  PENDING_APPROVAL: 'warn',
   REJECTED: 'error',
   REVOKED: 'error',
   EXPIRED: 'neutral',
@@ -84,7 +86,7 @@ function groupByStudent(rows: Enrollment[]): StudentGroup[] {
     }
     group.enrollments.push(row);
     if (row.status === 'ACTIVE') group.activeCount++;
-    if (row.status === 'PENDING_PAYMENT') group.pendingCount++;
+    if (row.status === 'PENDING_PAYMENT' || row.status === 'PENDING_APPROVAL') group.pendingCount++;
     group.earnedCentsTotal += earnedCents(row);
     group.lastEnrolledAt = Math.max(group.lastEnrolledAt, new Date(row.createdAt).getTime());
   }
@@ -172,6 +174,66 @@ function ContactLink({
   );
 }
 
+function DemoEnrollModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [studentEmail, setStudentEmail] = useState('');
+  const [courseId, setCourseId] = useState('');
+  const { data: courses } = useQuery({
+    queryKey: ['teacher-courses-list'],
+    queryFn: async () => (await api.get('/teacher/courses')).data,
+    enabled: open,
+  });
+
+  const demoEnroll = useMutation({
+    mutationFn: async () => (await api.post('/teacher/enrollments/demo', { studentEmail, courseId })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teacher-enrollments'] });
+      setStudentEmail('');
+      setCourseId('');
+      onClose();
+    },
+  });
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentEmail.trim() || !courseId) return;
+    demoEnroll.mutate();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={t('teacher.students.demoEnroll')}>
+      <p className="mb-4 text-sm text-on-surface-variant">{t('teacher.students.demoEnrollHint')}</p>
+      <form onSubmit={submit} className="grid gap-4">
+        <label className="grid gap-1.5">
+          <span className="text-sm font-bold">{t('teacher.students.demoStudentEmail')}</span>
+          <input
+            type="email"
+            dir="ltr"
+            value={studentEmail}
+            onChange={(e) => setStudentEmail(e.target.value)}
+            className="input"
+            required
+          />
+        </label>
+        <label className="grid gap-1.5">
+          <span className="text-sm font-bold">{t('teacher.students.demoCourse')}</span>
+          <select value={courseId} onChange={(e) => setCourseId(e.target.value)} className="input" required>
+            <option value="">{t('teacher.students.demoSelectCourse')}</option>
+            {(courses ?? []).map((c: { id: string; title: string }) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="btn-primary py-2.5" disabled={demoEnroll.isPending}>
+          {demoEnroll.isPending ? t('common.saving') : t('teacher.students.demoEnroll')}
+        </button>
+        <ErrorNote error={demoEnroll.error} />
+      </form>
+    </Modal>
+  );
+}
+
 export default function TeacherEnrollmentsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -205,6 +267,7 @@ export default function TeacherEnrollmentsPage() {
   const counts = {
     ALL: studentsWhere(() => true),
     PENDING_PAYMENT: studentsWhere((e) => e.status === 'PENDING_PAYMENT'),
+    PENDING_APPROVAL: studentsWhere((e) => e.status === 'PENDING_APPROVAL'),
     ACTIVE: studentsWhere((e) => e.status === 'ACTIVE'),
   };
 
@@ -213,6 +276,16 @@ export default function TeacherEnrollmentsPage() {
       (await api.patch(`/teacher/enrollments/${id}/revoke`, {})).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-enrollments'] }),
   });
+  const approve = useMutation({
+    mutationFn: async (id: string) => (await api.patch(`/teacher/enrollments/${id}/approve`, {})).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-enrollments'] }),
+  });
+  const reject = useMutation({
+    mutationFn: async (id: string) => (await api.patch(`/teacher/enrollments/${id}/reject`, {})).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-enrollments'] }),
+  });
+  const { academy } = useOwnedAcademy();
+  const [showDemo, setShowDemo] = useState(false);
 
   const groups = useMemo(() => {
     const visible = tab === 'ALL' ? all : all.filter((e) => e.status === tab);
@@ -241,7 +314,19 @@ export default function TeacherEnrollmentsPage() {
 
   return (
     <div className="page">
-      <PageHeader title={t('teacher.students.title')} subtitle={t('teacher.students.subtitle')} />
+      <PageHeader
+        title={t('teacher.students.title')}
+        subtitle={t('teacher.students.subtitle')}
+        action={
+          academy && academy.enrollmentMode !== 'AUTOMATIC' ? (
+            <button className="btn-secondary" onClick={() => setShowDemo(true)}>
+              <span className="material-symbols-outlined text-[20px]">person_add</span>
+              {t('teacher.students.demoEnroll')}
+            </button>
+          ) : undefined
+        }
+      />
+      <DemoEnrollModal open={showDemo} onClose={() => setShowDemo(false)} />
 
       {/* One toolbar: filters on top, search and sort beneath. The pending tab
           carries a live count so a teacher never has to go looking for it. */}
@@ -250,7 +335,7 @@ export default function TeacherEnrollmentsPage() {
           {TABS.map((value) => {
             const selected = tab === value;
             const count = counts[value];
-            const waiting = value === 'PENDING_PAYMENT' && count > 0;
+            const waiting = (value === 'PENDING_PAYMENT' || value === 'PENDING_APPROVAL') && count > 0;
             return (
               <button
                 key={value}
@@ -523,6 +608,27 @@ export default function TeacherEnrollmentsPage() {
                             // deliberately removed.
                             <span className="rounded-lg bg-surface-container-high px-3 py-1.5 text-xs font-semibold text-on-surface-variant">
                               {t('teacher.students.awaitingTransfer')}
+                            </span>
+                          )}
+                          {e.status === 'PENDING_APPROVAL' && (
+                            // Unlike PENDING_PAYMENT, this one IS actionable by staff —
+                            // it is a free course under MANUAL/DEMO mode, waiting on a
+                            // decision, not on money. See EnrollmentsService.approve().
+                            <span className="flex items-center gap-2">
+                              <button
+                                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-on-primary transition hover:opacity-90"
+                                disabled={approve.isPending || reject.isPending}
+                                onClick={() => approve.mutate(e.id)}
+                              >
+                                {t('teacher.students.approve')}
+                              </button>
+                              <button
+                                className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error transition hover:bg-error-container/40"
+                                disabled={approve.isPending || reject.isPending}
+                                onClick={() => reject.mutate(e.id)}
+                              >
+                                {t('teacher.students.reject')}
+                              </button>
                             </span>
                           )}
                           {e.status === 'ACTIVE' && (

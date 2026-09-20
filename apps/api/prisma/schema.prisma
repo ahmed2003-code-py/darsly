@@ -93,6 +93,17 @@ enum FeeType {
   FIXED
 }
 
+// SaaS Evolution Phase 5 — governs the free-course self-enroll path only.
+// AUTOMATIC (default): today's behavior, unchanged — instant ACTIVE.
+// MANUAL: a free-course request becomes PENDING_APPROVAL; staff approve/reject.
+// DEMO: same as MANUAL for self-enroll, plus staff may demoEnroll() any
+// student into any course (free or paid) with zero financial effect.
+enum AcademyEnrollmentMode {
+  AUTOMATIC
+  MANUAL
+  DEMO
+}
+
 model Academy {
   id          String        @id @default(cuid())
   slug        String        @unique
@@ -122,6 +133,13 @@ model Academy {
   // Revenue: additive platform service fee the STUDENT pays on top of the price.
   feeType  FeeType @default(PERCENT)
   feeValue Int     @default(20) // percent when PERCENT, fixed piasters when FIXED
+
+  // SaaS Evolution Phase 5. Governs ONLY the free-course self-enroll path
+  // (EnrollmentsService.enroll) — a paid course's activation is unaffected by
+  // this in every mode: payment verification is already the human-gated step,
+  // and duplicating that gate here would mean two places deciding when money
+  // is confirmed. See EnrollmentsService for the exact per-mode behavior.
+  enrollmentMode AcademyEnrollmentMode @default(AUTOMATIC)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -910,12 +928,26 @@ model Attachment {
 enum EnrollmentStatus {
   /// A payment has been submitted and is waiting to be confirmed. This is the
   /// platform checking that money arrived — not a teacher deciding whether to
-  /// let someone in. That queue is gone: a free course enrols on the spot.
+  /// let someone in. Never used for the free-course approval wait below —
+  /// those are two different kinds of "pending" and must not share a status.
   PENDING_PAYMENT
+  /// Phase 5: a free-course request under an academy's MANUAL/DEMO
+  /// enrollmentMode, waiting on staff sign-off. Never reached by a paid
+  /// course — see EnrollmentsService for why.
+  PENDING_APPROVAL
   ACTIVE
   REJECTED
   EXPIRED
   REVOKED
+}
+
+/// Phase 5: distinguishes how an ACTIVE/REJECTED enrollment got there, for
+/// rows created through the two new staff-driven paths. Null means "the
+/// existing checkout/free-enroll path" — every row that predates this column,
+/// and every AUTOMATIC-mode row created after it, is null.
+enum EnrollmentSource {
+  MANUAL_APPROVAL
+  DEMO
 }
 
 model Enrollment {
@@ -934,8 +966,11 @@ model Enrollment {
   // subscription/window end; null = lifetime
   expiresAt     DateTime?
   revokedReason String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  /// Phase 5: set only by EnrollmentsService.approve()/demoEnroll(). Null
+  /// everywhere else — see EnrollmentSource.
+  source        EnrollmentSource?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   /// The student took this off their own shelf. It only ever applies to an
   /// enrolment that is already dead — revoked, rejected or expired — and it

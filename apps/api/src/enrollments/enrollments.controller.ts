@@ -1,8 +1,8 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { EnrollmentStatus, JwtPayload, Role } from '@darsly/shared-types';
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AuditService } from '../audit/audit.service';
@@ -10,6 +10,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { IsId, LIMITS } from '../common/validation';
+import { AcademyStaffFeature } from '../feature-flags/academy-staff-feature.decorator';
 import { EnrollmentsService } from './enrollments.service';
 
 class EnrollDto {
@@ -25,6 +26,12 @@ class ModerateDto {
 
 class TeacherEnrollmentsQuery {
   @IsOptional() @IsEnum(EnrollmentStatus) status?: EnrollmentStatus;
+}
+
+class DemoEnrollDto {
+  @IsOptional() @IsId() studentUserId?: string;
+  @IsOptional() @IsEmail() studentEmail?: string;
+  @IsId() courseId: string;
 }
 
 @ApiTags('enrollments')
@@ -113,6 +120,71 @@ export class EnrollmentsController {
       entity: 'Enrollment',
       entityId: id,
       meta: { reason: dto.reason },
+    });
+    return enrollment;
+  }
+
+  // ── Phase 5: MANUAL-mode approval queue + DEMO enrollment ───────────────
+  // Gated by BOTH student.manage (existing capability — the same one revoke/
+  // teacherList already use) and the enrollmentApprovalMode feature flag: a
+  // platform-wide kill switch independent of what an academy owner has set
+  // their own enrollmentMode to.
+
+  @Patch('teacher/enrollments/:id/approve')
+  @AcademyStaffFeature('student.manage', 'enrollmentApprovalMode')
+  @ApiOperation({ summary: '[academy] Approve a pending (free-course, MANUAL/DEMO-mode) enrollment request' })
+  async approve(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    const enrollment = await this.enrollments.approve(ctx.academyId, id);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'enrollment.approve',
+      entity: 'Enrollment',
+      entityId: id,
+      academyId: ctx.academyId,
+    });
+    return enrollment;
+  }
+
+  @Patch('teacher/enrollments/:id/reject')
+  @AcademyStaffFeature('student.manage', 'enrollmentApprovalMode')
+  @ApiOperation({ summary: '[academy] Reject a pending enrollment request' })
+  async rejectRequest(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: ModerateDto,
+  ) {
+    const enrollment = await this.enrollments.reject(ctx.academyId, id, dto.reason);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'enrollment.reject',
+      entity: 'Enrollment',
+      entityId: id,
+      academyId: ctx.academyId,
+      meta: { reason: dto.reason },
+    });
+    return enrollment;
+  }
+
+  @Post('teacher/enrollments/demo')
+  @AcademyStaffFeature('student.manage', 'enrollmentApprovalMode')
+  @ApiOperation({ summary: '[academy, MANUAL/DEMO mode only] Grant a student access with zero financial effect' })
+  async demoEnroll(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: DemoEnrollDto) {
+    if (!dto.studentUserId && !dto.studentEmail) {
+      throw new BadRequestException('Provide either studentUserId or studentEmail');
+    }
+    const enrollment = await this.enrollments.demoEnroll(
+      ctx.academyId,
+      { studentUserId: dto.studentUserId, studentEmail: dto.studentEmail },
+      dto.courseId,
+    );
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'enrollment.demo',
+      entity: 'Enrollment',
+      entityId: enrollment.id,
+      academyId: ctx.academyId,
+      meta: { studentUserId: dto.studentUserId, studentEmail: dto.studentEmail, courseId: dto.courseId },
     });
     return enrollment;
   }

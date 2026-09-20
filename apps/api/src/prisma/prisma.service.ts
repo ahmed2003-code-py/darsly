@@ -62,6 +62,11 @@ const SOFT_DELETE_MODELS = new Set([
   'GroupAssignment',
   'AttendanceSession',
   'AttendanceRecord',
+  // SaaS Evolution Phase 4 — a cancelled/rescheduled-away session and an
+  // archived room both stay readable for history (see Room/GroupSession
+  // comments in schema.prisma); this only hides genuinely deleted rows.
+  'Room',
+  'GroupSession',
 ]);
 
 const READ_ACTIONS = new Set([

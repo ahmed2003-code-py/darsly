@@ -58,6 +58,7 @@ model User {
   liveAttendance     LiveAttendance[]
   liveMessages       LiveChatMessage[]
   groupAssignments   GroupAssignment[]
+  taughtSessions     GroupSession[]
 }
 
 // ─────────────────────────── Academy (Workspace) ───────────────────────────
@@ -126,10 +127,12 @@ model Academy {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete
 
-  memberships  AcademyMembership[]
-  domains      AcademyDomain[]
-  featureFlags AcademyFeatureFlag[]
-  groups       Group[]
+  memberships   AcademyMembership[]
+  domains       AcademyDomain[]
+  featureFlags  AcademyFeatureFlag[]
+  groups        Group[]
+  rooms         Room[]
+  groupSessions GroupSession[]
 
   // Academy Studio (AI site) — Phase 1. All additive.
   siteFacts AcademyProfileFacts?
@@ -221,6 +224,7 @@ model Group {
   members            GroupMembership[]
   assignments        GroupAssignment[]
   attendanceSessions AttendanceSession[]
+  groupSessions      GroupSession[]
 
   @@index([academyId, status])
 }
@@ -314,6 +318,75 @@ model AttendanceRecord {
   @@unique([sessionId, studentId])
   @@index([academyId])
   @@index([studentId])
+}
+
+enum RoomStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// A physical academy room — distinct from LiveSession's Daily.co video room
+// (roomName/roomUrl there), which is a meeting-provider artifact, not a place.
+// OWNER-managed only (see permissions.ts: room.manage is not granted to
+// TEACHER/ASSISTANT by default).
+model Room {
+  id        String     @id @default(cuid())
+  academyId String
+  academy   Academy    @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  name      String
+  location  String?
+  capacity  Int?
+  status    RoomStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
+
+  sessions GroupSession[]
+
+  @@index([academyId, status])
+}
+
+enum GroupSessionStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+// A scheduled occurrence for a Group — a physical/in-person class slot, never
+// the online video classroom (LiveSession, unaffected and untouched here).
+// Overlap protection is two-layered: an app-level pre-check for a friendly
+// structured error, and a DB-level EXCLUDE constraint (migration
+// 20260920_academy_scheduling — GiST, not representable in Prisma's schema
+// DSL) that is the actual race-condition guarantee for concurrent requests.
+model GroupSession {
+  id            String             @id @default(cuid())
+  academyId     String
+  academy       Academy            @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  // The staff member running this occurrence. Nullable — a session can be
+  // scheduled before a teacher is assigned — but teacher-overlap protection
+  // only applies once one is set, and it is checked across the WHOLE
+  // platform (a person cannot teach two academies at the same instant
+  // either), not just within this academy.
+  teacherUserId String?
+  teacher       User?              @relation(fields: [teacherUserId], references: [id])
+  roomId        String?
+  room          Room?              @relation(fields: [roomId], references: [id])
+  startAt       DateTime
+  endAt         DateTime
+  status        GroupSessionStatus @default(SCHEDULED)
+  createdBy     String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt     DateTime?
+
+  @@index([academyId, startAt])
+  @@index([groupId, startAt])
+  @@index([roomId, startAt])
+  @@index([teacherUserId, startAt])
 }
 
 // Single-use, hashed password-reset tokens (forgot-password flow).

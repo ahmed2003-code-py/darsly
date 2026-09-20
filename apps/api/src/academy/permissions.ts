@@ -21,6 +21,8 @@ export const CAPABILITIES = [
   'wallet.withdraw',
   'group.manage', // create/edit/archive groups, assign staff, manage membership — scoped further by GroupAssignment (see AcademyOpsAccessService)
   'attendance.mark', // mark/update attendance — same per-group scoping
+  'schedule.manage', // create/reschedule/cancel group sessions — same per-group scoping as group.manage
+  'room.manage', // create/edit/archive physical rooms — OWNER only, not granted to TEACHER/ASSISTANT below
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -43,6 +45,7 @@ export const ROLE_PERMISSIONS: Record<AcademyRole, Capability[]> = {
     'wallet.read',
     'group.manage',
     'attendance.mark',
+    'schedule.manage',
   ],
   ASSISTANT: [
     'assessment.author',
@@ -52,6 +55,7 @@ export const ROLE_PERMISSIONS: Record<AcademyRole, Capability[]> = {
     'live.manage',
     'group.manage',
     'attendance.mark',
+    'schedule.manage',
   ],
   STUDENT: [], // students act through enrollments, not academy-management grants
 };

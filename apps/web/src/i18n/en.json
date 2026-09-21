@@ -2821,7 +2821,25 @@
     "reactivateRoom": "Reactivate",
     "roomName": "Room name",
     "location": "Location",
-    "capacityLabel": "Capacity"
+    "capacityLabel": "Capacity",
+    "mode": "Delivery",
+    "modes": {
+      "PHYSICAL": "In person",
+      "ONLINE": "Online",
+      "HYBRID": "Hybrid"
+    },
+    "locationType": "Where",
+    "locations": {
+      "CENTER": "At the Center",
+      "TEACHER": "Teacher's place",
+      "STUDENT": "Student's place",
+      "OTHER": "Elsewhere"
+    },
+    "locationNote": "Location details",
+    "joinUrl": "Join link",
+    "joinUrlHint": "Optional if a live session is already scheduled for this group in the same slot.",
+    "allWorkspaces": "All my workspaces",
+    "allWorkspacesHint": "Personal academy plus every Center you teach in — your sessions only."
   },
   "center": {
     "title": "Center console",

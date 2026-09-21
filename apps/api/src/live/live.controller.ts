@@ -22,7 +22,7 @@ import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { LiveService } from './live.service';
+import { LiveScope, LiveService } from './live.service';
 
 class CreateLiveDto {
   @IsString() @MinLength(2) @MaxLength(160) title: string;
@@ -33,6 +33,8 @@ class CreateLiveDto {
   @IsOptionalId() courseId?: string | null;
   // Rendered as a link students click — anything but a real URL is a trap.
   @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?: string | null;
+  @IsOptionalId() teacherUserId?: string | null;
+  @IsOptionalId() groupId?: string | null;
 }
 
 class RecordingStartedDto {
@@ -56,7 +58,12 @@ class UpdateLiveDto {
   @IsOptional() @IsInt() @Min(1) @Max(MAX_CAPACITY) capacity?: number | null;
   @IsOptionalId() courseId?: string | null;
   @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?: string | null;
+  @IsOptionalId() teacherUserId?: string | null;
+  @IsOptionalId() groupId?: string | null;
 }
+
+/** Organisation + authorship scope from the validated context; the body never decides either. */
+const scopeOf = (ctx: AcademyContext): LiveScope => ({ academyId: ctx.academyId, userId: ctx.userId, manageAll: ctx.role === 'OWNER', role: ctx.role });
 
 @ApiTags('live')
 @ApiBearerAuth()
@@ -70,42 +77,42 @@ export class LiveController {
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Live sessions with booking counts' })
   listMine(@CurrentAcademy() ctx: AcademyContext) {
-    return this.live.listForTeacher(ctx.academyId);
+    return this.live.listForTeacher(scopeOf(ctx));
   }
 
   @Post('teacher/live')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Schedule a live session (notifies students)' })
   create(@CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateLiveDto) {
-    return this.live.create(ctx.academyId, dto);
+    return this.live.create(scopeOf(ctx), dto);
   }
 
   @Patch('teacher/live/:id')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Update a live session' })
   update(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: UpdateLiveDto) {
-    return this.live.update(ctx.academyId, id, dto);
+    return this.live.update(scopeOf(ctx), id, dto);
   }
 
   @Delete('teacher/live/:id')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Cancel (soft-delete) a live session' })
   remove(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.remove(ctx.academyId, id);
+    return this.live.remove(scopeOf(ctx), id);
   }
 
   @Get('teacher/live/:id/bookings')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Students booked for a session' })
   bookings(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.bookingsFor(ctx.academyId, id);
+    return this.live.bookingsFor(scopeOf(ctx), id);
   }
 
   @Get('teacher/live/:id/attendance')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Who actually attended, and for how long' })
   attendance(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.attendanceFor(ctx.academyId, id);
+    return this.live.attendanceFor(scopeOf(ctx), id);
   }
 
   /**
@@ -119,7 +126,7 @@ export class LiveController {
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Start the meeting and get an owner token' })
   start(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @CurrentUser() u: JwtPayload) {
-    return this.live.start(ctx.academyId, id, u.sub);
+    return this.live.start(scopeOf(ctx), id, u.sub);
   }
 
   /** Walking back into a class already running — a refresh, or a second device. */
@@ -127,14 +134,14 @@ export class LiveController {
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Re-enter a running meeting' })
   teacherJoin(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @CurrentUser() u: JwtPayload) {
-    return this.live.teacherJoin(ctx.academyId, id, u.sub);
+    return this.live.teacherJoin(scopeOf(ctx), id, u.sub);
   }
 
   @Post('teacher/live/:id/end')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] End the meeting for everyone' })
   end(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.end(ctx.academyId, id);
+    return this.live.end(scopeOf(ctx), id);
   }
 
   // ── Student ──────────────────────────────────────────────────────────────
@@ -186,14 +193,14 @@ export class LiveController {
     @Param('id') id: string,
     @Body() dto: RecordingStartedDto,
   ) {
-    return this.live.markRecording(ctx.academyId, id, dto.recordingId ?? null);
+    return this.live.markRecording(scopeOf(ctx), id, dto.recordingId ?? null);
   }
 
   @Post('teacher/live/:id/recording/stop')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Mark recording as stopped (still processing)' })
   stopRecording(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.stopRecording(ctx.academyId, id);
+    return this.live.stopRecording(scopeOf(ctx), id);
   }
 
   /** The classroom saying transcription never came up at the provider. */
@@ -201,14 +208,14 @@ export class LiveController {
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Record that transcription could not start' })
   transcriptionFailed(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.reportTranscriptionFailure(ctx.academyId, id);
+    return this.live.reportTranscriptionFailure(scopeOf(ctx), id);
   }
 
   @Post('teacher/live/:id/summary')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Queue an AI summary of the lesson' })
   summarise(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.requestSummary(ctx.academyId, id);
+    return this.live.requestSummary(scopeOf(ctx), id);
   }
 
   @Patch('teacher/live/:id/summary/visibility')
@@ -219,7 +226,7 @@ export class LiveController {
     @Param('id') id: string,
     @Body() dto: SummaryVisibilityDto,
   ) {
-    return this.live.setSummaryVisibility(ctx.academyId, id, dto.visible);
+    return this.live.setSummaryVisibility(scopeOf(ctx), id, dto.visible);
   }
 
   // ── The classroom, for anyone admitted to it ─────────────────────────────

@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { AcademyService } from '../academy/academy.service';
 import { LivePipelineStatus, LiveSessionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -30,6 +31,23 @@ export interface UpsertLiveDto {
   capacity?: number | null;
   courseId?: string | null;
   joinUrl?: string | null;
+  /** The teacher who runs it; defaults to the caller when they are a teacher. Validated server-side. */
+  teacherUserId?: string | null;
+  /** Restricts the audience to one group of the academy. */
+  groupId?: string | null;
+}
+
+/**
+ * Who is acting on live sessions and where. Built by the controller from the
+ * validated AcademyContext — never from the body. OWNER (incl. platform
+ * admin) reaches every stream in the academy; a TEACHER member only their
+ * own. tenantId (authorship) is derived from the assigned teacher's profile.
+ */
+export interface LiveScope {
+  academyId: string;
+  userId: string;
+  manageAll: boolean;
+  role: string;
 }
 
 @Injectable()
@@ -41,32 +59,94 @@ export class LiveService {
     private readonly daily: DailyService,
     private readonly realtime: RealtimeService,
     private readonly jobs: AiJobService,
+    private readonly academy: AcademyService,
   ) {}
 
   // ── Teacher ────────────────────────────────────────────────────────────────
 
-  async create(tenantId: string, dto: UpsertLiveDto) {
+  async create(scope: LiveScope, dto: UpsertLiveDto) {
+    // The stream's teacher: named explicitly, or the caller when they are a
+    // teacher themselves. STAFF must name one — they can schedule, never teach.
+    const teacher = await this.academy.assertAssignableTeacher(scope.academyId, dto.teacherUserId ?? scope.userId);
+    const groupId = await this.resolveGroup(scope, dto.groupId ?? null, teacher.userId);
+    const startsAt = new Date(dto.startsAt);
+    const durationMin = dto.durationMin ?? 60;
+    await this.assertTeacherFree(scope, teacher.userId, startsAt, durationMin);
     const session = await this.prisma.liveSession.create({
       data: {
-        tenantId,
+        tenantId: teacher.teacherProfileId,
+        academyId: scope.academyId,
+        teacherUserId: teacher.userId,
+        groupId,
         title: dto.title.trim(),
         description: dto.description ?? '',
-        startsAt: new Date(dto.startsAt),
-        durationMin: dto.durationMin ?? 60,
+        startsAt,
+        durationMin,
         capacity: dto.capacity ?? null,
         courseId: dto.courseId ?? null,
         joinUrl: dto.joinUrl ?? null,
       },
     });
-    await this.announceToStudents(tenantId, session.id, session.title, session.startsAt);
+    await this.announceToStudents(session, session.title, session.startsAt);
     return session;
   }
 
-  async update(tenantId: string, id: string, dto: Partial<UpsertLiveDto>) {
-    await this.assertOwned(tenantId, id);
+  /** A group must be offered in this academy, and the teacher must be assigned to it (an OWNER may take their own group unassigned). */
+  private async resolveGroup(scope: LiveScope, groupId: string | null, teacherUserId: string): Promise<string | null> {
+    if (!groupId) return null;
+    const group = await this.prisma.group.findFirst({ where: { id: groupId, academyId: scope.academyId }, select: { id: true } });
+    if (!group) throw new NotFoundException('Group not found');
+    const ownerSelf = scope.role === 'OWNER' && teacherUserId === scope.userId;
+    if (!ownerSelf) {
+      const assigned = await this.prisma.groupAssignment.findFirst({ where: { groupId, userId: teacherUserId }, select: { id: true } });
+      if (!assigned) throw new BadRequestException('That teacher is not assigned to this group');
+    }
+    return groupId;
+  }
+
+  /**
+   * A person cannot be in two places at once — physical or online, in any
+   * academy. GroupSession already enforces this against itself at the DB
+   * level; this is the application-level bridge across the two tables.
+   * A colliding session from another academy is reported by kind only.
+   */
+  private async assertTeacherFree(scope: LiveScope, teacherUserId: string, startsAt: Date, durationMin: number, excludeId?: string) {
+    const endsAt = new Date(startsAt.getTime() + durationMin * 60_000);
+    const group = await this.prisma.groupSession.findFirst({
+      where: { teacherUserId, status: { not: 'CANCELLED' }, startAt: { lt: endsAt }, endAt: { gt: startsAt } },
+      select: { id: true, academyId: true },
+    });
+    if (group) {
+      throw new ConflictException({ message: 'The teacher already has a session in this window', code: 'TEACHER_CONFLICT', conflictingSessionId: group.academyId === scope.academyId ? group.id : undefined });
+    }
+    const others = await this.prisma.liveSession.findMany({
+      where: { teacherUserId, status: { not: 'ENDED' }, ...(excludeId ? { id: { not: excludeId } } : {}), startsAt: { lt: endsAt } },
+      select: { id: true, academyId: true, startsAt: true, durationMin: true },
+    });
+    const clash = others.find((o) => new Date(o.startsAt.getTime() + o.durationMin * 60_000) > startsAt);
+    if (clash) {
+      throw new ConflictException({ message: 'The teacher already has a live session in this window', code: 'TEACHER_CONFLICT', conflictingSessionId: clash.academyId === scope.academyId ? clash.id : undefined });
+    }
+  }
+
+  async update(scope: LiveScope, id: string, dto: Partial<UpsertLiveDto>) {
+    const existing = await this.assertOwned(scope, id);
+    let teacher: { userId: string; teacherProfileId: string } | null = null;
+    if (dto.teacherUserId != null && dto.teacherUserId !== existing.teacherUserId) {
+      teacher = await this.academy.assertAssignableTeacher(scope.academyId, dto.teacherUserId);
+    }
+    const teacherUserId = teacher?.userId ?? existing.teacherUserId;
+    const groupId = dto.groupId !== undefined ? await this.resolveGroup(scope, dto.groupId, teacherUserId ?? scope.userId) : existing.groupId;
+    const startsAt = dto.startsAt != null ? new Date(dto.startsAt) : existing.startsAt;
+    const durationMin = dto.durationMin ?? existing.durationMin;
+    if (teacherUserId && (teacher || dto.startsAt != null || dto.durationMin != null)) {
+      await this.assertTeacherFree(scope, teacherUserId, startsAt, durationMin, id);
+    }
     return this.prisma.liveSession.update({
       where: { id },
       data: {
+        ...(teacher ? { tenantId: teacher.teacherProfileId, teacherUserId: teacher.userId } : {}),
+        ...(dto.groupId !== undefined ? { groupId } : {}),
         ...(dto.title != null ? { title: dto.title.trim() } : {}),
         ...(dto.description != null ? { description: dto.description } : {}),
         ...(dto.startsAt != null ? { startsAt: new Date(dto.startsAt) } : {}),
@@ -78,23 +158,23 @@ export class LiveService {
     });
   }
 
-  async remove(tenantId: string, id: string) {
-    await this.assertOwned(tenantId, id);
+  async remove(scope: LiveScope, id: string) {
+    await this.assertOwned(scope, id);
     await this.prisma.liveSession.delete({ where: { id } }); // soft delete via middleware
     return { id, deleted: true };
   }
 
-  async listForTeacher(tenantId: string) {
+  async listForTeacher(scope: LiveScope) {
     const sessions = await this.prisma.liveSession.findMany({
-      where: { tenantId },
+      where: this.scopeWhere(scope),
       orderBy: { startsAt: 'asc' },
       include: { _count: { select: { bookings: true } } },
     });
     return sessions.map((s) => ({ ...s, bookedCount: s._count.bookings }));
   }
 
-  async bookingsFor(tenantId: string, id: string) {
-    await this.assertOwned(tenantId, id);
+  async bookingsFor(scope: LiveScope, id: string) {
+    await this.assertOwned(scope, id);
     const rows = await this.prisma.liveBooking.findMany({
       where: { sessionId: id },
       orderBy: { createdAt: 'asc' },
@@ -110,14 +190,23 @@ export class LiveService {
 
   // ── Student ────────────────────────────────────────────────────────────────
 
-  /** Upcoming sessions from teachers the student is actively enrolled with. */
+  /**
+   * Upcoming sessions in the academies the student is actively enrolled with —
+   * a group-scoped stream only for that group's members, an academy-wide one
+   * for every enrolled student there.
+   */
   async upcomingForStudent(userId: string) {
     const student = await this.studentOf(userId);
-    const tenantIds = await this.enrolledTenantIds(student.id);
-    if (!tenantIds.length) return [];
+    const academyIds = await this.enrolledAcademyIds(student.id);
+    if (!academyIds.length) return [];
+    const groupIds = (await this.prisma.groupMembership.findMany({ where: { studentId: student.id }, select: { groupId: true } })).map((g) => g.groupId);
 
     const sessions = await this.prisma.liveSession.findMany({
-      where: { tenantId: { in: tenantIds }, startsAt: { gte: new Date(Date.now() - 2 * 3600_000) } },
+      where: {
+        academyId: { in: academyIds },
+        OR: [{ groupId: null }, { groupId: { in: groupIds } }],
+        startsAt: { gte: new Date(Date.now() - 2 * 3600_000) },
+      },
       orderBy: { startsAt: 'asc' },
       include: {
         teacher: { select: { slug: true, user: { select: { fullName: true } } } },
@@ -135,7 +224,7 @@ export class LiveService {
       include: { _count: { select: { bookings: true } } },
     });
     if (!session || session.deletedAt) throw new NotFoundException('Session not found');
-    await this.assertEnrolledWith(student.id, session.tenantId);
+    await this.assertEnrolledWith(student.id, session);
 
     const already = await this.prisma.liveBooking.findUnique({
       where: { sessionId_studentId: { sessionId, studentId: student.id } },
@@ -270,8 +359,8 @@ export class LiveService {
    * student may be signed in from — borrowing it here would tie a teacher's
    * classroom to an anti-account-sharing setting that has nothing to do with it.
    */
-  async start(tenantId: string, id: string, actorUserId: string) {
-    const session = await this.assertOwned(tenantId, id);
+  async start(scope: LiveScope, id: string, actorUserId: string) {
+    const session = await this.assertOwned(scope, id);
     // Only the clock closes a session for good. Pressing "end for all" two
     // minutes into an hour-long class — by accident, or to clear a room that
     // went wrong — must not cost the teacher the other fifty-eight and force
@@ -298,17 +387,17 @@ export class LiveService {
     // Claim the "one live session" slot and the LIVE status in one statement,
     // so two taps a millisecond apart cannot both win it.
     const claimed = await this.prisma.liveSession.updateMany({
-      where: { id, tenantId, status: { not: 'LIVE' }, deletedAt: null },
+      where: { id, academyId: scope.academyId, status: { not: 'LIVE' }, deletedAt: null },
       // `endedAt` is cleared on the way back in, so a reopened class does not
       // carry a finish time from the run before it.
       data: { status: 'LIVE', startedAt: new Date(), endedAt: null },
     });
     if (claimed.count === 0) {
-      const fresh = await this.assertOwned(tenantId, id);
+      const fresh = await this.assertOwned(scope, id);
       return this.teacherEntry(fresh, actorUserId);
     }
     const otherLive = await this.prisma.liveSession.count({
-      where: { tenantId, status: 'LIVE', id: { not: id }, deletedAt: null },
+      where: { tenantId: session.tenantId, status: 'LIVE', id: { not: id }, deletedAt: null },
     });
     if (otherLive > 0) {
       // Hand the slot back rather than leaving two sessions claiming to be live.
@@ -342,13 +431,13 @@ export class LiveService {
       where: { id },
       data: { roomName: room.name, roomUrl: room.url },
     });
-    await this.announceStart(tenantId, updated);
+    await this.announceStart(updated);
     return this.teacherEntry(updated, actorUserId);
   }
 
   /** The teacher walks back into a class they already started. */
-  async teacherJoin(tenantId: string, id: string, actorUserId: string) {
-    const session = await this.assertOwned(tenantId, id);
+  async teacherJoin(scope: LiveScope, id: string, actorUserId: string) {
+    const session = await this.assertOwned(scope, id);
     if (session.status !== 'LIVE' || !session.roomName) {
       throw new BadRequestException({ message: 'لم يبدأ الفصل بعد', code: 'NOT_STARTED' });
     }
@@ -359,8 +448,8 @@ export class LiveService {
   }
 
   /** The teacher closes the classroom. Everyone still inside is checked out. */
-  async end(tenantId: string, id: string) {
-    const session = await this.assertOwned(tenantId, id);
+  async end(scope: LiveScope, id: string) {
+    const session = await this.assertOwned(scope, id);
     const now = new Date();
     await this.prisma.$transaction([
       this.prisma.liveSession.update({
@@ -444,14 +533,14 @@ export class LiveService {
   async assertInSession(userId: string, sessionId: string) {
     const session = await this.prisma.liveSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, tenantId: true, deletedAt: true, teacher: { select: { userId: true } } },
+      select: { id: true, tenantId: true, academyId: true, deletedAt: true, teacher: { select: { userId: true } } },
     });
     if (!session || session.deletedAt) throw new NotFoundException('Session not found');
     if (session.teacher.userId === userId) return { session, role: 'TEACHER' as const };
     // Staff means a staff *role* — an ACTIVE membership with role STUDENT is a
     // learner, and must not be waved in as the teacher side of the room.
     const staff = await this.prisma.academyMembership.findFirst({
-      where: { academyId: session.tenantId, userId, status: 'ACTIVE', role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } },
+      where: { academyId: session.academyId ?? session.tenantId, userId, status: 'ACTIVE', role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } },
       select: { id: true },
     });
     if (staff) return { session, role: 'TEACHER' as const };
@@ -516,8 +605,8 @@ export class LiveService {
    * state is asked for later, because a recording is not finished when the
    * class is.
    */
-  async markRecording(tenantId: string, id: string, recordingId: string | null) {
-    await this.assertOwned(tenantId, id);
+  async markRecording(scope: LiveScope, id: string, recordingId: string | null) {
+    await this.assertOwned(scope, id);
     return this.prisma.liveSession.update({
       where: { id },
       data: {
@@ -530,8 +619,8 @@ export class LiveService {
   }
 
   /** Stopped. Processing continues at the provider for a while yet. */
-  async stopRecording(tenantId: string, id: string) {
-    await this.assertOwned(tenantId, id);
+  async stopRecording(scope: LiveScope, id: string) {
+    await this.assertOwned(scope, id);
     return this.prisma.liveSession.update({
       where: { id },
       data: { recordingStatus: 'PROCESSING' },
@@ -574,21 +663,21 @@ export class LiveService {
    * Idempotent on purpose: pressing the button twice, or a webhook arriving
    * twice, must not spend two model calls on one lesson.
    */
-  async requestSummary(tenantId: string, id: string) {
-    const session = await this.assertOwned(tenantId, id);
+  async requestSummary(scope: LiveScope, id: string) {
+    const session = await this.assertOwned(scope, id);
     if (session.summaryStatus === 'PROCESSING') return { status: 'PROCESSING' as const };
     if (session.summaryStatus === 'READY') return { status: 'READY' as const };
     await this.prisma.liveSession.update({
       where: { id },
       data: { summaryStatus: 'PROCESSING', summaryError: null },
     });
-    await this.jobs.enqueue(tenantId, 'LIVE_SUMMARY', { liveSessionId: id });
+    await this.jobs.enqueue(session.tenantId, 'LIVE_SUMMARY', { liveSessionId: id });
     return { status: 'PROCESSING' as const };
   }
 
   /** The teacher decides whether the class gets to keep the notes. */
-  async setSummaryVisibility(tenantId: string, id: string, visible: boolean) {
-    await this.assertOwned(tenantId, id);
+  async setSummaryVisibility(scope: LiveScope, id: string, visible: boolean) {
+    await this.assertOwned(scope, id);
     const updated = await this.prisma.liveSession.update({
       where: { id },
       data: { summaryForStudents: visible },
@@ -691,8 +780,8 @@ export class LiveService {
    * difference between a puzzled teacher and an operator who knows to enable
    * transcription on the Daily account.
    */
-  async reportTranscriptionFailure(tenantId: string, id: string) {
-    await this.assertOwned(tenantId, id);
+  async reportTranscriptionFailure(scope: LiveScope, id: string) {
+    await this.assertOwned(scope, id);
     await this.prisma.liveSession.update({
       where: { id },
       data: { transcriptStatus: 'FAILED' },
@@ -701,8 +790,8 @@ export class LiveService {
   }
 
   /** Who actually turned up, for the teacher's own session. */
-  async attendanceFor(tenantId: string, id: string) {
-    await this.assertOwned(tenantId, id);
+  async attendanceFor(scope: LiveScope, id: string) {
+    await this.assertOwned(scope, id);
     const rows = await this.prisma.liveAttendance.findMany({
       where: { sessionId: id },
       orderBy: { joinedAt: 'asc' },
@@ -849,7 +938,7 @@ export class LiveService {
     });
   }
 
-  private async announceStart(tenantId: string, s: { id: string; title: string }) {
+  private async announceStart(s: { id: string; title: string }) {
     const booked = await this.prisma.liveBooking.findMany({
       where: { sessionId: s.id },
       select: { student: { select: { userId: true } } },
@@ -896,8 +985,13 @@ export class LiveService {
     };
   }
 
-  private async assertOwned(tenantId: string, id: string) {
-    const s = await this.prisma.liveSession.findFirst({ where: { id, tenantId } });
+  private scopeWhere(scope: LiveScope) {
+    return { academyId: scope.academyId, ...(scope.manageAll ? {} : { teacherUserId: scope.userId }) };
+  }
+
+  /** Organisation scope first, then (for a non-owner) authorship — a foreign or colleague's stream 404s. */
+  private async assertOwned(scope: LiveScope, id: string) {
+    const s = await this.prisma.liveSession.findFirst({ where: { id, ...this.scopeWhere(scope) } });
     if (!s) throw new NotFoundException('Session not found');
     return s;
   }
@@ -920,29 +1014,35 @@ export class LiveService {
     };
   }
 
-  private async enrolledTenantIds(studentId: string): Promise<string[]> {
+  private async enrolledAcademyIds(studentId: string): Promise<string[]> {
     const rows = await this.prisma.enrollment.findMany({
       where: { studentId, ...this.activeEnrollmentWhere() },
-      select: { tenantId: true },
-      distinct: ['tenantId'],
+      select: { academyId: true, tenantId: true },
     });
-    return rows.map((r) => r.tenantId);
+    return [...new Set(rows.map((r) => r.academyId ?? r.tenantId))];
   }
 
-  private async assertEnrolledWith(studentId: string, tenantId: string) {
+  private async assertEnrolledWith(studentId: string, session: { academyId: string | null; tenantId: string; groupId: string | null }) {
+    if (session.groupId) {
+      const member = await this.prisma.groupMembership.findFirst({ where: { groupId: session.groupId, studentId }, select: { id: true } });
+      if (!member) throw new ForbiddenException({ message: 'This session is for a group you are not in', code: 'NOT_IN_GROUP' });
+    }
     const active = await this.prisma.enrollment.findFirst({
-      where: { studentId, tenantId, ...this.activeEnrollmentWhere() },
+      where: { studentId, academyId: session.academyId ?? session.tenantId, ...this.activeEnrollmentWhere() },
       select: { id: true },
     });
     if (!active) throw new ForbiddenException('You must be enrolled with this teacher to book');
   }
 
-  private async announceToStudents(tenantId: string, sessionId: string, title: string, startsAt: Date) {
-    const students = await this.prisma.enrollment.findMany({
-      where: { tenantId, status: 'ACTIVE' },
-      select: { student: { select: { userId: true } } },
-      distinct: ['studentId'],
-    });
+  private async announceToStudents(session: { id: string; academyId: string | null; tenantId: string; groupId: string | null }, title: string, startsAt: Date) {
+    const sessionId = session.id;
+    const students = session.groupId
+      ? await this.prisma.groupMembership.findMany({ where: { groupId: session.groupId }, select: { student: { select: { userId: true } } }, distinct: ['studentId'] })
+      : await this.prisma.enrollment.findMany({
+          where: { academyId: session.academyId ?? session.tenantId, status: 'ACTIVE' },
+          select: { student: { select: { userId: true } } },
+          distinct: ['studentId'],
+        });
     const when = startsAt.toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
     await Promise.all(
       students.map((e) =>

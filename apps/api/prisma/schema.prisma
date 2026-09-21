@@ -69,6 +69,7 @@ model User {
   liveMessages       LiveChatMessage[]
   groupAssignments   GroupAssignment[]
   taughtSessions     GroupSession[]
+  taughtLiveSessions LiveSession[]       @relation("liveSessionTeacher")
 }
 
 // ─────────────────────────── Academy (Workspace) ───────────────────────────
@@ -171,6 +172,7 @@ model Academy {
   groups        Group[]
   rooms         Room[]
   groupSessions GroupSession[]
+  liveSessions  LiveSession[]
 
   // Academy Studio (AI site) — Phase 1. All additive.
   siteFacts AcademyProfileFacts?
@@ -287,6 +289,7 @@ model Group {
   assignments        GroupAssignment[]
   attendanceSessions AttendanceSession[]
   groupSessions      GroupSession[]
+  liveSessions       LiveSession[]
 
   @@index([academyId, status])
 }
@@ -409,6 +412,24 @@ model Room {
   @@index([academyId, status])
 }
 
+// How a scheduled occurrence is delivered. A property of the session, never a
+// role: one teacher can run a PHYSICAL class on Monday and an ONLINE one on
+// Tuesday with the same identity.
+enum SessionMode {
+  ONLINE
+  PHYSICAL
+  HYBRID
+}
+
+// Where a PHYSICAL/HYBRID occurrence happens. CENTER may name a Room; the
+// others carry an optional free-text note. Null for ONLINE.
+enum SessionLocationType {
+  CENTER
+  TEACHER
+  STUDENT
+  OTHER
+}
+
 enum GroupSessionStatus {
   SCHEDULED
   CANCELLED
@@ -436,6 +457,14 @@ model GroupSession {
   teacher       User?              @relation(fields: [teacherUserId], references: [id])
   roomId        String?
   room          Room?              @relation(fields: [roomId], references: [id])
+  // Every existing row is a physical slot (that is all the model ever
+  // represented); ONLINE/HYBRID are only ever written explicitly from now on.
+  mode          SessionMode          @default(PHYSICAL)
+  locationType  SessionLocationType?
+  locationNote  String?
+  // Online access for ONLINE/HYBRID when no LiveSession is scheduled for the
+  // same group and window; a plain link, never a Daily room.
+  joinUrl       String?
   startAt       DateTime
   endAt         DateTime
   status        GroupSessionStatus @default(SCHEDULED)
@@ -2082,8 +2111,19 @@ enum LiveSessionStatus {
 
 model LiveSession {
   id          String            @id @default(cuid())
+  // Authorship: the teacher whose stream this is. Never the organisation.
   tenantId    String
   teacher     TeacherProfile    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Organisation scope (== tenantId for a PERSONAL workspace, a Center's id
+  // for a Center class), the teacher as a User (joins the platform-wide
+  // teacher-overlap check GroupSession already has) and, optionally, the
+  // Group the stream is for (audience = that group, not the whole academy).
+  academyId     String?
+  academy       Academy? @relation(fields: [academyId], references: [id])
+  teacherUserId String?
+  teacherUser   User?    @relation("liveSessionTeacher", fields: [teacherUserId], references: [id])
+  groupId       String?
+  group         Group?   @relation(fields: [groupId], references: [id])
   courseId    String?
   title       String
   description String            @default("")
@@ -2140,6 +2180,9 @@ model LiveSession {
   messages   LiveChatMessage[]
 
   @@index([tenantId, startsAt])
+  @@index([academyId, startsAt])
+  @@index([teacherUserId, startsAt])
+  @@index([groupId, startsAt])
   @@index([tenantId, status])
 }
 

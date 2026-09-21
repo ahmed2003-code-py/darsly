@@ -2821,7 +2821,25 @@
     "reactivateRoom": "إعادة تفعيل",
     "roomName": "اسم القاعة",
     "location": "الموقع",
-    "capacityLabel": "السعة"
+    "capacityLabel": "السعة",
+    "mode": "طريقة التدريس",
+    "modes": {
+      "PHYSICAL": "حضوري",
+      "ONLINE": "أونلاين",
+      "HYBRID": "هجين"
+    },
+    "locationType": "المكان",
+    "locations": {
+      "CENTER": "في السنتر",
+      "TEACHER": "عند المعلم",
+      "STUDENT": "عند الطالب",
+      "OTHER": "مكان آخر"
+    },
+    "locationNote": "تفاصيل المكان",
+    "joinUrl": "رابط الانضمام",
+    "joinUrlHint": "اختياري إذا كانت هناك جلسة مباشرة مجدولة لهذه المجموعة في نفس الموعد.",
+    "allWorkspaces": "كل مساحاتي",
+    "allWorkspacesHint": "أكاديميتك الشخصية وكل سنتر تدرّس فيه — حصصك أنت فقط."
   },
   "center": {
     "title": "لوحة السنتر",

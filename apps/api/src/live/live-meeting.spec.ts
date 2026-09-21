@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DailyService } from './daily.service';
-import { JOIN_OPENS_MIN, LiveService, PRESENCE_GRACE_SEC } from './live.service';
+import { JOIN_OPENS_MIN, LiveScope, LiveService, PRESENCE_GRACE_SEC } from './live.service';
 
 /**
  * Who gets into the classroom, and what the room remembers about it.
@@ -13,9 +13,11 @@ import { JOIN_OPENS_MIN, LiveService, PRESENCE_GRACE_SEC } from './live.service'
  * about the refusals, because a gate that only ever says yes is not a gate.
  */
 
+const T1: LiveScope = { academyId: 't1', userId: 'u_teacher', manageAll: true, role: 'OWNER' };
 const MIN = 60_000;
 
 type Session = {
+  academyId?: string;
   id: string;
   tenantId: string;
   title?: string;
@@ -52,7 +54,7 @@ function build(world: {
   const prisma = {
     liveSession: {
       findFirst: jest.fn(async ({ where }: any) =>
-        s && s.id === where.id && (where.tenantId === undefined || s.tenantId === where.tenantId) ? { ...s } : null,
+        s && s.id === where.id && (where.tenantId === undefined || s.tenantId === where.tenantId) && (where.academyId === undefined || s.academyId === where.academyId) ? { ...s } : null,
       ),
       findUnique: jest.fn(async () => (s ? { ...s } : null)),
       updateMany: jest.fn(async ({ data }: any) => {
@@ -113,16 +115,16 @@ function build(world: {
   const gamification = { record: jest.fn(async () => ({})) } as any;
   const realtime = { emitToLive: jest.fn() } as any;
   const jobs = { enqueue: jest.fn(async () => ({ id: 'job_1' })) } as any;
-  const service = new LiveService(prisma, notifications, gamification, daily, realtime, jobs);
+  const service = new LiveService(prisma, notifications, gamification, daily, realtime, jobs, {} as any);
   return { service, prisma, daily, notifications, realtime, jobs, session: s, updated, upserted };
 }
 
 describe('a teacher opens the classroom', () => {
   it('creates the room and hands back an owner token', async () => {
     const { service, daily } = build({
-      session: { id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
+      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
     });
-    const res = await service.start('t1', 'ls1', 'u_teacher');
+    const res = await service.start(T1, 'ls1', 'u_teacher');
     expect(daily.createRoom).toHaveBeenCalledWith('darsly-ls1', expect.any(Number));
     expect(res.participant.role).toBe('TEACHER');
     expect(res.meeting?.url).toContain('darsly.daily.co');
@@ -137,23 +139,23 @@ describe('a teacher opens the classroom', () => {
     });
     // Not 403: the existing convention is that another tenant's session simply
     // does not exist, because 403 would confirm that it does.
-    await expect(service.start('t1', 'ls1', 'u')).rejects.toThrow(NotFoundException);
+    await expect(service.start(T1, 'ls1', 'u')).rejects.toThrow(NotFoundException);
   });
 
   it('refuses to start before the doors open', async () => {
     const { service } = build({
-      session: { id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() + 3 * 3600_000) },
+      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 3 * 3600_000) },
     });
-    const err = await service.start('t1', 'ls1', 'u').catch((e) => e);
+    const err = await service.start(T1, 'ls1', 'u').catch((e) => e);
     expect(err).toBeInstanceOf(BadRequestException);
     expect(err.getResponse()).toMatchObject({ code: 'TOO_EARLY' });
   });
 
   it('refuses to start a session whose window has closed', async () => {
     const { service } = build({
-      session: { id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() - 5 * 3600_000) },
+      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 5 * 3600_000) },
     });
-    const err = await service.start('t1', 'ls1', 'u').catch((e) => e);
+    const err = await service.start(T1, 'ls1', 'u').catch((e) => e);
     expect(err.getResponse()).toMatchObject({ code: 'ENDED' });
   });
 
@@ -161,20 +163,20 @@ describe('a teacher opens the classroom', () => {
     // The refresh case, and the two-tabs case.
     const { service, daily } = build({
       session: {
-        id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() + 5 * MIN),
+        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN),
         status: 'LIVE', roomName: 'darsly-ls1', roomUrl: 'https://darsly.daily.co/darsly-ls1',
       },
     });
-    await service.start('t1', 'ls1', 'u');
+    await service.start(T1, 'ls1', 'u');
     expect(daily.createRoom).not.toHaveBeenCalled();
   });
 
   it('refuses a second live session while one is already running', async () => {
     const { service, session } = build({
-      session: { id: 'ls2', tenantId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
+      session: { id: 'ls2', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
       otherLiveCount: 1,
     });
-    const err = await service.start('t1', 'ls2', 'u').catch((e) => e);
+    const err = await service.start(T1, 'ls2', 'u').catch((e) => e);
     expect(err.getResponse()).toMatchObject({ code: 'ALREADY_LIVE' });
     // And the slot it optimistically claimed is handed back.
     expect(session!.status).toBe('SCHEDULED');
@@ -185,11 +187,11 @@ describe('a teacher opens the classroom', () => {
     // to throw the lesson away and make everyone rebook.
     const { service, daily } = build({
       session: {
-        id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() - 2 * MIN),
+        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 2 * MIN),
         durationMin: 60, status: 'ENDED', roomName: null, roomUrl: null,
       },
     });
-    const res = await service.start('t1', 'ls1', 'u');
+    const res = await service.start(T1, 'ls1', 'u');
     expect(res.participant.role).toBe('TEACHER');
     // The old room was deleted when it ended, so this is a fresh one.
     expect(daily.createRoom).toHaveBeenCalled();
@@ -198,20 +200,20 @@ describe('a teacher opens the classroom', () => {
   it('will not reopen one whose window has closed', async () => {
     const { service } = build({
       session: {
-        id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() - 5 * 3600_000),
+        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 5 * 3600_000),
         status: 'ENDED',
       },
     });
-    const err = await service.start('t1', 'ls1', 'u').catch((e) => e);
+    const err = await service.start(T1, 'ls1', 'u').catch((e) => e);
     expect(err.getResponse()).toMatchObject({ code: 'ENDED' });
   });
 
   it('does not leave a session LIVE when the provider fails', async () => {
     const { service, session } = build({
-      session: { id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
+      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
       dailyFails: true,
     });
-    await expect(service.start('t1', 'ls1', 'u')).rejects.toThrow();
+    await expect(service.start(T1, 'ls1', 'u')).rejects.toThrow();
     // Otherwise the card would offer "join" for a room that was never made.
     expect(session!.status).toBe('SCHEDULED');
     expect(session!.startedAt).toBeNull();
@@ -413,7 +415,7 @@ describe('a room\'s words are looked up, not assumed', () => {
 describe('a student enters the classroom', () => {
   const live = (over: Partial<Session> = {}): Session => ({
     id: 'ls1',
-    tenantId: 't1',
+    tenantId: 't1', academyId: 't1',
     startsAt: new Date(Date.now() + 5 * MIN),
     status: 'LIVE',
     roomName: 'darsly-ls1',
@@ -479,7 +481,7 @@ describe('attendance is what the room saw, not what the browser claimed', () => 
   it('files one record per person however many times they rejoin', async () => {
     const { service, upserted } = build({
       session: {
-        id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() + 5 * MIN),
+        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN),
         status: 'LIVE', roomName: 'darsly-ls1', roomUrl: 'https://x/y',
       },
       booked: true,
@@ -520,11 +522,11 @@ describe('ending the class', () => {
   it('closes the room and checks everyone still inside out', async () => {
     const { service, daily, updated } = build({
       session: {
-        id: 'ls1', tenantId: 't1', startsAt: new Date(Date.now() - 10 * MIN),
+        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 10 * MIN),
         status: 'LIVE', roomName: 'darsly-ls1', roomUrl: 'https://x/y',
       },
     });
-    const res = await service.end('t1', 'ls1');
+    const res = await service.end(T1, 'ls1');
     expect(res.status).toBe('ENDED');
     expect(daily.deleteRoom).toHaveBeenCalledWith('darsly-ls1');
     expect(updated.some((u) => u.leftAt instanceof Date)).toBe(true);
@@ -534,6 +536,6 @@ describe('ending the class', () => {
     const { service } = build({
       session: { id: 'ls1', tenantId: 'other', startsAt: new Date() },
     });
-    await expect(service.end('t1', 'ls1')).rejects.toThrow(NotFoundException);
+    await expect(service.end(T1, 'ls1')).rejects.toThrow(NotFoundException);
   });
 });

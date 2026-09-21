@@ -4,7 +4,7 @@ import { AiClient } from '../academy-site/ai/ai.client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DailyService, plainTextFromVtt } from './daily.service';
-import { LiveService } from './live.service';
+import { LiveScope, LiveService } from './live.service';
 import { LiveSummaryHandler } from './live-summary.handler';
 
 /**
@@ -17,6 +17,7 @@ import { LiveSummaryHandler } from './live-summary.handler';
  * matter most are the ones that stop it inventing a lesson nobody taught.
  */
 
+const T1: LiveScope = { academyId: 't1', userId: 'u_teacher', manageAll: true, role: 'OWNER' };
 function world(over: {
   session?: any;
   booked?: boolean;
@@ -26,7 +27,7 @@ function world(over: {
 } = {}) {
   const session = {
     id: 'ls1',
-    tenantId: 't1',
+    tenantId: 't1', academyId: 't1',
     title: 'الجبر',
     startsAt: new Date(Date.now() - 3600_000),
     durationMin: 60,
@@ -50,7 +51,7 @@ function world(over: {
       findUnique: jest.fn(async () => ({ ...session })),
       findUniqueOrThrow: jest.fn(async () => ({ ...session })),
       findFirst: jest.fn(async ({ where }: any) =>
-        where.tenantId && where.tenantId !== session.tenantId ? null : { ...session },
+        (where.tenantId && where.tenantId !== session.tenantId) || (where.academyId && where.academyId !== session.academyId) ? null : { ...session },
       ),
       update: jest.fn(async ({ data }: any) => {
         Object.assign(session, data);
@@ -89,7 +90,7 @@ function world(over: {
   const realtime = { emitToLive: jest.fn() } as any;
   const jobs = { enqueue: jest.fn(async () => ({ id: 'j1' })) } as any;
   const notifications = { create: jest.fn(async () => ({})) } as unknown as NotificationsService;
-  const service = new LiveService(prisma, notifications, {} as any, daily, realtime, jobs);
+  const service = new LiveService(prisma, notifications, {} as any, daily, realtime, jobs, {} as any);
   return { service, prisma, daily, realtime, jobs, notifications, session, created, updated };
 }
 
@@ -193,7 +194,7 @@ describe('the recording is not a public link', () => {
 describe('asking for a summary', () => {
   it('queues the job on the existing worker', async () => {
     const { service, jobs } = world();
-    expect(await service.requestSummary('t1', 'ls1')).toEqual({ status: 'PROCESSING' });
+    expect(await service.requestSummary(T1, 'ls1')).toEqual({ status: 'PROCESSING' });
     expect(jobs.enqueue).toHaveBeenCalledWith('t1', 'LIVE_SUMMARY', { liveSessionId: 'ls1' });
   });
 
@@ -201,19 +202,19 @@ describe('asking for a summary', () => {
     // The teacher pressing the button twice, and a webhook arriving twice, are
     // the same event as far as the bill is concerned.
     const { service, jobs } = world({ session: { summaryStatus: 'PROCESSING' } });
-    expect(await service.requestSummary('t1', 'ls1')).toEqual({ status: 'PROCESSING' });
+    expect(await service.requestSummary(T1, 'ls1')).toEqual({ status: 'PROCESSING' });
     expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 
   it('does not regenerate one that is already written', async () => {
     const { service, jobs } = world({ session: { summaryStatus: 'READY' } });
-    expect(await service.requestSummary('t1', 'ls1')).toEqual({ status: 'READY' });
+    expect(await service.requestSummary(T1, 'ls1')).toEqual({ status: 'READY' });
     expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 
   it('refuses a session belonging to another academy', async () => {
     const { service } = world();
-    await expect(service.requestSummary('other', 'ls1')).rejects.toThrow(NotFoundException);
+    await expect(service.requestSummary({ ...T1, academyId: 'other' }, 'ls1')).rejects.toThrow(NotFoundException);
   });
 });
 
@@ -251,7 +252,7 @@ describe('what each side is allowed to read', () => {
 
   it('tells the class when their teacher shares it', async () => {
     const { service, notifications } = world({ session: { summaryStatus: 'READY' } });
-    await service.setSummaryVisibility('t1', 'ls1', true);
+    await service.setSummaryVisibility(T1, 'ls1', true);
     expect(notifications.create).toHaveBeenCalled();
   });
 });
@@ -315,7 +316,7 @@ describe('the summary is written only from the transcript', () => {
     } = {},
   ) => {
     const session = {
-      id: 'ls1', tenantId: 't1', title: 'الجبر', roomName: 'darsly-ls1',
+      id: 'ls1', tenantId: 't1', academyId: 't1', title: 'الجبر', roomName: 'darsly-ls1',
       transcriptText: over.transcript ?? null,
       summaryStatus: over.summaryStatus ?? 'PROCESSING',
       transcriptStatus: over.transcriptStatus ?? 'NOT_STARTED',

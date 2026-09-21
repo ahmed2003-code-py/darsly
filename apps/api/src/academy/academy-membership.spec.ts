@@ -7,6 +7,7 @@ function makePrisma() {
     academyMembership: { findFirst: jest.fn(), findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn() },
     groupAssignment: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     groupSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    liveSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
   } as any;
 }
 

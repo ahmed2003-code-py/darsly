@@ -10,14 +10,26 @@ export interface Room {
   createdAt: string;
 }
 
+export type SessionMode = 'ONLINE' | 'PHYSICAL' | 'HYBRID';
+export type SessionLocationType = 'CENTER' | 'TEACHER' | 'STUDENT' | 'OTHER';
+
+/** One calendar event: a physical/hybrid group slot or a live stream, in one shape. */
 export interface ScheduleSession {
+  kind?: 'GROUP' | 'LIVE';
   id: string;
+  title?: string;
   startAt: string;
   endAt: string;
   status: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
-  group: { id: string; name: string };
+  mode?: SessionMode;
+  locationType?: SessionLocationType | null;
+  locationNote?: string | null;
+  joinUrl?: string | null;
+  group: { id: string; name: string } | null;
   room: { id: string; name: string } | null;
   teacher: { id: string; fullName: string } | null;
+  academyId?: string;
+  academy?: { id: string; name: string; slug: string; kind: 'PERSONAL' | 'CENTER' } | null;
 }
 
 export interface ConflictErrorBody {
@@ -73,7 +85,7 @@ export function useSchedule(slug: string | undefined, from: string, to: string) 
 export function useCreateSession(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (dto: { roomId?: string; teacherUserId?: string; startAt: string; endAt: string }) =>
+    mutationFn: async (dto: { roomId?: string; teacherUserId?: string; startAt: string; endAt: string; mode?: SessionMode; locationType?: SessionLocationType | null; locationNote?: string | null; joinUrl?: string | null }) =>
       (await api.post(`/teacher/groups/${groupId}/sessions`, dto)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['schedule'] }),
   });
@@ -91,4 +103,13 @@ export function useUpdateSession() {
 export function useCancelSession() {
   const update = useUpdateSession();
   return { ...update, mutate: (sessionId: string) => update.mutate({ sessionId, status: 'CANCELLED' }) };
+}
+
+/** The signed-in teacher's own sessions across Personal + every Center — physical and live. */
+export function useMySchedule(enabled: boolean, from: string, to: string) {
+  return useQuery<ScheduleSession[]>({
+    queryKey: ['my-schedule', from, to],
+    queryFn: async () => (await api.get('/me/schedule', { params: { from, to } })).data,
+    enabled,
+  });
 }

@@ -11,7 +11,7 @@ import {
   useCreateSession,
   useMyHomeAcademySlug,
   useRooms,
-  useSchedule,
+  useMySchedule, useSchedule,
   useUpdateRoom,
 } from '../../lib/scheduling';
 import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Skeleton } from '../../components/ui';
@@ -87,7 +87,13 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
   const [teacherUserId, setTeacherUserId] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [mode, setMode] = useState<'ONLINE' | 'PHYSICAL' | 'HYBRID'>('PHYSICAL');
+  const [locationType, setLocationType] = useState<'CENTER' | 'TEACHER' | 'STUDENT' | 'OTHER'>('CENTER');
+  const [locationNote, setLocationNote] = useState('');
+  const [joinUrl, setJoinUrl] = useState('');
   const createSession = useCreateSession(groupId);
+  const physical = mode !== 'ONLINE';
+  const online = mode !== 'PHYSICAL';
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +102,10 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
       {
         startAt: new Date(start).toISOString(),
         endAt: new Date(end).toISOString(),
-        ...(roomId ? { roomId } : {}),
+        mode,
+        ...(physical ? { locationType: roomId ? 'CENTER' : locationType, ...(locationNote ? { locationNote } : {}) } : {}),
+        ...(physical && roomId ? { roomId } : {}),
+        ...(online && joinUrl ? { joinUrl } : {}),
         ...(teacherUserId ? { teacherUserId } : {}),
       },
       { onSuccess: () => onClose() },
@@ -114,12 +123,41 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
           </select>
         </label>
         <label className="grid gap-1.5">
-          <span className="text-sm font-bold">{t('schedule.room')}</span>
-          <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary">
-            <option value="">{t('schedule.noRoom')}</option>
-            {rooms?.filter((r) => r.status === 'ACTIVE').map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          <span className="text-sm font-bold">{t('schedule.mode')}</span>
+          <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary">
+            {(['PHYSICAL', 'ONLINE', 'HYBRID'] as const).map((m) => <option key={m} value={m}>{t(`schedule.modes.${m}`)}</option>)}
           </select>
         </label>
+        {physical && (
+          <label className="grid gap-1.5">
+            <span className="text-sm font-bold">{t('schedule.locationType')}</span>
+            <select value={roomId ? 'CENTER' : locationType} onChange={(e) => setLocationType(e.target.value as typeof locationType)} disabled={!!roomId} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary">
+              {(['CENTER', 'TEACHER', 'STUDENT', 'OTHER'] as const).map((l) => <option key={l} value={l}>{t(`schedule.locations.${l}`)}</option>)}
+            </select>
+          </label>
+        )}
+        {physical && (
+          <label className="grid gap-1.5">
+            <span className="text-sm font-bold">{t('schedule.room')}</span>
+            <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary">
+              <option value="">{t('schedule.noRoom')}</option>
+              {rooms?.filter((r) => r.status === 'ACTIVE').map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </label>
+        )}
+        {physical && !roomId && (
+          <label className="grid gap-1.5">
+            <span className="text-sm font-bold">{t('schedule.locationNote')}</span>
+            <input value={locationNote} onChange={(e) => setLocationNote(e.target.value)} maxLength={120} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" />
+          </label>
+        )}
+        {online && (
+          <label className="grid gap-1.5">
+            <span className="text-sm font-bold">{t('schedule.joinUrl')}</span>
+            <input type="url" dir="ltr" value={joinUrl} onChange={(e) => setJoinUrl(e.target.value)} placeholder="https://" className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" />
+            <span className="text-xs text-outline">{t('schedule.joinUrlHint')}</span>
+          </label>
+        )}
         <label className="grid gap-1.5">
           <span className="text-sm font-bold">{t('schedule.teacher')}</span>
           <select value={teacherUserId} onChange={(e) => setTeacherUserId(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" disabled={!groupId}>
@@ -154,20 +192,23 @@ function SessionChip({ s, onCancel, cancelling, dense }: { s: ScheduleSession; o
   if (dense) {
     return (
       <p className={`truncate rounded-md px-1.5 py-0.5 text-[11px] font-bold ${s.status === 'CANCELLED' ? 'bg-surface-container-high text-outline line-through' : 'bg-primary-fixed text-on-primary-fixed-variant'}`}>
-        <span dir="ltr">{timeLabel(s.startAt)}</span> {s.group.name}
+        <span dir="ltr">{timeLabel(s.startAt)}</span> {s.group?.name ?? s.title ?? ''}
       </p>
     );
   }
   return (
     <div className={`card p-3 ${s.status === 'CANCELLED' ? 'opacity-50' : ''}`}>
-      <p className="truncate font-heading text-sm font-bold">{s.group.name}</p>
+      <p className="truncate font-heading text-sm font-bold">{s.group?.name ?? s.title ?? ''}</p>
       <p className="text-xs text-on-surface-variant tabular-nums" dir="ltr">{timeLabel(s.startAt)}–{timeLabel(s.endAt)}</p>
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        {s.academy && <Badge tone={s.academy.kind === 'CENTER' ? 'teal' : 'neutral'}>{s.academy.name}</Badge>}
+        {(s.kind === 'LIVE' || s.mode) && <Badge tone="warn">{t(`schedule.modes.${s.kind === 'LIVE' ? 'ONLINE' : s.mode}`)}</Badge>}
+        {s.locationType && s.locationType !== 'CENTER' && <Badge tone="neutral">{t(`schedule.locations.${s.locationType}`)}</Badge>}
         {s.room && <Badge tone="neutral">{s.room.name}</Badge>}
         {s.teacher && <Badge tone="primary">{s.teacher.fullName}</Badge>}
         {s.status === 'CANCELLED' && <Badge tone="error">{t('schedule.cancelled')}</Badge>}
       </div>
-      {s.status === 'SCHEDULED' && (
+      {s.status === 'SCHEDULED' && s.kind !== 'LIVE' && (
         <button className="mt-2 text-xs font-bold text-error hover:underline" onClick={onCancel} disabled={cancelling}>
           {t('schedule.cancel')}
         </button>
@@ -192,7 +233,11 @@ function CalendarTab() {
     if (view === 'month') return monthGrid(anchor);
     return Array.from({ length: view === 'day' ? 1 : 7 }, (_, i) => addDays(rangeStart, i));
   }, [rangeStart, view, anchor]);
-  const { data: sessions, isLoading } = useSchedule(slug, rangeStart.toISOString(), rangeEnd.toISOString());
+  const [allWorkspaces, setAllWorkspaces] = useState(false);
+  const center = useSchedule(allWorkspaces ? undefined : slug, rangeStart.toISOString(), rangeEnd.toISOString());
+  const mine = useMySchedule(allWorkspaces, rangeStart.toISOString(), rangeEnd.toISOString());
+  const sessions = allWorkspaces ? mine.data : center.data;
+  const isLoading = allWorkspaces ? mine.isLoading : center.isLoading;
 
   const byDay = useMemo(() => {
     const map = new Map<string, ScheduleSession[]>();
@@ -239,6 +284,13 @@ function CalendarTab() {
           <p className="ms-2 font-heading text-lg font-bold">{headerLabel}</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setAllWorkspaces((v) => !v)}
+            className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${allWorkspaces ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'}`}
+            title={t('schedule.allWorkspacesHint')}
+          >
+            {t('schedule.allWorkspaces')}
+          </button>
           <div className="flex gap-1 rounded-full bg-surface-container-lowest p-1 shadow-card">
             {(['month', 'week', 'day'] as const).map((v) => (
               <button

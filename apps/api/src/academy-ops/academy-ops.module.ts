@@ -13,6 +13,7 @@ import { RoomsService } from './rooms.service';
 import { RosterController } from './roster.controller';
 import { RosterService } from './roster.service';
 import { ScheduleController } from './schedule.controller';
+import { MyScheduleController } from './my-schedule.controller';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 
@@ -25,7 +26,7 @@ import { SessionsService } from './sessions.service';
     NeedsAttentionController,
     RoomsController,
     SessionsController,
-    ScheduleController,
+    ScheduleController, MyScheduleController,
   ],
   providers: [
     AcademyOpsAccessService,

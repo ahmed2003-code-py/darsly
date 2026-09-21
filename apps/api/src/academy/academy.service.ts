@@ -515,6 +515,37 @@ export class AcademyService {
       where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startAt: { gt: new Date() } },
       data: { teacherUserId: null },
     });
+    // Same for future live streams in this academy. tenantId (who authored it)
+    // is history and stays; the teacher slot is what stops blocking their time.
+    await this.prisma.liveSession.updateMany({
+      where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startsAt: { gt: new Date() } },
+      data: { teacherUserId: null },
+    });
+  }
+
+  /**
+   * The one check for "may this person be the teacher of a session here":
+   * a live TEACHER identity with an APPROVED profile, holding an ACTIVE
+   * membership in this academy as TEACHER or OWNER. STAFF, students,
+   * unapproved teachers and other Centers' teachers all fail here — the id
+   * comes from a client and proves nothing by itself.
+   */
+  async assertAssignableTeacher(academyId: string, teacherUserId: string): Promise<{ userId: string; teacherProfileId: string }> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: teacherUserId, isActive: true, deletedAt: null },
+      select: { id: true, role: true, teacherProfile: { select: { id: true, status: true } } },
+    });
+    if (!user || user.role !== Role.TEACHER || !user.teacherProfile || user.teacherProfile.status !== 'APPROVED') {
+      throw new BadRequestException({ message: 'That user is not an approved teacher', code: 'TEACHER_NOT_ASSIGNABLE' });
+    }
+    const membership = await this.prisma.academyMembership.findFirst({
+      where: { userId: teacherUserId, academyId, status: 'ACTIVE', deletedAt: null, role: { in: ['TEACHER', 'OWNER'] } },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new BadRequestException({ message: 'That teacher is not a member of this academy', code: 'TEACHER_NOT_MEMBER' });
+    }
+    return { userId: user.id, teacherProfileId: user.teacherProfile.id };
   }
 
   async updateMember(academyId: string, membershipId: string, dto: UpdateMemberDto) {

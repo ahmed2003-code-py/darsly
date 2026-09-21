@@ -9,7 +9,7 @@ function makePrisma() {
     liveBooking: { findUnique: jest.fn() },
   } as any;
 }
-const svc = (prisma: any) => new LiveService(prisma, {} as any, {} as any, {} as any, {} as any, {} as any);
+const svc = (prisma: any) => new LiveService(prisma, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
 const session = { id: 's1', tenantId: 'a1', deletedAt: null, teacher: { userId: 'author' } };
 
 describe('LiveService.assertInSession — staff means a staff role', () => {

@@ -93,10 +93,11 @@ export class AcademyService {
 
     const rows = await this.prisma.enrollment.findMany({
       where: { studentId: student.id, status: { in: EARNED_LOOK_STATUSES } },
-      select: { tenantId: true, createdAt: true },
+      select: { academyId: true, tenantId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
-    const ids = [...new Set(rows.map((r) => r.tenantId))].filter((id) => !already.has(id));
+    // Organisation scope; tenantId only as the pre-backfill fallback.
+    const ids = [...new Set(rows.map((r) => r.academyId ?? r.tenantId))].filter((id) => !already.has(id));
     if (!ids.length) return [];
 
     const academies = await this.prisma.academy.findMany({
@@ -230,7 +231,7 @@ export class AcademyService {
   /** Public storefront: an academy's PUBLISHED courses. */
   async publicCourses(academyId: string) {
     const rows = await this.prisma.course.findMany({
-      where: { tenantId: academyId, status: 'PUBLISHED', deletedAt: null },
+      where: { academyId, status: 'PUBLISHED', deletedAt: null },
       orderBy: { createdAt: 'desc' },
       select: this.courseCardSelect(),
     });
@@ -240,7 +241,7 @@ export class AcademyService {
   /** Console: all of the academy's courses (incl. DRAFT/ARCHIVED). Permission-gated. */
   async manageCourses(academyId: string) {
     const rows = await this.prisma.course.findMany({
-      where: { tenantId: academyId, deletedAt: null },
+      where: { academyId, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
       select: this.courseCardSelect(),
     });

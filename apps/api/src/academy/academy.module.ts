@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AcademyController } from './academy.controller';
 import { AcademyService } from './academy.service';
+import { AcademySubjectsController } from './academy-subjects.controller';
+import { AcademySubjectsService } from './academy-subjects.service';
 import { AcademyMembershipGuard } from './guards/academy-membership.guard';
 import { InvitationLinksController } from './invitation-links.controller';
 import { InvitationLinksService } from './invitation-links.service';
@@ -13,8 +15,8 @@ import { PermissionGuard } from './guards/permission.guard';
  * Phase 3 adds shareable staff invitation links alongside the existing email invite.
  */
 @Module({
-  controllers: [AcademyController, InvitationLinksController],
-  providers: [AcademyService, AcademyMembershipGuard, PermissionGuard, InvitationLinksService],
+  controllers: [AcademyController, InvitationLinksController, AcademySubjectsController],
+  providers: [AcademyService, AcademyMembershipGuard, PermissionGuard, InvitationLinksService, AcademySubjectsService],
   exports: [AcademyService, AcademyMembershipGuard, PermissionGuard],
 })
 export class AcademyModule {}

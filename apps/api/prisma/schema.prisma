@@ -181,6 +181,8 @@ model Academy {
 
   activationTokens AcademyActivationToken[]
   invitationLinks  AcademyInvitationLink[]
+  courses          Course[]
+  subjects         AcademySubject[]
 
   @@index([status])
   @@index([kind, status])
@@ -201,6 +203,24 @@ model AcademyFeatureFlag {
 
   @@unique([academyId, key])
   @@index([academyId])
+}
+
+// Which platform subjects a Center offers. The master Subject row is never
+// duplicated or deleted from here — a Center only switches an existing one
+// on or off. Unlike AcademyFeatureFlag, a MISSING row means "not offered":
+// subjects are opt-in per Center. Only consulted for kind = CENTER.
+model AcademySubject {
+  id        String  @id @default(cuid())
+  academyId String
+  academy   Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  isActive  Boolean @default(true)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([academyId, subjectId])
+  @@index([academyId, isActive])
 }
 
 // Custom / subdomain hosts that resolve to this academy (verified only).
@@ -687,6 +707,7 @@ model Subject {
   courses    Course[]
   interests  StudentInterest[]
   challenges Challenge[]
+  academies  AcademySubject[]
 }
 
 /// What a teacher teaches. Many-to-many: see `TeacherProfile.subjects`.
@@ -790,8 +811,14 @@ enum CourseExamMode {
 
 model Course {
   id       String         @id @default(cuid())
+  // Authorship: the teacher who wrote it. Never the organisation.
   tenantId String
   teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Organisation scope: where it is offered. Equal to tenantId for a PERSONAL
+  // workspace; a Center's id for a Center course. Nullable only for the
+  // migration window — the application always writes it.
+  academyId String?
+  academy   Academy? @relation(fields: [academyId], references: [id])
 
   title         String
   description   String  @default("")
@@ -861,6 +888,7 @@ model Course {
   challenges    Challenge[]
 
   @@index([tenantId, status])
+  @@index([academyId, status])
   @@index([subjectId, status])
 }
 
@@ -1020,7 +1048,8 @@ model Enrollment {
   student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   courseId  String
   course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  tenantId  String // denormalized for tenant-scoped queries
+  tenantId  String // denormalized author scope (== course.tenantId)
+  academyId String? // denormalized organisation scope (== course.academyId)
 
   /// No default: access is granted by a code path that decided to grant it,
   /// never by a row that forgot to say. There is no waiting room any more —
@@ -1050,6 +1079,7 @@ model Enrollment {
 
   @@unique([studentId, courseId])
   @@index([tenantId, status])
+  @@index([academyId, status])
 }
 
 model LessonProgress {
@@ -1197,7 +1227,8 @@ model Payment {
   course       Course         @relation(fields: [courseId], references: [id])
   enrollmentId String?
   enrollment   Enrollment?    @relation(fields: [enrollmentId], references: [id])
-  tenantId     String
+  tenantId     String // author scope (== course.tenantId)
+  academyId    String? // organisation scope (== course.academyId)
 
   // amountCents is the TOTAL the student paid. In the additive-fee model that is
   // netCents (academy earning) + feeCents (platform service fee). Nullable for
@@ -1242,6 +1273,7 @@ model Payment {
   deletedAt         DateTime?
 
   @@index([tenantId, status, createdAt])
+  @@index([academyId, status, createdAt])
   @@index([studentId, status])
 }
 

@@ -27,7 +27,7 @@ export class RosterService {
     const search = query.search?.trim();
 
     const where: Prisma.StudentProfileWhereInput = {
-      enrollments: { some: { tenantId: academyId } },
+      enrollments: { some: { academyId } },
       ...(search
         ? {
             user: {
@@ -62,13 +62,13 @@ export class RosterService {
     const [enrollmentAgg, activeCounts, lastActivity] = await Promise.all([
       this.prisma.enrollment.groupBy({
         by: ['studentId'],
-        where: { tenantId: academyId, studentId: { in: ids } },
+        where: { academyId, studentId: { in: ids } },
         _count: { _all: true },
         _min: { createdAt: true },
       }),
       this.prisma.enrollment.groupBy({
         by: ['studentId'],
-        where: { tenantId: academyId, studentId: { in: ids }, status: 'ACTIVE' },
+        where: { academyId, studentId: { in: ids }, status: 'ACTIVE' },
         _count: { _all: true },
       }),
       this.lastActivityBatch(academyId, ids),
@@ -105,6 +105,8 @@ export class RosterService {
     const rows = await this.prisma.$queryRaw<{ studentId: string; last: Date }[]>`
       SELECT "studentId", MAX("createdAt") AS last
       FROM "GamificationEvent"
+      -- GamificationEvent is still tenant-keyed (gamification scope is a later phase); for a
+      -- PERSONAL workspace tenantId == academyId, for a Center this reports author-side activity.
       WHERE "tenantId" = ${academyId} AND "studentId" = ANY(${studentIds}::text[])
       GROUP BY "studentId"
     `;

@@ -23,7 +23,7 @@ import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { validateImageDataUrl } from '../common/image.util';
 import { LIMITS } from '../common/validation';
-import { CoursesService } from './courses.service';
+import { CoursesService, CourseScope } from './courses.service';
 import {
   CreateCourseDto,
   CreateLessonDto,
@@ -61,24 +61,33 @@ export class TeacherCoursesController {
     private readonly audit: AuditService,
   ) {}
 
+  /**
+   * Organisation from the validated context, authorship from the JWT — the
+   * body never decides either. OWNER (incl. platform admin) manages every
+   * course offered here; a TEACHER member only their own.
+   */
+  private scope(user: JwtPayload, ctx: AcademyContext): CourseScope {
+    return { academyId: ctx.academyId, authorTenantId: user.tenantId, manageAll: ctx.role === 'OWNER' };
+  }
+
   // ── Courses ──────────────────────────────────────────────────────────────
 
   @Get('courses')
   @ApiOperation({ summary: '[teacher] List my courses' })
   list(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext) {
-    return this.courses.listMine(ctx.academyId);
+    return this.courses.listMine(this.scope(user, ctx));
   }
 
   @Get('courses/:id')
   @ApiOperation({ summary: '[teacher] Course with full curriculum tree' })
   get(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.courses.getMine(ctx.academyId, id);
+    return this.courses.getMine(this.scope(user, ctx), id);
   }
 
   @Post('courses')
   @ApiOperation({ summary: '[teacher] Create course (starts as DRAFT)' })
   async create(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateCourseDto) {
-    const course = await this.courses.create(ctx.academyId, dto);
+    const course = await this.courses.create(this.scope(user, ctx), dto);
     await this.audit.log({
       actorUserId: user.sub,
       action: 'course.create',
@@ -96,7 +105,7 @@ export class TeacherCoursesController {
     @Param('id') id: string,
     @Body() dto: UpdateCourseDto,
   ) {
-    const course = await this.courses.update(ctx.academyId, id, dto);
+    const course = await this.courses.update(this.scope(user, ctx), id, dto);
     await this.audit.log({
       actorUserId: user.sub,
       action: dto.status ? `course.status.${dto.status.toLowerCase()}` : 'course.update',
@@ -109,7 +118,7 @@ export class TeacherCoursesController {
   @Delete('courses/:id')
   @ApiOperation({ summary: '[teacher] Delete course (archives instead if it has enrollments)' })
   async remove(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    const result = await this.courses.remove(ctx.academyId, id);
+    const result = await this.courses.remove(this.scope(user, ctx), id);
     await this.audit.log({
       actorUserId: user.sub,
       action: result.deleted ? 'course.delete' : 'course.archive',
@@ -127,7 +136,7 @@ export class TeacherCoursesController {
     @Body() dto: SetThumbnailDto,
   ) {
     validateImageDataUrl(dto.dataUrl, 600 * 1024); // ~600 KB after decode
-    return this.courses.update(ctx.academyId, id, { thumbnailUrl: dto.dataUrl });
+    return this.courses.update(this.scope(user, ctx), id, { thumbnailUrl: dto.dataUrl });
   }
 
   @Post('courses/:id/intro-video')
@@ -149,7 +158,7 @@ export class TeacherCoursesController {
     @UploadedFile() file: Express.Multer.File | undefined,
   ) {
     if (!file) throw new BadRequestException('file is required');
-    const result = await this.courses.setIntroVideo(ctx.academyId, id, {
+    const result = await this.courses.setIntroVideo(this.scope(user, ctx), id, {
       buffer: file.buffer,
       mimetype: file.mimetype,
     });
@@ -169,7 +178,7 @@ export class TeacherCoursesController {
     @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
   ) {
-    const result = await this.courses.removeIntroVideo(ctx.academyId, id);
+    const result = await this.courses.removeIntroVideo(this.scope(user, ctx), id);
     await this.audit.log({
       actorUserId: user.sub,
       action: 'course.intro_video.remove',
@@ -186,7 +195,7 @@ export class TeacherCoursesController {
     @Param('id') id: string,
     @Body() dto: SetBundleItemsDto,
   ) {
-    return this.courses.setBundleItems(ctx.academyId, id, dto);
+    return this.courses.setBundleItems(this.scope(user, ctx), id, dto);
   }
 
   // ── Units ────────────────────────────────────────────────────────────────
@@ -198,19 +207,19 @@ export class TeacherCoursesController {
     @Param('courseId') courseId: string,
     @Body() dto: UpsertUnitDto,
   ) {
-    return this.courses.createUnit(ctx.academyId, courseId, dto);
+    return this.courses.createUnit(this.scope(user, ctx), courseId, dto);
   }
 
   @Patch('units/:id')
   @ApiOperation({ summary: '[teacher] Rename unit' })
   updateUnit(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: UpsertUnitDto) {
-    return this.courses.updateUnit(ctx.academyId, id, dto);
+    return this.courses.updateUnit(this.scope(user, ctx), id, dto);
   }
 
   @Delete('units/:id')
   @ApiOperation({ summary: '[teacher] Delete unit (cascades to its lessons)' })
   removeUnit(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.courses.removeUnit(ctx.academyId, id);
+    return this.courses.removeUnit(this.scope(user, ctx), id);
   }
 
   @Patch('courses/:courseId/units/reorder')
@@ -220,7 +229,7 @@ export class TeacherCoursesController {
     @Param('courseId') courseId: string,
     @Body() dto: ReorderDto,
   ) {
-    return this.courses.reorderUnits(ctx.academyId, courseId, dto);
+    return this.courses.reorderUnits(this.scope(user, ctx), courseId, dto);
   }
 
   // ── Lessons ──────────────────────────────────────────────────────────────
@@ -232,7 +241,7 @@ export class TeacherCoursesController {
     @Param('unitId') unitId: string,
     @Body() dto: CreateLessonDto,
   ) {
-    return this.courses.createLesson(ctx.academyId, unitId, dto);
+    return this.courses.createLesson(this.scope(user, ctx), unitId, dto);
   }
 
   @Post('courses/:courseId/lessons')
@@ -242,7 +251,7 @@ export class TeacherCoursesController {
     @Param('courseId') courseId: string,
     @Body() dto: CreateLessonDto,
   ) {
-    return this.courses.addLessonDirect(ctx.academyId, courseId, dto);
+    return this.courses.addLessonDirect(this.scope(user, ctx), courseId, dto);
   }
 
   @Post('courses/:courseId/lessons/import-youtube')
@@ -252,7 +261,7 @@ export class TeacherCoursesController {
     @Param('courseId') courseId: string,
     @Body() dto: ImportYoutubeDto,
   ) {
-    return this.courses.importYoutube(ctx.academyId, courseId, dto);
+    return this.courses.importYoutube(this.scope(user, ctx), courseId, dto);
   }
 
   @Patch('lessons/:id')
@@ -262,19 +271,19 @@ export class TeacherCoursesController {
     @Param('id') id: string,
     @Body() dto: UpdateLessonDto,
   ) {
-    return this.courses.updateLesson(ctx.academyId, id, dto);
+    return this.courses.updateLesson(this.scope(user, ctx), id, dto);
   }
 
   @Delete('lessons/:id')
   @ApiOperation({ summary: '[teacher] Delete lesson' })
   removeLesson(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.courses.removeLesson(ctx.academyId, id);
+    return this.courses.removeLesson(this.scope(user, ctx), id);
   }
 
   @Delete('lessons/:id/video')
   @ApiOperation({ summary: '[teacher] Remove a lesson\'s video and clean up its storage' })
   removeLessonVideo(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.courses.removeLessonVideo(ctx.academyId, id);
+    return this.courses.removeLessonVideo(this.scope(user, ctx), id);
   }
 
   @Patch('units/:unitId/lessons/reorder')
@@ -284,6 +293,6 @@ export class TeacherCoursesController {
     @Param('unitId') unitId: string,
     @Body() dto: ReorderDto,
   ) {
-    return this.courses.reorderLessons(ctx.academyId, unitId, dto);
+    return this.courses.reorderLessons(this.scope(user, ctx), unitId, dto);
   }
 }

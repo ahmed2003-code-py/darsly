@@ -90,11 +90,17 @@ export class EnrollmentsService {
   }
 
   /** Price breakdown for a course, optionally with a coupon applied. */
+  /** Organisation scope of a course. academyId is always written by the app; the fallback only covers pre-backfill rows. */
+  private orgOf(course: { academyId: string | null; tenantId: string }): string {
+    return course.academyId ?? course.tenantId;
+  }
+
   async quote(courseId: string, couponCode?: string): Promise<Quote> {
     const course = await this.prisma.course.findFirst({
       where: { id: courseId, status: 'PUBLISHED' },
     });
     if (!course) throw new NotFoundException('Course not found');
+    await this.assertNotPaidCenterCourse(course);
 
     let discount = 0;
     let coupon: Coupon | null = null;
@@ -105,8 +111,8 @@ export class EnrollmentsService {
         : Math.min(coupon.amountOffCents ?? 0, course.priceCents);
     }
     const net = Math.max(0, course.priceCents - discount);
-    const fee = await this.serviceFee(course.tenantId, net);
-    const basePlusFee = course.priceCents + (await this.serviceFee(course.tenantId, course.priceCents));
+    const fee = await this.serviceFee(this.orgOf(course), net);
+    const basePlusFee = course.priceCents + (await this.serviceFee(this.orgOf(course), course.priceCents));
 
     // What the student is shown: one price, and the discount they actually
     // earned. basePriceCents/netCents/feeCents stay out of the response — the
@@ -123,6 +129,19 @@ export class EnrollmentsService {
   }
 
   /** Platform service fee for an academy on a given net price (additive model). */
+  /**
+   * Money must not enter a Center before the finance phase: a Center course is
+   * free by rule (enforced at create/update), and this closes the door on any
+   * row that slipped past that with a price.
+   */
+  private async assertNotPaidCenterCourse(course: { academyId: string | null; tenantId: string; priceCents: number }) {
+    if (course.priceCents <= 0) return;
+    const academy = await this.prisma.academy.findUnique({ where: { id: this.orgOf(course) }, select: { kind: true } });
+    if (academy?.kind === 'CENTER') {
+      throw new BadRequestException({ message: 'Center courses are free in this phase', code: 'CENTER_COURSE_MUST_BE_FREE' });
+    }
+  }
+
   async serviceFee(academyId: string, netCents: number): Promise<number> {
     if (netCents <= 0) return 0;
     const academy = await this.prisma.academy.findUnique({
@@ -179,12 +198,12 @@ export class EnrollmentsService {
     // disabled feature flag falls back to AUTOMATIC rather than ever leaving
     // a student with no path to activation.
     const academy = await this.prisma.academy.findUnique({
-      where: { id: course.tenantId },
+      where: { id: this.orgOf(course) },
       select: { enrollmentMode: true },
     });
     const needsApproval =
       academy?.enrollmentMode && academy.enrollmentMode !== 'AUTOMATIC'
-        ? await this.flags.isEnabled(course.tenantId, 'enrollmentApprovalMode')
+        ? await this.flags.isEnabled(this.orgOf(course), 'enrollmentApprovalMode')
         : false;
 
     const data = needsApproval
@@ -222,7 +241,7 @@ export class EnrollmentsService {
       return existing
         ? tx.enrollment.update({ where: { id: existing.id }, data })
         : tx.enrollment.create({
-            data: { studentId: student.id, courseId, tenantId: course.tenantId, ...data },
+            data: { studentId: student.id, courseId, tenantId: course.tenantId, academyId: this.orgOf(course), ...data },
           });
     });
 
@@ -370,9 +389,9 @@ export class EnrollmentsService {
 
   // ── Teacher side ─────────────────────────────────────────────────────────
 
-  teacherList(tenantId: string, status?: string) {
+  teacherList(academyId: string, status?: string) {
     return this.prisma.enrollment.findMany({
-      where: { tenantId, ...(status ? { status: status as Enrollment['status'] } : {}) },
+      where: { academyId, ...(status ? { status: status as Enrollment['status'] } : {}) },
       include: {
         student: {
           include: {
@@ -396,9 +415,9 @@ export class EnrollmentsService {
     });
   }
 
-  private async assertTenantEnrollment(tenantId: string, id: string) {
+  private async assertTenantEnrollment(academyId: string, id: string) {
     const enrollment = await this.prisma.enrollment.findFirst({
-      where: { id, tenantId },
+      where: { id, academyId },
       include: {
         course: true,
         student: { include: { user: { select: { id: true } } } },
@@ -409,8 +428,8 @@ export class EnrollmentsService {
     return enrollment;
   }
 
-  async revoke(tenantId: string, id: string, reason?: string) {
-    const enrollment = await this.assertTenantEnrollment(tenantId, id);
+  async revoke(academyId: string, id: string, reason?: string) {
+    const enrollment = await this.assertTenantEnrollment(academyId, id);
     if (enrollment.status !== 'ACTIVE') {
       throw new BadRequestException('Only active enrollments can be revoked');
     }
@@ -435,8 +454,8 @@ export class EnrollmentsService {
   /** Approve a PENDING_APPROVAL request. Never touches Payment or the ledger
    *  — a paid course never reaches this state (see enroll()), so there is
    *  nothing financial for this action to settle. */
-  async approve(tenantId: string, id: string) {
-    const enrollment = await this.assertTenantEnrollment(tenantId, id);
+  async approve(academyId: string, id: string) {
+    const enrollment = await this.assertTenantEnrollment(academyId, id);
     if (enrollment.status !== 'PENDING_APPROVAL') {
       throw new BadRequestException({ message: 'Only a pending request can be approved', code: 'NOT_PENDING_APPROVAL' });
     }
@@ -465,8 +484,8 @@ export class EnrollmentsService {
   }
 
   /** Reject a PENDING_APPROVAL request. No coupon to release — see enroll(). */
-  async reject(tenantId: string, id: string, reason?: string) {
-    const enrollment = await this.assertTenantEnrollment(tenantId, id);
+  async reject(academyId: string, id: string, reason?: string) {
+    const enrollment = await this.assertTenantEnrollment(academyId, id);
     if (enrollment.status !== 'PENDING_APPROVAL') {
       throw new BadRequestException({ message: 'Only a pending request can be rejected', code: 'NOT_PENDING_APPROVAL' });
     }
@@ -497,8 +516,8 @@ export class EnrollmentsService {
    * departure from the academy's normal flow, not something available
    * silently underneath it) and the enrollmentApprovalMode flag is on.
    */
-  async demoEnroll(tenantId: string, identify: { studentUserId?: string; studentEmail?: string }, courseId: string) {
-    const academy = await this.prisma.academy.findUnique({ where: { id: tenantId }, select: { enrollmentMode: true } });
+  async demoEnroll(academyId: string, identify: { studentUserId?: string; studentEmail?: string }, courseId: string) {
+    const academy = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { enrollmentMode: true } });
     if (!academy || academy.enrollmentMode === 'AUTOMATIC') {
       throw new BadRequestException({
         message: 'Demo enrollment is only available when this academy is in MANUAL or DEMO enrollment mode',
@@ -516,7 +535,7 @@ export class EnrollmentsService {
     if (!student) throw new NotFoundException('Student not found');
 
     const course = await this.prisma.course.findFirst({
-      where: { id: courseId, tenantId, status: 'PUBLISHED' },
+      where: { id: courseId, academyId, status: 'PUBLISHED' },
     });
     if (!course) throw new NotFoundException('Course not found');
 
@@ -555,7 +574,7 @@ export class EnrollmentsService {
     const enrollment = existing
       ? await this.prisma.enrollment.update({ where: { id: existing.id }, data })
       : await this.prisma.enrollment.create({
-          data: { studentId: student.id, courseId, tenantId, ...data },
+          data: { studentId: student.id, courseId, tenantId: course.tenantId, academyId, ...data },
         });
 
     await activateBundleChildren(this.prisma, course, enrollment.studentId, enrollment.expiresAt);

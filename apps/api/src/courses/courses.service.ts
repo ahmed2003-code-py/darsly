@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import { JwtPayload, Role } from '@darsly/shared-types';
@@ -34,6 +34,20 @@ const COURSE_REACH = { subject: true, grades: { include: { grade: true } } } as 
 // 900_000-char limit (~675 KB decoded) so validation never rejects a payload the
 // controller already accepted; the point here is type/protocol safety, not size.
 const THUMBNAIL_MAX_BYTES = 700 * 1024;
+
+/**
+ * How the caller relates to the courses they're touching. Built by the
+ * controller from the validated AcademyContext (organisation) and the JWT
+ * tenantId (authorship); never from the request body.
+ */
+export interface CourseScope {
+  /** The organisation the caller is acting in. */
+  academyId: string;
+  /** The caller's own TeacherProfile.id. Undefined for STAFF / platform admin. */
+  authorTenantId?: string;
+  /** OWNER / platform admin: every course offered in the academy, not only their own. */
+  manageAll: boolean;
+}
 
 @Injectable()
 export class CoursesService {
@@ -245,28 +259,71 @@ export class CoursesService {
     };
   }
 
-  // ── Tenant isolation helpers ─────────────────────────────────────────────
-  // Every teacher mutation resolves the row through tenantId; a cross-tenant
-  // id therefore 404s (we don't reveal other tenants' resources exist).
+  // ── Scope helpers ─────────────────────────────────────────────────────────
+  // Two different questions, never conflated:
+  //   academyId  — which organisation the caller is acting in (validated
+  //                AcademyContext). Every row must belong to it.
+  //   tenantId   — who authored the row (the caller's own TeacherProfile).
+  // OWNER (and a platform admin) may manage every course offered in the
+  // academy; a TEACHER member only the ones they authored. Anything outside
+  // the scope 404s (we never reveal other academies' resources exist).
 
-  private async assertCourse(tenantId: string, courseId: string) {
-    const course = await this.prisma.course.findFirst({ where: { id: courseId, tenantId } });
+  private scopeWhere(scope: CourseScope): Prisma.CourseWhereInput {
+    if (scope.manageAll) return { academyId: scope.academyId };
+    // A non-owner without an author identity can match nothing.
+    return { academyId: scope.academyId, tenantId: scope.authorTenantId ?? '' };
+  }
+
+  /** The caller's own TeacherProfile — required wherever content is authored or media is owned. */
+  private author(scope: CourseScope): string {
+    if (!scope.authorTenantId) {
+      throw new ForbiddenException({ message: 'Only a teacher can author content', code: 'NOT_AN_AUTHOR' });
+    }
+    return scope.authorTenantId;
+  }
+
+  private async academyKind(academyId: string): Promise<'PERSONAL' | 'CENTER'> {
+    const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { kind: true } });
+    if (!a) throw new NotFoundException('Academy not found');
+    return a.kind;
+  }
+
+  /**
+   * Until the finance phase, a Center course is free: no split exists yet, so
+   * money must not be able to enter a Center through a crafted request.
+   */
+  private assertCenterPricing(kind: 'PERSONAL' | 'CENTER', priceCents: number | undefined) {
+    if (kind === 'CENTER' && (priceCents ?? 0) > 0) {
+      throw new BadRequestException({ message: 'Center courses are free in this phase', code: 'CENTER_COURSE_MUST_BE_FREE' });
+    }
+  }
+
+  /** A Center may only offer subjects it has switched on (opt-in; PERSONAL is never gated). */
+  private async assertSubjectOffered(academyId: string, subjectId: string) {
+    const row = await this.prisma.academySubject.findUnique({ where: { academyId_subjectId: { academyId, subjectId } }, select: { isActive: true } });
+    if (!row?.isActive) {
+      throw new BadRequestException({ message: 'This Center does not offer that subject', code: 'SUBJECT_NOT_OFFERED', subjectId });
+    }
+  }
+
+  private async assertCourse(scope: CourseScope, courseId: string) {
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, ...this.scopeWhere(scope) } });
     if (!course) throw new NotFoundException('Course not found');
     return course;
   }
 
-  private async assertUnit(tenantId: string, unitId: string) {
+  private async assertUnit(scope: CourseScope, unitId: string) {
     const unit = await this.prisma.courseUnit.findFirst({
-      where: { id: unitId, course: { tenantId } },
+      where: { id: unitId, course: this.scopeWhere(scope) },
       include: { course: true },
     });
     if (!unit) throw new NotFoundException('Unit not found');
     return unit;
   }
 
-  private async assertLesson(tenantId: string, lessonId: string) {
+  private async assertLesson(scope: CourseScope, lessonId: string) {
     const lesson = await this.prisma.lesson.findFirst({
-      where: { id: lessonId, unit: { course: { tenantId } } },
+      where: { id: lessonId, unit: { course: this.scopeWhere(scope) } },
       include: { unit: { include: { course: true } } },
     });
     if (!lesson) throw new NotFoundException('Lesson not found');
@@ -296,9 +353,9 @@ export class CoursesService {
     };
   }
 
-  async listMine(tenantId: string) {
+  async listMine(scope: CourseScope) {
     const rows = await this.prisma.course.findMany({
-      where: { tenantId },
+      where: this.scopeWhere(scope),
       include: {
         subject: true,
         grades: { include: { grade: true } },
@@ -310,9 +367,9 @@ export class CoursesService {
     return rows.map((r) => CoursesService.flattenGrades(r));
   }
 
-  async getMine(tenantId: string, courseId: string) {
+  async getMine(scope: CourseScope, courseId: string) {
     const course = await this.prisma.course.findFirst({
-      where: { id: courseId, tenantId },
+      where: { id: courseId, ...this.scopeWhere(scope) },
       include: {
         subject: true,
         grades: { include: { grade: true } },
@@ -354,7 +411,8 @@ export class CoursesService {
    * goes to all of them rather than to none, because an empty list in the form
    * means "I didn't pick", not "nobody".
    */
-  private async reachOf(tenantId: string, wanted?: string[], wantedSubject?: string) {
+  private async reachOf(scope: CourseScope, wanted?: string[], wantedSubject?: string) {
+    const tenantId = this.author(scope);
     const teacher = await this.prisma.teacherProfile.findUniqueOrThrow({
       where: { id: tenantId },
       select: { stages: true, subjects: { select: { subjectId: true } } },
@@ -397,15 +455,20 @@ export class CoursesService {
     return { subjectId, gradeIds: asked };
   }
 
-  async create(tenantId: string, dto: CreateCourseDto) {
+  async create(scope: CourseScope, dto: CreateCourseDto) {
+    const tenantId = this.author(scope);
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
+    const kind = await this.academyKind(scope.academyId);
+    this.assertCenterPricing(kind, dto.priceCents);
     const { gradeIds, subjectId: wantedSubject, ...rest } = dto;
-    const { subjectId, gradeIds: years } = await this.reachOf(tenantId, gradeIds, wantedSubject);
+    const { subjectId, gradeIds: years } = await this.reachOf(scope, gradeIds, wantedSubject);
+    if (kind === 'CENTER' && subjectId) await this.assertSubjectOffered(scope.academyId, subjectId);
     return this.prisma.course.create({
       data: {
         ...rest,
         subjectId,
         tenantId,
+        academyId: scope.academyId,
         grades: { create: years.map((gradeId) => ({ gradeId })) },
       },
       include: COURSE_REACH,
@@ -422,12 +485,12 @@ export class CoursesService {
    * be seen by people who have not paid.
    */
   async setIntroVideo(
-    tenantId: string,
+    scope: CourseScope,
     courseId: string,
     file: { buffer: Buffer; mimetype: string },
   ) {
-    await this.assertCourse(tenantId, courseId);
-    const media = await this.media.upload(tenantId, 'COURSE_INTRO', file);
+    const owned = await this.assertCourse(scope, courseId);
+    const media = await this.media.upload(owned.tenantId, 'COURSE_INTRO', file);
     const course = await this.prisma.course.findUniqueOrThrow({
       where: { id: courseId },
       select: { introVideoMediaId: true },
@@ -439,12 +502,12 @@ export class CoursesService {
     });
     // Re-recording replaces the clip; the old file has no other reader, so it
     // goes rather than sitting in storage forever.
-    await this.dropIntroMedia(tenantId, course.introVideoMediaId, media.id);
+    await this.dropIntroMedia(owned.tenantId, course.introVideoMediaId, media.id);
     return updated;
   }
 
-  async removeIntroVideo(tenantId: string, courseId: string) {
-    await this.assertCourse(tenantId, courseId);
+  async removeIntroVideo(scope: CourseScope, courseId: string) {
+    const owned = await this.assertCourse(scope, courseId);
     const course = await this.prisma.course.findUniqueOrThrow({
       where: { id: courseId },
       select: { introVideoMediaId: true },
@@ -454,7 +517,7 @@ export class CoursesService {
       data: { introVideoUrl: null, introVideoMediaId: null },
       select: { id: true, introVideoUrl: true, introVideoMediaId: true },
     });
-    await this.dropIntroMedia(tenantId, course.introVideoMediaId, null);
+    await this.dropIntroMedia(owned.tenantId, course.introVideoMediaId, null);
     return updated;
   }
 
@@ -479,9 +542,12 @@ export class CoursesService {
     }
   }
 
-  async update(tenantId: string, courseId: string, dto: UpdateCourseDto) {
-    await this.assertCourse(tenantId, courseId);
+  async update(scope: CourseScope, courseId: string, dto: UpdateCourseDto) {
+    const existing = await this.assertCourse(scope, courseId);
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
+    if (dto.priceCents !== undefined || dto.status === 'PUBLISHED') {
+      this.assertCenterPricing(await this.academyKind(scope.academyId), dto.priceCents ?? existing.priceCents);
+    }
 
     if (dto.status === 'PUBLISHED') {
       const lessons = await this.prisma.lesson.count({
@@ -572,7 +638,10 @@ export class CoursesService {
       gradeIds.every((id) => current.grades.some((g) => g.gradeId === id));
     const wantedYears = sameYears ? undefined : gradeIds;
 
-    const reach = wantedYears || wantedSubject ? await this.reachOf(tenantId, wantedYears, wantedSubject) : null;
+    const reach = wantedYears || wantedSubject ? await this.reachOf(scope, wantedYears, wantedSubject) : null;
+    if (reach?.subjectId && (await this.academyKind(scope.academyId)) === 'CENTER') {
+      await this.assertSubjectOffered(scope.academyId, reach.subjectId);
+    }
     return this.prisma.course.update({
       where: { id: courseId },
       data: {
@@ -604,8 +673,8 @@ export class CoursesService {
    * payment and the record; what they lose is a course the teacher withdrew,
    * which is the teacher's call to make about their own catalogue.
    */
-  async remove(tenantId: string, courseId: string) {
-    await this.assertCourse(tenantId, courseId);
+  async remove(scope: CourseScope, courseId: string) {
+    await this.assertCourse(scope, courseId);
     const students = await this.prisma.enrollment.count({
       where: { courseId, status: 'ACTIVE' },
     });
@@ -613,8 +682,8 @@ export class CoursesService {
     return { id: courseId, deleted: true, studentsAffected: students };
   }
 
-  async setBundleItems(tenantId: string, bundleId: string, dto: SetBundleItemsDto) {
-    const bundle = await this.assertCourse(tenantId, bundleId);
+  async setBundleItems(scope: CourseScope, bundleId: string, dto: SetBundleItemsDto) {
+    const bundle = await this.assertCourse(scope, bundleId);
     if (bundle.pricingModel !== 'BUNDLE') {
       throw new BadRequestException('Course pricing model is not BUNDLE');
     }
@@ -622,7 +691,7 @@ export class CoursesService {
       throw new BadRequestException('A bundle cannot contain itself');
     }
     const children = await this.prisma.course.findMany({
-      where: { id: { in: dto.courseIds }, tenantId },
+      where: { id: { in: dto.courseIds }, ...this.scopeWhere(scope) },
       select: { id: true },
     });
     if (children.length !== dto.courseIds.length) {
@@ -634,13 +703,13 @@ export class CoursesService {
         data: dto.courseIds.map((courseId) => ({ bundleId, courseId })),
       }),
     ]);
-    return this.getMine(tenantId, bundleId);
+    return this.getMine(scope, bundleId);
   }
 
   // ── Units ────────────────────────────────────────────────────────────────
 
-  async createUnit(tenantId: string, courseId: string, dto: UpsertUnitDto) {
-    await this.assertCourse(tenantId, courseId);
+  async createUnit(scope: CourseScope, courseId: string, dto: UpsertUnitDto) {
+    await this.assertCourse(scope, courseId);
     const last = await this.prisma.courseUnit.aggregate({
       where: { courseId },
       _max: { sortOrder: true },
@@ -654,19 +723,19 @@ export class CoursesService {
     });
   }
 
-  async updateUnit(tenantId: string, unitId: string, dto: UpsertUnitDto) {
-    await this.assertUnit(tenantId, unitId);
+  async updateUnit(scope: CourseScope, unitId: string, dto: UpsertUnitDto) {
+    await this.assertUnit(scope, unitId);
     return this.prisma.courseUnit.update({ where: { id: unitId }, data: dto });
   }
 
-  async removeUnit(tenantId: string, unitId: string) {
-    await this.assertUnit(tenantId, unitId);
+  async removeUnit(scope: CourseScope, unitId: string) {
+    await this.assertUnit(scope, unitId);
     await this.prisma.courseUnit.delete({ where: { id: unitId } });
     return { id: unitId, deleted: true };
   }
 
-  async reorderUnits(tenantId: string, courseId: string, dto: ReorderDto) {
-    await this.assertCourse(tenantId, courseId);
+  async reorderUnits(scope: CourseScope, courseId: string, dto: ReorderDto) {
+    await this.assertCourse(scope, courseId);
     await this.prisma.$transaction(
       dto.ids.map((id, i) =>
         this.prisma.courseUnit.updateMany({
@@ -688,9 +757,9 @@ export class CoursesService {
     return asset;
   }
 
-  async createLesson(tenantId: string, unitId: string, dto: CreateLessonDto) {
-    await this.assertUnit(tenantId, unitId);
-    if (dto.videoAssetId) await this.assertVideoAssetOwned(tenantId, dto.videoAssetId);
+  async createLesson(scope: CourseScope, unitId: string, dto: CreateLessonDto) {
+    await this.assertUnit(scope, unitId);
+    if (dto.videoAssetId) await this.assertVideoAssetOwned(this.author(scope), dto.videoAssetId);
     return this.insertLesson(unitId, dto);
   }
 
@@ -705,9 +774,9 @@ export class CoursesService {
    * but underneath it is an ordinary CourseUnit, so nothing else in the
    * lesson/quiz/assignment/progress pipeline needs to know it's different.
    */
-  async addLessonDirect(tenantId: string, courseId: string, dto: CreateLessonDto) {
-    await this.assertCourse(tenantId, courseId);
-    if (dto.videoAssetId) await this.assertVideoAssetOwned(tenantId, dto.videoAssetId);
+  async addLessonDirect(scope: CourseScope, courseId: string, dto: CreateLessonDto) {
+    await this.assertCourse(scope, courseId);
+    if (dto.videoAssetId) await this.assertVideoAssetOwned(this.author(scope), dto.videoAssetId);
     const unit = await this.getOrCreateDefaultUnit(courseId);
     return this.insertLesson(unit.id, dto);
   }
@@ -720,12 +789,12 @@ export class CoursesService {
    * same VideoProcessingService pipeline a manual upload goes through, so an
    * imported lesson is neither special-cased nor less protected than any other.
    */
-  async importYoutube(tenantId: string, courseId: string, dto: ImportYoutubeDto) {
-    await this.assertCourse(tenantId, courseId);
+  async importYoutube(scope: CourseScope, courseId: string, dto: ImportYoutubeDto) {
+    await this.assertCourse(scope, courseId);
 
     let unitId: string;
     if (dto.unitId) {
-      const unit = await this.assertUnit(tenantId, dto.unitId);
+      const unit = await this.assertUnit(scope, dto.unitId);
       if (unit.courseId !== courseId) {
         throw new BadRequestException('That section does not belong to this course');
       }
@@ -802,7 +871,7 @@ export class CoursesService {
       }
 
       const asset = await this.prisma.videoAsset.create({
-        data: { tenantId, originalKey: '', status: 'UPLOADING' },
+        data: { tenantId: this.author(scope), originalKey: '', status: 'UPLOADING' },
       });
       const lesson = await this.insertLesson(unitId, {
         title: meta.title,
@@ -879,9 +948,9 @@ export class CoursesService {
     });
   }
 
-  async updateLesson(tenantId: string, lessonId: string, dto: UpdateLessonDto) {
-    await this.assertLesson(tenantId, lessonId);
-    if (dto.videoAssetId) await this.assertVideoAssetOwned(tenantId, dto.videoAssetId);
+  async updateLesson(scope: CourseScope, lessonId: string, dto: UpdateLessonDto) {
+    await this.assertLesson(scope, lessonId);
+    if (dto.videoAssetId) await this.assertVideoAssetOwned(this.author(scope), dto.videoAssetId);
     const { clearDrip, dripUnlockAt, ...rest } = dto;
     return this.prisma.lesson.update({
       where: { id: lessonId },
@@ -904,10 +973,10 @@ export class CoursesService {
    * leaving an orphaned `VideoAsset` (and its HLS files) behind every time a
    * teacher swaps in a better take.
    */
-  async removeLessonVideo(tenantId: string, lessonId: string) {
-    const lesson = await this.assertLesson(tenantId, lessonId);
+  async removeLessonVideo(scope: CourseScope, lessonId: string) {
+    const lesson = await this.assertLesson(scope, lessonId);
     if (!lesson.videoAssetId) return { id: lessonId, videoRemoved: false };
-    const asset = await this.assertVideoAssetOwned(tenantId, lesson.videoAssetId);
+    const asset = await this.assertVideoAssetOwned(this.author(scope), lesson.videoAssetId);
 
     // The relation has no cascade, so the FK must be cleared before the row
     // it points at can be deleted. The duration goes with it — it was probed
@@ -925,14 +994,14 @@ export class CoursesService {
     return { id: lessonId, videoRemoved: true };
   }
 
-  async removeLesson(tenantId: string, lessonId: string) {
-    await this.assertLesson(tenantId, lessonId);
+  async removeLesson(scope: CourseScope, lessonId: string) {
+    await this.assertLesson(scope, lessonId);
     await this.prisma.lesson.delete({ where: { id: lessonId } });
     return { id: lessonId, deleted: true };
   }
 
-  async reorderLessons(tenantId: string, unitId: string, dto: ReorderDto) {
-    await this.assertUnit(tenantId, unitId);
+  async reorderLessons(scope: CourseScope, unitId: string, dto: ReorderDto) {
+    await this.assertUnit(scope, unitId);
     await this.prisma.$transaction(
       dto.ids.map((id, i) =>
         this.prisma.lesson.updateMany({

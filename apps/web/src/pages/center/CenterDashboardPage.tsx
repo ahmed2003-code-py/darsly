@@ -20,6 +20,7 @@ export default function CenterDashboardPage() {
 
   const cards = [
     { to: '/center/members', icon: 'group', title: t('center.members'), sub: t('center.membersSub') },
+    { to: '/center/subjects', icon: 'menu_book', title: t('center.subjects'), sub: t('center.subjectsSub') },
     { to: '/teacher/groups', icon: 'diversity_3', title: t('center.groups'), sub: t('center.groupsSub') },
     { to: '/teacher/schedule', icon: 'calendar_month', title: t('center.schedule'), sub: t('center.scheduleSub') },
   ];

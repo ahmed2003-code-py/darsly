@@ -46,7 +46,7 @@ export class PublicSiteService {
     const academy = await this.academyBySlug(slug);
     if (!academy) return [];
     const courses = await this.prisma.course.findMany({
-      where: { tenantId: academy.id, status: 'PUBLISHED', deletedAt: null },
+      where: { academyId: academy.id, status: 'PUBLISHED', deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: { id: true, title: true, thumbnailUrl: true, priceCents: true },

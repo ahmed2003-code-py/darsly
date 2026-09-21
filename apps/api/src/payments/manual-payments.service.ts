@@ -56,6 +56,13 @@ export class ManualPaymentsService {
     if (course.priceCents <= 0) {
       throw new BadRequestException({ message: 'This course is free — just enrol', code: 'COURSE_FREE' });
     }
+    // No money enters a Center before the finance phase — this is the one
+    // place a Payment row is created, so the door is closed here regardless
+    // of what the course row says.
+    const org = await this.prisma.academy.findUnique({ where: { id: course.academyId ?? course.tenantId }, select: { kind: true } });
+    if (org?.kind === 'CENTER') {
+      throw new BadRequestException({ message: 'Center courses are free in this phase', code: 'CENTER_COURSE_MUST_BE_FREE' });
+    }
 
     // Block a second pending submission / an already-active enrolment.
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -161,7 +168,7 @@ export class ManualPaymentsService {
             data: { status: 'PENDING_PAYMENT', approvedAt: null, revokedReason: null, hiddenAt: null },
           })
         : await tx.enrollment.create({
-            data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, status: 'PENDING_PAYMENT' },
+            data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, academyId: course.academyId ?? course.tenantId, status: 'PENDING_PAYMENT' },
           });
 
       const created = await tx.payment.create({
@@ -170,6 +177,7 @@ export class ManualPaymentsService {
           courseId: course.id,
           enrollmentId: enr.id,
           tenantId: course.tenantId,
+          academyId: course.academyId ?? course.tenantId,
           amountCents: totalCents,
           walletCents,
           feeCents,
@@ -344,7 +352,7 @@ export class ManualPaymentsService {
   private async priceNowFor(payment: { courseId: string; couponId: string | null }) {
     const course = await this.prisma.course.findUnique({
       where: { id: payment.courseId },
-      select: { priceCents: true, tenantId: true },
+      select: { priceCents: true, tenantId: true, academyId: true },
     });
     if (!course) return null;
 
@@ -361,7 +369,7 @@ export class ManualPaymentsService {
     let feeCents = 0;
     if (netCents > 0) {
       const academy = await this.prisma.academy.findUnique({
-        where: { id: course.tenantId },
+        where: { id: course.academyId ?? course.tenantId },
         select: { feeType: true, feeValue: true },
       });
       feeCents = academy
@@ -669,17 +677,17 @@ export class ManualPaymentsService {
 
   // ── Queues ──────────────────────────────────────────────────────────────────
 
-  teacherQueue(tenantId: string, status = 'PENDING') {
-    return this.list({ tenantId, status });
+  teacherQueue(academyId: string, status = 'PENDING') {
+    return this.list({ academyId, status });
   }
   adminQueue(status = 'PENDING') {
     return this.list({ status });
   }
 
-  private async list(where: { tenantId?: string; status?: string }) {
+  private async list(where: { academyId?: string; status?: string }) {
     const rows = await this.prisma.payment.findMany({
       where: {
-        ...(where.tenantId ? { tenantId: where.tenantId } : {}),
+        ...(where.academyId ? { academyId: where.academyId } : {}),
         ...(where.status ? { status: where.status as any } : {}),
         gateway: 'manual',
       },
@@ -750,7 +758,7 @@ export class ManualPaymentsService {
    * a card payment and a bank transfer end up crediting a teacher different
    * amounts for the same course.
    */
-  async quote(course: { id: string; priceCents: number; tenantId: string }, couponCode?: string) {
+  async quote(course: { id: string; priceCents: number; tenantId: string; academyId?: string | null }, couponCode?: string) {
     let discount = 0;
     let couponId: string | null = null;
     let couponMaxUses: number | null = null;
@@ -774,7 +782,7 @@ export class ManualPaymentsService {
     let feeCents = 0;
     if (netCents > 0) {
       const academy = await this.prisma.academy.findUnique({
-        where: { id: course.tenantId },
+        where: { id: course.academyId ?? course.tenantId },
         select: { feeType: true, feeValue: true },
       });
       feeCents = academy

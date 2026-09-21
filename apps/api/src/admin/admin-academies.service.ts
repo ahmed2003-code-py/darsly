@@ -36,13 +36,13 @@ export class AdminAcademiesService {
     if (tenantIds.length === 0) return map;
     // Raw query — bypasses the soft-delete middleware, so deletedAt has to be
     // filtered explicitly here (Enrollment is a soft-delete model).
-    const rows = await this.prisma.$queryRaw<{ tenantId: string; cnt: bigint }[]>`
-      SELECT "tenantId", COUNT(DISTINCT "studentId") AS cnt
+    const rows = await this.prisma.$queryRaw<{ academyId: string; cnt: bigint }[]>`
+      SELECT "academyId", COUNT(DISTINCT "studentId") AS cnt
       FROM "Enrollment"
-      WHERE "tenantId" = ANY(${tenantIds}::text[]) AND "deletedAt" IS NULL
-      GROUP BY "tenantId"
+      WHERE "academyId" = ANY(${tenantIds}::text[]) AND "deletedAt" IS NULL
+      GROUP BY "academyId"
     `;
-    for (const r of rows) map.set(r.tenantId, Number(r.cnt));
+    for (const r of rows) map.set(r.academyId, Number(r.cnt));
     return map;
   }
 
@@ -102,13 +102,13 @@ export class AdminAcademiesService {
     const ids = academies.map((a) => a.id);
     const [courseCounts, publishedCounts, enrollmentCounts, staffRows, studentCounts, revenue, lastActivity] =
       await Promise.all([
-        this.prisma.course.groupBy({ by: ['tenantId'], where: { tenantId: { in: ids } }, _count: { _all: true } }),
+        this.prisma.course.groupBy({ by: ['academyId'], where: { academyId: { in: ids } }, _count: { _all: true } }),
         this.prisma.course.groupBy({
-          by: ['tenantId'],
-          where: { tenantId: { in: ids }, status: 'PUBLISHED' },
+          by: ['academyId'],
+          where: { academyId: { in: ids }, status: 'PUBLISHED' },
           _count: { _all: true },
         }),
-        this.prisma.enrollment.groupBy({ by: ['tenantId'], where: { tenantId: { in: ids } }, _count: { _all: true } }),
+        this.prisma.enrollment.groupBy({ by: ['academyId'], where: { academyId: { in: ids } }, _count: { _all: true } }),
         this.prisma.academyMembership.groupBy({
           by: ['academyId', 'role'],
           where: { academyId: { in: ids }, deletedAt: null },
@@ -119,9 +119,9 @@ export class AdminAcademiesService {
         this.lastActivityBatch(ids),
       ]);
 
-    const courseByTenant = new Map(courseCounts.map((r) => [r.tenantId, r._count._all]));
-    const publishedByTenant = new Map(publishedCounts.map((r) => [r.tenantId, r._count._all]));
-    const enrollmentByTenant = new Map(enrollmentCounts.map((r) => [r.tenantId, r._count._all]));
+    const courseByTenant = new Map(courseCounts.map((r) => [r.academyId, r._count._all]));
+    const publishedByTenant = new Map(publishedCounts.map((r) => [r.academyId, r._count._all]));
+    const enrollmentByTenant = new Map(enrollmentCounts.map((r) => [r.academyId, r._count._all]));
     const staffByAcademy = new Map<string, { teachers: number; assistants: number }>();
     for (const row of staffRows) {
       const entry = staffByAcademy.get(row.academyId) ?? { teachers: 0, assistants: 0 };
@@ -188,9 +188,9 @@ export class AdminAcademiesService {
           orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
           include: { user: { select: { fullName: true, email: true, avatarUrl: true } } },
         }),
-        this.prisma.course.count({ where: { tenantId: academyId } }),
-        this.prisma.course.count({ where: { tenantId: academyId, status: 'PUBLISHED' } }),
-        this.prisma.enrollment.count({ where: { tenantId: academyId } }),
+        this.prisma.course.count({ where: { academyId } }),
+        this.prisma.course.count({ where: { academyId, status: 'PUBLISHED' } }),
+        this.prisma.enrollment.count({ where: { academyId } }),
         this.studentCountsBatch([academyId]),
         this.ledger.academyRevenueBatch([academyId]),
         this.lastActivityBatch([academyId]),

@@ -132,7 +132,8 @@
     "adminGamification": "التحفيز",
     "myStudio": "استوديو الطالب",
     "centerDashboard": "السنتر",
-    "centerMembers": "المعلمون والفريق"
+    "centerMembers": "المعلمون والفريق",
+    "centerSubjects": "المواد"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -2833,7 +2834,13 @@
     "schedule": "الجدول",
     "scheduleSub": "الحصص والقاعات.",
     "noCenter": "لا يوجد سنتر مرتبط بحسابك بعد.",
-    "statusSuspended": "هذا السنتر موقوف. تواصل مع المنصة."
+    "statusSuspended": "هذا السنتر موقوف. تواصل مع المنصة.",
+    "subjects": "المواد",
+    "subjectsSub": "اختر مواد المنصة التي يقدمها هذا السنتر. لا يمكن إنشاء كورس هنا إلا بمادة مُفعّلة.",
+    "subjectOffered": "مُفعّلة",
+    "subjectNotOffered": "غير مُفعّلة",
+    "subjectEnable": "تفعيل",
+    "subjectDisable": "إيقاف"
   },
   "joinCenter": {
     "title": "الانضمام لسنتر",

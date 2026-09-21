@@ -132,7 +132,8 @@
     "adminGamification": "Gamification",
     "myStudio": "My Studio",
     "centerDashboard": "Center",
-    "centerMembers": "Teachers & staff"
+    "centerMembers": "Teachers & staff",
+    "centerSubjects": "Subjects"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -2833,7 +2834,13 @@
     "schedule": "Schedule",
     "scheduleSub": "Sessions and rooms.",
     "noCenter": "No Center is assigned to your account yet.",
-    "statusSuspended": "This Center is suspended. Contact the platform."
+    "statusSuspended": "This Center is suspended. Contact the platform.",
+    "subjects": "Subjects",
+    "subjectsSub": "Choose which platform subjects this Center offers. Courses here can only use offered subjects.",
+    "subjectOffered": "Offered",
+    "subjectNotOffered": "Not offered",
+    "subjectEnable": "Offer",
+    "subjectDisable": "Stop offering"
   },
   "joinCenter": {
     "title": "Join a Center",

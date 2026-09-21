@@ -20,6 +20,8 @@ import { CoursesService } from './courses.service';
  * sentence about a value the teacher never typed.
  */
 const none = {} as any;
+// A teacher acting in their own PERSONAL workspace: organisation == author.
+const T1 = { academyId: 't1', authorTenantId: 't1', manageAll: true };
 const svc = (prisma: any) =>
   new CoursesService(
     prisma as PrismaService,
@@ -41,7 +43,7 @@ const JOIN_ROWS = [
 describe("a teacher's own course list", () => {
   it('hands back the years themselves, not the rows that join them', async () => {
     const prisma = { course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: JOIN_ROWS }]) } };
-    const [course] = await svc(prisma).listMine('t1');
+    const [course] = await svc(prisma).listMine(T1);
     expect(course.grades).toEqual([
       { id: 'g1', nameAr: 'الأول الثانوي', nameEn: 'Grade 10' },
       { id: 'g2', nameAr: 'الثاني الثانوي', nameEn: 'Grade 11' },
@@ -50,7 +52,7 @@ describe("a teacher's own course list", () => {
 
   it('gives the edit form ids it can send straight back', async () => {
     const prisma = { course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: JOIN_ROWS }]) } };
-    const [course] = await svc(prisma).listMine('t1');
+    const [course] = await svc(prisma).listMine(T1);
     const gradeIds = ((course.grades ?? []) as { id: string }[]).map((g) => g.id);
     expect(gradeIds).toEqual(['g1', 'g2']);
     expect(gradeIds.every((id: unknown) => typeof id === 'string')).toBe(true);
@@ -58,13 +60,13 @@ describe("a teacher's own course list", () => {
 
   it('does the same for one course opened on its own', async () => {
     const prisma = { course: { findFirst: jest.fn().mockResolvedValue({ id: 'c1', grades: JOIN_ROWS }) } };
-    const course = await svc(prisma).getMine('t1', 'c1');
+    const course = await svc(prisma).getMine(T1, 'c1');
     expect((course.grades as { id: string }[]).map((g) => g.id)).toEqual(['g1', 'g2']);
   });
 
   it('leaves a course with no years alone', async () => {
     const prisma = { course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: [] }]) } };
-    const [course] = await svc(prisma).listMine('t1');
+    const [course] = await svc(prisma).listMine(T1);
     expect(course.grades).toEqual([]);
   });
 });
@@ -81,8 +83,9 @@ describe("a teacher's own course list", () => {
  */
 describe('changing the price of a course whose subject is no longer yours', () => {
   const prismaFor = (courseSubject: string | null, teacherSubjects: string[]) => ({
+    academy: { findUnique: jest.fn().mockResolvedValue({ kind: 'PERSONAL' }) },
     course: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1', academyId: 't1', priceCents: 0 }),
       findUnique: jest.fn().mockResolvedValue({
         subjectId: courseSubject,
         examLessonId: null,
@@ -104,7 +107,7 @@ describe('changing the price of a course whose subject is no longer yours', () =
   it('goes through when the subject is simply left where it was', async () => {
     // The teacher teaches Arabic; the course sits on Maths and always has.
     const prisma = prismaFor('maths', ['arabic']);
-    const out = await svc(prisma).update('t1', 'c1', { subjectId: 'maths', priceCents: 0 } as any);
+    const out = await svc(prisma).update(T1, 'c1', { subjectId: 'maths', priceCents: 0 } as any);
     expect(out).toBeTruthy();
     expect(prisma.course.update).toHaveBeenCalled();
     // Nothing was re-aimed: the subject is not rewritten on the way through.
@@ -113,26 +116,27 @@ describe('changing the price of a course whose subject is no longer yours', () =
 
   it('lets that same edit make the course free', async () => {
     const prisma = prismaFor('maths', ['arabic']);
-    await svc(prisma).update('t1', 'c1', { subjectId: 'maths', priceCents: 0 } as any);
+    await svc(prisma).update(T1, 'c1', { subjectId: 'maths', priceCents: 0 } as any);
     expect(prisma.course.update.mock.calls[0][0].data.priceCents).toBe(0);
   });
 
   it('still refuses a move to a subject that is not theirs', async () => {
     const prisma = prismaFor('maths', ['arabic']);
-    await expect(svc(prisma).update('t1', 'c1', { subjectId: 'physics' } as any)).rejects.toThrow();
+    await expect(svc(prisma).update(T1, 'c1', { subjectId: 'physics' } as any)).rejects.toThrow();
   });
 
   it('still allows a move to one that is', async () => {
     const prisma = prismaFor('maths', ['arabic']);
-    const out = await svc(prisma).update('t1', 'c1', { subjectId: 'arabic' } as any);
+    const out = await svc(prisma).update(T1, 'c1', { subjectId: 'arabic' } as any);
     expect(out).toBeTruthy();
   });
 });
 
 describe('changing the price of a course aimed at years you no longer teach', () => {
   const prismaFor = (teacherStages: string[]) => ({
+    academy: { findUnique: jest.fn().mockResolvedValue({ kind: 'PERSONAL' }) },
     course: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1', academyId: 't1', priceCents: 0 }),
       findUnique: jest.fn().mockResolvedValue({
         subjectId: 'maths',
         examLessonId: null,
@@ -150,19 +154,19 @@ describe('changing the price of a course aimed at years you no longer teach', ()
     // The teacher now teaches only SECONDARY; the course has always been aimed
     // at two primary years. Restating them is not a change.
     const prisma = prismaFor(['SECONDARY']);
-    await svc(prisma).update('t1', 'c1', { gradeIds: ['g1', 'g2'], priceCents: 0 } as any);
+    await svc(prisma).update(T1, 'c1', { gradeIds: ['g1', 'g2'], priceCents: 0 } as any);
     expect(prisma.course.update.mock.calls[0][0].data.priceCents).toBe(0);
     expect(prisma.course.update.mock.calls[0][0].data.grades).toBeUndefined();
   });
 
   it('does not care what order the boxes were ticked in', async () => {
     const prisma = prismaFor(['SECONDARY']);
-    await svc(prisma).update('t1', 'c1', { gradeIds: ['g2', 'g1'], priceCents: 500 } as any);
+    await svc(prisma).update(T1, 'c1', { gradeIds: ['g2', 'g1'], priceCents: 500 } as any);
     expect(prisma.course.update.mock.calls[0][0].data.grades).toBeUndefined();
   });
 
   it('still refuses a move to a year the teacher does not teach', async () => {
     const prisma = prismaFor(['SECONDARY']);
-    await expect(svc(prisma).update('t1', 'c1', { gradeIds: ['g1', 'g3'] } as any)).rejects.toThrow();
+    await expect(svc(prisma).update(T1, 'c1', { gradeIds: ['g1', 'g3'] } as any)).rejects.toThrow();
   });
 });

@@ -247,7 +247,7 @@ export class SiteGeneratorService {
     // which is why "this teacher has twelve courses, lead with them" was not a
     // decision the pipeline could make.
     const [courseCount, reviewAgg] = await Promise.all([
-      this.prisma.course.count({ where: { tenantId: academyId, status: 'PUBLISHED', deletedAt: null } }),
+      this.prisma.course.count({ where: { academyId, status: 'PUBLISHED', deletedAt: null } }),
       this.prisma.review.aggregate({
         where: { tenantId: academyId, comment: { not: '' } },
         _count: { _all: true },

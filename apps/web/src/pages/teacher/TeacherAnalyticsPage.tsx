@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useMyAcademies } from '../../lib/academy';
+import { useStaffAcademyStore } from '../../stores/staffAcademy';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import {
@@ -14,6 +16,7 @@ import {
   useSchedulingOverview,
   useStaffAnalytics,
   useStudentsOverview,
+  useMyTeaching,
 } from '../../lib/analytics';
 import { Badge, BarChart, EmptyState, ErrorNote, PageHeader, Skeleton } from '../../components/ui';
 import { EngagementPanel } from '../../components/gamification/EngagementPanel';
@@ -416,10 +419,47 @@ function FinancialTab({ range }: { range: AnalyticsRange }) {
   );
 }
 
+/** A non-owner member's own numbers inside the active academy — never the Center-wide view. */
+function MyTeachingView({ range, onRange }: { range: AnalyticsRange; onRange: (r: AnalyticsRange) => void }) {
+  const { t } = useTranslation();
+  const { data, isLoading } = useMyTeaching(range);
+  if (isLoading || !data) return <Skeleton className="h-40 rounded-2xl" />;
+  const tiles = [
+    { label: t('analytics.me.courses'), value: data.courses },
+    { label: t('analytics.me.enrollments'), value: data.activeEnrollments },
+    { label: t('analytics.me.groups'), value: data.groups },
+    { label: t('analytics.me.upcoming'), value: data.sessions.upcoming },
+    { label: t('analytics.me.completed'), value: data.sessions.completed },
+    { label: t('analytics.me.attendance'), value: data.attendance.presentRate == null ? '—' : `${data.attendance.presentRate}%` },
+  ];
+  return (
+    <div className="page">
+      <PageHeader title={t('analytics.me.title')} subtitle={t('analytics.me.subtitle')} action={<RangeSwitch range={range} onChange={onRange} />} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        {tiles.map((k) => (
+          <div key={k.label} className="card p-4">
+            <p className="text-xs text-outline">{k.label}</p>
+            <p className="font-heading text-2xl font-bold tabular-nums">{k.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function TeacherAnalyticsPage() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('overview');
   const [range, setRange] = useState<AnalyticsRange>(30);
+  // The active workspace decides what this page is: the owner's academy-wide
+  // view, or a member's own slice. The server enforces the same split.
+  const { data: myAcademies } = useMyAcademies();
+  const activeId = useStaffAcademyStore((s) => s.academyId);
+  const active = myAcademies?.find((a) => a.academyId === activeId) ?? myAcademies?.find((a) => a.role === 'OWNER');
+  const isOwner = !active || active.role === 'OWNER';
+  const isCenter = active?.kind === 'CENTER';
+  const tabs = TABS.filter((tb) => !(isCenter && tb === 'financial'));
+  if (!isOwner) return <MyTeachingView range={range} onRange={setRange} />;
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-analytics'],
     queryFn: async () => (await api.get('/teacher/analytics')).data,
@@ -434,7 +474,7 @@ export default function TeacherAnalyticsPage() {
       />
 
       <div className="mb-6 flex flex-wrap gap-1 rounded-full bg-surface-container-lowest p-1 shadow-card">
-        {TABS.map((tb) => (
+        {tabs.map((tb) => (
           <button
             key={tb}
             onClick={() => setTab(tb)}

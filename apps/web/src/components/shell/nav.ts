@@ -47,9 +47,12 @@ export const TEACHER_NAV: NavItem[] = [
 export const STAFF_NAV: NavItem[] = [
   { to: '/center', icon: 'apartment', labelKey: 'nav.centerDashboard', end: true },
   { to: '/center/members', icon: 'group', labelKey: 'nav.centerMembers' },
+  { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
   { to: '/center/subjects', icon: 'menu_book', labelKey: 'nav.centerSubjects' },
   { to: '/teacher/groups', icon: 'diversity_3', labelKey: 'nav.groups' },
   { to: '/teacher/schedule', icon: 'calendar_month', labelKey: 'nav.schedule' },
+  { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
+  { to: '/center/settings', icon: 'settings', labelKey: 'nav.centerSettings' },
 ];
 
 export const ADMIN_NAV: NavItem[] = [

@@ -75,7 +75,7 @@ export class NeedsAttentionService {
       SELECT sp.id AS "studentId", u."fullName", MAX(ge."createdAt") AS "lastActivity"
       FROM "StudentProfile" sp
       JOIN "User" u ON u.id = sp."userId" AND u."deletedAt" IS NULL
-      JOIN "Enrollment" e ON e."studentId" = sp.id AND e."tenantId" = ${academyId} AND e.status = 'ACTIVE' AND e."deletedAt" IS NULL
+      JOIN "Enrollment" e ON e."studentId" = sp.id AND e."academyId" = ${academyId} AND e.status = 'ACTIVE' AND e."deletedAt" IS NULL
       ${scopedGroups ? Prisma.sql`JOIN "GroupMembership" gm ON gm."studentId" = sp.id AND gm."groupId" = ANY(${scopedGroups}::text[]) AND gm."deletedAt" IS NULL` : Prisma.sql``}
       LEFT JOIN "GamificationEvent" ge ON ge."studentId" = sp.id AND ge."tenantId" = ${academyId}
       WHERE sp."deletedAt" IS NULL

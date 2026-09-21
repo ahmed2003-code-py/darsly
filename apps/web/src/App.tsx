@@ -31,6 +31,7 @@ const AdminCreateCenterPage = lazyPage(() => import('./pages/admin/AdminCreateCe
 const CenterDashboardPage = lazyPage(() => import('./pages/center/CenterDashboardPage'));
 const CenterMembersPage = lazyPage(() => import('./pages/center/CenterMembersPage'));
 const CenterSubjectsPage = lazyPage(() => import('./pages/center/CenterSubjectsPage'));
+const CenterSettingsPage = lazyPage(() => import('./pages/center/CenterSettingsPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -200,19 +201,19 @@ export default function App() {
       <Route path="/teacher" element={<RequireAuth role={Role.TEACHER}><TeacherDashboardPage /></RequireAuth>} />
       <Route path="/academy/settings" element={<Navigate to="/academy/studio" replace />} />
       <Route path="/academy/studio" element={<RequireAuth role={Role.TEACHER}><AcademyStudioPage /></RequireAuth>} />
-      <Route path="/teacher/courses" element={<RequireAuth role={Role.TEACHER}><TeacherCoursesPage /></RequireAuth>} />
-      <Route path="/teacher/courses/:id" element={<RequireAuth role={Role.TEACHER}><CourseBuilderPage /></RequireAuth>} />
+      <Route path="/teacher/courses" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherCoursesPage /></RequireAuth>} />
+      <Route path="/teacher/courses/:id" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><CourseBuilderPage /></RequireAuth>} />
       <Route path="/teacher/lessons/:lessonId/quiz" element={<RequireAuth role={Role.TEACHER}><QuizBuilderPage /></RequireAuth>} />
       <Route path="/teacher/lessons/:lessonId/assignment" element={<RequireAuth role={Role.TEACHER}><AssignmentBuilderPage /></RequireAuth>} />
       <Route path="/teacher/challenges" element={<RequireAuth role={Role.TEACHER}><TeacherChallengesPage /></RequireAuth>} />
       <Route path="/teacher/challenges/:id" element={<RequireAuth role={Role.TEACHER}><ChallengeBuilderPage /></RequireAuth>} />
-      <Route path="/teacher/students" element={<RequireAuth role={Role.TEACHER}><TeacherEnrollmentsPage /></RequireAuth>} />
+      <Route path="/teacher/students" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherEnrollmentsPage /></RequireAuth>} />
       <Route path="/teacher/groups" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherGroupsPage /></RequireAuth>} />
       <Route path="/teacher/groups/:groupId" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherGroupDetailPage /></RequireAuth>} />
       <Route path="/teacher/schedule" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherSchedulePage /></RequireAuth>} />
       <Route path="/teacher/grading" element={<RequireAuth role={Role.TEACHER}><GradingPage /></RequireAuth>} />
       <Route path="/teacher/live" element={<RequireAuth role={Role.TEACHER}><TeacherLivePage /></RequireAuth>} />
-      <Route path="/teacher/analytics" element={<RequireAuth role={Role.TEACHER}><TeacherAnalyticsPage /></RequireAuth>} />
+      <Route path="/teacher/analytics" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherAnalyticsPage /></RequireAuth>} />
       <Route path="/teacher/wallet" element={<RequireAuth role={Role.TEACHER}><TeacherWalletPage /></RequireAuth>} />
       <Route path="/teacher/security" element={<RequireAuth role={Role.TEACHER}><TeacherSecurityPage /></RequireAuth>} />
       <Route path="/teacher/coupons" element={<RequireAuth role={Role.TEACHER}><TeacherCouponsPage /></RequireAuth>} />
@@ -225,6 +226,7 @@ export default function App() {
       <Route path="/center" element={<RequireAuth role={Role.STAFF}><CenterDashboardPage /></RequireAuth>} />
       <Route path="/center/members" element={<RequireAuth role={Role.STAFF}><CenterMembersPage /></RequireAuth>} />
       <Route path="/center/subjects" element={<RequireAuth role={Role.STAFF}><CenterSubjectsPage /></RequireAuth>} />
+      <Route path="/center/settings" element={<RequireAuth role={Role.STAFF}><CenterSettingsPage /></RequireAuth>} />
       <Route path="/admin/teachers" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminTeachersPage /></RequireAuth>} />
       <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />
       <Route path="/admin/payments" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPaymentsPage /></RequireAuth>} />

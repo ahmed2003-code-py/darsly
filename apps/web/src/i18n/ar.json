@@ -133,7 +133,8 @@
     "myStudio": "استوديو الطالب",
     "centerDashboard": "السنتر",
     "centerMembers": "المعلمون والفريق",
-    "centerSubjects": "المواد"
+    "centerSubjects": "المواد",
+    "centerSettings": "الإعدادات"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -1222,6 +1223,16 @@
       "pending": "دفعات بانتظار المراجعة",
       "trend": "اتجاه الإيرادات الصافية",
       "byCourse": "الإيرادات حسب الدورة"
+    },
+    "me": {
+      "title": "تدريسي هنا",
+      "subtitle": "كورساتك ومجموعاتك وحصصك وحضورك في مساحة العمل هذه.",
+      "courses": "كورساتي",
+      "enrollments": "اشتراكات نشطة",
+      "groups": "مجموعاتي",
+      "upcoming": "حصص قادمة",
+      "completed": "حصص مكتملة",
+      "attendance": "نسبة الحضور"
     }
   },
   "saved": {
@@ -2858,7 +2869,23 @@
     "subjectOffered": "مُفعّلة",
     "subjectNotOffered": "غير مُفعّلة",
     "subjectEnable": "تفعيل",
-    "subjectDisable": "إيقاف"
+    "subjectDisable": "إيقاف",
+    "courses": "الكورسات",
+    "coursesSub": "الكورسات المقدَّمة في هذا السنتر من معلميه.",
+    "analytics": "التحليلات",
+    "analyticsSub": "أرقام تشغيلية لهذا السنتر فقط.",
+    "settings": "إعدادات السنتر",
+    "settingsSub": "الاسم والشعار واللوجو والعنوان.",
+    "recentActivity": "آخر النشاط",
+    "kpi": {
+      "teachers": "المعلمون",
+      "students": "الطلاب",
+      "courses": "الكورسات (منشور/الكل)",
+      "groups": "المجموعات",
+      "upcoming": "حصص خلال ٧ أيام",
+      "attendance": "الحضور (٣٠ يوم)",
+      "subjects": "مواد مُفعّلة"
+    }
   },
   "joinCenter": {
     "title": "الانضمام لسنتر",

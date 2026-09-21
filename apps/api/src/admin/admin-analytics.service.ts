@@ -134,13 +134,13 @@ export class AdminAnalyticsService {
     // than a single relational filter — still no per-academy loop.
     const recentTenantIds = await this.prisma.enrollment.findMany({
       where: { createdAt: { gte: since } },
-      distinct: ['tenantId'],
-      select: { tenantId: true },
+      distinct: ['academyId'],
+      select: { academyId: true },
     });
     const [totalActive, activeWithEnrollment] = await Promise.all([
       this.prisma.academy.count({ where: { status: 'ACTIVE' } }),
       this.prisma.academy.count({
-        where: { status: 'ACTIVE', id: { in: recentTenantIds.map((r) => r.tenantId) } },
+        where: { status: 'ACTIVE', id: { in: recentTenantIds.map((r) => r.academyId).filter((id): id is string => !!id) } },
       }),
     ]);
     return {

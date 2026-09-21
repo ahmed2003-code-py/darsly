@@ -165,3 +165,28 @@ export function useActiveAcademyRate(range: AnalyticsRange) {
     queryFn: async () => (await api.get('/admin/analytics/active-academies', { params: { range } })).data,
   });
 }
+
+// ── Center operations (Phase 6) ──────────────────────────────────────────────
+
+export interface CenterOverview {
+  academy: { kind: 'PERSONAL' | 'CENTER'; name: string } | null;
+  teachers: number;
+  students: number;
+  courses: { total: number; published: number };
+  groups: number;
+  sessions: { upcoming7d: number; upcomingPhysical: number; upcomingLive: number; completed30d: number };
+  attendance: { records30d: number; presentRate: number | null };
+  subjectsActive: number | null;
+  recentActivity: { id: string; action: string; entity: string; entityId: string | null; at: string; by: string | null }[];
+}
+export const useCenterOverview = () => useAcademyAnalytics<CenterOverview>('center');
+
+export interface MyTeaching {
+  academyId: string;
+  courses: number;
+  activeEnrollments: number;
+  groups: number;
+  sessions: { upcoming: number; upcomingPhysical: number; upcomingLive: number; completed: number };
+  attendance: { records: number; presentRate: number | null };
+}
+export const useMyTeaching = (range: AnalyticsRange) => useAcademyAnalytics<MyTeaching>('me', range);

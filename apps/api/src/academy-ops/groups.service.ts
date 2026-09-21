@@ -113,7 +113,7 @@ export class GroupsService {
     // Every student must actually be enrolled in THIS academy — a group can
     // never be used to smuggle in a student from elsewhere.
     const validStudents = await this.prisma.studentProfile.findMany({
-      where: { id: { in: dto.studentIds }, enrollments: { some: { tenantId: ctx.academyId } } },
+      where: { id: { in: dto.studentIds }, enrollments: { some: { academyId: ctx.academyId } } },
       select: { id: true },
     });
     const validIds = new Set(validStudents.map((s) => s.id));

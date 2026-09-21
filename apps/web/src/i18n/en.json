@@ -133,7 +133,8 @@
     "myStudio": "My Studio",
     "centerDashboard": "Center",
     "centerMembers": "Teachers & staff",
-    "centerSubjects": "Subjects"
+    "centerSubjects": "Subjects",
+    "centerSettings": "Settings"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1222,6 +1223,16 @@
       "pending": "Pending payments",
       "trend": "Net revenue trend",
       "byCourse": "Revenue by course"
+    },
+    "me": {
+      "title": "My teaching here",
+      "subtitle": "Your own courses, groups, sessions and attendance in this workspace.",
+      "courses": "My courses",
+      "enrollments": "Active enrolments",
+      "groups": "My groups",
+      "upcoming": "Upcoming sessions",
+      "completed": "Completed sessions",
+      "attendance": "Attendance rate"
     }
   },
   "saved": {
@@ -2858,7 +2869,23 @@
     "subjectOffered": "Offered",
     "subjectNotOffered": "Not offered",
     "subjectEnable": "Offer",
-    "subjectDisable": "Stop offering"
+    "subjectDisable": "Stop offering",
+    "courses": "Courses",
+    "coursesSub": "Courses offered in this Center, authored by its teachers.",
+    "analytics": "Analytics",
+    "analyticsSub": "Operational numbers for this Center only.",
+    "settings": "Center settings",
+    "settingsSub": "Name, tagline, logo and address.",
+    "recentActivity": "Recent activity",
+    "kpi": {
+      "teachers": "Teachers",
+      "students": "Students",
+      "courses": "Courses (published/all)",
+      "groups": "Groups",
+      "upcoming": "Sessions next 7 days",
+      "attendance": "Attendance (30d)",
+      "subjects": "Active subjects"
+    }
   },
   "joinCenter": {
     "title": "Join a Center",

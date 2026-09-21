@@ -62,6 +62,7 @@ export interface MyAcademy {
   role: string;
   isHome: boolean;
   status: string;
+  kind?: 'PERSONAL' | 'CENTER';
   enrollmentMode: 'AUTOMATIC' | 'MANUAL' | 'DEMO';
   branding: {
     logoUrl: string | null;

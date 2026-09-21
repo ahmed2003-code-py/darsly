@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
 import { GroupsService } from '../academy-ops/groups.service';
@@ -155,19 +155,22 @@ export class AnalyticsService {
    * already flags students with, reused rather than redefined).
    */
   async students(ctx: AcademyContext, days: number) {
+    // Organisation scope: Enrollment.academyId. tenantId (the course author) is
+    // only still used for the tenant-keyed gamification store.
     const tenantId = ctx.academyId;
+    const academyId = ctx.academyId;
     const since = new Date(Date.now() - days * 86_400_000);
     const [total, active, newRows, engagement, attention] = await Promise.all([
-      this.prisma.enrollment.findMany({ where: { tenantId }, distinct: ['studentId'], select: { studentId: true } }),
+      this.prisma.enrollment.findMany({ where: { academyId }, distinct: ['studentId'], select: { studentId: true } }),
       this.prisma.enrollment.findMany({
-        where: { tenantId, status: 'ACTIVE', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        where: { academyId, status: 'ACTIVE', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
         distinct: ['studentId'],
         select: { studentId: true },
       }),
       this.prisma.$queryRaw<{ n: bigint }[]>`
         SELECT COUNT(*) AS n FROM (
           SELECT "studentId", MIN("createdAt") AS first
-          FROM "Enrollment" WHERE "tenantId" = ${tenantId} AND "deletedAt" IS NULL
+          FROM "Enrollment" WHERE "academyId" = ${academyId} AND "deletedAt" IS NULL
           GROUP BY "studentId"
         ) f WHERE f.first >= ${since}
       `,
@@ -193,7 +196,8 @@ export class AnalyticsService {
    * activity (lessons completed). DB-side date_trunc throughout, zero-filled,
    * same technique as AdminAnalyticsService.growthTrend.
    */
-  async growth(tenantId: string, days: number) {
+  async growth(academyId: string, days: number) {
+    const tenantId = academyId;
     const rows = await this.prisma.$queryRaw<
       { day: Date; newstudents: bigint; newenrollments: bigint; activated: bigint; courseactivity: bigint }[]
     >`
@@ -206,7 +210,7 @@ export class AnalyticsService {
       ), new_students AS (
         SELECT date_trunc('day', first) AS day, COUNT(*) AS n FROM (
           SELECT "studentId", MIN("createdAt") AS first
-          FROM "Enrollment" WHERE "tenantId" = ${tenantId} AND "deletedAt" IS NULL
+          FROM "Enrollment" WHERE "academyId" = ${academyId} AND "deletedAt" IS NULL
           GROUP BY "studentId"
         ) f
         WHERE first >= date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day'
@@ -214,13 +218,13 @@ export class AnalyticsService {
       ), new_enrollments AS (
         SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS n
         FROM "Enrollment"
-        WHERE "tenantId" = ${tenantId} AND "deletedAt" IS NULL
+        WHERE "academyId" = ${academyId} AND "deletedAt" IS NULL
           AND "createdAt" >= date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day'
         GROUP BY day
       ), activated AS (
         SELECT date_trunc('day', "approvedAt") AS day, COUNT(*) AS n
         FROM "Enrollment"
-        WHERE "tenantId" = ${tenantId} AND "deletedAt" IS NULL AND status = 'ACTIVE'
+        WHERE "academyId" = ${academyId} AND "deletedAt" IS NULL AND status = 'ACTIVE'
           AND "approvedAt" >= date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day'
         GROUP BY day
       ), activity AS (
@@ -229,7 +233,7 @@ export class AnalyticsService {
         JOIN "Lesson" l ON l.id = lp."lessonId"
         JOIN "CourseUnit" u ON u.id = l."unitId"
         JOIN "Course" c ON c.id = u."courseId"
-        WHERE c."tenantId" = ${tenantId}
+        WHERE c."academyId" = ${academyId}
           AND lp."completedAt" >= date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day'
         GROUP BY day
       )
@@ -261,10 +265,10 @@ export class AnalyticsService {
    * "automatic" here means "not staff-granted", not "unpaid". Never confuse
    * this with Payment.method/status, a different axis entirely.
    */
-  async enrollmentBreakdown(tenantId: string) {
+  async enrollmentBreakdown(academyId: string) {
     const [statusAgg, sourceAgg] = await Promise.all([
-      this.prisma.enrollment.groupBy({ by: ['status'], where: { tenantId }, _count: { _all: true } }),
-      this.prisma.enrollment.groupBy({ by: ['source'], where: { tenantId, status: 'ACTIVE' }, _count: { _all: true } }),
+      this.prisma.enrollment.groupBy({ by: ['status'], where: { academyId }, _count: { _all: true } }),
+      this.prisma.enrollment.groupBy({ by: ['source'], where: { academyId, status: 'ACTIVE' }, _count: { _all: true } }),
     ]);
     const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<string, number>;
     let automatic = 0;
@@ -500,9 +504,9 @@ export class AnalyticsService {
    * convention teacherOverview's own `earning()` helper uses), never
    * derived as enrollments × price.
    */
-  async coursesOverview(tenantId: string) {
+  async coursesOverview(academyId: string) {
     const courses = await this.prisma.course.findMany({
-      where: { tenantId },
+      where: { academyId },
       select: { id: true, title: true, status: true, priceCents: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -510,15 +514,15 @@ export class AnalyticsService {
     const courseIds = courses.map((c) => c.id);
 
     const [enrollAgg, sourceAgg, paymentAgg, quizAgg, lessonsPerCourse, completedAgg] = await Promise.all([
-      this.prisma.enrollment.groupBy({ by: ['courseId', 'status'], where: { tenantId, courseId: { in: courseIds } }, _count: { _all: true } }),
+      this.prisma.enrollment.groupBy({ by: ['courseId', 'status'], where: { academyId, courseId: { in: courseIds } }, _count: { _all: true } }),
       this.prisma.enrollment.groupBy({
         by: ['courseId', 'source'],
-        where: { tenantId, courseId: { in: courseIds }, status: 'ACTIVE' },
+        where: { academyId, courseId: { in: courseIds }, status: 'ACTIVE' },
         _count: { _all: true },
       }),
       this.prisma.payment.groupBy({
         by: ['courseId'],
-        where: { tenantId, courseId: { in: courseIds }, status: 'PAID' },
+        where: { academyId, courseId: { in: courseIds }, status: 'PAID' },
         _sum: { netCents: true, amountCents: true },
         _count: { _all: true },
       }),
@@ -540,7 +544,7 @@ export class AnalyticsService {
         JOIN "Lesson" l ON l.id = lp."lessonId"
         JOIN "CourseUnit" u ON u.id = l."unitId"
         JOIN "Enrollment" e ON e."studentId" = lp."studentId" AND e."courseId" = u."courseId"
-        WHERE u."courseId" = ANY(${courseIds}::text[]) AND e."tenantId" = ${tenantId}
+        WHERE u."courseId" = ANY(${courseIds}::text[]) AND e."academyId" = ${academyId}
           AND e.status = 'ACTIVE' AND e."deletedAt" IS NULL AND lp."completedAt" IS NOT NULL
         GROUP BY u."courseId"
       `,
@@ -652,7 +656,104 @@ export class AnalyticsService {
    * per-course attribution — the ledger has no course dimension), never from
    * enrollments × price.
    */
+  /**
+   * The Center Admin's dashboard numbers — every figure from the organisation
+   * scope (academyId), none of it financial. Reuses the attendance and
+   * activity sources that already exist rather than inventing metrics.
+   */
+  async centerOverview(ctx: AcademyContext) {
+    const academyId = ctx.academyId;
+    const now = new Date();
+    const weekAhead = new Date(now.getTime() + 7 * 86_400_000);
+    const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
+    const [teachers, studentRows, coursesTotal, coursesPublished, groups, upcomingGroup, upcomingLive, completedMonth, attendanceRows, subjectsActive, recent, kindRow] = await Promise.all([
+      this.prisma.academyMembership.count({
+        where: { academyId, status: 'ACTIVE', deletedAt: null, role: { in: ['TEACHER', 'OWNER'] }, user: { role: 'TEACHER', teacherProfile: { status: 'APPROVED' } } },
+      }),
+      this.prisma.$queryRaw<{ n: bigint }[]>`
+        SELECT COUNT(DISTINCT "studentId") AS n FROM (
+          SELECT "studentId" FROM "Enrollment" WHERE "academyId" = ${academyId} AND "deletedAt" IS NULL AND status = 'ACTIVE'
+          UNION SELECT "studentId" FROM "GroupMembership" WHERE "academyId" = ${academyId} AND "deletedAt" IS NULL
+        ) x`,
+      this.prisma.course.count({ where: { academyId } }),
+      this.prisma.course.count({ where: { academyId, status: 'PUBLISHED' } }),
+      this.prisma.group.count({ where: { academyId, status: 'ACTIVE' } }),
+      this.prisma.groupSession.count({ where: { academyId, status: 'SCHEDULED', startAt: { gt: now, lt: weekAhead } } }),
+      this.prisma.liveSession.count({ where: { academyId, status: 'SCHEDULED', startsAt: { gt: now, lt: weekAhead } } }),
+      this.prisma.groupSession.count({ where: { academyId, status: 'COMPLETED', startAt: { gte: monthAgo } } }),
+      this.prisma.$queryRaw<{ present: bigint; total: bigint }[]>`
+        SELECT COUNT(*) FILTER (WHERE r.status IN ('PRESENT', 'LATE')) AS present, COUNT(*) AS total
+        FROM "AttendanceRecord" r JOIN "AttendanceSession" s ON s.id = r."sessionId"
+        WHERE r."academyId" = ${academyId} AND r."deletedAt" IS NULL AND s."deletedAt" IS NULL AND s.date >= ${monthAgo}`,
+      this.prisma.academySubject.count({ where: { academyId, isActive: true } }),
+      this.prisma.auditLog.findMany({
+        where: { academyId },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { id: true, action: true, entity: true, entityId: true, createdAt: true, actor: { select: { fullName: true } } },
+      }),
+      this.prisma.academy.findUnique({ where: { id: academyId }, select: { kind: true, name: true } }),
+    ]);
+    const att = attendanceRows[0];
+    const total = Number(att?.total ?? 0);
+    return {
+      academy: kindRow,
+      teachers,
+      students: Number(studentRows[0]?.n ?? 0),
+      courses: { total: coursesTotal, published: coursesPublished },
+      groups,
+      sessions: { upcoming7d: upcomingGroup + upcomingLive, upcomingPhysical: upcomingGroup, upcomingLive, completed30d: completedMonth },
+      attendance: { records30d: total, presentRate: total ? Math.round((Number(att.present) / total) * 100) : null },
+      subjectsActive: kindRow?.kind === 'CENTER' ? subjectsActive : null,
+      recentActivity: recent.map((r) => ({ id: r.id, action: r.action, entity: r.entity, entityId: r.entityId, at: r.createdAt, by: r.actor?.fullName ?? null })),
+    };
+  }
+
+  /**
+   * One teacher's own numbers inside the active academy: what they authored
+   * here (tenantId + academyId — both, never either alone), the groups they
+   * are assigned to, their sessions and the attendance of their groups.
+   * Nothing about colleagues, nothing academy-wide.
+   */
+  async myTeaching(ctx: AcademyContext, authorTenantId: string | undefined, days: number) {
+    const academyId = ctx.academyId;
+    const userId = ctx.userId;
+    const now = new Date();
+    const since = new Date(now.getTime() - days * 86_400_000);
+    const [courses, activeEnrollments, groups, upcoming, completed, attendanceRows, upcomingLive] = await Promise.all([
+      authorTenantId ? this.prisma.course.count({ where: { academyId, tenantId: authorTenantId } }) : 0,
+      authorTenantId ? this.prisma.enrollment.count({ where: { academyId, status: 'ACTIVE', course: { tenantId: authorTenantId } } }) : 0,
+      this.prisma.groupAssignment.count({ where: { academyId, userId } }),
+      this.prisma.groupSession.count({ where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startAt: { gt: now } } }),
+      this.prisma.groupSession.count({ where: { academyId, teacherUserId: userId, status: 'COMPLETED', startAt: { gte: since } } }),
+      this.prisma.$queryRaw<{ present: bigint; total: bigint }[]>`
+        SELECT COUNT(*) FILTER (WHERE r.status IN ('PRESENT', 'LATE')) AS present, COUNT(*) AS total
+        FROM "AttendanceRecord" r
+        JOIN "AttendanceSession" s ON s.id = r."sessionId"
+        JOIN "GroupAssignment" ga ON ga."groupId" = s."groupId" AND ga."userId" = ${userId} AND ga."deletedAt" IS NULL
+        WHERE r."academyId" = ${academyId} AND r."deletedAt" IS NULL AND s."deletedAt" IS NULL AND s.date >= ${since}`,
+      this.prisma.liveSession.count({ where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startsAt: { gt: now } } }),
+    ]);
+    const att = attendanceRows[0];
+    const total = Number(att?.total ?? 0);
+    return {
+      academyId,
+      courses,
+      activeEnrollments,
+      groups,
+      sessions: { upcoming: upcoming + upcomingLive, upcomingPhysical: upcoming, upcomingLive, completed: completed },
+      attendance: { records: total, presentRate: total ? Math.round((Number(att.present) / total) * 100) : null },
+    };
+  }
+
   async financialOverview(tenantId: string, days: number) {
+    // A Center has no financial model yet (Phase 7). Its own ledger account is
+    // empty by construction, but an empty report still reads as a number —
+    // refuse instead of showing zeros that look like data.
+    const academy = await this.prisma.academy.findUnique({ where: { id: tenantId }, select: { kind: true } });
+    if (academy?.kind === 'CENTER') {
+      throw new BadRequestException({ message: 'Financial analytics are not available for Centers yet', code: 'FINANCE_NOT_AVAILABLE_FOR_CENTERS' });
+    }
     const since = new Date(Date.now() - days * 86_400_000);
     const [statusAgg, netTrend, earnings, byCourse] = await Promise.all([
       this.prisma.payment.groupBy({ by: ['status'], where: { tenantId, createdAt: { gte: since } }, _count: { _all: true } }),

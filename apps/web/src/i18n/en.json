@@ -1775,7 +1775,19 @@
     "linkInvalid": "At least 3 characters: letters, numbers and single hyphens",
     "linkSuggestions": "Free alternatives:",
     "teachTitle": "What you teach",
-    "teachHint": "Every course you publish is filed under these. Removing a stage leaves courses already aimed at it exactly where they are."
+    "teachHint": "Every course you publish is filed under these. Removing a stage leaves courses already aimed at it exactly where they are.",
+    "inviteLinkTitle": "Invite by link",
+    "inviteLinkHint": "Generate a single-use link and share it yourself — no email required on your side.",
+    "inviteLinkGenerate": "Generate link",
+    "inviteLinkCopy": "Copy link",
+    "inviteLinkRevoke": "Revoke",
+    "inviteLinkExpires": "Expires {{date}}",
+    "inviteLinkStatus": {
+      "PENDING": "Pending",
+      "USED": "Used",
+      "REVOKED": "Revoked",
+      "EXPIRED": "Expired"
+    }
   },
   "method": {
     "INSTAPAY": "InstaPay",
@@ -2822,5 +2834,11 @@
     "scheduleSub": "Sessions and rooms.",
     "noCenter": "No Center is assigned to your account yet.",
     "statusSuspended": "This Center is suspended. Contact the platform."
+  },
+  "joinCenter": {
+    "title": "Join a Center",
+    "invalid": "This invitation link is invalid, expired, or already used.",
+    "invitedAs": "You are invited to join as",
+    "accept": "Accept & join"
   }
 }

@@ -180,6 +180,7 @@ model Academy {
   claims    AcademyClaim[]
 
   activationTokens AcademyActivationToken[]
+  invitationLinks  AcademyInvitationLink[]
 
   @@index([status])
   @@index([kind, status])
@@ -467,6 +468,26 @@ model AcademyActivationToken {
 
   @@index([userId, usedAt])
   @@index([academyId])
+}
+
+// A single-use, expiring, revocable staff invitation for one Center + one role.
+// The raw token exists only in the generated URL; only sha256(token) is
+// stored. Redemption reads academyId/role from this row alone — never from
+// the client — and OWNER/STUDENT are never valid values here.
+model AcademyInvitationLink {
+  id              String    @id @default(cuid())
+  academyId       String
+  academy         Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  role            AcademyRole
+  tokenHash       String    @unique
+  createdByUserId String
+  expiresAt       DateTime
+  usedAt          DateTime?
+  usedByUserId    String?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([academyId, usedAt])
 }
 
 model OtpCode {

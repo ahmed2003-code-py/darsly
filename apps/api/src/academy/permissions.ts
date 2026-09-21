@@ -1,4 +1,6 @@
+import { BadRequestException } from '@nestjs/common';
 import { AcademyRole } from '@prisma/client';
+import { Role } from '@darsly/shared-types';
 
 /**
  * Named capabilities — the extensibility seam for authorization. New roles or
@@ -88,4 +90,26 @@ export function permissionsFor(role: AcademyRole, overrides: unknown = []): Set<
     }
   }
   return set;
+}
+
+/**
+ * Who may hold which membership role — the single source of truth, used both
+ * by direct invite (addMember) and invitation-link redemption. OWNER is never
+ * granted through either path. TEACHER/ASSISTANT carry content-authoring
+ * capabilities that are meaningless without an approved teacher identity, and
+ * a learner account must never become staff.
+ */
+export function assertStaffEligible(
+  user: { role: string; isActive: boolean; teacherProfile: { status: string } | null },
+  role: AcademyRole,
+) {
+  if (!user.isActive) throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
+  if (user.role === Role.STUDENT) {
+    throw new BadRequestException({ message: 'A student account cannot hold a staff role', code: 'STUDENT_NOT_STAFF' });
+  }
+  if (role === 'TEACHER' || role === 'ASSISTANT') {
+    if (user.role !== Role.TEACHER || user.teacherProfile?.status !== 'APPROVED') {
+      throw new BadRequestException({ message: 'Only an approved teacher can hold this role', code: 'TEACHER_NOT_APPROVED' });
+    }
+  }
 }

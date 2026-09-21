@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
 import { useOwnedAcademy } from '../../lib/academy';
+import { invitationJoinUrl, useCreateInvitationLink, useInvitationLinks, useRevokeInvitationLink } from '../../lib/invitationLinks';
 import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../../components/ui';
 
 const TABS = ['branding', 'members'] as const;
@@ -302,6 +303,77 @@ function AcademyAddressField({
 /** Resolved per render, not at module scope: the label must follow the active language. */
 const ROLE_KEY: Record<string, string> = { OWNER: 'academy.roleOwner', TEACHER: 'academy.roleTeacher', ASSISTANT: 'academy.roleAssistant', STUDENT: 'academy.roleStudent' };
 
+const LINK_STATUS_TONE: Record<string, 'teal' | 'neutral' | 'warn' | 'error'> = {
+  PENDING: 'teal', USED: 'neutral', REVOKED: 'error', EXPIRED: 'warn',
+};
+
+/** A shareable, single-use link — the alternative to inviting by email. */
+function InvitationLinksSection({ slug }: { slug: string }) {
+  const { t } = useTranslation();
+  const { data: links, isLoading } = useInvitationLinks(slug);
+  const create = useCreateInvitationLink(slug);
+  const revoke = useRevokeInvitationLink(slug);
+  const [role, setRole] = useState<'TEACHER' | 'ASSISTANT'>('TEACHER');
+  const [justCreated, setJustCreated] = useState<{ url: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const generate = () => {
+    setJustCreated(null);
+    create.mutate(role, {
+      onSuccess: (res) => setJustCreated({ url: invitationJoinUrl(res.token) }),
+    });
+  };
+  const copy = () => {
+    if (!justCreated) return;
+    void navigator.clipboard.writeText(justCreated.url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const pending = (links ?? []).filter((l) => l.status === 'PENDING');
+
+  return (
+    <div className="card">
+      <h3 className="mb-1 font-heading font-bold">{t('academy.inviteLinkTitle')}</h3>
+      <p className="mb-3 text-sm text-on-surface-variant">{t('academy.inviteLinkHint')}</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-40">
+          <Field label={t('academy.inviteRole')}>
+            <select className="input" value={role} onChange={(e) => setRole(e.target.value as 'TEACHER' | 'ASSISTANT')}>
+              <option value="TEACHER">{t('academy.roleTeacher')}</option>
+              <option value="ASSISTANT">{t('academy.roleAssistant')}</option>
+            </select>
+          </Field>
+        </div>
+        <button className="btn-primary mb-4" disabled={create.isPending} onClick={generate}>{t('academy.inviteLinkGenerate')}</button>
+      </div>
+      <ErrorNote error={create.error} />
+      {justCreated && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-secondary-container/30 px-4 py-3">
+          <code className="min-w-0 flex-1 truncate text-sm" dir="ltr">{justCreated.url}</code>
+          <button className="btn-secondary px-3 py-1.5 text-xs" onClick={copy}>{copied ? t('common.saved') : t('academy.inviteLinkCopy')}</button>
+        </div>
+      )}
+      {!isLoading && pending.length > 0 && (
+        <ul className="divide-y divide-outline-variant">
+          {pending.map((l) => (
+            <li key={l.id} className="flex flex-wrap items-center gap-3 py-3">
+              <Badge tone={LINK_STATUS_TONE[l.status]}>{t(`academy.inviteLinkStatus.${l.status}`)}</Badge>
+              <span className="text-sm">{t(ROLE_KEY[l.role])}</span>
+              <span className="text-xs text-outline">{t('academy.inviteLinkExpires', { date: new Date(l.expiresAt).toLocaleDateString() })}</span>
+              <button className="ms-auto rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
+                disabled={revoke.isPending} onClick={() => revoke.mutate(l.id)}>
+                {t('academy.inviteLinkRevoke')}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function MembersTab({ slug }: { slug: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -348,6 +420,8 @@ export function MembersTab({ slug }: { slug: string }) {
         </div>
         <ErrorNote error={add.error} />
       </div>
+
+      <InvitationLinksSection slug={slug} />
 
       <div className="card p-0">
         {isLoading ? <Spinner /> : (

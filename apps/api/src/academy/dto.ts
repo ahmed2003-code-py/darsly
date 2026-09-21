@@ -50,3 +50,8 @@ export class UpdateMemberDto {
   @IsOptional() @IsIn(['TEACHER', 'ASSISTANT']) role?: 'TEACHER' | 'ASSISTANT';
   @IsOptional() @IsIn(['ACTIVE', 'SUSPENDED']) status?: 'ACTIVE' | 'SUSPENDED';
 }
+
+export class CreateInvitationLinkDto {
+  @IsIn(['TEACHER', 'ASSISTANT'])
+  role: 'TEACHER' | 'ASSISTANT';
+}

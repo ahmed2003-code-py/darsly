@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AcademyContext } from './academy-context';
 import { AddMemberDto, UpdateAcademyDto, UpdateMemberDto } from './dto';
 import { slugCandidates, slugify, slugShapeError } from './slug';
-import { Capability, permissionsFor, ROLE_PERMISSIONS } from './permissions';
+import { assertStaffEligible, Capability, permissionsFor, ROLE_PERMISSIONS } from './permissions';
 
 const LOGO_MAX_BYTES = 600 * 1024;
 const COVER_MAX_BYTES = 1_600 * 1024;
@@ -438,7 +438,7 @@ export class AcademyService {
     if (!user) {
       throw new BadRequestException({ message: 'No user with this email — they must register first', code: 'USER_NOT_FOUND' });
     }
-    this.assertStaffEligible(user, dto.role as AcademyRole);
+    assertStaffEligible(user, dto.role as AcademyRole);
     const existing = await this.prisma.academyMembership.findUnique({
       where: { userId_academyId: { userId: user.id, academyId } },
     });
@@ -498,28 +498,6 @@ export class AcademyService {
       throw new ForbiddenException('The academy owner cannot be changed here');
     }
     return m;
-  }
-
-  /**
-   * Who may hold which membership role. OWNER is never granted here at all
-   * (see addMember). TEACHER/ASSISTANT carry content-authoring capabilities
-   * that are meaningless without an approved TeacherProfile, and a learner
-   * account must never become staff — so identity is checked, not just the
-   * existence of an email.
-   */
-  private assertStaffEligible(
-    user: { role: string; isActive: boolean; teacherProfile: { status: string } | null },
-    role: AcademyRole,
-  ) {
-    if (!user.isActive) throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
-    if (user.role === Role.STUDENT) {
-      throw new BadRequestException({ message: 'A student account cannot hold a staff role', code: 'STUDENT_NOT_STAFF' });
-    }
-    if (role === 'TEACHER' || role === 'ASSISTANT') {
-      if (user.role !== Role.TEACHER || user.teacherProfile?.status !== 'APPROVED') {
-        throw new BadRequestException({ message: 'Only an approved teacher can hold this role', code: 'TEACHER_NOT_APPROVED' });
-      }
-    }
   }
 
   /**

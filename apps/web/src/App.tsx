@@ -19,6 +19,7 @@ const RegisterPage = lazyPage(() => import('./pages/RegisterPage'));
 const ForgotPasswordPage = lazyPage(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazyPage(() => import('./pages/ResetPasswordPage'));
 const ActivateAccountPage = lazyPage(() => import('./pages/ActivateAccountPage'));
+const JoinCenterPage = lazyPage(() => import('./pages/JoinCenterPage'));
 const AcademyStorefrontPage = lazyPage(() => import('./pages/academy/AcademyStorefrontPage'));
 const MessagesPage = lazyPage(() => import('./pages/MessagesPage'));
 const CertificateViewPage = lazyPage(() => import('./pages/CertificateViewPage'));
@@ -167,6 +168,7 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/activate" element={<ActivateAccountPage />} />
+      <Route path="/join/:token" element={<RequireAuth><JoinCenterPage /></RequireAuth>} />
 
       {/* Student / public browsing */}
       <Route path="/" element={<HomeRedirect />} />

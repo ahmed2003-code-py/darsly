@@ -427,10 +427,14 @@ export class AcademyService {
    */
   async addMember(academyId: string, dto: AddMemberDto) {
     const email = dto.email.toLowerCase().trim();
-    const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, role: true, isActive: true, teacherProfile: { select: { status: true } } },
+    });
     if (!user) {
       throw new BadRequestException({ message: 'No user with this email — they must register first', code: 'USER_NOT_FOUND' });
     }
+    this.assertStaffEligible(user, dto.role as AcademyRole);
     const existing = await this.prisma.academyMembership.findUnique({
       where: { userId_academyId: { userId: user.id, academyId } },
     });
@@ -492,21 +496,68 @@ export class AcademyService {
     return m;
   }
 
+  /**
+   * Who may hold which membership role. OWNER is never granted here at all
+   * (see addMember). TEACHER/ASSISTANT carry content-authoring capabilities
+   * that are meaningless without an approved TeacherProfile, and a learner
+   * account must never become staff — so identity is checked, not just the
+   * existence of an email.
+   */
+  private assertStaffEligible(
+    user: { role: string; isActive: boolean; teacherProfile: { status: string } | null },
+    role: AcademyRole,
+  ) {
+    if (!user.isActive) throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
+    if (user.role === Role.STUDENT) {
+      throw new BadRequestException({ message: 'A student account cannot hold a staff role', code: 'STUDENT_NOT_STAFF' });
+    }
+    if (role === 'TEACHER' || role === 'ASSISTANT') {
+      if (user.role !== Role.TEACHER || user.teacherProfile?.status !== 'APPROVED') {
+        throw new BadRequestException({ message: 'Only an approved teacher can hold this role', code: 'TEACHER_NOT_APPROVED' });
+      }
+    }
+  }
+
+  /**
+   * A member who is out (LEFT/SUSPENDED) must not keep the per-group scope
+   * that made them dangerous in the first place. Assignments are soft-deleted
+   * (the middleware turns deleteMany into updateMany); sessions still ahead
+   * lose the teacher so nobody keeps scheduling onto a person who is gone,
+   * and the platform-wide teacher-overlap check stops reserving their time.
+   * Past/completed sessions are history and stay attributed.
+   */
+  private async revokeStaffResources(academyId: string, userId: string) {
+    await this.prisma.groupAssignment.deleteMany({ where: { academyId, userId } });
+    await this.prisma.groupSession.updateMany({
+      where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startAt: { gt: new Date() } },
+      data: { teacherUserId: null },
+    });
+  }
+
   async updateMember(academyId: string, membershipId: string, dto: UpdateMemberDto) {
-    await this.assertManageableMember(academyId, membershipId);
-    return this.prisma.academyMembership.update({
+    const m = await this.assertManageableMember(academyId, membershipId);
+    // ACTIVE is only ever a state the member chose (acceptInvitation) or an
+    // un-suspension. An owner may not silently resurrect a LEFT/INVITED row —
+    // that bypasses the invite-then-accept consent the whole flow rests on.
+    if (dto.status === 'ACTIVE' && m.status !== 'ACTIVE' && m.status !== 'SUSPENDED') {
+      throw new BadRequestException({ message: 'Re-invite this person; they must accept again', code: 'REINVITE_REQUIRED' });
+    }
+    const updated = await this.prisma.academyMembership.update({
       where: { id: membershipId },
       data: {
         ...(dto.role ? { role: dto.role as AcademyRole } : {}),
         ...(dto.status ? { status: dto.status } : {}),
       },
-      select: { id: true, role: true, status: true },
+      select: { id: true, role: true, status: true, userId: true },
     });
+    if (dto.status === 'SUSPENDED') await this.revokeStaffResources(academyId, updated.userId);
+    return { id: updated.id, role: updated.role, status: updated.status };
   }
 
   async removeMember(academyId: string, membershipId: string) {
-    await this.assertManageableMember(academyId, membershipId);
+    const m = await this.assertManageableMember(academyId, membershipId);
     await this.prisma.academyMembership.update({ where: { id: membershipId }, data: { status: 'LEFT' } });
+    await this.revokeStaffResources(academyId, m.userId);
     return { id: membershipId, removed: true };
   }
 
@@ -514,6 +565,12 @@ export class AcademyService {
    * Build the AcademyContext for a user in an academy. Returns null when the user
    * has no active membership (the guard turns that into a 404, never revealing
    * existence). SUPER_ADMIN gets a full platform-admin context.
+   *
+   * Membership alone is not enough: the account must be live, the academy
+   * must not be suspended/archived, and a teacher identity must still be
+   * approved — a platform suspension has to bite everywhere on the very next
+   * request, not only at the next login. findFirst (not findUnique) so the
+   * soft-delete middleware applies; a deleted row must never grant.
    */
   async buildContext(userId: string, academyId: string, globalRole?: string): Promise<AcademyContext | null> {
     if (globalRole === Role.SUPER_ADMIN) {
@@ -523,10 +580,17 @@ export class AcademyService {
         can: (c) => all.has(c),
       };
     }
-    const membership = await this.prisma.academyMembership.findUnique({
-      where: { userId_academyId: { userId, academyId } },
+    const membership = await this.prisma.academyMembership.findFirst({
+      where: { userId, academyId, status: 'ACTIVE', deletedAt: null },
+      include: {
+        user: { select: { isActive: true, role: true, teacherProfile: { select: { status: true } } } },
+        academy: { select: { status: true, deletedAt: true } },
+      },
     });
-    if (!membership || membership.status !== 'ACTIVE') return null;
+    if (!membership) return null;
+    if (!membership.user.isActive) return null;
+    if (membership.academy.deletedAt || membership.academy.status === 'SUSPENDED' || membership.academy.status === 'ARCHIVED') return null;
+    if (membership.user.role === Role.TEACHER && membership.user.teacherProfile?.status !== 'APPROVED') return null;
     const perms = permissionsFor(membership.role as AcademyRole, membership.permissions as unknown);
     return {
       academyId, userId, role: membership.role as AcademyRole, status: membership.status,

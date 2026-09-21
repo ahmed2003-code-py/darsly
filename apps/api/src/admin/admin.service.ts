@@ -92,6 +92,16 @@ export class AdminService {
       where: { id: updated.id },
       data: { status: ACADEMY_STATUS_FOR[status] ?? 'PENDING' },
     });
+    // A suspension that only bites at the next login leaves every live token
+    // valid for its full TTL. Evict now; the guard's revocation check makes
+    // the very next request fail, and buildContext refuses the teacher in
+    // every academy they belong to until they are approved again.
+    if (status === 'SUSPENDED' || status === 'REJECTED') {
+      await this.prisma.deviceSession.updateMany({
+        where: { userId: teacher.user.id, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: `TEACHER_${status}` },
+      });
+    }
     const messages: Record<string, [string, string]> = {
       APPROVED: ['تم اعتماد حسابك', 'تهانينا! تم اعتماد حسابك كمعلم ويمكنك الآن نشر دوراتك.'],
       REJECTED: ['تم رفض طلبك', 'عذراً، لم يتم اعتماد حسابك كمعلم.'],

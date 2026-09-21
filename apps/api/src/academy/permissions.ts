@@ -64,11 +64,28 @@ function isCapability(x: string): x is Capability {
   return (CAPABILITIES as readonly string[]).includes(x);
 }
 
-/** Effective capability set = role defaults ∪ valid membership overrides. */
+/**
+ * Capabilities that only the OWNER role may ever hold. A per-membership
+ * override can widen a TEACHER/ASSISTANT within their tier, but never up to
+ * organisation authority — otherwise a single JSON write would make anyone an
+ * owner in all but name.
+ */
+export const OWNER_ONLY: ReadonlySet<Capability> = new Set<Capability>([
+  'academy.manage',
+  'member.manage',
+  'wallet.withdraw',
+  'room.manage',
+]);
+
+/** Effective capability set = role defaults ∪ valid membership overrides (ceilinged). */
 export function permissionsFor(role: AcademyRole, overrides: unknown = []): Set<Capability> {
   const set = new Set<Capability>(ROLE_PERMISSIONS[role] ?? []);
   if (Array.isArray(overrides)) {
-    for (const o of overrides) if (typeof o === 'string' && isCapability(o)) set.add(o);
+    for (const o of overrides) {
+      if (typeof o !== 'string' || !isCapability(o)) continue;
+      if (role !== 'OWNER' && OWNER_ONLY.has(o)) continue;
+      set.add(o);
+    }
   }
   return set;
 }

@@ -2,16 +2,15 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 /**
- * Which academy a non-owner staff member (TEACHER/ASSISTANT membership, not
- * OWNER) is currently acting in.
+ * The active workspace: which academy the signed-in staff member (owner,
+ * teacher or assistant) is currently acting in. Sent as X-Academy-Id on every
+ * request by lib/api.ts.
  *
- * An academy OWNER never needs this: their JWT already carries `tenantId`
- * (their own TeacherProfile.id), so every `/teacher/*` call resolves their
- * academy automatically — see AcademyService.resolveAcademyId's JWT
- * fallback. A staff member who is NOT an owner has no such tenantId (it's
- * only ever set from the caller's own TeacherProfile), so without this
- * store every `/teacher/*` call for them had nothing to resolve an academy
- * from and 404'd — the actual cause of a real bug found 2026-09-20.
+ * The header is a context SELECTOR, never an authorization: the server
+ * resolves it to an academy and then decides from the caller's own ACTIVE
+ * membership there (AcademyService.buildContext). A forged or stale id gets a
+ * 404, nothing more. The JWT `tenantId` is the caller's own TeacherProfile
+ * (authorship) and is never derived from, or overwritten by, this value.
  *
  * Read directly (not via the `useX()` hook) from lib/api.ts's request
  * interceptor, since that file runs outside React.

@@ -44,8 +44,14 @@ function startOfMonth(d: Date): Date {
 function addMonths(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth() + n, 1);
 }
+/** Local-day key. toISOString() would give the UTC date, which for a
+ *  local-midnight Date in Cairo (UTC+2/+3) is the *previous* day — every
+ *  session would land one cell off. */
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 /** The 6×7 grid a real calendar app shows — the visible month plus enough
  *  of the neighbouring months to fill whole weeks, Saturday-start. */
@@ -297,7 +303,7 @@ function CalendarTab() {
 
           <div className="mt-5">
             <p className="mb-3 font-heading text-lg font-bold">
-              {new Date(selectedDay).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+              {new Date(`${selectedDay}T00:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
             <div className="grid gap-2">
               {!(byDay.get(selectedDay) ?? []).length && <p className="text-sm text-outline">{t('schedule.noSessions')}</p>}

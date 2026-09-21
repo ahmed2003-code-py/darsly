@@ -448,8 +448,10 @@ export class LiveService {
     });
     if (!session || session.deletedAt) throw new NotFoundException('Session not found');
     if (session.teacher.userId === userId) return { session, role: 'TEACHER' as const };
+    // Staff means a staff *role* — an ACTIVE membership with role STUDENT is a
+    // learner, and must not be waved in as the teacher side of the room.
     const staff = await this.prisma.academyMembership.findFirst({
-      where: { academyId: session.tenantId, userId, status: 'ACTIVE' },
+      where: { academyId: session.tenantId, userId, status: 'ACTIVE', role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } },
       select: { id: true },
     });
     if (staff) return { session, role: 'TEACHER' as const };

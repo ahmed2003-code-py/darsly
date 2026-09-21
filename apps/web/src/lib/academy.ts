@@ -116,28 +116,27 @@ export function useOwnedAcademy() {
 }
 
 /**
- * Keeps stores/staffAcademy.ts in sync with reality: a staff member who owns
- * no academy of their own (TEACHER/ASSISTANT membership only) needs SOME
- * academy selected before any /teacher/* call can resolve — see lib/api.ts's
- * request interceptor. Auto-picks the first non-owner active membership.
- * With more than one, this keeps whichever was already selected (or the
- * first, on a fresh login) rather than silently reassigning mid-session — a
- * real academy switcher is future work, not something to fake here.
+ * Keeps stores/staffAcademy.ts (the active workspace) in sync with reality.
+ * Every staff identity — owner included — acts inside ONE explicitly selected
+ * workspace, sent as X-Academy-Id on every call (lib/api.ts). The header is a
+ * selector only; the server still decides from the membership.
+ *
+ * An owner used to have this cleared so the JWT fallback resolved their own
+ * academy — which meant a teacher who ALSO belongs to another center could
+ * never act there. Now: keep a still-valid selection; otherwise default to
+ * the home membership, then the owned one, then the first staff one. Learner
+ * (STUDENT) rows are never a workspace. A real switcher is later work.
  */
 export function useSyncStaffAcademy() {
   const { data } = useMyAcademies();
   const { academyId, setAcademyId } = useStaffAcademyStore();
   useEffect(() => {
     if (!data) return;
-    const ownsOne = data.some((a) => a.role === 'OWNER');
-    if (ownsOne) {
-      if (academyId) setAcademyId(null); // an owner never needs this — their JWT already resolves it
-      return;
-    }
-    const stillValid = academyId && data.some((a) => a.academyId === academyId);
+    const staff = data.filter((a) => a.role !== 'STUDENT');
+    const stillValid = academyId && staff.some((a) => a.academyId === academyId);
     if (stillValid) return;
-    const first = data[0];
-    setAcademyId(first ? first.academyId : null);
+    const pick = staff.find((a) => a.isHome) ?? staff.find((a) => a.role === 'OWNER') ?? staff[0];
+    setAcademyId(pick ? pick.academyId : null);
   }, [data, academyId, setAcademyId]);
 }
 

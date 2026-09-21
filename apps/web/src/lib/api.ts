@@ -19,9 +19,8 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  // A non-owner staff member (TEACHER/ASSISTANT membership) has no tenantId
-  // in their own JWT — only an academy OWNER does — so without this every
-  // /teacher/* call for them had nothing to resolve an academy from. See
+  // The active workspace, for every staff identity. A selector only — the
+  // server authorizes from the membership, never from this header. See
   // stores/staffAcademy.ts. Never overrides a header a caller already set.
   const staffAcademyId = useStaffAcademyStore.getState().academyId;
   if (staffAcademyId && !config.headers['X-Academy-Id']) {

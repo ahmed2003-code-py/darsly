@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AcademyStatus } from '@darsly/shared-types';
+import { AcademyStatus, AcademyKind } from '@darsly/shared-types';
 import { api } from './api';
 
 export interface AdminOverview {
@@ -21,8 +21,10 @@ export interface AdminAcademyRow {
   slug: string;
   name: string;
   status: AcademyStatus;
+  kind: AcademyKind;
   createdAt: string;
   ownerName: string;
+  ownerRole: string;
   ownerEmail: string | null;
   teachersCount: number;
   assistantsCount: number;
@@ -57,12 +59,13 @@ export interface AdminAcademyDetail {
   slug: string;
   name: string;
   status: AcademyStatus;
+  kind: AcademyKind;
   createdAt: string;
   language: string;
   currency: string;
   feeType: 'PERCENT' | 'FIXED';
   feeValue: number;
-  owner: { id: string; fullName: string; email: string | null; phone: string | null };
+  owner: { id: string; fullName: string; email: string | null; phone: string | null; role: string; isActive: boolean };
   domains: { hostname: string; isPrimary: boolean; verifiedAt: string | null }[];
   staff: AdminAcademyStaff[];
   coursesCount: number;
@@ -97,7 +100,7 @@ export function useAdminOverview() {
   });
 }
 
-export function useAdminAcademies(params: { search?: string; status?: AcademyStatus | ''; page?: number; pageSize?: number }) {
+export function useAdminAcademies(params: { search?: string; status?: AcademyStatus | ''; kind?: AcademyKind; page?: number; pageSize?: number }) {
   return useQuery<AdminAcademyList>({
     queryKey: ['admin-academies', params],
     queryFn: async () =>
@@ -105,6 +108,7 @@ export function useAdminAcademies(params: { search?: string; status?: AcademySta
         params: {
           ...(params.search ? { search: params.search } : {}),
           ...(params.status ? { status: params.status } : {}),
+          ...(params.kind ? { kind: params.kind } : {}),
           page: params.page ?? 1,
           pageSize: params.pageSize ?? 20,
         },
@@ -144,5 +148,45 @@ export function useSetFeatureFlag(academyId: string) {
     mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) =>
       (await api.patch(`/admin/academies/${academyId}/feature-flags/${key}`, { enabled })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-academy-detail', academyId] }),
+  });
+}
+
+// ── Centers (Architecture Reset, Phase 2) ───────────────────────────────────
+
+export interface CreateCenterInput {
+  name: string;
+  slug?: string;
+  adminName: string;
+  adminEmail: string;
+  adminPhone?: string;
+}
+export interface CreateCenterResult {
+  id: string; slug: string; name: string; status: AcademyStatus; kind: AcademyKind;
+  admin: { id: string; role: string; activation: 'EMAIL_SENT' | 'NOT_REQUIRED' };
+}
+
+export function useCreateCenter() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateCenterInput) => (await api.post<CreateCenterResult>('/admin/centers', input)).data,
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['admin-academies'] }); },
+  });
+}
+
+export function useSetCenterStatus(academyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED') =>
+      (await api.patch(`/admin/centers/${academyId}/status`, { status })).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-academy-detail', academyId] });
+      void qc.invalidateQueries({ queryKey: ['admin-academies'] });
+    },
+  });
+}
+
+export function useResendCenterActivation(academyId: string) {
+  return useMutation({
+    mutationFn: async () => (await api.post(`/admin/centers/${academyId}/activation/resend`)).data,
   });
 }

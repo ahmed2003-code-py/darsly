@@ -44,6 +44,13 @@ export const TEACHER_NAV: NavItem[] = [
   { to: '/teacher/coupons', icon: 'sell', labelKey: 'nav.coupons' },
 ];
 
+export const STAFF_NAV: NavItem[] = [
+  { to: '/center', icon: 'apartment', labelKey: 'nav.centerDashboard', end: true },
+  { to: '/center/members', icon: 'group', labelKey: 'nav.centerMembers' },
+  { to: '/teacher/groups', icon: 'diversity_3', labelKey: 'nav.groups' },
+  { to: '/teacher/schedule', icon: 'calendar_month', labelKey: 'nav.schedule' },
+];
+
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
   { to: '/admin/academies', icon: 'apartment', labelKey: 'nav.adminAcademies' },
@@ -66,8 +73,12 @@ export const BOTTOM_TABS: Record<string, string[]> = {
   [Role.STUDENT]: ['/', '/my-courses', '/learning', '/messages', '/wallet'],
   [Role.TEACHER]: ['/teacher', '/teacher/courses', '/teacher/students', '/messages', '/teacher/wallet'],
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
+  [Role.STAFF]: ['/center', '/center/members', '/teacher/groups', '/teacher/schedule'],
 };
 
 export function navFor(role: string | undefined): NavItem[] {
-  return role === Role.SUPER_ADMIN ? ADMIN_NAV : role === Role.TEACHER ? TEACHER_NAV : STUDENT_NAV;
+  if (role === Role.SUPER_ADMIN) return ADMIN_NAV;
+  if (role === Role.TEACHER) return TEACHER_NAV;
+  if (role === Role.STAFF) return STAFF_NAV;
+  return STUDENT_NAV;
 }

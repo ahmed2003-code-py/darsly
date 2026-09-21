@@ -130,7 +130,9 @@
     "learning": "Learning Center",
     "challenges": "Challenges",
     "adminGamification": "Gamification",
-    "myStudio": "My Studio"
+    "myStudio": "My Studio",
+    "centerDashboard": "Center",
+    "centerMembers": "Teachers & staff"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -156,7 +158,8 @@
   "layout": {
     "teacherConsole": "Teacher console",
     "studentSpace": "Student space",
-    "adminConsole": "Platform console"
+    "adminConsole": "Platform console",
+    "staffConsole": "Center console"
   },
   "topbar": {
     "enablePush": "Enable browser alerts",
@@ -769,11 +772,53 @@
       "ASSISTANT": "Assistant"
     },
     "featureFlag": {
-      "attendance": { "label": "Attendance", "hint": "Session attendance tracking and Needs Attention" },
-      "scheduling": { "label": "Scheduling", "hint": "Calendar, rooms, and conflict detection" },
-      "groups": { "label": "Groups", "hint": "Student groups and cohorts" },
-      "enrollmentApprovalMode": { "label": "Manual enrollment approval", "hint": "Teacher/admin approve enrollments instead of instant activation" },
-      "adminStudio": { "label": "Admin Studio", "hint": "Platform-admin access to themes without purchase" }
+      "attendance": {
+        "label": "Attendance",
+        "hint": "Session attendance tracking and Needs Attention"
+      },
+      "scheduling": {
+        "label": "Scheduling",
+        "hint": "Calendar, rooms, and conflict detection"
+      },
+      "groups": {
+        "label": "Groups",
+        "hint": "Student groups and cohorts"
+      },
+      "enrollmentApprovalMode": {
+        "label": "Manual enrollment approval",
+        "hint": "Teacher/admin approve enrollments instead of instant activation"
+      },
+      "adminStudio": {
+        "label": "Admin Studio",
+        "hint": "Platform-admin access to themes without purchase"
+      }
+    },
+    "centersTitle": "Centers",
+    "centersSub": "Organisations created by the platform, each run by its own Center Admin.",
+    "independentTeachersTitle": "Independent teachers",
+    "independentTeachersSub": "Teachers running their own personal workspace.",
+    "viewCenters": "Centers",
+    "viewIndependentTeachers": "Independent teachers",
+    "createCenter": "Create Center",
+    "createCenterSub": "Set up an organisation and designate its admin. A new admin activates through a one-time link and chooses their own password.",
+    "centerSection": "Center",
+    "centerName": "Center name",
+    "centerSlug": "Address (slug)",
+    "centerSlugHint": "Optional. Left empty, it is derived from the name. Shared with teacher addresses — must be unique.",
+    "centerAdminSection": "Center Admin",
+    "centerAdminHint": "An existing approved teacher or staff account is designated directly. A new email creates a staff account (no teacher profile) that activates by email.",
+    "adminName": "Admin name",
+    "adminEmail": "Admin email",
+    "adminPhone": "Admin phone (optional)",
+    "centerAdmin": "Center Admin",
+    "activationPending": "Activation pending",
+    "resendActivation": "Resend activation link",
+    "activationResent": "Sent ✓",
+    "identity": {
+      "SUPER_ADMIN": "Platform admin",
+      "STAFF": "Staff (non-teaching)",
+      "TEACHER": "Teacher",
+      "STUDENT": "Student"
     }
   },
   "security": {
@@ -1015,7 +1060,8 @@
       "mailFailed": "We couldn’t send the email right now, please try again shortly.",
       "invalidPhone": "That phone number is not valid.",
       "rateLimited": "Too many attempts. Please try again shortly.",
-      "generic": "Something went wrong, please try again."
+      "generic": "Something went wrong, please try again.",
+      "activationInvalid": "This activation link is invalid, expired, or already used."
     },
     "platformTagline": "The learning-academy platform",
     "subject": "The subject you teach",
@@ -1031,7 +1077,11 @@
     "track": "School system",
     "trackHint": "We only show you the subjects and teachers of your own school system.",
     "trackRequired": "Pick your school system",
-    "subjectHint": "Pick everything you teach — you can choose more than one."
+    "subjectHint": "Pick everything you teach — you can choose more than one.",
+    "activateTitle": "Activate your account",
+    "activateFor": "{{name}} — admin of {{center}}",
+    "activateBtn": "Activate & sign in",
+    "activateDone": "Your account is active. Redirecting to sign in…"
   },
   "live": {
     "title": "Live sessions",
@@ -1986,7 +2036,11 @@
   "challenges": {
     "title": "Challenges",
     "subtitle": "Learn and play at once — quick questions, points, and rank.",
-    "tabs": { "available": "Available", "in_progress": "In progress", "completed": "Completed" },
+    "tabs": {
+      "available": "Available",
+      "in_progress": "In progress",
+      "completed": "Completed"
+    },
     "empty": {
       "available": "No challenges available right now.",
       "in_progress": "No challenge in progress.",
@@ -2068,7 +2122,13 @@
       "close": "Close",
       "viewSubmissions": "Results",
       "viewAnalytics": "Analytics",
-      "steps": { "basic": "Basic Info", "settings": "Settings", "questions": "Questions", "preview": "Preview", "publish": "Publish" },
+      "steps": {
+        "basic": "Basic Info",
+        "settings": "Settings",
+        "questions": "Questions",
+        "preview": "Preview",
+        "publish": "Publish"
+      },
       "basic": {
         "title": "Challenge title",
         "titlePh": "e.g. Unit 1 Review",
@@ -2660,7 +2720,11 @@
   "groups": {
     "title": "Groups",
     "subtitle": "Classes, roster, and attendance for your academy",
-    "tab": { "groups": "Groups", "roster": "Roster", "attention": "Needs attention" },
+    "tab": {
+      "groups": "Groups",
+      "roster": "Roster",
+      "attention": "Needs attention"
+    },
     "create": "New group",
     "empty": "No groups yet",
     "archived": "Archived",
@@ -2685,21 +2749,40 @@
     "backToGroups": "Back to groups",
     "archiveGroup": "Archive group",
     "reactivateGroup": "Reactivate group",
-    "detailTab": { "students": "Students", "staff": "Staff", "attendance": "Attendance" },
+    "detailTab": {
+      "students": "Students",
+      "staff": "Staff",
+      "attendance": "Attendance"
+    },
     "addStudents": "Add students",
     "noMembers": "No students in this group yet",
     "remove": "Remove",
     "noCandidates": "No matching students to add",
-    "staffRole": { "TEACHER": "Teacher", "ASSISTANT": "Assistant" },
+    "staffRole": {
+      "TEACHER": "Teacher",
+      "ASSISTANT": "Assistant"
+    },
     "assignHint": "Ask the academy owner to assign or remove teachers and assistants for this group.",
     "markAllPresent": "Mark all present",
-    "status": { "PRESENT": "Present", "LATE": "Late", "ABSENT": "Absent", "EXCUSED": "Excused" }
+    "status": {
+      "PRESENT": "Present",
+      "LATE": "Late",
+      "ABSENT": "Absent",
+      "EXCUSED": "Excused"
+    }
   },
   "schedule": {
     "title": "Schedule",
     "subtitle": "Sessions, rooms, and conflict-free scheduling for your academy",
-    "tab": { "calendar": "Calendar", "rooms": "Rooms" },
-    "view": { "month": "Month", "day": "Day", "week": "Week" },
+    "tab": {
+      "calendar": "Calendar",
+      "rooms": "Rooms"
+    },
+    "view": {
+      "month": "Month",
+      "day": "Day",
+      "week": "Week"
+    },
     "moreSessions": "+{{count}} more",
     "today": "Today",
     "createSession": "New session",
@@ -2726,5 +2809,18 @@
     "roomName": "Room name",
     "location": "Location",
     "capacityLabel": "Capacity"
+  },
+  "center": {
+    "title": "Center console",
+    "welcome": "Welcome, {{name}}",
+    "subtitle": "You manage {{center}}.",
+    "members": "Teachers & staff",
+    "membersSub": "Invite approved teachers and manage their roles.",
+    "groups": "Groups & roster",
+    "groupsSub": "Classes, students, attendance.",
+    "schedule": "Schedule",
+    "scheduleSub": "Sessions and rooms.",
+    "noCenter": "No Center is assigned to your account yet.",
+    "statusSuspended": "This Center is suspended. Contact the platform."
   }
 }

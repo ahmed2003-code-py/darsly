@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
-import { AcademyStatus } from '@darsly/shared-types';
+import { AcademyKind, AcademyStatus } from '@darsly/shared-types';
 import { dateShort, egp } from '../../lib/format';
-import { useAdminAcademyDetail, useSetFeatureFlag } from '../../lib/adminCommandCenter';
+import { useAdminAcademyDetail, useResendCenterActivation, useSetCenterStatus, useSetFeatureFlag } from '../../lib/adminCommandCenter';
 import {
   useAcademyActivity,
   useAcademyMembers,
@@ -77,6 +77,8 @@ export default function AdminAcademyDetailPage() {
   const updateMember = useUpdateAcademyMember(data?.slug);
   const removeMember = useRemoveAcademyMember(data?.slug);
   const setActive = useSetAcademyActive(id);
+  const setCenterStatus = useSetCenterStatus(id!);
+  const resendActivation = useResendCenterActivation(id!);
   const activity = useAcademyActivity(id);
 
   if (isLoading) {
@@ -176,9 +178,24 @@ export default function AdminAcademyDetailPage() {
         <div className="card p-5">
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-outline">{t('admin.owner')}</dt>
+              <dt className="text-xs text-outline">{data.kind === AcademyKind.CENTER ? t('admin.centerAdmin') : t('admin.owner')}</dt>
               <dd className="font-bold">{data.owner.fullName}</dd>
               <dd className="text-sm text-on-surface-variant" dir="ltr">{data.owner.email ?? data.owner.phone ?? '—'}</dd>
+              <dd className="mt-1 flex flex-wrap items-center gap-2">
+                <Badge tone="neutral">{t(`admin.identity.${data.owner.role}`)}</Badge>
+                {data.kind === AcademyKind.CENTER && !data.owner.isActive && (
+                  <>
+                    <Badge tone="warn">{t('admin.activationPending')}</Badge>
+                    <button
+                      className="text-xs font-bold text-primary hover:underline disabled:opacity-50"
+                      disabled={resendActivation.isPending}
+                      onClick={() => resendActivation.mutate()}
+                    >
+                      {resendActivation.isSuccess ? t('admin.activationResent') : t('admin.resendActivation')}
+                    </button>
+                  </>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-outline">{t('admin.lastActivity')}</dt>
@@ -306,13 +323,17 @@ export default function AdminAcademyDetailPage() {
         <p className="mb-4 text-sm text-on-surface-variant">
           {isActive ? t('adminControlStudio.actions.suspendConfirm', { name: data.name }) : t('adminControlStudio.actions.reactivateConfirm', { name: data.name })}
         </p>
-        <ErrorNote error={setActive.error} />
+        <ErrorNote error={data.kind === AcademyKind.CENTER ? setCenterStatus.error : setActive.error} />
         <div className="flex justify-end gap-2">
           <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setConfirmStatus(false)}>{t('common.cancel')}</button>
           <button
             className={isActive ? 'rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error' : 'btn-primary px-4 py-2 text-sm'}
-            disabled={setActive.isPending}
-            onClick={() => setActive.mutate(!isActive, { onSuccess: () => setConfirmStatus(false) })}
+            disabled={setActive.isPending || setCenterStatus.isPending}
+            onClick={() =>
+              data.kind === AcademyKind.CENTER
+                ? setCenterStatus.mutate(isActive ? 'SUSPENDED' : 'ACTIVE', { onSuccess: () => setConfirmStatus(false) })
+                : setActive.mutate(!isActive, { onSuccess: () => setConfirmStatus(false) })
+            }
           >
             {isActive ? t('adminControlStudio.actions.suspendAcademy') : t('adminControlStudio.actions.reactivateAcademy')}
           </button>

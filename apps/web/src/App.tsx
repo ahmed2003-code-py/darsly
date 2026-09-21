@@ -18,6 +18,7 @@ import { useAuthStore } from './stores/auth';
 const RegisterPage = lazyPage(() => import('./pages/RegisterPage'));
 const ForgotPasswordPage = lazyPage(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazyPage(() => import('./pages/ResetPasswordPage'));
+const ActivateAccountPage = lazyPage(() => import('./pages/ActivateAccountPage'));
 const AcademyStorefrontPage = lazyPage(() => import('./pages/academy/AcademyStorefrontPage'));
 const MessagesPage = lazyPage(() => import('./pages/MessagesPage'));
 const CertificateViewPage = lazyPage(() => import('./pages/CertificateViewPage'));
@@ -25,6 +26,9 @@ const ProfilePage = lazyPage(() => import('./pages/ProfilePage'));
 const AdminOverviewPage = lazyPage(() => import('./pages/admin/AdminOverviewPage'));
 const AdminAcademiesPage = lazyPage(() => import('./pages/admin/AdminAcademiesPage'));
 const AdminAcademyDetailPage = lazyPage(() => import('./pages/admin/AdminAcademyDetailPage'));
+const AdminCreateCenterPage = lazyPage(() => import('./pages/admin/AdminCreateCenterPage'));
+const CenterDashboardPage = lazyPage(() => import('./pages/center/CenterDashboardPage'));
+const CenterMembersPage = lazyPage(() => import('./pages/center/CenterMembersPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -79,7 +83,7 @@ const TeacherWalletPage = lazyPage(() => import('./pages/teacher/TeacherWalletPa
  * going — is unchanged, because a page without navigation is still a page
  * that has to be signed in for.
  */
-function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Role; bare?: boolean }) {
+function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Role | Role[]; bare?: boolean }) {
   const { accessToken, user } = useAuthStore();
   const location = useLocation();
   // Carry the destination to the login page. A visitor arriving from a generated
@@ -94,7 +98,8 @@ function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Rol
   // balance" and means the signed-in person's — and read it as if it were
   // theirs. An admin has their own console for every one of these (`/admin/…`);
   // being able to walk into the student's own pages was never the point.
-  if (role && user?.role !== role) {
+  const allowed = role === undefined ? true : Array.isArray(role) ? role.includes(user?.role as Role) : user?.role === role;
+  if (!allowed) {
     return <Navigate to={homeFor(user?.role)} replace />;
   }
   if (bare) return <>{children}</>;
@@ -104,6 +109,7 @@ function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Rol
 /** Where a role belongs when it is somewhere it does not. */
 function homeFor(role?: Role): string {
   if (role === Role.TEACHER) return '/teacher';
+  if (role === Role.STAFF) return '/center';
   if (role === Role.SUPER_ADMIN) return '/admin';
   return '/';
 }
@@ -112,6 +118,7 @@ function homeFor(role?: Role): string {
 function HomeRedirect() {
   const user = useAuthStore((s) => s.user);
   if (user?.role === Role.TEACHER) return <Navigate to="/teacher" replace />;
+  if (user?.role === Role.STAFF) return <Navigate to="/center" replace />;
   if (user?.role === Role.SUPER_ADMIN) return <Navigate to="/admin" replace />;
   return (
     <RequireAuth>
@@ -159,6 +166,7 @@ export default function App() {
       <Route path="/a/:slug" element={<AcademyStorefrontPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/activate" element={<ActivateAccountPage />} />
 
       {/* Student / public browsing */}
       <Route path="/" element={<HomeRedirect />} />
@@ -196,9 +204,9 @@ export default function App() {
       <Route path="/teacher/challenges" element={<RequireAuth role={Role.TEACHER}><TeacherChallengesPage /></RequireAuth>} />
       <Route path="/teacher/challenges/:id" element={<RequireAuth role={Role.TEACHER}><ChallengeBuilderPage /></RequireAuth>} />
       <Route path="/teacher/students" element={<RequireAuth role={Role.TEACHER}><TeacherEnrollmentsPage /></RequireAuth>} />
-      <Route path="/teacher/groups" element={<RequireAuth role={Role.TEACHER}><TeacherGroupsPage /></RequireAuth>} />
-      <Route path="/teacher/groups/:groupId" element={<RequireAuth role={Role.TEACHER}><TeacherGroupDetailPage /></RequireAuth>} />
-      <Route path="/teacher/schedule" element={<RequireAuth role={Role.TEACHER}><TeacherSchedulePage /></RequireAuth>} />
+      <Route path="/teacher/groups" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherGroupsPage /></RequireAuth>} />
+      <Route path="/teacher/groups/:groupId" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherGroupDetailPage /></RequireAuth>} />
+      <Route path="/teacher/schedule" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherSchedulePage /></RequireAuth>} />
       <Route path="/teacher/grading" element={<RequireAuth role={Role.TEACHER}><GradingPage /></RequireAuth>} />
       <Route path="/teacher/live" element={<RequireAuth role={Role.TEACHER}><TeacherLivePage /></RequireAuth>} />
       <Route path="/teacher/analytics" element={<RequireAuth role={Role.TEACHER}><TeacherAnalyticsPage /></RequireAuth>} />
@@ -210,6 +218,9 @@ export default function App() {
       <Route path="/admin" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminOverviewPage /></RequireAuth>} />
       <Route path="/admin/academies" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademiesPage /></RequireAuth>} />
       <Route path="/admin/academies/:id" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademyDetailPage /></RequireAuth>} />
+      <Route path="/admin/centers/new" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminCreateCenterPage /></RequireAuth>} />
+      <Route path="/center" element={<RequireAuth role={Role.STAFF}><CenterDashboardPage /></RequireAuth>} />
+      <Route path="/center/members" element={<RequireAuth role={Role.STAFF}><CenterMembersPage /></RequireAuth>} />
       <Route path="/admin/teachers" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminTeachersPage /></RequireAuth>} />
       <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />
       <Route path="/admin/payments" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPaymentsPage /></RequireAuth>} />

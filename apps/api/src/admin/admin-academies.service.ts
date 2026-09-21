@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { AcademyStatus, Prisma } from '@prisma/client';
+import { AcademyKind, AcademyStatus, Prisma } from '@prisma/client';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { LedgerService } from '../payments/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export interface ListAcademiesQuery {
   search?: string;
   status?: AcademyStatus;
+  kind?: AcademyKind;
   page?: number;
   pageSize?: number;
 }
@@ -66,6 +67,7 @@ export class AdminAcademiesService {
 
     const where: Prisma.AcademyWhereInput = {
       ...(query.status ? { status: query.status } : {}),
+      ...(query.kind ? { kind: query.kind } : {}),
       ...(search
         ? {
             OR: [
@@ -90,8 +92,9 @@ export class AdminAcademiesService {
           slug: true,
           name: true,
           status: true,
+          kind: true,
           createdAt: true,
-          owner: { select: { fullName: true, email: true } },
+          owner: { select: { fullName: true, email: true, role: true } },
         },
       }),
     ]);
@@ -139,8 +142,10 @@ export class AdminAcademiesService {
           slug: a.slug,
           name: a.name,
           status: a.status,
+          kind: a.kind,
           createdAt: a.createdAt,
           ownerName: a.owner.fullName,
+          ownerRole: a.owner.role,
           ownerEmail: a.owner.email,
           teachersCount: staff.teachers,
           assistantsCount: staff.assistants,
@@ -164,12 +169,13 @@ export class AdminAcademiesService {
         slug: true,
         name: true,
         status: true,
+        kind: true,
         createdAt: true,
         language: true,
         currency: true,
         feeType: true,
         feeValue: true,
-        owner: { select: { id: true, fullName: true, email: true, phone: true } },
+        owner: { select: { id: true, fullName: true, email: true, phone: true, role: true, isActive: true } },
         domains: { select: { hostname: true, isPrimary: true, verifiedAt: true } },
       },
     });
@@ -197,6 +203,7 @@ export class AdminAcademiesService {
       slug: academy.slug,
       name: academy.name,
       status: academy.status,
+      kind: academy.kind,
       createdAt: academy.createdAt,
       language: academy.language,
       currency: academy.currency,

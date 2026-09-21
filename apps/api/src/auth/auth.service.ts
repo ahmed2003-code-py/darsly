@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, GoneException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { Role, TeacherStatus } from '@darsly/shared-types';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes, randomInt } from 'crypto';
@@ -16,6 +16,7 @@ import {
   RegisterTeacherDto,
   ResetPasswordDto,
   VerifyResetCodeDto,
+  ActivateAccountDto,
 } from './dto/auth.dto';
 
 const MAX_FAILED_LOGINS = 10;
@@ -325,6 +326,69 @@ export class AuthService {
   }
 
   /** Step 3 — the code is spent here, exactly once. */
+  // ── Center Admin activation ─────────────────────────────────────────────────
+
+  private hashActivationToken(token: string): string {
+    return createHash('sha256').update(token.trim()).digest('hex');
+  }
+
+  /** What the activation page shows before any password is typed. Reveals only
+   *  what the invitee already knows from the email. */
+  async activationPreview(token: string) {
+    const row = await this.prisma.academyActivationToken.findUnique({
+      where: { tokenHash: this.hashActivationToken(token) },
+      select: {
+        expiresAt: true, usedAt: true, revokedAt: true,
+        user: { select: { fullName: true, email: true } },
+        academy: { select: { name: true } },
+      },
+    });
+    if (!row) throw new NotFoundException('Activation link not found');
+    if (row.usedAt || row.revokedAt || row.expiresAt <= new Date()) {
+      throw new GoneException({ message: 'This activation link is no longer valid', code: 'ACTIVATION_LINK_INVALID' });
+    }
+    return { fullName: row.user.fullName, email: row.user.email, academyName: row.academy.name };
+  }
+
+  /**
+   * Consume the link and let the designated admin set their own password.
+   * The token row is claimed with a single conditional update — two concurrent
+   * redemptions cannot both win — and everything it unlocks is bound to the
+   * user and academy the token was issued for, never to anything the client
+   * sends.
+   */
+  async activateAccount(dto: ActivateAccountDto) {
+    const tokenHash = this.hashActivationToken(dto.token);
+    const now = new Date();
+    const claimed = await this.prisma.academyActivationToken.updateMany({
+      where: { tokenHash, usedAt: null, revokedAt: null, expiresAt: { gt: now } },
+      data: { usedAt: now },
+    });
+    if (claimed.count !== 1) {
+      throw new GoneException({ message: 'This activation link is no longer valid', code: 'ACTIVATION_LINK_INVALID' });
+    }
+    const row = await this.prisma.academyActivationToken.findUniqueOrThrow({
+      where: { tokenHash },
+      select: { userId: true, academyId: true },
+    });
+    const passwordHash = await argon2.hash(dto.password);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: row.userId },
+        data: { passwordHash, isActive: true, failedLogins: 0, lockedUntil: null },
+      }),
+      this.prisma.academyMembership.updateMany({
+        where: { userId: row.userId, academyId: row.academyId, status: 'INVITED' },
+        data: { status: 'ACTIVE', joinedAt: now },
+      }),
+      this.prisma.academy.updateMany({
+        where: { id: row.academyId, status: 'PENDING' },
+        data: { status: 'ACTIVE' },
+      }),
+    ]);
+    return { ok: true };
+  }
+
   async resetPassword(dto: ResetPasswordDto) {
     const row = await this.consumableResetToken(dto.email, dto.code);
 
@@ -537,13 +601,23 @@ export class AuthService {
       'teacher';
     for (let i = 0; i < 5; i++) {
       const candidate = i === 0 ? base : `${base}-${randomBytes(2).toString('hex')}`;
-      const taken = await this.prisma.teacherProfile.findUnique({
-        where: { slug: candidate },
-        select: { id: true },
-      });
-      if (!taken) return candidate;
+      if (!(await this.slugTakenAnywhere(candidate))) return candidate;
     }
     return `${base}-${randomBytes(4).toString('hex')}`;
+  }
+
+  /**
+   * /t/<slug> and /a/<slug> share one namespace: a teacher's slug becomes their
+   * PERSONAL academy's slug, and a Center's slug is public too. Checking only
+   * TeacherProfile let a signup collide with a Center and fail on the
+   * Academy unique index mid-transaction.
+   */
+  private async slugTakenAnywhere(slug: string): Promise<boolean> {
+    const [teacher, academy] = await Promise.all([
+      this.prisma.teacherProfile.findUnique({ where: { slug }, select: { id: true } }),
+      this.prisma.academy.findUnique({ where: { slug }, select: { id: true } }),
+    ]);
+    return !!teacher || !!academy;
   }
 
   /**

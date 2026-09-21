@@ -18,6 +18,10 @@ enum Role {
   SUPER_ADMIN
   TEACHER
   STUDENT
+  // A non-learning, non-teaching account whose authority comes entirely from
+  // AcademyMembership (a Center Admin who does not teach). No TeacherProfile,
+  // no StudentProfile, no tenantId.
+  STAFF
 }
 
 model User {
@@ -53,6 +57,7 @@ model User {
   auditLogs      AuditLog[]           @relation("actor")
   sentMessages   ChatMessage[]
   resetTokens    PasswordResetToken[]
+  activationTokens AcademyActivationToken[]
 
   // Academy workspace model (v2). A user's authority lives on memberships, not
   // on the global role. Additive — existing tenantId relations are untouched.
@@ -76,6 +81,15 @@ enum AcademyStatus {
   ACTIVE
   SUSPENDED
   ARCHIVED
+}
+
+// Classification only — never a security boundary (that stays academyId +
+// membership + capability). PERSONAL is a teacher's own auto-provisioned
+// workspace (id == TeacherProfile.id); CENTER is an organisation created by a
+// platform admin. Existing rows are PERSONAL and are never converted in bulk.
+enum AcademyKind {
+  PERSONAL
+  CENTER
 }
 
 enum AcademyRole {
@@ -114,6 +128,7 @@ model Academy {
   slug        String        @unique
   name        String
   status      AcademyStatus @default(ACTIVE)
+  kind        AcademyKind   @default(PERSONAL)
   ownerUserId String
   owner       User          @relation("academyOwner", fields: [ownerUserId], references: [id])
 
@@ -164,7 +179,10 @@ model Academy {
   aiJobs    AiJob[]
   claims    AcademyClaim[]
 
+  activationTokens AcademyActivationToken[]
+
   @@index([status])
+  @@index([kind, status])
 }
 
 // Per-academy feature toggles. A missing row means "default for that key" (see
@@ -429,6 +447,26 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId, usedAt])
+}
+
+// One-time Center Admin activation. The raw token lives only in the emailed
+// link; only sha256(token) is stored. Consumed atomically (usedAt) so a replay
+// cannot activate twice, and bound to both the user and the academy it was
+// issued for so it can never be redeemed for anyone else.
+model AcademyActivationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academyId String
+  academy   Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
+  @@index([academyId])
 }
 
 model OtpCode {

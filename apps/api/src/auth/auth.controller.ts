@@ -15,6 +15,7 @@ import {
   RegisterTeacherDto,
   ResetPasswordDto,
   VerifyResetCodeDto,
+  ActivateAccountDto,
 } from './dto/auth.dto';
 import { TokenService } from './token.service';
 
@@ -79,6 +80,23 @@ export class AuthController {
   @ApiOperation({ summary: 'Check a reset code without spending it' })
   verifyResetCode(@Body() dto: VerifyResetCodeDto) {
     return this.authService.verifyResetCode(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 600_000 } })
+  @Get('activation/:token')
+  @ApiOperation({ summary: 'Who a Center Admin activation link is for (no side effects)' })
+  activationPreview(@Param('token') token: string) {
+    return this.authService.activationPreview(token);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @Post('activation')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Consume a Center Admin activation link and set a password' })
+  activateAccount(@Body() dto: ActivateAccountDto) {
+    return this.authService.activateAccount(dto);
   }
 
   @Public()

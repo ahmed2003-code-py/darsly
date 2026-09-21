@@ -10,6 +10,8 @@ export enum Role {
   SUPER_ADMIN = 'SUPER_ADMIN',
   TEACHER = 'TEACHER',
   STUDENT = 'STUDENT',
+  /** Non-teaching, non-learning account; authority is membership-only. */
+  STAFF = 'STAFF',
 }
 
 export enum TeacherStatus {
@@ -123,6 +125,12 @@ export enum AcademyStatus {
   ACTIVE = 'ACTIVE',
   SUSPENDED = 'SUSPENDED',
   ARCHIVED = 'ARCHIVED',
+}
+
+/** Classification only: a teacher's own workspace vs an admin-created organisation. */
+export enum AcademyKind {
+  PERSONAL = 'PERSONAL',
+  CENTER = 'CENTER',
 }
 
 // ── Challenges (gamified) ──────────────────────────────────────────────────

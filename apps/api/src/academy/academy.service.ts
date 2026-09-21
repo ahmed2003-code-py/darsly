@@ -34,7 +34,7 @@ export class AcademyService {
       include: {
         academy: {
           select: {
-            id: true, slug: true, name: true, status: true,
+            id: true, slug: true, name: true, status: true, kind: true,
             logoUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true,
             enrollmentMode: true,
           },
@@ -49,6 +49,7 @@ export class AcademyService {
         role: m.role,
         isHome: m.isHome,
         status: m.academy.status,
+        kind: m.academy.kind,
         enrollmentMode: m.academy.enrollmentMode,
         // brandTokens carries the published design system, so the console can
         // dress itself in the academy's own look rather than the platform default.
@@ -101,7 +102,7 @@ export class AcademyService {
     const academies = await this.prisma.academy.findMany({
       where: { id: { in: ids }, deletedAt: null, status: { not: 'ARCHIVED' } },
       select: {
-        id: true, slug: true, name: true, status: true,
+        id: true, slug: true, name: true, status: true, kind: true,
         logoUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true,
       },
     });
@@ -120,6 +121,7 @@ export class AcademyService {
         // else on the membership table.
         isHome: false,
         status: a.status,
+        kind: a.kind,
         branding: {
           logoUrl: a.logoUrl,
           colorPrimary: a.colorPrimary,
@@ -357,17 +359,19 @@ export class AcademyService {
       }
     }
 
-    // /a/<slug> and /t/<slug> are the same identity — provisioning copies one to
-    // the other, the generated site's call to action relies on it, and letting
-    // them drift would leave every academy page linking to a 404. Renaming moves
-    // both together or neither.
+    // For a PERSONAL academy, /a/<slug> and /t/<slug> are the same identity —
+    // provisioning copies one to the other, the generated site's call to action
+    // relies on it, and letting them drift would leave every academy page
+    // linking to a 404. Renaming moves both together or neither.
+    // A CENTER is an organisation, not its admin: renaming it must never touch
+    // the admin's own public teacher page.
     if (dto.slug !== undefined) {
       const slug = dto.slug.trim().toLowerCase();
       const owner = await this.prisma.academy.findUnique({
         where: { id: academyId },
-        select: { ownerUserId: true },
+        select: { ownerUserId: true, kind: true },
       });
-      if (owner) {
+      if (owner && owner.kind === 'PERSONAL') {
         await this.prisma.teacherProfile.updateMany({
           where: { userId: owner.ownerUserId },
           data: { slug },

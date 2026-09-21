@@ -213,6 +213,19 @@ export class ResetPasswordDto {
   password: string;
 }
 
+/** The one-time link a newly designated Center Admin follows to set a password. */
+export class ActivateAccountDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(256)
+  token: string;
+
+  @ApiProperty({ example: 'Passw0rd!' })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_MSG })
+  password: string;
+}
+
 export class RefreshTokenDto {
   @ApiProperty()
   @IsString()

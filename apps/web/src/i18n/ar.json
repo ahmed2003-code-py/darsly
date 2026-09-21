@@ -130,7 +130,9 @@
     "learning": "مركز التعلّم",
     "challenges": "التحديات",
     "adminGamification": "التحفيز",
-    "myStudio": "استوديو الطالب"
+    "myStudio": "استوديو الطالب",
+    "centerDashboard": "السنتر",
+    "centerMembers": "المعلمون والفريق"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -156,7 +158,8 @@
   "layout": {
     "teacherConsole": "لوحة تحكم المعلم",
     "studentSpace": "مساحة الطالب",
-    "adminConsole": "لوحة تحكم المنصة"
+    "adminConsole": "لوحة تحكم المنصة",
+    "staffConsole": "لوحة السنتر"
   },
   "topbar": {
     "enablePush": "فعّل تنبيهات المتصفح",
@@ -769,11 +772,53 @@
       "ASSISTANT": "مساعد"
     },
     "featureFlag": {
-      "attendance": { "label": "الحضور", "hint": "تتبع حضور الجلسات وتنبيهات المتابعة" },
-      "scheduling": { "label": "الجدولة", "hint": "التقويم والقاعات وكشف التعارضات" },
-      "groups": { "label": "المجموعات", "hint": "مجموعات وفصول الطلاب" },
-      "enrollmentApprovalMode": { "label": "موافقة الاشتراك اليدوية", "hint": "المعلم أو الإدارة يوافقون على الاشتراك بدلاً من التفعيل الفوري" },
-      "adminStudio": { "label": "استوديو الإدارة", "hint": "وصول إدارة المنصة للثيمات بدون شراء" }
+      "attendance": {
+        "label": "الحضور",
+        "hint": "تتبع حضور الجلسات وتنبيهات المتابعة"
+      },
+      "scheduling": {
+        "label": "الجدولة",
+        "hint": "التقويم والقاعات وكشف التعارضات"
+      },
+      "groups": {
+        "label": "المجموعات",
+        "hint": "مجموعات وفصول الطلاب"
+      },
+      "enrollmentApprovalMode": {
+        "label": "موافقة الاشتراك اليدوية",
+        "hint": "المعلم أو الإدارة يوافقون على الاشتراك بدلاً من التفعيل الفوري"
+      },
+      "adminStudio": {
+        "label": "استوديو الإدارة",
+        "hint": "وصول إدارة المنصة للثيمات بدون شراء"
+      }
+    },
+    "centersTitle": "السناتر",
+    "centersSub": "منظمات أنشأتها المنصة، يدير كلاً منها مدير سنتر خاص بها.",
+    "independentTeachersTitle": "المعلمون المستقلون",
+    "independentTeachersSub": "معلمون يديرون مساحة العمل الشخصية الخاصة بهم.",
+    "viewCenters": "السناتر",
+    "viewIndependentTeachers": "المعلمون المستقلون",
+    "createCenter": "إنشاء سنتر",
+    "createCenterSub": "أنشئ منظمة وعيّن مديرها. المدير الجديد يفعّل حسابه برابط لمرة واحدة ويختار كلمة السر بنفسه.",
+    "centerSection": "السنتر",
+    "centerName": "اسم السنتر",
+    "centerSlug": "العنوان (slug)",
+    "centerSlugHint": "اختياري. لو تُرك فارغاً يُشتق من الاسم. مشترك مع عناوين المعلمين — يجب أن يكون فريداً.",
+    "centerAdminSection": "مدير السنتر",
+    "centerAdminHint": "المعلم المعتمد أو حساب الفريق الموجود يُعيَّن مباشرة. البريد الجديد ينشئ حساب فريق (بدون ملف معلم) يُفعَّل بالبريد.",
+    "adminName": "اسم المدير",
+    "adminEmail": "بريد المدير",
+    "adminPhone": "هاتف المدير (اختياري)",
+    "centerAdmin": "مدير السنتر",
+    "activationPending": "بانتظار التفعيل",
+    "resendActivation": "إعادة إرسال رابط التفعيل",
+    "activationResent": "تم الإرسال ✓",
+    "identity": {
+      "SUPER_ADMIN": "مدير المنصة",
+      "STAFF": "فريق (غير معلم)",
+      "TEACHER": "معلم",
+      "STUDENT": "طالب"
     }
   },
   "security": {
@@ -1015,7 +1060,8 @@
       "mailFailed": "تعذّر إرسال البريد الآن، حاول بعد قليل.",
       "invalidPhone": "رقم الموبايل غير صحيح.",
       "rateLimited": "محاولات كثيرة. برجاء المحاولة بعد قليل.",
-      "generic": "حدث خطأ، حاول مرة أخرى."
+      "generic": "حدث خطأ، حاول مرة أخرى.",
+      "activationInvalid": "رابط التفعيل غير صالح أو منتهي أو مُستخدَم."
     },
     "platformTagline": "منصّة الأكاديميات التعليمية",
     "subject": "المادة اللي بتدرّسها",
@@ -1031,7 +1077,11 @@
     "track": "نوع المدرسة",
     "trackHint": "بنعرض لك المواد والمدرسين بتوع مدرستك بس.",
     "trackRequired": "اختر نوع مدرستك",
-    "subjectHint": "اختر كل المواد اللي بتشرحها — تقدر تختار أكتر من واحدة."
+    "subjectHint": "اختر كل المواد اللي بتشرحها — تقدر تختار أكتر من واحدة.",
+    "activateTitle": "فعّل حسابك",
+    "activateFor": "{{name}} — مدير {{center}}",
+    "activateBtn": "تفعيل والدخول",
+    "activateDone": "تم تفعيل حسابك. جارٍ التحويل لتسجيل الدخول…"
   },
   "live": {
     "title": "الجلسات المباشرة",
@@ -1986,7 +2036,11 @@
   "challenges": {
     "title": "التحديات",
     "subtitle": "تعلّم والعب في نفس الوقت — أسئلة سريعة، نقاط، وترتيب.",
-    "tabs": { "available": "متاحة", "in_progress": "جارية", "completed": "مكتملة" },
+    "tabs": {
+      "available": "متاحة",
+      "in_progress": "جارية",
+      "completed": "مكتملة"
+    },
     "empty": {
       "available": "مفيش تحديات متاحة دلوقتي.",
       "in_progress": "مفيش تحدي شغّال حاليًا.",
@@ -2068,7 +2122,13 @@
       "close": "إقفال",
       "viewSubmissions": "النتائج",
       "viewAnalytics": "التحليلات",
-      "steps": { "basic": "معلومات أساسية", "settings": "الإعدادات", "questions": "الأسئلة", "preview": "معاينة", "publish": "نشر" },
+      "steps": {
+        "basic": "معلومات أساسية",
+        "settings": "الإعدادات",
+        "questions": "الأسئلة",
+        "preview": "معاينة",
+        "publish": "نشر"
+      },
       "basic": {
         "title": "عنوان التحدي",
         "titlePh": "مثال: مراجعة الوحدة الأولى",
@@ -2660,7 +2720,11 @@
   "groups": {
     "title": "المجموعات",
     "subtitle": "الفصول والحضور وقائمة طلاب الأكاديمية",
-    "tab": { "groups": "المجموعات", "roster": "قائمة الطلاب", "attention": "يحتاج متابعة" },
+    "tab": {
+      "groups": "المجموعات",
+      "roster": "قائمة الطلاب",
+      "attention": "يحتاج متابعة"
+    },
     "create": "مجموعة جديدة",
     "empty": "لا توجد مجموعات بعد",
     "archived": "مؤرشفة",
@@ -2685,21 +2749,40 @@
     "backToGroups": "العودة للمجموعات",
     "archiveGroup": "أرشفة المجموعة",
     "reactivateGroup": "إعادة تفعيل المجموعة",
-    "detailTab": { "students": "الطلاب", "staff": "الفريق", "attendance": "الحضور" },
+    "detailTab": {
+      "students": "الطلاب",
+      "staff": "الفريق",
+      "attendance": "الحضور"
+    },
     "addStudents": "إضافة طلاب",
     "noMembers": "لا يوجد طلاب في هذه المجموعة بعد",
     "remove": "إزالة",
     "noCandidates": "لا يوجد طلاب مطابقين للإضافة",
-    "staffRole": { "TEACHER": "معلم", "ASSISTANT": "مساعد" },
+    "staffRole": {
+      "TEACHER": "معلم",
+      "ASSISTANT": "مساعد"
+    },
     "assignHint": "اطلب من صاحب الأكاديمية تعيين أو إزالة المعلمين والمساعدين لهذه المجموعة.",
     "markAllPresent": "تحديد الكل حاضر",
-    "status": { "PRESENT": "حاضر", "LATE": "متأخر", "ABSENT": "غائب", "EXCUSED": "معذور" }
+    "status": {
+      "PRESENT": "حاضر",
+      "LATE": "متأخر",
+      "ABSENT": "غائب",
+      "EXCUSED": "معذور"
+    }
   },
   "schedule": {
     "title": "الجدول",
     "subtitle": "الحصص والقاعات وجدولة بلا تعارض لأكاديميتك",
-    "tab": { "calendar": "التقويم", "rooms": "القاعات" },
-    "view": { "month": "شهر", "day": "يوم", "week": "أسبوع" },
+    "tab": {
+      "calendar": "التقويم",
+      "rooms": "القاعات"
+    },
+    "view": {
+      "month": "شهر",
+      "day": "يوم",
+      "week": "أسبوع"
+    },
     "moreSessions": "+{{count}} أخرى",
     "today": "اليوم",
     "createSession": "حصة جديدة",
@@ -2726,5 +2809,18 @@
     "roomName": "اسم القاعة",
     "location": "الموقع",
     "capacityLabel": "السعة"
+  },
+  "center": {
+    "title": "لوحة السنتر",
+    "welcome": "أهلاً {{name}}",
+    "subtitle": "أنت تدير {{center}}.",
+    "members": "المعلمون والفريق",
+    "membersSub": "ادعُ معلمين معتمدين وأدر أدوارهم.",
+    "groups": "المجموعات والطلاب",
+    "groupsSub": "الفصول والطلاب والحضور.",
+    "schedule": "الجدول",
+    "scheduleSub": "الحصص والقاعات.",
+    "noCenter": "لا يوجد سنتر مرتبط بحسابك بعد.",
+    "statusSuspended": "هذا السنتر موقوف. تواصل مع المنصة."
   }
 }

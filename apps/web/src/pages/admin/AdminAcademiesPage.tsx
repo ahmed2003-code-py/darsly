@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
-import { AcademyStatus } from '@darsly/shared-types';
+import { AcademyKind, AcademyStatus } from '@darsly/shared-types';
 import { egp } from '../../lib/format';
 import { useAdminAcademies } from '../../lib/adminCommandCenter';
 import { Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui';
@@ -23,12 +23,21 @@ export default function AdminAcademiesPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const status = (params.get('status') as AcademyStatus | null) ?? '';
+  // Two separate views: Centers (organisations) and Independent Teachers
+  // (PERSONAL workspaces). Never one mixed list.
+  const kind = params.get('kind') === AcademyKind.PERSONAL ? AcademyKind.PERSONAL : AcademyKind.CENTER;
   const [searchInput, setSearchInput] = useState(params.get('search') ?? '');
   const search = params.get('search') ?? '';
   const page = Number(params.get('page') ?? '1');
 
-  const { data, isLoading, isFetching } = useAdminAcademies({ search, status, page, pageSize: 20 });
+  const { data, isLoading, isFetching } = useAdminAcademies({ search, status, kind, page, pageSize: 20 });
 
+  const setKind = (k: AcademyKind) => {
+    const next = new URLSearchParams(params);
+    next.set('kind', k);
+    next.delete('page');
+    setParams(next);
+  };
   const setStatus = (s: AcademyStatus | '') => {
     const next = new URLSearchParams(params);
     if (s) next.set('status', s); else next.delete('status');
@@ -52,7 +61,30 @@ export default function AdminAcademiesPage() {
 
   return (
     <div className="page">
-      <PageHeader title={t('admin.academiesTitle')} subtitle={t('admin.academiesSub')} />
+      <PageHeader
+        title={kind === AcademyKind.CENTER ? t('admin.centersTitle') : t('admin.independentTeachersTitle')}
+        subtitle={kind === AcademyKind.CENTER ? t('admin.centersSub') : t('admin.independentTeachersSub')}
+        action={kind === AcademyKind.CENTER ? (
+          <Link to="/admin/centers/new" className="btn-primary">
+            <span className="material-symbols-outlined text-lg">add_business</span>
+            {t('admin.createCenter')}
+          </Link>
+        ) : undefined}
+      />
+
+      <div className="mb-4 flex gap-2">
+        {([AcademyKind.CENTER, AcademyKind.PERSONAL] as const).map((k) => (
+          <button
+            key={k}
+            className={`rounded-full px-4 py-2 font-heading text-sm font-bold transition ${
+              kind === k ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+            }`}
+            onClick={() => setKind(k)}
+          >
+            {k === AcademyKind.CENTER ? t('admin.viewCenters') : t('admin.viewIndependentTeachers')}
+          </button>
+        ))}
+      </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <form onSubmit={submitSearch} className="flex-1 min-w-[220px]">

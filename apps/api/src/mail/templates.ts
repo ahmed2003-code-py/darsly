@@ -179,6 +179,28 @@ export function teacherApprovedEmail(input: { name: string; loginUrl: string; br
   };
 }
 
+export function centerAdminActivationEmail(input: {
+  name: string;
+  centerName: string;
+  activationUrl: string;
+  expiresInDays: number;
+  brandName?: string;
+}): EmailContent {
+  const brandName = input.brandName ?? DEFAULT_BRAND;
+  return {
+    subject: `تم تعيينك مديراً لسنتر ${input.centerName}`,
+    text: `${input.name}: تم تعيينك مديراً لسنتر ${input.centerName} على ${brandName}. فعّل حسابك واختر كلمة السر من هنا (الرابط صالح ${input.expiresInDays} أيام، ويُستخدم مرة واحدة): ${input.activationUrl}`,
+    html: layout({
+      brandName,
+      title: 'فعّل حساب مدير السنتر',
+      body: `<p style="margin:0 0 12px;">أهلاً <strong>${esc(input.name)}</strong>،</p>
+        <p style="margin:0 0 12px;">تم تعيينك مديراً لسنتر <strong>${esc(input.centerName)}</strong> على ${esc(brandName)}. فعّل حسابك واختر كلمة السر الخاصة بك.</p>
+        <p style="margin:0;color:#6b7280;font-size:13px;">الرابط صالح لمدة ${input.expiresInDays} أيام ويُستخدم مرة واحدة فقط.</p>
+        ${button(input.activationUrl, 'تفعيل الحساب')}`,
+    }),
+  };
+}
+
 export function teacherStatusChangedEmail(input: {
   name: string;
   status: 'REJECTED' | 'SUSPENDED';

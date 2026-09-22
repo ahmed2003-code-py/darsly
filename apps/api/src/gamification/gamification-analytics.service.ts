@@ -66,11 +66,17 @@ export class GamificationAnalyticsService {
     };
   }
 
+  /**
+   * GamificationEvent is the busiest table on the platform — one row per XP
+   * award, so per lesson, per quiz, per streak tick. Reading all of them to
+   * count how many distinct students appear is the most expensive way to ask
+   * the cheapest question. `groupBy` makes Postgres do the de-duplication and
+   * return one row per learner instead of one per event.
+   */
   private async activeLearners(scope: Prisma.GamificationEventWhereInput, since: Date): Promise<number> {
-    const rows = await this.prisma.gamificationEvent.findMany({
+    const rows = await this.prisma.gamificationEvent.groupBy({
+      by: ['studentId'],
       where: { ...scope, createdAt: { gte: since } },
-      distinct: ['studentId'],
-      select: { studentId: true },
     });
     return rows.length;
   }
@@ -78,18 +84,20 @@ export class GamificationAnalyticsService {
   private async returningLearners(scope: Prisma.GamificationEventWhereInput) {
     const now = Date.now();
     const [thisWeek, lastWeek] = await Promise.all([
-      this.prisma.gamificationEvent.findMany({
+      // Both halves still need the learner ids themselves — the answer is the
+      // intersection of two weeks, not two counts — but `groupBy` returns the
+      // distinct set from the database rather than every event to be
+      // de-duplicated here.
+      this.prisma.gamificationEvent.groupBy({
+        by: ['studentId'],
         where: { ...scope, createdAt: { gte: new Date(now - 7 * 86_400_000) } },
-        distinct: ['studentId'],
-        select: { studentId: true },
       }),
-      this.prisma.gamificationEvent.findMany({
+      this.prisma.gamificationEvent.groupBy({
+        by: ['studentId'],
         where: {
           ...scope,
           createdAt: { gte: new Date(now - 14 * 86_400_000), lt: new Date(now - 7 * 86_400_000) },
         },
-        distinct: ['studentId'],
-        select: { studentId: true },
       }),
     ]);
     const prior = new Set(lastWeek.map((r) => r.studentId));
@@ -205,11 +213,7 @@ export class GamificationAnalyticsService {
 
   /** Students enrolled with this academy — the only ones an academy may count. */
   private async studentsOf(tenantId: string): Promise<string[]> {
-    const rows = await this.prisma.enrollment.findMany({
-      where: { tenantId },
-      distinct: ['studentId'],
-      select: { studentId: true },
-    });
+    const rows = await this.prisma.enrollment.groupBy({ by: ['studentId'], where: { tenantId } });
     return rows.map((r) => r.studentId);
   }
 }

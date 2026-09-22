@@ -4,7 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
-import './i18n';
+import { initI18n } from './i18n';
 import './index.css';
 import { Role } from '@darsly/shared-types';
 import AppToasts from './components/AppToasts';
@@ -29,6 +29,15 @@ bootStudio();
 // that happens to share a browser profile with an admin — see adminTheme.ts.
 bootAdminTheme(useAuthStore.getState().user?.role === Role.SUPER_ADMIN);
 
+/**
+ * The reader's language is loaded before the first render.
+ *
+ * Locales are separate chunks now (see i18n/index.ts), so this is a real await
+ * rather than a formality. Mounting first and letting the strings arrive a
+ * tick later would paint one frame of raw translation keys — a worse trade
+ * than the few milliseconds spent here, and a very visible one in Arabic.
+ */
+void initI18n().then(() => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
@@ -45,6 +54,7 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+});
 
 // If the app has been running stably, clear the one-shot chunk-reload guard so a
 // future deploy can recover again (see components/ErrorBoundary.tsx).

@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+coverage
+android
+apps/api/prisma/migrations
+apps/web/public
+package-lock.json
+*.md

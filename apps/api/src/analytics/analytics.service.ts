@@ -29,76 +29,124 @@ export class AnalyticsService {
     private readonly ledger: LedgerService,
   ) {}
 
+  /**
+   * A teacher's dashboard, counted by the database rather than in memory.
+   *
+   * This used to read every PAID payment, every enrollment, every active
+   * enrollment and every quiz attempt the teacher had ever accumulated — four
+   * unbounded scans, on a page they open daily — and then sum, bucket and
+   * de-duplicate the rows in JavaScript. The numbers were right; the cost grew
+   * forever, and a teacher with a few busy years would eventually have taken
+   * the container's memory with them.
+   *
+   * Every total here keeps the meaning it had. All-time figures are still
+   * all-time — computed with SUM and COUNT instead of by loading the rows.
+   * The only queries that still read rows are the two six-month series, which
+   * were always six-month series; they are now asked for as such instead of
+   * being filtered down from everything after the fact.
+   *
+   * Prisma's `count`/`aggregate`/`groupBy` are used rather than `$queryRaw`
+   * deliberately: they pass through the soft-delete middleware
+   * (`prisma.service.ts:72-79`), so deleted rows stay excluded exactly as they
+   * were. A hand-written SQL aggregate would have silently started counting
+   * them.
+   */
   async teacherOverview(tenantId: string) {
-    const [payments, enrollments, activeEnrollments, reviews, quizAgg] = await Promise.all([
-      this.prisma.payment.findMany({
-        where: { tenantId, status: 'PAID' },
-        select: { amountCents: true, netCents: true, paidAt: true, createdAt: true },
-      }),
-      this.prisma.enrollment.findMany({
-        where: { tenantId },
-        select: { createdAt: true, status: true },
-      }),
-      this.prisma.enrollment.findMany({
-        where: { tenantId, status: 'ACTIVE' },
-        select: { studentId: true, courseId: true },
-      }),
-      this.prisma.review.aggregate({ where: { tenantId }, _avg: { rating: true }, _count: true }),
-      this.prisma.quizAttempt.findMany({
-        where: {
-          quiz: { lesson: { unit: { course: { tenantId } } } },
-          passed: { not: null },
-          ...LIVE_STUDENT,
-        },
-        select: { passed: true },
-      }),
-    ]);
-
     const months = lastMonths(6);
+    const seriesSince = firstOfMonth(months[0].key);
+
     // An academy's revenue is what it earns, not what the student paid: the
     // difference between the two is the platform fee, so reporting the total
     // here would disclose it by subtraction against the price they set.
     const earning = (p: { amountCents: number; netCents: number | null }) => p.netCents ?? p.amountCents;
-    const grossCents = payments.reduce((sum, p) => sum + earning(p), 0);
-    const revenueByMonth = bucketByMonth(months, payments.map((p) => ({ at: p.paidAt ?? p.createdAt, v: earning(p) })));
-    const enrollmentsByMonth = bucketByMonth(months, enrollments.map((e) => ({ at: e.createdAt, v: 1 })));
+    const paid = { tenantId, status: 'PAID' as const };
 
-    const activeStudents = new Set(activeEnrollments.map((e) => e.studentId)).size;
+    const [
+      netSum,
+      grossFallbackSum,
+      seriesPayments,
+      totalEnrollments,
+      pendingEnrollments,
+      seriesEnrollments,
+      activeStudentRows,
+      activeByCourse,
+      reviews,
+      quizTotal,
+      quizPassed,
+    ] = await Promise.all([
+      // `netCents ?? amountCents` has no SQL expression Prisma can build, so
+      // the sum is split on exactly that condition and added back. Two index
+      // scans instead of one table read.
+      this.prisma.payment.aggregate({ where: { ...paid, netCents: { not: null } }, _sum: { netCents: true } }),
+      this.prisma.payment.aggregate({ where: { ...paid, netCents: null }, _sum: { amountCents: true } }),
+      // Bounded to the window it was always displaying. `paidAt ?? createdAt`
+      // is the bucket key, so a payment with no paidAt is matched on createdAt.
+      this.prisma.payment.findMany({
+        where: {
+          ...paid,
+          OR: [{ paidAt: { gte: seriesSince } }, { paidAt: null, createdAt: { gte: seriesSince } }],
+        },
+        select: { amountCents: true, netCents: true, paidAt: true, createdAt: true },
+      }),
+      this.prisma.enrollment.count({ where: { tenantId } }),
+      this.prisma.enrollment.count({ where: { tenantId, status: 'PENDING_PAYMENT' } }),
+      this.prisma.enrollment.findMany({
+        where: { tenantId, createdAt: { gte: seriesSince } },
+        select: { createdAt: true },
+      }),
+      // One row per distinct student rather than one per enrollment — the
+      // answer's own size, instead of students × courses.
+      this.prisma.enrollment.groupBy({ by: ['studentId'], where: { tenantId, status: 'ACTIVE' } }),
+      // One row per course, carrying how many active enrollments it has. That
+      // count is what the completion denominator needs, so the enrollment rows
+      // never have to be materialised at all.
+      this.prisma.enrollment.groupBy({
+        by: ['courseId'],
+        where: { tenantId, status: 'ACTIVE' },
+        _count: { _all: true },
+      }),
+      this.prisma.review.aggregate({ where: { tenantId }, _avg: { rating: true }, _count: true }),
+      this.prisma.quizAttempt.count({
+        where: { quiz: { lesson: { unit: { course: { tenantId } } } }, passed: { not: null }, ...LIVE_STUDENT },
+      }),
+      this.prisma.quizAttempt.count({
+        where: { quiz: { lesson: { unit: { course: { tenantId } } } }, passed: true, ...LIVE_STUDENT },
+      }),
+    ]);
+
+    const grossCents = (netSum._sum.netCents ?? 0) + (grossFallbackSum._sum.amountCents ?? 0);
+    const revenueByMonth = bucketByMonth(months, seriesPayments.map((p) => ({ at: p.paidAt ?? p.createdAt, v: earning(p) })));
+    const enrollmentsByMonth = bucketByMonth(months, seriesEnrollments.map((e) => ({ at: e.createdAt, v: 1 })));
+
+    const activeStudents = activeStudentRows.length;
 
     // Completion rate: completed lessons ÷ lessons in the courses students are
     // actively enrolled in.
-    const courseIds = [...new Set(activeEnrollments.map((e) => e.courseId))];
-    const [lessonCounts, completedByStudent] = await Promise.all([
-      courseIds.length
-        ? this.prisma.lesson.groupBy({
-            by: ['unitId'],
-            where: { unit: { courseId: { in: courseIds } } },
-            _count: true,
-          })
-        : Promise.resolve([]),
-      this.prisma.lessonProgress.count({
-        where: {
-          completedAt: { not: null },
-          lesson: { unit: { course: { tenantId } } },
-          student: { deletedAt: null, enrollments: { some: { tenantId, status: 'ACTIVE', deletedAt: null } } },
-        },
-      }),
-    ]);
+    const courseIds = activeByCourse.map((c) => c.courseId);
+    const completedByStudent = await this.prisma.lessonProgress.count({
+      where: {
+        completedAt: { not: null },
+        lesson: { unit: { course: { tenantId } } },
+        student: { deletedAt: null, enrollments: { some: { tenantId, status: 'ACTIVE', deletedAt: null } } },
+      },
+    });
     // Total lessons per course (via units), then × active enrollments per course.
     const lessonsPerCourse = await this.lessonsPerCourse(courseIds);
-    const totalRequired = activeEnrollments.reduce((s, e) => s + (lessonsPerCourse[e.courseId] ?? 0), 0);
+    const totalRequired = activeByCourse.reduce(
+      (s, c) => s + (lessonsPerCourse[c.courseId] ?? 0) * c._count._all,
+      0,
+    );
     const completionRatePct = totalRequired ? Math.round((completedByStudent / totalRequired) * 100) : 0;
 
-    const passed = quizAgg.filter((a) => a.passed).length;
-    const quizPassRatePct = quizAgg.length ? Math.round((passed / quizAgg.length) * 100) : 0;
+    const quizPassRatePct = quizTotal ? Math.round((quizPassed / quizTotal) * 100) : 0;
 
     const topLessons = await this.topLessons(tenantId);
 
     return {
       grossCents,
       activeStudents,
-      totalEnrollments: enrollments.length,
-      pendingEnrollments: enrollments.filter((e) => e.status === 'PENDING_PAYMENT').length,
+      totalEnrollments,
+      pendingEnrollments,
       completionRatePct,
       quizPassRatePct,
       avgRating: reviews._avg.rating ? Math.round(reviews._avg.rating * 10) / 10 : null,
@@ -161,11 +209,13 @@ export class AnalyticsService {
     const academyId = ctx.academyId;
     const since = new Date(Date.now() - days * 86_400_000);
     const [total, active, newRows, engagement, attention] = await Promise.all([
-      this.prisma.enrollment.findMany({ where: { academyId }, distinct: ['studentId'], select: { studentId: true } }),
-      this.prisma.enrollment.findMany({
+      // One row per student, grouped by the database — not one row per
+      // enrollment, de-duplicated here. Both are only ever measured by their
+      // length.
+      this.prisma.enrollment.groupBy({ by: ['studentId'], where: { academyId } }),
+      this.prisma.enrollment.groupBy({
+        by: ['studentId'],
         where: { academyId, status: 'ACTIVE', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-        distinct: ['studentId'],
-        select: { studentId: true },
       }),
       this.prisma.$queryRaw<{ n: bigint }[]>`
         SELECT COUNT(*) AS n FROM (
@@ -802,6 +852,12 @@ function lastMonths(n: number): { key: string; label: string }[] {
     });
   }
   return out;
+}
+
+/** The first instant of a `YYYY-MM` bucket — the lower bound a series query needs. */
+function firstOfMonth(key: string): Date {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1);
 }
 
 function bucketByMonth(months: { key: string; label: string }[], items: { at: Date; v: number }[]) {

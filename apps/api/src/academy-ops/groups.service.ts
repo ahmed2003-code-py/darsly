@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { GroupAssignmentRole, Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,7 +24,8 @@ export class GroupsService {
 
     const where: Prisma.GroupWhereInput = {
       academyId: ctx.academyId,
-      ...(ctx.role === 'OWNER' ? {} : { assignments: { some: { userId: ctx.userId } } }),
+      deletedAt: null,
+      ...(ctx.role === 'OWNER' ? {} : { assignments: { some: { userId: ctx.userId, deletedAt: null } } }),
     };
 
     const [total, groups] = await Promise.all([
@@ -36,7 +37,7 @@ export class GroupsService {
         take: pageSize,
         select: {
           id: true, name: true, description: true, status: true, createdAt: true,
-          _count: { select: { members: true } },
+          _count: { select: { members: { where: { deletedAt: null } } } },
         },
       }),
     ]);
@@ -44,7 +45,7 @@ export class GroupsService {
     const ids = groups.map((g) => g.id);
     const assignmentRows = ids.length
       ? await this.prisma.groupAssignment.findMany({
-          where: { groupId: { in: ids } },
+          where: { groupId: { in: ids }, deletedAt: null },
           select: { groupId: true, role: true, user: { select: { fullName: true } } },
         })
       : [];
@@ -65,12 +66,53 @@ export class GroupsService {
     };
   }
 
+  /**
+   * A group its creator can actually use.
+   *
+   * Holding `group.manage` means "I may manage the groups I'm assigned to"
+   * (see AcademyOpsAccessService), so a TEACHER/ASSISTANT who created a group
+   * without also being assigned to it owned nothing: `list` filtered it out of
+   * their own screen and every follow-up call — add students, take attendance
+   * — came back "You are not assigned to this group". They then pressed create
+   * again, because from where they sat nothing had happened, and the academy
+   * quietly collected twins. The assignment is part of creating, in the same
+   * transaction: whoever made the group is on it, or the group does not exist.
+   *
+   * An OWNER acts academy-wide already, so they get no assignment row — one
+   * would claim they personally teach every group they ever set up.
+   */
   async create(ctx: AcademyContext, dto: CreateGroupDto) {
-    const group = await this.prisma.group.create({
-      data: { academyId: ctx.academyId, name: dto.name, description: dto.description },
+    const name = dto.name.trim();
+    // The same refusal a second press would have earned had the first one been
+    // visible. Scoped to live groups, so a name is reusable after archiving.
+    const clash = await this.prisma.group.findFirst({
+      where: { academyId: ctx.academyId, deletedAt: null, status: 'ACTIVE', name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
     });
+    if (clash) {
+      throw new ConflictException({ message: 'A group with this name already exists', code: 'GROUP_NAME_TAKEN', groupId: clash.id });
+    }
+
+    const group = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.group.create({
+        data: { academyId: ctx.academyId, name, description: dto.description },
+      });
+      if (ctx.role === 'TEACHER' || ctx.role === 'ASSISTANT') {
+        await tx.groupAssignment.create({
+          data: {
+            groupId: created.id,
+            userId: ctx.userId,
+            academyId: ctx.academyId,
+            role: ctx.role === 'ASSISTANT' ? GroupAssignmentRole.ASSISTANT : GroupAssignmentRole.TEACHER,
+          },
+        });
+      }
+      return created;
+    });
+
     await this.audit.log({
       actorUserId: ctx.userId, action: 'group.create', entity: 'Group', entityId: group.id, academyId: ctx.academyId,
+      meta: { selfAssigned: ctx.role === 'TEACHER' || ctx.role === 'ASSISTANT' },
     });
     return group;
   }
@@ -119,7 +161,7 @@ export class GroupsService {
     const validIds = new Set(validStudents.map((s) => s.id));
     const invalid = dto.studentIds.filter((id) => !validIds.has(id));
     if (invalid.length) {
-      throw new BadRequestException({ message: 'Some students are not enrolled in this academy', invalid });
+      throw new BadRequestException({ message: 'Some students are not enrolled in this academy', code: 'STUDENTS_NOT_ENROLLED', invalid });
     }
 
     await this.prisma.$transaction(
@@ -127,7 +169,12 @@ export class GroupsService {
         this.prisma.groupMembership.upsert({
           where: { groupId_studentId: { groupId, studentId } },
           create: { groupId, studentId, academyId: ctx.academyId },
-          update: {}, // already a member — idempotent, not an error
+          // `upsert` matches on the unique pair, which a soft-deleted row still
+          // occupies — so a student who was removed and is being added back
+          // lands here, not in `create`. Clearing `deletedAt` is what makes the
+          // second add work; an empty update silently did nothing and the
+          // student never reappeared in the group.
+          update: { deletedAt: null },
         }),
       ),
     );
@@ -141,7 +188,7 @@ export class GroupsService {
   async removeMember(ctx: AcademyContext, groupId: string, studentId: string) {
     await this.access.assertGroupAccess(ctx, groupId);
     const membership = await this.prisma.groupMembership.findFirst({ where: { groupId, studentId } });
-    if (!membership) throw new NotFoundException('Membership not found');
+    if (!membership) throw new NotFoundException({ message: 'Membership not found', code: 'MEMBERSHIP_NOT_FOUND' });
     await this.prisma.groupMembership.delete({ where: { id: membership.id } });
     await this.audit.log({
       actorUserId: ctx.userId, action: 'group.members.remove', entity: 'Group', entityId: groupId, academyId: ctx.academyId,
@@ -154,18 +201,20 @@ export class GroupsService {
    *  third party or remove the owner's own oversight of it. */
   async assignStaff(ctx: AcademyContext, groupId: string, dto: AssignStaffDto) {
     const group = await this.prisma.group.findFirst({ where: { id: groupId, academyId: ctx.academyId } });
-    if (!group) throw new NotFoundException('Group not found');
-    if (ctx.role !== 'OWNER') throw new BadRequestException('Only the academy owner can assign group staff');
+    if (!group) throw new NotFoundException({ message: 'Group not found', code: 'GROUP_NOT_FOUND' });
+    if (ctx.role !== 'OWNER') throw new BadRequestException({ message: 'Only the academy owner can assign group staff', code: 'GROUP_STAFF_OWNER_ONLY' });
 
     const membership = await this.prisma.academyMembership.findFirst({
       where: { userId: dto.userId, academyId: ctx.academyId, status: 'ACTIVE', role: { in: ['TEACHER', 'ASSISTANT', 'OWNER'] } },
     });
-    if (!membership) throw new BadRequestException('That user is not active staff of this academy');
+    if (!membership) throw new BadRequestException({ message: 'That user is not active staff of this academy', code: 'NOT_ACADEMY_STAFF' });
 
     const assignment = await this.prisma.groupAssignment.upsert({
       where: { groupId_userId: { groupId, userId: dto.userId } },
       create: { groupId, userId: dto.userId, role: dto.role, academyId: ctx.academyId },
-      update: { role: dto.role },
+      // Same soft-delete revival as group membership: an unassigned row still
+      // holds the unique pair, so re-assigning the same person has to clear it.
+      update: { role: dto.role, deletedAt: null },
     });
     await this.audit.log({
       actorUserId: ctx.userId, action: 'group.assignment.set', entity: 'Group', entityId: groupId, academyId: ctx.academyId,
@@ -176,11 +225,11 @@ export class GroupsService {
 
   async unassignStaff(ctx: AcademyContext, groupId: string, userId: string) {
     const group = await this.prisma.group.findFirst({ where: { id: groupId, academyId: ctx.academyId } });
-    if (!group) throw new NotFoundException('Group not found');
-    if (ctx.role !== 'OWNER') throw new BadRequestException('Only the academy owner can change group staff');
+    if (!group) throw new NotFoundException({ message: 'Group not found', code: 'GROUP_NOT_FOUND' });
+    if (ctx.role !== 'OWNER') throw new BadRequestException({ message: 'Only the academy owner can change group staff', code: 'GROUP_STAFF_OWNER_ONLY' });
 
     const assignment = await this.prisma.groupAssignment.findFirst({ where: { groupId, userId } });
-    if (!assignment) throw new NotFoundException('Assignment not found');
+    if (!assignment) throw new NotFoundException({ message: 'Assignment not found', code: 'ASSIGNMENT_NOT_FOUND' });
     await this.prisma.groupAssignment.delete({ where: { id: assignment.id } });
     await this.audit.log({
       actorUserId: ctx.userId, action: 'group.assignment.remove', entity: 'Group', entityId: groupId, academyId: ctx.academyId,

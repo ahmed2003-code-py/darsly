@@ -57,6 +57,7 @@ export class AttendanceService {
     if (invalid.length) {
       throw new BadRequestException({
         message: 'Some records are for students not in this group',
+        code: 'NOT_GROUP_MEMBERS',
         invalid: invalid.map((r) => r.studentId),
       });
     }

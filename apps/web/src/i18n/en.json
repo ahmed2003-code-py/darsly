@@ -137,7 +137,8 @@
     "centerSettings": "Settings",
     "centerActivity": "Activity",
     "profile": "Profile",
-    "centerCourses": "Center courses"
+    "centerCourses": "Center courses",
+    "centerStudio": "Center Studio"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -787,7 +788,8 @@
       "overview": "Overview",
       "staff": "Staff",
       "flags": "Feature flags",
-      "activity": "Activity"
+      "activity": "Activity",
+      "studio": "Center Studio"
     },
     "owner": "Owner",
     "lastActivity": "Last activity",
@@ -849,7 +851,34 @@
       "TEACHER": "Teacher",
       "STUDENT": "Student"
     },
-    "activationEmailFailed": "Activation email could not be delivered — the link was NOT sent. Fix the email provider, then resend."
+    "activationEmailFailed": "Activation email could not be delivered — the link was NOT sent. Fix the email provider, then resend.",
+    "danger": {
+      "title": "Danger zone",
+      "hint": "Actions that affect the whole center. Archiving and deleting hide it from everyone — a delete is recoverable in the database, but not from this screen.",
+      "archive": "Archive center",
+      "archiveHint": "The center stays on the platform but nobody can get in. Reversible at any time.",
+      "delete": "Delete center",
+      "deleteHint": "Remove the center from the platform and release its address. Payments and financial records are kept.",
+      "personalOnly": "A personal academy follows its owner's status — managed from the teachers page, not here.",
+      "deleteTitle": "Delete \"{{name}}\"",
+      "deleteBody": "This hides the center and everything under it from everyone, and frees its address for another center. Payments, invoices and the ledger are left untouched.",
+      "impactStaff": "{{count}} staff will lose access",
+      "impactStudents": "{{count}} students enrolled with this center",
+      "impactCourses": "{{count}} courses",
+      "impactGroups": "{{count}} groups",
+      "impactActive": "Warning: {{count}} active enrollments — students studying right now",
+      "confirmLabel": "Type \"{{slug}}\" to confirm",
+      "deleteConfirm": "Delete this center"
+    },
+    "revokeOwner": {
+      "action": "Revoke access",
+      "title": "Revoke the center owner's access",
+      "body": "\"{{name}}\" will lose access to this center immediately. A center can't be left without an owner, so choose who takes over.",
+      "successor": "New owner",
+      "pick": "Pick a staff member",
+      "noCandidates": "There's no other active member of this center who could take over. Add a teacher or assistant first, or delete the center.",
+      "confirm": "Revoke access and transfer ownership"
+    }
   },
   "security": {
     "title": "Security & integrity",
@@ -2485,7 +2514,39 @@
     "eUserNotFound": "No such user.",
     "eVoiceFormat": "That voice format isn't supported.",
     "eVoiceTooLong": "That voice message is too long.",
-    "eWrongPassword": "Wrong password."
+    "eWrongPassword": "Wrong password.",
+    "network": "We couldn't reach the service. Check your connection and try again.",
+    "offline": "You're offline. We'll try again as soon as the connection is back.",
+    "unknown": "Something went wrong. Please try again, and contact support if it keeps happening.",
+    "status": {
+      "badRequest": "The details sent were incomplete or invalid. Check them and try again.",
+      "unauthorized": "Your session has expired. Please sign in again to continue.",
+      "forbidden": "You don't have permission to do this.",
+      "notFound": "We couldn't find that, or it isn't something you have access to.",
+      "conflict": "That conflicts with something that already exists. Check the details and try again.",
+      "tooLarge": "That file is larger than the limit. Try a smaller one.",
+      "unsupportedType": "That file type isn't supported.",
+      "unprocessable": "We couldn't process the request with these details. Check them and try again.",
+      "tooMany": "Too many attempts in a short time. Wait a moment and try again.",
+      "server": "Something broke on our side. Please try again shortly — it isn't you."
+    },
+    "eGroupNotAssigned": "You aren't assigned to this group. Ask the center owner to assign you to it.",
+    "eGroupNotFound": "That group doesn't exist, or it isn't one of this center's groups.",
+    "eGroupNameTaken": "A group with this name already exists. Pick a different name, or open the existing group.",
+    "eGroupStaffOwnerOnly": "Only the center owner can assign a group's staff.",
+    "eNotAcademyStaff": "That person isn't active staff of this center.",
+    "eMembershipNotFound": "That student isn't a member of the group.",
+    "eAssignmentNotFound": "That assignment doesn't exist.",
+    "eInvalidDate": "That date isn't valid. Pick one from the calendar.",
+    "eCenterNotFound": "That center doesn't exist.",
+    "eNotACenter": "This action applies to centers only — a personal academy follows its owner's status.",
+    "eConfirmMismatch": "What you typed doesn't match the center's address. Copy it exactly to confirm.",
+    "eCenterHasOwnerOnly": "The center's owner can't be removed. Transfer ownership first, or delete the center.",
+    "eThemeNotAllowed": "That theme isn't available to you. Access to it is granted by the platform team.",
+    "eThemeUnknown": "That theme doesn't exist.",
+    "validation": "Some details are missing or invalid ({{count}}). Check the fields and try again.",
+    "eStudentsNotEnrolled": "{{count}} of the students you picked aren't enrolled with this center.",
+    "eNotGroupMembers": "{{count}} of those students aren't members of this group."
   },
   "myStudio": {
     "title": "My Studio",
@@ -2861,6 +2922,21 @@
       "LATE": "Late",
       "ABSENT": "Absent",
       "EXCUSED": "Excused"
+    },
+    "attendance": {
+      "prevDay": "Previous day",
+      "nextDay": "Next day",
+      "today": "Today",
+      "taken": "Attendance taken",
+      "notTaken": "Not taken yet",
+      "save": "Save attendance",
+      "saved": "Saved",
+      "unsaved": "Unsaved changes",
+      "defaulted": "Everyone present by default — mark who's missing, then save",
+      "restAbsent": "Mark the rest absent",
+      "tapToCycle": "Tap the name to cycle through the statuses",
+      "unsavedWarning": "You have unsaved changes for this day. Moving to another date will lose them. Continue?",
+      "addStudentsFirst": "Add students to this group first, from the Students tab."
     }
   },
   "schedule": {
@@ -2995,5 +3071,21 @@
     "landingSubtitle": "Join as {{role}}. Sign in if you already have a Darsly account, or create one — the invitation stays with you either way.",
     "createAccount": "Create an account & join",
     "signInToAccept": "I have an account — sign in"
+  },
+  "centerStudio": {
+    "title": "Center Studio",
+    "subtitle": "Looks available to {{name}} — pick one to become the center's brand.",
+    "tileSub": "The themes the platform granted this center.",
+    "empty": "No themes yet",
+    "emptyHint": "The platform team chooses which looks appear here.",
+    "apply": "Apply",
+    "wearing": "In use",
+    "granted": "Available to the center owner",
+    "notGranted": "Not available",
+    "grantTitle": "Center Studio themes",
+    "grantHint": "Pick the looks this center's owner will see in Center Studio. They will not see the rest.",
+    "grantCount": "{{count}} selected",
+    "noLooks": "No looks in this shelf.",
+    "saveGrants": "Save available themes"
   }
 }

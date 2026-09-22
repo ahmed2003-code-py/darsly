@@ -1,4 +1,6 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
+import { resolveError } from './errorMessage';
+import { useToastStore } from './toast';
 
 /**
  * The one query cache, reachable from outside React.
@@ -9,6 +11,30 @@ import { QueryClient } from '@tanstack/react-query';
  */
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  /**
+   * Every write that fails says so, once, in the reader's language.
+   *
+   * Put here rather than at each call site because "the save failed and nobody
+   * was told" was the common case, not the exception: a screen had to remember
+   * to render an `ErrorNote`, and most row actions, toggles and uploads had
+   * nowhere to put one — so the refusal went to the console and the reader was
+   * left looking at a button that appeared to do nothing.
+   *
+   * A mutation that reports its own failure better (a form with field-level
+   * copy, a flow with its own recovery UI) opts out with
+   * `meta: { silentError: true }`.
+   */
+  mutationCache: new MutationCache({
+    onError: (error, _vars, _ctx, mutation) => {
+      if (mutation.meta?.silentError) return;
+      const { message, status } = resolveError(error);
+      // 401 is not a refusal the reader can act on: the axios interceptor has
+      // already tried to refresh and, having failed, signed them out. The
+      // sign-in screen they land on is the message.
+      if (!message || status === 401) return;
+      useToastStore.getState().push({ tone: 'error', message });
+    },
+  }),
 });
 
 /**

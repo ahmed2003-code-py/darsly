@@ -21,13 +21,15 @@ export class AcademyOpsAccessService {
    *  AcademyMembershipGuard. */
   async assertGroupAccess(ctx: AcademyContext, groupId: string): Promise<Group> {
     const group = await this.prisma.group.findFirst({ where: { id: groupId, academyId: ctx.academyId } });
-    if (!group) throw new NotFoundException('Group not found');
+    if (!group) throw new NotFoundException({ message: 'Group not found', code: 'GROUP_NOT_FOUND' });
     if (ctx.role !== 'OWNER') {
       const assigned = await this.prisma.groupAssignment.findFirst({
         where: { groupId, userId: ctx.userId },
         select: { id: true },
       });
-      if (!assigned) throw new ForbiddenException('You are not assigned to this group');
+      if (!assigned) {
+        throw new ForbiddenException({ message: 'You are not assigned to this group', code: 'GROUP_NOT_ASSIGNED' });
+      }
     }
     return group;
   }

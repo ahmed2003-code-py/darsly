@@ -7,6 +7,7 @@ import App from './App';
 import './i18n';
 import './index.css';
 import { Role } from '@darsly/shared-types';
+import AppToasts from './components/AppToasts';
 import { bootAdminTheme } from './lib/adminTheme';
 import { bootColorMode } from './lib/colorMode';
 import { bootStudio } from './lib/studio';
@@ -36,6 +37,9 @@ createRoot(document.getElementById('root')!).render(
       <LazyMotion features={domAnimation} strict>
         <BrowserRouter>
           <App />
+          {/* At the root, not inside the app shell: a sign-in, an activation or
+              a public academy page can fail too, and those render no shell. */}
+          <AppToasts />
         </BrowserRouter>
       </LazyMotion>
     </QueryClientProvider>

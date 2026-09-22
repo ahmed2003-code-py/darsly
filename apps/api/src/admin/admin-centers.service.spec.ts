@@ -18,8 +18,14 @@ function makePrisma() {
   };
   return prisma;
 }
-const deps = (delivered = true) => ({ mail: { send: jest.fn().mockResolvedValue(delivered ? { delivered: true, id: 'm1', transport: 'resend' } : { delivered: false, reason: 'provider-error' }), sendInBackground: jest.fn(), webUrl: (p: string) => `https://web${p}` }, audit: { log: jest.fn() } });
-const svc = (prisma: any, d = deps()) => ({ s: new AdminCentersService(prisma, d.mail as any, d.audit as any), d });
+const deps = (delivered = true) => ({
+  mail: { send: jest.fn().mockResolvedValue(delivered ? { delivered: true, id: 'm1', transport: 'resend' } : { delivered: false, reason: 'provider-error' }), sendInBackground: jest.fn(), webUrl: (p: string) => `https://web${p}` },
+  audit: { log: jest.fn() },
+  // Granting a new Center its Studio looks happens outside the creation
+  // transaction and is a no-op when no ids are supplied, which is every case here.
+  centerThemes: { grantAtCreation: jest.fn().mockResolvedValue(undefined) },
+});
+const svc = (prisma: any, d = deps()) => ({ s: new AdminCentersService(prisma, d.mail as any, d.audit as any, d.centerThemes as any), d });
 const dto = { name: 'El Shehab', adminName: 'Ahmed', adminEmail: 'Admin@x.com' };
 
 describe('AdminCentersService.createCenter — new admin', () => {

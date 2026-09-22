@@ -178,6 +178,7 @@ model Academy {
   memberships   AcademyMembership[]
   domains       AcademyDomain[]
   featureFlags  AcademyFeatureFlag[]
+  themeGrants   AcademyThemeGrant[]
   groups        Group[]
   rooms         Room[]
   groupSessions GroupSession[]
@@ -232,6 +233,31 @@ model AcademySubject {
 
   @@unique([academyId, subjectId])
   @@index([academyId, isActive])
+}
+
+// Which looks a Center is allowed to wear.
+//
+// Themes are not rows anywhere — a look is a namespaced id the platform can
+// resolve (`preset:midnight`, `academy:<id>`, `cosmetic:<key>`; see
+// AdminThemeService.resolve), so this records the id and nothing else. Same
+// opt-in shape as AcademySubject: a MISSING row means "not granted", because a
+// Center wears what the platform handed it and never the whole shelf.
+//
+// Only consulted for kind = CENTER. A PERSONAL academy's look comes from its own
+// teacher publishing a site, which is a different mechanism entirely and is not
+// gated by anything here.
+model AcademyThemeGrant {
+  id        String   @id @default(cuid())
+  academyId String
+  academy   Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  themeId   String
+  // The platform admin who granted it — this is an authority record, so who
+  // widened a Center's options is part of it.
+  grantedBy String?
+  createdAt DateTime @default(now())
+
+  @@unique([academyId, themeId])
+  @@index([academyId])
 }
 
 // Custom / subdomain hosts that resolve to this academy (verified only).

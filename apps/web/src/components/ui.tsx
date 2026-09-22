@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ReactNode } from 'react';
 import { Reveal } from './motion';
 import i18n from '../i18n';
+import { errorMessage } from '../lib/errorMessage';
 
 /** Small building blocks shared across screens. */
 
@@ -202,56 +203,20 @@ export function ProgressBar({ pct, tone }: { pct: number; tone?: 'accent' | 'pri
 }
 
 /**
- * Server refusals the reader can act on, in their own language.
+ * A refusal in its own place — under the form that caused it.
  *
- * Most API errors are already written for a person and pass straight through.
- * These are the ones where the server knows something the sentence cannot
- * carry — a count, a list — so the copy lives here and the payload supplies
- * the detail.
+ * The wording is resolved by `lib/errorMessage`, the single place that decides
+ * what a failure says; this component only decides where it sits. The same
+ * resolver feeds the toasts, so an error reads identically whether it is shown
+ * inline or over the page.
  */
-/**
- * The handful of codes whose Arabic wording predates the convention below and
- * cannot be derived from the code alone.
- */
-const ERROR_CODES: Record<string, string> = {
-  MEDIA_NOT_READY: 'err.mediaNotReady',
-  HTML_LOCKED: 'err.htmlLocked',
-  NO_HAND_AUTHORED_HTML: 'err.noHandAuthored',
-  ENROLLMENT_ACTIVE: 'err.enrollmentActive',
-  MESSAGING_CLOSED: 'err.messagingClosed',
-  COURSE_OTHER_YEAR: 'err.courseOtherYear',
-};
-
-/**
- * `BAD_REMEDIAL_LESSON` → `err.eBadRemedialLesson`.
- *
- * The map above had six entries against the API's eighty-seven codes, so
- * eighty-one of them fell through to the provider's own English sentence and
- * showed it to an Arabic reader — "The remedial lesson must be a video in this
- * course" under a page that is Arabic throughout. Deriving the key from the
- * code instead of listing it means a new code is translated by adding one
- * string, and never by remembering to edit this file too.
- */
-function keyForCode(code: string): string {
-  return `err.e${code.toLowerCase().replace(/_(.)/g, (_, c: string) => c.toUpperCase()).replace(/^(.)/, (_, c: string) => c.toUpperCase())}`;
-}
-
 export function ErrorNote({ error }: { error: unknown }) {
-  const { t } = useTranslation();
+  // Re-render in the new language when it changes; the resolver reads i18n
+  // directly, so without this a note left on screen would keep the old copy.
+  useTranslation();
   if (!error) return null;
-  const data = (error as any)?.response?.data;
-  const count = Array.isArray(data?.mediaIds) ? data.mediaIds.length : 0;
-  const explicit = data?.code ? ERROR_CODES[data.code] : undefined;
-  const derived = data?.code ? keyForCode(data.code) : undefined;
-  // The server's own sentence is the last resort, not the first: it is written
-  // for a log, in English, and this is the only place a reader ever sees it.
-  const translated = explicit
-    ? t(explicit, { count })
-    : derived
-      ? t(derived, { count, defaultValue: '' })
-      : '';
-  const message =
-    translated || data?.message?.toString?.() || (error as any)?.message || String(error);
+  const message = errorMessage(error);
+  if (!message) return null;
   return (
     <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
       {message}

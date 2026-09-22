@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCreateCenter } from '../../lib/adminCommandCenter';
 import { ErrorNote, Field, PageHeader } from '../../components/ui';
+import { CenterThemeGrantPicker } from './CenterThemeGrantPicker';
 
 export default function AdminCreateCenterPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const create = useCreateCenter();
   const [form, setForm] = useState({ name: '', slug: '', adminName: '', adminEmail: '', adminPhone: '' });
+  const [themeIds, setThemeIds] = useState<string[]>([]);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = (e: FormEvent) => {
@@ -20,6 +22,7 @@ export default function AdminCreateCenterPage() {
         adminName: form.adminName.trim(),
         adminEmail: form.adminEmail.trim(),
         ...(form.adminPhone.trim() ? { adminPhone: form.adminPhone.trim() } : {}),
+        ...(themeIds.length ? { themeIds } : {}),
       },
       {
         onSuccess: (res) => {
@@ -63,6 +66,10 @@ export default function AdminCreateCenterPage() {
         <Field label={t('admin.adminPhone')}>
           <input className="input" dir="ltr" inputMode="tel" value={form.adminPhone} onChange={set('adminPhone')} />
         </Field>
+
+        <div className="mt-6 border-t border-outline-variant/50 pt-6">
+          <CenterThemeGrantPicker selected={themeIds} onChange={setThemeIds} />
+        </div>
 
         <ErrorNote error={create.error} />
         <div className="mt-4 flex justify-end">

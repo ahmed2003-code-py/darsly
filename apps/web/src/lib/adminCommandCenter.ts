@@ -159,6 +159,7 @@ export interface CreateCenterInput {
   adminName: string;
   adminEmail: string;
   adminPhone?: string;
+  themeIds?: string[];
 }
 export interface CreateCenterResult {
   id: string; slug: string; name: string; status: AcademyStatus; kind: AcademyKind;
@@ -199,5 +200,54 @@ export interface ResendActivationResult {
 export function useResendCenterActivation(academyId: string) {
   return useMutation({
     mutationFn: async () => (await api.post<ResendActivationResult>(`/admin/centers/${academyId}/activation/resend`)).data,
+  });
+}
+
+export interface CenterDeletionImpact {
+  id: string;
+  slug: string;
+  name: string;
+  kind: 'PERSONAL' | 'CENTER';
+  status: string;
+  staffCount: number;
+  studentCount: number;
+  activeEnrollments: number;
+  courseCount: number;
+  groupCount: number;
+  reversible: boolean;
+}
+
+/** What a delete would hide, fetched only while the confirmation is open — the
+ *  admin decides with the numbers in front of them, not after. */
+export function useCenterDeletionImpact(academyId: string | undefined, enabled: boolean) {
+  return useQuery<CenterDeletionImpact>({
+    queryKey: ['admin-center-deletion-impact', academyId],
+    queryFn: async () => (await api.get(`/admin/centers/${academyId}/deletion-impact`)).data,
+    enabled: !!academyId && enabled,
+  });
+}
+
+export function useDeleteCenter(academyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    // The address the admin typed travels in the body; see the controller for why.
+    mutationFn: async (confirmSlug: string) =>
+      (await api.delete(`/admin/centers/${academyId}`, { data: { confirmSlug } })).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-academies'] });
+      void qc.removeQueries({ queryKey: ['admin-academy-detail', academyId] });
+    },
+  });
+}
+
+export function useRevokeCenterAccess(academyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { userId: string; transferOwnershipTo?: string }) =>
+      (await api.post(`/admin/centers/${academyId}/access/revoke`, body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-academy-detail', academyId] });
+      void qc.invalidateQueries({ queryKey: ['admin-academy-members'] });
+    },
   });
 }

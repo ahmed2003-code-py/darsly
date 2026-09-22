@@ -8,7 +8,7 @@ import { MarkAttendanceDto } from './dto/academy-ops.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function assertDate(date?: string): string {
-  if (!date || !DATE_RE.test(date)) throw new BadRequestException('date must be YYYY-MM-DD');
+  if (!date || !DATE_RE.test(date)) throw new BadRequestException({ message: 'date must be YYYY-MM-DD', code: 'INVALID_DATE' });
   return date;
 }
 

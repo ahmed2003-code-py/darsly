@@ -30,6 +30,10 @@ describe('AdminThemeService.catalog', () => {
       expect(Object.keys(e.tokens)).toHaveLength(17);
       for (const v of Object.values(e.tokens)) expect(v).toMatch(TRIPLE);
       expect(['light', 'dark']).toContain(e.mode);
+      expect(e.modes.light).toBeTruthy();
+      expect(e.modes.dark).toBeTruthy();
+      expect(Object.keys(e.modes.light)).toHaveLength(17);
+      expect(Object.keys(e.modes.dark)).toHaveLength(17);
     }
     // Only live rows are asked for: deleted/archived academies and retired items never appear.
     expect(prisma.academy.findMany.mock.calls[0][0].where).toMatchObject({ deletedAt: null, status: { not: 'ARCHIVED' } });

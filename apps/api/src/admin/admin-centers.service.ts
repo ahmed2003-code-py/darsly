@@ -7,6 +7,7 @@ import { centerAdminActivationEmail } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { slugCandidates, slugify, slugShapeError } from '../academy/slug';
 import { normalizeEgyptianPhone } from '../auth/dto/auth.dto';
+import { CenterThemesService } from './center-themes.service';
 import { CreateCenterDto } from './dto/admin-centers.dto';
 
 const ACTIVATION_TTL_DAYS = 7;
@@ -23,6 +24,7 @@ export class AdminCentersService {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly audit: AuditService,
+    private readonly centerThemes: CenterThemesService,
   ) {}
 
   async createCenter(dto: CreateCenterDto, adminUserId: string) {
@@ -47,9 +49,13 @@ export class AdminCentersService {
         });
         return a;
       });
+      // Outside the transaction on purpose: an unusable theme id must not undo a
+      // Center that is otherwise correctly created. `grantAtCreation` drops ids
+      // it cannot resolve rather than refusing, and the list is editable after.
+      await this.centerThemes.grantAtCreation(academy.id, dto.themeIds ?? [], adminUserId);
       await this.audit.log({
         actorUserId: adminUserId, action: 'center.create', entity: 'Academy', entityId: academy.id, academyId: academy.id,
-        meta: { adminUserId: existing.id, adminIdentity: existing.role, activation: 'NOT_REQUIRED' },
+        meta: { adminUserId: existing.id, adminIdentity: existing.role, activation: 'NOT_REQUIRED', themeGrants: dto.themeIds?.length ?? 0 },
       });
       return { ...academy, admin: { id: existing.id, role: existing.role, activation: 'NOT_REQUIRED' as const } };
     }
@@ -82,6 +88,8 @@ export class AdminCentersService {
       return { user, academy: a };
     });
 
+    await this.centerThemes.grantAtCreation(created.academy.id, dto.themeIds ?? [], adminUserId);
+
     // Delivery is awaited and REPORTED, never assumed: the Center and its
     // inactive admin exist, the hashed token is stored, and nothing about that
     // changes if the provider fails — the admin simply learns it did (and can
@@ -104,7 +112,7 @@ export class AdminCentersService {
     const activation = delivery.delivered ? ('EMAIL_SENT' as const) : ('EMAIL_FAILED' as const);
     await this.audit.log({
       actorUserId: adminUserId, action: 'center.create', entity: 'Academy', entityId: created.academy.id, academyId: created.academy.id,
-      meta: { adminUserId: created.user.id, adminIdentity: Role.STAFF, activation, ...(delivery.delivered ? {} : { deliveryFailure: delivery.reason }) },
+      meta: { adminUserId: created.user.id, adminIdentity: Role.STAFF, activation, themeGrants: dto.themeIds?.length ?? 0, ...(delivery.delivered ? {} : { deliveryFailure: delivery.reason }) },
     });
     return {
       ...created.academy,
@@ -185,6 +193,174 @@ export class AdminCentersService {
       meta: { from: academy.status, to: status },
     });
     return updated;
+  }
+
+  /**
+   * What deleting this Center would take with it.
+   *
+   * Read separately from the delete itself so the admin is told before they
+   * type the address, not after — "delete" on an organisation that turns out to
+   * hold a hundred students and live enrollments is a different decision from
+   * deleting the empty one somebody set up by mistake last week.
+   */
+  async deletionImpact(academyId: string) {
+    const academy = await this.prisma.academy.findFirst({
+      where: { id: academyId, deletedAt: null },
+      select: { id: true, slug: true, name: true, kind: true, status: true },
+    });
+    if (!academy) throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
+
+    const [staffCount, studentCount, activeEnrollments, courseCount, groupCount] = await Promise.all([
+      this.prisma.academyMembership.count({ where: { academyId, role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } } }),
+      this.prisma.enrollment.findMany({ where: { academyId }, select: { studentId: true }, distinct: ['studentId'] }).then((r) => r.length),
+      this.prisma.enrollment.count({ where: { academyId, status: 'ACTIVE' } }),
+      this.prisma.course.count({ where: { academyId } }),
+      this.prisma.group.count({ where: { academyId } }),
+    ]);
+
+    return {
+      id: academy.id, slug: academy.slug, name: academy.name, kind: academy.kind, status: academy.status,
+      staffCount, studentCount, activeEnrollments, courseCount, groupCount,
+      // Nothing is destroyed — every table here is soft-deleted, so the row
+      // survives for the money trail and can be brought back. Said explicitly
+      // because "delete" otherwise reads as irreversible and stops people from
+      // cleaning up test data they should be free to remove.
+      reversible: true,
+    };
+  }
+
+  /**
+   * Remove a Center from the platform.
+   *
+   * There was no delete at all before this: a Center could be suspended or
+   * archived and that was the end of the lifecycle, so an organisation created
+   * by mistake — or one whose admin never activated, which left it PENDING and
+   * therefore without even a suspend button in the console — stayed on the
+   * platform for ever, holding its slug.
+   *
+   * Soft, through the same middleware every other removal on the platform uses
+   * (PrismaService's SOFT_DELETE_MODELS): the Academy row is stamped, not
+   * dropped, so payments, ledger entries and invoices keep pointing at
+   * something real and an accidental delete is recoverable. Memberships go with
+   * it in the same transaction — otherwise a staff member would keep a live
+   * membership in an academy that no longer resolves, and `buildContext` would
+   * be the only thing standing between them and a workspace that is gone.
+   *
+   * The slug is released: `slugTaken` only looks at live rows, so the address
+   * is immediately reusable, which is what makes "delete and recreate it
+   * properly" a real recovery path.
+   */
+  async deleteCenter(academyId: string, confirmSlug: string, adminUserId: string) {
+    const academy = await this.prisma.academy.findFirst({
+      where: { id: academyId, deletedAt: null },
+      select: { id: true, slug: true, name: true, kind: true, status: true },
+    });
+    if (!academy) throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
+    // A PERSONAL academy IS a teacher's identity (its id is their
+    // TeacherProfile id); removing it would orphan their courses without
+    // removing the account. Deleting the teacher is a different action.
+    if (academy.kind !== 'CENTER') {
+      throw new BadRequestException({ message: 'Only a Center can be deleted here', code: 'NOT_A_CENTER' });
+    }
+    if (confirmSlug.trim().toLowerCase() !== academy.slug.toLowerCase()) {
+      throw new BadRequestException({ message: 'The confirmation does not match this center address', code: 'CONFIRM_MISMATCH' });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Outstanding activation links die with the Center, or the admin who
+      // never activated could still walk in through an email from last week.
+      await tx.academyActivationToken.updateMany({
+        where: { academyId, usedAt: null, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.academyMembership.deleteMany({ where: { academyId } });
+      // ARCHIVED as well as stamped: `status` is what every list and
+      // `buildContext` already branch on, so the Center stops resolving even
+      // for a caller that reaches it without the soft-delete read filter.
+      await tx.academy.update({ where: { id: academyId }, data: { status: 'ARCHIVED' } });
+      await tx.academy.delete({ where: { id: academyId } });
+    });
+
+    await this.audit.log({
+      actorUserId: adminUserId, action: 'center.delete', entity: 'Academy', entityId: academyId, academyId,
+      meta: { slug: academy.slug, name: academy.name, fromStatus: academy.status },
+    });
+    return { ok: true as const, id: academyId, slug: academy.slug };
+  }
+
+  /**
+   * Take one person's access to one Center away.
+   *
+   * The Center console can already remove its own staff, but only a member who
+   * is not the OWNER — and a platform admin had no path of their own at all, so
+   * "revoke access to this specific Center" was simply not expressible: the
+   * only lever was suspending the whole organisation, which takes everyone's
+   * access including the people who were using it correctly.
+   *
+   * The owner is included here, and only here. It is the one removal the
+   * academy's own console must not offer (an owner could be talked into
+   * removing themselves, and nobody would be left who could undo it), but a
+   * platform admin revoking a Center admin who has left the company is a normal
+   * operation — so it requires a replacement owner in the same call. A Center
+   * with no owner has no one who can grant anybody else access again.
+   */
+  async revokeAccess(academyId: string, userId: string, adminUserId: string, transferOwnershipTo?: string) {
+    const academy = await this.prisma.academy.findFirst({
+      where: { id: academyId, deletedAt: null },
+      select: { id: true, kind: true, ownerUserId: true },
+    });
+    if (!academy) throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
+
+    const membership = await this.prisma.academyMembership.findFirst({
+      where: { academyId, userId },
+      select: { id: true, role: true },
+    });
+    if (!membership) throw new NotFoundException({ message: 'This person is not a member of this center', code: 'MEMBERSHIP_NOT_FOUND' });
+
+    const isOwner = membership.role === 'OWNER' || academy.ownerUserId === userId;
+    if (isOwner && !transferOwnershipTo) {
+      throw new BadRequestException({
+        message: 'Name the member who takes over as owner before revoking this one',
+        code: 'OWNER_NEEDS_SUCCESSOR',
+      });
+    }
+
+    let successorId: string | null = null;
+    if (isOwner && transferOwnershipTo) {
+      if (transferOwnershipTo === userId) {
+        throw new BadRequestException({ message: 'The successor must be a different member', code: 'SUCCESSOR_IS_SAME_USER' });
+      }
+      const successor = await this.prisma.academyMembership.findFirst({
+        where: { academyId, userId: transferOwnershipTo, status: 'ACTIVE', role: { in: ['TEACHER', 'ASSISTANT', 'OWNER'] } },
+        select: { id: true, user: { select: { role: true, isActive: true, teacherProfile: { select: { status: true } } } } },
+      });
+      if (!successor) {
+        throw new BadRequestException({ message: 'The successor must already be active staff of this center', code: 'SUCCESSOR_NOT_STAFF' });
+      }
+      this.assertDesignatable(successor.user);
+      successorId = transferOwnershipTo;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (successorId) {
+        await tx.academyMembership.updateMany({ where: { academyId, userId: successorId }, data: { role: 'OWNER' } });
+        await tx.academy.update({ where: { id: academyId }, data: { ownerUserId: successorId } });
+      }
+      // Group assignments go too: a revoked teacher who kept an assignment row
+      // would still be listed as the staff of a group they can no longer reach.
+      await tx.groupAssignment.deleteMany({ where: { academyId, userId } });
+      await tx.academyMembership.deleteMany({ where: { academyId, userId } });
+      await tx.academyActivationToken.updateMany({
+        where: { academyId, userId, usedAt: null, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    await this.audit.log({
+      actorUserId: adminUserId, action: 'center.access.revoke', entity: 'AcademyMembership', entityId: membership.id, academyId,
+      meta: { userId, revokedRole: membership.role, ...(successorId ? { ownershipTransferredTo: successorId } : {}) },
+    });
+    return { ok: true as const, userId, ownerTransferredTo: successorId };
   }
 
   private assertDesignatable(user: { role: string; isActive: boolean; teacherProfile: { status: string } | null }) {

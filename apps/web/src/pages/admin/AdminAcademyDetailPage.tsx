@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AcademyKind, AcademyStatus } from '@darsly/shared-types';
 import { dateShort, egp } from '../../lib/format';
-import { useAdminAcademyDetail, useResendCenterActivation, useSetCenterStatus, useSetFeatureFlag } from '../../lib/adminCommandCenter';
+import {
+  useAdminAcademyDetail,
+  useCenterDeletionImpact,
+  useDeleteCenter,
+  useResendCenterActivation,
+  useRevokeCenterAccess,
+  useSetCenterStatus,
+  useSetFeatureFlag,
+} from '../../lib/adminCommandCenter';
 import {
   useAcademyActivity,
   useAcademyMembers,
@@ -13,9 +21,11 @@ import {
   useUpdateAcademyMember,
 } from '../../lib/adminStudio';
 import { Badge, ErrorNote, Field, Modal, Skeleton } from '../../components/ui';
+import { CenterThemeGrantEditor } from './CenterThemeGrantPicker';
 
-const TABS = ['overview', 'staff', 'flags', 'activity'] as const;
-type Tab = (typeof TABS)[number];
+const TABS_PERSONAL = ['overview', 'staff', 'flags', 'activity'] as const;
+const TABS_CENTER = ['overview', 'staff', 'studio', 'flags', 'activity'] as const;
+type Tab = (typeof TABS_CENTER)[number];
 
 const TONE: Record<AcademyStatus, 'teal' | 'warn' | 'error' | 'neutral'> = {
   [AcademyStatus.ACTIVE]: 'teal',
@@ -65,12 +75,167 @@ function AddMemberModal({ open, onClose, slug }: { open: boolean; onClose: () =>
   );
 }
 
+/**
+ * Removing an organisation, and removing one person from it.
+ *
+ * Kept behind its own heading and away from the ordinary controls above: a
+ * delete here hides a Center with everything hanging off it, and "suspend" a
+ * click away is the reversible thing an admin usually wants instead. The counts
+ * are fetched while the confirmation is open so the decision is made with the
+ * scale of it visible, and the address has to be typed back — a boolean
+ * confirmation is satisfied by a mis-click on the wrong row.
+ */
+function DangerZone({
+  academyId, slug, name, status, kind,
+}: { academyId: string; slug: string; name: string; status: AcademyStatus; kind: AcademyKind }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const impact = useCenterDeletionImpact(academyId, open);
+  const remove = useDeleteCenter(academyId);
+  const setCenterStatus = useSetCenterStatus(academyId);
+
+  const isCenter = kind === AcademyKind.CENTER;
+  const matches = typed.trim().toLowerCase() === slug.toLowerCase();
+
+  return (
+    <div className="mt-6 rounded-xl border border-error/30 p-5">
+      <h3 className="font-heading font-bold text-error">{t('admin.danger.title')}</h3>
+      <p className="mt-1 text-sm text-on-surface-variant">{t('admin.danger.hint')}</p>
+
+      <div className="mt-4 grid gap-3">
+        {isCenter && status !== AcademyStatus.ARCHIVED && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container-low p-3">
+            <div>
+              <p className="font-bold">{t('admin.danger.archive')}</p>
+              <p className="text-sm text-on-surface-variant">{t('admin.danger.archiveHint')}</p>
+            </div>
+            <button
+              className="rounded-lg border border-outline px-4 py-2 text-sm font-bold"
+              disabled={setCenterStatus.isPending}
+              onClick={() => setCenterStatus.mutate(AcademyStatus.ARCHIVED)}
+            >
+              {t('admin.danger.archive')}
+            </button>
+          </div>
+        )}
+
+        {isCenter && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-error-container/40 p-3">
+            <div>
+              <p className="font-bold text-error">{t('admin.danger.delete')}</p>
+              <p className="text-sm text-on-surface-variant">{t('admin.danger.deleteHint')}</p>
+            </div>
+            <button
+              className="rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error"
+              onClick={() => { setTyped(''); setOpen(true); }}
+            >
+              {t('admin.danger.delete')}
+            </button>
+          </div>
+        )}
+        {!isCenter && <p className="text-sm text-on-surface-variant">{t('admin.danger.personalOnly')}</p>}
+      </div>
+
+      <Modal open={open} title={t('admin.danger.deleteTitle', { name })} onClose={() => setOpen(false)}>
+        <p className="mb-3 text-sm text-on-surface-variant">{t('admin.danger.deleteBody')}</p>
+        {impact.isLoading ? (
+          <Skeleton className="mb-4 h-20 rounded-xl" />
+        ) : impact.data ? (
+          <ul className="mb-4 grid gap-1 rounded-xl bg-surface-container-low p-3 text-sm">
+            <li>{t('admin.danger.impactStaff', { count: impact.data.staffCount })}</li>
+            <li>{t('admin.danger.impactStudents', { count: impact.data.studentCount })}</li>
+            <li>{t('admin.danger.impactCourses', { count: impact.data.courseCount })}</li>
+            <li>{t('admin.danger.impactGroups', { count: impact.data.groupCount })}</li>
+            {impact.data.activeEnrollments > 0 && (
+              <li className="font-bold text-error">{t('admin.danger.impactActive', { count: impact.data.activeEnrollments })}</li>
+            )}
+          </ul>
+        ) : null}
+        <Field label={t('admin.danger.confirmLabel', { slug })}>
+          <input className="input w-full" dir="ltr" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={slug} />
+        </Field>
+        <ErrorNote error={remove.error} />
+        <div className="flex justify-end gap-2">
+          <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setOpen(false)}>{t('common.cancel')}</button>
+          <button
+            className="rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error disabled:opacity-40"
+            disabled={!matches || remove.isPending}
+            onClick={() => remove.mutate(typed.trim(), { onSuccess: () => navigate('/admin/academies') })}
+          >
+            {remove.isPending ? t('common.saving') : t('admin.danger.deleteConfirm')}
+          </button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+/**
+ * Revoking the Center admin's own access.
+ *
+ * Separate from the ordinary "remove member" because it is the one removal that
+ * cannot leave the Center as it found it: with the owner gone nobody can grant
+ * access to anybody, so a successor is named in the same breath and the two
+ * happen together or not at all.
+ */
+function RevokeOwnerModal({
+  open, onClose, academyId, owner, staff,
+}: {
+  open: boolean;
+  onClose: () => void;
+  academyId: string;
+  owner: { id: string; fullName: string };
+  staff: { userId: string; fullName: string; status: string }[];
+}) {
+  const { t } = useTranslation();
+  const [successor, setSuccessor] = useState('');
+  const revoke = useRevokeCenterAccess(academyId);
+  // Only someone who could hold the Center tomorrow: active staff, and not the
+  // person being revoked. The API enforces the same rule; this keeps the list
+  // from offering a choice it would then refuse.
+  const candidates = staff.filter((m) => m.userId !== owner.id && m.status === 'ACTIVE');
+
+  return (
+    <Modal open={open} title={t('admin.revokeOwner.title')} onClose={onClose}>
+      <p className="mb-3 text-sm text-on-surface-variant">{t('admin.revokeOwner.body', { name: owner.fullName })}</p>
+      {candidates.length === 0 ? (
+        <p className="mb-4 rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container">
+          {t('admin.revokeOwner.noCandidates')}
+        </p>
+      ) : (
+        <Field label={t('admin.revokeOwner.successor')}>
+          <select className="input w-full" value={successor} onChange={(e) => setSuccessor(e.target.value)}>
+            <option value="">{t('admin.revokeOwner.pick')}</option>
+            {candidates.map((c) => (
+              <option key={c.userId} value={c.userId}>{c.fullName}</option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <ErrorNote error={revoke.error} />
+      <div className="flex justify-end gap-2">
+        <button className="btn-secondary px-4 py-2 text-sm" onClick={onClose}>{t('common.cancel')}</button>
+        <button
+          className="rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error disabled:opacity-40"
+          disabled={!successor || revoke.isPending}
+          onClick={() => revoke.mutate({ userId: owner.id, transferOwnershipTo: successor }, { onSuccess: onClose })}
+        >
+          {t('admin.revokeOwner.confirm')}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 export default function AdminAcademyDetailPage() {
   const { t } = useTranslation();
   const { id } = useParams();
   const [tab, setTab] = useState<Tab>('overview');
   const [showAddMember, setShowAddMember] = useState(false);
   const [confirmStatus, setConfirmStatus] = useState(false);
+  const [revokeOwner, setRevokeOwner] = useState(false);
   const { data, isLoading, error } = useAdminAcademyDetail(id);
   const setFlag = useSetFeatureFlag(id ?? '');
   const members = useAcademyMembers(data?.slug);
@@ -113,7 +278,20 @@ export default function AdminAcademyDetailPage() {
   }
 
   const isActive = data.status === AcademyStatus.ACTIVE;
-  const canToggleStatus = data.status === AcademyStatus.ACTIVE || data.status === AcademyStatus.SUSPENDED;
+  const isCenter = data.kind === AcademyKind.CENTER;
+  /**
+   * A PENDING Center used to show no lifecycle control at all — which is how a
+   * Center created with the wrong address, whose admin never opened the
+   * activation email, became permanently unmanageable: not active, so nothing
+   * to suspend, and there was no delete. Suspending a PENDING Center is a
+   * legitimate call the API already accepted (only PENDING → ACTIVE is refused,
+   * because activation happens through the emailed link), so the button belongs
+   * here too. ARCHIVED stays out: it is reversed from the danger zone below.
+   */
+  const canToggleStatus =
+    isActive ||
+    data.status === AcademyStatus.SUSPENDED ||
+    (isCenter && data.status === AcademyStatus.PENDING);
 
   return (
     <div className="page">
@@ -174,7 +352,7 @@ export default function AdminAcademyDetailPage() {
       </div>
 
       <div className="mb-6 flex gap-2">
-        {TABS.map((tb) => (
+        {(isCenter ? TABS_CENTER : TABS_PERSONAL).map((tb) => (
           <button
             key={tb}
             className={`rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
@@ -249,6 +427,19 @@ export default function AdminAcademyDetailPage() {
               </dd>
             </div>
           </dl>
+          <DangerZone
+            academyId={data.id}
+            slug={data.slug}
+            name={data.name}
+            status={data.status}
+            kind={data.kind}
+          />
+        </div>
+      )}
+
+      {tab === 'studio' && isCenter && (
+        <div className="card p-5">
+          <CenterThemeGrantEditor academyId={data.id} />
         </div>
       )}
 
@@ -276,6 +467,17 @@ export default function AdminAcademyDetailPage() {
                   <Badge tone={isOwner ? 'primary' : s.status === 'SUSPENDED' ? 'error' : 'neutral'}>
                     {t(`admin.staffRole.${s.role}`)}
                   </Badge>
+                  {/* The owner's access is revocable only by a platform admin,
+                      and only together with a successor — hence its own action
+                      rather than the plain "remove" the others get. */}
+                  {isOwner && isCenter && (
+                    <button
+                      className="rounded-lg px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
+                      onClick={() => setRevokeOwner(true)}
+                    >
+                      {t('admin.revokeOwner.action')}
+                    </button>
+                  )}
                   {!isOwner && s.id && members.data && (
                     <div className="flex items-center gap-1">
                       {!isInvited && (
@@ -302,6 +504,13 @@ export default function AdminAcademyDetailPage() {
           </div>
           <ErrorNote error={updateMember.error ?? removeMember.error} />
           {data.slug && <AddMemberModal open={showAddMember} onClose={() => setShowAddMember(false)} slug={data.slug} />}
+          <RevokeOwnerModal
+            open={revokeOwner}
+            onClose={() => setRevokeOwner(false)}
+            academyId={data.id}
+            owner={{ id: data.owner.id, fullName: data.owner.fullName }}
+            staff={(members.data ?? []).map((m) => ({ userId: m.userId, fullName: m.fullName, status: m.status }))}
+          />
         </div>
       )}
 

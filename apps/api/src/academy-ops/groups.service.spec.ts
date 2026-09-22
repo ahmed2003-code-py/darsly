@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { GroupsService } from './groups.service';
 
 function ctx(overrides: Partial<{ academyId: string; userId: string; role: string }> = {}) {
@@ -8,11 +8,11 @@ function ctx(overrides: Partial<{ academyId: string; userId: string; role: strin
 function makeDeps() {
   const prisma: any = {
     group: { count: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), findUniqueOrThrow: jest.fn(), create: jest.fn(), update: jest.fn() },
-    groupAssignment: { findMany: jest.fn(), findFirst: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
+    groupAssignment: { findMany: jest.fn(), findFirst: jest.fn(), upsert: jest.fn(), delete: jest.fn(), create: jest.fn() },
     groupMembership: { findMany: jest.fn(), findFirst: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
     studentProfile: { findMany: jest.fn() },
     academyMembership: { findFirst: jest.fn() },
-    $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
+    $transaction: jest.fn(async (arg: any) => (typeof arg === 'function' ? arg(prisma) : Promise.all(arg))),
   };
   const audit: any = { log: jest.fn() };
   // access service backed by the same prisma mock, matching real DI wiring
@@ -38,7 +38,7 @@ describe('GroupsService', () => {
       prisma.group.findMany.mockResolvedValue([]);
       const svc = new GroupsService(prisma, access, audit);
       await svc.list(ctx({ role: 'OWNER' }), {});
-      expect(prisma.group.count).toHaveBeenCalledWith({ where: { academyId: 'a1' } });
+      expect(prisma.group.count).toHaveBeenCalledWith({ where: { academyId: 'a1', deletedAt: null } });
     });
 
     it('TEACHER only sees groups they are assigned to', async () => {
@@ -48,8 +48,40 @@ describe('GroupsService', () => {
       const svc = new GroupsService(prisma, access, audit);
       await svc.list(ctx({ role: 'TEACHER', userId: 'teacherA' }), {});
       expect(prisma.group.count).toHaveBeenCalledWith({
-        where: { academyId: 'a1', assignments: { some: { userId: 'teacherA' } } },
+        where: { academyId: 'a1', deletedAt: null, assignments: { some: { userId: 'teacherA', deletedAt: null } } },
       });
+    });
+  });
+
+  describe('create', () => {
+    it('assigns a TEACHER to the group they just created, in the same transaction', async () => {
+      const { prisma, audit, access } = makeDeps();
+      prisma.group.findFirst.mockResolvedValue(null);
+      prisma.group.create.mockResolvedValue({ id: 'g1', academyId: 'a1', name: 'G1' });
+      prisma.groupAssignment.create.mockResolvedValue({ id: 'ga1' });
+      const svc = new GroupsService(prisma, access, audit);
+      const group = await svc.create(ctx({ role: 'TEACHER', userId: 'teacherA' }), { name: 'G1' });
+      expect(group.id).toBe('g1');
+      expect(prisma.groupAssignment.create).toHaveBeenCalledWith({
+        data: { groupId: 'g1', userId: 'teacherA', academyId: 'a1', role: 'TEACHER' },
+      });
+    });
+
+    it('does not assign an OWNER to every group they create', async () => {
+      const { prisma, audit, access } = makeDeps();
+      prisma.group.findFirst.mockResolvedValue(null);
+      prisma.group.create.mockResolvedValue({ id: 'g1', academyId: 'a1', name: 'G1' });
+      const svc = new GroupsService(prisma, access, audit);
+      await svc.create(ctx({ role: 'OWNER' }), { name: 'G1' });
+      expect(prisma.groupAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a second live group with the same name — the duplicate that appeared when create was invisible to its author', async () => {
+      const { prisma, audit, access } = makeDeps();
+      prisma.group.findFirst.mockResolvedValue({ id: 'existing' });
+      const svc = new GroupsService(prisma, access, audit);
+      await expect(svc.create(ctx({ role: 'TEACHER' }), { name: 'G1' })).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.group.create).not.toHaveBeenCalled();
     });
   });
 

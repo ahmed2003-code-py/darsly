@@ -42,8 +42,21 @@ export interface AdminThemeEntry {
   source: AdminThemeSource;
   name: string;
   subtitle: string | null;
+  /** The mode the look was designed in — what `tokens` below is. */
   mode: AdminThemeMode;
+  /** The native-mode token set. Equal to `modes[mode]`. */
   tokens: AdminThemeTokens;
+  /**
+   * Both ends of the look, so the reader's light/dark switch actually switches.
+   *
+   * Without this an admin look was a single absolute palette, and the CSS remap
+   * that paints it outranks `:root[data-theme='dark']` — so the console ignored
+   * the mode toggle entirely. The server resolves both halves (same
+   * contrast-floored derivation the academy console uses) and the client paints
+   * whichever half matches the mode, exactly as `lib/theme.ts` already does for
+   * an academy's palette.
+   */
+  modes: Record<AdminThemeMode, AdminThemeTokens>;
   meta: {
     academyId?: string;
     academyKind?: 'PERSONAL' | 'CENTER';
@@ -174,7 +187,24 @@ export const ADMIN_THEME_PRESET_IDS: readonly string[] = ADMIN_THEME_PRESETS.map
 
 export const ADMIN_THEME_DEFAULT_ID = `preset:${ADMIN_THEME_PRESETS[0].id}`;
 
-/** A preset as a catalogue entry — the same shape every other source resolves to. */
+/**
+ * A preset as a catalogue entry — the same shape every other source resolves to.
+ *
+ * `modes` is seeded with the preset's own tokens at both ends. The API replaces
+ * the opposite end with a properly derived one (see AdminThemeService); this
+ * shape exists so the web can boot from a preset before that round trip, and so
+ * a client that somehow has no pair still paints something coherent rather than
+ * nothing. The real pair arrives with the catalogue and is cached from then on.
+ */
 export function presetEntry(preset: AdminThemePreset): AdminThemeEntry {
-  return { id: `preset:${preset.id}`, source: 'PRESET', name: preset.name, subtitle: null, mode: preset.mode, tokens: preset.tokens, meta: {} };
+  return {
+    id: `preset:${preset.id}`,
+    source: 'PRESET',
+    name: preset.name,
+    subtitle: null,
+    mode: preset.mode,
+    tokens: preset.tokens,
+    modes: { light: preset.tokens, dark: preset.tokens },
+    meta: {},
+  };
 }

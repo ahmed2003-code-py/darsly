@@ -32,6 +32,7 @@ const CenterDashboardPage = lazyPage(() => import('./pages/center/CenterDashboar
 const CenterMembersPage = lazyPage(() => import('./pages/center/CenterMembersPage'));
 const CenterSubjectsPage = lazyPage(() => import('./pages/center/CenterSubjectsPage'));
 const CenterSettingsPage = lazyPage(() => import('./pages/center/CenterSettingsPage'));
+const CenterStudioPage = lazyPage(() => import('./pages/center/CenterStudioPage'));
 const CenterActivityPage = lazyPage(() => import('./pages/center/CenterActivityPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
@@ -239,6 +240,7 @@ export default function App() {
       <Route path="/center/members" element={<RequireAuth role={Role.STAFF}><CenterMembersPage /></RequireAuth>} />
       <Route path="/center/subjects" element={<RequireAuth role={Role.STAFF}><CenterSubjectsPage /></RequireAuth>} />
       <Route path="/center/settings" element={<RequireAuth role={Role.STAFF}><CenterSettingsPage /></RequireAuth>} />
+      <Route path="/center/studio" element={<RequireAuth role={[Role.STAFF, Role.TEACHER]}><CenterStudioPage /></RequireAuth>} />
       <Route path="/center/activity" element={<RequireAuth role={Role.STAFF}><CenterActivityPage /></RequireAuth>} />
       <Route path="/admin/teachers" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminTeachersPage /></RequireAuth>} />
       <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />

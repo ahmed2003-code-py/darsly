@@ -8,6 +8,7 @@ import {
   watchSystemMode,
   type ResolvedMode,
 } from '../lib/colorMode';
+import { repaintAdminThemeForMode } from '../lib/adminTheme';
 import { repaintStudioForMode } from '../lib/studio';
 import { repaintForMode } from '../lib/theme';
 
@@ -36,6 +37,9 @@ export default function ColorModeToggle() {
       repaintForMode();
       // The student's own accent has a light and a dark end too.
       repaintStudioForMode();
+      // And so does the admin console's look — whose remap outranks the
+      // platform's dark block, so the attribute alone changes nothing there.
+      repaintAdminThemeForMode();
     });
   }, []);
 
@@ -49,8 +53,10 @@ export default function ColorModeToggle() {
         // properties and beat the stylesheet, so the other end has to be
         // written over them.
         repaintForMode();
-      // The student's own accent has a light and a dark end too.
-      repaintStudioForMode();
+        // The student's own accent has a light and a dark end too.
+        repaintStudioForMode();
+        // And the admin console's look, for the same reason.
+        repaintAdminThemeForMode();
       }}
       title={t(`colorMode.${next}`)}
       aria-label={t(`colorMode.${next}`)}

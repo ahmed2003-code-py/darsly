@@ -39,6 +39,7 @@ export default function CenterDashboardPage() {
     { to: '/teacher/schedule', icon: 'calendar_month', title: t('center.schedule'), sub: t('center.scheduleSub') },
     { to: '/center/subjects', icon: 'menu_book', title: t('center.subjects'), sub: t('center.subjectsSub') },
     { to: '/teacher/analytics', icon: 'monitoring', title: t('center.analytics'), sub: t('center.analyticsSub') },
+    { to: '/center/studio', icon: 'palette', title: t('centerStudio.title'), sub: t('centerStudio.tileSub') },
     { to: '/center/settings', icon: 'settings', title: t('center.settings'), sub: t('center.settingsSub') },
   ];
 

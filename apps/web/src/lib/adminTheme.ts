@@ -1,4 +1,5 @@
-import { ADMIN_THEME_PRESETS, presetEntry, type AdminThemeEntry, type AdminThemeTokens } from '@darsly/shared-types';
+import { ADMIN_THEME_PRESETS, presetEntry, type AdminThemeEntry, type AdminThemeMode, type AdminThemeTokens } from '@darsly/shared-types';
+import { resolveMode } from './colorMode';
 
 /**
  * Darsly Platform Admin theme — separate from Student Cosmetics, Academy
@@ -35,20 +36,67 @@ function findAdminPreset(id: string | null | undefined): AdminThemeEntry | null 
 const CACHE_KEY = 'darsly-admin-theme';
 const ATTR = 'data-admin-theme';
 
+/** What is on screen, so flipping the colour mode can repaint the other end of
+ *  it without another round trip. */
+let current: AdminThemeLook | null = null;
+
+/** A look as this module needs it: an id and both ends of the palette. */
+type AdminThemeLook = Pick<AdminThemeEntry, 'id'> &
+  Partial<Pick<AdminThemeEntry, 'tokens'>> &
+  Partial<Pick<AdminThemeEntry, 'modes'>>;
+
+/**
+ * The half of `look` that belongs on screen right now.
+ *
+ * An entry from the current API carries both ends; one from a cache written
+ * before it did carries only `tokens`, so that is the fallback rather than a
+ * blank console.
+ */
+function tokensForMode(look: AdminThemeLook, mode: AdminThemeMode): AdminThemeTokens | null {
+  return look.modes?.[mode] ?? look.tokens ?? null;
+}
+
 /** Paint the Admin Studio in `theme`. Writes only `--adm-*` variables and
  *  the gating attribute — never touches `--c-*` directly, so the remap
  *  block in admin-theme.css is the one and only place the two systems
  *  ever meet. */
-export function applyAdminTheme(theme: Pick<AdminThemeEntry, 'id' | 'tokens'>, remember = true): void {
-  paint(theme.tokens);
+export function applyAdminTheme(theme: AdminThemeLook, remember = true): void {
+  const tokens = tokensForMode(theme, resolveMode());
+  if (!tokens) return;
+  current = theme;
+  paint(tokens);
   if (!remember) return;
   try {
     // The resolved tokens travel with the id so a Center's or a store theme's
     // look — which only the API can resolve — replays before first paint too.
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ id: theme.id, tokens: theme.tokens }));
+    // Both ends are cached, so the mode switch is a repaint from memory.
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ id: theme.id, tokens, modes: theme.modes ?? null }));
   } catch {
     // A full or blocked storage costs the next load its head start, nothing more.
   }
+}
+
+/** The half of an entry that applying it would actually paint — so a card in the
+ *  shelf shows the look at the end of the day the reader is sitting in. */
+export function adminTokensForCurrentMode(entry: AdminThemeLook): AdminThemeTokens {
+  return tokensForMode(entry, resolveMode()) ?? DEFAULT_ADMIN_THEME.tokens;
+}
+
+/**
+ * Repaint the look already on screen at the other end of the palette.
+ *
+ * This is what makes the console's light/dark switch do anything at all for an
+ * admin. `admin-theme.css` redefines the `--c-*` tokens under an attribute
+ * specific enough to outrank `:root[data-theme='dark']` — deliberately, so a
+ * chosen look is not half-overwritten by the platform's dark block — which also
+ * meant flipping the switch changed the attribute and nothing else. The mode
+ * picks which half of the admin look is written, the same way lib/theme.ts's
+ * `repaintForMode` picks which half of an academy's palette is written.
+ */
+export function repaintAdminThemeForMode(): void {
+  if (!current) return;
+  const tokens = tokensForMode(current, resolveMode());
+  if (tokens) paint(tokens);
 }
 
 function paint(tokens: AdminThemeTokens): void {
@@ -79,6 +127,8 @@ export function stripAdminThemeFromDom(): void {
     root.style.removeProperty(name);
   }
   root.removeAttribute(ATTR);
+  // Nothing is painted any more, so a later mode flip must not put it back.
+  current = null;
 }
 
 /**
@@ -104,14 +154,20 @@ export function bootAdminTheme(isSuperAdmin: boolean): void {
   }
 }
 
-/** The cached look, in either the current `{id, tokens}` form or the older bare preset id. */
-function readCache(): Pick<AdminThemeEntry, 'id' | 'tokens'> | null {
+/** The cached look, in the current `{id, tokens, modes}` form, the `{id, tokens}`
+ *  form that predates light/dark pairs, or the oldest bare preset id. */
+function readCache(): AdminThemeLook | null {
   const raw = localStorage.getItem(CACHE_KEY);
   if (!raw) return null;
   if (!raw.startsWith('{')) return findAdminPreset(raw);
-  const parsed = JSON.parse(raw) as { id?: unknown; tokens?: unknown };
+  const parsed = JSON.parse(raw) as { id?: unknown; tokens?: unknown; modes?: unknown };
   if (typeof parsed.id !== 'string' || !isTokens(parsed.tokens)) return null;
-  return { id: parsed.id, tokens: parsed.tokens };
+  const modes = parsed.modes as Record<string, unknown> | null | undefined;
+  const pair =
+    modes && isTokens(modes.light) && isTokens(modes.dark)
+      ? { light: modes.light, dark: modes.dark }
+      : undefined;
+  return { id: parsed.id, tokens: parsed.tokens, modes: pair };
 }
 
 /** Only ever paints "R G B" triples — a cache is still browser storage, and a stray string in it must not become a CSS value. */

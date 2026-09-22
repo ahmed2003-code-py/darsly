@@ -44,7 +44,24 @@
   --c-on-surface: var(--adm-text);
   --c-on-surface-variant: var(--adm-text-muted);
   --c-outline: var(--adm-text-muted);
-  --c-line: var(--adm-border);
+  /*
+   * `--c-line` is the ink hairlines are an alpha OF, not a border colour.
+   *
+   * tailwind.config.ts defines `outline-variant` as `rgb(var(--c-line) / 0.10)`
+   * and `shadow-card` as a 6% ring of `--c-shadow`, and `.btn-secondary`,
+   * `.card` and `.input` all draw their only edge from those. This block used
+   * to seat `--adm-border` here — a *surface* colour (AdminThemeService derives
+   * it from `surface-container-highest`), so on every dark preset it was a dark
+   * slate at 10% opacity over a dark page: the buttons were still there, and
+   * their edges were invisible. The platform palette states the rule directly
+   * — light mode seats ink `24 24 34`, dark mode seats `235 235 245` — so the
+   * admin look follows it with its own ink, and every hairline comes back at
+   * both ends. `--adm-border` keeps its job wherever a full-strength border is
+   * drawn (below, and in the LookPreview swatches).
+   */
+  --c-line: var(--adm-text);
+  /* Shadows stay black, the same choice the platform dark palette and
+     deriveAppTheme both make: a shadow tinted with light ink glows. */
   --c-shadow: 0 0 0;
 
   --c-primary: var(--adm-primary);

@@ -99,7 +99,13 @@ export default function AcademyStudioPage() {
             <h1 className="display">{t('studio.title')}</h1>
             <p className="mt-2 max-w-prose text-on-surface-variant">{t('studio.subtitle')}</p>
           </div>
-          {ov?.status === 'PUBLISHED' && (
+            {academy.kind === 'CENTER' && (
+              <Link to="/center/studio" className="btn-secondary shrink-0">
+                <span className="material-symbols-outlined text-[20px]">palette</span>
+                {t('centerStudio.title')}
+              </Link>
+            )}
+            {ov?.status === 'PUBLISHED' && (
             <Link to={`/a/${academy.slug}`} target="_blank" className="btn-secondary shrink-0">
               <span className="material-symbols-outlined text-[20px]">open_in_new</span>
               {t('studio.viewPublished')}

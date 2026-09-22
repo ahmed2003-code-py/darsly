@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
+import { Link } from 'react-router-dom';
 import { useOwnedAcademy } from '../../lib/academy';
 import { BrandingTab } from '../academy/AcademyConsolePage';
 import { EmptyState, ErrorNote, PageHeader, Skeleton } from '../../components/ui';
@@ -20,6 +21,15 @@ export default function CenterSettingsPage() {
   return (
     <div className="page">
       <PageHeader title={t('center.settings')} subtitle={academy.name} />
+      {academy.kind === 'CENTER' && (
+        <Link to="/center/studio" className="card card-hover mb-6 flex items-center gap-3 p-4">
+          <span className="material-symbols-outlined text-2xl text-primary">palette</span>
+          <div>
+            <p className="font-heading font-bold">{t('centerStudio.title')}</p>
+            <p className="text-sm text-on-surface-variant">{t('centerStudio.tileSub')}</p>
+          </div>
+        </Link>
+      )}
       <RevenueShareCard slug={academy.slug} />
       <BrandingTab slug={academy.slug} />
     </div>

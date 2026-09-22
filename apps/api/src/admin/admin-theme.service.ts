@@ -3,10 +3,12 @@ import { Prisma } from '@prisma/client';
 import {
   ADMIN_THEME_PRESETS,
   AdminThemeEntry,
+  AdminThemeMode,
+  AdminThemePreset,
   AdminThemeTokens,
   presetEntry,
 } from '@darsly/shared-types';
-import { AppTheme, BrandPalette, deriveAppTheme, paletteFromBrandTokens } from '../branding/app-theme';
+import { AppTheme, BrandPalette, deriveAppTheme, deriveAppThemeFor, paletteFromBrandTokens } from '../branding/app-theme';
 import { PrismaService } from '../prisma/prisma.service';
 import { safeHex, ThemeConfig } from '../studio/studio-theme';
 
@@ -65,7 +67,7 @@ export class AdminThemeService {
       }),
     ]);
     return {
-      presets: ADMIN_THEME_PRESETS.map(presetEntry),
+      presets: ADMIN_THEME_PRESETS.map(bothModesPreset),
       academies: academies.map(academyEntry),
       cosmetics: cosmetics.map(cosmeticEntry),
     };
@@ -95,11 +97,11 @@ export class AdminThemeService {
     const ref = rest.join(':');
     if (!ref) {
       const preset = ADMIN_THEME_PRESETS.find((p) => p.id === themeId);
-      return preset ? presetEntry(preset) : null;
+      return preset ? bothModesPreset(preset) : null;
     }
     if (ns === 'preset') {
       const preset = ADMIN_THEME_PRESETS.find((p) => p.id === ref);
-      return preset ? presetEntry(preset) : null;
+      return preset ? bothModesPreset(preset) : null;
     }
     if (ns === 'academy') {
       const row = await this.prisma.academy.findFirst({ where: { id: ref, deletedAt: null, status: { not: 'ARCHIVED' } }, select: ACADEMY_SELECT });
@@ -115,30 +117,81 @@ export class AdminThemeService {
 
 // ── resolution ───────────────────────────────────────────────────────────────
 
+/**
+ * One palette, both ends, reduced to the admin shell's tokens.
+ *
+ * `deriveAppThemeFor` is the same function the academy console uses to show a
+ * published palette at the other end of the day: the brand hue is kept, the
+ * neutrals are re-seated, and every contrast floor is enforced by the code that
+ * already enforces them for the palette's native mode. Deriving here rather
+ * than inventing a second set of rules is the point — an admin look and an
+ * academy look go dark by the same means.
+ */
+function bothModes(palette: BrandPalette | null): Pick<AdminThemeEntry, 'mode' | 'tokens' | 'modes'> {
+  const native = deriveAppTheme(palette);
+  const modes = {
+    light: adminTokensFrom(deriveAppThemeFor(palette, 'light')),
+    dark: adminTokensFrom(deriveAppThemeFor(palette, 'dark')),
+  };
+  return { mode: native.mode, tokens: modes[native.mode], modes };
+}
+
+/**
+ * A built-in preset, at both ends.
+ *
+ * The preset's own tokens are kept verbatim for the mode it was designed in —
+ * these are drawn looks and re-deriving them would mean shipping a "Darsly
+ * Dark" that is not the one anybody approved. Only the opposite end is derived,
+ * from the preset read back as a brand palette.
+ */
+function bothModesPreset(preset: AdminThemePreset): AdminThemeEntry {
+  const other: AdminThemeMode = preset.mode === 'dark' ? 'light' : 'dark';
+  const derived = adminTokensFrom(deriveAppThemeFor(paletteFromAdminTokens(preset.tokens), other));
+  return {
+    ...presetEntry(preset),
+    modes: { [preset.mode]: preset.tokens, [other]: derived } as Record<AdminThemeMode, AdminThemeTokens>,
+  };
+}
+
+/** An admin token set read back as the five-field palette the derivation takes. */
+function paletteFromAdminTokens(tokens: AdminThemeTokens): BrandPalette {
+  return {
+    background: hexFromTriple(tokens.background),
+    surface: hexFromTriple(tokens.surface),
+    surfaceAlt: hexFromTriple(tokens.surfaceElevated),
+    ink: hexFromTriple(tokens.text),
+    primary: hexFromTriple(tokens.primary),
+    accent: hexFromTriple(tokens.accent),
+  };
+}
+
+/** `"110 91 211"` → `"#6E5BD3"`. The inverse of app-theme's `triple()`. */
+function hexFromTriple(triple: string): string {
+  const parts = triple.trim().split(/\s+/).map((n) => Math.max(0, Math.min(255, Number(n) | 0)));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '#000000';
+  return `#${parts.map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
+
 function academyEntry(a: AcademyRow): AdminThemeEntry {
   const palette = paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent);
-  const app = deriveAppTheme(palette);
   return {
     id: `academy:${a.id}`,
     source: 'ACADEMY',
     name: a.name,
     subtitle: a.owner?.fullName ?? null,
-    mode: app.mode,
-    tokens: adminTokensFrom(app),
+    ...bothModes(palette),
     meta: { academyId: a.id, academyKind: a.kind, slug: a.slug, logoUrl: a.logoUrl, ownerName: a.owner?.fullName ?? null },
   };
 }
 
 function cosmeticEntry(c: CosmeticRow): AdminThemeEntry {
   const cfg = (c.config && typeof c.config === 'object' ? c.config : {}) as ThemeConfig;
-  const app = deriveAppTheme(paletteFromCosmetic(cfg));
   return {
     id: `cosmetic:${c.key}`,
     source: 'COSMETIC',
     name: c.nameAr,
     subtitle: c.nameEn,
-    mode: app.mode,
-    tokens: adminTokensFrom(app),
+    ...bothModes(paletteFromCosmetic(cfg)),
     meta: { cosmeticKey: c.key, rarity: c.rarity, pattern: typeof cfg.pattern === 'string' ? cfg.pattern : null },
   };
 }

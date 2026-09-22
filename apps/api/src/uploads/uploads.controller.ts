@@ -19,6 +19,7 @@ import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as os from 'os';
 import { AuditService } from '../audit/audit.service';
+import { assertFileMatchesMime } from '../common/file-signature';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -85,8 +86,29 @@ export class UploadsController {
           : cb(new BadRequestException('Only mp4/webm/mov/mkv videos are accepted'), false),
     }),
   )
+  /**
+   * Refuse a file whose content does not match its declared type, and do not
+   * leave the staged copy behind when refusing.
+   *
+   * Every early return in this controller unlinks the temp file; a new one
+   * that forgot would leak a 2 GB upload onto the container's disk, so the
+   * cleanup lives with the check rather than at each call site.
+   */
+  private async rejectMismatch(file: Express.Multer.File): Promise<void> {
+    try {
+      await assertFileMatchesMime(file.path, file.mimetype);
+    } catch (e) {
+      fs.unlink(file.path, () => undefined);
+      throw e;
+    }
+  }
+
   async uploadVideo(@CurrentUser() user: JwtPayload, @UploadedFile() file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('file is required');
+    // The filter above checked the type the client *declared*; this checks the
+    // bytes. Done here rather than in fileFilter because multer has not written
+    // the body yet when that runs — there is nothing to read until now.
+    await this.rejectMismatch(file);
 
     // Create the asset first (UPLOADING) so we can key the source object by id,
     // then move the staged upload into private storage under source/<id>.
@@ -167,6 +189,7 @@ export class UploadsController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('file is required');
+    await this.rejectMismatch(file);
     const lesson = await this.prisma.lesson.findFirst({
       where: { id: lessonId, unit: { course: { tenantId: user.tenantId } } },
     });

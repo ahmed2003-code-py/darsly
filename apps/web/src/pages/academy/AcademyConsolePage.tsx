@@ -1,58 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
-import { useOwnedAcademy } from '../../lib/academy';
 import { invitationJoinUrl, useCreateInvitationLink, useInvitationLinks, useRevokeInvitationLink } from '../../lib/invitationLinks';
-import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../../components/ui';
+import { Badge, ErrorNote, Field, Spinner } from '../../components/ui';
 
-const TABS = ['branding', 'members'] as const;
-
-export default function AcademyConsolePage() {
-  const { t } = useTranslation();
-  const { academy, isLoading } = useOwnedAcademy();
-  const [tab, setTab] = useState<(typeof TABS)[number]>('branding');
-
-  if (isLoading) return <div className="mx-auto max-w-container px-6 py-8"><Spinner /></div>;
-  if (!academy) {
-    return (
-      <div className="mx-auto max-w-container px-6 py-8">
-        <PageHeader title={t('academy.none')} subtitle={t('academy.noneSub')} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="page">
-      <PageHeader
-        title={t('academy.title')}
-        subtitle={t('academy.subtitle')}
-        action={
-          <Link to={`/a/${academy.slug}`} target="_blank" className="btn-secondary">
-            <span className="material-symbols-outlined text-[20px]">open_in_new</span>{t('academy.viewPage')}</Link>
-        }
-      />
-      <div className="mb-6 flex gap-2">
-        {TABS.map((tb) => (
-          <button
-            key={tb}
-            onClick={() => setTab(tb)}
-            className={`rounded-full px-5 py-2 font-heading text-sm font-semibold transition-colors ${
-              tab === tb ? 'bg-primary text-on-primary' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
-            }`}
-          >
-            {tb === 'branding' ? t('academy.tabBranding') : t('academy.tabTeam')}
-          </button>
-        ))}
-      </div>
-      {tab === 'branding' ? <BrandingTab slug={academy.slug} /> : <MembersTab slug={academy.slug} />}
-    </div>
-  );
-}
-
-// ── Branding & settings ─────────────────────────────────────────────────────
 export function BrandingTab({ slug }: { slug: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();

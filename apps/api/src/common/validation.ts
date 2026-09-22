@@ -3,7 +3,6 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  Matches,
   Max,
   MaxLength,
   Min,
@@ -55,38 +54,6 @@ export function IsId(): PropertyDecorator {
 /** Optional variant of {@link IsId}. */
 export function IsOptionalId(): PropertyDecorator {
   return applyDecorators(IsOptional(), IsString(), MaxLength(LIMITS.ID));
-}
-
-const IMAGE_DATA_URL = /^data:image\/(png|jpe?g|webp|gif|avif);base64,[A-Za-z0-9+/=]+$/;
-
-/**
- * A `data:image/...;base64,...` URL, size-capped.
- *
- * Checking the prefix matters: these values are stored and later echoed into an
- * `<img src>`. Accepting any string there lets a `javascript:` or
- * `data:text/html` payload reach the browser that renders it.
- */
-export function IsImageDataUrl(maxLength: number = LIMITS.IMAGE_DATA_URL): PropertyDecorator {
-  return applyDecorators(
-    IsString(),
-    Matches(IMAGE_DATA_URL, { message: 'must be a base64-encoded image data URL' }),
-    MaxLength(maxLength, { message: `image is too large (max ${Math.round(maxLength / 1024)} KB)` }),
-  );
-}
-
-/**
- * An image reference that may be either a data URL or an https link — used
- * where a teacher can paste a hosted image instead of uploading one.
- */
-export function IsImageRef(maxLength: number = LIMITS.IMAGE_DATA_URL): PropertyDecorator {
-  return applyDecorators(
-    IsString(),
-    Matches(
-      new RegExp(`^(https://[^\\s]+|${IMAGE_DATA_URL.source.slice(1, -1)})$`),
-      { message: 'must be an https URL or a base64 image data URL' },
-    ),
-    MaxLength(maxLength),
-  );
 }
 
 /** A 1-based page number. */

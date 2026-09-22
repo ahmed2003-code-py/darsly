@@ -18,7 +18,7 @@ function makePrisma() {
   };
   return prisma;
 }
-const deps = () => ({ mail: { sendInBackground: jest.fn(), webUrl: (p: string) => `https://web${p}` }, audit: { log: jest.fn() } });
+const deps = (delivered = true) => ({ mail: { send: jest.fn().mockResolvedValue(delivered ? { delivered: true, id: 'm1', transport: 'resend' } : { delivered: false, reason: 'provider-error' }), sendInBackground: jest.fn(), webUrl: (p: string) => `https://web${p}` }, audit: { log: jest.fn() } });
 const svc = (prisma: any, d = deps()) => ({ s: new AdminCentersService(prisma, d.mail as any, d.audit as any), d });
 const dto = { name: 'El Shehab', adminName: 'Ahmed', adminEmail: 'Admin@x.com' };
 
@@ -38,7 +38,7 @@ describe('AdminCentersService.createCenter — new admin', () => {
     expect(tok.tokenHash).toMatch(/^[a-f0-9]{64}$/);
     expect(tok.expiresAt.getTime()).toBeGreaterThan(Date.now());
     // the raw token reaches the email only — and is never equal to what is stored
-    const url: string = d.mail.sendInBackground.mock.calls[0][0].text;
+    const url: string = d.mail.send.mock.calls[0][0].text;
     expect(url).toContain('/activate?token=');
     expect(url).not.toContain(tok.tokenHash);
     expect(res.admin).toMatchObject({ role: 'STAFF', activation: 'EMAIL_SENT' });
@@ -58,13 +58,56 @@ describe('AdminCentersService.createCenter — new admin', () => {
     // The mail call still names the REAL admin as `to` — MailService (not
     // this service) is what redirects delivery, and only because this one
     // call opts in via the flag below.
-    const mailCall = d.mail.sendInBackground.mock.calls[0][0];
+    const mailCall = d.mail.send.mock.calls[0][0];
     expect(mailCall.to).toBe('admin@x.com');
     expect(mailCall.centerOwnerTestRedirect).toBe(true);
 
     // The email content still carries the real Center/admin details.
     expect(mailCall.subject).toContain('El Shehab');
     expect(mailCall.text).toContain('Admin'); // the admin's fullName
+  });
+
+  it('EMAIL FAILURE: the Center, the inactive admin and the hashed token are all persisted; the response says EMAIL_FAILED — nobody is activated', async () => {
+    const prisma = makePrisma();
+    const { s, d } = svc(prisma, deps(false));
+    const res = await s.createCenter(dto, 'sa');
+    expect(prisma._tx.user.create.mock.calls[0][0].data).toMatchObject({ isActive: false });
+    expect(prisma._tx.academy.create.mock.calls[0][0].data).toMatchObject({ status: 'PENDING' });
+    expect(prisma._tx.academyActivationToken.create).toHaveBeenCalledTimes(1);
+    expect(res.admin.activation).toBe('EMAIL_FAILED');
+    expect((res as any).delivery).toEqual({ delivered: false, reason: 'provider-error' });
+    // The audit row records the failure, so the admin can see it and reissue.
+    expect(d.audit.log.mock.calls[0][0].meta).toMatchObject({ activation: 'EMAIL_FAILED', deliveryFailure: 'provider-error' });
+    // No user.update, no isActive flip, no membership ACTIVE anywhere.
+    expect(prisma._tx.academyMembership.create.mock.calls[0][0].data.status).toBe('INVITED');
+  });
+
+  it('EMAIL SUCCESS: identical persisted state, response says EMAIL_SENT', async () => {
+    const prisma = makePrisma();
+    const { s } = svc(prisma, deps(true));
+    const res = await s.createCenter(dto, 'sa');
+    expect(res.admin.activation).toBe('EMAIL_SENT');
+    expect((res as any).delivery).toEqual({ delivered: true });
+    expect(prisma._tx.user.create.mock.calls[0][0].data.isActive).toBe(false);
+  });
+
+  it('RETRY: resendActivation revokes every open token, mints a new one, reports delivery, and applies the same test routing', async () => {
+    const prisma = makePrisma();
+    prisma.academy.findFirst.mockResolvedValue({ id: 'c1', name: 'C', owner: { id: 'newU', email: 'admin@x.com', fullName: 'Admin', isActive: false, passwordHash: null } });
+    prisma.$transaction = jest.fn(async (arg: any) => (typeof arg === 'function' ? arg(prisma._tx) : Promise.all(arg)));
+    const { s, d } = svc(prisma, deps(false));
+    const res = await s.resendActivation('c1', 'sa');
+    expect(prisma.academyActivationToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { revokedAt: expect.any(Date) } }));
+    expect(prisma.academyActivationToken.create).toHaveBeenCalledTimes(1);
+    expect(res.delivery).toEqual({ delivered: false, reason: 'provider-error' });
+    expect(d.mail.send.mock.calls[0][0]).toMatchObject({ to: 'admin@x.com', centerOwnerTestRedirect: true });
+  });
+
+  it('RETRY refused once the admin has activated', async () => {
+    const prisma = makePrisma();
+    prisma.academy.findFirst.mockResolvedValue({ id: 'c1', name: 'C', owner: { id: 'u', email: 'a@x.com', fullName: 'A', isActive: true, passwordHash: 'h' } });
+    const { s } = svc(prisma);
+    await expect(s.resendActivation('c1', 'sa')).rejects.toMatchObject({ response: { code: 'ALREADY_ACTIVE' } });
   });
 
   it('derives a slug that collides with neither an academy nor a teacher', async () => {

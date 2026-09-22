@@ -21,7 +21,7 @@ export default function AdminCreateCenterPage() {
         adminEmail: form.adminEmail.trim(),
         ...(form.adminPhone.trim() ? { adminPhone: form.adminPhone.trim() } : {}),
       },
-      { onSuccess: (res) => navigate(`/admin/academies/${res.id}`) },
+      { onSuccess: (res) => navigate(`/admin/academies/${res.id}${res.delivery?.delivered === false ? '?activationEmail=failed' : ''}`) },
     );
   };
 

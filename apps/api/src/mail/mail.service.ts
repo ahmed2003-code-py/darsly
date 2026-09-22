@@ -1,4 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { mkdirSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { EmailContent } from './templates';
 
 export interface SendMailInput extends EmailContent {
@@ -27,10 +30,16 @@ function escapeHtml(value: string): string {
 }
 
 export type SendResult =
-  | { delivered: true; id: string }
+  | { delivered: true; id: string; transport: 'resend' | 'capture' }
   | { delivered: false; reason: 'no-provider' | 'provider-error' };
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+
+/**
+ * Where the capture transport writes outbound mail. Test/dev only — see
+ * `captureDir` below; it is never honoured when NODE_ENV=production.
+ */
+const DEFAULT_CAPTURE_DIR = join(tmpdir(), 'darsly-mail-outbox');
 
 /**
  * The single outbound-email seam for the whole API — one place that knows the
@@ -71,6 +80,20 @@ export class MailService {
     return Boolean(this.apiKey);
   }
 
+  /**
+   * Capture transport (test/dev only): with MAIL_TRANSPORT=capture every
+   * outbound message is written as JSON to MAIL_CAPTURE_DIR instead of being
+   * sent, so an E2E run can read the activation/invitation URL it would have
+   * emailed — without depending on Resend, and without any HTTP endpoint that
+   * hands tokens out. Refused outright in production: NODE_ENV=production
+   * ignores the variable and falls through to the real provider.
+   */
+  private get captureDir(): string | undefined {
+    if (process.env.NODE_ENV === 'production') return undefined;
+    if (process.env.MAIL_TRANSPORT?.trim() !== 'capture') return undefined;
+    return process.env.MAIL_CAPTURE_DIR?.trim() || DEFAULT_CAPTURE_DIR;
+  }
+
   async send(input: SendMailInput): Promise<SendResult> {
     const key = this.apiKey;
 
@@ -87,12 +110,27 @@ export class MailService {
     const html = redirectTo ? `${noticeHtml}${input.html}` : input.html;
     const text = redirectTo ? `[TEMPORARY TEST ROUTING — real recipient: ${input.to}]\n\n${input.text}` : input.text;
 
+    const captureDir = this.captureDir;
+    if (captureDir) {
+      try {
+        mkdirSync(captureDir, { recursive: true });
+        const file = join(captureDir, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
+        writeFileSync(file, JSON.stringify({ capturedAt: new Date().toISOString(), to, realRecipient: input.to, subject, text, html }, null, 2));
+        this.logger.log(`[MAIL:CAPTURED] to=${to} subject="${subject}" → ${file}`);
+        return { delivered: true, id: file, transport: 'capture' };
+      } catch (error) {
+        this.logger.error(`Mail capture failed: ${error instanceof Error ? error.message : String(error)}`);
+        return { delivered: false, reason: 'provider-error' };
+      }
+    }
+
     if (!key) {
       // Dev seam: no provider configured, so the mail is logged instead of sent.
-      // Reset links stay usable locally without an account anywhere.
-      this.logger.warn(
-        `[MAIL:NOT-SENT] to=${to} subject="${subject}" — RESEND_API_KEY is unset\n${text}`,
-      );
+      // Reset links stay usable locally without an account anywhere. The body
+      // (which carries the activation/reset link) is logged OUTSIDE production
+      // only — a production log must never contain a live token.
+      const body = process.env.NODE_ENV === 'production' ? '' : `\n${text}`;
+      this.logger.warn(`[MAIL:NOT-SENT] to=${to} subject="${subject}" — RESEND_API_KEY is unset${body}`);
       return { delivered: false, reason: 'no-provider' };
     }
 
@@ -123,7 +161,7 @@ export class MailService {
 
       const payload = (await response.json().catch(() => ({}))) as { id?: string };
       this.logger.log(`Sent "${subject}" to ${to} (id=${payload.id ?? 'n/a'})${redirectTo ? ` [TEST ROUTED, real recipient ${input.to}]` : ''}`);
-      return { delivered: true, id: payload.id ?? '' };
+      return { delivered: true, id: payload.id ?? '', transport: 'resend' };
     } catch (error) {
       this.logger.error(
         `Mail delivery to ${to} failed: ${error instanceof Error ? error.message : String(error)}`,

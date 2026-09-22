@@ -337,6 +337,68 @@ describe('StudioService — a teacher’s look as the way back', () => {
   });
 });
 
+describe('StudioService — Center branding resolves by organisation (Enrollment.academyId), not author', () => {
+  const overviewPrisma = (enrollments: any[], academies: any[]) => {
+    const prisma = makePrisma();
+    prisma.enrollment.findMany.mockResolvedValue(enrollments);
+    prisma.academy.findMany.mockResolvedValue(academies);
+    prisma.cosmeticItem.findMany.mockResolvedValue([]);
+    prisma.studentProfile.findUnique.mockResolvedValue({ id: 's1', currentStreak: 0, user: { fullName: 'Student', avatarUrl: null } });
+    return prisma;
+  };
+  const academy = (id: string, name: string) => ({ id, name, colorPrimary: '#111111', colorAccent: '#222222', brandTokens: null, owner: { fullName: 'Owner' } });
+
+  it('1. personal course: the teacher own academy is offered (academyId == tenantId) — unchanged behaviour', async () => {
+    const prisma = overviewPrisma([{ tenantId: 'teacherA', academyId: 'teacherA', createdAt: new Date() }], [academy('teacherA', 'Academy A')]);
+    const out = await svc(prisma).overview('u1');
+    expect(prisma.academy.findMany.mock.calls[0][0].where.id.in).toEqual(['teacherA']);
+    expect(out.academyThemes.map((a: any) => a.academyId)).toEqual(['teacherA']);
+  });
+
+  it('2. Center course: the CENTER is offered, not the authoring teacher personal academy', async () => {
+    const prisma = overviewPrisma([{ tenantId: 'teacherA', academyId: 'centerX', createdAt: new Date() }], [academy('centerX', 'Center X')]);
+    const out = await svc(prisma).overview('u1');
+    expect(prisma.academy.findMany.mock.calls[0][0].where.id.in).toEqual(['centerX']);
+    expect(out.academyThemes.map((a: any) => a.academyId)).toEqual(['centerX']);
+  });
+
+  it('a legacy row with no academyId still resolves to its author academy', async () => {
+    const prisma = overviewPrisma([{ tenantId: 'teacherA', academyId: null, createdAt: new Date() }], [academy('teacherA', 'Academy A')]);
+    await svc(prisma).overview('u1');
+    expect(prisma.academy.findMany.mock.calls[0][0].where.id.in).toEqual(['teacherA']);
+  });
+
+  it('2b. equipAcademy accepts the Center of a Center enrolment', async () => {
+    const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) } });
+    await svc(prisma).equipAcademy('u1', 'centerX');
+    const where = prisma.enrollment.findFirst.mock.calls[0][0].where;
+    expect(where.OR).toEqual([{ academyId: 'centerX' }, { academyId: null, tenantId: 'centerX' }]);
+    expect(where.studentId).toBe('s1');
+    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { academyId: 'centerX', themeKey: null } }));
+  });
+
+  it('3. an unrelated Center the student never enrolled in is refused (no row matches the organisation filter)', async () => {
+    const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue(null) } });
+    await expect(svc(prisma).equipAcademy('u1', 'centerY')).rejects.toMatchObject({ response: { code: 'NOT_ENROLLED' } });
+    expect(prisma.studentCustomization.upsert).not.toHaveBeenCalled();
+  });
+
+  it('4. cross-Center: the filter is keyed on the requested id AND the student — a membership elsewhere cannot satisfy it', async () => {
+    const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue(null) } });
+    await expect(svc(prisma).equipAcademy('u1', 'centerZ')).rejects.toBeInstanceOf(ForbiddenException);
+    const where = prisma.enrollment.findFirst.mock.calls[0][0].where;
+    expect(where.studentId).toBe('s1');
+    expect(JSON.stringify(where)).toContain('centerZ');
+    expect(where.status).toEqual({ in: expect.any(Array) });
+  });
+
+  it('5. teacher academy branding is untouched: the author personal academy still wears for a personal course', async () => {
+    const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) } });
+    await svc(prisma).equipAcademy('u1', 'teacherA');
+    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { academyId: 'teacherA', themeKey: null } }));
+  });
+});
+
 describe('StudioService — a colour of your own', () => {
   it('refuses anything that is not a colour', async () => {
     const prisma = makePrisma();

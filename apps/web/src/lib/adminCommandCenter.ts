@@ -162,7 +162,9 @@ export interface CreateCenterInput {
 }
 export interface CreateCenterResult {
   id: string; slug: string; name: string; status: AcademyStatus; kind: AcademyKind;
-  admin: { id: string; role: string; activation: 'EMAIL_SENT' | 'NOT_REQUIRED' };
+  admin: { id: string; role: string; activation: 'EMAIL_SENT' | 'EMAIL_FAILED' | 'NOT_REQUIRED' };
+  /** Present for a new (email-activated) admin: whether the activation email was actually accepted for delivery. */
+  delivery?: { delivered: true } | { delivered: false; reason: 'no-provider' | 'provider-error' };
 }
 
 export function useCreateCenter() {

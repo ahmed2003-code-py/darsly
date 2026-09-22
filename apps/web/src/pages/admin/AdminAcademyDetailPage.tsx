@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { AcademyKind, AcademyStatus } from '@darsly/shared-types';
 import { dateShort, egp } from '../../lib/format';
 import { useAdminAcademyDetail, useResendCenterActivation, useSetCenterStatus, useSetFeatureFlag } from '../../lib/adminCommandCenter';
@@ -79,6 +79,7 @@ export default function AdminAcademyDetailPage() {
   const setActive = useSetAcademyActive(id);
   const setCenterStatus = useSetCenterStatus(id!);
   const resendActivation = useResendCenterActivation(id!);
+  const emailFailedOnCreate = new URLSearchParams(useLocation().search).get('activationEmail') === 'failed';
   const activity = useAcademyActivity(id);
 
   if (isLoading) {
@@ -191,8 +192,11 @@ export default function AdminAcademyDetailPage() {
                       disabled={resendActivation.isPending}
                       onClick={() => resendActivation.mutate()}
                     >
-                      {resendActivation.isSuccess ? t('admin.activationResent') : t('admin.resendActivation')}
+                      {resendActivation.isSuccess && (resendActivation.data as any)?.delivery?.delivered !== false ? t('admin.activationResent') : t('admin.resendActivation')}
                     </button>
+                    {((resendActivation.isSuccess && (resendActivation.data as any)?.delivery?.delivered === false) || emailFailedOnCreate) && (
+                      <span className="text-xs font-bold text-error">{t('admin.activationEmailFailed')}</span>
+                    )}
                   </>
                 )}
               </dd>

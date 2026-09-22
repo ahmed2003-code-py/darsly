@@ -102,7 +102,7 @@ export class EnrollmentsService {
       where: { id: courseId, status: 'PUBLISHED' },
     });
     if (!course) throw new NotFoundException('Course not found');
-    await this.assertNotPaidCenterCourse(course);
+    await this.assertCenterSplitConfiguredIfPaid(course);
 
     let discount = 0;
     let coupon: Coupon | null = null;
@@ -139,7 +139,7 @@ export class EnrollmentsService {
    * free by rule (enforced at create/update), and this closes the door on any
    * row that slipped past that with a price.
    */
-  private async assertNotPaidCenterCourse(course: { academyId: string | null; tenantId: string; priceCents: number }) {
+  private async assertCenterSplitConfiguredIfPaid(course: { academyId: string | null; tenantId: string; priceCents: number }) {
     // Phase 7: a paid Center course is sellable once its revenue split is agreed.
     await assertSplitConfigured(this.prisma, course);
   }

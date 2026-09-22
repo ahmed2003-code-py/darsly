@@ -191,19 +191,6 @@ export function stripAdminThemeFromDom(): void {
   root.removeAttribute(ATTR);
 }
 
-/** Back to the platform default admin look for THIS admin — removes the
- *  saved preference too, so a future login (or boot replay) doesn't bring
- *  it back. Only ever called from a SUPER_ADMIN session about their own
- *  preference — see useSetAdminTheme's "reset" action. */
-export function resetAdminTheme(): void {
-  stripAdminThemeFromDom();
-  try {
-    localStorage.removeItem(CACHE_KEY);
-  } catch {
-    // Nothing to clean up if storage was never reachable.
-  }
-}
-
 /**
  * Replay the cached admin theme, synchronously, before first paint — same
  * technique lib/theme.ts's bootTheme() uses for the academy palette.

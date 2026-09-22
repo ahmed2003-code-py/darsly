@@ -201,17 +201,6 @@ export function useSaveChallengeQuestions(id: string | undefined) {
   });
 }
 
-export function usePublishChallenge(id: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => (await api.post(`/teacher/challenges/${id}/publish`)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['teacher-challenge', id] });
-      qc.invalidateQueries({ queryKey: ['teacher-challenges'] });
-    },
-  });
-}
-
 // ── Student ──────────────────────────────────────────────────────────────
 
 export function useStudentChallenges(tab: 'available' | 'in_progress' | 'completed') {
@@ -229,10 +218,3 @@ export function useChallengeDetail(id: string | undefined) {
   });
 }
 
-export function useChallengeLeaderboard(id: string | undefined, enabled: boolean) {
-  return useQuery<ChallengeLeaderboardRow[]>({
-    queryKey: ['student-challenge-leaderboard', id],
-    queryFn: async () => (await api.get(`/challenges/${id}/leaderboard`)).data,
-    enabled: enabled && !!id,
-  });
-}

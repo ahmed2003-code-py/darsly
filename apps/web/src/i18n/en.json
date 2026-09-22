@@ -842,7 +842,8 @@
       "STAFF": "Staff (non-teaching)",
       "TEACHER": "Teacher",
       "STUDENT": "Student"
-    }
+    },
+    "activationEmailFailed": "Activation email could not be delivered — the link was NOT sent. Fix the email provider, then resend."
   },
   "security": {
     "title": "Security & integrity",

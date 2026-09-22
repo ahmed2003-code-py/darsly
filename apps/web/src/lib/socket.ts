@@ -36,8 +36,3 @@ export function getSocket(): Socket | null {
   return socket;
 }
 
-export function closeSocket() {
-  socket?.close();
-  socket = null;
-  boundToken = null;
-}

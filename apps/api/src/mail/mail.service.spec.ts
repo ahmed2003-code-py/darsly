@@ -40,7 +40,7 @@ describe('MailService', () => {
 
     const result = await service.send(message());
 
-    expect(result).toEqual({ delivered: true, id: 'msg_1' });
+    expect(result).toEqual({ delivered: true, id: 'msg_1', transport: 'resend' });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://api.resend.com/emails');
     expect(init.headers.Authorization).toBe('Bearer re_test_key');
@@ -75,6 +75,65 @@ describe('MailService', () => {
     expect(service.webUrl()).toBe('https://darsly.app');
   });
 
+  describe('capture transport (MAIL_TRANSPORT=capture) — deterministic outbox for tests, never in production', () => {
+    const fs = require('fs') as typeof import('fs');
+    const os = require('os') as typeof import('os');
+    const path = require('path') as typeof import('path');
+    let dir: string;
+    beforeEach(() => {
+      dir = fs.mkdtempSync(path.join(os.tmpdir(), 'darsly-mail-spec-'));
+      process.env.MAIL_TRANSPORT = 'capture';
+      process.env.MAIL_CAPTURE_DIR = dir;
+      process.env.RESEND_API_KEY = 're_test_key';
+      delete process.env.NODE_ENV;
+    });
+    afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    it('writes the message to the outbox instead of calling the provider, and reports it as captured', async () => {
+      const result = await service.send(message());
+      expect(result).toMatchObject({ delivered: true, transport: 'capture' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      const files = fs.readdirSync(dir);
+      expect(files).toHaveLength(1);
+      const saved = JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8'));
+      expect(saved.to).toBe('student@example.com');
+      expect(saved.text).toContain('https://app/reset?token=x'); // the link a test needs to read back
+    });
+
+    it('keeps the real recipient even when the temp redirect is also on', async () => {
+      process.env.TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO = 'tester@example.com';
+      await service.send({ ...message(), to: 'owner@example.com', centerOwnerTestRedirect: true });
+      const saved = JSON.parse(fs.readFileSync(path.join(dir, fs.readdirSync(dir)[0]), 'utf8'));
+      expect(saved.realRecipient).toBe('owner@example.com');
+      expect(saved.to).toBe('tester@example.com');
+    });
+
+    it('is REFUSED in production: NODE_ENV=production ignores MAIL_TRANSPORT and uses the real provider', async () => {
+      process.env.NODE_ENV = 'production';
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'msg_prod' }) });
+      const result = await service.send(message());
+      expect(result).toMatchObject({ delivered: true, transport: 'resend' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fs.readdirSync(dir)).toHaveLength(0);
+    });
+  });
+
+  describe('no-provider dev seam never logs a token in production', () => {
+    it('outside production the body (with its link) is logged for local use', async () => {
+      delete process.env.RESEND_API_KEY; delete process.env.MAIL_TRANSPORT; delete process.env.NODE_ENV;
+      const warn = service['logger'].warn as jest.Mock;
+      await service.send(message());
+      expect(warn.mock.calls[0][0]).toContain('https://app/reset?token=x');
+    });
+    it('in production only the envelope is logged — the link/token never reaches the log', async () => {
+      delete process.env.RESEND_API_KEY; delete process.env.MAIL_TRANSPORT; process.env.NODE_ENV = 'production';
+      const warn = service['logger'].warn as jest.Mock;
+      await service.send(message());
+      expect(warn.mock.calls[0][0]).toContain('[MAIL:NOT-SENT]');
+      expect(warn.mock.calls[0][0]).not.toContain('token=x');
+    });
+  });
+
   describe('TEMPORARY TEST ROUTING (centerOwnerTestRedirect)', () => {
     beforeEach(() => {
       process.env.RESEND_API_KEY = 're_test_key';
@@ -84,7 +143,7 @@ describe('MailService', () => {
 
     it('delivers to the test address instead of the real recipient when the flag and env var are both set', async () => {
       const result = await service.send({ ...message(), centerOwnerTestRedirect: true });
-      expect(result).toEqual({ delivered: true, id: 'msg_1' });
+      expect(result).toEqual({ delivered: true, id: 'msg_1', transport: 'resend' });
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.to).toEqual(['ahmedelsayed05113@gmail.com']);
     });

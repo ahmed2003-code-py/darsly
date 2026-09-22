@@ -43,7 +43,16 @@ export class ProofStorageService {
 
   /** Is this value a key of ours, rather than a legacy data URL or nothing? */
   static isKey(value: string | null | undefined): value is string {
-    return !!value && value.startsWith(`${PREFIX}/`);
+    // Only keys this service minted have this shape: the prefix, then plain
+    // path segments. `..`, empty segments, backslashes and control characters
+    // are refused here as well as by the storage root guard — the link is a
+    // capability, and a capability must never name anything outside its box.
+    if (!value || !value.startsWith(PREFIX + '/')) return false;
+    for (let c = 0; c < value.length; c++) {
+      const code = value.charCodeAt(c);
+      if (code < 0x20 || code === 0x7f || value[c] === String.fromCharCode(92)) return false;
+    }
+    return value.split('/').every((seg, i) => (i === 0 ? true : seg.length > 0 && seg !== '.' && seg !== '..'));
   }
 
   /**

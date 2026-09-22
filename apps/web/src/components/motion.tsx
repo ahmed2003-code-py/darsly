@@ -123,18 +123,3 @@ export function StaggerItem({
   );
 }
 
-/**
- * Subtle press/hover affordance for interactive cards (transform only).
- *
- * A hook rather than a constant now, because the lift follows the theme: a
- * still theme lifts nothing, an expressive one lifts a little more.
- */
-export function useHoverLift() {
-  const { off, scale, dur } = useMotion();
-  if (off) return {};
-  return {
-    whileHover: { y: -2 * scale },
-    whileTap: { scale: 0.99 },
-    transition: { duration: Math.max(0.12, dur * 0.75), ease: EASE },
-  };
-}

@@ -82,15 +82,16 @@ export class AdminCentersService {
       return { user, academy: a };
     });
 
-    this.mail.sendInBackground({
+    // Delivery is awaited and REPORTED, never assumed: the Center and its
+    // inactive admin exist, the hashed token is stored, and nothing about that
+    // changes if the provider fails — the admin simply learns it did (and can
+    // reissue the link). Activation itself only ever happens through the token.
+    const delivery = await this.mail.send({
       to: adminEmail,
-      // TEMPORARY TEST ROUTING (Phase 8 follow-up): while the real provider
-      // can't be verified end-to-end on Railway, this opts the ONE
-      // Center-activation email into MailService's redirect — `adminEmail`
-      // above stays the real recipient in every other respect (the DB row,
-      // the returned response, this call's own `to`). See
-      // MailService.send / TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO. Remove this
-      // line once the real provider is confirmed working.
+      // TEMPORARY TEST ROUTING: opts this Center-activation email into
+      // MailService's redirect — `adminEmail` stays the real recipient in the
+      // DB row, the response and this call's own `to`. See
+      // TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO. Remove once the provider works.
       centerOwnerTestRedirect: true,
       ...centerAdminActivationEmail({
         name: created.user.fullName,
@@ -99,11 +100,16 @@ export class AdminCentersService {
         expiresInDays: ACTIVATION_TTL_DAYS,
       }),
     });
+    const activation = delivery.delivered ? ('EMAIL_SENT' as const) : ('EMAIL_FAILED' as const);
     await this.audit.log({
       actorUserId: adminUserId, action: 'center.create', entity: 'Academy', entityId: created.academy.id, academyId: created.academy.id,
-      meta: { adminUserId: created.user.id, adminIdentity: Role.STAFF, activation: 'EMAIL_SENT' },
+      meta: { adminUserId: created.user.id, adminIdentity: Role.STAFF, activation, ...(delivery.delivered ? {} : { deliveryFailure: delivery.reason }) },
     });
-    return { ...created.academy, admin: { id: created.user.id, role: Role.STAFF, activation: 'EMAIL_SENT' as const } };
+    return {
+      ...created.academy,
+      admin: { id: created.user.id, role: Role.STAFF, activation },
+      delivery: delivery.delivered ? { delivered: true as const } : { delivered: false as const, reason: delivery.reason },
+    };
   }
 
   /** Reissue the one-time link: every earlier token for this admin is revoked first. */
@@ -129,16 +135,20 @@ export class AdminCentersService {
         data: { userId: academy.owner.id, academyId, tokenHash: this.hashToken(rawToken), expiresAt },
       }),
     ]);
-    this.mail.sendInBackground({
+    const delivery = await this.mail.send({
       to: academy.owner.email,
+      centerOwnerTestRedirect: true, // TEMPORARY TEST ROUTING — same as createCenter
       ...centerAdminActivationEmail({
         name: academy.owner.fullName, centerName: academy.name,
         activationUrl: this.mail.webUrl(`/activate?token=${encodeURIComponent(rawToken)}`),
         expiresInDays: ACTIVATION_TTL_DAYS,
       }),
     });
-    await this.audit.log({ actorUserId: adminUserId, action: 'center.activation.resend', entity: 'Academy', entityId: academyId, academyId });
-    return { ok: true, expiresAt };
+    await this.audit.log({
+      actorUserId: adminUserId, action: 'center.activation.resend', entity: 'Academy', entityId: academyId, academyId,
+      meta: delivery.delivered ? { delivered: true } : { delivered: false, deliveryFailure: delivery.reason },
+    });
+    return { ok: true, expiresAt, delivery: delivery.delivered ? { delivered: true as const } : { delivered: false as const, reason: delivery.reason } };
   }
 
   /**

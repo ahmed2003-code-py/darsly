@@ -139,14 +139,6 @@ export function useRemoveGroupMember(groupId: string) {
   });
 }
 
-export function useAssignStaff(groupId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (dto: { userId: string; role: 'TEACHER' | 'ASSISTANT' }) => (await api.post(`/teacher/groups/${groupId}/assignments`, dto)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-group', groupId] }),
-  });
-}
-
 export function useUnassignStaff(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -169,14 +161,6 @@ export function useMarkAttendance(groupId: string) {
     mutationFn: async (dto: { date: string; records: { studentId: string; status: string }[] }) =>
       (await api.post(`/teacher/groups/${groupId}/attendance`, dto)).data,
     onSuccess: (_data, dto) => qc.invalidateQueries({ queryKey: ['teacher-attendance', groupId, dto.date] }),
-  });
-}
-
-export function useStudentAttendanceHistory(studentId: string | undefined) {
-  return useQuery({
-    queryKey: ['teacher-student-attendance', studentId],
-    queryFn: async () => (await api.get(`/teacher/students/${studentId}/attendance`)).data,
-    enabled: !!studentId,
   });
 }
 

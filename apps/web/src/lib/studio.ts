@@ -582,16 +582,3 @@ export function releaseStudio(): void {
   // so the next arrival knows to check whose look this is.
 }
 
-/** Forget it entirely — a different account, or a reset. */
-export function clearStudio(): void {
-  equipped = null;
-  paint(null);
-  rememberAcademy(null);
-  try {
-    const id = signedInUserId();
-    if (id) localStorage.removeItem(studioKeyFor(id));
-    dropLegacyCache();
-  } catch {
-    /* nothing to clear */
-  }
-}

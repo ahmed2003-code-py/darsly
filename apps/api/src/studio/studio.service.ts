@@ -199,12 +199,17 @@ export class StudioService implements OnModuleInit {
     chosen: string | null,
     wornThemeKey: string | null,
   ) {
+    // The ORGANISATION the student studies at (Enrollment.academyId) — a Center
+    // for a Center course, the teacher's own academy otherwise. tenantId is the
+    // author, which for a Center course is a different academy than the one
+    // whose colours the student should be offered. Pre-Phase-4 rows carry no
+    // academyId; their author's academy is that organisation.
     const rows = await this.prisma.enrollment.findMany({
       where: { studentId, status: { in: EARNED_LOOK_STATUSES } },
-      select: { tenantId: true, createdAt: true },
+      select: { tenantId: true, academyId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
-    const ids = [...new Set(rows.map((r) => r.tenantId))];
+    const ids = [...new Set(rows.map((r) => r.academyId ?? r.tenantId))];
     if (!ids.length) return [];
 
     const academies = await this.prisma.academy.findMany({
@@ -247,8 +252,16 @@ export class StudioService implements OnModuleInit {
     const studentId = await this.studentIdOf(userId);
     // The gate: a student may only wear the colours of an academy they actually
     // study at. An id from a request is not a relationship.
+    // Organisation scope (Enrollment.academyId), same rule as academyThemes():
+    // an enrolment in a Center's course earns the Center's look, not its
+    // author's personal one. Legacy rows with no academyId fall back to the
+    // author's academy — which is the organisation for a PERSONAL course.
     const enrolled = await this.prisma.enrollment.findFirst({
-      where: { studentId, tenantId: academyId, status: { in: EARNED_LOOK_STATUSES } },
+      where: {
+        studentId,
+        status: { in: EARNED_LOOK_STATUSES },
+        OR: [{ academyId }, { academyId: null, tenantId: academyId }],
+      },
       select: { id: true },
     });
     if (!enrolled) throw new ForbiddenException({ message: 'Not your academy', code: 'NOT_ENROLLED' });

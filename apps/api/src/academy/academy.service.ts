@@ -238,15 +238,7 @@ export class AcademyService {
     return rows.map((c) => this.mapCard(c));
   }
 
-  /** Console: all of the academy's courses (incl. DRAFT/ARCHIVED). Permission-gated. */
-  async manageCourses(academyId: string) {
-    const rows = await this.prisma.course.findMany({
-      where: { academyId, deletedAt: null },
-      orderBy: { updatedAt: 'desc' },
-      select: this.courseCardSelect(),
-    });
-    return rows.map((c) => this.mapCard(c));
-  }
+
 
   // ── Academy settings (owner: academy.manage) ──────────────────────────────
 

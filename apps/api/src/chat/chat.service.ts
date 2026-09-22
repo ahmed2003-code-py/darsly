@@ -62,7 +62,12 @@ export class ChatService {
     const thread = await this.prisma.chatThread.findUnique({ where: { id: threadId } });
     if (!thread) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
-    if (user.role === Role.TEACHER) return thread.tenantId === user.tenantId;
+    // `!!user.tenantId` is defence in depth rather than a fix for a live bug:
+    // the column is non-nullable and a teacher's token always carries a
+    // tenant. But `undefined === undefined` is true, so the comparison on its
+    // own would grant a tenant-less token access to a tenant-less thread the
+    // day either of those assumptions stops holding.
+    if (user.role === Role.TEACHER) return !!user.tenantId && thread.tenantId === user.tenantId;
     const sid = await this.studentId(user.sub);
     return !!sid && thread.studentId === sid;
   }

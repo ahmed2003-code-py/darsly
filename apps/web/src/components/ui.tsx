@@ -1,11 +1,17 @@
 import { m } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { ReactNode } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, ReactNode, useEffect, useId, useRef } from 'react';
 import { Reveal } from './motion';
 import i18n from '../i18n';
 import { errorMessage } from '../lib/errorMessage';
 
 /** Small building blocks shared across screens. */
+
+/** What Tab can reach inside a dialog. `[tabindex="-1"]` is excluded on
+ *  purpose: it is programmatically focusable but not part of the tab order,
+ *  and the panel itself carries it. */
+const FOCUSABLE =
+  'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 export function Badge({
   children,
@@ -127,6 +133,29 @@ export function EmptyState({ icon, title, hint }: { icon: string; title: string;
   );
 }
 
+/**
+ * The dialog the whole app uses — now one a keyboard can actually operate.
+ *
+ * It looked like a dialog and behaved like a `<div>`: no `role`, no
+ * `aria-modal`, no focus management, no Escape. A screen reader announced
+ * nothing, and Tab walked straight out of the panel and into the page behind
+ * it, where everything is still focusable but nothing is visible. Since this
+ * is the modal nearly every screen reaches for, that was the app's single
+ * largest accessibility gap.
+ *
+ * Four things, each the minimum that makes the pattern correct:
+ *
+ *  - `role="dialog"` + `aria-modal` + `aria-labelledby`, so it is announced,
+ *    and announced *by its own title* rather than as an unnamed region.
+ *  - Focus moves into the panel on open. Without it a keyboard user is still
+ *    outside, tabbing through a page they cannot see.
+ *  - Tab is cycled inside the panel, so focus cannot escape while it is open.
+ *  - Escape closes, and focus returns to whatever opened it — otherwise the
+ *    caret restarts at the top of the document on every close.
+ *
+ * `aria-hidden` on the backdrop is deliberately not used: it would hide the
+ * panel too, since the panel is inside it.
+ */
 export function Modal({
   open,
   title,
@@ -140,6 +169,75 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  // Whatever had focus when this opened, so it can be given back on close.
+  const openerRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    openerRef.current = document.activeElement;
+
+    // The panel itself, rather than its first control: a dialog that opens with
+    // the cursor already in a text field reads its label instead of its title,
+    // and the reader never learns what they are being asked.
+    const focusPanel = requestAnimationFrame(() => panelRef.current?.focus());
+
+    return () => {
+      cancelAnimationFrame(focusPanel);
+      // Only take focus back if it is still inside the dialog being torn down;
+      // if something else has claimed it since, stealing it would be worse.
+      const panel = panelRef.current;
+      if (!panel || panel.contains(document.activeElement)) {
+        (openerRef.current as HTMLElement | null)?.focus?.();
+      }
+    };
+  }, [open]);
+
+  /**
+   * Keys are handled on the panel, not on `document`.
+   *
+   * A document-level listener would fire before anything inside the dialog —
+   * so an inline editor that cancels on Escape would never get the chance, and
+   * with two dialogs open both would close at once. Here the event bubbles
+   * from whatever is focused, so the innermost handler decides first and this
+   * only sees what nobody else claimed. Focus is trapped inside the panel, so
+   * it always bubbles through.
+   */
+  const handleKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+      (el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true',
+    );
+    if (!focusable.length) {
+      // Nothing to move between — keep focus on the panel rather than letting
+      // Tab wander into the page behind.
+      e.preventDefault();
+      panel.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    // Wrapping both ways, and treating "focus is on the panel" as being at the
+    // start, which is where it begins.
+    if (e.shiftKey && (active === first || active === panel)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   if (!open) return null;
   return (
     <m.div
@@ -150,13 +248,19 @@ export function Modal({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <m.div
-        className={`modal-panel max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-outline-variant bg-surface-container-lowest p-6 shadow-modal ${wide ? 'max-w-3xl' : 'max-w-lg'}`}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className={`modal-panel max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-outline-variant bg-surface-container-lowest p-6 shadow-modal outline-none ${wide ? 'max-w-3xl' : 'max-w-lg'}`}
         initial={{ opacity: 0, y: 14, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-heading text-xl font-bold tracking-tight">{title}</h3>
+          <h3 id={titleId} className="font-heading text-xl font-bold tracking-tight">{title}</h3>
           <button
             className="grid h-9 w-9 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
             onClick={onClose}

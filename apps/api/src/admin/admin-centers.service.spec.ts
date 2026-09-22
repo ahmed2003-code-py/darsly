@@ -89,6 +89,9 @@ describe('AdminCentersService.createCenter — new admin', () => {
     expect(res.admin.activation).toBe('EMAIL_SENT');
     expect((res as any).delivery).toEqual({ delivered: true });
     expect(prisma._tx.user.create.mock.calls[0][0].data.isActive).toBe(false);
+    // The SUPER_ADMIN who just created the Center gets the link back directly —
+    // testing (or a dead mail provider) never has to wait on Resend.
+    expect((res as any).activationUrl).toContain('/activate?token=');
   });
 
   it('RETRY: resendActivation revokes every open token, mints a new one, reports delivery, and applies the same test routing', async () => {
@@ -101,6 +104,7 @@ describe('AdminCentersService.createCenter — new admin', () => {
     expect(prisma.academyActivationToken.create).toHaveBeenCalledTimes(1);
     expect(res.delivery).toEqual({ delivered: false, reason: 'provider-error' });
     expect(d.mail.send.mock.calls[0][0]).toMatchObject({ to: 'admin@x.com', centerOwnerTestRedirect: true });
+    expect(res.activationUrl).toContain('/activate?token=');
   });
 
   it('RETRY refused once the admin has activated', async () => {

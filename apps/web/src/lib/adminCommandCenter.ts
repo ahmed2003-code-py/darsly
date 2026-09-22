@@ -165,6 +165,8 @@ export interface CreateCenterResult {
   admin: { id: string; role: string; activation: 'EMAIL_SENT' | 'EMAIL_FAILED' | 'NOT_REQUIRED' };
   /** Present for a new (email-activated) admin: whether the activation email was actually accepted for delivery. */
   delivery?: { delivered: true } | { delivered: false; reason: 'no-provider' | 'provider-error' };
+  /** Present for a new (email-activated) admin: the one-time activation link, handed back to the SUPER_ADMIN who just minted it. */
+  activationUrl?: string;
 }
 
 export function useCreateCenter() {
@@ -187,8 +189,15 @@ export function useSetCenterStatus(academyId: string) {
   });
 }
 
+export interface ResendActivationResult {
+  ok: true;
+  expiresAt: string;
+  delivery: { delivered: true } | { delivered: false; reason: 'no-provider' | 'provider-error' };
+  activationUrl: string;
+}
+
 export function useResendCenterActivation(academyId: string) {
   return useMutation({
-    mutationFn: async () => (await api.post(`/admin/centers/${academyId}/activation/resend`)).data,
+    mutationFn: async () => (await api.post<ResendActivationResult>(`/admin/centers/${academyId}/activation/resend`)).data,
   });
 }

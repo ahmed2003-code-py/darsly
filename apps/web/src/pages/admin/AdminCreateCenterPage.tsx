@@ -21,7 +21,18 @@ export default function AdminCreateCenterPage() {
         adminEmail: form.adminEmail.trim(),
         ...(form.adminPhone.trim() ? { adminPhone: form.adminPhone.trim() } : {}),
       },
-      { onSuccess: (res) => navigate(`/admin/academies/${res.id}${res.delivery?.delivered === false ? '?activationEmail=failed' : ''}`) },
+      {
+        onSuccess: (res) => {
+          const params = new URLSearchParams();
+          if (res.delivery?.delivered === false) params.set('activationEmail', 'failed');
+          // Carried through the URL (never persisted, never a second retrieval
+          // endpoint) so the detail page can show it once, right after creation
+          // — the same token, still single-use, still normal /auth/activation.
+          if (res.activationUrl) params.set('activationLink', res.activationUrl);
+          const qs = params.toString();
+          navigate(`/admin/academies/${res.id}${qs ? `?${qs}` : ''}`);
+        },
+      },
     );
   };
 

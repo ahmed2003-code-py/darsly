@@ -654,7 +654,9 @@
     "add": "Add",
     "clear": "Clear",
     "confirmDelete": "Sure?",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "copyLink": "Copy link",
+    "copied": "Copied ✓"
   },
   "wallet": {
     "title": "Wallet",

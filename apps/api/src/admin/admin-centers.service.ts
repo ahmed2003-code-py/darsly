@@ -86,6 +86,7 @@ export class AdminCentersService {
     // inactive admin exist, the hashed token is stored, and nothing about that
     // changes if the provider fails — the admin simply learns it did (and can
     // reissue the link). Activation itself only ever happens through the token.
+    const activationUrl = this.mail.webUrl(`/activate?token=${encodeURIComponent(rawToken)}`);
     const delivery = await this.mail.send({
       to: adminEmail,
       // TEMPORARY TEST ROUTING: opts this Center-activation email into
@@ -96,7 +97,7 @@ export class AdminCentersService {
       ...centerAdminActivationEmail({
         name: created.user.fullName,
         centerName: name,
-        activationUrl: this.mail.webUrl(`/activate?token=${encodeURIComponent(rawToken)}`),
+        activationUrl,
         expiresInDays: ACTIVATION_TTL_DAYS,
       }),
     });
@@ -109,6 +110,11 @@ export class AdminCentersService {
       ...created.academy,
       admin: { id: created.user.id, role: Role.STAFF, activation },
       delivery: delivery.delivered ? { delivered: true as const } : { delivered: false as const, reason: delivery.reason },
+      // Handed to the SUPER_ADMIN who just minted this token, in the same
+      // response — not a separate retrieval endpoint, and not public. Lets a
+      // Center be activated for testing without depending on live email at
+      // all: copy this link instead of waiting on Resend.
+      activationUrl,
     };
   }
 
@@ -135,12 +141,13 @@ export class AdminCentersService {
         data: { userId: academy.owner.id, academyId, tokenHash: this.hashToken(rawToken), expiresAt },
       }),
     ]);
+    const activationUrl = this.mail.webUrl(`/activate?token=${encodeURIComponent(rawToken)}`);
     const delivery = await this.mail.send({
       to: academy.owner.email,
       centerOwnerTestRedirect: true, // TEMPORARY TEST ROUTING — same as createCenter
       ...centerAdminActivationEmail({
         name: academy.owner.fullName, centerName: academy.name,
-        activationUrl: this.mail.webUrl(`/activate?token=${encodeURIComponent(rawToken)}`),
+        activationUrl,
         expiresInDays: ACTIVATION_TTL_DAYS,
       }),
     });
@@ -148,7 +155,10 @@ export class AdminCentersService {
       actorUserId: adminUserId, action: 'center.activation.resend', entity: 'Academy', entityId: academyId, academyId,
       meta: delivery.delivered ? { delivered: true } : { delivered: false, deliveryFailure: delivery.reason },
     });
-    return { ok: true, expiresAt, delivery: delivery.delivered ? { delivered: true as const } : { delivered: false as const, reason: delivery.reason } };
+    // Same rationale as createCenter: the SUPER_ADMIN who just reissued this
+    // token gets the link back directly, so a dead mail provider never blocks
+    // testing — resend, copy the link, move on.
+    return { ok: true, expiresAt, delivery: delivery.delivered ? { delivered: true as const } : { delivered: false as const, reason: delivery.reason }, activationUrl };
   }
 
   /**

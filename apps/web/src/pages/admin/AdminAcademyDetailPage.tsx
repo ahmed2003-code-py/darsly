@@ -79,7 +79,19 @@ export default function AdminAcademyDetailPage() {
   const setActive = useSetAcademyActive(id);
   const setCenterStatus = useSetCenterStatus(id!);
   const resendActivation = useResendCenterActivation(id!);
-  const emailFailedOnCreate = new URLSearchParams(useLocation().search).get('activationEmail') === 'failed';
+  const searchParams = new URLSearchParams(useLocation().search);
+  const emailFailedOnCreate = searchParams.get('activationEmail') === 'failed';
+  // Shown once, right after creation — carried in the URL, not persisted or
+  // re-fetchable. A resend mints a fresh one (in resendActivation.data), so
+  // losing this copy is never a dead end: hit "resend activation" again.
+  const [activationLink, setActivationLink] = useState<string | null>(searchParams.get('activationLink'));
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyActivationLink = (url: string) => {
+    void navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    });
+  };
   const activity = useAcademyActivity(id);
 
   if (isLoading) {
@@ -190,16 +202,33 @@ export default function AdminAcademyDetailPage() {
                     <button
                       className="text-xs font-bold text-primary hover:underline disabled:opacity-50"
                       disabled={resendActivation.isPending}
-                      onClick={() => resendActivation.mutate()}
+                      onClick={() =>
+                        resendActivation.mutate(undefined, {
+                          onSuccess: (res) => setActivationLink(res.activationUrl),
+                        })
+                      }
                     >
-                      {resendActivation.isSuccess && (resendActivation.data as any)?.delivery?.delivered !== false ? t('admin.activationResent') : t('admin.resendActivation')}
+                      {resendActivation.isSuccess && resendActivation.data.delivery.delivered !== false ? t('admin.activationResent') : t('admin.resendActivation')}
                     </button>
-                    {((resendActivation.isSuccess && (resendActivation.data as any)?.delivery?.delivered === false) || emailFailedOnCreate) && (
+                    {((resendActivation.isSuccess && resendActivation.data.delivery.delivered === false) || emailFailedOnCreate) && (
                       <span className="text-xs font-bold text-error">{t('admin.activationEmailFailed')}</span>
                     )}
                   </>
                 )}
               </dd>
+              {data.kind === AcademyKind.CENTER && !data.owner.isActive && activationLink && (
+                <dd className="mt-2 flex items-center gap-2 rounded-xl bg-surface-container-low p-2">
+                  <span className="material-symbols-outlined text-lg text-primary">link</span>
+                  <input
+                    className="input flex-1 truncate border-0 bg-transparent px-1 py-1 text-xs"
+                    dir="ltr" readOnly value={activationLink}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <button type="button" className="btn-secondary shrink-0 px-3 py-1.5 text-xs" onClick={() => copyActivationLink(activationLink)}>
+                    {linkCopied ? t('common.copied') : t('common.copyLink')}
+                  </button>
+                </dd>
+              )}
             </div>
             <div>
               <dt className="text-xs text-outline">{t('admin.lastActivity')}</dt>

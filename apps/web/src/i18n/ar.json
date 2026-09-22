@@ -654,7 +654,9 @@
     "add": "إضافة",
     "clear": "مسح",
     "confirmDelete": "متأكد؟",
-    "loadMore": "عرض المزيد"
+    "loadMore": "عرض المزيد",
+    "copyLink": "نسخ الرابط",
+    "copied": "اتنسخ ✓"
   },
   "wallet": {
     "title": "المحفظة",

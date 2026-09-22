@@ -13,6 +13,8 @@ import { AiJobService } from './ai-job.service';
 
 const POLL_MS = 3_000;
 const LEASE_MS = 5 * 60_000;
+/** How long a shutdown waits for in-flight jobs before giving up on them. */
+const DRAIN_TIMEOUT_MS = 30_000;
 
 /**
  * In-process worker. On boot (when the feature and worker are both enabled) it
@@ -27,6 +29,7 @@ export class AiJobWorker implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
   private active = 0;
   private ticking = false;
+  private stopping = false;
 
   constructor(
     private readonly config: AcademySiteConfig,
@@ -43,16 +46,45 @@ export class AiJobWorker implements OnModuleInit, OnModuleDestroy {
     this.timer = setInterval(() => void this.tick(), POLL_MS);
   }
 
-  onModuleDestroy(): void {
+  /**
+   * Stop taking work, then wait for what is already running.
+   *
+   * This used to clear the timer and return, which left every in-flight job
+   * abandoned mid-side-effect on each redeploy. Nothing was lost permanently —
+   * the lease expires and another replica re-claims — but the job restarts
+   * from the beginning, and a generation that was most of the way through an
+   * OpenAI call is re-run and re-billed for nothing.
+   *
+   * Bounded, because Railway will not wait forever either: a job still running
+   * at the timeout is abandoned exactly as before, which is safe, just slower.
+   *
+   * None of this executed at all until `main.ts` began calling
+   * `app.enableShutdownHooks()` — without it Nest never sees SIGTERM and
+   * `onModuleDestroy` is dead code.
+   */
+  async onModuleDestroy(): Promise<void> {
+    this.stopping = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (!this.active) return;
+
+    this.logger.log(`Draining ${this.active} in-flight AI job(s)…`);
+    const deadline = Date.now() + DRAIN_TIMEOUT_MS;
+    while (this.active > 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (this.active > 0) {
+      this.logger.warn(
+        `Shutdown timeout with ${this.active} job(s) still running; their leases will expire and another replica will re-claim them.`,
+      );
+    }
   }
 
   private async tick(): Promise<void> {
-    if (this.ticking) return; // avoid overlapping claim loops
+    if (this.ticking || this.stopping) return; // avoid overlapping claim loops
     this.ticking = true;
     try {
-      while (this.active < this.config.workerConcurrency) {
+      while (!this.stopping && this.active < this.config.workerConcurrency) {
         const job = await this.jobs.claimNext(LEASE_MS);
         if (!job) break;
         this.active++;

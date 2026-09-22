@@ -6,6 +6,7 @@ import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AnalyticsRange, isAnalyticsRange } from './analytics.constants';
 import { AnalyticsService } from './analytics.service';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * Academy-wide analytics are the owner's view of the organisation. A TEACHER
@@ -28,7 +29,7 @@ function parseRange(raw?: string): AnalyticsRange {
 @AcademyStaff('analytics.read')
 @Controller('teacher/analytics')
 export class AnalyticsController {
-  constructor(private readonly analytics: AnalyticsService) {}
+  constructor(private readonly analytics: AnalyticsService, private readonly auditService: AuditService) {}
 
   @Get()
   @ApiOperation({ summary: '[academy] Teaching KPIs + revenue/enrollment trends' })
@@ -111,5 +112,12 @@ export class AnalyticsController {
   @ApiOperation({ summary: '[academy] My own teaching numbers inside the active academy' })
   me(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Query('range') range?: string) {
     return this.analytics.myTeaching(ctx, user.tenantId, parseRange(range));
+  }
+
+  @Get('activity')
+  @ApiOperation({ summary: "[academy] The Center's own audit trail — who did what, cursor-paginated (owner-only)" })
+  activity(@CurrentAcademy() ctx: AcademyContext, @Query('cursor') cursor?: string, @Query('take') take?: string) {
+    ownerOnly(ctx);
+    return this.auditService.listForAcademy(ctx.academyId, { cursor, take: take ? Number(take) : undefined });
   }
 }

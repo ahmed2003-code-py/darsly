@@ -40,14 +40,33 @@ export class PayoutsController {
 
   @Post('methods')
   @ApiOperation({ summary: '[teacher] Add a payout method (bank / wallet / instapay)' })
-  addMethod(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMethodDto) {
-    return this.payouts.addMethod(ctx.academyId, dto.method, dto.details, dto.isDefault ?? false);
+  async addMethod(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMethodDto) {
+    const method = await this.payouts.addMethod(ctx.academyId, dto.method, dto.details, dto.isDefault ?? false);
+    // Phase 8: where payout money goes is security-sensitive — auditable, but
+    // never the account details themselves (no IBAN/wallet number in the log).
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'payout.method.add',
+      entity: 'PayoutMethodSaved',
+      entityId: method.id,
+      academyId: ctx.academyId,
+      meta: { method: dto.method, isDefault: dto.isDefault ?? false },
+    });
+    return method;
   }
 
   @Delete('methods/:id')
   @ApiOperation({ summary: '[teacher] Remove a payout method' })
-  removeMethod(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.payouts.removeMethod(ctx.academyId, id);
+  async removeMethod(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    const result = await this.payouts.removeMethod(ctx.academyId, id);
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'payout.method.remove',
+      entity: 'PayoutMethodSaved',
+      entityId: id,
+      academyId: ctx.academyId,
+    });
+    return result;
   }
 
   @Get()
@@ -65,6 +84,7 @@ export class PayoutsController {
       action: 'payout.request',
       entity: 'PayoutRequest',
       entityId: payout.id,
+      academyId: ctx.academyId,
       meta: { amountCents: dto.amountCents },
     });
     return payout;

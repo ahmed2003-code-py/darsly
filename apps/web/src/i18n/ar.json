@@ -134,7 +134,8 @@
     "centerDashboard": "السنتر",
     "centerMembers": "المعلمون والفريق",
     "centerSubjects": "المواد",
-    "centerSettings": "الإعدادات"
+    "centerSettings": "الإعدادات",
+    "centerActivity": "النشاط"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -651,7 +652,8 @@
     "optional": "اختياري",
     "add": "إضافة",
     "clear": "مسح",
-    "confirmDelete": "متأكد؟"
+    "confirmDelete": "متأكد؟",
+    "loadMore": "عرض المزيد"
   },
   "wallet": {
     "title": "المحفظة",
@@ -2921,6 +2923,10 @@
       "label": "نسبة المدرّس الافتراضية",
       "unsetWarning": "لسه مش محددة — المدرّسين هنا مش هيقدروا يبيعوا دورات مدفوعة لحد ما تحدد نسبة.",
       "overrideHint": "تقدر كمان تحدد نسبة مختلفة لكل مدرّس من صفحة الأعضاء."
+    },
+    "activity": {
+      "title": "نشاط السنتر",
+      "empty": "لسه مفيش نشاط مسجّل."
     }
   },
   "joinCenter": {

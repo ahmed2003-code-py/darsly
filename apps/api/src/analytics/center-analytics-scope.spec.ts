@@ -3,11 +3,12 @@ import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 
 const ctx = (over: Record<string, unknown> = {}) => ({ academyId: 'centerA', userId: 'tA', role: 'OWNER', status: 'ACTIVE', isPlatformAdmin: false, can: () => true, ...over }) as any;
+const auditSvc: any = { listForAcademy: jest.fn(async () => ({ items: [], nextCursor: null })) };
 const user = { sub: 'tA', role: 'TEACHER', tenantId: 'tpA', sessionId: 's' } as any;
 
 describe('AnalyticsController — academy-wide analytics are the owner\'s; a member gets their own slice', () => {
   const svc: any = new Proxy({}, { get: (_t, name) => jest.fn(async () => ({ called: name })) });
-  const c = new AnalyticsController(svc);
+  const c = new AnalyticsController(svc, auditSvc);
 
   it.each([
     ['overview', (c: AnalyticsController, x: any) => c.overview(x)],
@@ -21,6 +22,7 @@ describe('AnalyticsController — academy-wide analytics are the owner\'s; a mem
     ['teachers', (c: AnalyticsController, x: any) => c.teachers(x)],
     ['financial', (c: AnalyticsController, x: any) => c.financial(x, '30')],
     ['center', (c: AnalyticsController, x: any) => c.center(x)],
+    ['activity', (c: AnalyticsController, x: any) => c.activity(x)],
   ])('%s: TEACHER member → 403, OWNER → served, platform admin (synthetic OWNER) → served', async (_n, call) => {
     // The gate throws before any service call — synchronously, on purpose.
     await expect((async () => call(c, ctx({ role: 'TEACHER' })))()).rejects.toBeInstanceOf(ForbiddenException);
@@ -31,8 +33,16 @@ describe('AnalyticsController — academy-wide analytics are the owner\'s; a mem
 
   it('me: any analytics.read holder, scoped to their own identity + the active academy', async () => {
     const s: any = { myTeaching: jest.fn(async () => ({})) };
-    await new AnalyticsController(s).me(user, ctx({ role: 'TEACHER' }), '30');
+    await new AnalyticsController(s, auditSvc).me(user, ctx({ role: 'TEACHER' }), '30');
     expect(s.myTeaching).toHaveBeenCalledWith(expect.objectContaining({ academyId: 'centerA', userId: 'tA' }), 'tpA', 30);
+  });
+
+  it('activity: scoped strictly to ctx.academyId, never a client-supplied one; forwards cursor/take', async () => {
+    const s: any = {};
+    const a: any = { listForAcademy: jest.fn(async () => ({ items: [{ id: 'log1' }], nextCursor: 'log1' })) };
+    const out = await new AnalyticsController(s, a).activity(ctx({ academyId: 'centerA' }), 'cursorX', '10');
+    expect(a.listForAcademy).toHaveBeenCalledWith('centerA', { cursor: 'cursorX', take: 10 });
+    expect(out.items).toHaveLength(1);
   });
 });
 

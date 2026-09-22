@@ -134,7 +134,8 @@
     "centerDashboard": "Center",
     "centerMembers": "Teachers & staff",
     "centerSubjects": "Subjects",
-    "centerSettings": "Settings"
+    "centerSettings": "Settings",
+    "centerActivity": "Activity"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -651,7 +652,8 @@
     "optional": "optional",
     "add": "Add",
     "clear": "Clear",
-    "confirmDelete": "Sure?"
+    "confirmDelete": "Sure?",
+    "loadMore": "Load more"
   },
   "wallet": {
     "title": "Wallet",
@@ -2921,6 +2923,10 @@
       "label": "Default teacher share",
       "unsetWarning": "Not set — teachers here cannot sell paid courses until you set a share.",
       "overrideHint": "You can also set a different share per teacher from the Members page."
+    },
+    "activity": {
+      "title": "Center Activity",
+      "empty": "Nothing logged yet."
     }
   },
   "joinCenter": {

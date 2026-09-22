@@ -132,10 +132,21 @@ export class AcademyController {
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('academy.manage')
   @ApiOperation({ summary: '[academy] Update branding & settings' })
-  updateSettings(@CurrentAcademy() ctx: AcademyContext, @Body() dto: UpdateAcademyDto) {
+  async updateSettings(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: UpdateAcademyDto) {
     // No rebuild needed on a rename: the published page reads its slug from its
     // own URL, so it follows the new address on the next load.
-    return this.academy.updateSettings(ctx.academyId, dto);
+    const updated = await this.academy.updateSettings(ctx.academyId, dto);
+    // Phase 8: every settings change is auditable — field NAMES only (never
+    // logo/cover data URLs, never anything that could carry PII-sized payloads).
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'academy.settings.update',
+      entity: 'Academy',
+      entityId: ctx.academyId,
+      academyId: ctx.academyId,
+      meta: { fields: Object.entries(dto).filter(([, v]) => v !== undefined).map(([k]) => k) },
+    });
+    return updated;
   }
 
   // ── Members (owner: member.manage) ────────────────────────────────────────

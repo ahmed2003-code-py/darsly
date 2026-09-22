@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from './api';
 
 /** Phase 6: academy + platform analytics hooks. Ranges match the platform
@@ -190,3 +190,29 @@ export interface MyTeaching {
   attendance: { records: number; presentRate: number | null };
 }
 export const useMyTeaching = (range: AnalyticsRange) => useAcademyAnalytics<MyTeaching>('me', range);
+
+// ── Phase 8: Center activity trail (owner-only) ─────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  createdAt: string;
+  actor: { fullName: string; role: string } | null;
+  meta: Record<string, unknown> | null;
+}
+interface ActivityPage {
+  items: AuditLogEntry[];
+  nextCursor: string | null;
+}
+/** Cursor-paginated — the Center's own audit trail, one page (30 rows) at a time. */
+export function useCenterActivity() {
+  return useInfiniteQuery<ActivityPage>({
+    queryKey: ['academy-analytics', 'activity'],
+    queryFn: async ({ pageParam }) =>
+      (await api.get('/teacher/analytics/activity', { params: pageParam ? { cursor: pageParam } : undefined })).data,
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+}

@@ -9,6 +9,9 @@ import {
   WidevineDrmProvider,
 } from './drm/vendor-drm.stubs';
 import { HlsKeyService } from './hls-key.service';
+import { VideoJobConfig } from './jobs/video-job.config';
+import { VideoJobService } from './jobs/video-job.service';
+import { VideoJobWorker } from './jobs/video-job.worker';
 import { TranscodeService } from './transcode.service';
 import { VideoProcessingService } from './video-processing.service';
 import { YoutubeImportService } from './youtube-import.service';
@@ -57,7 +60,13 @@ import { YoutubeImportService } from './youtube-import.service';
     },
     VideoProcessingService,
     YoutubeImportService,
+    // The durable packaging queue. The worker is registered here rather than
+    // in its own module so it shares this module's DRM provider wiring; it
+    // polls on its own timer and has no controller.
+    VideoJobConfig,
+    VideoJobService,
+    VideoJobWorker,
   ],
-  exports: [VideoProcessingService, HlsKeyService, SignedUrlService, DRM_PROVIDER, YoutubeImportService],
+  exports: [VideoProcessingService, VideoJobService, HlsKeyService, SignedUrlService, DRM_PROVIDER, YoutubeImportService],
 })
 export class VideoModule {}

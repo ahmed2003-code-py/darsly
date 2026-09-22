@@ -18,7 +18,7 @@ function makePrisma() {
     $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
   } as any;
 }
-const svc = (prisma: any) => new AuthService(prisma, {} as any, {} as any);
+const svc = (prisma: any) => new AuthService(prisma, {} as any, {} as any, {} as any);
 const future = new Date(Date.now() + 60_000);
 const past = new Date(Date.now() - 60_000);
 

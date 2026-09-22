@@ -8,10 +8,12 @@ import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
 import { arrivalAcademy } from '../lib/arrival';
 import { useAcademyBranding } from '../lib/academy';
+import { invitationTokenFromPath, registerViaInvitation, useInvitationPreview } from '../lib/invitationLinks';
 import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 import GradeSelect from '../components/GradeSelect';
 import SubjectPicker from '../components/SubjectPicker';
+import { Skeleton } from '../components/ui';
 import { STAGES, type Stage } from '../lib/stages';
 import { STUDENT_TRACKS, type StudentTrack, type Subject } from '../lib/subjects';
 
@@ -35,7 +37,18 @@ export default function RegisterPage() {
   // borrows just enough of their identity to say "still their door in", not a
   // second copy of their site.
   const { data: academy } = useAcademyBranding(fromAcademy ? arrivalAcademy()! : undefined);
+  // Someone who followed a Center's invitation link is here to join THAT
+  // Center in the role the link names. The server's preview says which; the
+  // question "teacher or student?" is never asked, and the answer is never
+  // sent — the token carries it.
+  const inviteToken = invitationTokenFromPath(destination);
+  const { data: invite, isLoading: inviteLoading, isError: inviteInvalid } = useInvitationPreview(inviteToken ?? undefined);
   const [role, setRole] = useState<Role>('student');
+  // Which extra questions the form asks. An invited TEACHER still names what
+  // they teach (courses are filed under it); an invited ASSISTANT authors
+  // nothing and is asked for neither that nor a student's year.
+  const asksTeaching = inviteToken ? invite?.role === 'TEACHER' : role === 'teacher';
+  const asksStudent = !inviteToken && role === 'student';
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -58,14 +71,14 @@ export default function RegisterPage() {
   const { data: grades } = useQuery({
     queryKey: ['grades'],
     queryFn: async () => (await api.get('/catalog/grades')).data,
-    enabled: role === 'student',
+    enabled: asksStudent,
   });
   // The whole catalogue, both systems: a teacher signing up has not said which
   // ones they teach yet, and that is exactly what this list is for.
   const { data: subjects } = useQuery<Subject[]>({
     queryKey: ['subjects', 'all'],
     queryFn: async () => (await api.get('/catalog/subjects')).data,
-    enabled: role === 'teacher',
+    enabled: asksTeaching,
   });
   const toggleStage = (st: Stage) =>
     setStages((cur) => (cur.includes(st) ? cur.filter((x) => x !== st) : [...cur, st]));
@@ -75,7 +88,20 @@ export default function RegisterPage() {
     setError('');
     setBusy(true);
     try {
-      if (role === 'student') {
+      if (inviteToken) {
+        if (asksTeaching && !subjectIds.length) throw new Error(t('auth.subjectRequired'));
+        if (asksTeaching && !stages.length) throw new Error(t('auth.stagesRequired'));
+        // No role, no Center, no owner in this body — the token is all of them.
+        const data = await registerViaInvitation({
+          token: inviteToken,
+          fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
+          ...(asksTeaching ? { subjectIds, stages } : {}),
+          deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
+        });
+        setTokens(data.accessToken, data.refreshToken);
+        setUser(data.user);
+        navigate('/teacher', { replace: true });
+      } else if (role === 'student') {
         if (!gradeId) throw new Error(t('auth.gradeRequired'));
         if (!track) throw new Error(t('auth.trackRequired'));
         const { data } = await api.post('/auth/register/student', {
@@ -126,11 +152,33 @@ export default function RegisterPage() {
     );
   }
 
+  // An invitation that cannot be previewed is one that cannot be joined: say
+  // so here rather than let someone fill a form the server will refuse.
+  if (inviteToken && inviteInvalid) {
+    return (
+      <AuthShell title={t('joinCenter.title')}>
+        <m.div variants={rise} className="card p-6 text-center">
+          <span className="material-symbols-outlined mb-2 text-5xl text-error">link_off</span>
+          <p className="font-heading font-bold">{t('joinCenter.invalid')}</p>
+          <p className="mt-1 text-sm text-on-surface-variant">{t('joinCenter.invalidHint')}</p>
+        </m.div>
+      </AuthShell>
+    );
+  }
+
+  const inviteRoleLabel = invite ? t(invite.role === 'TEACHER' ? 'academy.roleTeacher' : 'academy.roleAssistant') : '';
+  const title = invite
+    ? t('auth.joinCenterTitle', { name: invite.academyName })
+    : academy ? t('auth.joinAcademyTitle', { name: academy.name }) : t('auth.createAccount');
+  const subtitle = invite
+    ? t('auth.joinCenterSubtitle', { role: inviteRoleLabel })
+    : academy ? t('auth.joinAcademySubtitle', { name: academy.name }) : t('auth.signupSubtitle');
+
   return (
     <AuthShell
-      title={academy ? t('auth.joinAcademyTitle', { name: academy.name }) : t('auth.createAccount')}
-      subtitle={academy ? t('auth.joinAcademySubtitle', { name: academy.name }) : t('auth.signupSubtitle')}
-      brandName={academy?.name}
+      title={title}
+      subtitle={subtitle}
+      brandName={invite?.academyName ?? academy?.name}
       brandTagline={academy?.tagline}
       footer={
         <>
@@ -140,8 +188,17 @@ export default function RegisterPage() {
       }
     >
       <form onSubmit={submit}>
-        {/* Role toggle — hidden for anyone who came in through an academy. */}
-        {!fromAcademy && (
+        {inviteToken && inviteLoading && <Skeleton className="mb-4 h-10 rounded-xl" />}
+        {invite && (
+          <m.div variants={rise} className="mb-4 flex items-center gap-2 rounded-xl bg-primary-container/40 px-4 py-2.5 text-sm">
+            <span className="material-symbols-outlined text-primary">apartment</span>
+            <span>{t('joinCenter.invitedAs')} <span className="font-bold">{inviteRoleLabel}</span> · {invite.academyName}</span>
+          </m.div>
+        )}
+        {/* Role toggle — hidden for anyone who came in through an academy or a
+            Center invitation: in both cases the door they used already says
+            who they are. */}
+        {!fromAcademy && !inviteToken && (
           <AuthSegmented<Role>
             value={role}
             onChange={setRole}
@@ -174,7 +231,7 @@ export default function RegisterPage() {
           placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
           reveal revealed={show} onReveal={() => setShow((s) => !s)} hint={t('auth.passwordHint')} />
 
-        {role === 'student' && (
+        {asksStudent && (
           <label className="mb-4 block">
             <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
               {t('auth.grade')}
@@ -186,7 +243,7 @@ export default function RegisterPage() {
           </label>
         )}
 
-        {role === 'student' && (
+        {asksStudent && (
           <div className="mb-4">
             <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
               {t('auth.track')}
@@ -214,7 +271,7 @@ export default function RegisterPage() {
           </div>
         )}
 
-        {role === 'teacher' && (
+        {asksTeaching && (
           <>
             <label className="mb-4 block">
               <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
@@ -251,7 +308,7 @@ export default function RegisterPage() {
         )}
 
         <div className="mt-6">
-          <AuthSubmit busy={busy}>{busy ? t('auth.creating') : t('auth.createBtn')}</AuthSubmit>
+          <AuthSubmit busy={busy || (!!inviteToken && !invite)}>{busy ? t('auth.creating') : t('auth.createBtn')}</AuthSubmit>
         </div>
       </form>
     </AuthShell>

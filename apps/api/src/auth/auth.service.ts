@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, GoneExcepti
 import { Role, TeacherStatus } from '@darsly/shared-types';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes, randomInt } from 'crypto';
+import { InvitationLinksService } from '../academy/invitation-links.service';
 import { provisionTeacherAcademy } from '../academy/provision';
 import { MailService } from '../mail/mail.service';
 import { otpEmail, teacherAppliedAdminEmail, teacherPendingEmail, welcomeStudentEmail } from '../mail/templates';
@@ -14,6 +15,7 @@ import {
   normalizeEgyptianPhone,
   RegisterStudentDto,
   RegisterTeacherDto,
+  RegisterViaInvitationDto,
   ResetPasswordDto,
   VerifyResetCodeDto,
   ActivateAccountDto,
@@ -36,6 +38,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly tokenService: TokenService,
     private readonly mail: MailService,
+    private readonly links: InvitationLinksService,
   ) {}
 
   /**
@@ -145,6 +148,77 @@ export class AuthService {
     this.mail.sendInBackground({ to: email, ...teacherPendingEmail({ name: fullName }) });
     void this.tellAdminsTeacherApplied({ fullName, email, phone, subjectIds: dto.subjectIds });
     return { pending: true };
+  }
+
+  /**
+   * Signup for someone a Center invited by link. Everything that makes this
+   * differ from `registerTeacher` follows from one fact: the person answering
+   * is the Center's, not the platform's.
+   *
+   *   - Identity, role and Center come from the token's row — the body carries
+   *     none of them, so nothing here can be steered from a client.
+   *   - The teacher identity is APPROVED at once and nobody at the platform is
+   *     asked: the owner who issued the link is the one vouching for them.
+   *   - No PERSONAL academy is provisioned. They author inside the Center they
+   *     were invited to; they are not a marketplace teacher with a storefront
+   *     of their own.
+   *   - Claim and account creation are one transaction: a link that cannot be
+   *     claimed leaves no account behind, and a created account always holds
+   *     its ACTIVE membership.
+   *
+   * Both TEACHER and ASSISTANT invitees get the teacher identity, because
+   * every staff capability in a Center (grading, attendance, authoring) is
+   * checked against one — only the membership role differs. Subjects and
+   * stages are what courses are filed under, so a TEACHER must supply them; an
+   * ASSISTANT authors nothing and may leave them empty.
+   */
+  async registerViaInvitation(dto: RegisterViaInvitationDto, device: DeviceContext) {
+    const invite = await this.links.resolveLive(dto.token);
+    const email = dto.email.toLowerCase().trim();
+    await this.assertEmailFree(email);
+    const phone = normalizeEgyptianPhone(dto.phone);
+    await this.assertPhoneFree(phone);
+    const username = await this.usernameFor(dto.username, email);
+    const fullName = dto.fullName.trim();
+    const subjectIds = dto.subjectIds ?? [];
+    const stages = dto.stages ?? [];
+    if (invite.role === 'TEACHER') {
+      if (!subjectIds.length) throw new BadRequestException({ message: 'Pick at least one subject you teach', code: 'SUBJECT_REQUIRED' });
+      if (!stages.length) throw new BadRequestException({ message: 'Pick at least one stage you teach', code: 'STAGES_REQUIRED' });
+    }
+    if (subjectIds.length) await this.assertSubjectsExist(subjectIds);
+    const slug = await this.uniqueSlug(email, fullName);
+    const passwordHash = await argon2.hash(dto.password);
+
+    const { user, membership } = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          role: Role.TEACHER,
+          email,
+          phone,
+          username,
+          fullName,
+          passwordHash,
+          teacherProfile: {
+            create: {
+              slug,
+              status: TeacherStatus.APPROVED,
+              subjects: { create: subjectIds.map((subjectId) => ({ subjectId })) },
+              stages,
+            },
+          },
+        },
+        include: { teacherProfile: true, studentProfile: true },
+      });
+      const claimed = await this.links.claimForNewUser(tx, invite.tokenHash, created.id);
+      return { user: created, membership: claimed };
+    });
+
+    const tokens = await this.tokenService.createSession(
+      { id: user.id, role: Role.TEACHER, tenantId: user.teacherProfile!.id },
+      { ...device, deviceName: dto.deviceName ?? device.deviceName },
+    );
+    return { user: this.publicUser(user), membership, isNewUser: true, ...tokens };
   }
 
   /**

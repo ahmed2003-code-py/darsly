@@ -257,7 +257,7 @@ function AcademyAddressField({
 const ROLE_KEY: Record<string, string> = { OWNER: 'academy.roleOwner', TEACHER: 'academy.roleTeacher', ASSISTANT: 'academy.roleAssistant', STUDENT: 'academy.roleStudent' };
 
 const LINK_STATUS_TONE: Record<string, 'teal' | 'neutral' | 'warn' | 'error'> = {
-  PENDING: 'teal', USED: 'neutral', REVOKED: 'error', EXPIRED: 'warn',
+  PENDING: 'teal', USED: 'neutral', REVOKED: 'error', DECLINED: 'error', EXPIRED: 'warn',
 };
 
 /** A shareable, single-use link — the alternative to inviting by email. */

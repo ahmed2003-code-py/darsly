@@ -17,6 +17,6 @@ import { PermissionGuard } from './guards/permission.guard';
 @Module({
   controllers: [AcademyController, InvitationLinksController, AcademySubjectsController],
   providers: [AcademyService, AcademyMembershipGuard, PermissionGuard, InvitationLinksService, AcademySubjectsService],
-  exports: [AcademyService, AcademyMembershipGuard, PermissionGuard],
+  exports: [AcademyService, AcademyMembershipGuard, PermissionGuard, InvitationLinksService],
 })
 export class AcademyModule {}

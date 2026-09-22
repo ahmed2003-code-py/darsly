@@ -95,7 +95,9 @@ async function main() {
   check('approved teacher accepts → ACTIVE membership', accepted.status < 300 && accepted.body.status === 'ACTIVE' && accepted.body.role === 'TEACHER', String(accepted.status));
   const membershipRow = await prisma.academyMembership.findUnique({ where: { userId_academyId: { userId: teacherBProfile.userId, academyId: centerId } } });
   check('membership row: ACTIVE, correct role', membershipRow?.status === 'ACTIVE' && membershipRow?.role === 'TEACHER');
-  check('replay of a used token → 410', (await api(`/invitation-links/${rawToken}/accept`, { token: teacherBTok, method: 'POST' })).status === 410);
+  const replay = await api(`/invitation-links/${rawToken}/accept`, { token: teacherBTok, method: 'POST' });
+  check('replay by the SAME user → idempotent 2xx with their membership, nothing re-written', replay.status < 300 && replay.body.status === 'ACTIVE' && replay.body.academyId === centerId, String(replay.status));
+  check('a used token is not transferable — another user → 410', (await api(`/invitation-links/${rawToken}/accept`, { token: ownerTok, method: 'POST' })).status === 410);
   check('used token no longer previewable', (await api(`/invitation-links/${rawToken}`)).status !== 200);
 
   // ── 6. Already-a-member conflict ──
@@ -119,7 +121,11 @@ async function main() {
   const raceLink = await api(`/academies/${centerSlug}/invitation-links`, { token: ownerTok, method: 'POST', body: { role: 'ASSISTANT' }, headers: h });
   await prisma.academyMembership.deleteMany({ where: { academyId: centerId, userId: teacherBProfile.userId } }); // reset for a clean race
   const race = await Promise.all([1, 2].map(() => api(`/invitation-links/${raceLink.body.token}/accept`, { token: teacherBTok, method: 'POST' })));
-  check('concurrent accept: exactly one success', race.filter((r) => r.status < 300).length === 1, race.map((r) => r.status).join('/'));
+  // Same user both times: the loser may either lose the claim (410) or, if it
+  // ran after the winner committed, read back the winner's membership (200).
+  // Either way the link is claimed exactly once and one membership exists.
+  const raceRows = await prisma.academyMembership.count({ where: { academyId: centerId, userId: teacherBProfile.userId } });
+  check('concurrent accept: one claim, one membership', race.some((r) => r.status < 300) && raceRows === 1, race.map((r) => r.status).join('/'));
 
   // ── 9. Multi-Center: teacher B ends up in PERSONAL + Center X + a second Center ──
   const centerY = await api('/admin/centers', { token: adminTok, method: 'POST', body: { name: `Center Y ${tag}`, adminName: 'ignored', adminEmail: teacherX.owner.email } });

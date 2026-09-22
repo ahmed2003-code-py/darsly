@@ -7,16 +7,16 @@ const sha = (t: string) => createHash('sha256').update(t).digest('hex');
 function makePrisma() {
   return {
     academyInvitationLink: {
-      create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), updateMany: jest.fn(),
+      create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), findUniqueOrThrow: jest.fn(), update: jest.fn(), updateMany: jest.fn(),
     },
     user: { findUniqueOrThrow: jest.fn() },
-    academyMembership: { findUnique: jest.fn(), upsert: jest.fn() },
+    academyMembership: { findUnique: jest.fn(), findFirst: jest.fn(), upsert: jest.fn(), create: jest.fn() },
   } as any;
 }
 const future = new Date(Date.now() + 60_000);
 const past = new Date(Date.now() - 60_000);
 const liveRow = (over: Record<string, unknown> = {}) => ({
-  tokenHash: sha('raw-token'), role: 'TEACHER', academyId: 'c1', expiresAt: future, usedAt: null, revokedAt: null,
+  id: 'l1', tokenHash: sha('raw-token'), role: 'TEACHER', academyId: 'c1', expiresAt: future, usedAt: null, usedByUserId: null, revokedAt: null, declinedAt: null, declinedByUserId: null,
   academy: { name: 'Center', status: 'ACTIVE', deletedAt: null },
   ...over,
 });
@@ -84,6 +84,7 @@ describe('InvitationLinksService.preview', () => {
     ['expired', liveRow({ expiresAt: past })],
     ['used', liveRow({ usedAt: past })],
     ['revoked', liveRow({ revokedAt: past })],
+    ['declined', liveRow({ declinedAt: past, declinedByUserId: 'u9' })],
     ['suspended Center', liveRow({ academy: { name: 'C', status: 'SUSPENDED', deletedAt: null } })],
     ['archived Center', liveRow({ academy: { name: 'C', status: 'ARCHIVED', deletedAt: null } })],
     ['deleted Center', liveRow({ academy: { name: 'C', status: 'ACTIVE', deletedAt: new Date() } })],
@@ -186,6 +187,122 @@ describe('InvitationLinksService.accept', () => {
     expect(prisma.academyMembership.upsert.mock.calls[0][0].where).toEqual({ userId_academyId: { userId: 'u1', academyId: 'centerB' } });
     // No query ever touches any other academyId for this user.
     expect(prisma.academyMembership.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('InvitationLinksService.accept — consumed links', () => {
+  const consumedBy = (userId: string) => {
+    const prisma = makePrisma();
+    prisma.academyInvitationLink.findUnique.mockResolvedValue(liveRow({ usedAt: past, usedByUserId: userId }));
+    prisma.academyMembership.findFirst.mockResolvedValue({ id: 'm1', academyId: 'c1', role: 'TEACHER', status: 'ACTIVE' });
+    return prisma;
+  };
+
+  it('the user who already won this link gets their membership back — a retried accept is not a failure', async () => {
+    const prisma = consumedBy('u1');
+    const m = await new InvitationLinksService(prisma).accept('raw-token', 'u1');
+    expect(m).toMatchObject({ id: 'm1', academyId: 'c1', status: 'ACTIVE' });
+    // Nothing is claimed or written again.
+    expect(prisma.academyInvitationLink.updateMany).not.toHaveBeenCalled();
+    expect(prisma.academyMembership.upsert).not.toHaveBeenCalled();
+    expect(prisma.user.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
+
+  it('a consumed link never transfers: any other user → 410, nothing written', async () => {
+    const prisma = consumedBy('u1');
+    await expect(new InvitationLinksService(prisma).accept('raw-token', 'u2')).rejects.toBeInstanceOf(GoneException);
+    expect(prisma.academyInvitationLink.updateMany).not.toHaveBeenCalled();
+    expect(prisma.academyMembership.upsert).not.toHaveBeenCalled();
+  });
+
+  it('the winner removed from the Center since cannot walk back in on the old link → 410', async () => {
+    const prisma = consumedBy('u1');
+    prisma.academyMembership.findFirst.mockResolvedValue(null);
+    await expect(new InvitationLinksService(prisma).accept('raw-token', 'u1')).rejects.toBeInstanceOf(GoneException);
+  });
+
+  it('a declined link cannot be accepted, even by the one who declined it', async () => {
+    const prisma = makePrisma();
+    prisma.academyInvitationLink.findUnique.mockResolvedValue(liveRow({ declinedAt: past, declinedByUserId: 'u1' }));
+    await expect(new InvitationLinksService(prisma).accept('raw-token', 'u1')).rejects.toBeInstanceOf(GoneException);
+    expect(prisma.academyInvitationLink.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('InvitationLinksService.decline', () => {
+  it('closes a live link for good and creates NO membership of any status', async () => {
+    const prisma = makePrisma();
+    prisma.academyInvitationLink.findUnique.mockResolvedValue(liveRow());
+    prisma.academyInvitationLink.updateMany.mockResolvedValue({ count: 1 });
+    const res = await new InvitationLinksService(prisma).decline('raw-token', 'u1');
+    expect(res).toEqual({ id: 'l1', academyId: 'c1', role: 'TEACHER', declined: true });
+    const call = prisma.academyInvitationLink.updateMany.mock.calls[0][0];
+    expect(call.where).toMatchObject({ tokenHash: sha('raw-token'), usedAt: null, revokedAt: null, declinedAt: null });
+    expect(call.data).toMatchObject({ declinedAt: expect.any(Date), declinedByUserId: 'u1' });
+    expect(prisma.academyMembership.upsert).not.toHaveBeenCalled();
+    expect(prisma.academyMembership.create).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent for the person who declined', async () => {
+    const prisma = makePrisma();
+    prisma.academyInvitationLink.findUnique.mockResolvedValue(liveRow({ declinedAt: past, declinedByUserId: 'u1' }));
+    prisma.academyInvitationLink.updateMany.mockResolvedValue({ count: 0 });
+    await expect(new InvitationLinksService(prisma).decline('raw-token', 'u1')).resolves.toMatchObject({ declined: true });
+  });
+
+  it.each([
+    ['used', liveRow({ usedAt: past, usedByUserId: 'u1' })],
+    ['revoked', liveRow({ revokedAt: past })],
+    ['expired', liveRow({ expiresAt: past })],
+    ['declined by someone else', liveRow({ declinedAt: past, declinedByUserId: 'u9' })],
+  ])('a %s link cannot be declined → 410', async (_l, row) => {
+    const prisma = makePrisma();
+    prisma.academyInvitationLink.findUnique.mockResolvedValue(row);
+    prisma.academyInvitationLink.updateMany.mockResolvedValue({ count: 0 });
+    await expect(new InvitationLinksService(prisma).decline('raw-token', 'u1')).rejects.toBeInstanceOf(GoneException);
+  });
+
+  it('unknown token → 404', async () => {
+    const prisma = makePrisma();
+    prisma.academyInvitationLink.findUnique.mockResolvedValue(null);
+    await expect(new InvitationLinksService(prisma).decline('raw-token', 'u1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('InvitationLinksService.list', () => {
+  it('a declined link reads DECLINED — distinct from the owner revoking it', async () => {
+    const prisma = makePrisma();
+    prisma.academyInvitationLink.findMany.mockResolvedValue([
+      { id: 'a', role: 'TEACHER', expiresAt: future, usedAt: null, revokedAt: null, declinedAt: past, createdAt: new Date(), createdByUserId: 'o' },
+    ]);
+    const rows = await new InvitationLinksService(prisma).list('c1');
+    expect(rows[0].status).toBe('DECLINED');
+  });
+});
+
+describe('InvitationLinksService.claimForNewUser (inside a registration transaction)', () => {
+  const tx = () => ({
+    academyInvitationLink: { updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
+    academyMembership: { create: jest.fn() },
+  });
+
+  it('claims the exact row, then builds the membership from the ROW — academyId and role are never the caller\'s to say', async () => {
+    const t = tx();
+    t.academyInvitationLink.updateMany.mockResolvedValue({ count: 1 });
+    t.academyInvitationLink.findUniqueOrThrow.mockResolvedValue({ academyId: 'center-from-row', role: 'ASSISTANT' });
+    t.academyMembership.create.mockImplementation(async ({ data }: any) => ({ id: 'm1', ...data }));
+    const m = await new InvitationLinksService(makePrisma()).claimForNewUser(t as any, sha('raw-token'), 'new-user');
+    expect(t.academyInvitationLink.updateMany.mock.calls[0][0].where).toMatchObject({ tokenHash: sha('raw-token'), usedAt: null, revokedAt: null, declinedAt: null });
+    expect(t.academyInvitationLink.updateMany.mock.calls[0][0].data).toMatchObject({ usedByUserId: 'new-user' });
+    expect(t.academyMembership.create.mock.calls[0][0].data).toEqual({ userId: 'new-user', academyId: 'center-from-row', role: 'ASSISTANT', status: 'ACTIVE', joinedAt: expect.any(Date) });
+    expect(m).toMatchObject({ academyId: 'center-from-row', role: 'ASSISTANT', status: 'ACTIVE' });
+  });
+
+  it('a link that cannot be claimed throws inside the transaction — so the account creation around it rolls back', async () => {
+    const t = tx();
+    t.academyInvitationLink.updateMany.mockResolvedValue({ count: 0 });
+    await expect(new InvitationLinksService(makePrisma()).claimForNewUser(t as any, sha('raw-token'), 'new-user')).rejects.toBeInstanceOf(GoneException);
+    expect(t.academyMembership.create).not.toHaveBeenCalled();
   });
 });
 

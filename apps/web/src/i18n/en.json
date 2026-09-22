@@ -1038,6 +1038,8 @@
     "signupSubtitle": "Join Darsly and start your learning journey.",
     "joinAcademyTitle": "Join {{name}}",
     "joinAcademySubtitle": "Create your account and start your learning journey with {{name}}.",
+    "joinCenterTitle": "Join {{name}}",
+    "joinCenterSubtitle": "Create your account — you will join as {{role}} straight away, no approval to wait for.",
     "asStudent": "Student",
     "asTeacher": "Teacher",
     "fullName": "Full name",
@@ -1727,13 +1729,30 @@
       "suspendConfirm": "Suspend {{name}}? Its owner is signed out of teaching until reactivated — students keep any access they already have.",
       "reactivateConfirm": "Reactivate {{name}}? Its owner regains full access immediately."
     },
+    "shelf": {
+      "ALL": "All looks",
+      "PRESET": "Built-in",
+      "CENTER": "Centers",
+      "TEACHER": "Teachers",
+      "COSMETIC": "Store themes"
+    },
     "theme": {
       "gallery": "Theme gallery",
       "reset": "Reset to default",
       "apply": "Apply",
+      "applyThis": "Apply this look",
+      "revert": "Back to my look",
+      "preview": "Preview",
+      "stopPreview": "Stop preview",
+      "current": "Your current look",
+      "currentLabel": "Your console wears",
+      "previewingLabel": "Trying on",
+      "platformDefault": "platform default",
+      "search": "Search Centers, teachers, themes…",
+      "empty": "Nothing on this shelf matches.",
       "dark": "Dark",
       "light": "Light",
-      "hint": "Click a theme to preview it live across the Admin Studio — nothing is saved until you press Apply.",
+      "hint": "Preview repaints the whole Admin Studio live — nothing is saved until you press Apply. Wearing a Center's or a teacher's brand changes only your console, never theirs.",
       "livePreview": "Live preview",
       "previewKpi1": "Platform revenue",
       "previewKpi2": "Active academies",
@@ -1831,6 +1850,7 @@
       "PENDING": "Pending",
       "USED": "Used",
       "REVOKED": "Revoked",
+      "DECLINED": "Declined",
       "EXPIRED": "Expired"
     },
     "revenueShareOverride": "Share",
@@ -2937,7 +2957,14 @@
   "joinCenter": {
     "title": "Join a Center",
     "invalid": "This invitation link is invalid, expired, or already used.",
+    "invalidHint": "Ask the Center to send you a new link.",
     "invitedAs": "You are invited to join as",
-    "accept": "Accept & join"
+    "accept": "Accept & join",
+    "decline": "Decline",
+    "decisionHint": "Accepting adds you to this Center only. Declining closes this link; the Center can send another.",
+    "landingTitle": "{{name}} invited you",
+    "landingSubtitle": "Join as {{role}}. Sign in if you already have a Darsly account, or create one — the invitation stays with you either way.",
+    "createAccount": "Create an account & join",
+    "signInToAccept": "I have an account — sign in"
   }
 }

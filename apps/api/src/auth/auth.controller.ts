@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { JwtPayload } from '@darsly/shared-types';
 import { Request } from 'express';
+import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
@@ -13,6 +14,7 @@ import {
   RefreshTokenDto,
   RegisterStudentDto,
   RegisterTeacherDto,
+  RegisterViaInvitationDto,
   ResetPasswordDto,
   VerifyResetCodeDto,
   ActivateAccountDto,
@@ -32,6 +34,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly tokenService: TokenService,
+    private readonly audit: AuditService,
   ) {}
 
   @Public()
@@ -50,6 +53,20 @@ export class AuthController {
   @ApiOperation({ summary: 'Teacher signup — lands PENDING admin approval' })
   registerTeacher(@Body() dto: RegisterTeacherDto) {
     return this.authService.registerTeacher(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 600_000 } })
+  @Post('register/invitation')
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Signup through a Center invitation link — role and Center come from the token; joins and logs in at once' })
+  async registerViaInvitation(@Body() dto: RegisterViaInvitationDto, @Req() req: Request) {
+    const result = await this.authService.registerViaInvitation(dto, deviceContext(req));
+    await this.audit.log({
+      actorUserId: result.user.id, action: 'member.invitationLink.register', entity: 'AcademyMembership',
+      entityId: result.membership.id, academyId: result.membership.academyId, meta: { role: result.membership.role },
+    });
+    return result;
   }
 
   @Public()

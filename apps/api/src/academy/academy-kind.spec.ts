@@ -47,7 +47,7 @@ describe('AuthService slug derivation at teacher signup', () => {
       teacherProfile: { findUnique: jest.fn().mockResolvedValue(null) },
       academy: { findUnique: jest.fn().mockResolvedValueOnce({ id: 'center' }).mockResolvedValue(null) },
     } as any;
-    const svc: any = new AuthService(prisma, {} as any, {} as any);
+    const svc: any = new AuthService(prisma, {} as any, {} as any, {} as any);
     const slug = await svc.uniqueSlug('ahmed@x.com', 'Ahmed');
     expect(slug).not.toBe('ahmed');
     expect(slug.startsWith('ahmed-')).toBe(true);
@@ -84,7 +84,7 @@ describe('STAFF identity', () => {
   });
 
   it('STAFF login is gated only on isActive — no teacher approval, no student cap', () => {
-    const svc: any = new AuthService({} as any, {} as any, {} as any);
+    const svc: any = new AuthService({} as any, {} as any, {} as any, {} as any);
     expect(() => svc.assertLoginAllowed({ isActive: true, role: 'STAFF', teacherProfile: null })).not.toThrow();
     expect(() => svc.assertLoginAllowed({ isActive: false, role: 'STAFF', teacherProfile: null })).toThrow(ForbiddenException);
   });

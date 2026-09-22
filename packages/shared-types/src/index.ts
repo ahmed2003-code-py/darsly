@@ -410,3 +410,7 @@ export interface ApiError {
   message: string | string[];
   error?: string;
 }
+
+// ── Platform Admin look (SUPER_ADMIN console theme) ─────────────────────────
+
+export * from './admin-theme';

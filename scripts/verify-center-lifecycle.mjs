@@ -110,7 +110,8 @@ async function main() {
   check('6. invitation link created (owner copies it; the platform emails nothing here)', !!link?.token);
   check('   student cannot accept a staff invitation', (await api(`/invitation-links/${link.token}/accept`, { token: tokS, method: 'POST' })).status >= 400);
   check('   teacher accepts', (await api(`/invitation-links/${link.token}/accept`, { token: tokB, method: 'POST' })).status < 300);
-  check('   REUSE: the same link is refused', (await api(`/invitation-links/${link.token}/accept`, { token: tokB, method: 'POST' })).status >= 400);
+  check('   REUSE: the same link cannot be used by anyone else', (await api(`/invitation-links/${link.token}/accept`, { token: tokC, method: 'POST' })).status === 410);
+  check('   REPLAY: the teacher retrying gets the same membership back, nothing re-written', (await api(`/invitation-links/${link.token}/accept`, { token: tokB, method: 'POST' })).status < 300 && (await prisma.academyMembership.count({ where: { academyId: cId, userId: tB.owner.id } })) === 1);
   const members = (await api(`/academies/${cSlug}/members`, { token: tokC, headers: H(cId) })).body;
   check('7. teacher appears in the Center as TEACHER', members.some((m) => m.userId === tB.owner.id && m.role === 'TEACHER'));
   // An invitation from ANOTHER Center cannot be used to enter this one.

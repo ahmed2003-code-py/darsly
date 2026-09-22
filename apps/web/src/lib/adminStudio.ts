@@ -2,22 +2,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AcademyRole } from '@darsly/shared-types';
 import { api } from './api';
-import { ADMIN_THEME_PRESETS, applyAdminTheme, findAdminTheme, stripAdminThemeFromDom } from './adminTheme';
-
-/**
- * The platform default look for SUPER_ADMIN — applied automatically the
- * moment someone signs in as SUPER_ADMIN, even before they've ever opened
- * Theme Studio. A super admin's console must never be visually
- * indistinguishable from a teacher's own console (the two carry very
- * different authority), so "no preference chosen yet" still means
- * *something* distinct, not nothing.
- */
-const DEFAULT_ADMIN_THEME = ADMIN_THEME_PRESETS[0]; // "Darsly Dark"
+import { applyAdminTheme, DEFAULT_ADMIN_THEME, stripAdminThemeFromDom, type AdminThemeEntry } from './adminTheme';
 
 // ── Theme ────────────────────────────────────────────────────────────────
 
+export interface AdminThemePreference {
+  themeId: string | null;
+  /** Resolved by the API from whatever the id names — the only colours ever painted. */
+  theme: AdminThemeEntry | null;
+}
+
+export interface AdminThemeCatalog {
+  presets: AdminThemeEntry[];
+  academies: AdminThemeEntry[];
+  cosmetics: AdminThemeEntry[];
+}
+
 export function useAdminThemePreference(enabled: boolean) {
-  return useQuery<{ themeId: string | null }>({
+  return useQuery<AdminThemePreference>({
     queryKey: ['admin-theme'],
     queryFn: async () => (await api.get('/admin/theme')).data,
     enabled,
@@ -25,10 +27,19 @@ export function useAdminThemePreference(enabled: boolean) {
   });
 }
 
+/** Every look the console can wear: the presets, every Academy's brand, every store theme. */
+export function useAdminThemeCatalog() {
+  return useQuery<AdminThemeCatalog>({
+    queryKey: ['admin-theme-catalog'],
+    queryFn: async () => (await api.get('/admin/theme/catalog')).data,
+    staleTime: 60_000,
+  });
+}
+
 export function useSetAdminTheme() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (themeId: string | null) => (await api.patch('/admin/theme', { themeId })).data,
+    mutationFn: async (themeId: string | null) => (await api.patch<AdminThemePreference>('/admin/theme', { themeId })).data,
     onSuccess: (data) => qc.setQueryData(['admin-theme'], data),
   });
 }
@@ -54,8 +65,7 @@ export function useSyncAdminTheme(isSuperAdmin: boolean) {
     }
     if (!data) return;
     // No explicit choice yet → the platform default, not "undecorated".
-    const theme = findAdminTheme(data.themeId) ?? DEFAULT_ADMIN_THEME;
-    applyAdminTheme(theme);
+    applyAdminTheme(data.theme ?? DEFAULT_ADMIN_THEME);
   }, [isSuperAdmin, data]);
 }
 

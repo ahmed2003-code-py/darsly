@@ -4,7 +4,7 @@ import { api } from './api';
 export interface InvitationLink {
   id: string;
   role: 'TEACHER' | 'ASSISTANT';
-  status: 'PENDING' | 'USED' | 'REVOKED' | 'EXPIRED';
+  status: 'PENDING' | 'USED' | 'REVOKED' | 'DECLINED' | 'EXPIRED';
   expiresAt: string;
   createdAt: string;
 }
@@ -61,4 +61,32 @@ export function useAcceptInvitationLink() {
   return useMutation({
     mutationFn: async (token: string) => (await api.post(`/invitation-links/${token}/accept`)).data,
   });
+}
+
+export function useDeclineInvitationLink() {
+  return useMutation({
+    mutationFn: async (token: string) => (await api.post(`/invitation-links/${token}/decline`)).data,
+  });
+}
+
+/** The token inside a `/join/<token>` path — the shape the login/register redirect carries it in. */
+export function invitationTokenFromPath(path: string | null | undefined): string | null {
+  const m = /^\/join\/([A-Za-z0-9_-]{20,128})(?:[?#].*)?$/.exec(path ?? '');
+  return m ? m[1] : null;
+}
+
+export interface RegisterViaInvitationInput {
+  token: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  password: string;
+  subjectIds?: string[];
+  stages?: string[];
+  deviceName?: string;
+}
+
+/** Signup through a Center invitation: the server decides role and Center from the token; the response is a logged-in session. */
+export async function registerViaInvitation(input: RegisterViaInvitationInput) {
+  return (await api.post('/auth/register/invitation', input)).data;
 }

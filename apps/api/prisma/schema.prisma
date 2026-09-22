@@ -545,6 +545,10 @@ model AcademyInvitationLink {
   usedAt          DateTime?
   usedByUserId    String?
   revokedAt       DateTime?
+  /// The invitee said no. Distinct from revoke (the owner's act) and use (a
+  /// join) so the owner sees which of the three happened.
+  declinedAt       DateTime?
+  declinedByUserId String?
   createdAt       DateTime    @default(now())
 
   @@index([academyId, usedAt])

@@ -110,6 +110,17 @@ function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Rol
   return <Layout>{children}</Layout>;
 }
 
+/**
+ * A Center invitation link is opened by people with and without an account.
+ * Signed in, it is an ordinary page inside the shell; signed out, the same
+ * page stands alone and offers sign-in / sign-up that both return here —
+ * bouncing to /login first would have thrown away what the link was for.
+ */
+function JoinRoute() {
+  const signedIn = useAuthStore((s) => !!s.accessToken);
+  return signedIn ? <RequireAuth><JoinCenterPage /></RequireAuth> : <JoinCenterPage />;
+}
+
 /** Where a role belongs when it is somewhere it does not. */
 function homeFor(role?: Role): string {
   if (role === Role.TEACHER) return '/teacher';
@@ -171,7 +182,7 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/activate" element={<ActivateAccountPage />} />
-      <Route path="/join/:token" element={<RequireAuth><JoinCenterPage /></RequireAuth>} />
+      <Route path="/join/:token" element={<JoinRoute />} />
 
       {/* Student / public browsing */}
       <Route path="/" element={<HomeRedirect />} />

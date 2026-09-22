@@ -168,6 +168,67 @@ export class RegisterTeacherDto {
   stages: EducationStageValue[];
 }
 
+/**
+ * Account creation for someone a Center invited by link. Deliberately carries
+ * NO role, NO academy and NO owner: the token names all three and the server
+ * reads them from the stored row. Subjects/stages are what a TEACHER invitee
+ * will author under and are required for that role only — the service, not
+ * this shape, decides, because the shape cannot see the token's role.
+ */
+export class RegisterViaInvitationDto {
+  @ApiProperty({ example: 'NdAWTeObUi2NUYNi5hwwErzIrlq33IsExIVC-wAFl4E' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  token: string;
+
+  @ApiProperty({ example: 'teacher@example.com' })
+  @IsEmail({}, { message: 'A valid email is required' })
+  email: string;
+
+  @ApiProperty({ example: 'أ. خالد حسن' })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  fullName: string;
+
+  @ApiProperty({ example: 'Passw0rd!' })
+  @Matches(PASSWORD_REGEX, { message: PASSWORD_MSG })
+  password: string;
+
+  @ApiProperty({ example: '01012345678' })
+  @Matches(EGY_PHONE_REGEX, { message: 'phone must be a valid Egyptian mobile number' })
+  phone: string;
+
+  @ApiPropertyOptional({ example: 'mr_khaled' })
+  @IsOptional()
+  @Matches(USERNAME_REGEX, { message: USERNAME_MSG })
+  username?: string;
+
+  @ApiPropertyOptional({ example: ['clx123subjectid'], isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(LIMITS.ID, { each: true })
+  subjectIds?: string[];
+
+  @ApiPropertyOptional({ example: ['SECONDARY'], enum: EDUCATION_STAGES, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @ArrayUnique()
+  @IsIn(EDUCATION_STAGES, { each: true })
+  stages?: EducationStageValue[];
+
+  @ApiPropertyOptional({ example: 'Chrome on Android' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  deviceName?: string;
+}
+
 export class ChangePasswordDto {
   @ApiProperty({ example: 'OldPassw0rd' })
   @IsString()

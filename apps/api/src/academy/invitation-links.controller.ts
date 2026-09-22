@@ -71,4 +71,15 @@ export class InvitationLinksController {
     });
     return membership;
   }
+
+  @Post('invitation-links/:token/decline')
+  @ApiOperation({ summary: 'Decline a staff invitation link — closes it, creates nothing' })
+  async decline(@CurrentUser() user: JwtPayload, @Param('token') token: string) {
+    const result = await this.links.decline(token, user.sub);
+    await this.audit.log({
+      actorUserId: user.sub, action: 'member.invitationLink.decline', entity: 'AcademyInvitationLink', entityId: result.id,
+      academyId: result.academyId, meta: { role: result.role },
+    });
+    return { declined: true };
+  }
 }

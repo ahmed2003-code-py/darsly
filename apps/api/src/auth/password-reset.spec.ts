@@ -37,7 +37,7 @@ describe('AuthService — password reset by emailed code', () => {
       $transaction: jest.fn().mockResolvedValue([]),
     };
     mail = { send: jest.fn().mockResolvedValue({ delivered: true, id: 'm1' }), webUrl: (p = '') => p };
-    service = new AuthService(prisma, {} as any, mail);
+    service = new AuthService(prisma, {} as any, mail, {} as any);
     delete process.env.OTP_DEV_MODE;
   });
 

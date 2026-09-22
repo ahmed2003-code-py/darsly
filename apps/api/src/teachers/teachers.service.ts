@@ -20,6 +20,14 @@ export interface DiscoverTeachersQuery {
   pageSize?: number;
 }
 
+/**
+ * What makes a teacher the platform's to list: a PERSONAL academy of their
+ * own. Every marketplace signup is provisioned one; a teacher who only ever
+ * joined a Center by invitation has none, and belongs to that Center — not
+ * on the public shelf, not behind a /t/ page of their own.
+ */
+const MARKETPLACE_TEACHER: Prisma.AcademyWhereInput = { kind: 'PERSONAL', deletedAt: null };
+
 @Injectable()
 export class TeachersService {
   constructor(
@@ -59,7 +67,7 @@ export class TeachersService {
     const tracks = trackFilter(track);
     const where: Prisma.TeacherProfileWhereInput = {
       status: 'APPROVED',
-      user: { isActive: true },
+      user: { isActive: true, ownedAcademies: { some: MARKETPLACE_TEACHER } },
       ...(hidden.length ? { id: { notIn: hidden } } : {}),
       // Both of these ask about `subjects`, so they go in an AND rather than as
       // two keys of the same object, where the second would silently replace
@@ -172,7 +180,7 @@ export class TeachersService {
       ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
       : {};
     const teacher = await this.prisma.teacherProfile.findFirst({
-      where: { slug, status: 'APPROVED', user: { isActive: true } },
+      where: { slug, status: 'APPROVED', user: { isActive: true, ownedAcademies: { some: MARKETPLACE_TEACHER } } },
       include: {
         user: {
           select: {

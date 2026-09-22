@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { computeSplit } from './revenue-split';
 
 /**
  * Accepts either the base client or an interactive-transaction client, so
@@ -15,11 +16,25 @@ type Db = PrismaService | Prisma.TransactionClient;
  * immutable; corrections are new transactions. All amounts are integer piasters.
  *
  * Accounts:
- *   platform:cash               — money the platform holds
- *   platform:commission         — platform earnings
- *   teacher:<tenantId>:balance  — a teacher's withdrawable balance
+ *   platform:cash                     — money the platform holds (real transfers)
+ *   platform:cash-in-kind             — cash a receiver collected in person and
+ *                                        immediately self-settled as their own
+ *                                        earning (Phase 7; a balancing entry,
+ *                                        not a liability — see recordPayment)
+ *   platform:commission               — platform earnings
+ *   teacher:<tenantId>:balance        — a teacher's withdrawable balance
+ *   academy:<academyId>:balance       — a Center's withdrawable balance (Phase 7)
+ *   teacher:<tenantId>:cash-liability — cash a teacher personally collected
+ *                                        that is NOT theirs yet (Phase 7)
+ *   academy:<academyId>:cash-liability — same, for a Center's desk (Phase 7)
  *
- * A teacher's withdrawable balance = Σ CREDIT − Σ DEBIT on their balance account.
+ * A :balance account is CREDIT-only in practice (never debited by a sale) —
+ * it is what its holder actually earned and may withdraw. A :cash-liability
+ * account is DEBIT-only in practice (nothing credits it back yet — there is
+ * no remittance/settle-up flow) — a negative balance there is the expected,
+ * standing record of what its holder still owes for cash it is physically
+ * holding on someone else's behalf. The two are never the same account, so a
+ * payout can never draw on money that belongs to the platform or another party.
  */
 @Injectable()
 export class LedgerService {
@@ -29,6 +44,67 @@ export class LedgerService {
 
   private teacherAccount(tenantId: string) {
     return `teacher:${tenantId}:balance`;
+  }
+
+  /** The organisation's own balance account — a Center has its own; a PERSONAL workspace is the teacher's. */
+  orgAccount(academy: { id: string; kind: 'PERSONAL' | 'CENTER' }) {
+    return academy.kind === 'CENTER' ? `academy:${academy.id}:balance` : this.teacherAccount(academy.id);
+  }
+
+  /**
+   * Phase 7 cash accounting. `:balance` is a payout-eligible earnings
+   * account — it must only ever be CREDITED (what a party actually earned),
+   * never debited to represent cash sitting in someone's pocket. Physically
+   * holding cash that is not entirely one's own is a SEPARATE fact — a
+   * liability, "money still to remit" — and lives on its own account, so it
+   * can never be netted into, or mistaken for, withdrawable earnings.
+   *
+   * This account is debited only the RECEIVER'S NON-OWN portion of a cash
+   * collection (the platform's fee, plus any other party's share) — never
+   * the receiver's own share, and never the gross amount collected (see
+   * recordPayment's two-leg cash entries). It is never auto-credited: there
+   * is no remittance/settle-up flow yet (a later phase), so the obligation
+   * persists exactly as booked — it does not shrink just because the
+   * receiver later makes an unrelated online sale.
+   */
+  private cashLiabilityAccount(receiver: 'TEACHER' | 'CENTER', tenantId: string, academyId: string) {
+    return receiver === 'CENTER' ? `academy:${academyId}:cash-liability` : `teacher:${tenantId}:cash-liability`;
+  }
+
+  /** How much of the cash a receiver collected is still unremitted (platform fee + any other party's share). Always ≥ 0. */
+  async cashOwedCents(account: string, db: Db = this.prisma): Promise<number> {
+    const balance = await this.balanceOf(account, db);
+    return balance < 0 ? -balance : 0;
+  }
+
+  /** Convenience wrappers over cashOwedCents for the two receiver shapes. */
+  teacherCashOwed(tenantId: string, db: Db = this.prisma): Promise<number> {
+    return this.cashOwedCents(`teacher:${tenantId}:cash-liability`, db);
+  }
+  orgCashOwed(academyId: string, db: Db = this.prisma): Promise<number> {
+    return this.cashOwedCents(`academy:${academyId}:cash-liability`, db);
+  }
+
+  private async balanceOf(account: string, db: Db): Promise<number> {
+    const [credits, debits] = await Promise.all([
+      db.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
+      db.ledgerEntry.aggregate({ where: { account, direction: 'DEBIT' }, _sum: { amountCents: true } }),
+    ]);
+    return (credits._sum.amountCents ?? 0) - (debits._sum.amountCents ?? 0);
+  }
+
+  /** Withdrawable balance of an organisation (credits − debits on its own account). */
+  orgBalance(academy: { id: string; kind: 'PERSONAL' | 'CENTER' }, db: Db = this.prisma): Promise<number> {
+    return this.balanceOf(this.orgAccount(academy), db);
+  }
+
+  /** Lifetime earnings credited to an organisation's own account. */
+  async orgEarnings(academy: { id: string; kind: 'PERSONAL' | 'CENTER' }) {
+    const net = await this.prisma.ledgerEntry.aggregate({
+      where: { account: this.orgAccount(academy), direction: 'CREDIT' },
+      _sum: { amountCents: true },
+    });
+    return { netCents: net._sum.amountCents ?? 0 };
   }
 
   /** A student's prepaid wallet — a platform liability held for the student. */
@@ -195,6 +271,13 @@ export class LedgerService {
     // contribution does not — debiting platform:cash for a wallet-funded
     // portion would invent money that was already counted once, when the
     // wallet was topped up.
+    // Phase 7: where the net goes. PERSONAL → all to the teacher (unchanged);
+    // CENTER → the configured Center/teacher split. Resolved inside the
+    // settlement transaction so an unconfigured split rolls the whole flip back.
+    const split = await computeSplit(db, payment, net);
+    const academyId = split.academyId;
+    const isCash = payment.method === 'CASH';
+
     const paidFully = payment.method === 'WALLET';
     // Defensive, not just decorative: a caller that hands in a hand-built
     // object (a unit test, or a future refactor) rather than a real Prisma row
@@ -229,6 +312,31 @@ export class LedgerService {
     const debitEntries: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
     if (paidFully) {
       debitEntries.push({ account: this.walletAccount(payment.studentId), direction: 'DEBIT', amountCents: payment.amountCents });
+    } else if (isCash) {
+      // Physical cash never reaches the platform: whoever received it holds the
+      // whole amount. Debiting platform:cash would invent money the platform
+      // never saw. But the whole amount collected is NOT all "owed" — the
+      // receiver's OWN share is theirs the moment they hold it; only the rest
+      // (the platform's fee, and — when a teacher collects on a Center course,
+      // or vice versa — the other party's cut) is a real outstanding
+      // obligation. Two legs, so the liability account reflects EXACTLY that
+      // remainder, never the gross:
+      //  1. the receiver's own share is "self-settled in kind" — a wash against
+      //     a platform-wide account, purely to balance the entry, paired with
+      //     the ordinary earnings credit below (identical in effect to an
+      //     online sale: their :balance is credited only their share).
+      //  2. the remainder is debited from the receiver's OWN cash-liability
+      //     account (see cashLiabilityAccount) — an auditable, standing "still
+      //     owe this" figure that never gets smaller on its own.
+      const receiverOwnShare = payment.cashReceiver === 'CENTER' ? split.academyCents : split.teacherCents;
+      const owedPortion = payment.amountCents - receiverOwnShare;
+      if (receiverOwnShare > 0) {
+        debitEntries.push({ account: 'platform:cash-in-kind', direction: 'DEBIT', amountCents: receiverOwnShare, tenantId: payment.tenantId, academyId });
+      }
+      if (owedPortion > 0) {
+        const receiver = this.cashLiabilityAccount(payment.cashReceiver ?? 'TEACHER', payment.tenantId, academyId);
+        debitEntries.push({ account: receiver, direction: 'DEBIT', amountCents: owedPortion, tenantId: payment.tenantId, academyId });
+      }
     } else {
       if (mixedWallet) {
         debitEntries.push({ account: this.paymentEscrowAccount(paymentId), direction: 'DEBIT', amountCents: walletCents });
@@ -246,9 +354,15 @@ export class LedgerService {
           create: [
             ...debitEntries,
             // platform earnings (the service fee) — account name kept for continuity.
-            { account: 'platform:commission', direction: 'CREDIT', amountCents: fee, tenantId: payment.tenantId },
-            // the academy's withdrawable earning.
-            { account: this.teacherAccount(payment.tenantId), direction: 'CREDIT', amountCents: net, tenantId: payment.tenantId },
+            { account: 'platform:commission', direction: 'CREDIT', amountCents: fee, tenantId: payment.tenantId, academyId },
+            // the Center's share of the net (CENTER only).
+            ...(split.academyCents > 0
+              ? [{ account: `academy:${academyId}:balance`, direction: 'CREDIT' as const, amountCents: split.academyCents, tenantId: payment.tenantId, academyId }]
+              : []),
+            // the teacher's withdrawable earning (all of the net for PERSONAL).
+            ...(split.teacherCents > 0 || split.kind === 'PERSONAL'
+              ? [{ account: this.teacherAccount(payment.tenantId), direction: 'CREDIT' as const, amountCents: split.teacherCents, tenantId: payment.tenantId, academyId }]
+              : []),
           ],
         },
       },
@@ -281,6 +395,13 @@ export class LedgerService {
       include: { ledgerTransaction: true },
     });
     if (!payout || payout.ledgerTransaction) return;
+    // Phase 7: the payout draws on the organisation's own account (a Center's,
+    // or the teacher's for a PERSONAL workspace). academyId was backfilled from
+    // tenantId, so a legacy row resolves to the same account it always did.
+    const academyId = payout.academyId ?? payout.tenantId;
+    if (!academyId) throw new BadRequestException({ message: 'Payout has no organisation', code: 'PAYOUT_UNSCOPED' });
+    const academy = await db.academy.findUnique({ where: { id: academyId }, select: { id: true, kind: true } });
+    const account = academy ? this.orgAccount(academy) : this.teacherAccount(academyId);
 
     await db.ledgerTransaction.create({
       data: {
@@ -288,7 +409,7 @@ export class LedgerService {
         payoutId,
         entries: {
           create: [
-            { account: this.teacherAccount(payout.tenantId), direction: 'DEBIT', amountCents: payout.amountCents, tenantId: payout.tenantId },
+            { account, direction: 'DEBIT', amountCents: payout.amountCents, tenantId: payout.tenantId, academyId },
             { account: 'platform:cash', direction: 'CREDIT', amountCents: payout.amountCents },
           ],
         },
@@ -342,25 +463,32 @@ export class LedgerService {
    * CREDIT on `teacher:<id>:balance` is net revenue, CREDIT on
    * `platform:commission` (scoped by tenantId) is the fee taken from it.
    */
-  async academyRevenueBatch(tenantIds: string[]): Promise<Map<string, { netCents: number; feeCents: number }>> {
+  async academyRevenueBatch(academyIds: string[]): Promise<Map<string, { netCents: number; feeCents: number }>> {
     const map = new Map<string, { netCents: number; feeCents: number }>();
-    for (const id of tenantIds) map.set(id, { netCents: 0, feeCents: 0 });
-    if (tenantIds.length === 0) return map;
+    for (const id of academyIds) map.set(id, { netCents: 0, feeCents: 0 });
+    if (academyIds.length === 0) return map;
 
+    // Phase 7: keyed by organisation. "Net" is what was credited to the
+    // organisation's OWN account — a Center's balance for a Center, the
+    // teacher's for a PERSONAL workspace (whose account id == academy id).
     const [netRows, feeRows] = await Promise.all([
       this.prisma.ledgerEntry.groupBy({
-        by: ['tenantId'],
-        where: { tenantId: { in: tenantIds }, direction: 'CREDIT', account: { startsWith: 'teacher:' } },
+        by: ['academyId'],
+        where: {
+          academyId: { in: academyIds },
+          direction: 'CREDIT',
+          account: { in: academyIds.flatMap((id) => [`teacher:${id}:balance`, `academy:${id}:balance`]) },
+        },
         _sum: { amountCents: true },
       }),
       this.prisma.ledgerEntry.groupBy({
-        by: ['tenantId'],
-        where: { tenantId: { in: tenantIds }, direction: 'CREDIT', account: 'platform:commission' },
+        by: ['academyId'],
+        where: { academyId: { in: academyIds }, direction: 'CREDIT', account: 'platform:commission' },
         _sum: { amountCents: true },
       }),
     ]);
-    for (const r of netRows) if (r.tenantId) map.get(r.tenantId)!.netCents = r._sum.amountCents ?? 0;
-    for (const r of feeRows) if (r.tenantId) map.get(r.tenantId)!.feeCents = r._sum.amountCents ?? 0;
+    for (const r of netRows) if (r.academyId) map.get(r.academyId)!.netCents = r._sum.amountCents ?? 0;
+    for (const r of feeRows) if (r.academyId) map.get(r.academyId)!.feeCents = r._sum.amountCents ?? 0;
     return map;
   }
 
@@ -405,8 +533,8 @@ export class LedgerService {
    * academy sees only what it earns, never gross or the platform's
    * commission — see teacherEarnings() above for why.
    */
-  async academyRevenueTrend(tenantId: string, days: number): Promise<{ date: string; netCents: number }[]> {
-    const account = this.teacherAccount(tenantId);
+  async academyRevenueTrend(academy: { id: string; kind: 'PERSONAL' | 'CENTER' }, days: number): Promise<{ date: string; netCents: number }[]> {
+    const account = this.orgAccount(academy);
     const rows = await this.prisma.$queryRaw<{ day: Date; net: bigint }[]>`
       WITH days AS (
         SELECT generate_series(

@@ -684,6 +684,24 @@
       "PROCESSING": "Processing",
       "COMPLETED": "Completed",
       "REJECTED": "Rejected"
+    },
+    "cash": {
+      "pending": "Pending cash",
+      "pendingCount": "{{count}} awaiting your confirmation",
+      "noneQueued": "No cash claims waiting.",
+      "confirm": "Confirm received",
+      "reject": "Reject",
+      "record": "Record cash received",
+      "course": "Course",
+      "pickCourse": "Pick a course",
+      "student": "Student",
+      "pickStudent": "Pick a student",
+      "teacherSharePercent": "Your revenue share",
+      "origin": {
+        "STUDENT_REPORTED": "student claim",
+        "TEACHER_RECORDED": "you recorded",
+        "CENTER_RECORDED": "Center recorded"
+      }
     }
   },
   "admin": {
@@ -1352,6 +1370,14 @@
       "WALLET_NUMBERHint": "This is the number that reaches us in the transfer message, and how we know the transfer is yours. It has to be right.",
       "TRANSACTION_REFERENCE": "The transfer reference",
       "TRANSACTION_REFERENCEHint": "Copy it from the transfer message you received — like 05b6efa4. It is how we tell your transfer from anyone else’s."
+    },
+    "cash": {
+      "receiver": "Who did you pay?",
+      "receiverTeacher": "The teacher, in person",
+      "receiverCenter": "The Center desk",
+      "note": "Note (optional)",
+      "pendingHint": "This is a claim, not a receipt — it stays pending until whoever received the cash confirms it. You'll be enrolled once they do.",
+      "submit": "Submit cash claim"
     }
   },
   "tpay": {
@@ -1799,13 +1825,16 @@
       "USED": "Used",
       "REVOKED": "Revoked",
       "EXPIRED": "Expired"
-    }
+    },
+    "revenueShareOverride": "Share",
+    "canCollectCash": "Cash collector"
   },
   "method": {
     "INSTAPAY": "InstaPay",
     "VODAFONE_CASH": "Vodafone Cash",
     "BANK_TRANSFER": "Bank transfer",
-    "OTHER": "Other"
+    "OTHER": "Other",
+    "CASH": "Cash"
   },
   "image": {
     "tooLarge": "Image is too large (25 MB maximum)",
@@ -2885,6 +2914,13 @@
       "upcoming": "Sessions next 7 days",
       "attendance": "Attendance (30d)",
       "subjects": "Active subjects"
+    },
+    "revenueShare": {
+      "title": "Teacher revenue share",
+      "hint": "The default share of a paid course's net that goes to its teacher — the rest is the Center's revenue. A paid course cannot be sold until this is set. A teacher's own override (in Members) takes priority over this default.",
+      "label": "Default teacher share",
+      "unsetWarning": "Not set — teachers here cannot sell paid courses until you set a share.",
+      "overrideHint": "You can also set a different share per teacher from the Members page."
     }
   },
   "joinCenter": {

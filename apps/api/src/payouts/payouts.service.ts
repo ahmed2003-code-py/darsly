@@ -13,6 +13,19 @@ export class PayoutsService {
     private readonly notifications: NotificationsService,
   ) {}
 
+  /**
+   * Phase 7: payouts belong to an ORGANISATION's balance account. For a
+   * PERSONAL workspace that is the teacher's (academyId == tenantId, as
+   * before); for a Center it is the Center's own — never the teacher's, and
+   * never another Center's. The workspace comes from the validated context,
+   * so the caller cannot name a scope they are not the owner of.
+   */
+  private async orgOf(academyId: string) {
+    const academy = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { id: true, kind: true, ownerUserId: true } });
+    if (!academy) throw new NotFoundException('Academy not found');
+    return academy;
+  }
+
   private async minimumCents(): Promise<number> {
     const s = await this.prisma.platformSetting.findUnique({ where: { key: 'payout.minimumCents' } });
     return Number((s?.value as number) ?? 50000);
@@ -20,25 +33,27 @@ export class PayoutsService {
 
   // ── Teacher: payout methods ───────────────────────────────────────────────
 
-  listMethods(tenantId: string) {
+  listMethods(academyId: string) {
     return this.prisma.payoutMethodSaved.findMany({
-      where: { tenantId },
+      where: { academyId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async addMethod(tenantId: string, method: PayoutMethod, details: Record<string, unknown>, isDefault: boolean) {
+  async addMethod(academyId: string, method: PayoutMethod, details: Record<string, unknown>, isDefault: boolean) {
+    const academy = await this.orgOf(academyId);
     if (isDefault) {
-      await this.prisma.payoutMethodSaved.updateMany({ where: { tenantId }, data: { isDefault: false } });
+      await this.prisma.payoutMethodSaved.updateMany({ where: { academyId }, data: { isDefault: false } });
     }
-    const count = await this.prisma.payoutMethodSaved.count({ where: { tenantId } });
+    const count = await this.prisma.payoutMethodSaved.count({ where: { academyId } });
     return this.prisma.payoutMethodSaved.create({
-      data: { tenantId, method, details: details as any, isDefault: isDefault || count === 0 },
+      // tenantId kept for a PERSONAL workspace (legacy readers); a Center's method has none.
+      data: { academyId, tenantId: academy.kind === 'PERSONAL' ? academyId : null, method, details: details as any, isDefault: isDefault || count === 0 },
     });
   }
 
-  async removeMethod(tenantId: string, id: string) {
-    const m = await this.prisma.payoutMethodSaved.findFirst({ where: { id, tenantId } });
+  async removeMethod(academyId: string, id: string) {
+    const m = await this.prisma.payoutMethodSaved.findFirst({ where: { id, academyId } });
     if (!m) throw new NotFoundException('Method not found');
     await this.prisma.payoutMethodSaved.delete({ where: { id } });
     return { id, deleted: true };
@@ -46,8 +61,9 @@ export class PayoutsService {
 
   // ── Teacher: request a payout ─────────────────────────────────────────────
 
-  async request(tenantId: string, amountCents: number, methodId: string) {
-    const method = await this.prisma.payoutMethodSaved.findFirst({ where: { id: methodId, tenantId } });
+  async request(academyId: string, amountCents: number, methodId: string) {
+    const academy = await this.orgOf(academyId);
+    const method = await this.prisma.payoutMethodSaved.findFirst({ where: { id: methodId, academyId } });
     if (!method) throw new NotFoundException('Payout method not found');
 
     const min = await this.minimumCents();
@@ -62,20 +78,21 @@ export class PayoutsService {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          const balance = await this.ledger.teacherBalance(tenantId, tx);
+          const balance = await this.ledger.orgBalance(academy, tx);
           if (amountCents > balance) {
-            throw new BadRequestException('Amount exceeds your withdrawable balance');
+            throw new BadRequestException({ message: 'Amount exceeds your withdrawable balance', code: 'PAYOUT_EXCEEDS_BALANCE' });
           }
           const pending = await tx.payoutRequest.aggregate({
-            where: { tenantId, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } },
+            where: { academyId, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } },
             _sum: { amountCents: true },
           });
           if ((pending._sum.amountCents ?? 0) + amountCents > balance) {
-            throw new BadRequestException('You already have pending payouts covering this balance');
+            throw new BadRequestException({ message: 'You already have pending payouts covering this balance', code: 'PAYOUT_EXCEEDS_BALANCE' });
           }
           return tx.payoutRequest.create({
             data: {
-              tenantId,
+              academyId,
+              tenantId: academy.kind === 'PERSONAL' ? academyId : null,
               amountCents,
               method: method.method,
               destination: method.details as any,
@@ -93,8 +110,8 @@ export class PayoutsService {
     }
   }
 
-  teacherList(tenantId: string) {
-    return this.prisma.payoutRequest.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } });
+  teacherList(academyId: string) {
+    return this.prisma.payoutRequest.findMany({ where: { academyId }, orderBy: { createdAt: 'desc' } });
   }
 
   // ── Admin: process payouts ────────────────────────────────────────────────
@@ -103,7 +120,10 @@ export class PayoutsService {
     return this.prisma.payoutRequest.findMany({
       where: status ? { status } : {},
       orderBy: { createdAt: 'asc' },
-      include: { teacher: { include: { user: { select: { fullName: true } } } } },
+      include: {
+        teacher: { include: { user: { select: { fullName: true } } } },
+        academy: { select: { id: true, name: true, kind: true } },
+      },
     });
   }
 
@@ -115,9 +135,13 @@ export class PayoutsService {
   async process(id: string, status: PayoutStatus, adminUserId: string, note?: string) {
     const payout = await this.prisma.payoutRequest.findUnique({
       where: { id },
-      include: { teacher: { select: { userId: true } } },
+      include: { teacher: { select: { userId: true } }, academy: { select: { id: true, kind: true, ownerUserId: true } } },
     });
     if (!payout) throw new NotFoundException('Payout not found');
+    // Whose balance this draws on (a legacy row has academyId backfilled == tenantId).
+    const org = payout.academy ?? (payout.tenantId ? { id: payout.tenantId, kind: 'PERSONAL' as const, ownerUserId: payout.teacher?.userId ?? '' } : null);
+    if (!org) throw new BadRequestException({ message: 'Payout has no organisation', code: 'PAYOUT_UNSCOPED' });
+    const notifyUserId = payout.teacher?.userId ?? org.ownerUserId;
     if (['COMPLETED', 'REJECTED'].includes(payout.status)) {
       throw new BadRequestException('Payout is already finalized');
     }
@@ -134,9 +158,9 @@ export class PayoutsService {
       // request) and book the debit atomically with the status change.
       updated = await this.prisma.$transaction(
         async (tx) => {
-          const balance = await this.ledger.teacherBalance(payout.tenantId, tx);
+          const balance = await this.ledger.orgBalance(org, tx);
           if (payout.amountCents > balance) {
-            throw new BadRequestException('Teacher balance no longer covers this payout');
+            throw new BadRequestException({ message: 'Balance no longer covers this payout', code: 'PAYOUT_EXCEEDS_BALANCE' });
           }
           const flip = await tx.payoutRequest.updateMany({ where: open, data });
           if (flip.count === 0) throw new BadRequestException('Payout is already finalized');
@@ -153,7 +177,7 @@ export class PayoutsService {
 
     if (status === 'COMPLETED') {
       await this.notifications.create({
-        userId: payout.teacher.userId,
+        userId: notifyUserId,
         type: 'PAYOUT_STATUS',
         title: 'تم تحويل مستحقاتك',
         body: `تم إتمام سحب بقيمة ${(payout.amountCents / 100).toFixed(0)} ج.م`,
@@ -161,7 +185,7 @@ export class PayoutsService {
       });
     } else if (status === 'REJECTED') {
       await this.notifications.create({
-        userId: payout.teacher.userId,
+        userId: notifyUserId,
         type: 'PAYOUT_STATUS',
         title: 'رُفض طلب السحب',
         body: note ?? 'تم رفض طلب السحب من الإدارة.',

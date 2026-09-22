@@ -11,7 +11,9 @@ function makeDeps(course = personalCourse, kind: 'PERSONAL' | 'CENTER' = 'PERSON
   const prisma: any = {
     studentProfile: { findUnique: jest.fn().mockResolvedValue(STUDENT) },
     course: { findFirst: jest.fn().mockResolvedValue(course), findUnique: jest.fn().mockResolvedValue(course), findUniqueOrThrow: jest.fn().mockResolvedValue(course) },
-    academy: { findUnique: jest.fn().mockResolvedValue({ kind, feeType: 'PERCENT', feeValue: 20 }) },
+    academy: { findUnique: jest.fn().mockResolvedValue({ id: 'orgX', kind, feeType: 'PERCENT', feeValue: 20, teacherSharePercent: null }) },
+    teacherProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'tu' }) },
+    academyMembership: { findFirst: jest.fn().mockResolvedValue(null) },
     courseGrade: { findMany: jest.fn().mockResolvedValue([]) },
     coupon: { findFirst: jest.fn().mockResolvedValue(null) },
     platformPaymentAccount: { findMany: jest.fn().mockResolvedValue([]) },
@@ -43,9 +45,9 @@ describe('ManualPaymentsService — organisation scope on the one Payment creati
     expect(prisma.enrollment.create.mock.calls[0][0].data).toMatchObject({ academyId: 'teacherT' });
   });
 
-  it('a Center course is refused before any enrollment or payment row exists', async () => {
+  it('a Center course with no agreed revenue split is refused before any enrollment or payment row exists', async () => {
     const { prisma, svc, ledger } = makeDeps(centerCourse, 'CENTER');
-    await expect(svc.submit('u1', dto)).rejects.toMatchObject({ response: { code: 'CENTER_COURSE_MUST_BE_FREE' } });
+    await expect(svc.submit('u1', dto)).rejects.toMatchObject({ response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' } });
     expect(prisma.enrollment.create).not.toHaveBeenCalled();
     expect(prisma.payment.create).not.toHaveBeenCalled();
     expect(ledger.recordPayment).not.toHaveBeenCalled();
@@ -57,12 +59,22 @@ describe('ManualPaymentsService — organisation scope on the one Payment creati
     expect(prisma.academy.findUnique.mock.calls[0][0].where).toEqual({ id: 'orgX' });
   });
 
-  it('the teacher queue is scoped by academyId, not tenantId', async () => {
+  it('the OWNER teacher queue is scoped by academyId, not narrowed to one author', async () => {
     const { prisma, svc } = makeDeps();
-    await svc.teacherQueue('centerA');
+    const ctx = { academyId: 'centerA', role: 'OWNER', can: () => true } as any;
+    await svc.teacherQueue(ctx, 'tpOwner');
     const where = prisma.payment.findMany.mock.calls[0][0].where;
     expect(where.academyId).toBe('centerA');
     expect(where.tenantId).toBeUndefined();
+  });
+
+  it("a non-collector member's queue is narrowed to courses they authored", async () => {
+    const { prisma, svc } = makeDeps();
+    const ctx = { academyId: 'centerA', role: 'TEACHER', can: () => false } as any;
+    await svc.teacherQueue(ctx, 'tpMember');
+    const where = prisma.payment.findMany.mock.calls[0][0].where;
+    expect(where.academyId).toBe('centerA');
+    expect(where.tenantId).toBe('tpMember');
   });
 
   it('no direct balance mutation — money still only moves through LedgerService', () => {

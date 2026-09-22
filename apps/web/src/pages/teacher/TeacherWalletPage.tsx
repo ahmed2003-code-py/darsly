@@ -17,6 +17,10 @@ export default function TeacherWalletPage() {
   const [amount, setAmount] = useState('');
   const [methodId, setMethodId] = useState('');
   const [newMethod, setNewMethod] = useState({ method: 'INSTAPAY', details: '' });
+  // Phase 7: cash — pending claims to confirm/reject, and recording cash in hand.
+  const [cashQueueOpen, setCashQueueOpen] = useState(false);
+  const [recordCashOpen, setRecordCashOpen] = useState(false);
+  const [recordCash, setRecordCash] = useState({ studentId: '', courseId: '', receiver: 'TEACHER' as 'TEACHER' | 'CENTER', note: '' });
 
   const { data: wallet, isLoading } = useQuery({
     queryKey: ['wallet'],
@@ -25,6 +29,21 @@ export default function TeacherWalletPage() {
   const { data: methods } = useQuery({
     queryKey: ['payout-methods'],
     queryFn: async () => (await api.get('/teacher/payouts/methods')).data,
+  });
+  const { data: cashQueue } = useQuery({
+    queryKey: ['payments-cash-pending'],
+    queryFn: async () => (await api.get('/teacher/payments', { params: { status: 'PENDING', method: 'CASH' } })).data,
+    enabled: cashQueueOpen,
+  });
+  const { data: myCourses } = useQuery({
+    queryKey: ['teacher-courses-for-cash'],
+    queryFn: async () => (await api.get('/teacher/courses')).data,
+    enabled: recordCashOpen,
+  });
+  const { data: roster } = useQuery({
+    queryKey: ['roster-for-cash'],
+    queryFn: async () => (await api.get('/teacher/roster', { params: { pageSize: 200 } })).data,
+    enabled: recordCashOpen,
   });
 
   const invalidate = () => {
@@ -46,6 +65,22 @@ export default function TeacherWalletPage() {
       })).data,
     onSuccess: () => { invalidate(); setMethodOpen(false); setNewMethod({ method: 'INSTAPAY', details: '' }); },
   });
+  const invalidateCash = () => {
+    invalidate();
+    queryClient.invalidateQueries({ queryKey: ['payments-cash-pending'] });
+  };
+  const confirmCash = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/teacher/payments/${id}/confirm-cash`)).data,
+    onSuccess: invalidateCash,
+  });
+  const rejectCash = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/teacher/payments/${id}/reject-cash`)).data,
+    onSuccess: invalidateCash,
+  });
+  const submitRecordCash = useMutation({
+    mutationFn: async () => (await api.post('/teacher/payments/cash', recordCash)).data,
+    onSuccess: () => { invalidateCash(); setRecordCashOpen(false); setRecordCash({ studentId: '', courseId: '', receiver: 'TEACHER', note: '' }); },
+  });
 
   if (isLoading) {
     return (
@@ -64,14 +99,20 @@ export default function TeacherWalletPage() {
         title={t('wallet.title')}
         subtitle={t('wallet.subtitle')}
         action={
-          <button
-            className="btn-primary"
-            disabled={!methods?.length || wallet.balanceCents < wallet.payoutMinimumCents}
-            onClick={() => { setMethodId(methods?.[0]?.id ?? ''); setPayoutOpen(true); }}
-          >
-            <span className="material-symbols-outlined">account_balance</span>
-            {t('wallet.requestPayout')}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" onClick={() => setRecordCashOpen(true)}>
+              <span className="material-symbols-outlined">payments</span>
+              {t('wallet.cash.record')}
+            </button>
+            <button
+              className="btn-primary"
+              disabled={!methods?.length || wallet.balanceCents < wallet.payoutMinimumCents}
+              onClick={() => { setMethodId(methods?.[0]?.id ?? ''); setPayoutOpen(true); }}
+            >
+              <span className="material-symbols-outlined">account_balance</span>
+              {t('wallet.requestPayout')}
+            </button>
+          </div>
         }
       />
 
@@ -82,7 +123,18 @@ export default function TeacherWalletPage() {
           <p className="font-heading text-3xl font-extrabold">{egp(wallet.balanceCents)}</p>
           <p className="mt-1 text-xs opacity-80">{t('wallet.minPayout', { amount: `${minEgp} ${t('common.currencyShort')}` })}</p>
         </div>
-        <div className="card"><p className="text-sm text-on-surface-variant">{t('wallet.net')}</p><p className="font-heading text-3xl font-extrabold text-accent">{egp(wallet.netCents)}</p></div>
+        <div className="card"><p className="text-sm text-on-surface-variant">{t('wallet.net')}</p><p className="font-heading text-3xl font-extrabold text-accent">{egp(wallet.netCents ?? wallet.earnedHereCents ?? 0)}</p></div>
+        <button type="button" className="card text-start transition hover:shadow-md" onClick={() => setCashQueueOpen(true)}>
+          <p className="text-sm text-on-surface-variant">{t('wallet.cash.pending')}</p>
+          <p className="font-heading text-3xl font-extrabold">{egp(wallet.pendingCashCents ?? 0)}</p>
+          {(wallet.pendingCashCount ?? 0) > 0 && <p className="mt-1 text-xs text-warn">{t('wallet.cash.pendingCount', { count: wallet.pendingCashCount })}</p>}
+        </button>
+        {wallet.kind === 'CENTER' && wallet.scope === 'ORGANISATION' && (
+          <div className="card">
+            <p className="text-sm text-on-surface-variant">{t('wallet.cash.teacherSharePercent')}</p>
+            <p className="font-heading text-3xl font-extrabold">{wallet.teacherSharePercent == null ? '—' : `${wallet.teacherSharePercent}%`}</p>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -172,6 +224,65 @@ export default function TeacherWalletPage() {
           </Field>
           <button className="btn-primary w-full" disabled={requestPayout.isPending}>{t('wallet.submit')}</button>
           <ErrorNote error={requestPayout.error} />
+        </form>
+      </Modal>
+
+      {/* Phase 7: pending cash confirmations */}
+      <Modal open={cashQueueOpen} title={t('wallet.cash.pending')} onClose={() => setCashQueueOpen(false)} wide>
+        {!cashQueue?.length ? (
+          <p className="py-8 text-center text-outline">{t('wallet.cash.noneQueued')}</p>
+        ) : (
+          <ul className="divide-y divide-outline-variant/40">
+            {cashQueue.map((p: any) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-bold">{p.courseTitle}</p>
+                  <p className="truncate text-xs text-outline">{p.studentName} · {egp(p.amountCents)} · {t(`wallet.cash.origin.${p.cashOrigin}`)}</p>
+                  {p.note && <p className="truncate text-xs text-outline">{p.note}</p>}
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button className="btn-primary px-3 py-1.5 text-xs" disabled={confirmCash.isPending} onClick={() => confirmCash.mutate(p.id)}>
+                    {t('wallet.cash.confirm')}
+                  </button>
+                  <button className="btn-secondary px-3 py-1.5 text-xs" disabled={rejectCash.isPending} onClick={() => rejectCash.mutate(p.id)}>
+                    {t('wallet.cash.reject')}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <ErrorNote error={confirmCash.error ?? rejectCash.error} />
+      </Modal>
+
+      {/* Phase 7: record cash received in hand */}
+      <Modal open={recordCashOpen} title={t('wallet.cash.record')} onClose={() => setRecordCashOpen(false)}>
+        <form onSubmit={(e: FormEvent) => { e.preventDefault(); submitRecordCash.mutate(); }}>
+          <Field label={t('wallet.cash.course')}>
+            <select className="input py-2.5" required value={recordCash.courseId} onChange={(e) => setRecordCash({ ...recordCash, courseId: e.target.value })}>
+              <option value="">{t('wallet.cash.pickCourse')}</option>
+              {(myCourses ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </select>
+          </Field>
+          <Field label={t('wallet.cash.student')}>
+            <select className="input py-2.5" required value={recordCash.studentId} onChange={(e) => setRecordCash({ ...recordCash, studentId: e.target.value })}>
+              <option value="">{t('wallet.cash.pickStudent')}</option>
+              {(roster?.students ?? []).map((s: any) => <option key={s.id} value={s.id}>{s.fullName}</option>)}
+            </select>
+          </Field>
+          {wallet.kind === 'CENTER' && (
+            <Field label={t('pay.cash.receiver')}>
+              <select className="input py-2.5" value={recordCash.receiver} onChange={(e) => setRecordCash({ ...recordCash, receiver: e.target.value as 'TEACHER' | 'CENTER' })}>
+                <option value="TEACHER">{t('pay.cash.receiverTeacher')}</option>
+                <option value="CENTER">{t('pay.cash.receiverCenter')}</option>
+              </select>
+            </Field>
+          )}
+          <Field label={t('pay.cash.note')}>
+            <input className="input" value={recordCash.note} onChange={(e) => setRecordCash({ ...recordCash, note: e.target.value })} maxLength={300} />
+          </Field>
+          <button className="btn-primary w-full" disabled={submitRecordCash.isPending}>{t('wallet.cash.record')}</button>
+          <ErrorNote error={submitRecordCash.error} />
         </form>
       </Modal>
 

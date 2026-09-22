@@ -16,6 +16,10 @@ export const CAPABILITIES = [
   'assessment.grade', // grade attempts/submissions
   'student.manage', // approve/revoke/manage students
   'payment.verify', // verify manual payments
+  // Phase 7: record/confirm CASH received by the ORGANISATION (a Center's desk).
+  // OWNER by default; an owner may grant it to a member (the "cashier") — the
+  // money is the organisation's, never tied to one person's identity.
+  'payment.collect',
   'chat.moderate',
   'live.manage', // schedule/manage live sessions
   'analytics.read',

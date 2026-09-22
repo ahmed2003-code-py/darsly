@@ -9,9 +9,13 @@ import { CoursesService, CourseScope } from './courses.service';
 const none = {} as any;
 function makePrisma(kind: 'PERSONAL' | 'CENTER' = 'PERSONAL') {
   return {
-    academy: { findUnique: jest.fn().mockResolvedValue({ kind }) },
+    academy: { findUnique: jest.fn().mockResolvedValue({ id: 'centerA', kind, teacherSharePercent: null }) },
     academySubject: { findUnique: jest.fn().mockResolvedValue(null) },
-    teacherProfile: { findUniqueOrThrow: jest.fn().mockResolvedValue({ stages: ['SECONDARY'], subjects: [{ subjectId: 'maths' }] }) },
+    academyMembership: { findFirst: jest.fn().mockResolvedValue(null) },
+    teacherProfile: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ stages: ['SECONDARY'], subjects: [{ subjectId: 'maths' }] }),
+      findUnique: jest.fn().mockResolvedValue({ userId: 'tu' }),
+    },
     gradeLevel: { findMany: jest.fn().mockResolvedValue([]) },
     course: {
       create: jest.fn(async ({ data }: any) => ({ id: 'new', ...data, grades: [] })),
@@ -61,10 +65,10 @@ describe('CoursesService.create — authorship vs organisation', () => {
     expect(prisma.course.create).not.toHaveBeenCalled();
   });
 
-  it('a Center course with a price is refused', async () => {
+  it('a Center course with a price but no agreed revenue split is refused', async () => {
     const prisma = makePrisma('CENTER');
     await expect(svc(prisma).create(teacherInCenter, { title: 'x', priceCents: 100 } as any))
-      .rejects.toMatchObject({ response: { code: 'CENTER_COURSE_MUST_BE_FREE' } });
+      .rejects.toMatchObject({ response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' } });
     expect(prisma.course.create).not.toHaveBeenCalled();
   });
 
@@ -82,20 +86,20 @@ describe('CoursesService.create — authorship vs organisation', () => {
   });
 });
 
-describe('CoursesService.update — Center pricing cannot be introduced later', () => {
+describe('CoursesService.update — Center pricing needs an agreed revenue split', () => {
   const existing = { id: 'c1', tenantId: 'teacherT', academyId: 'centerA', priceCents: 0 };
-  it('raising the price of a Center course is refused', async () => {
+  it('raising the price of a Center course with no agreed split is refused', async () => {
     const prisma = makePrisma('CENTER');
     prisma.course.findFirst.mockResolvedValue(existing);
     await expect(svc(prisma).update(teacherInCenter, 'c1', { priceCents: 250 } as any))
-      .rejects.toMatchObject({ response: { code: 'CENTER_COURSE_MUST_BE_FREE' } });
+      .rejects.toMatchObject({ response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' } });
     expect(prisma.course.update).not.toHaveBeenCalled();
   });
-  it('publishing a Center course that somehow carries a price is refused', async () => {
+  it('publishing a Center course that somehow carries a price with no agreed split is refused', async () => {
     const prisma = makePrisma('CENTER');
     prisma.course.findFirst.mockResolvedValue({ ...existing, priceCents: 999 });
     await expect(svc(prisma).update(ownerOfCenter, 'c1', { status: 'PUBLISHED' } as any))
-      .rejects.toMatchObject({ response: { code: 'CENTER_COURSE_MUST_BE_FREE' } });
+      .rejects.toMatchObject({ response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' } });
   });
   it('a PERSONAL course keeps its pricing behaviour', async () => {
     const prisma = makePrisma('PERSONAL');

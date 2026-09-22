@@ -1,5 +1,5 @@
 import {
-  IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength,
+  IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf,
 } from 'class-validator';
 import { LIMITS } from '../common/validation';
 
@@ -34,6 +34,9 @@ export class UpdateAcademyDto {
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptional() @IsInt() @Min(1) @Max(10) maxConcurrentSessions?: number;
   @IsOptional() @IsIn(['AUTOMATIC', 'MANUAL', 'DEMO']) enrollmentMode?: 'AUTOMATIC' | 'MANUAL' | 'DEMO';
+  // Phase 7 (CENTER only): default share of a course's net that goes to its
+  // teacher, 0–100. null clears it (paid Center courses stop being sellable).
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(0) @Max(100) teacherSharePercent?: number | null;
 }
 
 export class AddMemberDto {
@@ -49,6 +52,10 @@ export class CheckSlugDto {
 export class UpdateMemberDto {
   @IsOptional() @IsIn(['TEACHER', 'ASSISTANT']) role?: 'TEACHER' | 'ASSISTANT';
   @IsOptional() @IsIn(['ACTIVE', 'SUSPENDED']) status?: 'ACTIVE' | 'SUSPENDED';
+  // Phase 7: this teacher's agreed share in the Center (overrides the Center default).
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(0) @Max(100) revenueSharePercent?: number | null;
+  // Phase 7: grant/revoke the organisation's cash-collector capability.
+  @IsOptional() @IsBoolean() canCollectCash?: boolean;
 }
 
 export class CreateInvitationLinkDto {

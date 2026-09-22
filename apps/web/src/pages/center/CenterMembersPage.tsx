@@ -12,7 +12,7 @@ export default function CenterMembersPage() {
   return (
     <div className="page">
       <PageHeader title={t('center.members')} subtitle={academy.name} />
-      <MembersTab slug={academy.slug} />
+      <MembersTab slug={academy.slug} isCenter />
     </div>
   );
 }

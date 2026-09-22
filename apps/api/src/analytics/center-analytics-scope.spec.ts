@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 
@@ -53,7 +53,11 @@ function makePrisma() {
     $queryRaw: jest.fn().mockResolvedValue([{ n: 0n, present: 0n, total: 0n }]),
   } as any;
 }
-const svcOf = (prisma: any) => new AnalyticsService(prisma, {} as any, {} as any, {} as any, {} as any);
+const makeLedger = () => ({
+  orgEarnings: jest.fn().mockResolvedValue({ netCents: 0 }),
+  academyRevenueTrend: jest.fn().mockResolvedValue([]),
+}) as any;
+const svcOf = (prisma: any) => new AnalyticsService(prisma, {} as any, {} as any, {} as any, makeLedger());
 
 describe('AnalyticsService — organisation scope is academyId, authorship is tenantId', () => {
   it('centerOverview keys every count on ctx.academyId and reads no financial source', async () => {
@@ -92,10 +96,18 @@ describe('AnalyticsService — organisation scope is academyId, authorship is te
     expect(prisma.course.count).not.toHaveBeenCalled();
   });
 
-  it('financialOverview refuses a Center until the finance phase', async () => {
+  it("financialOverview is now organisation-scoped for a Center too (Phase 7) — its own account, not the author's", async () => {
     const prisma = makePrisma();
-    prisma.academy.findUnique.mockResolvedValue({ kind: 'CENTER' });
-    await expect(svcOf(prisma).financialOverview('centerA', 30)).rejects.toMatchObject({ response: { code: 'FINANCE_NOT_AVAILABLE_FOR_CENTERS' } });
+    prisma.academy.findUnique.mockResolvedValue({ id: 'centerA', kind: 'CENTER' });
+    const out = await svcOf(prisma).financialOverview('centerA', 30);
+    expect(out.kind).toBe('CENTER');
+    expect(prisma.payment.groupBy.mock.calls[0][0].where.academyId).toBe('centerA');
+  });
+
+  it('financialOverview 404s for an unknown academy id', async () => {
+    const prisma = makePrisma();
+    prisma.academy.findUnique.mockResolvedValue(null);
+    await expect(svcOf(prisma).financialOverview('ghost', 30)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('enrollmentBreakdown / coursesOverview filter by academyId, never tenantId = ctx.academyId', async () => {

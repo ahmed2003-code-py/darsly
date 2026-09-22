@@ -374,7 +374,7 @@ function InvitationLinksSection({ slug }: { slug: string }) {
   );
 }
 
-export function MembersTab({ slug }: { slug: string }) {
+export function MembersTab({ slug, isCenter = false }: { slug: string; isCenter?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [email, setEmail] = useState('');
@@ -437,7 +437,7 @@ export function MembersTab({ slug }: { slug: string }) {
                 </div>
                 <Badge tone={m.role === 'OWNER' ? 'primary' : m.role === 'STUDENT' ? 'neutral' : 'teal'}>{t(ROLE_KEY[m.role] ?? 'academy.roleStudent')}</Badge>
                 {m.role !== 'OWNER' && m.role !== 'STUDENT' && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <select className="input w-28 py-1.5 text-sm" value={m.role} onChange={(e) => change.mutate({ id: m.id, body: { role: e.target.value } })}>
                       <option value="TEACHER">{t('academy.roleTeacher')}</option>
                       <option value="ASSISTANT">{t('academy.roleAssistant')}</option>
@@ -445,11 +445,50 @@ export function MembersTab({ slug }: { slug: string }) {
                     <button className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40" onClick={() => remove.mutate(m.id)}>{t('common.remove')}</button>
                   </div>
                 )}
+                {isCenter && m.role === 'TEACHER' && (
+                  <MemberRevenueShare
+                    memberId={m.id}
+                    value={m.revenueSharePercent}
+                    canCollectCash={m.canCollectCash}
+                    onSave={(body) => change.mutate({ id: m.id, body })}
+                  />
+                )}
               </li>
             ))}
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A Center-only per-member override: this teacher's revenue share (falls
+ * back to the Center's default when left blank — see CenterSettingsPage),
+ * and whether they hold the organisation's cash-collector permission.
+ */
+function MemberRevenueShare({
+  memberId, value, canCollectCash, onSave,
+}: { memberId: string; value: number | null; canCollectCash: boolean; onSave: (body: Record<string, unknown>) => void }) {
+  const { t } = useTranslation();
+  const [pct, setPct] = useState(value == null ? '' : String(value));
+  useEffect(() => setPct(value == null ? '' : String(value)), [value, memberId]);
+  return (
+    <div className="flex w-full items-center gap-3 border-t border-outline-variant/40 pt-2 text-xs">
+      <label className="flex items-center gap-1.5">
+        <span className="text-on-surface-variant">{t('academy.revenueShareOverride')}</span>
+        <input
+          className="input w-16 py-1 text-xs" inputMode="numeric" placeholder="—"
+          value={pct} onChange={(e) => setPct(e.target.value.replace(/[^\d]/g, ''))}
+          onBlur={() => onSave({ revenueSharePercent: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))) })}
+        />
+        <span className="text-on-surface-variant">%</span>
+      </label>
+      <label className="flex cursor-pointer items-center gap-1.5">
+        <input type="checkbox" className="accent-primary" checked={canCollectCash}
+          onChange={(e) => onSave({ canCollectCash: e.target.checked })} />
+        <span className="text-on-surface-variant">{t('academy.canCollectCash')}</span>
+      </label>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { StudentPriceService } from '../payments/student-price.service';
 import { yearAdmits } from '../catalog/course-year';
 import { viewerGrade, viewerTrack } from '../catalog/stage.util';
 import { trackFilter } from '../catalog/subject-track';
+import { assertSplitConfigured } from '../payments/revenue-split';
 import {
   CreateCourseDto,
   CreateLessonDto,
@@ -289,12 +290,13 @@ export class CoursesService {
   }
 
   /**
-   * Until the finance phase, a Center course is free: no split exists yet, so
-   * money must not be able to enter a Center through a crafted request.
+   * Phase 7: a Center course may carry a price only once the Center has agreed
+   * a revenue share with its author — the split is what turns a price into
+   * money that can be booked. No default percentage is assumed.
    */
-  private assertCenterPricing(kind: 'PERSONAL' | 'CENTER', priceCents: number | undefined) {
+  private async assertCenterPricing(kind: 'PERSONAL' | 'CENTER', academyId: string, tenantId: string, priceCents: number | undefined) {
     if (kind === 'CENTER' && (priceCents ?? 0) > 0) {
-      throw new BadRequestException({ message: 'Center courses are free in this phase', code: 'CENTER_COURSE_MUST_BE_FREE' });
+      await assertSplitConfigured(this.prisma, { tenantId, academyId, priceCents: priceCents ?? 0 });
     }
   }
 
@@ -459,7 +461,7 @@ export class CoursesService {
     const tenantId = this.author(scope);
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
     const kind = await this.academyKind(scope.academyId);
-    this.assertCenterPricing(kind, dto.priceCents);
+    await this.assertCenterPricing(kind, scope.academyId, tenantId, dto.priceCents);
     const { gradeIds, subjectId: wantedSubject, ...rest } = dto;
     const { subjectId, gradeIds: years } = await this.reachOf(scope, gradeIds, wantedSubject);
     if (kind === 'CENTER' && subjectId) await this.assertSubjectOffered(scope.academyId, subjectId);
@@ -546,7 +548,7 @@ export class CoursesService {
     const existing = await this.assertCourse(scope, courseId);
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
     if (dto.priceCents !== undefined || dto.status === 'PUBLISHED') {
-      this.assertCenterPricing(await this.academyKind(scope.academyId), dto.priceCents ?? existing.priceCents);
+      await this.assertCenterPricing(await this.academyKind(scope.academyId), scope.academyId, existing.tenantId, dto.priceCents ?? existing.priceCents);
     }
 
     if (dto.status === 'PUBLISHED') {

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
 import { GroupsService } from '../academy-ops/groups.service';
@@ -746,22 +746,20 @@ export class AnalyticsService {
     };
   }
 
-  async financialOverview(tenantId: string, days: number) {
-    // A Center has no financial model yet (Phase 7). Its own ledger account is
-    // empty by construction, but an empty report still reads as a number —
-    // refuse instead of showing zeros that look like data.
-    const academy = await this.prisma.academy.findUnique({ where: { id: tenantId }, select: { kind: true } });
-    if (academy?.kind === 'CENTER') {
-      throw new BadRequestException({ message: 'Financial analytics are not available for Centers yet', code: 'FINANCE_NOT_AVAILABLE_FOR_CENTERS' });
-    }
+  async financialOverview(academyId: string, days: number) {
+    // Phase 7: organisation scope. A Center's figures come from its OWN ledger
+    // account (its share of the net), a PERSONAL workspace's from the
+    // teacher's — never the author's personal configuration for a Center.
+    const academy = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { id: true, kind: true } });
+    if (!academy) throw new NotFoundException('Academy not found');
     const since = new Date(Date.now() - days * 86_400_000);
     const [statusAgg, netTrend, earnings, byCourse] = await Promise.all([
-      this.prisma.payment.groupBy({ by: ['status'], where: { tenantId, createdAt: { gte: since } }, _count: { _all: true } }),
-      this.ledger.academyRevenueTrend(tenantId, days),
-      this.ledger.teacherEarnings(tenantId),
+      this.prisma.payment.groupBy({ by: ['status'], where: { academyId, createdAt: { gte: since } }, _count: { _all: true } }),
+      this.ledger.academyRevenueTrend(academy, days),
+      this.ledger.orgEarnings(academy),
       this.prisma.payment.groupBy({
         by: ['courseId'],
-        where: { tenantId, status: 'PAID' },
+        where: { academyId, status: 'PAID' },
         _sum: { netCents: true, amountCents: true },
         _count: { _all: true },
       }),
@@ -774,6 +772,7 @@ export class AnalyticsService {
     const titleById = new Map(courses.map((c) => [c.id, c.title]));
     return {
       rangeDays: days,
+      kind: academy.kind,
       lifetimeNetCents: earnings.netCents,
       netRevenueTrend: netTrend,
       paidTransactions: byStatus.PAID ?? 0,

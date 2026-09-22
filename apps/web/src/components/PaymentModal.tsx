@@ -12,7 +12,7 @@ function faultOf(err: unknown): { code?: string; balanceCents?: number; required
 }
 
 const METHOD_ICON: Record<string, string> = {
-  INSTAPAY: 'account_balance', VODAFONE_CASH: 'smartphone', BANK_TRANSFER: 'account_balance', OTHER: 'payments',
+  INSTAPAY: 'account_balance', VODAFONE_CASH: 'smartphone', BANK_TRANSFER: 'account_balance', OTHER: 'payments', CASH: 'payments',
 };
 
 export default function PaymentModal({
@@ -22,6 +22,10 @@ export default function PaymentModal({
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [method, setMethod] = useState('');
+  // Phase 7: "I paid cash" — a claim, not a receipt. Who the money was handed
+  // to (a Center course may offer its own desk; every course offers its teacher).
+  const [cashReceiver, setCashReceiver] = useState<'TEACHER' | 'CENTER'>('TEACHER');
+  const [cashNote, setCashNote] = useState('');
   const [reference, setReference] = useState('');
   const [proof, setProof] = useState<string | null>(null);
   const [proofName, setProofName] = useState('');
@@ -131,11 +135,13 @@ export default function PaymentModal({
 
   const fault = faultOf(payWithWallet.error);
 
+  const isCash = method === 'CASH';
   const submit = useMutation({
     mutationFn: async () =>
-      (await api.post('/payments', {
-        courseId, method, proofImageUrl: proof, reference: reference.trim() || undefined, couponCode, useWallet,
-      })).data,
+      (await api.post('/payments', isCash
+        ? { courseId, method, couponCode, cashReceiver, note: cashNote.trim() || undefined }
+        : { courseId, method, proofImageUrl: proof, reference: reference.trim() || undefined, couponCode, useWallet },
+      )).data,
     onSuccess: () => {
       setDone(true);
       qc.invalidateQueries({ queryKey: ['course', courseId] });
@@ -289,7 +295,7 @@ export default function PaymentModal({
                 transfer, then tell us about it. A request submitted before the
                 money moved has nothing to match and reaches an admin looking
                 exactly like one that does. */}
-            <label className={`mb-3 flex items-start gap-2 rounded-xl border p-3 text-sm transition ${
+            {!isCash && <label className={`mb-3 flex items-start gap-2 rounded-xl border p-3 text-sm transition ${
               transferred ? 'border-secondary bg-secondary-container/25' : 'border-outline-variant/60'
             }`}>
               <input type="checkbox" className="mt-0.5 accent-primary" checked={transferred}
@@ -298,33 +304,56 @@ export default function PaymentModal({
                 <span className="block font-bold">{t('pay.confirmTransferred')}</span>
                 <span className="block text-xs text-on-surface-variant">{t('pay.confirmTransferredHint')}</span>
               </span>
-            </label>
+            </label>}
 
             <Field label={t('pay.method')}>
               <select className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
                 <option value="">{t('pay.pickMethod')}</option>
                 <option value="INSTAPAY">{t('method.INSTAPAY')}</option><option value="VODAFONE_CASH">{t('method.VODAFONE_CASH')}</option><option value="BANK_TRANSFER">{t('method.BANK_TRANSFER')}</option><option value="OTHER">{t('method.OTHER')}</option>
+                <option value="CASH">{t('method.CASH')}</option>
               </select>
             </Field>
+
+            {/* Cash: a claim, not a receipt — there is nothing to transfer, upload
+                or match. It waits for whoever receives it to confirm. */}
+            {isCash && (
+              <div className="rounded-xl border border-outline-variant/60 p-3">
+                {(quote?.cashReceivers ?? ['TEACHER']).length > 1 && (
+                  <Field label={t('pay.cash.receiver')}>
+                    <select className="input" value={cashReceiver} onChange={(e) => setCashReceiver(e.target.value as 'TEACHER' | 'CENTER')}>
+                      <option value="TEACHER">{t('pay.cash.receiverTeacher')}</option>
+                      <option value="CENTER">{t('pay.cash.receiverCenter')}</option>
+                    </select>
+                  </Field>
+                )}
+                <Field label={t('pay.cash.note')}>
+                  <textarea className="input" rows={2} value={cashNote} onChange={(e) => setCashNote(e.target.value)} maxLength={300} />
+                </Field>
+                <p className="mt-1 flex items-start gap-2 text-xs leading-5 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[16px] leading-5 text-primary">hourglass_top</span>
+                  {t('pay.cash.pendingHint')}
+                </p>
+              </div>
+            )}
 
             {/* Which identifier is asked for is decided by the provider, not by
                 us: a Vodafone Cash SMS names the sending wallet and carries no
                 transaction id, a bank's names a reference and carries no phone
                 number. Asking for the wrong one guarantees no match. */}
-            {method && refRequired && (
+            {method && !isCash && refRequired && (
               <Field label={t(`pay.ref.${refKind}`)} hint={t(`pay.ref.${refKind}Hint`)}>
                 <input className="input" dir="ltr" inputMode={refKind === 'WALLET_NUMBER' ? 'tel' : 'text'}
                   value={reference} onChange={(e) => setReference(e.target.value)}
                   placeholder={refKind === 'WALLET_NUMBER' ? '01xxxxxxxxx' : '05b6efa4'} />
               </Field>
             )}
-            {method && !refRequired && (
+            {method && !isCash && !refRequired && (
               <p className="mb-3 flex items-start gap-2 rounded-xl border border-outline-variant/60 bg-surface-container-low/60 p-3 text-xs leading-5 text-on-surface-variant">
                 <span className="material-symbols-outlined text-[16px] leading-5 text-primary">auto_awesome</span>
                 {t('walletStudent.receiptIsTheProof')}
               </p>
             )}
-            <Field label={t('pay.proof')}>
+            {!isCash && <Field label={t('pay.proof')}>
               <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
                 onChange={(e) => e.target.files?.[0] && pickProof(e.target.files[0])} />
               <button type="button"
@@ -333,13 +362,13 @@ export default function PaymentModal({
                 <span className="material-symbols-outlined">{proof ? 'check_circle' : 'upload'}</span>
                 {proof ? (proofName || t('pay.proofPicked')) : t('pay.uploadProof')}
               </button>
-            </Field>
+            </Field>}
             {proof && <img src={proof} alt="" className="mb-3 max-h-40 rounded-lg border border-outline-variant/50 object-contain" />}
             <ErrorNote error={submit.error} />
             <button className="btn-primary w-full"
-              disabled={submit.isPending || !method || !proof || !transferred || (refRequired && !referenceLooksRight)}
+              disabled={submit.isPending || !method || (isCash ? false : (!proof || !transferred || (refRequired && !referenceLooksRight)))}
               onClick={() => submit.mutate()}>
-              {submit.isPending ? t('common.saving') : t('pay.submit')}
+              {submit.isPending ? t('common.saving') : isCash ? t('pay.cash.submit') : t('pay.submit')}
             </button>
           </div>
         </div>

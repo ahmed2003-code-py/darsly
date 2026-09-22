@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
 import { assertCourseTrack } from '../catalog/subject-track';
 import { activateBundleChildren } from './bundle';
+import { assertSplitConfigured } from '../payments/revenue-split';
 
 /**
  * What a student is quoted. Deliberately only two numbers.
@@ -34,6 +35,7 @@ export interface Quote {
   totalCents: number;
   currency: string;
   coupon: { id: string; code: string; maxUses: number | null } | null;
+  cashReceivers: readonly ('TEACHER' | 'CENTER')[];
 }
 
 @Injectable()
@@ -119,12 +121,15 @@ export class EnrollmentsService {
     // split between the academy's price and the platform's fee is not something
     // either side of the transaction needs to see, and publishing it made the
     // course card and the checkout show two different numbers for one course.
+    const org = await this.prisma.academy.findUnique({ where: { id: this.orgOf(course) }, select: { kind: true } });
     return {
       basePriceCents: basePlusFee,
       discountCents: discount,
       totalCents: net + fee,
       currency: course.currency,
       coupon: coupon ? { id: coupon.id, code: coupon.code, maxUses: coupon.maxUses } : null,
+      // Phase 7: where cash can be handed over — the teacher always; the desk only in a Center.
+      cashReceivers: org?.kind === 'CENTER' ? (['TEACHER', 'CENTER'] as const) : (['TEACHER'] as const),
     };
   }
 
@@ -135,11 +140,8 @@ export class EnrollmentsService {
    * row that slipped past that with a price.
    */
   private async assertNotPaidCenterCourse(course: { academyId: string | null; tenantId: string; priceCents: number }) {
-    if (course.priceCents <= 0) return;
-    const academy = await this.prisma.academy.findUnique({ where: { id: this.orgOf(course) }, select: { kind: true } });
-    if (academy?.kind === 'CENTER') {
-      throw new BadRequestException({ message: 'Center courses are free in this phase', code: 'CENTER_COURSE_MUST_BE_FREE' });
-    }
+    // Phase 7: a paid Center course is sellable once its revenue split is agreed.
+    await assertSplitConfigured(this.prisma, course);
   }
 
   async serviceFee(academyId: string, netCents: number): Promise<number> {

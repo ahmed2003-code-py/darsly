@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
@@ -13,9 +13,14 @@ import { ManualPaymentsService } from './manual-payments.service';
 import { PaymentAccountsService, UpsertAccountDto } from './payment-accounts.service';
 import { PaymentMatchingService } from './payment-matching.service';
 
+// The transfer methods plus CASH (Phase 7) — cash is not a transfer, so it
+// stays out of the shared PaymentMethod enum the matcher and top-ups use.
+const SUBMIT_METHODS = [...Object.values(PaymentMethod), 'CASH'] as const;
+type SubmitMethod = (typeof SUBMIT_METHODS)[number];
+
 class SubmitPaymentDto {
   @IsId() courseId: string;
-  @IsEnum(PaymentMethod) method: PaymentMethod;
+  @IsIn(SUBMIT_METHODS) method: SubmitMethod;
   // A receipt photo as a base64 data URL. Bigger than the other image caps on
   // purpose: an unreadable receipt cannot be verified.
   //
@@ -30,6 +35,17 @@ class SubmitPaymentDto {
   // Explicit opt-in — a balance is never spent toward a purchase the student
   // didn't ask it to be.
   @IsOptional() @IsBoolean() useWallet?: boolean;
+  // Phase 7, CASH only: who the student handed the money to.
+  @IsOptional() @IsIn(['TEACHER', 'CENTER']) cashReceiver?: 'TEACHER' | 'CENTER';
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+}
+class RecordCashDto {
+  @IsId() studentId: string;
+  @IsId() courseId: string;
+  @IsIn(['TEACHER', 'CENTER']) receiver: 'TEACHER' | 'CENTER';
+  @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
 }
 class PayFromWalletDto {
   @IsId() courseId: string;
@@ -84,9 +100,10 @@ export class ManualPaymentsController {
     // usually already arrived and is sitting unmatched. Check for it now rather
     // than leaving a payment waiting on a human for a transfer we already have.
     // Never let a reconciliation failure fail the submission itself.
-    const reconciled = await this.matching
-      .reconcilePayment(payment.id)
-      .catch(() => ({ status: 'SKIPPED' as const }));
+    // A cash claim has no bank message to reconcile against — it waits for the receiver.
+    const reconciled = dto.method === 'CASH'
+      ? { status: 'SKIPPED' as const }
+      : await this.matching.reconcilePayment(payment.id).catch(() => ({ status: 'SKIPPED' as const }));
     return { ...payment, autoVerified: reconciled.status === 'MATCHED' };
   }
 
@@ -111,9 +128,45 @@ export class ManualPaymentsController {
 
   @Get('teacher/payments')
   @AcademyStaff('payment.verify')
-  @ApiOperation({ summary: '[academy] Payments for this academy (read-only)' })
-  teacherQueue(@CurrentAcademy() ctx: AcademyContext, @Query('status') status?: string) {
-    return this.payments.teacherQueue(ctx.academyId, status ?? 'PENDING');
+  @ApiOperation({ summary: '[academy] Payments for this academy (read-only; a non-collector member sees only their own courses)' })
+  teacherQueue(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Query('status') status?: string, @Query('method') method?: string) {
+    return this.payments.teacherQueue(ctx, u.tenantId, status ?? 'PENDING', method);
+  }
+
+  // ── Phase 7: cash — the receiving side confirms; nothing else does ─────────
+
+  @Post('teacher/payments/cash')
+  @AcademyStaff('payment.verify')
+  @ApiOperation({ summary: '[academy] Record cash received in hand (teacher: own course; Center: payment.collect) — settles immediately' })
+  async recordCash(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: RecordCashDto) {
+    const result = await this.payments.recordCash(u, ctx, dto);
+    await this.audit.log({
+      actorUserId: u.sub,
+      action: 'payment.cash.record',
+      entity: 'Payment',
+      entityId: result.id,
+      academyId: ctx.academyId,
+      meta: { amountCents: result.amountCents, origin: result.cashOrigin, receiver: result.cashReceiver, courseId: dto.courseId, studentId: dto.studentId },
+    });
+    return result;
+  }
+
+  @Post('teacher/payments/:id/confirm-cash')
+  @AcademyStaff('payment.verify')
+  @ApiOperation({ summary: '[academy] Confirm a student\'s cash claim (only its receiver) — paid + settled in one step' })
+  async confirmCash(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    const result = await this.payments.confirmCash(u, ctx, id);
+    await this.audit.log({ actorUserId: u.sub, action: 'payment.cash.confirm', entity: 'Payment', entityId: id, academyId: ctx.academyId });
+    return result;
+  }
+
+  @Post('teacher/payments/:id/reject-cash')
+  @AcademyStaff('payment.verify')
+  @ApiOperation({ summary: '[academy] Reject a student\'s cash claim (only its receiver)' })
+  async rejectCash(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: RejectDto) {
+    const result = await this.payments.rejectCash(u, ctx, id, dto.reason);
+    await this.audit.log({ actorUserId: u.sub, action: 'payment.cash.reject', entity: 'Payment', entityId: id, academyId: ctx.academyId, meta: { reason: dto.reason } });
+    return result;
   }
 
   @Get('admin/payments')

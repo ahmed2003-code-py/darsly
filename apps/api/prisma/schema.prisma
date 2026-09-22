@@ -25,38 +25,38 @@ enum Role {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  role         Role
+  id                   String    @id @default(cuid())
+  role                 Role
   // Egyptian E.164, e.g. +2010xxxxxxxx. Optional secondary contact.
-  phone        String?   @unique
+  phone                String?   @unique
   // Primary login handle for everyone (students, teachers, admins).
-  email        String?   @unique
+  email                String?   @unique
   // Optional handle a person can sign in with instead of their email or phone.
   // Lowercase, starts with a letter, so it can never be mistaken for a number.
-  username     String?   @unique
-  passwordHash String?
-  fullName     String
-  avatarUrl    String?
-  locale       String    @default("ar")
-  isActive     Boolean   @default(true)
+  username             String?   @unique
+  passwordHash         String?
+  fullName             String
+  avatarUrl            String?
+  locale               String    @default("ar")
+  isActive             Boolean   @default(true)
   /// Phase 7: SUPER_ADMIN's own Admin Studio theme choice ({themeId,
   /// customTokens?}). Null = platform default. Nobody else reads or writes
   /// this — scoped to the caller's own id everywhere it's touched, and it
   /// never influences Student/Teacher/Academy rendering.
   adminThemePreference Json?
   // Brute-force defense: consecutive failures soft-lock the account.
-  failedLogins Int       @default(0)
-  lockedUntil  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  failedLogins         Int       @default(0)
+  lockedUntil          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  teacherProfile TeacherProfile?
-  studentProfile StudentProfile?
-  sessions       DeviceSession[]
-  notifications  Notification[]
-  auditLogs      AuditLog[]           @relation("actor")
-  sentMessages   ChatMessage[]
-  resetTokens    PasswordResetToken[]
+  teacherProfile   TeacherProfile?
+  studentProfile   StudentProfile?
+  sessions         DeviceSession[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]               @relation("actor")
+  sentMessages     ChatMessage[]
+  resetTokens      PasswordResetToken[]
   activationTokens AcademyActivationToken[]
 
   // Academy workspace model (v2). A user's authority lives on memberships, not
@@ -162,6 +162,15 @@ model Academy {
   // is confirmed. See EnrollmentsService for the exact per-mode behavior.
   enrollmentMode AcademyEnrollmentMode @default(AUTOMATIC)
 
+  // Architecture Reset Phase 7 — CENTER only. The share of a course's net
+  // price (after the platform fee) that goes to the authoring teacher; the
+  // rest is the Center's revenue. A membership may override it. NULL means
+  // "not agreed yet": a paid Center course cannot be sold until it is set —
+  // no default percentage is assumed anywhere.
+  teacherSharePercent Int?
+  payoutMethods       PayoutMethodSaved[]
+  payoutRequests      PayoutRequest[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete
@@ -212,12 +221,12 @@ model AcademyFeatureFlag {
 // on or off. Unlike AcademyFeatureFlag, a MISSING row means "not offered":
 // subjects are opt-in per Center. Only consulted for kind = CENTER.
 model AcademySubject {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   academyId String
-  academy   Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  academy   Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
   subjectId String
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  isActive  Boolean @default(true)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  isActive  Boolean  @default(true)
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 
@@ -240,25 +249,27 @@ model AcademyDomain {
 
 // A (User, Academy, Role) relationship. All in-academy authority is per-membership.
 model AcademyMembership {
-  id          String           @id @default(cuid())
-  userId      String
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  academyId   String
-  academy     Academy          @relation(fields: [academyId], references: [id], onDelete: Cascade)
-  role        AcademyRole
-  status      MembershipStatus @default(ACTIVE)
+  id                  String           @id @default(cuid())
+  userId              String
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academyId           String
+  academy             Academy          @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  role                AcademyRole
+  status              MembershipStatus @default(ACTIVE)
   // A student's single primary academy; one true per user. Enforced in application code
   // AND at the DB level via a partial unique index (migration 20260920040600 — not
   // representable here since Prisma's DSL has no WHERE-qualified @@unique).
-  isHome      Boolean          @default(false)
+  isHome              Boolean          @default(false)
   // Optional named-capability overrides layered on top of the role defaults.
-  permissions Json             @default("[]")
-  invitedBy   String?
-  joinedAt    DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  permissions         Json             @default("[]")
+  // Phase 7: per-teacher revenue share inside a Center (overrides Academy.teacherSharePercent).
+  revenueSharePercent Int?
+  invitedBy           String?
+  joinedAt            DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
   /// Soft delete: rows with deletedAt set are hidden from all reads.
-  deletedAt   DateTime?
+  deletedAt           DateTime?
 
   @@unique([userId, academyId])
   @@index([academyId, role, status])
@@ -443,20 +454,20 @@ enum GroupSessionStatus {
 // 20260920_academy_scheduling — GiST, not representable in Prisma's schema
 // DSL) that is the actual race-condition guarantee for concurrent requests.
 model GroupSession {
-  id            String             @id @default(cuid())
+  id            String               @id @default(cuid())
   academyId     String
-  academy       Academy            @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  academy       Academy              @relation(fields: [academyId], references: [id], onDelete: Cascade)
   groupId       String
-  group         Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group         Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
   // The staff member running this occurrence. Nullable — a session can be
   // scheduled before a teacher is assigned — but teacher-overlap protection
   // only applies once one is set, and it is checked across the WHOLE
   // platform (a person cannot teach two academies at the same instant
   // either), not just within this academy.
   teacherUserId String?
-  teacher       User?              @relation(fields: [teacherUserId], references: [id])
+  teacher       User?                @relation(fields: [teacherUserId], references: [id])
   roomId        String?
-  room          Room?              @relation(fields: [roomId], references: [id])
+  room          Room?                @relation(fields: [roomId], references: [id])
   // Every existing row is a physical slot (that is all the model ever
   // represented); ONLINE/HYBRID are only ever written explicitly from now on.
   mode          SessionMode          @default(PHYSICAL)
@@ -467,10 +478,10 @@ model GroupSession {
   joinUrl       String?
   startAt       DateTime
   endAt         DateTime
-  status        GroupSessionStatus @default(SCHEDULED)
+  status        GroupSessionStatus   @default(SCHEDULED)
   createdBy     String
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt     DateTime?
 
@@ -524,17 +535,17 @@ model AcademyActivationToken {
 // stored. Redemption reads academyId/role from this row alone — never from
 // the client — and OWNER/STUDENT are never valid values here.
 model AcademyInvitationLink {
-  id              String    @id @default(cuid())
+  id              String      @id @default(cuid())
   academyId       String
-  academy         Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  academy         Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
   role            AcademyRole
-  tokenHash       String    @unique
+  tokenHash       String      @unique
   createdByUserId String
   expiresAt       DateTime
   usedAt          DateTime?
   usedByUserId    String?
   revokedAt       DateTime?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime    @default(now())
 
   @@index([academyId, usedAt])
 }
@@ -839,15 +850,15 @@ enum CourseExamMode {
 }
 
 model Course {
-  id       String         @id @default(cuid())
+  id        String         @id @default(cuid())
   // Authorship: the teacher who wrote it. Never the organisation.
-  tenantId String
-  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  teacher   TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // Organisation scope: where it is offered. Equal to tenantId for a PERSONAL
   // workspace; a Center's id for a Center course. Nullable only for the
   // migration window — the application always writes it.
   academyId String?
-  academy   Academy? @relation(fields: [academyId], references: [id])
+  academy   Academy?       @relation(fields: [academyId], references: [id])
 
   title         String
   description   String  @default("")
@@ -1246,6 +1257,23 @@ enum PaymentMethod {
   // money already entered the platform when the wallet was topped up, so
   // settlement debits the student's wallet rather than platform cash.
   WALLET
+  // Phase 7: physical cash handed to the teacher or paid at the Center desk.
+  // Never auto-matched; PAID only when the receiving side confirms it.
+  CASH
+}
+
+// Phase 7 — who recorded a cash payment (kept apart for the audit trail).
+enum CashOrigin {
+  STUDENT_REPORTED // the student claims "I paid cash"; pending until confirmed
+  TEACHER_RECORDED // the authoring teacher recorded cash they received
+  CENTER_RECORDED // Center finance staff recorded cash received at the Center
+}
+
+// Phase 7 — who physically holds the cash, hence who may confirm it and whose
+// balance account the ledger debits instead of platform:cash.
+enum CashReceiver {
+  TEACHER
+  CENTER
 }
 
 model Payment {
@@ -1282,7 +1310,13 @@ model Payment {
   /// What the uploaded receipt says — see WalletTopup.proofReading.
   proofReading   Json?
   rejectedReason String?
-  verifiedById   String? // user id of the teacher/admin who verified
+  verifiedById   String? // user id of the teacher/admin who verified (for CASH: who confirmed receipt)
+
+  // Phase 7 — cash lifecycle. paidAt/verifiedById double as confirmedAt/confirmedBy.
+  cashOrigin       CashOrigin?
+  cashReceiver     CashReceiver?
+  recordedByUserId String? // staff user who recorded a TEACHER/CENTER_RECORDED cash payment
+  note             String? // optional free text from whoever recorded/claimed it
 
   gatewayRef String?
   couponId   String?
@@ -1399,12 +1433,15 @@ model LedgerEntry {
   direction     LedgerDirection
   amountCents   Int // always positive; direction carries the sign
   tenantId      String?
+  // Phase 7: organisation scope of the fact (== tenantId for PERSONAL rows).
+  academyId     String?
   createdAt     DateTime          @default(now())
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt     DateTime?
 
   @@index([account])
   @@index([tenantId])
+  @@index([academyId])
 }
 
 // ─────────────────────────── Student wallet ────────────────────────────────
@@ -1509,14 +1546,17 @@ enum PayoutMethod {
 }
 
 model PayoutMethodSaved {
-  id        String         @id @default(cuid())
-  tenantId  String
-  teacher   TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id        String          @id @default(cuid())
+  // Phase 7: the organisation the method belongs to (PERSONAL: == tenantId).
+  academyId String?
+  academy   Academy?        @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  tenantId  String? // legacy author key; NULL for a Center's method
+  teacher   TeacherProfile? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   method    PayoutMethod
   // masked display + full details, e.g. {iban, bankName} or {walletPhone}
   details   Json
-  isDefault Boolean        @default(false)
-  createdAt DateTime       @default(now())
+  isDefault Boolean         @default(false)
+  createdAt DateTime        @default(now())
   // Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 }
@@ -1530,9 +1570,12 @@ enum PayoutStatus {
 }
 
 model PayoutRequest {
-  id       String         @id @default(cuid())
-  tenantId String
-  teacher  TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id        String          @id @default(cuid())
+  // Phase 7: whose balance account is being withdrawn (PERSONAL: == tenantId).
+  academyId String?
+  academy   Academy?        @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  tenantId  String? // legacy author key; NULL for a Center payout
+  teacher   TeacherProfile? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   amountCents Int
   currency    String       @default("EGP")
@@ -1549,6 +1592,7 @@ model PayoutRequest {
   deletedAt         DateTime?
 
   @@index([status, createdAt])
+  @@index([academyId])
 }
 
 model Invoice {
@@ -2110,39 +2154,39 @@ enum LiveSessionStatus {
 }
 
 model LiveSession {
-  id          String            @id @default(cuid())
+  id            String            @id @default(cuid())
   // Authorship: the teacher whose stream this is. Never the organisation.
-  tenantId    String
-  teacher     TeacherProfile    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId      String
+  teacher       TeacherProfile    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // Organisation scope (== tenantId for a PERSONAL workspace, a Center's id
   // for a Center class), the teacher as a User (joins the platform-wide
   // teacher-overlap check GroupSession already has) and, optionally, the
   // Group the stream is for (audience = that group, not the whole academy).
   academyId     String?
-  academy       Academy? @relation(fields: [academyId], references: [id])
+  academy       Academy?          @relation(fields: [academyId], references: [id])
   teacherUserId String?
-  teacherUser   User?    @relation("liveSessionTeacher", fields: [teacherUserId], references: [id])
+  teacherUser   User?             @relation("liveSessionTeacher", fields: [teacherUserId], references: [id])
   groupId       String?
-  group         Group?   @relation(fields: [groupId], references: [id])
-  courseId    String?
-  title       String
-  description String            @default("")
-  startsAt    DateTime
-  durationMin Int               @default(60)
+  group         Group?            @relation(fields: [groupId], references: [id])
+  courseId      String?
+  title         String
+  description   String            @default("")
+  startsAt      DateTime
+  durationMin   Int               @default(60)
   // null = unlimited seats
-  capacity    Int?
+  capacity      Int?
   /// An external meeting link (Zoom, Meet) the teacher pasted in themselves.
   /// Predates the built-in classroom and still works: a session that has one
   /// and no room of its own keeps sending students there.
-  joinUrl     String?
-  status      LiveSessionStatus @default(SCHEDULED)
+  joinUrl       String?
+  status        LiveSessionStatus @default(SCHEDULED)
   /// The Daily room backing this session. Created when the teacher starts it,
   /// not when they schedule it — a room booked weeks ahead is a room sitting
   /// open weeks ahead, and the session may never run at all.
-  roomName    String?           @unique
-  roomUrl     String?
-  startedAt   DateTime?
-  endedAt     DateTime?
+  roomName      String?           @unique
+  roomUrl       String?
+  startedAt     DateTime?
+  endedAt       DateTime?
 
   /// Recording, transcript and summary: three stages of the same pipeline, so
   /// each carries its own state rather than one flag trying to describe all of

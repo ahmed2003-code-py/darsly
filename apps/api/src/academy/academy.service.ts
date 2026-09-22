@@ -267,11 +267,11 @@ export class AcademyService {
     return this.prisma.academy.findUnique({
       where: { id: academyId },
       select: {
-        id: true, slug: true, name: true, tagline: true, status: true,
+        id: true, slug: true, name: true, tagline: true, status: true, kind: true,
         logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true,
         language: true, currency: true,
         maxConcurrentSessions: true, feeType: true, feeValue: true,
-        enrollmentMode: true,
+        enrollmentMode: true, teacherSharePercent: true,
       },
     });
   }
@@ -345,6 +345,13 @@ export class AcademyService {
   async updateSettings(academyId: string, dto: UpdateAcademyDto) {
     this.assertImage(dto.logoUrl, LOGO_MAX_BYTES);
     this.assertImage(dto.coverUrl, COVER_MAX_BYTES);
+    // Phase 7: a revenue split is a Center concept; a PERSONAL workspace has none.
+    let isCenter = false;
+    if (dto.teacherSharePercent !== undefined) {
+      const k = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { kind: true } });
+      isCenter = k?.kind === 'CENTER';
+      if (!isCenter) throw new BadRequestException({ message: 'Only a Center has a teacher revenue share', code: 'NOT_A_CENTER' });
+    }
 
     if (dto.slug !== undefined) {
       const slug = dto.slug.trim().toLowerCase();
@@ -393,8 +400,9 @@ export class AcademyService {
         ...(dto.language !== undefined ? { language: dto.language } : {}),
         ...(dto.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: dto.maxConcurrentSessions } : {}),
         ...(dto.enrollmentMode !== undefined ? { enrollmentMode: dto.enrollmentMode } : {}),
+        ...(dto.teacherSharePercent !== undefined && isCenter ? { teacherSharePercent: dto.teacherSharePercent } : {}),
       },
-      select: { id: true, slug: true, name: true, colorPrimary: true, enrollmentMode: true },
+      select: { id: true, slug: true, name: true, colorPrimary: true, enrollmentMode: true, teacherSharePercent: true },
     });
   }
 
@@ -416,6 +424,10 @@ export class AcademyService {
       id: m.id, userId: m.userId, role: m.role, status: m.status, isHome: m.isHome,
       fullName: m.user.fullName, email: m.user.email, avatarUrl: m.user.avatarUrl,
       joinedAt: m.joinedAt,
+      // Phase 7 (CENTER only): this member's revenue-share override and
+      // whether they hold the organisation's cash-collector permission.
+      revenueSharePercent: m.revenueSharePercent,
+      canCollectCash: Array.isArray(m.permissions) && (m.permissions as string[]).includes('payment.collect'),
     }));
   }
 
@@ -556,13 +568,24 @@ export class AcademyService {
     if (dto.status === 'ACTIVE' && m.status !== 'ACTIVE' && m.status !== 'SUSPENDED') {
       throw new BadRequestException({ message: 'Re-invite this person; they must accept again', code: 'REINVITE_REQUIRED' });
     }
+    // Phase 7: the cash-collector grant lives in the membership's permission
+    // overrides (the same ceilinged mechanism permissionsFor() already reads).
+    let permissions: string[] | undefined;
+    if (dto.canCollectCash !== undefined) {
+      const current = Array.isArray(m.permissions) ? (m.permissions as string[]) : [];
+      permissions = dto.canCollectCash
+        ? [...new Set([...current, 'payment.collect'])]
+        : current.filter((c) => c !== 'payment.collect');
+    }
     const updated = await this.prisma.academyMembership.update({
       where: { id: membershipId },
       data: {
         ...(dto.role ? { role: dto.role as AcademyRole } : {}),
         ...(dto.status ? { status: dto.status } : {}),
+        ...(dto.revenueSharePercent !== undefined ? { revenueSharePercent: dto.revenueSharePercent } : {}),
+        ...(permissions ? { permissions } : {}),
       },
-      select: { id: true, role: true, status: true, userId: true },
+      select: { id: true, role: true, status: true, userId: true, revenueSharePercent: true, permissions: true },
     });
     if (dto.status === 'SUSPENDED') await this.revokeStaffResources(academyId, updated.userId);
     return { id: updated.id, role: updated.role, status: updated.status };

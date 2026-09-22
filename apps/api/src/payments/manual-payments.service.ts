@@ -13,12 +13,14 @@ import { activateBundleChildren } from '../enrollments/bundle';
 import { releaseCouponUse, reserveCouponUse } from './coupon-use';
 import { computeServiceFee } from './fee.util';
 import { LedgerService } from './ledger.service';
+import { assertSplitConfigured } from './revenue-split';
+import type { AcademyContext } from '../academy/academy-context';
 
 const PROOF_MAX_BYTES = 1_200 * 1024; // ~1.2 MB screenshot
 
 export interface SubmitPaymentDto {
   courseId: string;
-  method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER' | 'WALLET';
+  method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER' | 'WALLET' | 'CASH';
   /** Absent for WALLET — nothing was transferred, so there is nothing to prove. */
   proofImageUrl?: string;
   reference?: string;
@@ -30,7 +32,22 @@ export interface SubmitPaymentDto {
    * only part of it.
    */
   useWallet?: boolean;
+  /** CASH only: who the student handed the money to. Defaults to TEACHER. */
+  cashReceiver?: 'TEACHER' | 'CENTER';
+  note?: string;
 }
+
+/** Phase 7: staff recording cash they (or their Center) received in hand. */
+export interface RecordCashDto {
+  studentId: string; // StudentProfile id
+  courseId: string;
+  receiver: 'TEACHER' | 'CENTER';
+  couponCode?: string;
+  reference?: string;
+  note?: string;
+}
+
+type Actor = { sub: string; role: string; tenantId?: string };
 
 @Injectable()
 export class ManualPaymentsService {
@@ -59,10 +76,11 @@ export class ManualPaymentsService {
     // No money enters a Center before the finance phase — this is the one
     // place a Payment row is created, so the door is closed here regardless
     // of what the course row says.
-    const org = await this.prisma.academy.findUnique({ where: { id: course.academyId ?? course.tenantId }, select: { kind: true } });
-    if (org?.kind === 'CENTER') {
-      throw new BadRequestException({ message: 'Center courses are free in this phase', code: 'CENTER_COURSE_MUST_BE_FREE' });
-    }
+    // Phase 7: a Center may sell, but only once its share with this teacher is
+    // agreed — no default percentage is ever assumed.
+    await assertSplitConfigured(this.prisma, course);
+    const isCash = dto.method === 'CASH';
+    const cashReceiver = isCash ? await this.resolveCashReceiver(course, dto.cashReceiver) : null;
 
     // Block a second pending submission / an already-active enrolment.
     const enrollment = await this.prisma.enrollment.findUnique({
@@ -85,7 +103,8 @@ export class ManualPaymentsService {
     // checked against the shape the chosen method's SMS will actually carry —
     // see payer-reference.ts. A blank or malformed one could never match, and
     // every payment carrying one went to an admin to resolve by hand.
-    const reference = normalizePayerReference(dto.method, dto.reference, await this.receivingHandles());
+    // A cash claim carries whatever receipt number the student was given, if any.
+    const reference = isCash ? (dto.reference ?? '').trim().slice(0, 120) : normalizePayerReference(dto.method, dto.reference, await this.receivingHandles());
 
     const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
 
@@ -96,7 +115,8 @@ export class ManualPaymentsService {
     // already-explicit 100%-from-balance path — its own button — and is left
     // out of this entirely.
     const isWalletMethod = dto.method === 'WALLET';
-    const wantsWallet = !isWalletMethod && dto.useWallet === true;
+    // Cash is paid in full, in hand: no wallet portion, no proof to read.
+    const wantsWallet = !isWalletMethod && !isCash && dto.useWallet === true;
     const balance = wantsWallet ? await this.ledger.walletBalance(student.id) : 0;
     const walletCents = wantsWallet ? Math.min(balance, totalCents) : 0;
     const cashDueCents = totalCents - walletCents;
@@ -118,7 +138,7 @@ export class ManualPaymentsService {
      * differently — the wallet knew the picture said 2,000 while the checkout
      * did not, and only the checkout still demanded a reference nobody has.
      */
-    const needsProof = !isWalletMethod && cashDueCents > 0;
+    const needsProof = !isWalletMethod && !isCash && cashDueCents > 0;
     const reading = needsProof ? await this.proofReader.read(dto.proofImageUrl ?? '') : null;
     if (needsProof) {
       const check = checkProofAgainstClaim(reading, { amountCents: cashDueCents }, await this.receivingHandles());
@@ -190,8 +210,9 @@ export class ManualPaymentsService {
           reference,
           couponId,
           status: 'PENDING',
+          ...(isCash ? { cashOrigin: 'STUDENT_REPORTED' as const, cashReceiver: cashReceiver!, note: dto.note?.trim().slice(0, 300) || null } : {}),
         },
-        select: { id: true, status: true, amountCents: true, walletCents: true, enrollmentId: true, createdAt: true },
+        select: { id: true, status: true, amountCents: true, walletCents: true, enrollmentId: true, createdAt: true, method: true, cashReceiver: true },
       });
 
       if (wantsWallet && walletCents > 0) {
@@ -316,8 +337,130 @@ export class ManualPaymentsService {
 
   /** For audit-log attribution — tenantId already equals academyId. */
   async academyIdFor(paymentId: string): Promise<string | null> {
-    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId }, select: { tenantId: true } });
-    return payment?.tenantId ?? null;
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId }, select: { tenantId: true, academyId: true } });
+    return payment?.academyId ?? payment?.tenantId ?? null;
+  }
+
+  // ── Phase 7: cash ──────────────────────────────────────────────────────────
+  //
+  // Cash never touches the platform, so there is no bank message to match and
+  // no admin who could verify it: the only evidence is the receiving side
+  // saying "I have the money". That confirmation is therefore the settlement
+  // (paid + settled + ledger in one flip), and it is scoped hard: the TEACHER
+  // receiver is the course's author in person; the CENTER receiver is anyone
+  // holding `payment.collect` in THAT Center. Nothing else may confirm.
+
+  private async resolveCashReceiver(course: { tenantId: string; academyId: string | null }, wanted?: 'TEACHER' | 'CENTER') {
+    const receiver = wanted ?? 'TEACHER';
+    if (receiver === 'CENTER') {
+      const org = await this.prisma.academy.findUnique({ where: { id: course.academyId ?? course.tenantId }, select: { kind: true } });
+      if (org?.kind !== 'CENTER') throw new BadRequestException({ message: 'Only a Center can receive cash at its desk', code: 'CASH_RECEIVER_INVALID' });
+    }
+    return receiver;
+  }
+
+  /**
+   * Who may confirm/reject THIS cash payment from THIS workspace. 404 when the
+   * payment is not the workspace's at all (existence hidden, like every other
+   * cross-academy read); 403 when it is, but the caller is not its receiver.
+   */
+  private async cashAuthority(actor: Actor, ctx: AcademyContext, paymentId: string) {
+    const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, deletedAt: null } });
+    const orgId = payment ? payment.academyId ?? payment.tenantId : null;
+    if (!payment || (orgId !== ctx.academyId && actor.role !== Role.SUPER_ADMIN)) throw new NotFoundException('Payment not found');
+    if (payment.method !== 'CASH') throw new BadRequestException({ message: 'Not a cash payment', code: 'NOT_CASH' });
+    if (actor.role === Role.SUPER_ADMIN) return payment;
+    if (payment.cashReceiver === 'CENTER') {
+      if (!ctx.can('payment.collect')) throw new ForbiddenException({ message: 'Only the Center\'s cash collector can confirm this', code: 'CASH_NOT_RECEIVER' });
+      return payment;
+    }
+    const author = await this.prisma.teacherProfile.findUnique({ where: { id: payment.tenantId }, select: { userId: true } });
+    if (author?.userId !== actor.sub) throw new ForbiddenException({ message: 'Only the teacher who received the cash can confirm it', code: 'CASH_NOT_RECEIVER' });
+    return payment;
+  }
+
+  async confirmCash(actor: Actor, ctx: AcademyContext, paymentId: string) {
+    const payment = await this.cashAuthority(actor, ctx, paymentId);
+    if (payment.status !== 'PENDING') throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
+    // Confirmation IS settlement for cash (see above): settle=true books the
+    // ledger inside the same status flip, and the flip's updateMany guard is
+    // what makes a concurrent second confirmation lose (NOT_PENDING).
+    return this.applyVerification(payment, actor.sub, false, true);
+  }
+
+  async rejectCash(actor: Actor, ctx: AcademyContext, paymentId: string, reason?: string) {
+    await this.cashAuthority(actor, ctx, paymentId);
+    return this.reject({ sub: actor.sub, role: Role.SUPER_ADMIN }, paymentId, reason, /* preAuthorized */ true);
+  }
+
+  /**
+   * Staff records cash they hold. The row is created PENDING with the
+   * recorder's identity and then confirmed through the very same path a
+   * student claim takes — one lifecycle, two audit rows, no shortcut.
+   */
+  async recordCash(actor: Actor, ctx: AcademyContext, dto: RecordCashDto) {
+    const course = await this.prisma.course.findFirst({
+      where: { id: dto.courseId, status: 'PUBLISHED', academyId: ctx.academyId },
+      include: { teacher: { select: { userId: true } } },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+    if (course.priceCents <= 0) throw new BadRequestException({ message: 'This course is free — just enrol', code: 'COURSE_FREE' });
+    await assertSplitConfigured(this.prisma, course);
+    const receiver = await this.resolveCashReceiver(course, dto.receiver);
+    const isAuthor = course.teacher.userId === actor.sub;
+    if (receiver === 'TEACHER' && !isAuthor && actor.role !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException({ message: 'Only the course\'s teacher can record cash they received', code: 'CASH_NOT_RECEIVER' });
+    }
+    if (receiver === 'CENTER' && !ctx.can('payment.collect') && actor.role !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException({ message: 'Recording Center cash needs the payment.collect permission', code: 'CASH_NOT_RECEIVER' });
+    }
+    const student = await this.prisma.studentProfile.findUnique({ where: { id: dto.studentId }, select: { id: true, gradeId: true, track: true } });
+    if (!student) throw new NotFoundException('Student not found');
+
+    const enrollment = await this.prisma.enrollment.findUnique({ where: { studentId_courseId: { studentId: student.id, courseId: course.id } } });
+    if (enrollment?.status === 'ACTIVE' && (!enrollment.expiresAt || enrollment.expiresAt > new Date())) {
+      throw new ConflictException({ message: 'Already enrolled', code: 'ALREADY_ENROLLED' });
+    }
+    const pending = await this.prisma.payment.findFirst({ where: { studentId: student.id, courseId: course.id, status: 'PENDING' } });
+    if (pending) throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+    await assertCourseYear(this.prisma, course.id, student.gradeId, enrollment);
+    await assertCourseTrack(this.prisma, course.id, student.track, enrollment);
+
+    const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
+    const origin = receiver === 'CENTER' ? 'CENTER_RECORDED' : 'TEACHER_RECORDED';
+
+    const created = await this.submitTransaction(async (tx) => {
+      if (couponId) await reserveCouponUse(tx, couponId, couponMaxUses);
+      const enr = enrollment
+        ? await tx.enrollment.update({ where: { id: enrollment.id }, data: { status: 'PENDING_PAYMENT', approvedAt: null, revokedReason: null, hiddenAt: null } })
+        : await tx.enrollment.create({ data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, academyId: course.academyId ?? course.tenantId, status: 'PENDING_PAYMENT' } });
+      return tx.payment.create({
+        data: {
+          studentId: student.id,
+          courseId: course.id,
+          enrollmentId: enr.id,
+          tenantId: course.tenantId,
+          academyId: course.academyId ?? course.tenantId,
+          amountCents: totalCents,
+          walletCents: 0,
+          feeCents,
+          netCents,
+          currency: course.currency,
+          gateway: 'manual',
+          method: 'CASH',
+          proofImageUrl: '',
+          reference: (dto.reference ?? '').trim().slice(0, 120),
+          couponId,
+          status: 'PENDING',
+          cashOrigin: origin,
+          cashReceiver: receiver,
+          recordedByUserId: actor.sub,
+          note: dto.note?.trim().slice(0, 300) || null,
+        },
+      });
+    });
+    await this.applyVerification(created, actor.sub, false, true);
+    return { id: created.id, status: 'PAID', amountCents: created.amountCents, cashOrigin: origin, cashReceiver: receiver };
   }
 
   async verify(user: { sub: string; role: string; tenantId?: string }, paymentId: string) {
@@ -637,8 +780,10 @@ export class ManualPaymentsService {
     return { ok: true, settledBy: actorId };
   }
 
-  async reject(user: { sub: string; role: string; tenantId?: string }, paymentId: string, reason?: string) {
-    const payment = await this.authorizePayment(user, paymentId);
+  async reject(user: { sub: string; role: string; tenantId?: string }, paymentId: string, reason?: string, preAuthorized = false) {
+    const payment = preAuthorized
+      ? await this.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })
+      : await this.authorizePayment(user, paymentId);
     if (payment.status !== 'PENDING') {
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
@@ -677,18 +822,26 @@ export class ManualPaymentsService {
 
   // ── Queues ──────────────────────────────────────────────────────────────────
 
-  teacherQueue(academyId: string, status = 'PENDING') {
-    return this.list({ academyId, status });
+  /**
+   * The workspace queue. Inside a Center a member who is not its cash
+   * collector sees only payments for courses they authored — another
+   * teacher's students and amounts are that teacher's business.
+   */
+  teacherQueue(ctx: AcademyContext, authorTenantId: string | undefined, status = 'PENDING', method?: string) {
+    const wholeOrg = ctx.role === 'OWNER' || ctx.can('payment.collect');
+    return this.list({ academyId: ctx.academyId, status, method, tenantId: wholeOrg ? undefined : (authorTenantId ?? '__none__') });
   }
   adminQueue(status = 'PENDING') {
     return this.list({ status });
   }
 
-  private async list(where: { academyId?: string; status?: string }) {
+  private async list(where: { academyId?: string; status?: string; method?: string; tenantId?: string }) {
     const rows = await this.prisma.payment.findMany({
       where: {
         ...(where.academyId ? { academyId: where.academyId } : {}),
+        ...(where.tenantId ? { tenantId: where.tenantId } : {}),
         ...(where.status ? { status: where.status as any } : {}),
+        ...(where.method ? { method: where.method as any } : {}),
         gateway: 'manual',
       },
       orderBy: { createdAt: 'desc' },
@@ -707,8 +860,14 @@ export class ManualPaymentsService {
       proofImageUrl: this.proofs.urlFor(p.proofImageUrl),
       rejectedReason: p.rejectedReason,
       createdAt: p.createdAt,
+      paidAt: p.paidAt,
+      settledAt: p.settledAt,
+      cashOrigin: p.cashOrigin,
+      cashReceiver: p.cashReceiver,
+      note: p.note,
       studentName: p.student.user.fullName,
       studentPhone: p.student.user.phone,
+      courseId: p.courseId,
       courseTitle: p.course.title,
     }));
   }
@@ -727,6 +886,8 @@ export class ManualPaymentsService {
       method: p.method,
       rejectedReason: p.rejectedReason,
       createdAt: p.createdAt,
+      paidAt: p.paidAt,
+      cashReceiver: p.cashReceiver,
       courseId: p.courseId,
       courseTitle: p.course.title,
     }));

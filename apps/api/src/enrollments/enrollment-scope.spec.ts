@@ -11,7 +11,9 @@ function makeDeps(course = centerCourse, academy: Record<string, unknown> = { ki
     studentProfile: { findUnique: jest.fn().mockResolvedValue(STUDENT), findFirst: jest.fn().mockResolvedValue(STUDENT) },
     course: { findFirst: jest.fn().mockResolvedValue(course), findUnique: jest.fn().mockResolvedValue(course) },
     courseGrade: { findMany: jest.fn().mockResolvedValue([]) },
-    academy: { findUnique: jest.fn().mockResolvedValue(academy) },
+    academy: { findUnique: jest.fn().mockResolvedValue({ id: 'centerA', teacherSharePercent: null, ...academy }) },
+    teacherProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'tu' }) },
+    academyMembership: { findFirst: jest.fn().mockResolvedValue(null) },
     coupon: { findFirst: jest.fn().mockResolvedValue(null) },
     payment: { findFirst: jest.fn().mockResolvedValue(null) },
     enrollment: {
@@ -46,9 +48,9 @@ describe('EnrollmentsService — organisation scope is copied from the Course', 
     expect(academyLookups).not.toContain('teacherT');
   });
 
-  it('a Center course that somehow carries a price cannot be quoted / bought', async () => {
+  it('a Center course with a price but no agreed revenue split cannot be quoted / bought', async () => {
     const { svc } = makeDeps({ ...centerCourse, priceCents: 500 });
-    await expect(svc.quote('c1')).rejects.toMatchObject({ response: { code: 'CENTER_COURSE_MUST_BE_FREE' } });
+    await expect(svc.quote('c1')).rejects.toMatchObject({ response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' } });
   });
 
   it('a PERSONAL paid course still quotes with the fee (unchanged behaviour)', async () => {

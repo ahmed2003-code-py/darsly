@@ -144,7 +144,7 @@ export default function AuthShell({
         <div className="absolute end-6 top-6 flex items-center gap-2">
           <button
             className="rounded-full border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:border-transparent hover:bg-surface-container-low hover:text-primary"
-            onClick={() => setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
+            onClick={() => void setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
           >
             {i18n.language === 'ar' ? 'EN' : 'ع'}
           </button>

@@ -359,7 +359,7 @@ export default function ProfilePage() {
             <select
               className="input py-2"
               value={i18n.language.startsWith('ar') ? 'ar' : 'en'}
-              onChange={(e) => setLanguage(e.target.value as 'ar' | 'en')}
+              onChange={(e) => void setLanguage(e.target.value as 'ar' | 'en')}
             >
               <option value="ar">العربية</option>
               <option value="en">English</option>

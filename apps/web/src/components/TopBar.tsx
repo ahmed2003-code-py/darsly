@@ -232,7 +232,7 @@ export default function TopBar({
           {/* Language */}
           <button
             className="grid h-10 w-10 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low"
-            onClick={() => setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
+            onClick={() => void setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
             title={t('common.language')}
           >
             <span className="material-symbols-outlined">translate</span>

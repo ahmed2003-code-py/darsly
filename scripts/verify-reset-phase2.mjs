@@ -153,7 +153,14 @@ main()
   .catch((e) => { console.error('\nUNCAUGHT:', e); fail++; })
   .finally(async () => {
     for (const id of cleanup.academyIds) await prisma.academy.delete({ where: { id } }).catch(() => {});
-    for (const id of cleanup.userIds) await prisma.user.delete({ where: { id } }).catch(() => {});
+    // A teacher registered by this run was provisioned a PERSONAL academy that
+    // RESTRICTs the user delete — remove it (and the profile) first, or the
+    // user delete below fails silently and leaks a `renamed-*` teacher per run.
+    for (const id of cleanup.userIds) {
+      await prisma.academy.deleteMany({ where: { ownerUserId: id } }).catch(() => {});
+      await prisma.teacherProfile.deleteMany({ where: { userId: id } }).catch(() => {});
+      await prisma.user.delete({ where: { id } }).catch(() => {});
+    }
     await prisma.$disconnect();
     console.log(`\n== ${pass} passed, ${fail} failed ==`);
     process.exit(fail ? 1 : 0);

@@ -135,7 +135,8 @@
     "centerMembers": "Teachers & staff",
     "centerSubjects": "Subjects",
     "centerSettings": "Settings",
-    "centerActivity": "Activity"
+    "centerActivity": "Activity",
+    "profile": "Profile"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1103,7 +1104,8 @@
     "activateTitle": "Activate your account",
     "activateFor": "{{name}} — admin of {{center}}",
     "activateBtn": "Activate & sign in",
-    "activateDone": "Your account is active. Redirecting to sign in…"
+    "activateDone": "Your account is active. Redirecting to sign in…",
+    "loginTitle": "Sign in"
   },
   "live": {
     "title": "Live sessions",

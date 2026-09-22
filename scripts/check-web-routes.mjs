@@ -15,8 +15,10 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const WEB = new URL('../apps/web/', import.meta.url).pathname;
+// fileURLToPath, not .pathname: on Windows .pathname yields '/D:/…' (and %20 for spaces), which join() mangles.
+const WEB = fileURLToPath(new URL('../apps/web/', import.meta.url));
 const fail = [];
 
 // ── routes ───────────────────────────────────────────────────────────────────

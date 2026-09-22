@@ -215,7 +215,7 @@ export default function App() {
       <Route path="/teacher/grading" element={<RequireAuth role={Role.TEACHER}><GradingPage /></RequireAuth>} />
       <Route path="/teacher/live" element={<RequireAuth role={Role.TEACHER}><TeacherLivePage /></RequireAuth>} />
       <Route path="/teacher/analytics" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherAnalyticsPage /></RequireAuth>} />
-      <Route path="/teacher/wallet" element={<RequireAuth role={Role.TEACHER}><TeacherWalletPage /></RequireAuth>} />
+      <Route path="/teacher/wallet" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherWalletPage /></RequireAuth>} />
       <Route path="/teacher/security" element={<RequireAuth role={Role.TEACHER}><TeacherSecurityPage /></RequireAuth>} />
       <Route path="/teacher/coupons" element={<RequireAuth role={Role.TEACHER}><TeacherCouponsPage /></RequireAuth>} />
 

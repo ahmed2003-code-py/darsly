@@ -52,6 +52,7 @@ export const STAFF_NAV: NavItem[] = [
   { to: '/teacher/groups', icon: 'diversity_3', labelKey: 'nav.groups' },
   { to: '/teacher/schedule', icon: 'calendar_month', labelKey: 'nav.schedule' },
   { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
+  { to: '/teacher/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
   { to: '/center/activity', icon: 'history', labelKey: 'nav.centerActivity' },
   { to: '/center/settings', icon: 'settings', labelKey: 'nav.centerSettings' },
 ];

@@ -151,7 +151,7 @@ async function main() {
   check('teacher A\'s own slice in Center A counts their authored course', meA?.courses === 1 && meA?.activeEnrollments === 1, JSON.stringify(meA));
   check('student cannot read analytics', denied((await api('/teacher/analytics/center', { token: tokS, headers: H(cA.id) })).status));
   const fin = await api('/teacher/analytics/financial', { token: tokA, headers: H(cA.id) });
-  check('financial analytics refused for a Center', fin.status === 400 && fin.body?.code === 'FINANCE_NOT_AVAILABLE_FOR_CENTERS', String(fin.status));
+  check('financial analytics are served for a Center (Phase 7: organisation-scoped, its own ledger account)', fin.status === 200 && fin.body?.kind === 'CENTER', String(fin.status));
   check('financial analytics still served for the Personal academy', (await api('/teacher/analytics/financial', { token: tokA, headers: H(tA.id) })).status === 200);
   const ovS = await api('/teacher/analytics/center', { token: tokStaff, headers: H(cS.id) });
   check('STAFF admin reads own Center overview; is not counted as a teacher', ovS.status === 200 && ovS.body.teachers === 0, String(ovS.status));

@@ -135,7 +135,8 @@
     "centerMembers": "المعلمون والفريق",
     "centerSubjects": "المواد",
     "centerSettings": "الإعدادات",
-    "centerActivity": "النشاط"
+    "centerActivity": "النشاط",
+    "profile": "الملف الشخصي"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -1103,7 +1104,8 @@
     "activateTitle": "فعّل حسابك",
     "activateFor": "{{name}} — مدير {{center}}",
     "activateBtn": "تفعيل والدخول",
-    "activateDone": "تم تفعيل حسابك. جارٍ التحويل لتسجيل الدخول…"
+    "activateDone": "تم تفعيل حسابك. جارٍ التحويل لتسجيل الدخول…",
+    "loginTitle": "تسجيل الدخول"
   },
   "live": {
     "title": "الجلسات المباشرة",

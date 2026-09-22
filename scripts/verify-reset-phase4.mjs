@@ -57,7 +57,7 @@ async function main() {
   check('personal: tenantId == academyId == teacher', pc.body.tenantId === tA.id && pc.body.academyId === tA.id);
 
   // ── 2. Center course rules ──
-  check('Center course with a price is refused', (await api('/teacher/courses', { token: tokA, method: 'POST', body: { title: 'paid', priceCents: 100, subjectId: subjA }, headers: H(cA.id) })).body?.code === 'CENTER_COURSE_MUST_BE_FREE');
+  check('Center course with a price is refused until a revenue split is agreed (Phase 7)', (await api('/teacher/courses', { token: tokA, method: 'POST', body: { title: 'paid', priceCents: 100, subjectId: subjA }, headers: H(cA.id) })).body?.code === 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED');
   check('Center course with a subject the Center has not activated is refused', (await api('/teacher/courses', { token: tokA, method: 'POST', body: { title: 'free', priceCents: 0, subjectId: subjA }, headers: H(cA.id) })).body?.code === 'SUBJECT_NOT_OFFERED');
   const subjectsBefore = await api(`/academies/${cA.slug}/subjects`, { token: tokA, headers: H(cA.id) });
   check('Center subject list is gated and reads the master catalogue', subjectsBefore.body?.gated === true && subjectsBefore.body.subjects.some((s) => s.id === subjA && s.offered === false));
@@ -67,7 +67,7 @@ async function main() {
   check('Center course created once the subject is offered', cc.status === 201, JSON.stringify(cc.body?.code ?? cc.status));
   cleanup.courseIds.push(cc.body.id);
   check('Center: tenantId = author, academyId = Center (different)', cc.body.tenantId === tA.id && cc.body.academyId === cA.id);
-  check('raising a Center course price later is refused', (await api(`/teacher/courses/${cc.body.id}`, { token: tokA, method: 'PATCH', body: { priceCents: 50 }, headers: H(cA.id) })).body?.code === 'CENTER_COURSE_MUST_BE_FREE');
+  check('raising a Center course price later is refused until a revenue split is agreed (Phase 7)', (await api(`/teacher/courses/${cc.body.id}`, { token: tokA, method: 'PATCH', body: { priceCents: 50 }, headers: H(cA.id) })).body?.code === 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED');
   check('forged academyId in the body is rejected by validation', (await api('/teacher/courses', { token: tokA, method: 'POST', body: { title: 'x', priceCents: 0, academyId: cB.id }, headers: H(cA.id) })).status === 400);
   check('forged tenantId in the body is rejected by validation', (await api('/teacher/courses', { token: tokA, method: 'POST', body: { title: 'x', priceCents: 0, tenantId: tB.id }, headers: H(cA.id) })).status === 400);
 
@@ -127,8 +127,8 @@ async function main() {
 
   // ── 6. Payment scope ──
   await prisma.course.update({ where: { id: cc.body.id }, data: { priceCents: 500 } }); // simulate a row that slipped past the create rule
-  check('a Center course that carries a price cannot be quoted', (await api('/enrollments/quote', { token: tokS, method: 'POST', body: { courseId: cc.body.id } })).body?.code === 'CENTER_COURSE_MUST_BE_FREE');
-  check('a Center course that carries a price cannot receive a payment', (await api('/payments', { token: tokS, method: 'POST', body: { courseId: cc.body.id, method: 'VODAFONE_CASH', reference: '01000000000' } })).body?.code === 'CENTER_COURSE_MUST_BE_FREE');
+  check('a priced Center course with no agreed split cannot be quoted (Phase 7)', (await api('/enrollments/quote', { token: tokS, method: 'POST', body: { courseId: cc.body.id } })).body?.code === 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED');
+  check('a priced Center course with no agreed split cannot receive a payment (Phase 7)', (await api('/payments', { token: tokS, method: 'POST', body: { courseId: cc.body.id, method: 'VODAFONE_CASH', reference: '01000000000' } })).body?.code === 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED');
   check('no Payment row was created for the Center course', (await prisma.payment.count({ where: { courseId: cc.body.id } })) === 0);
   await prisma.course.update({ where: { id: cc.body.id }, data: { priceCents: 0 } });
   const pqA = (await api('/admin/payments?status=PENDING', { token: tokAdmin })).status;

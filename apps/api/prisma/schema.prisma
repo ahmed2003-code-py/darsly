@@ -561,21 +561,21 @@ model AcademyActivationToken {
 // stored. Redemption reads academyId/role from this row alone — never from
 // the client — and OWNER/STUDENT are never valid values here.
 model AcademyInvitationLink {
-  id              String      @id @default(cuid())
-  academyId       String
-  academy         Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
-  role            AcademyRole
-  tokenHash       String      @unique
-  createdByUserId String
-  expiresAt       DateTime
-  usedAt          DateTime?
-  usedByUserId    String?
-  revokedAt       DateTime?
+  id               String      @id @default(cuid())
+  academyId        String
+  academy          Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  role             AcademyRole
+  tokenHash        String      @unique
+  createdByUserId  String
+  expiresAt        DateTime
+  usedAt           DateTime?
+  usedByUserId     String?
+  revokedAt        DateTime?
   /// The invitee said no. Distinct from revoke (the owner's act) and use (a
   /// join) so the owner sees which of the three happened.
   declinedAt       DateTime?
   declinedByUserId String?
-  createdAt       DateTime    @default(now())
+  createdAt        DateTime    @default(now())
 
   @@index([academyId, usedAt])
 }
@@ -1051,6 +1051,24 @@ enum VideoAssetStatus {
   FAILED
 }
 
+/// What a VideoJob is asking for. Only PACKAGE today — the YouTube download
+/// that runs *before* packaging is still fire-and-forget
+/// (courses.service.ts:909,932) and is tracked as its own follow-up.
+enum VideoJobType {
+  /// Transcode an already-stored source into encrypted HLS.
+  PACKAGE
+}
+
+/// Mirrors AiJobStatus deliberately: two queues in one codebase should read
+/// the same way.
+enum VideoJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
 // A processed video: original is transcoded to AES-128 encrypted HLS renditions.
 // Raw MP4 storage keys are NEVER exposed through the API.
 model VideoAsset {
@@ -1067,6 +1085,51 @@ model VideoAsset {
   updatedAt       DateTime         @updatedAt
 
   lesson Lesson?
+  jobs   VideoJob[]
+}
+
+/// Durable work for a VideoAsset.
+///
+/// Packaging used to be started with `void this.process(id).catch(log)` — no
+/// record that the work was ever owed, so a crash or a Railway redeploy
+/// mid-ffmpeg left the asset in PROCESSING with nothing to pick it up, and the
+/// teacher watched a lesson that would never become ready.
+///
+/// The row is the promise. It survives the process that made it, is claimed
+/// with FOR UPDATE SKIP LOCKED so several replicas can share the work, and is
+/// re-claimable once its lease expires — which is what turns a crash into a
+/// delay instead of a loss.
+///
+/// Lives in Postgres rather than Redis on purpose: this is the same database
+/// that holds the VideoAsset, so the job and the state it describes move in one
+/// transaction, and a Redis outage (which every other Redis user here survives
+/// by failing open) cannot lose video work.
+model VideoJob {
+  id             String         @id @default(cuid())
+  videoAssetId   String
+  videoAsset     VideoAsset     @relation(fields: [videoAssetId], references: [id], onDelete: Cascade)
+  /// Denormalised from the asset so the admin view can scope without a join.
+  tenantId       String
+  type           VideoJobType   @default(PACKAGE)
+  status         VideoJobStatus @default(QUEUED)
+  /// Deliberately near-empty: the videoAssetId is the job, and everything else
+  /// is re-read from the database when the work actually runs. A payload that
+  /// copies state goes stale between enqueue and a retry ten minutes later.
+  input          Json           @default("{}")
+  attempts       Int            @default(0)
+  /// Exponential backoff: a claim only considers jobs due now. Without it a
+  /// RETRYABLE failure re-runs on the next 3s poll and fails the same way.
+  nextRunAt      DateTime       @default(now())
+  leaseExpiresAt DateTime?
+  errorClass     String? // RETRYABLE | TERMINAL
+  error          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  /// The claim query's index: due, queued, oldest first.
+  @@index([status, nextRunAt])
+  @@index([videoAssetId])
+  @@index([tenantId, createdAt])
 }
 
 // AES-128 keys for HLS segments; rotated per HLS_KEY_ROTATION_SECONDS.

@@ -104,9 +104,17 @@ export class UploadsController {
       contentType: file.mimetype,
     });
     fs.unlink(file.path, () => undefined);
-    await this.prisma.videoAsset.update({
-      where: { id: asset.id },
-      data: { originalKey: sourceKey },
+
+    // The source key and the promise to package it are committed together.
+    // Separately, a crash between the two leaves either an asset holding a
+    // video nothing will ever transcode, or a job pointing at a source that
+    // was never recorded.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.videoAsset.update({
+        where: { id: asset.id },
+        data: { originalKey: sourceKey },
+      });
+      await this.videoProcessing.enqueue(asset.id, asset.tenantId, tx);
     });
 
     await this.audit.log({
@@ -117,8 +125,8 @@ export class UploadsController {
       meta: { sizeBytes: file.size, mimeType: file.mimetype },
     });
 
-    // Transcode to encrypted HLS off the request thread.
-    this.videoProcessing.enqueue(asset.id);
+    // Packaging is durable now — enqueued in the transaction above, picked up
+    // by VideoJobWorker. The response is unchanged.
     return {
       id: asset.id,
       status: 'PROCESSING',

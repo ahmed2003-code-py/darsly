@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ProofStorageService } from '../storage/proof-storage.service';
 import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -120,10 +121,24 @@ export class WalletService {
 
     // An object, not a row: see ProofStorageService. Dropped if the row fails.
     const proofKey = await this.proofs.store('topups', dto.proofImageUrl, PROOF_MAX_BYTES);
+    /**
+     * "Already under review" is checked twice, on purpose.
+     *
+     * This read is the friendly answer — it is what lets the student be told
+     * why, in a sentence, before anything is written. What it is not is a
+     * guarantee: two submits a few milliseconds apart both run it, both find
+     * nothing, and both proceed. The partial unique index added alongside this
+     * is the actual rule, and the P2002 below is that rule speaking.
+     *
+     * A duplicate pending top-up is not a cosmetic problem. Each one carries a
+     * transfer receipt an admin will approve, and approving two receipts for
+     * one transfer credits the wallet twice.
+     */
     const existing = await this.prisma.walletTopup.findFirst({
       where: { studentId: student.id, status: 'PENDING' },
     });
     if (existing) {
+      await this.proofs.discard(proofKey);
       throw new BadRequestException({ message: 'A top-up is already under review', code: 'TOPUP_PENDING' });
     }
 
@@ -142,6 +157,13 @@ export class WalletService {
       select: { id: true, amountCents: true, status: true, createdAt: true },
     }).catch(async (e) => {
       await this.proofs.discard(proofKey);
+      // The race the read above cannot close: the other submit committed
+      // first. Answered with the same refusal it would have received a
+      // millisecond earlier, so the student sees one answer however the race
+      // resolves rather than a 500 for a double tap.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new BadRequestException({ message: 'A top-up is already under review', code: 'TOPUP_PENDING' });
+      }
       throw e;
     });
 

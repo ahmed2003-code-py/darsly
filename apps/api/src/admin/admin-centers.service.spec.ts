@@ -44,6 +44,29 @@ describe('AdminCentersService.createCenter — new admin', () => {
     expect(res.admin).toMatchObject({ role: 'STAFF', activation: 'EMAIL_SENT' });
   });
 
+  it('TEMPORARY TEST ROUTING: the real Center owner/admin (email, user row, DB, response) is never changed — only the mail call opts into MailService\'s redirect', async () => {
+    const prisma = makePrisma();
+    const { s, d } = svc(prisma);
+    const res = await s.createCenter(dto, 'sa');
+
+    // The real admin's email is what the DB row, the activation token, and
+    // the returned response all use — untouched by any test routing.
+    const userRow = prisma._tx.user.create.mock.calls[0][0].data;
+    expect(userRow.email).toBe('admin@x.com');
+    expect(res.admin.id).toBe('newU');
+
+    // The mail call still names the REAL admin as `to` — MailService (not
+    // this service) is what redirects delivery, and only because this one
+    // call opts in via the flag below.
+    const mailCall = d.mail.sendInBackground.mock.calls[0][0];
+    expect(mailCall.to).toBe('admin@x.com');
+    expect(mailCall.centerOwnerTestRedirect).toBe(true);
+
+    // The email content still carries the real Center/admin details.
+    expect(mailCall.subject).toContain('El Shehab');
+    expect(mailCall.text).toContain('Admin'); // the admin's fullName
+  });
+
   it('derives a slug that collides with neither an academy nor a teacher', async () => {
     const prisma = makePrisma();
     prisma.academy.findUnique.mockResolvedValueOnce({ id: 'x' }); // "el-shehab" taken by an academy

@@ -84,6 +84,14 @@ export class AdminCentersService {
 
     this.mail.sendInBackground({
       to: adminEmail,
+      // TEMPORARY TEST ROUTING (Phase 8 follow-up): while the real provider
+      // can't be verified end-to-end on Railway, this opts the ONE
+      // Center-activation email into MailService's redirect — `adminEmail`
+      // above stays the real recipient in every other respect (the DB row,
+      // the returned response, this call's own `to`). See
+      // MailService.send / TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO. Remove this
+      // line once the real provider is confirmed working.
+      centerOwnerTestRedirect: true,
       ...centerAdminActivationEmail({
         name: created.user.fullName,
         centerName: name,

@@ -74,6 +74,52 @@ describe('MailService', () => {
     expect(service.webUrl('/reset-password?token=a')).toBe('https://darsly.app/reset-password?token=a');
     expect(service.webUrl()).toBe('https://darsly.app');
   });
+
+  describe('TEMPORARY TEST ROUTING (centerOwnerTestRedirect)', () => {
+    beforeEach(() => {
+      process.env.RESEND_API_KEY = 're_test_key';
+      process.env.TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO = 'ahmedelsayed05113@gmail.com';
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'msg_1' }) });
+    });
+
+    it('delivers to the test address instead of the real recipient when the flag and env var are both set', async () => {
+      const result = await service.send({ ...message(), centerOwnerTestRedirect: true });
+      expect(result).toEqual({ delivered: true, id: 'msg_1' });
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.to).toEqual(['ahmedelsayed05113@gmail.com']);
+    });
+
+    it('still carries the real recipient and message content — only delivery is redirected', async () => {
+      await service.send({ ...message(), to: 'real-center-owner@example.com', centerOwnerTestRedirect: true });
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      // The real recipient appears in the subject and body, never silently dropped.
+      expect(body.subject).toContain('real-center-owner@example.com');
+      expect(body.html).toContain('real-center-owner@example.com');
+      expect(body.text).toContain('real-center-owner@example.com');
+      // The original message content is still present, not replaced.
+      expect(body.html).toContain('https://app/reset?token=x');
+    });
+
+    it('is a no-op without the flag — an ordinary email is delivered to its real recipient, unaffected', async () => {
+      await service.send(message()); // no centerOwnerTestRedirect
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.to).toEqual(['student@example.com']);
+      expect(body.subject).not.toContain('TEST ROUTED');
+    });
+
+    it('is a no-op with the flag but no env var configured — falls back to the real recipient', async () => {
+      delete process.env.TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO;
+      await service.send({ ...message(), centerOwnerTestRedirect: true });
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.to).toEqual(['student@example.com']);
+    });
+
+    it('never mutates the caller\'s input object — the real `to` stays intact after send()', async () => {
+      const input = { ...message(), centerOwnerTestRedirect: true };
+      await service.send(input);
+      expect(input.to).toBe('student@example.com');
+    });
+  });
 });
 
 describe('email templates', () => {

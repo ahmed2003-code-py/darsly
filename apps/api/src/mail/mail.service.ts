@@ -5,6 +5,25 @@ export interface SendMailInput extends EmailContent {
   to: string;
   /** Where a human reply should land (support inbox), if different from the sender. */
   replyTo?: string;
+  /**
+   * TEMPORARY TEST ROUTING — added for one call site (the Center owner/admin
+   * activation email in AdminCentersService) while the real provider can't be
+   * verified end-to-end on Railway. Opt-in per call: when set AND
+   * TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO is configured, delivery is redirected
+   * to that address instead of `to`. `to` (the real Center owner/admin) is
+   * never mutated — only where THIS message is delivered — and the message
+   * body says so explicitly. No other call site is affected.
+   *
+   * To remove: delete this flag, the `tempCenterOwnerRedirectTo` getter and
+   * the redirect block in `send()` below, the `centerOwnerTestRedirect: true`
+   * at its one call site, and unset TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO.
+   */
+  centerOwnerTestRedirect?: boolean;
+}
+
+/** Escapes a value before it lands inside the temporary test-routing HTML notice. */
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export type SendResult =
@@ -42,6 +61,11 @@ export class MailService {
     return process.env.MAIL_REPLY_TO?.trim() || undefined;
   }
 
+  /** TEMPORARY TEST ROUTING — see SendMailInput.centerOwnerTestRedirect. */
+  private get tempCenterOwnerRedirectTo(): string | undefined {
+    return process.env.TEMP_CENTER_OWNER_EMAIL_REDIRECT_TO?.trim() || undefined;
+  }
+
   /** True once a provider key is configured — callers can branch on it if needed. */
   get isConfigured(): boolean {
     return Boolean(this.apiKey);
@@ -49,11 +73,25 @@ export class MailService {
 
   async send(input: SendMailInput): Promise<SendResult> {
     const key = this.apiKey;
+
+    // TEMPORARY TEST ROUTING (see SendMailInput.centerOwnerTestRedirect above).
+    // Opt-in per call and a no-op unless the env var is also set, so this
+    // never touches any other email flow. `input.to` — the real recipient —
+    // is read but never written anywhere.
+    const redirectTo = input.centerOwnerTestRedirect ? this.tempCenterOwnerRedirectTo : undefined;
+    const to = redirectTo ?? input.to;
+    const subject = redirectTo ? `[TEST ROUTED — real recipient: ${input.to}] ${input.subject}` : input.subject;
+    const noticeHtml = redirectTo
+      ? `<p style="margin:0 0 16px;padding:12px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;font-size:13px;color:#92400E;"><strong>TEMPORARY TEST ROUTING</strong> — this message was really meant for <strong>${escapeHtml(input.to)}</strong>. It was redirected here only for testing; nothing about the real recipient changed.</p>`
+      : '';
+    const html = redirectTo ? `${noticeHtml}${input.html}` : input.html;
+    const text = redirectTo ? `[TEMPORARY TEST ROUTING — real recipient: ${input.to}]\n\n${input.text}` : input.text;
+
     if (!key) {
       // Dev seam: no provider configured, so the mail is logged instead of sent.
       // Reset links stay usable locally without an account anywhere.
       this.logger.warn(
-        `[MAIL:NOT-SENT] to=${input.to} subject="${input.subject}" — RESEND_API_KEY is unset\n${input.text}`,
+        `[MAIL:NOT-SENT] to=${to} subject="${subject}" — RESEND_API_KEY is unset\n${text}`,
       );
       return { delivered: false, reason: 'no-provider' };
     }
@@ -67,10 +105,10 @@ export class MailService {
         },
         body: JSON.stringify({
           from: this.from,
-          to: [input.to],
-          subject: input.subject,
-          html: input.html,
-          text: input.text,
+          to: [to],
+          subject,
+          html,
+          text,
           ...(input.replyTo ?? this.replyTo ? { reply_to: input.replyTo ?? this.replyTo } : {}),
         }),
       });
@@ -78,17 +116,17 @@ export class MailService {
       if (!response.ok) {
         const body = await response.text().catch(() => '');
         this.logger.error(
-          `Resend rejected the message to ${input.to} (${response.status}): ${body.slice(0, 400)}`,
+          `Resend rejected the message to ${to} (${response.status}): ${body.slice(0, 400)}`,
         );
         return { delivered: false, reason: 'provider-error' };
       }
 
       const payload = (await response.json().catch(() => ({}))) as { id?: string };
-      this.logger.log(`Sent "${input.subject}" to ${input.to} (id=${payload.id ?? 'n/a'})`);
+      this.logger.log(`Sent "${subject}" to ${to} (id=${payload.id ?? 'n/a'})${redirectTo ? ` [TEST ROUTED, real recipient ${input.to}]` : ''}`);
       return { delivered: true, id: payload.id ?? '' };
     } catch (error) {
       this.logger.error(
-        `Mail delivery to ${input.to} failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Mail delivery to ${to} failed: ${error instanceof Error ? error.message : String(error)}`,
       );
       return { delivered: false, reason: 'provider-error' };
     }

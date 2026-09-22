@@ -44,10 +44,16 @@ export const TEACHER_NAV: NavItem[] = [
   { to: '/teacher/coupons', icon: 'sell', labelKey: 'nav.coupons' },
 ];
 
+/**
+ * A Center's desk administers; it does not teach. The courses entry is here
+ * because an owner must be able to see — and take off sale — everything the
+ * Center offers, but it is named for what it is: oversight of a catalogue
+ * other people wrote, not a builder.
+ */
 export const STAFF_NAV: NavItem[] = [
   { to: '/center', icon: 'apartment', labelKey: 'nav.centerDashboard', end: true },
   { to: '/center/members', icon: 'group', labelKey: 'nav.centerMembers' },
-  { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.courseBuilder' },
+  { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.centerCourses' },
   { to: '/center/subjects', icon: 'menu_book', labelKey: 'nav.centerSubjects' },
   { to: '/teacher/groups', icon: 'diversity_3', labelKey: 'nav.groups' },
   { to: '/teacher/schedule', icon: 'calendar_month', labelKey: 'nav.schedule' },

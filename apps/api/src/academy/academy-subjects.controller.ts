@@ -31,6 +31,24 @@ export class AcademySubjectsController {
     return this.subjects.list(ctx.academyId);
   }
 
+  /**
+   * All of them, one way. Sits above the per-subject route so `subjects/all`
+   * is never read as a subject id.
+   */
+  @Put('academies/:slug/subjects')
+  @UseGuards(AcademyMembershipGuard, PermissionGuard)
+  @RequirePermission('academy.manage')
+  @ApiOperation({ summary: '[academy] Offer / stop offering every platform subject (CENTER only)' })
+  async setAll(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: SetSubjectOfferedDto) {
+    const res = await this.subjects.setAllOffered(ctx.academyId, dto.isActive);
+    await this.audit.log({
+      actorUserId: user.sub, action: dto.isActive ? 'academy.subject.activateAll' : 'academy.subject.deactivateAll',
+      entity: 'AcademySubject', entityId: ctx.academyId, academyId: ctx.academyId,
+      meta: { count: res.count, viaPlatformAdmin: ctx.isPlatformAdmin },
+    });
+    return res;
+  }
+
   @Put('academies/:slug/subjects/:subjectId')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('academy.manage')

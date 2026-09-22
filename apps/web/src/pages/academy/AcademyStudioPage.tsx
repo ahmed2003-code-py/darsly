@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { api } from '../../lib/api';
-import { useOwnedAcademy } from '../../lib/academy';
+import { useMyAcademies, useOwnedAcademy } from '../../lib/academy';
 import { Badge, PageHeader, Spinner } from '../../components/ui';
 import FactsForm from './studio/FactsForm';
 import MediaManager from './studio/MediaManager';
@@ -74,13 +74,7 @@ export default function AcademyStudioPage() {
   };
 
   if (isLoading) return <div className="mx-auto max-w-container px-6 py-8"><Spinner /></div>;
-  if (!academy) {
-    return (
-      <div className="mx-auto max-w-container px-6 py-8">
-        <PageHeader title={t('studio.title')} subtitle={t('studio.noAcademy')} />
-      </div>
-    );
-  }
+  if (!academy) return <NoOwnedAcademy />;
   if (overview.isError && isFeatureDisabled(overview.error)) {
     return (
       <div className="mx-auto max-w-container px-6 py-8">
@@ -235,6 +229,61 @@ export default function AcademyStudioPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+
+/**
+ * A teacher who owns nothing is not a teacher with no page.
+ *
+ * A teacher invited into a Center is deliberately not given a personal academy
+ * (the Center is the organisation, and its desk is the one that publishes a
+ * site). Telling them "no academy yet" here read as a problem to fix. What
+ * they actually have is two public doors already open: every Center they
+ * belong to has a storefront that lists their courses, and their own profile
+ * page lists them too, wherever they were filed. Both are handed out here.
+ */
+function NoOwnedAcademy() {
+  const { t } = useTranslation();
+  const { data: academies } = useMyAcademies();
+  const { data: profile } = useQuery<{ slug?: string }>({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+  });
+  const centers = (academies ?? []).filter((a) => a.role !== 'STUDENT' && a.role !== 'OWNER');
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  const copy = (url: string) => { void navigator.clipboard?.writeText(url); };
+
+  return (
+    <div className="mx-auto max-w-container px-6 py-8">
+      <PageHeader title={t('studio.title')} subtitle={centers.length ? t('studio.centerTeacherSubtitle') : t('studio.noAcademy')} />
+      <div className="grid gap-4 md:grid-cols-2">
+        {centers.map((c) => (
+          <div key={c.academyId} className="card p-5">
+            <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">{t('studio.centerDoor')}</p>
+            <p className="mt-1 font-heading text-xl font-bold">{c.name}</p>
+            <p className="mt-1 text-sm text-on-surface-variant">{t('studio.centerDoorHint')}</p>
+            <p className="mt-3 truncate font-mono text-sm" dir="ltr">{origin}/a/{c.slug}</p>
+            <div className="mt-3 flex gap-2">
+              <Link to={`/a/${c.slug}`} className="btn-primary px-4 py-2 text-sm">{t('studio.openPage')}</Link>
+              <button className="btn-secondary px-4 py-2 text-sm" onClick={() => copy(`${origin}/a/${c.slug}`)}>{t('studio.copyLink')}</button>
+            </div>
+          </div>
+        ))}
+        {profile?.slug && (
+          <div className="card p-5">
+            <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">{t('studio.profileDoor')}</p>
+            <p className="mt-1 font-heading text-xl font-bold">{t('studio.profileDoorTitle')}</p>
+            <p className="mt-1 text-sm text-on-surface-variant">{t('studio.profileDoorHint')}</p>
+            <p className="mt-3 truncate font-mono text-sm" dir="ltr">{origin}/t/{profile.slug}</p>
+            <div className="mt-3 flex gap-2">
+              <Link to={`/t/${profile.slug}`} className="btn-primary px-4 py-2 text-sm">{t('studio.openPage')}</Link>
+              <button className="btn-secondary px-4 py-2 text-sm" onClick={() => copy(`${origin}/t/${profile.slug}`)}>{t('studio.copyLink')}</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

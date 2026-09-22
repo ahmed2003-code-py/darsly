@@ -53,6 +53,15 @@ export function applyAdminTheme(theme: Pick<AdminThemeEntry, 'id' | 'tokens'>, r
 
 function paint(tokens: AdminThemeTokens): void {
   const root = document.documentElement;
+  // An academy palette cached by lib/theme.ts writes `--c-*` *inline*, and an
+  // inline property beats any stylesheet whatever its specificity — so on a
+  // browser that had ever worn an academy's colours the remap below would be
+  // dead on arrival. The admin console is never an academy's storefront, so
+  // the inline layer is cleared here; the stylesheet's own `:root` is the
+  // floor the remap then sits on.
+  for (const name of Array.from(root.style).filter((n) => n.startsWith('--c-'))) {
+    root.style.removeProperty(name);
+  }
   for (const [key, value] of Object.entries(tokens)) {
     root.style.setProperty(`--adm-${camelToKebab(key)}`, value);
   }

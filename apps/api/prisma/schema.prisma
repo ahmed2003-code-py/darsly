@@ -746,6 +746,12 @@ model Subject {
   /// adds without thinking about systems, is shown to everybody rather than
   /// disappearing from half the platform.
   track     SubjectTrack @default(BOTH)
+  /// The subjects every school sits — Arabic, religion, social studies,
+  /// English, maths, science. A Center is opted into these the moment it
+  /// exists, because a desk that has to switch on Arabic before anyone can
+  /// file a course under it is asking a question with one answer. Everything
+  /// else stays opt-in.
+  isCore    Boolean      @default(false)
 
   teachers   TeacherSubject[]
   courses    Course[]

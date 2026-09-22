@@ -136,7 +136,8 @@
     "centerSubjects": "المواد",
     "centerSettings": "الإعدادات",
     "centerActivity": "النشاط",
-    "profile": "الملف الشخصي"
+    "profile": "الملف الشخصي",
+    "centerCourses": "دورات السنتر"
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",
@@ -451,7 +452,8 @@
       "sortPrice": "الأعلى سعرًا",
       "countCourses": "{{count}} دورة",
       "totalStudents": "إجمالي الطلبة",
-      "deleteConfirmWithStudents": "الدورة دي فيها {{count}} طالب مشترك — لو مسحتها هيفقدوا الوصول ليها. متأكد؟"
+      "deleteConfirmWithStudents": "الدورة دي فيها {{count}} طالب مشترك — لو مسحتها هيفقدوا الوصول ليها. متأكد؟",
+      "viewContent": "عرض المحتوى"
     },
     "builder": {
       "title": "محتوى الدورة",
@@ -541,7 +543,9 @@
       "replaceIntro": "غيّر الفيديو",
       "removeIntroConfirm": "تشيل الفيديو التعريفي؟",
       "introFormatErr": "الفيديو لازم يكون MP4.",
-      "introSizeErr": "الفيديو كبير أوي — الحد الأقصى {{mb}} ميجا. قصّره أو اضغطه الأول."
+      "introSizeErr": "الفيديو كبير أوي — الحد الأقصى {{mb}} ميجا. قصّره أو اضغطه الأول.",
+      "readOnly": "عرض فقط",
+      "readOnlyHint": "تقدر تشوف كل الدروس كاملة، لكن التعديل من حق المعلّم صاحب الدورة. تقدر توقف نشر الدورة من صفحة الدورات."
     },
     "students": {
       "title": "طلابي",
@@ -1663,7 +1667,15 @@
       }
     },
     "continue": "متابعة",
-    "stepOf": "الخطوة {{n}} من {{total}}"
+    "stepOf": "الخطوة {{n}} من {{total}}",
+    "centerTeacherSubtitle": "إنت معلّم داخل سنتر — السنتر هو اللي بينشر الموقع. دي الأبواب اللي الطالب بيوصلك منها.",
+    "centerDoor": "صفحة السنتر",
+    "centerDoorHint": "كل كورس تنشره بيظهر هنا، والطالب بيشترك من عليها مباشرة.",
+    "profileDoor": "صفحتك الشخصية",
+    "profileDoorTitle": "ملفك العام",
+    "profileDoorHint": "كل كورساتك المنشورة في مكان واحد، أيًا كان السنتر. ابعتها للطلاب على واتساب.",
+    "openPage": "افتح الصفحة",
+    "copyLink": "نسخ الرابط"
   },
   "adminStudio": {
     "title": "استوديو الأكاديميات",
@@ -2952,7 +2964,24 @@
     "activity": {
       "title": "نشاط السنتر",
       "empty": "لسه مفيش نشاط مسجّل."
-    }
+    },
+    "coursesOversightSub": "كل الدورات اللي السنتر بيقدّمها — للاطّلاع وإيقاف النشر، والتعديل من حق صاحب الدورة.",
+    "subjectSearch": "ابحث عن مادة…",
+    "subjectEnableAll": "تفعيل الكل",
+    "subjectDisableAll": "إلغاء تفعيل الكل",
+    "subjectDisableAllConfirm": "هتلغي تفعيل كل المواد. الكورسات المنشورة مش هتتحذف، لكن مش هينفع تضيف كورس جديد لحد ما تفعّل مادة تاني. تكمّل؟",
+    "subjectOfferedCount": "{{count}} من {{total}} مادة مُفعّلة",
+    "subjectNoMatch": "مفيش مادة بالاسم ده",
+    "subjectCore": "أساسية",
+    "subjectAdd": "إضافة مادة",
+    "subjectAddHint": "المواد دي كتالوج المنصة كلها — أي مادة تضيفها هتظهر لكل السناتر والمعلمين.",
+    "subjectNameAr": "الاسم بالعربي",
+    "subjectNameEn": "الاسم بالإنجليزي",
+    "subjectTrack": "النظام الدراسي",
+    "subjectTrackBoth": "الاتنين",
+    "subjectTrackGeneral": "عربي (عام)",
+    "subjectTrackLanguages": "لغات",
+    "subjectMarkCore": "مادة أساسية — تتفعّل تلقائيًا لكل سنتر"
   },
   "joinCenter": {
     "title": "الانضمام لسنتر",

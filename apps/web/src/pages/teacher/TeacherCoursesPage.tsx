@@ -9,6 +9,8 @@ import { MarkdownEditor } from '../../components/MarkdownEditor';
 import { STAGES, type Grade } from '../../lib/stages';
 import { type Subject } from '../../lib/subjects';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
+import { useAuthStore } from '../../stores/auth';
+import { Role } from '@darsly/shared-types';
 
 interface CourseForm {
   id?: string;
@@ -47,6 +49,11 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 export default function TeacherCoursesPage() {
   const { t, i18n } = useTranslation();
+  // A Center's desk administers; it does not teach. STAFF sees the Center's
+  // whole catalogue — that is the point of the page for them — but authoring
+  // belongs to the teachers whose names are on the courses, so the page drops
+  // its authoring affordances rather than offering buttons the API refuses.
+  const isDesk = useAuthStore((s) => s.user?.role) === Role.STAFF;
   const ar = i18n.language === 'ar';
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CourseForm | null>(null);
@@ -164,13 +171,15 @@ export default function TeacherCoursesPage() {
   return (
     <div className="page">
       <PageHeader
-        title={t('teacher.courses.title')}
-        subtitle={t('teacher.courses.subtitle')}
+        title={isDesk ? t('center.courses') : t('teacher.courses.title')}
+        subtitle={isDesk ? t('center.coursesOversightSub') : t('teacher.courses.subtitle')}
         action={
-          <button className="btn-primary" onClick={() => setForm({ ...EMPTY_FORM })}>
-            <span className="material-symbols-outlined">add</span>
-            {t('teacher.newCourse')}
-          </button>
+          isDesk ? undefined : (
+            <button className="btn-primary" onClick={() => setForm({ ...EMPTY_FORM })}>
+              <span className="material-symbols-outlined">add</span>
+              {t('teacher.newCourse')}
+            </button>
+          )
         }
       />
 
@@ -312,26 +321,28 @@ export default function TeacherCoursesPage() {
               </div>
               <div className="flex flex-wrap gap-2 border-t border-outline-variant/50 pt-4">
                 <Link to={`/teacher/courses/${c.id}`} className="btn-primary flex-1 py-2 text-center text-sm">
-                  {t('teacher.courses.builder')}
+                  {c.canEdit === false ? t('teacher.courses.viewContent') : t('teacher.courses.builder')}
                 </Link>
-                <button
-                  className="btn-ghost px-3 py-2 text-sm"
-                  title={t('teacher.courses.edit')}
-                  aria-label={t('teacher.courses.edit')}
-                  onClick={() =>
-                    setForm({
-                      id: c.id,
-                      title: c.title,
-                      description: c.description,
-                      subjectId: c.subject?.id ?? '',
-                      gradeIds: (c.grades ?? []).map((g: { id: string }) => g.id),
-                      pricingModel: c.pricingModel,
-                      priceEgp: String(c.priceCents / 100),
-                    })
-                  }
-                >
-                  <span className="material-symbols-outlined text-base">edit</span>
-                </button>
+                {c.canEdit !== false && (
+                  <button
+                    className="btn-ghost px-3 py-2 text-sm"
+                    title={t('teacher.courses.edit')}
+                    aria-label={t('teacher.courses.edit')}
+                    onClick={() =>
+                      setForm({
+                        id: c.id,
+                        title: c.title,
+                        description: c.description,
+                        subjectId: c.subject?.id ?? '',
+                        gradeIds: (c.grades ?? []).map((g: { id: string }) => g.id),
+                        pricingModel: c.pricingModel,
+                        priceEgp: String(c.priceCents / 100),
+                      })
+                    }
+                  >
+                    <span className="material-symbols-outlined text-base">edit</span>
+                  </button>
+                )}
                 <button
                   className="btn-ghost px-3 py-2 text-sm"
                   title={c.status === 'PUBLISHED' ? t('teacher.courses.unpublish') : t('teacher.courses.publish')}
@@ -346,6 +357,7 @@ export default function TeacherCoursesPage() {
                     {c.status === 'PUBLISHED' ? 'visibility_off' : 'publish'}
                   </span>
                 </button>
+                {c.canEdit !== false && (
                 <button
                   className="rounded-lg border border-error/30 px-3 py-2 text-error transition hover:bg-error-container/40"
                   title={t('teacher.courses.delete')}
@@ -363,6 +375,7 @@ export default function TeacherCoursesPage() {
                 >
                   <span className="material-symbols-outlined text-base">delete</span>
                 </button>
+                )}
               </div>
               <ErrorNote error={setStatus.variables?.id === c.id ? setStatus.error : null} />
             </article>

@@ -1042,7 +1042,7 @@ export default function CourseBuilderPage() {
           {/* Publishing lives at the end of the curriculum, where a teacher is
               standing once the lessons are in. Up here it only appears once the
               course is already live, to push later edits out. */}
-          {isPublished && (
+          {isPublished && course.canEdit !== false && (
             <button className="btn-secondary py-2 text-sm" disabled={publish.isPending} onClick={() => publish.mutate('PUBLISHED')}>
               <span className="material-symbols-outlined text-[20px]">publish</span>
               {t('teacher.builder.republish')}
@@ -1051,6 +1051,22 @@ export default function CourseBuilderPage() {
         </div>
       </div>
       {publish.error && <PublishError error={publish.error} t={t} />}
+
+      {/* Oversight, not authorship. A Center's desk and the platform admin can
+          open any course under them and watch every lesson in full, for free —
+          that is what the whole page below is for them. What they cannot do is
+          change it: the API refuses any write from someone who is not the
+          author, so this says so up front rather than letting them find out on
+          a save. Unpublishing is still theirs, from the courses list. */}
+      {course.canEdit === false && (
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-outline-variant bg-surface-container-low p-4">
+          <span className="material-symbols-outlined text-primary">visibility</span>
+          <div>
+            <p className="font-bold">{t('teacher.builder.readOnly')}</p>
+            <p className="text-sm text-on-surface-variant">{t('teacher.builder.readOnlyHint')}</p>
+          </div>
+        </div>
+      )}
 
       {/*
         Course cover.

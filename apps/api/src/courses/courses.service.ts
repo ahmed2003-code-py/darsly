@@ -308,9 +308,31 @@ export class CoursesService {
     }
   }
 
-  private async assertCourse(scope: CourseScope, courseId: string) {
+  /**
+   * Oversight is not authorship.
+   *
+   * `manageAll` answers "may I see this course" — a Center's OWNER and the
+   * platform admin must be able to look at everything offered under them, for
+   * free and in full. It never answered "may I rewrite it", and treating the
+   * two as one question meant the desk that administers a Center, and the
+   * platform itself, could silently edit a teacher's lessons. The course
+   * belongs to the person who wrote it; the only authority an overseer holds
+   * over it is to stop it being sold (see `update`, which lets a non-author
+   * send `status` and nothing else).
+   */
+  private assertAuthored(scope: CourseScope, course: { tenantId: string }): void {
+    if (scope.authorTenantId && course.tenantId === scope.authorTenantId) return;
+    throw new ForbiddenException({
+      message: 'Only the teacher who wrote this course can change its content',
+      code: 'NOT_THE_AUTHOR',
+    });
+  }
+
+  /** `oversight: true` skips the authorship check — for the read-and-unpublish paths only. */
+  private async assertCourse(scope: CourseScope, courseId: string, opts: { oversight?: boolean } = {}) {
     const course = await this.prisma.course.findFirst({ where: { id: courseId, ...this.scopeWhere(scope) } });
     if (!course) throw new NotFoundException('Course not found');
+    if (!opts.oversight) this.assertAuthored(scope, course);
     return course;
   }
 
@@ -320,6 +342,7 @@ export class CoursesService {
       include: { course: true },
     });
     if (!unit) throw new NotFoundException('Unit not found');
+    this.assertAuthored(scope, unit.course);
     return unit;
   }
 
@@ -329,6 +352,7 @@ export class CoursesService {
       include: { unit: { include: { course: true } } },
     });
     if (!lesson) throw new NotFoundException('Lesson not found');
+    this.assertAuthored(scope, lesson.unit.course);
     return lesson;
   }
 
@@ -366,7 +390,15 @@ export class CoursesService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((r) => CoursesService.flattenGrades(r));
+    // `canEdit` is the same question `assertAuthored` answers, told to the
+    // screen so it can draw an overseer's list without edit affordances that
+    // would 403 on click.
+    return rows.map((r) => ({ ...CoursesService.flattenGrades(r), canEdit: this.canEdit(scope, r) }));
+  }
+
+  /** Whether this caller authored the row — oversight reads, authorship writes. */
+  private canEdit(scope: CourseScope, course: { tenantId: string }): boolean {
+    return !!scope.authorTenantId && course.tenantId === scope.authorTenantId;
   }
 
   async getMine(scope: CourseScope, courseId: string) {
@@ -396,7 +428,10 @@ export class CoursesService {
     if (!course) throw new NotFoundException('Course not found');
     // BigInt (sizeBytes) doesn't survive JSON.stringify — stringify it here.
     return JSON.parse(
-      JSON.stringify(CoursesService.flattenGrades(course), (_, v) => (typeof v === 'bigint' ? Number(v) : v)),
+      JSON.stringify(
+        { ...CoursesService.flattenGrades(course), canEdit: this.canEdit(scope, course) },
+        (_, v) => (typeof v === 'bigint' ? Number(v) : v),
+      ),
     );
   }
 
@@ -545,7 +580,15 @@ export class CoursesService {
   }
 
   async update(scope: CourseScope, courseId: string, dto: UpdateCourseDto) {
-    const existing = await this.assertCourse(scope, courseId);
+    const existing = await this.assertCourse(scope, courseId, { oversight: true });
+    // An overseer — a Center's OWNER, the platform admin — may take a course
+    // off sale and nothing else. Anything beyond `status` in the same payload
+    // is refused outright rather than quietly dropped, so a caller is never
+    // told a change was saved that was not.
+    if (!scope.authorTenantId || existing.tenantId !== scope.authorTenantId) {
+      const touched = Object.keys(dto).filter((k) => (dto as Record<string, unknown>)[k] !== undefined);
+      if (touched.some((k) => k !== 'status')) this.assertAuthored(scope, existing);
+    }
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
     if (dto.priceCents !== undefined || dto.status === 'PUBLISHED') {
       await this.assertCenterPricing(await this.academyKind(scope.academyId), scope.academyId, existing.tenantId, dto.priceCents ?? existing.priceCents);

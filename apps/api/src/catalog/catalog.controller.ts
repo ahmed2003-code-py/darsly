@@ -19,6 +19,8 @@ class UpsertSubjectDto {
   @IsOptional() @IsInt() @Min(0) @Max(10_000) sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsIn(['GENERAL', 'LANGUAGES', 'BOTH']) track?: SubjectTrack;
+  /** Core subjects are switched on for every Center without being asked. */
+  @IsOptional() @IsBoolean() isCore?: boolean;
 }
 
 class UpsertGradeDto {

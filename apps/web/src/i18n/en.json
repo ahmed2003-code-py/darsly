@@ -136,7 +136,8 @@
     "centerSubjects": "Subjects",
     "centerSettings": "Settings",
     "centerActivity": "Activity",
-    "profile": "Profile"
+    "profile": "Profile",
+    "centerCourses": "Center courses"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -451,7 +452,8 @@
       "sortPrice": "Highest price",
       "countCourses": "{{count}} courses",
       "totalStudents": "Total students",
-      "deleteConfirmWithStudents": "{{count}} student(s) are enrolled — deleting this takes their access with it. Sure?"
+      "deleteConfirmWithStudents": "{{count}} student(s) are enrolled — deleting this takes their access with it. Sure?",
+      "viewContent": "View content"
     },
     "builder": {
       "title": "Course content",
@@ -541,7 +543,9 @@
       "replaceIntro": "Replace video",
       "removeIntroConfirm": "Remove the intro video?",
       "introFormatErr": "The video must be an MP4.",
-      "introSizeErr": "That video is too large — {{mb}}MB is the limit. Trim or compress it first."
+      "introSizeErr": "That video is too large — {{mb}}MB is the limit. Trim or compress it first.",
+      "readOnly": "View only",
+      "readOnlyHint": "You can watch every lesson in full, but editing belongs to the teacher who wrote this course. You can still unpublish it from the courses list."
     },
     "students": {
       "title": "My students",
@@ -1663,7 +1667,15 @@
       }
     },
     "continue": "Continue",
-    "stepOf": "Step {{n}} of {{total}}"
+    "stepOf": "Step {{n}} of {{total}}",
+    "centerTeacherSubtitle": "You teach inside a Center — the Center publishes the site. These are the doors students reach you through.",
+    "centerDoor": "Center page",
+    "centerDoorHint": "Every course you publish appears here, and students enrol from it directly.",
+    "profileDoor": "Your own page",
+    "profileDoorTitle": "Public profile",
+    "profileDoorHint": "All your published courses in one place, whichever Center they live in. Share it on WhatsApp.",
+    "openPage": "Open page",
+    "copyLink": "Copy link"
   },
   "adminStudio": {
     "title": "Academy Studios",
@@ -2952,7 +2964,24 @@
     "activity": {
       "title": "Center Activity",
       "empty": "Nothing logged yet."
-    }
+    },
+    "coursesOversightSub": "Every course this Center offers — to review and to unpublish. Editing belongs to its author.",
+    "subjectSearch": "Search subjects…",
+    "subjectEnableAll": "Enable all",
+    "subjectDisableAll": "Disable all",
+    "subjectDisableAllConfirm": "This switches every subject off. Published courses stay, but no new course can be filed until you switch one back on. Continue?",
+    "subjectOfferedCount": "{{count}} of {{total}} subjects offered",
+    "subjectNoMatch": "No subject by that name",
+    "subjectCore": "Core",
+    "subjectAdd": "Add subject",
+    "subjectAddHint": "This is the whole platform catalogue — a subject added here appears for every Center and every teacher.",
+    "subjectNameAr": "Arabic name",
+    "subjectNameEn": "English name",
+    "subjectTrack": "School system",
+    "subjectTrackBoth": "Both",
+    "subjectTrackGeneral": "National (Arabic)",
+    "subjectTrackLanguages": "Language schools",
+    "subjectMarkCore": "Core subject — switched on for every Center automatically"
   },
   "joinCenter": {
     "title": "Join a Center",

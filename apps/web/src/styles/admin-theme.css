@@ -13,7 +13,19 @@
  * automatically; nothing here is ever active for a Student or Teacher
  * session, since the attribute is never set on one.
  */
-[data-admin-theme] {
+/**
+ * Specificity, deliberately doubled.
+ *
+ * postcss-import inlines this file where the `@import` sits — at the very top
+ * of index.css, BEFORE `@tailwind base` expands into the platform `:root`
+ * palette and the `:root[data-theme='dark']` block. A bare
+ * `[data-admin-theme]` (0,1,0) ties with `:root` (0,1,0) and loses to
+ * `:root[data-theme='dark']` (0,2,0); later rules win a tie, so the remap was
+ * silently overridden and applying a look repainted nothing. Repeating the
+ * attribute takes it to (0,3,0) — above both — without changing what it
+ * matches.
+ */
+:root[data-admin-theme][data-admin-theme] {
   --c-background: var(--adm-background);
   --c-surface: var(--adm-surface);
   --c-surface-bright: var(--adm-surface-elevated);
@@ -88,10 +100,10 @@
    ordinary cards, matching the "sidebar"/"topbar" tokens the preset shape
    asks for — a plain --c-surface-container-lowest remap alone would tie
    them to the same value as every other low-elevation surface. */
-[data-admin-theme] .shell-aside,
-[data-admin-theme] .shell-drawer {
+:root[data-admin-theme][data-admin-theme] .shell-aside,
+:root[data-admin-theme][data-admin-theme] .shell-drawer {
   background-color: rgb(var(--adm-sidebar));
 }
-[data-admin-theme] header[data-variant] {
+:root[data-admin-theme][data-admin-theme] header[data-variant] {
   background-color: rgb(var(--adm-topbar));
 }

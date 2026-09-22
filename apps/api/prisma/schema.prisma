@@ -561,21 +561,21 @@ model AcademyActivationToken {
 // stored. Redemption reads academyId/role from this row alone — never from
 // the client — and OWNER/STUDENT are never valid values here.
 model AcademyInvitationLink {
-  id              String      @id @default(cuid())
-  academyId       String
-  academy         Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
-  role            AcademyRole
-  tokenHash       String      @unique
-  createdByUserId String
-  expiresAt       DateTime
-  usedAt          DateTime?
-  usedByUserId    String?
-  revokedAt       DateTime?
+  id               String      @id @default(cuid())
+  academyId        String
+  academy          Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  role             AcademyRole
+  tokenHash        String      @unique
+  createdByUserId  String
+  expiresAt        DateTime
+  usedAt           DateTime?
+  usedByUserId     String?
+  revokedAt        DateTime?
   /// The invitee said no. Distinct from revoke (the owner's act) and use (a
   /// join) so the owner sees which of the three happened.
   declinedAt       DateTime?
   declinedByUserId String?
-  createdAt       DateTime    @default(now())
+  createdAt        DateTime    @default(now())
 
   @@index([academyId, usedAt])
 }
@@ -847,6 +847,8 @@ model TeacherGrade {
   grade    GradeLevel     @relation(fields: [gradeId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, gradeId])
+  /// trailing half of the composite PK: reverse lookup + cascade from GradeLevel.
+  @@index([gradeId])
 }
 
 model StudentInterest {
@@ -856,6 +858,8 @@ model StudentInterest {
   subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@id([studentId, subjectId])
+  /// trailing half of the composite PK: cascade from Subject.
+  @@index([subjectId])
 }
 
 // ─────────────────────────── Courses & Content ─────────────────────────────
@@ -976,6 +980,8 @@ model BundleItem {
   course   Course @relation("bundleChild", fields: [courseId], references: [id], onDelete: Cascade)
 
   @@id([bundleId, courseId])
+  /// trailing half of the composite PK: 'which bundles contain this course'.
+  @@index([courseId])
 }
 
 model CourseUnit {
@@ -1067,6 +1073,9 @@ model VideoAsset {
   updatedAt       DateTime         @updatedAt
 
   lesson Lesson?
+
+  /// every ownership check (uploads.controller.ts) filters by it.
+  @@index([tenantId])
 }
 
 // AES-128 keys for HLS segments; rotated per HLS_KEY_ROTATION_SECONDS.
@@ -1089,6 +1098,9 @@ model Attachment {
   downloadable Boolean   @default(true)
   // Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt    DateTime?
+
+  /// filtered on every lesson render, and the cascade from Lesson scans it.
+  @@index([lessonId])
 }
 
 // ─────────────────────────── Enrollment & Progress ─────────────────────────
@@ -1595,6 +1607,10 @@ model PayoutMethodSaved {
   createdAt DateTime        @default(now())
   // Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
+
+  /// both cascade parents.
+  @@index([academyId])
+  @@index([tenantId])
 }
 
 enum PayoutStatus {
@@ -1723,6 +1739,9 @@ model QuizQuestion {
   points           Int              @default(1)
   sortOrder        Int              @default(0)
   reports          QuestionReport[]
+
+  /// read on every quiz render — the hottest of these.
+  @@index([quizId])
 }
 
 /// A student saying "this question is wrong".
@@ -2147,6 +2166,9 @@ model Announcement {
   body      String
   createdBy String
   createdAt DateTime          @default(now())
+
+  /// tenant scoping, and the cascade from TeacherProfile.
+  @@index([tenantId])
 }
 
 enum NotificationType {

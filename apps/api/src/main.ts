@@ -6,7 +6,9 @@ import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { JSON_BODY_LIMIT } from './common/validation';
+import { AppLogger } from './common/app-logger';
 import { validateConfig } from './common/config.validation';
+import { requestIdMiddleware } from './common/request-context';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
 
 async function bootstrap() {
@@ -14,7 +16,18 @@ async function bootstrap() {
   validateConfig();
 
   const isProd = process.env.NODE_ENV === 'production';
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Attaches the request id to every line, and in production emits JSON so the
+  // logs can be queried rather than grepped. See common/app-logger.ts.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: new AppLogger() });
+
+  /**
+   * First middleware, before anything can log.
+   *
+   * Ahead of helmet and the body parsers on purpose: a request rejected by one
+   * of those is exactly the kind that needs an id, and middleware registered
+   * later would never see it.
+   */
+  app.use(requestIdMiddleware);
 
   // Production sits entirely behind Railway's edge — nothing reaches this
   // process except through it, so trusting the whole X-Forwarded-For chain is

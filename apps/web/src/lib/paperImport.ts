@@ -57,6 +57,10 @@ export interface DraftQuestion {
   number: number;
   type: DraftType;
   text: string;
+  /** Written by varying a question the material did support, to reach the
+   *  number the teacher asked for. Shown on the review screen, because
+   *  "which of these are variants" is a fair question to want answered. */
+  variant?: boolean;
   options: DraftOption[];
   modelAnswer: string;
   marks: number | null;
@@ -105,6 +109,7 @@ export function warningKey(code: string): string | null {
     'NUMBER_GAP',
     'NO_QUESTIONS',
     'NOT_ENOUGH_CONTENT',
+    'COMPLETED_WITH_VARIANTS',
     'DUPLICATE_QUESTION',
   ];
   return known.includes(code) ? `paper.warn.${code}` : null;

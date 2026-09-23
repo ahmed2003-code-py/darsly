@@ -51,6 +51,7 @@ import { StudioModule } from './studio/studio.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { AcademyOpsModule } from './academy-ops/academy-ops.module';
 import { PaperImportModule } from './paper-import/paper-import.module';
+import { DraftsModule } from './drafts/drafts.module';
 
 // Single-service deploys: when the web app has been built into apps/web/dist,
 // the API serves it too (SPA fallback included). API routes stay under /api.
@@ -130,6 +131,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     FeatureFlagsModule,
     AcademyOpsModule,
     PaperImportModule,
+    DraftsModule,
     DeviceModule,
   ],
   controllers: [HealthController],

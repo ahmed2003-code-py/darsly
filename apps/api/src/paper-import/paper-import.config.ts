@@ -209,6 +209,23 @@ export class PaperImportConfig {
     Math.min(4, num(process.env.PAPER_IMPORT_GENERATION_ATTEMPTS, 2)),
   );
 
+  /**
+   * How many rounds of variants may be written to reach the requested count.
+   *
+   * A teacher who asked for twenty questions is asking for a twenty-question
+   * paper, and being handed thirteen with an explanation solves the honesty
+   * problem and not the teacher's. The shortfall is filled by varying what the
+   * material did support — see `QuestionGeneratorService.generateVariants`.
+   *
+   * Two rounds, because each round is a model call against the same material
+   * and a third almost always returns what the second already did. Set to 0 to
+   * go back to reporting the shortfall and stopping.
+   */
+  readonly generationVariantRounds = Math.max(
+    0,
+    Math.min(4, num(process.env.PAPER_IMPORT_VARIANT_ROUNDS, 2)),
+  );
+
   /** Ceiling on how much lecture material one session may hold, in pages.
    *  Fifty pages is a chapter; past that a teacher is uploading a textbook. */
   readonly maxContentPages = Math.max(1, num(process.env.PAPER_IMPORT_MAX_CONTENT_PAGES, 60));

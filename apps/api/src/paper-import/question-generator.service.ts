@@ -194,6 +194,40 @@ export class QuestionGeneratorService {
   }
 
   /**
+   * Write the questions the material could not carry a second way.
+   *
+   * The honest position — "this lecture supports thirteen questions, not
+   * twenty" — is the right one about *content*, and the wrong one about a
+   * teacher who needs a twenty-question paper on Sunday. Both can be true, so
+   * the shortfall is filled by varying what the material did support rather
+   * than by inventing what it did not: the same concept with different
+   * numbers, asked from the other end, or about a different facet of it.
+   *
+   * What makes this safe is that nothing new is claimed. A variant is still
+   * grounded in a chunk, still answerable from the uploaded material, and
+   * still has to clear the same duplicate check as everything else — so a
+   * reworded copy of its own source is thrown away rather than counted. That
+   * check is the whole guard against the obvious failure here, which is twenty
+   * questions that are thirteen questions wearing hats.
+   */
+  async generateVariants(opts: {
+    /** The slots still to fill: type, difficulty and marks for each. */
+    plan: PlannedQuestion[];
+    chunks: SourceChunk[];
+    language: 'AUTO' | 'AR' | 'EN';
+    /** The questions the material did support, to be varied. */
+    source: { text: string; modelAnswer: string }[];
+    /** Everything already on the exam, so a variant is not a repeat. */
+    avoid: string[];
+    stronger?: boolean;
+  }): Promise<GenerationResult> {
+    const model = opts.stronger ? this.config.strongModel : this.config.generationModel;
+    const price = opts.stronger ? this.config.strongPrice : this.config.generationPrice;
+    const effort = opts.stronger ? this.config.strongEffort : this.config.generationEffort;
+    return this.call(model, price, effort, this.variantPrompt(opts));
+  }
+
+  /**
    * Write one question again.
    *
    * The whole point of the review screen's "regenerate" button: a teacher who
@@ -255,6 +289,76 @@ export class QuestionGeneratorService {
       opts.reason ? `\nThe previous attempt at this question was rejected: ${opts.reason}` : '',
       opts.avoid.length
         ? `\nQuestions already on this exam — do not ask any of these again, in any wording:\n${opts.avoid
+            .map((a) => `- ${a.slice(0, 160)}`)
+            .join('\n')}`
+        : '',
+      '',
+      '<<<MATERIAL>>>',
+      material,
+      '<<<END MATERIAL>>>',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  /**
+   * What a variant is, said precisely enough to be useful.
+   *
+   * The instruction that does the work is the list of ways a question may
+   * differ, because "write a different question about the same thing" is
+   * reliably answered with the same question in different words — which this
+   * pipeline then throws away as a duplicate, having paid for it.
+   */
+  private variantPrompt(opts: {
+    plan: PlannedQuestion[];
+    chunks: SourceChunk[];
+    language: 'AUTO' | 'AR' | 'EN';
+    source: { text: string; modelAnswer: string }[];
+    avoid: string[];
+  }): string {
+    const wanted = opts.plan
+      .map((p, i) => `${i + 1}. type=${p.type} difficulty=${p.difficulty} marks=${p.marks}`)
+      .join('\n');
+    const material = opts.chunks
+      .map(
+        (c) => `[chunk ${c.index}] (${c.sourceFile}${c.page ? `, page ${c.page}` : ''})\n${c.text}`,
+      )
+      .join('\n\n');
+    const language =
+      opts.language === 'AR'
+        ? 'Write every question in Arabic.'
+        : opts.language === 'EN'
+          ? 'Write every question in English.'
+          : 'Write in the language of the material.';
+
+    return [
+      'This exam is short. The material below has already produced the questions listed under EXISTING, and it has no further distinct content in it.',
+      `Write exactly ${opts.plan.length} more question(s) by VARYING those existing ones, one for each line below, in this order:`,
+      wanted,
+      '',
+      'A variant tests the same idea as one of the existing questions, and is a different question to sit for. Vary it in at least one of these ways:',
+      '- change the numbers, and work the new answer out correctly from the material',
+      '- ask it from the other end: give what was asked for and ask for what was given',
+      '- ask about a different facet of the same concept, or a different step of the same method',
+      '- change the situation the concept is applied to, keeping the concept',
+      '- for multiple choice, keep the idea and build a different correct answer with new plausible distractors',
+      '',
+      'Rules that do not bend:',
+      '- Still grounded. Every variant names the chunk it is answerable from, exactly as before. Nothing may require a fact the material does not contain.',
+      '- Keep the difficulty asked for on each line. A variant that is easier than its source is not the question that was ordered.',
+      '- Never reword. If your variant would be recognised as the same question in different words, it is rejected and wasted — change the substance, not the sentence.',
+      '- Every answer must be correct. A variant with a wrong answer is worse than a missing question.',
+      '- insufficient must be false here: you are not being asked for new content, you are being asked to vary what exists.',
+      '',
+      language,
+      '',
+      '<<<EXISTING>>>',
+      opts.source
+        .map((q, i) => `${i + 1}. ${q.text}${q.modelAnswer ? `\n   answer: ${q.modelAnswer}` : ''}`)
+        .join('\n'),
+      '<<<END EXISTING>>>',
+      opts.avoid.length
+        ? `\nDo not ask any of these again, in any wording:\n${opts.avoid
             .map((a) => `- ${a.slice(0, 160)}`)
             .join('\n')}`
         : '',

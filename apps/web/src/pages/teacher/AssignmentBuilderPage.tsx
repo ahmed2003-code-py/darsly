@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Badge, ErrorNote, Field, PageHeader, Spinner } from '../../components/ui';
+import { draftKey, fetchDraft, useAutosaveDraft } from '../../lib/drafts';
 
 export default function AssignmentBuilderPage() {
   const { t } = useTranslation();
@@ -19,19 +20,59 @@ export default function AssignmentBuilderPage() {
   const [maxScore, setMaxScore] = useState(100);
   const [dueAt, setDueAt] = useState('');
   const [grading, setGrading] = useState<Record<string, { score: string; feedback: string }>>({});
+  /** Set when unsaved work was put back into the form, so the teacher is told
+   *  rather than left guessing why the box is already full. */
+  const [restoredDraft, setRestoredDraft] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['tassign', lessonId],
     queryFn: async () => (await api.get(`/teacher/lessons/${lessonId}/assignment`)).data,
   });
 
+  /**
+   * What is on the server, and then whatever was being written over it.
+   *
+   * Order matters: the saved assignment goes in first so the form is never
+   * empty, and the draft is applied on top because it is newer by definition —
+   * it exists precisely because it had not been saved yet.
+   */
+  const restored = useRef(false);
   useEffect(() => {
-    if (data) {
-      setPrompt(data.prompt ?? '');
-      setMaxScore(data.maxScore ?? 100);
-      setDueAt(data.dueAt ? String(data.dueAt).slice(0, 10) : '');
-    }
-  }, [data]);
+    if (!data) return;
+    setPrompt(data.prompt ?? '');
+    setMaxScore(data.maxScore ?? 100);
+    setDueAt(data.dueAt ? String(data.dueAt).slice(0, 10) : '');
+    if (restored.current || !lessonId) return;
+    restored.current = true;
+    let alive = true;
+    void fetchDraft<{ prompt?: string; maxScore?: number; dueAt?: string }>(
+      draftKey.assignment(lessonId),
+    )
+      .then((saved) => {
+        if (!alive || !saved?.data) return;
+        setPrompt(saved.data.prompt ?? '');
+        if (saved.data.maxScore) setMaxScore(saved.data.maxScore);
+        setDueAt(saved.data.dueAt ?? '');
+        setRestoredDraft(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [data, lessonId]);
+
+  /** Written as it is typed, so a half-composed question survives a closed
+   *  tab. Cleared the moment the assignment itself saves. */
+  const autosave = useAutosaveDraft({
+    kind: 'ASSIGNMENT',
+    scopeKey: lessonId ? draftKey.assignment(lessonId) : null,
+    courseId: fromCourse ?? undefined,
+    lessonId: lessonId ?? undefined,
+    label: prompt.trim().slice(0, 60),
+    step: 'prompt',
+    data: { prompt, maxScore, dueAt },
+    enabled: !!lessonId,
+  });
 
   const save = useMutation({
     mutationFn: async () =>
@@ -42,7 +83,13 @@ export default function AssignmentBuilderPage() {
           dueAt: dueAt || null,
         })
       ).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tassign', lessonId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tassign', lessonId] });
+      // Saved for real — the draft is now an older copy of it.
+      autosave.clear();
+      setRestoredDraft(false);
+      qc.invalidateQueries({ queryKey: ['drafts'] });
+    },
   });
 
   const grade = useMutation({
@@ -104,6 +151,21 @@ export default function AssignmentBuilderPage() {
               />
             </Field>
           </div>
+          {restoredDraft && (
+            <p className="mb-2 flex items-start gap-2 rounded-xl border border-secondary/40 bg-secondary/5 p-2 text-xs text-on-surface-variant">
+              <span className="material-symbols-outlined text-base text-secondary">restore</span>
+              {t('drafts.restored')}
+            </p>
+          )}
+          <p className="mt-1 text-xs text-on-surface-variant">
+            {autosave.state === 'saving'
+              ? t('drafts.saving')
+              : autosave.state === 'error'
+                ? t('drafts.saveFailed')
+                : autosave.state === 'saved'
+                  ? t('drafts.saved')
+                  : ''}
+          </p>
           <button
             className="btn-primary mt-2 w-full"
             disabled={save.isPending || !prompt.trim()}

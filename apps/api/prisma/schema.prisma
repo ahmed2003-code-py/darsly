@@ -3467,3 +3467,71 @@ model ExamSourceChunk {
   @@unique([importId, index])
   @@index([importId])
 }
+
+/// What a half-finished piece of work is.
+///
+/// A teacher who starts writing a lesson, opens something else and comes back
+/// used to find an empty form. What was lost was never a technical problem —
+/// the form state existed, it just lived in one browser tab's memory — but it
+/// is the failure a teacher feels most, because the work was real.
+enum ContentDraftKind {
+  /// A lesson's own settings: its title, description, release rule.
+  LESSON
+  /// An assignment being written.
+  ASSIGNMENT
+  /// A quiz or exam being built by hand, question by question.
+  QUIZ
+  /// The details of a course being set up.
+  COURSE
+}
+
+/// Work in progress, saved without being asked to.
+///
+/// One row per thing being edited, keyed by `scopeKey` so re-opening the same
+/// form finds the same draft instead of leaving a trail of them. The row holds
+/// whatever the form needs to come back exactly as it was left — which is why
+/// `data` is opaque JSON: the shape belongs to the screen, and a schema here
+/// would mean a migration every time a field moves.
+///
+/// Deliberately not a foreign key to anything. A draft outliving the thing it
+/// referred to is a listing problem, solved by checking on read, and it is a
+/// far smaller problem than a cascade quietly deleting a teacher's unsaved
+/// work because something else was tidied up.
+model ContentDraft {
+  id        String @id @default(cuid())
+  academyId String
+  /// The teacher who owns the content — the same tenant every course is keyed
+  /// by, so a Center's staff member drafting on their behalf lands in the
+  /// right place.
+  tenantId  String
+  /// Who was typing. A Center has several people and "whose draft is this" is
+  /// a question the drafts list has to be able to answer.
+  createdBy String
+
+  kind     ContentDraftKind
+  /// Stable identity for the form that produced it: `lesson:<id>`,
+  /// `assignment:new:<courseId>`, and so on. Unique per tenant, which is what
+  /// makes an autosave an update rather than a new row every keystroke.
+  scopeKey String
+
+  /// Where it belongs, for the list a teacher sees when they open a course.
+  courseId String?
+  lessonId String?
+
+  /// What to call it on that list. Written by the form, because only the form
+  /// knows whether this is "درس ٣: المشتقات" or an untitled one.
+  label String @default("")
+  /// Which step the teacher had reached, for a form that has steps. Free text:
+  /// the screen defines its own vocabulary and is the only thing that reads it.
+  step  String @default("")
+
+  data Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, scopeKey])
+  @@index([tenantId, updatedAt])
+  @@index([courseId, updatedAt])
+  @@index([academyId, updatedAt])
+}

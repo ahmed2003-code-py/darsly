@@ -71,6 +71,7 @@ describe('writing an exam from uploaded lecture material', () => {
   let prisma: any;
   let generator: {
     generateBatch: jest.Mock;
+    generateVariants: jest.Mock;
     regenerateOne: jest.Mock;
     batchCount: jest.Mock;
     batchOf: jest.Mock;
@@ -106,6 +107,10 @@ describe('writing an exam from uploaded lecture material', () => {
     const real = new QuestionGeneratorService({} as never, config);
     generator = {
       generateBatch: jest.fn(),
+      // Nothing by default: a test that does not set this up is a test about
+      // the ordinary path, and a variant round that silently filled the exam
+      // would make those tests assert the wrong thing.
+      generateVariants: jest.fn().mockResolvedValue(ok([])),
       regenerateOne: jest.fn(),
       batchCount: jest.fn((n: number) => real.batchCount(n)),
       batchOf: jest.fn((plan: never[], i: number) => real.batchOf(plan, i)),
@@ -136,6 +141,12 @@ describe('writing an exam from uploaded lecture material', () => {
       config,
     );
   });
+
+  const lastWarnings = (): { code: string; params?: Record<string, number> }[] =>
+    prisma.paperImport.update.mock.calls
+      .map((c: [{ data: { warnings?: unknown } }]) => c[0].data.warnings)
+      .filter(Boolean)
+      .pop() as { code: string; params?: Record<string, number> }[];
 
   const savedDraft = (): ExamDraft =>
     prisma.paperImport.update.mock.calls
@@ -350,6 +361,122 @@ describe('writing an exam from uploaded lecture material', () => {
       .pop();
     const short = warnings.find((w: { code: string }) => w.code === 'NOT_ENOUGH_CONTENT');
     expect(short.params).toMatchObject({ got: 2, wanted: 4, mcq: 2, trueFalse: 0, written: 0 });
+  });
+
+  // ── reaching the number that was asked for ──────────────────────────────
+  //
+  // Being told "your lecture supports thirteen of the twenty questions you
+  // asked for" is honest and does not give a teacher a twenty-question paper
+  // for Sunday. The shortfall is now filled by varying the questions the
+  // material did support — which is a different thing from inventing content,
+  // and the tests below are about keeping it different.
+
+  it('fills the count by varying what the material did support', async () => {
+    generator.generateBatch.mockResolvedValue(
+      ok([generated(), generated()], { insufficient: true, supportable: 2 }),
+    );
+    generator.generateVariants.mockResolvedValue(ok([generated(), generated()]));
+
+    await service.generate(record());
+
+    const draft = savedDraft();
+    expect(draft.sections[0].questions).toHaveLength(4);
+    expect(generator.generateVariants).toHaveBeenCalled();
+  });
+
+  it('marks every question it wrote that way', async () => {
+    generator.generateBatch.mockResolvedValue(
+      ok([generated(), generated()], { insufficient: true, supportable: 2 }),
+    );
+    generator.generateVariants.mockResolvedValue(ok([generated(), generated()]));
+
+    await service.generate(record());
+
+    const questions = savedDraft().sections[0].questions;
+    expect(questions.filter((q) => q.variant)).toHaveLength(2);
+    // And leaves the ones that came out of the material alone.
+    expect(questions.filter((q) => !q.variant)).toHaveLength(2);
+  });
+
+  it('tells the teacher how many of their questions are variants', async () => {
+    generator.generateBatch.mockResolvedValue(
+      ok([generated(), generated()], { insufficient: true, supportable: 2 }),
+    );
+    generator.generateVariants.mockResolvedValue(ok([generated(), generated()]));
+
+    await service.generate(record());
+
+    const warnings = lastWarnings();
+    const told = warnings.find((w) => w.code === 'COMPLETED_WITH_VARIANTS');
+    expect(told?.params).toEqual({ variants: 2, fromMaterial: 2, wanted: 4 });
+    // The exam is the length that was ordered, so the shortfall warning — the
+    // one that asks the teacher to upload more or ask for less — is gone.
+    expect(warnings.some((w) => w.code === 'NOT_ENOUGH_CONTENT')).toBe(false);
+  });
+
+  it('asks only for the questions still missing, in the types still owed', async () => {
+    generator.generateBatch.mockResolvedValue(
+      ok([generated(), generated(), generated()], { insufficient: true, supportable: 3 }),
+    );
+    generator.generateVariants.mockResolvedValue(ok([generated()]));
+
+    await service.generate(record());
+
+    const asked = generator.generateVariants.mock.calls[0][0];
+    expect(asked.plan).toHaveLength(1);
+    expect(asked.plan[0].type).toBe('MCQ');
+    // And hands over what there is to vary, plus everything to avoid.
+    expect(asked.source).toHaveLength(3);
+    expect(asked.avoid).toHaveLength(3);
+  });
+
+  it('throws away a variant that is its own source reworded', async () => {
+    // The failure this whole idea invites. A variant that would be recognised
+    // as the same question is a duplicate, and it faces the same check as any
+    // other duplicate rather than a softer one.
+    const original = generated({ text: SUBJECTS[0] });
+    generator.generateBatch.mockResolvedValue(
+      ok([original], { insufficient: true, supportable: 1 }),
+    );
+    generator.generateVariants.mockResolvedValue(
+      ok([generated({ text: SUBJECTS[0] }), generated({ text: SUBJECTS[0] })]),
+    );
+
+    await service.generate(record());
+
+    expect(savedDraft().sections[0].questions).toHaveLength(1);
+  });
+
+  it('stops after one empty round rather than paying for another', async () => {
+    generator.generateBatch.mockResolvedValue(
+      ok([generated()], { insufficient: true, supportable: 1 }),
+    );
+    generator.generateVariants.mockResolvedValue(ok([]));
+
+    await service.generate(record());
+
+    expect(generator.generateVariants).toHaveBeenCalledTimes(1);
+  });
+
+  it('still says the material was short when variants could not fill it either', async () => {
+    generator.generateBatch.mockResolvedValue(
+      ok([generated()], { insufficient: true, supportable: 1 }),
+    );
+    generator.generateVariants.mockResolvedValue(ok([]));
+
+    await service.generate(record());
+
+    expect(lastWarnings().some((w) => w.code === 'NOT_ENOUGH_CONTENT')).toBe(true);
+  });
+
+  it('does not write variants for an exam the material already filled', async () => {
+    generator.generateBatch.mockResolvedValue(
+      ok([generated(), generated(), generated(), generated()]),
+    );
+
+    await service.generate(record());
+
+    expect(generator.generateVariants).not.toHaveBeenCalled();
   });
 
   it('fails honestly when the material produced nothing', async () => {

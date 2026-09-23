@@ -325,6 +325,20 @@ export interface DraftQuestion {
   unsupportedKind: string;
   /** Flagged for the teacher's eye: low confidence, or a type we cannot keep. */
   needsReview: boolean;
+  /**
+   * Written to make the count, by varying a question the material did support.
+   *
+   * A teacher who asks for twenty questions wants twenty questions. When the
+   * uploaded material only carries thirteen distinct ones, the remaining seven
+   * are written as genuine variants of those thirteen — the same concept with
+   * different numbers, asked from the other end, or about a different facet of
+   * it — never the same question reworded, which the duplicate check rejects
+   * on sight.
+   *
+   * Marked, because a teacher is entitled to know which of their twenty came
+   * from new material and which from a second look at the same material.
+   */
+  variant?: boolean;
 }
 
 export interface ExamDraft {
@@ -351,6 +365,11 @@ export type DraftWarningCode =
   /// Content path: the material did not support the number of questions asked
   /// for, and we said so rather than inventing the difference.
   | 'NOT_ENOUGH_CONTENT'
+  /// Content path: the exam is the length that was asked for, and some of it
+  /// was written by varying the questions the material did support. Not a
+  /// failure — but the teacher is entitled to know which questions those are
+  /// before they set the paper.
+  | 'COMPLETED_WITH_VARIANTS'
   /// Content path: two questions came out the same.
   | 'DUPLICATE_QUESTION';
 

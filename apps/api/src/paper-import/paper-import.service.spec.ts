@@ -403,6 +403,35 @@ describe('who may touch an import', () => {
     });
   });
 
+  describe('confirming carries the settings chosen in the Studio', () => {
+    const ready = (over: Record<string, unknown>) => ({
+      id: 'imp1',
+      status: 'REVIEW',
+      draft: { title: 't', instructions: [], sections: [{ title: '', questions: [{}] }] },
+      ...over,
+    });
+
+    it('an exam written from material gets the time, shuffle and answer settings the teacher set', async () => {
+      prisma.paperImport.findFirst.mockResolvedValue(
+        ready({ kind: 'CONTENT', spec: { timeLimitMin: 30, shuffle: true, showAnswers: false } }),
+      );
+      builder.build.mockResolvedValue({ courseId: 'c1', lessonId: 'l1', questionCount: 1 });
+      await service.confirm(scope, 'imp1', { target: 'NEW_COURSE' }).catch(() => undefined);
+      expect(builder.build.mock.calls[0][3]).toMatchObject({
+        timeLimitMin: 30,
+        shuffle: true,
+        showAnswers: false,
+      });
+    });
+
+    it('a paper import was never asked, so nothing is imposed on it — not even the form defaults', async () => {
+      prisma.paperImport.findFirst.mockResolvedValue(ready({ kind: 'PAPER', spec: null }));
+      builder.build.mockResolvedValue({ courseId: 'c1', lessonId: 'l1', questionCount: 1 });
+      await service.confirm(scope, 'imp1', { target: 'NEW_COURSE' }).catch(() => undefined);
+      expect(builder.build.mock.calls[0][3]).toBeUndefined();
+    });
+  });
+
   it('refuses to edit the draft while the pages are still being read', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({ id: 'imp1', status: 'PROCESSING' });
     await expect(

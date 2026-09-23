@@ -3,6 +3,7 @@ import { CourseExamMode, LessonType, QuestionType } from '@darsly/shared-types';
 import { CourseScope, CoursesService } from '../courses/courses.service';
 import { QuizQuestionDto } from '../assessments/dto/quiz.dto';
 import { QuizzesService } from '../assessments/quizzes.service';
+import { ExamSpec } from './exam-spec';
 import { PrismaService } from '../prisma/prisma.service';
 import { DraftQuestion, ExamDraft } from './extraction.schema';
 
@@ -70,7 +71,17 @@ export class ExamBuilderService {
    * it is a visible, editable, deletable thing, and the import is only marked
    * COMPLETED once every step has run.
    */
-  async build(scope: CourseScope, draft: ExamDraft, opts: ConfirmTarget): Promise<BuiltExam> {
+  async build(
+    scope: CourseScope,
+    draft: ExamDraft,
+    opts: ConfirmTarget,
+    /**
+     * What the teacher already chose for this exam in the Studio — time,
+     * shuffling, whether answers are shown. Omitted for a paper import, which
+     * asks none of it, so the exam gets the builder's own defaults.
+     */
+    settings?: Pick<ExamSpec, 'timeLimitMin' | 'shuffle' | 'showAnswers'>,
+  ): Promise<BuiltExam> {
     const questions = this.flatten(draft);
     const unsupported = questions.filter((q) => q.type === 'UNSUPPORTED');
     if (unsupported.length && !opts.dropUnsupported) {
@@ -131,8 +142,21 @@ export class ExamBuilderService {
     });
 
     // Creates the Quiz row and flips the lesson to QUIZ, exactly as the
-    // manual builder's first save does.
-    await this.quizzes.upsertForTeacher(scope.authorTenantId!, lesson.id, {});
+    // manual builder's first save does — carrying the settings the teacher
+    // already chose in the Studio. It used to pass nothing, so the time limit
+    // and the shuffle they had set came back as "no limit" and unticked in the
+    // builder, to be set a second time.
+    await this.quizzes.upsertForTeacher(
+      scope.authorTenantId!,
+      lesson.id,
+      settings
+        ? {
+            timeLimitSec: settings.timeLimitMin ? settings.timeLimitMin * 60 : null,
+            shuffleQuestions: settings.shuffle,
+            showAnswers: settings.showAnswers,
+          }
+        : {},
+    );
     await this.quizzes.setQuestions(scope.authorTenantId!, lesson.id, {
       questions: keep.map((q) => this.toQuizQuestion(q)),
     });

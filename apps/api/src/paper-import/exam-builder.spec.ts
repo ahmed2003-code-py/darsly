@@ -217,4 +217,28 @@ describe('turning a confirmed draft into an ordinary exam', () => {
     expect(quizzes.upsertForTeacher).toHaveBeenCalledWith('teacher1', 'lesson1', {});
     expect(quizzes.setQuestions).toHaveBeenCalledWith('teacher1', 'lesson1', expect.anything());
   });
+
+  it('carries the time, shuffle and answer settings chosen in the Studio into the exam', async () => {
+    await builder.build(
+      scope,
+      draft([draftQuestion()]),
+      { target: 'NEW_COURSE' },
+      { timeLimitMin: 45, shuffle: true, showAnswers: false },
+    );
+    expect(quizzes.upsertForTeacher).toHaveBeenCalledWith('teacher1', 'lesson1', {
+      timeLimitSec: 2700,
+      shuffleQuestions: true,
+      showAnswers: false,
+    });
+  });
+
+  it('"no time limit" chosen in the Studio stays no limit', async () => {
+    await builder.build(
+      scope,
+      draft([draftQuestion()]),
+      { target: 'NEW_COURSE' },
+      { timeLimitMin: null, shuffle: false, showAnswers: true },
+    );
+    expect(quizzes.upsertForTeacher.mock.calls[0][2]).toMatchObject({ timeLimitSec: null });
+  });
 });

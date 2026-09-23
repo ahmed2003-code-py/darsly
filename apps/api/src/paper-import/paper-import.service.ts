@@ -605,7 +605,15 @@ export class PaperImportService {
       });
     }
 
-    const built = await this.builder.build(scope, draft, dto);
+    // Only an exam generated from material has settings the teacher chose;
+    // a paper import was never asked, and the spec's defaults (a 60-minute
+    // limit among them) are not choices to impose on it.
+    const built = await this.builder.build(
+      scope,
+      draft,
+      dto,
+      record.kind === 'CONTENT' ? normalizeSpec(record.spec as never) : undefined,
+    );
 
     await this.prisma.paperImport.update({
       where: { id: record.id },

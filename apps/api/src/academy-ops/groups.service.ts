@@ -3,6 +3,7 @@ import { GroupAssignmentRole, Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { asPage } from '../common/pagination';
 import { AcademyOpsAccessService } from './academy-ops-access.service';
 import { AddGroupMembersDto, AssignStaffDto, CreateGroupDto, UpdateGroupDto } from './dto/academy-ops.dto';
 
@@ -56,14 +57,16 @@ export class GroupsService {
       byGroup.set(a.groupId, list);
     }
 
-    return {
-      total, page, pageSize,
-      groups: groups.map((g) => ({
-        id: g.id, name: g.name, description: g.description, status: g.status, createdAt: g.createdAt,
-        studentsCount: g._count.members,
-        staff: byGroup.get(g.id) ?? [],
-      })),
-    };
+    const items = groups.map((g) => ({
+      id: g.id, name: g.name, description: g.description, status: g.status, createdAt: g.createdAt,
+      studentsCount: g._count.members,
+      staff: byGroup.get(g.id) ?? [],
+    }));
+    // `groups` is the same array under its original name. It is the one key in
+    // the API that calls the list something other than `items`, which is the
+    // whole of why a client written against courses could not read this. Both
+    // are returned so nothing has to change at once; `groups` is deprecated.
+    return { ...asPage(items, total, page, pageSize), groups: items };
   }
 
   /**

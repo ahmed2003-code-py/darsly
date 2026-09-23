@@ -4,8 +4,15 @@ import { JwtPayload } from '@darsly/shared-types';
 import { IsOptional, IsBooleanString } from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { PageQuery, asPage, pageArgs } from '../common/pagination';
 
-class ListQuery {
+/**
+ * `take: 30` used to be the whole of this endpoint's paging, with no way to
+ * ask for the thirty-first. A reader with a busy term could not reach their
+ * own older notifications at all — the rows existed and nothing addressed
+ * them. Sending neither parameter still returns the same first thirty.
+ */
+class ListQuery extends PageQuery {
   @IsOptional() @IsBooleanString() unreadOnly?: string;
 }
 
@@ -20,15 +27,19 @@ export class NotificationsController {
   @Get()
   @ApiOperation({ summary: 'My notifications (newest first)' })
   async list(@CurrentUser() user: JwtPayload, @Query() q: ListQuery) {
-    const [items, unread] = await Promise.all([
-      this.prisma.notification.findMany({
-        where: { userId: user.sub, ...(q.unreadOnly === 'true' ? { readAt: null } : {}) },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
-      }),
+    const { skip, take, page, pageSize } = pageArgs(q, 30);
+    const where = { userId: user.sub, ...(q.unreadOnly === 'true' ? { readAt: null } : {}) };
+    const [items, unread, total] = await Promise.all([
+      this.prisma.notification.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take }),
+      // Counted over every notification, not the filtered page: this is the
+      // number on the bell, and it does not change because the reader is
+      // looking at page two or filtered to unread.
       this.prisma.notification.count({ where: { userId: user.sub, readAt: null } }),
+      this.prisma.notification.count({ where }),
     ]);
-    return { items, unread };
+    // `items` and `unread` keep their names and meaning; the envelope's other
+    // fields are added beside them, so an existing reader is unaffected.
+    return { ...asPage(items, total, page, pageSize), unread };
   }
 
   @Patch(':id/read')

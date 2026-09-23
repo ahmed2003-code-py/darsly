@@ -9,6 +9,7 @@ import { JSON_BODY_LIMIT } from './common/validation';
 import { AppLogger } from './common/app-logger';
 import { validateConfig } from './common/config.validation';
 import { requestIdMiddleware } from './common/request-context';
+import { configureRouting } from './common/routing';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
 
 async function bootstrap() {
@@ -66,7 +67,7 @@ async function bootstrap() {
     .map((o) => o.trim());
   app.enableCors({ origin: allowedOrigins, credentials: true });
 
-  app.setGlobalPrefix('api/v1');
+  configureRouting(app);
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );

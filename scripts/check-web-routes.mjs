@@ -79,6 +79,35 @@ for (const key of used) {
   if (!(key in ar) && !(key in en)) fail.push(`i18n: t('${key}') is used but defined nowhere`);
 }
 
+// A key does not have to sit inside `t(` to be a key.
+//
+// `t(kind === 'PAPER' ? 'studio.modePaper' : 'studio.modeContent')` shipped to
+// production and drew the literal words "studio.modePaper" as a page title,
+// because the check above only ever looked at the character after `t(`. The
+// rename that orphaned those three strings passed every gate we had.
+//
+// So every string literal that *looks* like a key into a namespace we actually
+// have is checked, wherever it appears. A namespace nobody defined is ignored
+// — that is a filename or a MIME type, not a key — which keeps this specific
+// about the failure it exists to catch.
+const namespaces = new Set(Object.keys(ar).map((k) => k.split('.')[0]));
+// Real strings that collide with the shape: a namespace, a dot, a word.
+const NOT_KEYS = new Set(['common.js', 'common.css']);
+for (const file of sources) {
+  const text = readFileSync(file, 'utf8');
+  for (const m of text.matchAll(/'([a-z][A-Za-z0-9]*(?:\.[A-Za-z][\w]*)+)'/g)) {
+    const key = m[1];
+    if (NOT_KEYS.has(key)) continue;
+    if (!namespaces.has(key.split('.')[0])) continue;
+    if (key in ar || key in en) continue;
+    // A prefix of real keys is a template base (`paper.type.` + a variable).
+    if (Object.keys(ar).some((k) => k.startsWith(`${key}.`))) continue;
+    fail.push(
+      `i18n: "${key}" reads like a translation key and is defined nowhere (${file.replace(WEB, '')})`,
+    );
+  }
+}
+
 // ── report ───────────────────────────────────────────────────────────────────
 if (fail.length) {
   console.error(`✗ ${fail.length} problem(s):`);

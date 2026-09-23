@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { askConfirm } from '../../lib/confirm';
-import { toastError, toastSuccess } from '../../lib/toast';
+import { toastError, toastErrorText, toastSuccess } from '../../lib/toast';
 import { PageHeader, ProgressBar, Spinner } from '../../components/ui';
 import { ExamReviewPanel } from './exam-studio/ExamReviewPanel';
 import { ExamSpecForm } from './exam-studio/ExamSpecForm';
@@ -19,6 +19,8 @@ import {
   creationState,
   draftProblems,
   fetchImport,
+  fetchLimits,
+  overLimit,
   phaseOf,
   retryImport,
   saveDraft,
@@ -154,6 +156,15 @@ function Upload({
   const [pct, setPct] = useState(0);
   const input = useRef<HTMLInputElement>(null);
 
+  // The ceilings, said before they are hit. They used to be spelled out only
+  // inside the refusal, so the first time anybody learned the limit was after
+  // choosing forty files and waiting for the upload to fail.
+  const { data: limits } = useQuery({
+    queryKey: ['studio-limits'],
+    queryFn: fetchLimits,
+    staleTime: 10 * 60_000,
+  });
+
   const upload = useMutation({
     mutationFn: () => uploadPaper(files, kind, setPct),
     onSuccess: ({ id }) =>
@@ -166,7 +177,20 @@ function Upload({
 
   const add = (picked: FileList | null) => {
     if (!picked) return;
-    setFiles((current) => [...current, ...Array.from(picked)]);
+    const next = [...files, ...Array.from(picked)];
+    // Caught here so the teacher is told now rather than after the upload.
+    // The server still checks and still has the last word.
+    const over = overLimit(next, kind, limits);
+    if (over) {
+      toastErrorText(
+        over.code === 'TOO_MANY_FILES'
+          ? t('examStudio.tooManyFiles', { limit: over.limit })
+          : t('examStudio.fileTooLarge', { name: over.name, mb: over.mb, limit: over.limit }),
+      );
+      if (input.current) input.current.value = '';
+      return;
+    }
+    setFiles(next);
     if (input.current) input.current.value = '';
   };
   const move = (index: number, delta: -1 | 1) =>
@@ -182,8 +206,10 @@ function Upload({
     <div className="page">
       <PageHeader
         eyebrow={t('examStudio.title')}
-        title={t(kind === 'PAPER' ? 'studio.modePaper' : 'studio.modeContent')}
-        subtitle={t(kind === 'PAPER' ? 'studio.uploadPaperHint' : 'studio.uploadContentHint')}
+        title={t(kind === 'PAPER' ? 'examStudio.modePaper' : 'examStudio.modeContent')}
+        subtitle={t(
+          kind === 'PAPER' ? 'examStudio.uploadPaperHint' : 'examStudio.uploadContentHint',
+        )}
         action={
           <button className="btn-ghost" onClick={onBack}>
             {t('examStudio.back')}
@@ -211,6 +237,16 @@ function Upload({
             {t('examStudio.pickFiles')}
           </span>
           <span className="text-sm text-outline">{t('examStudio.pickFilesHint')}</span>
+          {limits && (
+            <span className="max-w-md text-xs text-outline">
+              {t(kind === 'PAPER' ? 'examStudio.limits' : 'examStudio.limitsContent', {
+                pages: kind === 'PAPER' ? limits.paper.maxPages : limits.content.maxPages,
+                image: limits.maxImageMb,
+                pdf: limits.maxPdfMb,
+                files: limits.maxFiles,
+              })}
+            </span>
+          )}
         </button>
 
         {files.length > 0 && (
@@ -267,7 +303,7 @@ function Upload({
           disabled={!files.length || upload.isPending}
           onClick={() => upload.mutate()}
         >
-          {t(kind === 'PAPER' ? 'studio.startPaper' : 'studio.startContent')}
+          {t(kind === 'PAPER' ? 'examStudio.startPaper' : 'examStudio.startContent')}
         </button>
       </div>
     </div>

@@ -543,3 +543,51 @@ export async function confirmImport(
 export async function deleteImport(id: string): Promise<void> {
   await api.delete(`/teacher/paper-imports/${id}`);
 }
+
+/** The ceilings on an upload, so a screen can say them before a teacher picks
+ *  forty files rather than after. */
+export interface StudioLimits {
+  paper: { maxPages: number };
+  content: { maxPages: number };
+  maxImageMb: number;
+  maxPdfMb: number;
+  maxFiles: number;
+}
+
+export async function fetchLimits(): Promise<StudioLimits> {
+  const { data } = await api.get('/teacher/paper-imports/limits');
+  return data;
+}
+
+/**
+ * Is this pile of files already over a ceiling?
+ *
+ * Checked in the browser too, so a teacher who picked one file too many is
+ * told before the upload rather than after it — the server still checks, and
+ * still has the last word.
+ */
+export function overLimit(
+  files: File[],
+  kind: CreationKind,
+  limits: StudioLimits | undefined,
+): { code: 'TOO_MANY_FILES' | 'FILE_TOO_LARGE'; name?: string; mb?: number; limit: number } | null {
+  if (!limits) return null;
+  if (files.length > limits.maxFiles) {
+    return { code: 'TOO_MANY_FILES', limit: limits.maxFiles };
+  }
+  for (const file of files) {
+    const isPdf = file.type === 'application/pdf';
+    const cap = isPdf ? limits.maxPdfMb : limits.maxImageMb;
+    if (file.size > cap * 1024 * 1024) {
+      return {
+        code: 'FILE_TOO_LARGE',
+        name: file.name,
+        mb: Math.round(file.size / 1024 / 1024),
+        limit: cap,
+      };
+    }
+  }
+  // Pages inside a PDF cannot be counted here; the server does that.
+  void kind;
+  return null;
+}

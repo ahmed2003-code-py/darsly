@@ -2561,10 +2561,10 @@
     "eNoDraft": "There is nothing to confirm yet.",
     "eCourseRequired": "Choose the course this exam belongs to.",
     "eTooManyQuestions": "That is more questions than an exam can hold.",
-    "ePaperFileTooLarge": "One of those files is too large.",
-    "ePaperUnsupportedType": "Pages must be PNG, JPEG or WebP images, or PDFs.",
-    "ePaperContentMismatch": "That file is not the type it claims to be.",
-    "ePaperTooManyPages": "That is more pages than one session can hold.",
+    "ePaperFileTooLarge": "“{{name}}” is {{mb}} MB. The most one file can be is {{limit}} MB — try a smaller scan, or split the PDF.",
+    "ePaperUnsupportedType": "“{{name}}” is not a kind of file we can read. Use a PNG, JPEG or WebP image, or a PDF.",
+    "ePaperContentMismatch": "“{{name}}” is not really the kind of file its name says it is, so we did not open it.",
+    "ePaperTooManyPages": "That comes to {{got}} pages, and one exam can take {{limit}}. Split it and import the rest as a second exam.",
     "eNoFiles": "Choose at least one file first."
   },
   "myStudio": {
@@ -3194,7 +3194,7 @@
     "modeContentHint": "Upload your lectures or teaching files and we will write an exam to the specification you choose.",
     "back": "Back",
     "pickFiles": "Choose the files",
-    "pickFilesHint": "Photos (PNG, JPEG, WebP) and PDFs — as many as you like, in order",
+    "pickFilesHint": "Photos (PNG, JPEG, WebP) and PDFs — in the order they should be read",
     "uploadPaperHint": "Photograph every page, or attach the PDF. Put them in the order they are on paper.",
     "uploadContentHint": "Lectures, chapters, scanned notes — anything you teach from. They do not need to contain questions.",
     "uploading": "Uploading… {{pct}}%",
@@ -3282,6 +3282,10 @@
     "shortfallBody": "What you uploaded supports {{got}} good questions, not {{wanted}}. We have set the exam to {{got}}: {{mcq}} multiple choice, {{trueFalse}} true/false, {{written}} written. Keep it as it is, or change the settings and upload more material.",
     "shortfallKeep": "Keep {{got}} questions",
     "draftSaved": "Draft saved.",
-    "examCreated": "The exam has been created — {{n}} questions."
+    "examCreated": "The exam has been created — {{n}} questions.",
+    "limits": "Up to {{pages}} pages per exam. One image up to {{image}} MB, one PDF up to {{pdf}} MB, {{files}} files at a time.",
+    "limitsContent": "Up to {{pages}} pages of material. One image up to {{image}} MB, one PDF up to {{pdf}} MB, {{files}} files at a time.",
+    "tooManyFiles": "That is more than {{limit}} files. Upload the first {{limit}}, then add the rest as another exam.",
+    "fileTooLarge": "“{{name}}” is {{mb}} MB, and one file can be at most {{limit}} MB."
   }
 }

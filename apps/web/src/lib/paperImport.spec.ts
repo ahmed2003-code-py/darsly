@@ -12,9 +12,11 @@ import {
   creationState,
   phaseOf,
   progressPct,
+  overLimit,
   stepStates,
   warningKey,
   PaperImport,
+  StudioLimits,
   removeQuestion,
   renumber,
   setCorrect,
@@ -492,5 +494,49 @@ describe('the shortfall copy', () => {
   it('shows the variable name when a value is missing, which is the bug', () => {
     // Kept as the failing shape, so the guard above is testing something real.
     expect(fill(strings.keep, {})).toContain('{{got}}');
+  });
+});
+
+/**
+ * Refusing an upload before it is uploaded.
+ *
+ * The server still checks and still has the last word; this is so a teacher
+ * who picked a 62 MB scan is told now, with the number, rather than after
+ * waiting for it to travel.
+ */
+describe('catching an upload that is already over a ceiling', () => {
+  const limits: StudioLimits = {
+    paper: { maxPages: 25 },
+    content: { maxPages: 60 },
+    maxImageMb: 15,
+    maxPdfMb: 40,
+    maxFiles: 30,
+  };
+  const file = (name: string, mb: number, type = 'image/png') =>
+    ({ name, type, size: mb * 1024 * 1024 }) as File;
+
+  it('passes a normal pile of photographs', () => {
+    expect(overLimit([file('p1.png', 3), file('p2.png', 4)], 'PAPER', limits)).toBeNull();
+  });
+
+  it('names the file that is too large, and by how much it missed', () => {
+    const over = overLimit([file('p1.png', 3), file('scan.png', 62)], 'PAPER', limits);
+    expect(over).toMatchObject({ code: 'FILE_TOO_LARGE', name: 'scan.png', mb: 62, limit: 15 });
+  });
+
+  it('judges a PDF by the PDF ceiling, not the image one', () => {
+    expect(overLimit([file('exam.pdf', 30, 'application/pdf')], 'PAPER', limits)).toBeNull();
+    expect(overLimit([file('exam.pdf', 55, 'application/pdf')], 'PAPER', limits)).toMatchObject({
+      limit: 40,
+    });
+  });
+
+  it('says how many files are allowed when there are too many', () => {
+    const many = Array.from({ length: 31 }, (_, i) => file(`p${i}.png`, 1));
+    expect(overLimit(many, 'PAPER', limits)).toMatchObject({ code: 'TOO_MANY_FILES', limit: 30 });
+  });
+
+  it('stays out of the way before the ceilings have loaded', () => {
+    expect(overLimit([file('huge.png', 500)], 'PAPER', undefined)).toBeNull();
   });
 });

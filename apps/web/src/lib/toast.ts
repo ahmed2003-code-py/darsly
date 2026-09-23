@@ -53,6 +53,20 @@ export function toastError(error: unknown, title?: string): void {
   useToastStore.getState().push({ tone: 'error', message, title });
 }
 
+/**
+ * A refusal the app worked out for itself, rather than one the API sent.
+ *
+ * `toastError` runs its argument through the resolver, which is right for
+ * anything that came back from the server and wrong for a sentence already
+ * written here — the resolver would not recognise a bare string and would
+ * replace it with the generic apology, losing the numbers that made it worth
+ * showing.
+ */
+export function toastErrorText(message: string): void {
+  if (!message) return;
+  useToastStore.getState().push({ tone: 'error', message });
+}
+
 export function toastSuccess(message: string): void {
   useToastStore.getState().push({ tone: 'success', message });
 }

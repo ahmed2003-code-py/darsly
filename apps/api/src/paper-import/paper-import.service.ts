@@ -26,6 +26,15 @@ import { DraftQuestion, DraftWarning, ExamDraft } from './extraction.schema';
 import { PAPER_IMAGE_MIME, PAPER_PDF_MIME, PagePreparerService } from './page-preparer.service';
 import { PaperImportConfig } from './paper-import.config';
 
+/**
+ * How many files one session accepts in a single upload.
+ *
+ * Lives here rather than only in the controller because the screen has to be
+ * able to say it before a teacher picks forty files, and the controller's
+ * multer ceiling is not something a browser can read.
+ */
+export const MAX_FILES_PER_SESSION = 30;
+
 /** An uploaded file as the controller hands it over, already size-capped and
  *  type-filtered by multer. Everything past that is checked here. */
 export interface UploadedPaper {
@@ -68,6 +77,24 @@ export class PaperImportService {
     private readonly audit: AuditService,
     private readonly content: ContentGenerationService,
   ) {}
+
+  /**
+   * What a teacher is allowed to upload, so the screen can say so *before*
+   * they choose forty files.
+   *
+   * The numbers live in the config and nowhere else. They used to be spelled
+   * out only inside the refusal, which meant the first time anybody learned
+   * the ceiling was after hitting it.
+   */
+  limits() {
+    return {
+      paper: { maxPages: this.config.maxPages },
+      content: { maxPages: this.config.maxContentPages },
+      maxImageMb: Math.round(this.config.maxImageBytes / 1024 / 1024),
+      maxPdfMb: Math.round(this.config.maxPdfBytes / 1024 / 1024),
+      maxFiles: MAX_FILES_PER_SESSION,
+    };
+  }
 
   // ── stage 1: upload, validation, storage ─────────────────────────────────
 
@@ -169,6 +196,14 @@ export class PaperImportService {
         throw new BadRequestException({
           message: `"${file.originalname}" is larger than ${Math.round(this.config.maxPdfBytes / 1024 / 1024)}MB`,
           code: 'PAPER_FILE_TOO_LARGE',
+          // The numbers travel so the screen can write the sentence in the
+          // reader's language. A refusal that says only "too large" makes the
+          // teacher guess at how much smaller.
+          params: {
+            name: file.originalname,
+            mb: Math.round(file.size / 1024 / 1024),
+            limit: Math.round(this.config.maxPdfBytes / 1024 / 1024),
+          },
         });
       }
       // The declared type is a string the client chose; this is the bytes.
@@ -176,6 +211,7 @@ export class PaperImportService {
         throw new BadRequestException({
           message: 'That file is not the PDF it claims to be',
           code: 'PAPER_CONTENT_MISMATCH',
+          params: { name: file.originalname },
         });
       }
       return;
@@ -184,12 +220,18 @@ export class PaperImportService {
       throw new BadRequestException({
         message: 'Pages must be PNG, JPEG or WebP images, or PDFs',
         code: 'PAPER_UNSUPPORTED_TYPE',
+        params: { name: file.originalname },
       });
     }
     if (file.size > this.config.maxImageBytes) {
       throw new BadRequestException({
         message: `"${file.originalname}" is larger than ${Math.round(this.config.maxImageBytes / 1024 / 1024)}MB`,
         code: 'PAPER_FILE_TOO_LARGE',
+        params: {
+          name: file.originalname,
+          mb: Math.round(file.size / 1024 / 1024),
+          limit: Math.round(this.config.maxImageBytes / 1024 / 1024),
+        },
       });
     }
     assertMagicMatchesMime(file.mimetype, file.buffer);
@@ -219,6 +261,7 @@ export class PaperImportService {
         throw new BadRequestException({
           message: `That is ${from + count} pages; a session can hold ${this.pageCap(kind)}`,
           code: 'PAPER_TOO_MANY_PAGES',
+          params: { name: file.originalname, got: from + count, limit: this.pageCap(kind) },
         });
       }
       for (let n = 1; n <= count; n++) {
@@ -278,6 +321,7 @@ export class PaperImportService {
       throw new BadRequestException({
         message: `A session can hold ${this.pageCap(kind)} pages`,
         code: 'PAPER_TOO_MANY_PAGES',
+        params: { name: file.originalname, got: page, limit: this.pageCap(kind) },
       });
     }
     const ext =

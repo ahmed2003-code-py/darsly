@@ -29,13 +29,13 @@ import {
   SetSpecDto,
 } from './dto/paper-import.dto';
 import { ExamExportService } from './exam-export.service';
-import { ImportScope, PaperImportService } from './paper-import.service';
+import { ImportScope, MAX_FILES_PER_SESSION, PaperImportService } from './paper-import.service';
 
 /** The multer ceiling. A second, tighter, per-kind limit is enforced in the
  *  service — this one only stops a body big enough to be a denial of service
  *  from being read into memory at all. */
 const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
-const MAX_FILES = 30;
+const MAX_FILES = MAX_FILES_PER_SESSION;
 const ACCEPTED = /^(image\/(png|jpe?g|webp)|application\/pdf)$/;
 
 /**
@@ -106,6 +106,16 @@ export class PaperImportController {
   @ApiOperation({ summary: '[teacher] My paper imports' })
   list(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext) {
     return this.imports.list(this.scope(user, ctx));
+  }
+
+  /**
+   * What may be uploaded. Declared before `:id` or that route would swallow
+   * it — Nest matches in declaration order.
+   */
+  @Get('paper-imports/limits')
+  @ApiOperation({ summary: '[teacher] Upload ceilings, so the screen can say them upfront' })
+  limits() {
+    return this.imports.limits();
   }
 
   @Get('paper-imports/:id')

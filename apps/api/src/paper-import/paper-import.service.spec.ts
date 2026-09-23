@@ -113,10 +113,10 @@ describe('accepting a stack of paper', () => {
     });
   });
 
-  it('refuses a type nobody asked for', async () => {
+  it('refuses a type nobody asked for, and names the file', async () => {
     const zip = file({ mimetype: 'application/zip', originalname: 'exam.zip' });
     await expect(service.create(scope, [zip])).rejects.toMatchObject({
-      response: { code: 'PAPER_UNSUPPORTED_TYPE' },
+      response: { code: 'PAPER_UNSUPPORTED_TYPE', params: { name: 'exam.zip' } },
     });
   });
 
@@ -131,11 +131,44 @@ describe('accepting a stack of paper', () => {
     expect(storage.put).not.toHaveBeenCalled();
   });
 
-  it('refuses an image past the size ceiling', async () => {
-    const huge = file({ size: 200 * 1024 * 1024 });
+  it('refuses an image past the size ceiling, and says by how much', async () => {
+    // "Too large" makes a teacher guess how much smaller. The numbers travel
+    // so the screen can write the sentence in their language.
+    const huge = file({ originalname: 'scan.png', size: 200 * 1024 * 1024 });
     await expect(service.create(scope, [huge])).rejects.toMatchObject({
-      response: { code: 'PAPER_FILE_TOO_LARGE' },
+      response: {
+        code: 'PAPER_FILE_TOO_LARGE',
+        params: { name: 'scan.png', mb: 200, limit: 15 },
+      },
     });
+  });
+
+  it('says how many pages are allowed when a PDF has too many', async () => {
+    const handle = {
+      pageCount: jest.fn().mockResolvedValue(80),
+      text: jest.fn(),
+      render: jest.fn(),
+    };
+    preparer.withPdf.mockImplementation((_b: Buffer, fn: (h: unknown) => Promise<void>) =>
+      fn(handle),
+    );
+
+    await expect(
+      service.create(scope, [
+        file({ originalname: 'book.pdf', mimetype: 'application/pdf', buffer: PDF }),
+      ]),
+    ).rejects.toMatchObject({
+      response: { code: 'PAPER_TOO_MANY_PAGES', params: { got: 80, limit: 25 } },
+    });
+  });
+
+  it('publishes the ceilings so a screen can say them before they are hit', () => {
+    const limits = service.limits();
+    expect(limits.paper.maxPages).toBeGreaterThan(0);
+    // A lecture is allowed to be longer than an exam, because it is.
+    expect(limits.content.maxPages).toBeGreaterThan(limits.paper.maxPages);
+    expect(limits.maxPdfMb).toBeGreaterThan(limits.maxImageMb);
+    expect(limits.maxFiles).toBeGreaterThan(1);
   });
 
   it('refuses more pages than an import is allowed to hold', async () => {

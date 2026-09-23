@@ -29,6 +29,15 @@ interface ApiErrorBody {
   /** Extra detail some refusals carry, used by the copy that asks for a count. */
   mediaIds?: unknown;
   invalid?: unknown;
+  /**
+   * Values the sentence needs, when the sentence needs values.
+   *
+   * "That file is too large" makes a teacher guess how much smaller; "«exam.pdf»
+   * حجمه 62 ميجا، والحد الأقصى 40" does not. The API sends the numbers and the
+   * sentence is written here, in the reader's language — the same division the
+   * import warnings already use.
+   */
+  params?: unknown;
 }
 
 export interface ResolvedError {
@@ -93,8 +102,12 @@ function isArabic(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
 }
 
-function translate(key: string, count: number): string | null {
-  const out = i18n.t(key, { count, defaultValue: '' });
+function translate(
+  key: string,
+  count: number,
+  params: Record<string, unknown> = {},
+): string | null {
+  const out = i18n.t(key, { count, ...params, defaultValue: '' });
   return typeof out === 'string' && out ? out : null;
 }
 
@@ -129,7 +142,11 @@ export function resolveError(error: unknown): ResolvedError {
       ? data.invalid.length
       : 0;
   if (code) {
-    const named = translate(EXPLICIT[code] ?? keyForCode(code), detail);
+    const params =
+      data?.params && typeof data.params === 'object'
+        ? (data.params as Record<string, unknown>)
+        : {};
+    const named = translate(EXPLICIT[code] ?? keyForCode(code), detail, params);
     if (named) return { message: named, code, status, generic: false };
   }
 

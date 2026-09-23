@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { draftKey, fetchDraft, useAutosaveDraft } from '../../lib/drafts';
 import { Badge, ErrorNote, PageHeader, Spinner } from '../../components/ui';
 import i18n from '../../i18n';
 
@@ -70,6 +71,9 @@ export default function QuizBuilderPage() {
   const [aiThresholdPct, setAiThresholdPct] = useState(60);
   const [showAnswers, setShowAnswers] = useState(true);
   const [questions, setQuestions] = useState<Q[]>([]);
+  /** Set when questions written on another device were put back, so the
+   *  teacher is told rather than left wondering where they came from. */
+  const [restoredDraft, setRestoredDraft] = useState(false);
 
   // The course's video lessons, so the remedy is picked rather than typed.
   const { data: courseData } = useQuery({
@@ -118,7 +122,56 @@ export default function QuizBuilderPage() {
         })),
       );
     }
-  }, [data]);
+    if (restored.current || !lessonId) return;
+    restored.current = true;
+    let alive = true;
+    void fetchDraft<Record<string, unknown>>(draftKey.quiz(lessonId))
+      .then((saved) => {
+        if (!alive || !saved?.data) return;
+        const d = saved.data as any;
+        // Applied over what the server has, because a draft only exists for
+        // questions that were written and never saved.
+        if (Array.isArray(d.questions)) setQuestions(d.questions);
+        if (typeof d.passingScore === 'number') setPassingScore(d.passingScore);
+        if (typeof d.timeLimitMin === 'string') setTimeLimitMin(d.timeLimitMin);
+        if (typeof d.maxAttempts === 'string') setMaxAttempts(d.maxAttempts);
+        if (typeof d.shuffle === 'boolean') setShuffle(d.shuffle);
+        if (typeof d.aiGrading === 'boolean') setAiGrading(d.aiGrading);
+        if (typeof d.showAnswers === 'boolean') setShowAnswers(d.showAnswers);
+        setRestoredDraft(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [data, lessonId]);
+
+  /**
+   * An exam being written by hand, kept as it is written.
+   *
+   * The longest form in the product — twenty questions, each with four
+   * options — and until now the only thing holding it was the tab it was
+   * typed into.
+   */
+  const restored = useRef(false);
+  const autosave = useAutosaveDraft({
+    kind: 'QUIZ',
+    scopeKey: lessonId ? draftKey.quiz(lessonId) : null,
+    courseId: fromCourse ?? undefined,
+    lessonId: lessonId ?? undefined,
+    label: questions[0]?.prompt?.slice(0, 60) ?? '',
+    step: `${questions.length}`,
+    data: {
+      questions,
+      passingScore,
+      timeLimitMin,
+      maxAttempts,
+      shuffle,
+      aiGrading,
+      showAnswers,
+    },
+    enabled: !!lessonId,
+  });
 
   /**
    * Written questions with no model answer, while automatic marking is asked
@@ -162,7 +215,13 @@ export default function QuizBuilderPage() {
       });
       return saved;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tquiz', lessonId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tquiz', lessonId] });
+      // Saved for real — the draft is now an older copy of this exam.
+      autosave.clear();
+      setRestoredDraft(false);
+      qc.invalidateQueries({ queryKey: ['drafts'] });
+    },
   });
 
   if (isLoading)
@@ -554,6 +613,21 @@ export default function QuizBuilderPage() {
               </div>
             )}
 
+            {restoredDraft && (
+              <p className="mt-3 flex items-start gap-2 rounded-xl border border-secondary/40 bg-secondary/5 p-2 text-xs text-on-surface-variant">
+                <span className="material-symbols-outlined text-base text-secondary">restore</span>
+                {t('drafts.restored')}
+              </p>
+            )}
+            <p className="mt-2 text-center text-xs text-on-surface-variant">
+              {autosave.state === 'saving'
+                ? t('drafts.saving')
+                : autosave.state === 'error'
+                  ? t('drafts.saveFailed')
+                  : autosave.state === 'saved'
+                    ? t('drafts.saved')
+                    : ''}
+            </p>
             <button
               className="btn-primary mt-4 w-full"
               disabled={save.isPending || !questions.length || unmarkable.length > 0}

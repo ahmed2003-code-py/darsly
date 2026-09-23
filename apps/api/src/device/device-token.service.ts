@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { randomUUID } from 'crypto';
+import { AuthConfig } from '../auth/auth.config';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -30,13 +31,14 @@ export class DeviceTokenService {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly config: AuthConfig,
   ) {}
 
   private get accessTtl() {
-    return Number(process.env.DEVICE_JWT_ACCESS_TTL ?? process.env.JWT_ACCESS_TTL ?? 900);
+    return this.config.deviceAccessTtlSeconds;
   }
   private get refreshTtl() {
-    return Number(process.env.DEVICE_JWT_REFRESH_TTL ?? process.env.JWT_REFRESH_TTL ?? 2_592_000);
+    return this.config.deviceRefreshTtlSeconds;
   }
 
   async issue(device: { id: string; phone: string }): Promise<DeviceTokens> {

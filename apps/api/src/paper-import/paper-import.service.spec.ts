@@ -404,19 +404,52 @@ describe('who may touch an import', () => {
   });
 
   describe('confirming carries the settings chosen in the Studio', () => {
+    // Its own service, with a real builder mock and a prisma that can be
+    // written to: the enclosing block builds one out of empty objects to prove
+    // that reads are scoped, and confirming actually goes all the way through
+    // to making an exam.
+    let prisma: any;
+    let builder: { build: jest.Mock };
+    let confirmService: PaperImportService;
+
     const ready = (over: Record<string, unknown>) => ({
       id: 'imp1',
       status: 'REVIEW',
       draft: { title: 't', instructions: [], sections: [{ title: '', questions: [{}] }] },
+      costCents: 0,
       ...over,
     });
 
+    beforeEach(() => {
+      builder = {
+        build: jest.fn().mockResolvedValue({ courseId: 'c1', lessonId: 'l1', questionCount: 1 }),
+      };
+      prisma = {
+        paperImport: { findFirst: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+      };
+      confirmService = new PaperImportService(
+        prisma as PrismaService,
+        {} as StorageProvider,
+        {} as PagePreparerService,
+        new PaperImportConfig(),
+        {} as AiJobService,
+        builder as unknown as ExamBuilderService,
+        { log: jest.fn().mockResolvedValue(undefined) } as unknown as AuditService,
+        {} as ContentGenerationService,
+      );
+    });
+
     it('an exam written from material gets the time, shuffle and answer settings the teacher set', async () => {
+      // The bug this is here for: the Studio asked for a time limit and
+      // whether to shuffle, generated the exam, and then the exam had neither
+      // — so the builder asked for both again, as though the first answer had
+      // not been given.
       prisma.paperImport.findFirst.mockResolvedValue(
         ready({ kind: 'CONTENT', spec: { timeLimitMin: 30, shuffle: true, showAnswers: false } }),
       );
-      builder.build.mockResolvedValue({ courseId: 'c1', lessonId: 'l1', questionCount: 1 });
-      await service.confirm(scope, 'imp1', { target: 'NEW_COURSE' }).catch(() => undefined);
+
+      await confirmService.confirm(scope, 'imp1', { target: 'NEW_COURSE' });
+
       expect(builder.build.mock.calls[0][3]).toMatchObject({
         timeLimitMin: 30,
         shuffle: true,
@@ -425,9 +458,13 @@ describe('who may touch an import', () => {
     });
 
     it('a paper import was never asked, so nothing is imposed on it — not even the form defaults', async () => {
+      // `normalizeSpec` fills in a 60-minute limit for an empty spec. On the
+      // paper path that number is not a choice anybody made, and writing it
+      // onto the exam would be the same bug in the other direction.
       prisma.paperImport.findFirst.mockResolvedValue(ready({ kind: 'PAPER', spec: null }));
-      builder.build.mockResolvedValue({ courseId: 'c1', lessonId: 'l1', questionCount: 1 });
-      await service.confirm(scope, 'imp1', { target: 'NEW_COURSE' }).catch(() => undefined);
+
+      await confirmService.confirm(scope, 'imp1', { target: 'NEW_COURSE' });
+
       expect(builder.build.mock.calls[0][3]).toBeUndefined();
     });
   });

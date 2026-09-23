@@ -328,23 +328,38 @@ export class AuthService {
    * mail provider outage all produced the same cheerful "check your inbox",
    * and the user sat waiting for a message that was never coming.
    *
-   * The enumeration risk is real and is mitigated rather than ignored: the
-   * route is throttled to 5 requests per 10 minutes per IP, which makes
-   * harvesting a list of addresses impractical while keeping the honest user
-   * informed. If that trade stops being acceptable, this is the one method to
-   * change back.
+   * The answer is the same whether or not the address is registered.
+   *
+   * It used to 404 `EMAIL_NOT_FOUND` for an unknown address and 403
+   * `ACCOUNT_DISABLED` for a suspended one, which made this endpoint a
+   * membership oracle: anyone could confirm whether a given person has an
+   * account here, and whether it has been suspended. The throttle (5 per 10
+   * minutes) made bulk harvesting slow, but it never stopped a targeted check
+   * of one address — which is the question that actually matters to somebody
+   * looking for a specific person.
+   *
+   * Both cases now return the same `{ ok: true }` an existing account gets, and
+   * no email is sent. The reader is told "if that address has an account, a
+   * code is on its way", which is true in both branches.
+   *
+   * The code is still generated and hashed on the unknown-address path. It is
+   * thrown away, and it costs a SHA-256 — the point is that the cheap branch
+   * does not return conspicuously faster than the expensive one. That narrows
+   * the timing side-channel; it does not close it, because only the real path
+   * writes a row and awaits the mail provider.
    */
   async forgotPassword(dto: ForgotPasswordDto) {
     const email = dto.email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      throw new NotFoundException({
-        message: 'لا يوجد حساب مسجَّل بهذا البريد الإلكتروني',
-        code: 'EMAIL_NOT_FOUND',
-      });
-    }
-    if (!user.isActive) {
-      throw new ForbiddenException({ message: 'Account disabled', code: 'ACCOUNT_DISABLED' });
+
+    // Same answer, same shape, no email — for an address with no account and
+    // for one whose account is suspended.
+    if (!user || !user.isActive) {
+      this.hashResetCode('no-such-user', String(randomInt(0, 1_000_000)).padStart(6, '0'));
+      this.logger.warn(
+        `password reset requested for ${!user ? 'an unknown address' : 'a disabled account'}; answered as if sent`,
+      );
+      return { ok: true, expiresInMinutes: RESET_TTL_MINUTES };
     }
 
     // Invalidate any previous unused code for this user, so the newest code is

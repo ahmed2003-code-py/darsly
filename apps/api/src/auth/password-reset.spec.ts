@@ -47,21 +47,41 @@ describe('AuthService — password reset by emailed code', () => {
     return body.match(/\b(\d{6})\b/)![1];
   }
 
-  it('refuses an email that has no account, naming the reason', async () => {
+  it('answers an unknown address exactly as it answers a real one', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
-    await expect(service.forgotPassword({ email: 'nobody@example.com' })).rejects.toMatchObject({
-      status: 404,
-      response: { code: 'EMAIL_NOT_FOUND' },
-    });
+    const result = await service.forgotPassword({ email: 'nobody@example.com' });
+
+    // Indistinguishable from the answer a real account gets — that is the point.
+    expect(result).toMatchObject({ ok: true, expiresInMinutes: expect.any(Number) });
     expect(mail.send).not.toHaveBeenCalled();
+    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
   });
 
-  it('refuses a disabled account without emailing it', async () => {
+  it('answers a disabled account the same way, and emails nothing', async () => {
     prisma.user.findUnique.mockResolvedValue({ ...USER, isActive: false });
-    await expect(service.forgotPassword({ email: USER.email })).rejects.toMatchObject({
-      status: 403,
-    });
+
+    const result = await service.forgotPassword({ email: USER.email });
+
+    // Suspension is not something a stranger gets to discover either.
+    expect(result).toMatchObject({ ok: true });
     expect(mail.send).not.toHaveBeenCalled();
+    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The property the whole change exists for: an attacker holding one address
+   * must not be able to tell from the response whether it has an account here.
+   */
+  it('unknown, disabled and real addresses are indistinguishable in the response', async () => {
+    const unknown = await service.forgotPassword({ email: 'nobody@example.com' });
+    prisma.user.findUnique.mockResolvedValue({ ...USER, isActive: false });
+    const disabled = await service.forgotPassword({ email: USER.email });
+    prisma.user.findUnique.mockResolvedValue(USER);
+    const real = await service.forgotPassword({ email: USER.email });
+
+    const shape = (r: any) => JSON.stringify({ ...r, devResetCode: undefined });
+    expect(shape(unknown)).toBe(shape(real));
+    expect(shape(disabled)).toBe(shape(real));
   });
 
   it('emails a 6-digit code and stores only its hash', async () => {

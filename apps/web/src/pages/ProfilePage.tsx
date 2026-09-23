@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { askConfirm } from '../lib/confirm';
 import { authErrorText } from '../lib/authError';
 import { dateShort } from '../lib/format';
 import { imageToDataUrl } from '../lib/image';
@@ -416,7 +417,7 @@ export default function ProfilePage() {
             </div>
             <button
               className="w-full rounded-xl border border-error/40 px-5 py-2.5 font-bold text-error transition hover:bg-error-container/40 sm:w-auto"
-              onClick={() => window.confirm(t('profile.logoutConfirm')) && logout()}
+              onClick={async () => (await askConfirm(t('profile.logoutConfirm'))) && logout()}
             >
               <span className="material-symbols-outlined me-1 align-middle text-base">logout</span>
               {t('dashboard.logout')}

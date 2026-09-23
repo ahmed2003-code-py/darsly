@@ -3,6 +3,7 @@ import { FormEvent, ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import { egp } from '../../lib/format';
 import { stripMarkdown } from '../../lib/markdown';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
@@ -362,7 +363,7 @@ export default function TeacherCoursesPage() {
                   className="rounded-lg border border-error/30 px-3 py-2 text-error transition hover:bg-error-container/40"
                   title={t('teacher.courses.delete')}
                   aria-label={t('teacher.courses.delete')}
-                  onClick={() => {
+                  onClick={async () => {
                     // The count is the whole point of asking: removing a course
                     // nobody joined costs nothing, and removing one with a class
                     // in it takes their access with it.
@@ -370,7 +371,7 @@ export default function TeacherCoursesPage() {
                     const ask = enrolled
                       ? t('teacher.courses.deleteConfirmWithStudents', { count: enrolled })
                       : t('teacher.courses.deleteConfirm');
-                    if (window.confirm(ask)) remove.mutate(c.id);
+                    if (await askConfirm(ask)) remove.mutate(c.id);
                   }}
                 >
                   <span className="material-symbols-outlined text-base">delete</span>

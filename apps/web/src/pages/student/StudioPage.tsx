@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import {
   applyStudio,
   playActivation,
@@ -330,7 +331,7 @@ export default function StudioPage() {
             <button
               className="studio-btn rounded-xl border border-outline-variant px-5 py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-error hover:text-error"
               disabled={reset.isPending}
-              onClick={() => window.confirm(t('myStudio.resetConfirm')) && reset.mutate()}
+              onClick={async () => (await askConfirm(t('myStudio.resetConfirm'))) && reset.mutate()}
             >
               {reset.isPending ? t('common.saving') : t('myStudio.reset')}
             </button>

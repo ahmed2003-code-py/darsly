@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api } from '../../../lib/api';
+import { askConfirm } from '../../../lib/confirm';
 import { dateShort } from '../../../lib/format';
 import { Badge, ErrorNote, Spinner } from '../../../components/ui';
 import type { SiteOverview, SiteStatus } from './types';
@@ -147,7 +148,7 @@ export default function PublishTab({ slug }: { slug: string }) {
           <p className="text-sm text-on-surface-variant">{t('studio.publish.lockedHint')}</p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button className="btn-primary" disabled={unlock.isPending}
-              onClick={() => { if (confirm(t('studio.publish.confirmUnlock'))) unlock.mutate(); }}>
+              onClick={async () => { if (await askConfirm(t('studio.publish.confirmUnlock'))) unlock.mutate(); }}>
               <span className="material-symbols-outlined text-[18px]">lock_open</span>
               {unlock.isPending ? t('studio.publish.publishing') : t('studio.publish.unlockBtn')}
             </button>
@@ -168,7 +169,7 @@ export default function PublishTab({ slug }: { slug: string }) {
           <p className="text-sm text-on-surface-variant">{t('studio.publish.restoreHandHint')}</p>
           <div className="mt-3">
             <button className="btn-secondary" disabled={relock.isPending}
-              onClick={() => { if (confirm(t('studio.publish.confirmRestoreHand'))) relock.mutate(); }}>
+              onClick={async () => { if (await askConfirm(t('studio.publish.confirmRestoreHand'))) relock.mutate(); }}>
               <span className="material-symbols-outlined text-[18px]">history</span>
               {relock.isPending ? t('studio.publish.publishing') : t('studio.publish.restoreHandBtn')}
             </button>
@@ -254,9 +255,9 @@ export default function PublishTab({ slug }: { slug: string }) {
               <SnapshotRow key={s.id} s={s} isCurrent={idx === 0}
                 rolling={rollback.isPending} deleting={removeSnap.isPending}
                 publishing={publishSnap.isPending && publishSnap.variables === s.id}
-                onPublish={() => { if (confirm(t('studio.publish.confirmPublish', { n: s.version }))) publishSnap.mutate(s.id); }}
-                onRollback={() => { if (confirm(t('studio.publish.confirmRestore', { n: s.version }))) rollback.mutate(s.id); }}
-                onDelete={() => { if (confirm(t('studio.publish.confirmDelete', { n: s.version }))) removeSnap.mutate(s.id); }} />
+                onPublish={async () => { if (await askConfirm(t('studio.publish.confirmPublish', { n: s.version }))) publishSnap.mutate(s.id); }}
+                onRollback={async () => { if (await askConfirm(t('studio.publish.confirmRestore', { n: s.version }))) rollback.mutate(s.id); }}
+                onDelete={async () => { if (await askConfirm(t('studio.publish.confirmDelete', { n: s.version }))) removeSnap.mutate(s.id); }} />
             ))}
           </div>
         )}

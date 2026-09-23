@@ -8,6 +8,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService } from '../redis/cache.service';
 import { SubjectTrack } from '@prisma/client';
 import { viewerTrack } from './stage.util';
 import { trackFilter } from './subject-track';
@@ -41,7 +42,17 @@ export class CatalogController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly cache: CacheService,
   ) {}
+
+  /**
+   * The taxonomy changes perhaps twice a year and is read by every anonymous
+   * visitor who opens the registration page or a course filter. Ten minutes is
+   * only the backstop — every mutation below clears these keys before it
+   * returns, so an admin never waits for a TTL to see their own edit.
+   */
+  private static readonly TTL_SECONDS = 600;
+  private static readonly PREFIX = 'catalog:';
 
   /**
    * The subjects to offer, narrowed to the asker's school system.
@@ -59,20 +70,29 @@ export class CatalogController {
     const wanted = asked === 'GENERAL' || asked === 'LANGUAGES' ? (asked as SubjectTrack) : null;
     const mine = wanted ?? (viewer?.sub ? await viewerTrack(this.prisma, viewer.sub) : null);
     const tracks = trackFilter(mine);
-    return this.prisma.subject.findMany({
-      where: { isActive: true, ...(tracks ? { track: { in: tracks } } : {}) },
-      orderBy: { sortOrder: 'asc' },
-    });
+    // Keyed by the narrowing, not by the viewer: two students in the same
+    // school system are asking the identical question.
+    return this.cache.wrap(
+      `${CatalogController.PREFIX}subjects:${tracks ? tracks.join(',') : 'all'}`,
+      CatalogController.TTL_SECONDS,
+      () =>
+        this.prisma.subject.findMany({
+          where: { isActive: true, ...(tracks ? { track: { in: tracks } } : {}) },
+          orderBy: { sortOrder: 'asc' },
+        }),
+    );
   }
 
   @Public()
   @Get('grades')
   @ApiOperation({ summary: 'List active grade levels' })
   grades() {
-    return this.prisma.gradeLevel.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: 'asc' },
-    });
+    return this.cache.wrap(`${CatalogController.PREFIX}grades`, CatalogController.TTL_SECONDS, () =>
+      this.prisma.gradeLevel.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+    );
   }
 
   @Post('subjects')
@@ -88,6 +108,7 @@ export class CatalogController {
       entityId: subject.id,
       meta: { nameAr: dto.nameAr },
     });
+    await this.cache.invalidate(CatalogController.PREFIX);
     return subject;
   }
 
@@ -107,6 +128,7 @@ export class CatalogController {
       entity: 'Subject',
       entityId: id,
     });
+    await this.cache.invalidate(CatalogController.PREFIX);
     return subject;
   }
 
@@ -125,6 +147,7 @@ export class CatalogController {
       entity: 'Subject',
       entityId: id,
     });
+    await this.cache.invalidate(CatalogController.PREFIX);
     return subject;
   }
 
@@ -140,6 +163,7 @@ export class CatalogController {
       entity: 'GradeLevel',
       entityId: grade.id,
     });
+    await this.cache.invalidate(CatalogController.PREFIX);
     return grade;
   }
 
@@ -159,6 +183,7 @@ export class CatalogController {
       entity: 'GradeLevel',
       entityId: id,
     });
+    await this.cache.invalidate(CatalogController.PREFIX);
     return grade;
   }
 }

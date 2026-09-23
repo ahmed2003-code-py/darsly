@@ -212,7 +212,9 @@ export class AdminCentersService {
 
     const [staffCount, studentCount, activeEnrollments, courseCount, groupCount] = await Promise.all([
       this.prisma.academyMembership.count({ where: { academyId, role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } } }),
-      this.prisma.enrollment.findMany({ where: { academyId }, select: { studentId: true }, distinct: ['studentId'] }).then((r) => r.length),
+      // Distinct students, counted by grouping rather than by reading every
+      // enrollment row the Center has ever had.
+      this.prisma.enrollment.groupBy({ by: ['studentId'], where: { academyId } }).then((r) => r.length),
       this.prisma.enrollment.count({ where: { academyId, status: 'ACTIVE' } }),
       this.prisma.course.count({ where: { academyId } }),
       this.prisma.group.count({ where: { academyId } }),

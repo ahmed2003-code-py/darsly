@@ -70,7 +70,7 @@ describe('AdminAnalyticsService', () => {
   it('activeAcademyRate counts only ACTIVE academies with a recent enrollment', async () => {
     const prisma: any = {
       enrollment: {
-        findMany: jest.fn().mockResolvedValue([{ tenantId: 'a1' }, { tenantId: 'a2' }]),
+        groupBy: jest.fn().mockResolvedValue([{ academyId: 'a1' }, { academyId: 'a2' }]),
       },
       academy: {
         count: jest.fn().mockResolvedValueOnce(5).mockResolvedValueOnce(2),
@@ -82,5 +82,12 @@ describe('AdminAnalyticsService', () => {
 
     const result = await svc.activeAcademyRate(7);
     expect(result).toEqual({ rangeDays: 7, totalActiveAcademies: 5, academiesWithRecentEnrollment: 2, ratePct: 40 });
+    // Grouped in the database, not read whole and de-duplicated here: this is
+    // a platform-wide query with no tenant filter, so the difference is every
+    // enrollment on the platform versus one row per academy.
+    expect(prisma.enrollment.groupBy).toHaveBeenCalledWith({
+      by: ['academyId'],
+      where: { createdAt: { gte: expect.any(Date) } },
+    });
   });
 });

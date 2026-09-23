@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CursorPage, MAX_PAGE_SIZE } from '../common/pagination';
+
+/** One row as this endpoint returns it — the log line plus who wrote it. */
+type AuditRow = Prisma.AuditLogGetPayload<{
+  include: { actor: { select: { fullName: true; role: true } } };
+}>;
 
 /** Append-only audit trail. Every privileged mutation should call log(). */
 @Injectable()
@@ -12,8 +19,8 @@ export class AuditService {
    * academy (never a client-supplied id — callers pass `ctx.academyId`) and
    * cursor-paginated so a busy Center's history stays browsable.
    */
-  async listForAcademy(academyId: string, opts: { take?: number; cursor?: string } = {}) {
-    const take = Math.min(Math.max(opts.take ?? 30, 1), 100);
+  async listForAcademy(academyId: string, opts: { take?: number; cursor?: string } = {}): Promise<CursorPage<AuditRow>> {
+    const take = Math.min(Math.max(opts.take ?? 30, 1), MAX_PAGE_SIZE);
     const rows = await this.prisma.auditLog.findMany({
       where: { academyId },
       orderBy: { createdAt: 'desc' },

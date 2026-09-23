@@ -4,9 +4,13 @@
 FROM node:20-slim
 
 # System deps: ffmpeg for transcoding, openssl+ca-certificates for Prisma/TLS,
-# curl to fetch yt-dlp/deno below, unzip because the deno installer needs it.
+# curl to fetch yt-dlp/deno below, unzip because the deno installer needs it,
+# poppler-utils for paper exam import — pdfinfo/pdftoppm/pdftotext turn an
+# uploaded PDF into one page each. `pdftotext` in particular is what keeps that
+# feature cheap: a PDF exported from Word carries the whole exam as text, and
+# reading it costs nothing instead of a vision model's image tokens.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg openssl ca-certificates curl unzip \
+  && apt-get install -y --no-install-recommends ffmpeg openssl ca-certificates curl unzip poppler-utils \
   && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp: the PyInstaller-frozen `yt-dlp_linux` build — no system Python

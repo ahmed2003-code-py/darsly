@@ -1384,3 +1384,31 @@ body {
 .card-live {
   border-color: rgb(var(--s-accent, var(--c-primary)) / 0.45);
 }
+
+/* ── Printing an exam ──────────────────────────────────────────────────────
+   The exam print route renders `bare` (no shell), so there is nothing here to
+   hide — only the page box to set and the typography to fix, because the PDF
+   export is the browser's own print rather than a PDF library.
+
+   The PDF export is the browser's own print, so the page box is set here
+   rather than in a PDF library. A4 with the sheet's own 20mm margins folded
+   into the @page rule, and widows/orphans tightened so a question does not
+   leave one line behind on the previous page. */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 18mm 16mm;
+  }
+  .exam-sheet {
+    widows: 3;
+    orphans: 3;
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+  .exam-sheet h1 {
+    font-size: 18pt;
+  }
+  .exam-sheet h2 {
+    font-size: 13pt;
+  }
+}

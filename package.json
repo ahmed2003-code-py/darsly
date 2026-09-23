@@ -17,6 +17,7 @@
     "db:seed": "npm run db:seed --workspace=apps/api",
     "setup": "docker compose up -d && npm install && npm run db:migrate && npm run db:seed",
     "test": "npm run test --workspace=apps/api",
+    "test:web": "npm run test --workspace=apps/web",
     "test:e2e": "npm run test:e2e --workspace=apps/api",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

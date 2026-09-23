@@ -29,6 +29,9 @@ import { AcademyMediaProcessor } from './media/academy-media.processor';
 import { AcademyMediaService } from './media/academy-media.service';
 import { MediaMaintenanceWorker } from './media/media-maintenance.worker';
 import { StudentPriceService } from '../payments/student-price.service';
+import { PaperImportCoreModule } from '../paper-import/paper-import-core.module';
+import { PaperExtractionService } from '../paper-import/paper-extraction.service';
+import { PaperImportHandler } from '../paper-import/paper-import.handler';
 
 /**
  * Academy Studio (AI site) module. Slice 2 wires the job infrastructure only;
@@ -36,7 +39,7 @@ import { StudentPriceService } from '../payments/student-price.service';
  * facts/editor APIs, renderer and public page. PrismaService is global.
  */
 @Module({
-  imports: [AcademyModule, DailyModule],
+  imports: [AcademyModule, DailyModule, PaperImportCoreModule],
   controllers: [
     AcademyMediaController,
     AcademyFactsController,
@@ -53,6 +56,8 @@ import { StudentPriceService } from '../payments/student-price.service';
     AiJobService,
     AiJobWorker,
     LiveSummaryHandler,
+    PaperExtractionService,
+    PaperImportHandler,
     AcademyMediaProcessor,
     AcademyMediaService,
     MediaMaintenanceWorker,
@@ -72,11 +77,12 @@ import { StudentPriceService } from '../payments/student-price.service';
       provide: AI_JOB_HANDLERS,
       // The live summary runs on the same worker as site generation: one queue,
       // one lease, one retry policy.
-      useFactory: (siteGenerate: SiteGenerateHandler, liveSummary: LiveSummaryHandler) => [
-        siteGenerate,
-        liveSummary,
-      ],
-      inject: [SiteGenerateHandler, LiveSummaryHandler],
+      useFactory: (
+        siteGenerate: SiteGenerateHandler,
+        liveSummary: LiveSummaryHandler,
+        paperImport: PaperImportHandler,
+      ) => [siteGenerate, liveSummary, paperImport],
+      inject: [SiteGenerateHandler, LiveSummaryHandler, PaperImportHandler],
     },
   ],
   exports: [

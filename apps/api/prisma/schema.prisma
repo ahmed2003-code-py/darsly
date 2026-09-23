@@ -185,11 +185,13 @@ model Academy {
   liveSessions  LiveSession[]
 
   // Academy Studio (AI site) — Phase 1. All additive.
-  siteFacts AcademyProfileFacts?
-  site      AcademySite?
-  media     AcademyMedia[]
-  aiJobs    AiJob[]
-  claims    AcademyClaim[]
+  siteFacts    AcademyProfileFacts?
+  site         AcademySite?
+  media        AcademyMedia[]
+  aiJobs       AiJob[]
+  claims       AcademyClaim[]
+  /// Paper exams a teacher scanned in, waiting to become ordinary exams.
+  paperImports PaperImport[]
 
   activationTokens AcademyActivationToken[]
   invitationLinks  AcademyInvitationLink[]
@@ -2483,6 +2485,8 @@ enum AiJobType {
   SITE_GENERATE
   /// Summarise a finished live session from its transcript.
   LIVE_SUMMARY
+  /// Read a scanned paper exam and turn it into a draft question set.
+  PAPER_IMPORT
 }
 
 enum AiJobStatus {
@@ -3180,4 +3184,156 @@ model StudentCustomization {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+// ───────────────────────── Paper exam import (authoring) ────────────────────
+//
+// A teacher who already has the exam on paper photographs it and gets back a
+// draft they edit and confirm. What they confirm becomes an ordinary Quiz on
+// an ordinary QUIZ Lesson — there is no second exam engine here, and nothing
+// student-facing knows an exam was ever imported.
+//
+// The rows below exist for the authoring stage only: they hold the uploaded
+// pages, the per-page extraction, what each page cost, and the draft while the
+// teacher is still editing it. Once `lessonId` is set the import is history —
+// kept, because the original pages are the evidence behind every question and
+// the only way to re-run an extraction that came out wrong.
+
+enum PaperSourceKind {
+  IMAGES
+  PDF
+}
+
+enum PaperImportStatus {
+  /// Rows exist, pages are being stored. Never seen by a poll in practice.
+  UPLOADING
+  /// Queued or running: pages are being read.
+  PROCESSING
+  /// Every page has been read; the draft is waiting for the teacher.
+  REVIEW
+  /// The teacher confirmed; `lessonId` names the exam that came out of it.
+  COMPLETED
+  /// Nothing readable came back. The pages are still here to retry from.
+  FAILED
+  CANCELED
+}
+
+enum PaperImportPageStatus {
+  PENDING
+  /// Read by the primary model, and the result passed validation.
+  EXTRACTED
+  /// Read by the fallback model after the primary's answer failed validation.
+  ESCALATED
+  /// Both models failed, or the page was unreadable. Retryable on its own.
+  FAILED
+  /// A blank or duplicate page, skipped before any model saw it.
+  SKIPPED
+}
+
+/// One teacher's attempt to turn a stack of paper into an exam.
+model PaperImport {
+  id        String  @id @default(cuid())
+  academyId String
+  academy   Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  /// The teacher who owns the content: TeacherProfile.id, the same `tenantId`
+  /// every course and lesson is keyed by. Not a relation, so removing a
+  /// teacher profile never cascades away the audit trail of what was imported.
+  tenantId  String
+  /// The user who pressed the button — a Center's staff member is not the
+  /// tenant, and "who uploaded this" has to survive independently.
+  createdBy String
+
+  sourceKind PaperSourceKind
+  status     PaperImportStatus @default(UPLOADING)
+  title      String            @default("")
+  /// The job reading these pages. Loose reference: the job row is the queue's,
+  /// not ours, and an import outlives it.
+  jobId      String?
+
+  /// The structured exam as it currently stands: the aggregate of every page's
+  /// extraction, plus whatever the teacher has edited since. This is what the
+  /// review screen renders and what `confirm` reads — never the per-page rows.
+  draft    Json @default("{}")
+  /// Things the teacher needs to be told: a page that failed, a question type
+  /// this platform has no place for, a number that skipped.
+  warnings Json @default("[]")
+
+  /// What it cost us to read this stack, for the question "how much does a
+  /// ten-page import cost Darsly". Summed from the pages as each one lands.
+  inputTokens    Int @default(0)
+  outputTokens   Int @default(0)
+  costCents      Int @default(0)
+  /// How many pages needed the expensive model. The number that says whether
+  /// the cheap-first strategy is still working.
+  escalatedPages Int @default(0)
+  /// Wall-clock of the last completed extraction run, in milliseconds.
+  durationMs     Int @default(0)
+
+  error String?
+
+  /// Set on confirm: the exam this became, and the course it landed in.
+  lessonId String?
+  courseId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  deletedAt DateTime?
+
+  pages PaperImportPage[]
+
+  @@index([academyId, createdAt])
+  @@index([tenantId, status])
+}
+
+/// One page of paper, and what reading it produced.
+///
+/// `originalKey` is never overwritten and never deleted while the import
+/// lives: it is the source the teacher checks a question against, and the
+/// input a re-extraction runs on. `renderKey` is the normalised copy that is
+/// actually sent to the model — smaller, upright, grey — and may be rebuilt.
+model PaperImportPage {
+  id       String      @id @default(cuid())
+  importId String
+  import   PaperImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  pageNumber   Int
+  originalKey  String
+  originalMime String
+  bytes        Int     @default(0)
+  renderKey    String?
+  /// The page's own text, when the source PDF already carried one. Set means
+  /// this page costs no image tokens at all: the text is sent instead of the
+  /// picture. Null for every scan and every photograph.
+  textKey      String?
+  width        Int?
+  height       Int?
+
+  status           PaperImportPageStatus @default(PENDING)
+  /// The model that produced `extracted`, so a bad batch can be traced to the
+  /// model that read it rather than guessed at.
+  model            String?
+  /// Why this page went to the expensive model, in one word. Null when it did
+  /// not — which is the normal case and the one the cost depends on.
+  escalationReason String?
+  attempts         Int                   @default(0)
+  error            String?
+
+  inputTokens    Int @default(0)
+  outputTokens   Int @default(0)
+  /// Thousandths of a cent. A page costs a fraction of a cent on the cheap
+  /// model, and rounding each one up to a whole cent made a ten-page import
+  /// look five times more expensive than it was. The import's own `costCents`
+  /// is the rounded total, computed from these.
+  costMillicents Int @default(0)
+
+  /// This page's own structured extraction, before aggregation. Kept so a
+  /// single page can be re-read and merged without re-reading the stack.
+  extracted Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([importId, pageNumber])
+  @@index([importId, status])
 }

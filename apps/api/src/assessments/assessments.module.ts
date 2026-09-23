@@ -37,6 +37,9 @@ import { QuizzesService } from './quizzes.service';
     AiGraderService,
     GradingService,
   ],
-  exports: [CertificatesService],
+  // QuizzesService is exported so paper import can build its exam through the
+  // same authoring path the manual builder uses, rather than writing Quiz rows
+  // of its own and drifting from it.
+  exports: [CertificatesService, QuizzesService],
 })
 export class AssessmentsModule {}

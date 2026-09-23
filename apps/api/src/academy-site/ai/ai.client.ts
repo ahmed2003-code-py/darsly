@@ -36,10 +36,39 @@ type ContentPart =
   | { type: 'input_image'; image_url: string; detail: 'auto' | 'low' | 'high' };
 type InputMessage = { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] };
 
-/** GPT-5 / o-series are reasoning models: they use the default temperature only
- *  (a custom value returns 400) and benefit from an explicit reasoning effort. */
-function isReasoningModel(model: string): boolean {
-  return /^(gpt-5|o\d)/i.test(model);
+/** GPT-5 / GPT-6 / o-series are reasoning models: they use the default
+ *  temperature only (a custom value returns 400) and benefit from an explicit
+ *  reasoning effort.
+ *
+ *  GPT-6 was missing from this test, which meant a deployment that set
+ *  AI_MODEL to one of them sent `temperature` and got a 400 back from every
+ *  call. Matching the family rather than a list of ids, so the next point
+ *  release does not have to be added here. */
+export function isReasoningModel(model: string): boolean {
+  return /^(gpt-[5-9]|o\d)/i.test(model);
+}
+
+/** Per-million-token prices, in cents. Callers that read a different model
+ *  than AI_MODEL pass their own, so cost stays right per call. */
+export interface AiPrice {
+  inPerMToken: number;
+  outPerMToken: number;
+}
+
+/** How hard the model thinks before answering. Cheap work asks for less. */
+export type AiReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+
+/** Options every call shares. `model` overrides AI_MODEL for this call only —
+ *  that is what lets one feature read pages on a cheap model and escalate a
+ *  single page to an expensive one without a second client. */
+interface AiCallOverrides {
+  model?: string;
+  price?: AiPrice;
+  reasoningEffort?: AiReasoningEffort;
+  /** `low` costs a fraction of `high` and is enough for a picture that is
+   *  only being looked at, not read. Defaults to `high`, which is what every
+   *  existing caller was getting. */
+  imageDetail?: 'auto' | 'low' | 'high';
 }
 
 /**
@@ -63,21 +92,41 @@ export class AiClient {
 
   constructor(private readonly config: AcademySiteConfig) {}
 
-  /** Cost in whole cents for a given token usage (prices are per million tokens). */
-  costCents(inputTokens: number, outputTokens: number): number {
-    const cents =
-      (inputTokens / 1_000_000) * this.config.priceInPerMToken +
-      (outputTokens / 1_000_000) * this.config.priceOutPerMToken;
+  /** Cost in whole cents for a given token usage (prices are per million
+   *  tokens). Without a `price` the configured AI_MODEL prices are used, which
+   *  is what every caller before per-call models got. */
+  costCents(inputTokens: number, outputTokens: number, price?: AiPrice): number {
+    const inPerM = price?.inPerMToken ?? this.config.priceInPerMToken;
+    const outPerM = price?.outPerMToken ?? this.config.priceOutPerMToken;
+    const cents = (inputTokens / 1_000_000) * inPerM + (outputTokens / 1_000_000) * outPerM;
     return Math.ceil(cents);
   }
 
+  /**
+   * Cost in thousandths of a cent.
+   *
+   * `costCents` rounds up to a whole cent, which is right for a job that costs
+   * dollars and wrong for a page that costs a fifth of a cent: rounding every
+   * page up to 1¢ made a ten-page import look like 10¢ when it cost 2. Pages
+   * are metered in millicents and only the total is rounded.
+   */
+  costMillicents(inputTokens: number, outputTokens: number, price?: AiPrice): number {
+    const inPerM = price?.inPerMToken ?? this.config.priceInPerMToken;
+    const outPerM = price?.outPerMToken ?? this.config.priceOutPerMToken;
+    return Math.round(
+      ((inputTokens / 1_000_000) * inPerM + (outputTokens / 1_000_000) * outPerM) * 1000,
+    );
+  }
+
   /** Free-text completion (interface preserved). */
-  async complete(opts: {
-    system?: string;
-    messages: AiMessage[];
-    maxTokens?: number;
-    temperature?: number;
-  }): Promise<AiCompletion> {
+  async complete(
+    opts: {
+      system?: string;
+      messages: AiMessage[];
+      maxTokens?: number;
+      temperature?: number;
+    } & AiCallOverrides,
+  ): Promise<AiCompletion> {
     const resp = await this.callResponses(opts);
     const text: string = resp.output_text ?? '';
     const { inputTokens, outputTokens } = this.usage(resp);
@@ -85,7 +134,7 @@ export class AiClient {
       text,
       inputTokens,
       outputTokens,
-      costCents: this.costCents(inputTokens, outputTokens),
+      costCents: this.costCents(inputTokens, outputTokens, opts.price),
     };
   }
 
@@ -94,17 +143,22 @@ export class AiClient {
    * guaranteed to return JSON matching it (or a refusal). Returns the parsed
    * object — the caller never parses free-form text.
    */
-  async completeStructured<T = unknown>(opts: {
-    system?: string;
-    messages: AiMessage[];
-    maxTokens?: number;
-    schemaName: string;
-    schema: Record<string, unknown>;
-  }): Promise<AiStructuredResult<T>> {
+  async completeStructured<T = unknown>(
+    opts: {
+      system?: string;
+      messages: AiMessage[];
+      maxTokens?: number;
+      schemaName: string;
+      schema: Record<string, unknown>;
+    } & AiCallOverrides,
+  ): Promise<AiStructuredResult<T>> {
     const resp = await this.callResponses({
       system: opts.system,
       messages: opts.messages,
       maxTokens: opts.maxTokens,
+      model: opts.model,
+      reasoningEffort: opts.reasoningEffort,
+      imageDetail: opts.imageDetail,
       format: { name: opts.schemaName, schema: opts.schema },
     });
 
@@ -130,27 +184,30 @@ export class AiClient {
       data,
       inputTokens,
       outputTokens,
-      costCents: this.costCents(inputTokens, outputTokens),
+      costCents: this.costCents(inputTokens, outputTokens, opts.price),
     };
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
 
-  private async callResponses(opts: {
-    system?: string;
-    messages: AiMessage[];
-    maxTokens?: number;
-    temperature?: number;
-    format?: { name: string; schema: Record<string, unknown> };
-  }): Promise<any> {
+  private async callResponses(
+    opts: {
+      system?: string;
+      messages: AiMessage[];
+      maxTokens?: number;
+      temperature?: number;
+      format?: { name: string; schema: Record<string, unknown> };
+    } & AiCallOverrides,
+  ): Promise<any> {
     if (!this.config.enabled) {
       throw new AiJobError('AI feature is disabled (AI_ACADEMY_ENABLED)', 'TERMINAL');
     }
     if (!this.config.apiKey) {
       throw new AiJobError('OPENAI_API_KEY is not configured', 'TERMINAL');
     }
-    const model = this.config.model;
+    const model = opts.model || this.config.model;
     const reasoning = isReasoningModel(model);
+    const detail = opts.imageDetail ?? 'high';
 
     const input: InputMessage[] = [];
     if (opts.system) input.push({ role: 'system', content: opts.system });
@@ -164,7 +221,7 @@ export class AiClient {
                 ...m.images.map((image_url) => ({
                   type: 'input_image' as const,
                   image_url,
-                  detail: 'high' as const,
+                  detail,
                 })),
               ],
             }
@@ -178,7 +235,7 @@ export class AiClient {
       max_output_tokens: opts.maxTokens ?? 2000,
     };
     if (opts.temperature != null && !reasoning) params.temperature = opts.temperature;
-    if (reasoning) params.reasoning = { effort: 'low' };
+    if (reasoning) params.reasoning = { effort: opts.reasoningEffort ?? 'low' };
     if (opts.format) {
       params.text = {
         format: {

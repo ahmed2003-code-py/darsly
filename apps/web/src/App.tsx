@@ -63,6 +63,8 @@ const AdminAcademyStudioPage = lazyPage(() => import('./pages/admin/AdminAcademy
 const AdminStudioPage = lazyPage(() => import('./pages/admin/AdminStudioPage'));
 const TeacherAnalyticsPage = lazyPage(() => import('./pages/teacher/TeacherAnalyticsPage'));
 const QuizBuilderPage = lazyPage(() => import('./pages/teacher/QuizBuilderPage'));
+const PaperImportPage = lazyPage(() => import('./pages/teacher/PaperImportPage'));
+const ExamPrintPage = lazyPage(() => import('./pages/teacher/ExamPrintPage'));
 const TeacherCoursesPage = lazyPage(() => import('./pages/teacher/TeacherCoursesPage'));
 const ChallengesPage = lazyPage(() => import('./pages/student/ChallengesPage'));
 const ChallengePlayPage = lazyPage(() => import('./pages/student/ChallengePlayPage'));
@@ -407,6 +409,35 @@ export default function App() {
             element={
               <RequireAuth role={Role.TEACHER}>
                 <QuizBuilderPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/paper-imports"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <PaperImportPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/paper-imports/:id"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <PaperImportPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/lessons/:lessonId/exam/print"
+            element={
+              // `bare`: this page is a sheet of paper. The sidebar and top bar
+              // do not belong around it on screen, and printing them was
+              // exactly what happened the first time — the nav, the search box
+              // and a `menu` glyph came out on the exam and pushed a
+              // three-question paper onto two pages.
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]} bare>
+                <ExamPrintPage />
               </RequireAuth>
             }
           />

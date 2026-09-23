@@ -24,17 +24,28 @@ export class AiJobService {
     private readonly config: AcademySiteConfig,
   ) {}
 
-  /** Enqueue a job. Rejects if the feature is off, a job is already active for
-   *  this academy, or the monthly AI budget is exhausted. */
+  /**
+   * Enqueue a job. Rejects if the feature is off, a job is already active for
+   * this academy, or the monthly AI budget is exhausted.
+   *
+   * `conflictsWith` narrows what counts as "already active". One academy-wide
+   * lock was right while site generation was the only thing here — two
+   * generations at once rewrite the same page. It is wrong across unrelated
+   * features: a teacher scanning an exam would be refused because somebody
+   * else was regenerating the academy's site, and vice versa. A caller that
+   * passes its own type gets a lock over that type alone; passing nothing
+   * keeps the academy-wide behaviour every existing caller relies on.
+   */
   async enqueue(
     academyId: string,
     type: AiJobType,
     input: Prisma.InputJsonValue = {},
+    opts: { conflictsWith?: AiJobType[] } = {},
   ): Promise<AiJob> {
     if (!this.config.enabled) {
       throw new ServiceUnavailableException('AI features are currently disabled');
     }
-    if (await this.hasActiveJob(academyId)) {
+    if (await this.hasActiveJob(academyId, opts.conflictsWith)) {
       throw new ConflictException('A generation job is already in progress for this academy');
     }
     await this.assertWithinBudget();
@@ -46,9 +57,15 @@ export class AiJobService {
     return this.prisma.aiJob.findFirst({ where: { id: jobId, academyId } });
   }
 
-  hasActiveJob(academyId: string): Promise<boolean> {
+  hasActiveJob(academyId: string, types?: AiJobType[]): Promise<boolean> {
     return this.prisma.aiJob
-      .count({ where: { academyId, status: { in: ['QUEUED', 'RUNNING'] } } })
+      .count({
+        where: {
+          academyId,
+          status: { in: ['QUEUED', 'RUNNING'] },
+          ...(types?.length ? { type: { in: types } } : {}),
+        },
+      })
       .then((n) => n > 0);
   }
 

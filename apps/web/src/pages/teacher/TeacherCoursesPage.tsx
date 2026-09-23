@@ -189,10 +189,18 @@ export default function TeacherCoursesPage() {
         subtitle={isDesk ? t('center.coursesOversightSub') : t('teacher.courses.subtitle')}
         action={
           isDesk ? undefined : (
-            <button className="btn-primary" onClick={() => setForm({ ...EMPTY_FORM })}>
-              <span className="material-symbols-outlined">add</span>
-              {t('teacher.newCourse')}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {/* The second way in: a teacher whose exam is already on paper
+                  does not start by making a course. */}
+              <Link className="btn-secondary" to="/teacher/paper-imports">
+                <span className="material-symbols-outlined">document_scanner</span>
+                {t('paper.importFromPaper')}
+              </Link>
+              <button className="btn-primary" onClick={() => setForm({ ...EMPTY_FORM })}>
+                <span className="material-symbols-outlined">add</span>
+                {t('teacher.newCourse')}
+              </button>
+            </div>
           )
         }
       />

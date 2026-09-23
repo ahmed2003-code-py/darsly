@@ -123,6 +123,19 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     if (!env.AI_MONTHLY_BUDGET_CENTS) {
       warnings.push('AI_MONTHLY_BUDGET_CENTS unset — AI generation spend is uncapped');
     }
+    // Paper exam import rides the same switch. Its whole cost control is that
+    // the two models are different: the cheap one reads every page and the
+    // expensive one re-reads only the pages that failed. Pointing both at the
+    // same model does not break anything — it silently doubles the bill for
+    // every page that needed a second look, and nothing else would say so.
+    if (
+      env.PAPER_IMPORT_PRIMARY_MODEL &&
+      env.PAPER_IMPORT_PRIMARY_MODEL === env.PAPER_IMPORT_FALLBACK_MODEL
+    ) {
+      warnings.push(
+        'PAPER_IMPORT_PRIMARY_MODEL and PAPER_IMPORT_FALLBACK_MODEL are the same model — an escalation then re-reads the page on the model that already failed it, at double the cost and no benefit',
+      );
+    }
   }
 
   for (const w of warnings) {

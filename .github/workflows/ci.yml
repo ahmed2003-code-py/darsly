@@ -97,6 +97,14 @@ jobs:
         working-directory: apps/api
         run: npx jest --maxWorkers=2
 
+      # The web workspace's own Jest project. Pure-logic only — no DOM and no
+      # component rendering — so it is a second or two, and it covers the
+      # state a screen moves through, which is the part of a page that can be
+      # wrong without anything looking wrong.
+      - name: Test web
+        working-directory: apps/web
+        run: npx jest
+
       # The guard chain over real HTTP. Separate from the step above because it
       # is a separate Jest project: `npm test` has rootDir `src`, this has
       # `apps/api/test`, and neither picks up the other's files.

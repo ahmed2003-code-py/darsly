@@ -9,9 +9,12 @@ import {
   moveQuestion,
   looksUnreadable,
   needsReviewCount,
+  creationState,
   phaseOf,
   progressPct,
+  stepStates,
   warningKey,
+  PaperImport,
   removeQuestion,
   renumber,
   setCorrect,
@@ -321,5 +324,136 @@ describe('wording a warning in the language of whoever is reading it', () => {
     // A deploy where the API is ahead of the browser must not leave a blank
     // line where a warning should be.
     expect(warningKey('SOMETHING_NEWER')).toBeNull();
+  });
+});
+
+/**
+ * The state a teacher is told they are in.
+ *
+ * All of it derived from what the server recorded, so there is nothing kept
+ * in the browser that could disagree with the work and a reload lands on the
+ * truth. The distinctions matter: "reading this again, more slowly" and
+ * "reading this" are different things to be told, and showing one spinner for
+ * both is how a screen comes to look frozen.
+ */
+const session = (over: Partial<PaperImport> = {}): PaperImport =>
+  ({
+    id: 'imp1',
+    kind: 'PAPER',
+    status: 'PROCESSING',
+    stage: 'READING',
+    title: '',
+    sourceKind: 'IMAGES',
+    error: null,
+    lessonId: null,
+    courseId: null,
+    draft: { title: '', instructions: [], sections: [] },
+    spec: {} as never,
+    warnings: [],
+    pages: [],
+    progress: { done: 0, total: 0 },
+    highAccuracy: false,
+    costCents: 0,
+    generationBatches: 0,
+    ...over,
+  }) as PaperImport;
+
+describe('telling the teacher what is happening', () => {
+  it('is working while the worker is working', () => {
+    expect(creationState(session())).toBe('PROCESSING');
+  });
+
+  it('says it is reading again when a page failed and is being retried', () => {
+    const pages = [{ id: 'p1', pageNumber: 1, status: 'FAILED' }] as never;
+    expect(creationState(session({ pages }))).toBe('RETRYING');
+  });
+
+  it('says a high-accuracy read is a high-accuracy read', () => {
+    expect(creationState(session({ highAccuracy: true }))).toBe('HIGH_ACCURACY');
+  });
+
+  it('asks for the specification once the material has been read', () => {
+    expect(creationState(session({ status: 'CONFIGURING', stage: 'READY' }))).toBe('NEEDS_SPEC');
+  });
+
+  it('is simply ready when nothing needs an eye', () => {
+    const draft = {
+      title: 'x',
+      instructions: [],
+      sections: [
+        {
+          title: '',
+          questions: [question({ id: 'a', text: 'A good clear question about cells' })],
+        },
+      ],
+    };
+    expect(creationState(session({ status: 'REVIEW', stage: 'READY', draft }))).toBe('READY');
+  });
+
+  it('says so when the review has warnings on it', () => {
+    const draft = {
+      title: 'x',
+      instructions: [],
+      sections: [
+        {
+          title: '',
+          questions: [question({ id: 'a', text: 'A good clear question about cells' })],
+        },
+      ],
+    };
+    const warnings = [{ code: 'NO_ANSWER_KEY', detail: 'x' }];
+    expect(creationState(session({ status: 'REVIEW', stage: 'READY', draft, warnings }))).toBe(
+      'NEEDS_REVIEW',
+    );
+  });
+
+  it('offers the stronger read when most of the draft came back unusable', () => {
+    const bad = (i: number) =>
+      question({ id: `q${i}`, text: '[نص السؤال غير واضح]', needsReview: true });
+    const draft = {
+      title: 'x',
+      instructions: [],
+      sections: [{ title: '', questions: [bad(1), bad(2), bad(3)] }],
+    };
+    expect(creationState(session({ status: 'REVIEW', stage: 'READY', draft }))).toBe(
+      'HIGH_ACCURACY_AVAILABLE',
+    );
+  });
+
+  it('is done once the exam exists', () => {
+    expect(creationState(session({ status: 'COMPLETED' }))).toBe('DONE');
+  });
+
+  it('is failed for anything else', () => {
+    expect(creationState(session({ status: 'FAILED' }))).toBe('FAILED');
+    expect(creationState(session({ status: 'CANCELED' }))).toBe('FAILED');
+  });
+});
+
+describe('the five steps of the pipeline', () => {
+  it('ticks the steps the worker has actually finished', () => {
+    const steps = stepStates({ stage: 'GENERATING', status: 'PROCESSING' } as never);
+    expect(steps.UPLOAD).toBe('done');
+    expect(steps.READ).toBe('done');
+    expect(steps.BUILD).toBe('done');
+    expect(steps.VALIDATE).toBe('active');
+    expect(steps.DONE).toBe('todo');
+  });
+
+  it('shows reading as the active step while reading', () => {
+    const steps = stepStates({ stage: 'READING', status: 'PROCESSING' } as never);
+    expect(steps.READ).toBe('done');
+    expect(steps.BUILD).toBe('active');
+  });
+
+  it('ticks everything once the draft is waiting', () => {
+    const steps = stepStates({ stage: 'READY', status: 'REVIEW' } as never);
+    expect(Object.values(steps).every((s) => s === 'done')).toBe(true);
+  });
+
+  it('never leaves every step blank for a session that has only just started', () => {
+    const steps = stepStates({ stage: 'UPLOADED', status: 'PROCESSING' } as never);
+    expect(steps.UPLOAD).toBe('done');
+    expect(steps.READ).toBe('active');
   });
 });

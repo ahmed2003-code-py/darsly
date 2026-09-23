@@ -1,6 +1,7 @@
 import { AiJob } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
+import { ContentGenerationService } from './content-generation.service';
 import { PaperExtractionService } from './paper-extraction.service';
 import { PaperImportHandler } from './paper-import.handler';
 import { PageExtraction } from './extraction.schema';
@@ -78,11 +79,15 @@ describe('reading a stack on the queue', () => {
       prisma as PrismaService,
       storage as StorageProvider,
       { extractPage: extract } as unknown as PaperExtractionService,
+      // The content path has its own service and its own tests; this suite is
+      // about the paper path, and a content job here would be a bug.
+      { read: jest.fn(), generate: jest.fn() } as unknown as ContentGenerationService,
     );
   });
 
   it('reads every page of a fresh import', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page(), page({ id: 'p2', pageNumber: 2 })],
@@ -95,6 +100,7 @@ describe('reading a stack on the queue', () => {
 
   it('re-reads only the pages that failed', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'REVIEW',
       pages: [
@@ -121,6 +127,7 @@ describe('reading a stack on the queue', () => {
 
   it('sends the stored text instead of the picture when the page has one', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page({ renderKey: null, textKey: 'paper-imports/imp1/text/1.txt' })],
@@ -135,6 +142,7 @@ describe('reading a stack on the queue', () => {
 
   it('marks a page failed when its bytes are gone, without failing the import', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page()],
@@ -151,6 +159,7 @@ describe('reading a stack on the queue', () => {
 
   it('leaves the import in review with a warning when one page of several failed', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page()],
@@ -175,6 +184,7 @@ describe('reading a stack on the queue', () => {
 
   it('fails the import only when nothing at all could be read', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page()],
@@ -188,6 +198,7 @@ describe('reading a stack on the queue', () => {
 
   it("adds up what the stack cost, in the pages' own fractions of a cent", async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page()],
@@ -234,6 +245,7 @@ describe('reading a stack on the queue', () => {
       error: null,
     });
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page()],
@@ -255,6 +267,7 @@ describe('reading a stack on the queue', () => {
 
   it('passes the teacher-chosen tier through to the reader', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'REVIEW',
       pages: [page()],
@@ -267,6 +280,7 @@ describe('reading a stack on the queue', () => {
 
   it('reads on the ordinary ladder when no tier was asked for', async () => {
     prisma.paperImport.findFirst.mockResolvedValue({
+      kind: 'PAPER',
       id: 'imp1',
       status: 'PROCESSING',
       pages: [page()],

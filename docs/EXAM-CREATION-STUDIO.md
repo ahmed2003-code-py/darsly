@@ -1,13 +1,51 @@
-# Paper exam import
+# Exam Creation Studio
 
-A teacher photographs an exam they already have on paper, checks what came
-off it, and confirms. What they confirm is an ordinary Darsly `Quiz` on an
-ordinary QUIZ `Lesson` — the student side, the grading, the gating, the
-certificates and the leaderboards know nothing about paper.
+Two ways for a teacher to get an exam, and one exam at the end of both.
+
+- **لدي امتحان جاهز** — they photograph the exam they already have (or attach
+  the PDF), check what came off it, and confirm.
+- **إنشاء امتحان من محتوى** — they upload the lectures they teach from, say
+  how many questions of what kind they want, and check what was written.
+
+Both produce an ordinary Darsly `Quiz` on an ordinary QUIZ `Lesson`. The
+student side, the grading, the gating, the certificates and the leaderboards
+know nothing about either path, and both meet at the same review screen —
+`ExamReviewPanel`, used by both, because two review screens would have meant
+every later improvement to one of them quietly not existing in the other.
 
 This is an **authoring pipeline into the existing exam model**, not a second
-exam engine. Everything below exists to get a paper into that model cheaply
-and honestly; nothing below changes what an exam is once it is there.
+exam engine.
+
+> **On the table names.** The rows are still `PaperImport` and
+> `PaperImportPage`, from when the studio only did the first path. They now
+> carry a `kind` (`PAPER` | `CONTENT`) and hold both. The name was left alone
+> deliberately: renaming a live table for tidiness is a migration's worth of
+> risk bought with nothing, and the domain language everywhere above the
+> database — module, routes, UI — is the studio's.
+
+---
+
+## The two paths
+
+```
+                        ┌──────────── PAPER ────────────┐
+upload → validate → store ─┤                               ├─ review → confirm → Quiz
+                        └─── CONTENT ── spec ───────────┘
+```
+
+| | PAPER | CONTENT |
+|---|---|---|
+| what is uploaded | an exam | lecture material |
+| reading | questions are found | words are transcribed |
+| in between | — | the teacher says what exam they want |
+| writing | — | questions are written from chunks, in batches |
+| grounding | the page it came off | the chunk, file and page it came from |
+| rewriting one | — | yes, from the same material |
+
+The teacher speaks in the middle of the content path, which is why it is two
+jobs rather than one: reading is cheap and tells us whether there is anything
+here at all, and writing twenty questions before anyone has said how many were
+wanted is a bill for a guess.
 
 ---
 
@@ -37,6 +75,58 @@ The reading runs on the **existing** `AiJob` queue — same claim with
 `FOR UPDATE SKIP LOCKED`, same lease, same retry policy, same monthly budget
 ceiling as academy site generation. A twenty-page import is minutes of
 provider time and was never going to be an HTTP request.
+
+---
+
+## Writing an exam from lecture material
+
+Everything before the model is deterministic and free, and that is most of the
+work:
+
+1. **The text layer, when there is one.** A lecture exported from slides or a
+   word processor carries its own text; `pdftotext` hands it over in
+   milliseconds and the page costs **zero tokens**. Measured, not estimated: a
+   one-page Arabic lecture PDF read end to end locally cost 0 tokens and 0
+   cents. Only a scan or a photograph is read by a model.
+2. **Cleanup** (`normalizePageText`, `stripRunningLines`) — hyphenated line
+   breaks rejoined, page numbers dropped, bidi marks stripped, and the running
+   header removed by noticing it repeats on most pages. On a fifty-page lecture
+   that header is fifty copies of the same sentence in the material questions
+   get written from.
+3. **Chunking** (`chunkSource`) — paragraph-aligned chunks of ~700 tokens that
+   never span two pages, each carrying the teacher's own file name and page so
+   a question can say *"biology.pdf — صفحة 8"* and mean it.
+4. **Selection** (`selectChunksForBatch`) — batch 1 gets the opening of the
+   material, batch 2 the next stretch, so a twenty-question exam on a fifty-page
+   lecture asks about the whole lecture rather than its first chapter four
+   times.
+
+Then the model writes, in **batches** (`PAPER_IMPORT_BATCH_SIZE`, default 8),
+never one call per question — that pays for the same instructions and the same
+source material once per question, and it is how a model writes the same
+question twice without knowing it.
+
+**Grounding is a fact, not a claim.** Every generated question must name the
+chunk it came from, and a question naming a chunk it was not given is dropped
+before the teacher sees it. A model asked for twenty questions from material
+that supports thirteen will happily write twenty; seven of them would be about
+things the lecture never said, and a teacher who does not catch it sets an exam
+on content their class was never taught. So the schema has a place to say
+*"this supports fewer than you asked for"*, the prompt says it twice, and the
+shortfall reaches the teacher as a warning with an offer — upload more, or ask
+for fewer — rather than as seven invented questions.
+
+**Rewriting one question is one question.** The review screen's «أعد الكتابة»
+sends that question's own chunk plus the nearest few, every *other* question so
+the rewrite is not one of them, and the teacher's reason if they gave one. It
+costs one small call, not a new exam.
+
+**Duplicates are caught deterministically.** `similarity()` is word overlap on
+Arabic folded for diacritics, alef forms and ta marbuta — so «الطاقة» and
+«الطّاقه» compare equal and a duplicate is not hidden by spelling. No
+embeddings: there is no vector store in this project, a lecture is tens of
+chunks rather than millions, and two questions written from the same paragraph
+in the same call repeat each other's words when they repeat each other.
 
 ---
 
@@ -103,6 +193,22 @@ concatenation, page-break joins and renumbering. Asking a model to do it would
 mean sending every page's text a second time: the most expensive possible way
 to do string concatenation, and the least predictable.
 
+### The three tiers, and who reaches them
+
+| tier | model (default) | reached by |
+|---|---|---|
+| read a page | `gpt-6-luna` | every page, always |
+| read it properly | `gpt-6-sol` | a page that failed a deterministic check |
+| write questions | `gpt-6-sol` | every batch |
+| write them properly | `gpt-6-astra` | a batch that already failed twice |
+| read it *really* properly | `gpt-6-astra` | **a teacher pressing a button** |
+
+The flagship is never a default anywhere. Transcribing is copying and the cheap
+model does it well; writing a fair question with a defensible key and three
+plausible wrong options is not copying, which is why generation starts a tier
+up. Nothing automatic reaches `astra` except a batch that has already failed
+twice on the same material.
+
 ### What an import actually costs
 
 Metered per page in **millicents** (`PaperImportPage.costMillicents`), because
@@ -125,12 +231,40 @@ primary model is the wrong one, not the strategy.
 
 ---
 
-## What the teacher sees
+## What the teacher sees, and how progress stays honest
 
-Upload → a progress screen counting pages that have **actually** come back
-(never a timer) → a review screen → confirm. Closing the tab is safe at every
-point: the phase is derived from the server's own status (`phaseOf`), so
-reopening lands exactly where it was left.
+Choose a path → upload → a progress screen → (the specification, on the content
+path) → review → confirm.
+
+**Progress is the worker's own record.** `PaperImport.stage` and
+`progressDone`/`progressTotal` are written by the worker as it finishes each
+unit — a page on the way in, a batch of questions on the way out — and the
+screen reads them. Nothing is interpolated and nothing moves on a timer:
+
+- *"8 من 12 صفحة"* means eight pages actually came back.
+- *"اتكتب 14 من 20 سؤال"* means fourteen questions passed the checks.
+- Five named steps, ticked from `stage`, so "قراءة الصفحات ✓" means the worker
+  finished reading.
+- A per-page breakdown behind a closed «تفاصيل المعالجة», because it is useful
+  when something is stuck on one page and noise the rest of the time.
+- Where the work genuinely cannot be counted yet, the bar is **indeterminate**
+  and the stage text carries the meaning. That is the honest version of "still
+  working" — a bar crawling 0 → 50 → 100 while nothing happens is a lie that
+  costs a teacher their trust the first time it reaches 100 and the page does
+  not change.
+
+Because all of it lives on the row rather than in the browser, closing the tab
+is safe at every point and reopening lands exactly where the work is. Nine
+user-visible states are derived in one place (`creationState`): `PROCESSING`,
+`RETRYING`, `HIGH_ACCURACY`, `NEEDS_SPEC`, `READY`, `NEEDS_REVIEW`,
+`HIGH_ACCURACY_AVAILABLE`, `FAILED`, `DONE`. "Reading this again, more slowly"
+and "reading this" are different things to be told, and showing one spinner for
+both is how a screen comes to look frozen.
+
+**Cancel** stops the work that has not happened yet and keeps every uploaded
+file: a teacher cancelling a generation has decided this *exam* was wrong, not
+that the lecture was, and throwing away the material would mean uploading it
+again to try different settings — which is the commonest reason to cancel.
 
 On the review screen a teacher can edit any question's text and options, change
 its type, mark the right answer, reorder, delete, add a question the extraction
@@ -256,6 +390,22 @@ is in the Dockerfile, beside ffmpeg and yt-dlp, for the same reason they are.
 
 ---
 
+## Recovery
+
+Nothing is ever redone that does not need redoing.
+
+- A page that fails is retried alone; pages 1–6 are not re-read because page 7
+  failed.
+- A batch that fails validation is rewritten alone; the other batches stand.
+- Good questions inside a failed batch are **kept** — seven good and one broken
+  is seven kept and one asked for again.
+- The teacher-triggered high-accuracy read is the one deliberate exception: it
+  re-reads the whole paper, because the pages that "succeeded" are exactly the
+  ones being rejected.
+- Rewriting question 7 rewrites question 7.
+
+---
+
 ## Known limits
 
 - Handwriting is read as well as the model reads handwriting. Modern
@@ -273,3 +423,19 @@ is in the Dockerfile, beside ffmpeg and yt-dlp, for the same reason they are.
   across; the question text is, and the original page is one click away.
 - Sections are a reading aid on paper and the exam model has one flat question
   list, so a section heading is folded into the first question it introduces.
+- **There is no separate "essay" question type.** The exam engine stores three
+  types, and offering a fourth on the specification form that silently became
+  one of the three would be a promise the exam cannot keep. A long written
+  answer is a `SHORT_ANSWER` with more marks and more ruled space on the
+  printed paper.
+- Question generation has been verified against a **mocked** provider only.
+  The deterministic half of the content path — upload, text-layer extraction,
+  cleanup, chunking — was verified end to end against the real API, worker and
+  database, and cost nothing. No automated test calls a paid API, and no real
+  generation has been measured.
+- Chunk selection is coverage-first with word-overlap for rewrites. It has no
+  notion of *topic*, so a teacher asking for twenty questions "about
+  photosynthesis" from a mixed lecture gets twenty questions about the whole
+  lecture. Topic targeting would need retrieval this feature does not have.
+- Source material is read page by page; a table or a diagram spanning two pages
+  is chunked as two.

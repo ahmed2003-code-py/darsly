@@ -10,7 +10,38 @@ import { api } from './api';
  */
 
 export type ImportStatus =
-  'UPLOADING' | 'PROCESSING' | 'REVIEW' | 'COMPLETED' | 'FAILED' | 'CANCELED';
+  | 'UPLOADING'
+  | 'PROCESSING'
+  /// Content path: the material has been read and the teacher has not yet
+  /// said what exam they want out of it.
+  | 'CONFIGURING'
+  | 'REVIEW'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELED';
+
+/** Which way into the studio this session took. */
+export type CreationKind = 'PAPER' | 'CONTENT';
+
+/** Where the worker is. Stored on the server, so a reload shows the truth. */
+export type CreationStage = 'UPLOADED' | 'READING' | 'GENERATING' | 'VALIDATING' | 'READY';
+
+export type SpecQuestionType = 'MCQ' | 'TRUE_FALSE' | 'SHORT_ANSWER';
+
+/** What the teacher asked for, on the content path. */
+export interface ExamSpec {
+  questionCount: number;
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED';
+  mix: { EASY: number; MEDIUM: number; HARD: number };
+  types: Record<SpecQuestionType, number>;
+  title: string;
+  instructions: string[];
+  marksPerQuestion: number | null;
+  timeLimitMin: number | null;
+  language: 'AUTO' | 'AR' | 'EN';
+  shuffle: boolean;
+  showAnswers: boolean;
+}
 
 export type DraftType = 'MCQ' | 'TRUE_FALSE' | 'SHORT_ANSWER' | 'UNSUPPORTED';
 
@@ -30,6 +61,10 @@ export interface DraftQuestion {
   modelAnswer: string;
   marks: number | null;
   sourcePages: number[];
+  /** Content path: which chunk of the uploaded material this came from, and
+   *  which file — "biology.pdf — صفحة 8" on the review screen. */
+  sourceChunk?: number | null;
+  sourceFile?: string;
   unsupportedKind: string;
   needsReview: boolean;
 }
@@ -67,6 +102,8 @@ export function warningKey(code: string): string | null {
     'NO_ANSWER_KEY',
     'NUMBER_GAP',
     'NO_QUESTIONS',
+    'NOT_ENOUGH_CONTENT',
+    'DUPLICATE_QUESTION',
   ];
   return known.includes(code) ? `paper.warn.${code}` : null;
 }
@@ -82,16 +119,22 @@ export interface ImportPage {
 
 export interface PaperImport {
   id: string;
+  kind: CreationKind;
   status: ImportStatus;
+  stage: CreationStage;
   title: string;
-  sourceKind: 'IMAGES' | 'PDF';
+  sourceKind: 'IMAGES' | 'PDF' | 'MIXED';
   error: string | null;
   lessonId: string | null;
   courseId: string | null;
   draft: ExamDraft;
+  spec: ExamSpec;
   warnings: DraftWarning[];
   pages: ImportPage[];
   progress: { done: number; total: number };
+  highAccuracy: boolean;
+  costCents: number;
+  generationBatches: number;
 }
 
 /**
@@ -101,7 +144,7 @@ export interface PaperImport {
  * reload lands the teacher exactly where they were and two tabs cannot
  * disagree about what stage an import is at.
  */
-export type Phase = 'upload' | 'processing' | 'review' | 'done' | 'failed';
+export type Phase = 'upload' | 'processing' | 'configuring' | 'review' | 'done' | 'failed';
 
 export function phaseOf(record: Pick<PaperImport, 'status'> | null | undefined): Phase {
   if (!record) return 'upload';
@@ -109,6 +152,8 @@ export function phaseOf(record: Pick<PaperImport, 'status'> | null | undefined):
     case 'UPLOADING':
     case 'PROCESSING':
       return 'processing';
+    case 'CONFIGURING':
+      return 'configuring';
     case 'REVIEW':
       return 'review';
     case 'COMPLETED':
@@ -116,6 +161,80 @@ export function phaseOf(record: Pick<PaperImport, 'status'> | null | undefined):
     default:
       return 'failed';
   }
+}
+
+/**
+ * The state a teacher is told they are in.
+ *
+ * Six of them, all derived from what the server actually recorded — there is
+ * no state kept in the browser that could disagree with the work, and a
+ * reload lands on the truth. `RETRYING` and `HIGH_ACCURACY` exist separately
+ * from `PROCESSING` because "we are reading this again, more slowly" is a
+ * different thing to be told than "we are reading this", and showing the same
+ * spinner for both is how a screen comes to look frozen.
+ */
+export type CreationState =
+  | 'PROCESSING'
+  | 'RETRYING'
+  | 'HIGH_ACCURACY'
+  | 'NEEDS_SPEC'
+  | 'READY'
+  | 'NEEDS_REVIEW'
+  | 'HIGH_ACCURACY_AVAILABLE'
+  | 'FAILED'
+  | 'DONE';
+
+export function creationState(record: PaperImport | null | undefined): CreationState {
+  if (!record) return 'PROCESSING';
+  switch (record.status) {
+    case 'UPLOADING':
+    case 'PROCESSING':
+      if (record.highAccuracy) return 'HIGH_ACCURACY';
+      // A page that has been attempted before and is being attempted again.
+      return record.pages.some((p) => p.status === 'FAILED') ? 'RETRYING' : 'PROCESSING';
+    case 'CONFIGURING':
+      return 'NEEDS_SPEC';
+    case 'REVIEW':
+      if (looksUnreadable(record.draft)) return 'HIGH_ACCURACY_AVAILABLE';
+      return record.warnings.length || needsReviewCount(record.draft) ? 'NEEDS_REVIEW' : 'READY';
+    case 'COMPLETED':
+      return 'DONE';
+    default:
+      return 'FAILED';
+  }
+}
+
+/**
+ * The five steps of the pipeline, and where this session is in them.
+ *
+ * Read from the server's own `stage`, so a tick beside "قراءة الصفحات" means
+ * the worker finished reading, not that a timer elapsed.
+ */
+export const CREATION_STEPS = ['UPLOAD', 'READ', 'BUILD', 'VALIDATE', 'DONE'] as const;
+export type CreationStep = (typeof CREATION_STEPS)[number];
+
+export function stepStates(
+  record: Pick<PaperImport, 'stage' | 'status'> | null | undefined,
+): Record<CreationStep, 'done' | 'active' | 'todo'> {
+  const order: Record<CreationStage, number> = {
+    UPLOADED: 0,
+    READING: 1,
+    GENERATING: 2,
+    VALIDATING: 3,
+    READY: 4,
+  };
+  const at = order[record?.stage ?? 'UPLOADED'];
+  const finished = record?.status === 'REVIEW' || record?.status === 'COMPLETED';
+  const out = {} as Record<CreationStep, 'done' | 'active' | 'todo'>;
+  CREATION_STEPS.forEach((step, i) => {
+    // Uploading is always behind us by the time a session exists at all.
+    if (i === 0) out[step] = 'done';
+    else if (finished) out[step] = 'done';
+    else if (i < at + 1) out[step] = 'done';
+    else if (i === at + 1) out[step] = 'active';
+    else out[step] = 'todo';
+  });
+  return out;
 }
 
 /**
@@ -317,11 +436,45 @@ export function renumber(draft: ExamDraft): ExamDraft {
 
 // ── api ──────────────────────────────────────────────────────────────────
 
-export async function uploadPaper(files: File[]): Promise<{ id: string }> {
+export async function uploadPaper(
+  files: File[],
+  kind: CreationKind = 'PAPER',
+  onProgress?: (pct: number) => void,
+): Promise<{ id: string }> {
   const body = new FormData();
   for (const file of files) body.append('files', file);
-  const { data } = await api.post('/teacher/paper-imports', body);
+  body.append('kind', kind);
+  const { data } = await api.post('/teacher/paper-imports', body, {
+    // Real upload progress: the browser's own count of bytes on the wire.
+    onUploadProgress: (e) => {
+      if (!onProgress || !e.total) return;
+      onProgress(Math.round((e.loaded / e.total) * 100));
+    },
+  });
   return data;
+}
+
+/** Say what exam to write, and start writing it. */
+export async function setSpec(id: string, spec: ExamSpec): Promise<void> {
+  await api.put(`/teacher/paper-imports/${id}/spec`, spec);
+}
+
+/** Write one question again — only that one. */
+export async function regenerateQuestion(
+  id: string,
+  questionId: string,
+  reason?: string,
+): Promise<{ question: DraftQuestion }> {
+  const { data } = await api.post(
+    `/teacher/paper-imports/${id}/questions/${questionId}/regenerate`,
+    { reason },
+  );
+  return data;
+}
+
+/** Stop work that has not happened yet. The uploads stay. */
+export async function cancelImport(id: string): Promise<void> {
+  await api.post(`/teacher/paper-imports/${id}/cancel`);
 }
 
 export async function fetchImport(id: string): Promise<PaperImport> {

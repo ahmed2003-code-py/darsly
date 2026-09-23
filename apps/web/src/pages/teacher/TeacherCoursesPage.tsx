@@ -192,9 +192,9 @@ export default function TeacherCoursesPage() {
             <div className="flex flex-wrap gap-2">
               {/* The second way in: a teacher whose exam is already on paper
                   does not start by making a course. */}
-              <Link className="btn-secondary" to="/teacher/paper-imports">
-                <span className="material-symbols-outlined">document_scanner</span>
-                {t('paper.importFromPaper')}
+              <Link className="btn-secondary" to="/teacher/exam-studio">
+                <span className="material-symbols-outlined">auto_awesome</span>
+                {t('examStudio.entry')}
               </Link>
               <button className="btn-primary" onClick={() => setForm({ ...EMPTY_FORM })}>
                 <span className="material-symbols-outlined">add</span>

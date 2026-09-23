@@ -3,6 +3,7 @@ import { AiJobService } from '../academy-site/jobs/ai-job.service';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
+import { ContentGenerationService } from './content-generation.service';
 import { ExamBuilderService } from './exam-builder.service';
 import { PagePreparerService } from './page-preparer.service';
 import { PaperImportConfig } from './paper-import.config';
@@ -78,6 +79,7 @@ describe('accepting a stack of paper', () => {
       jobs as AiJobService,
       builder as ExamBuilderService,
       audit as AuditService,
+      { regenerateOne: jest.fn() } as unknown as ContentGenerationService,
     );
   });
 
@@ -118,6 +120,17 @@ describe('accepting a stack of paper', () => {
     });
   });
 
+  it('refuses a PDF whose bytes are not a PDF even in a mixed upload', async () => {
+    await expect(
+      service.create(scope, [
+        file(),
+        file({ mimetype: 'application/pdf', buffer: Buffer.from('<?php ?>') }),
+      ]),
+    ).rejects.toMatchObject({ response: { code: 'PAPER_CONTENT_MISMATCH' } });
+    // Refused before a single byte is stored.
+    expect(storage.put).not.toHaveBeenCalled();
+  });
+
   it('refuses an image past the size ceiling', async () => {
     const huge = file({ size: 200 * 1024 * 1024 });
     await expect(service.create(scope, [huge])).rejects.toMatchObject({
@@ -132,10 +145,37 @@ describe('accepting a stack of paper', () => {
     });
   });
 
-  it('refuses a mixture of a PDF and loose images', async () => {
-    await expect(
-      service.create(scope, [file({ mimetype: 'application/pdf', buffer: PDF }), file()]),
-    ).rejects.toMatchObject({ response: { code: 'MIXED_SOURCES' } });
+  it('takes a PDF and loose photographs as one exam, numbered in the order sent', async () => {
+    // Three photographs and the printed cover sheet are one exam, not two
+    // imports — this used to be refused outright.
+    const handle = {
+      pageCount: jest.fn().mockResolvedValue(2),
+      text: jest.fn().mockResolvedValue(null),
+      render: jest
+        .fn()
+        .mockResolvedValue({ data: PNG, mimeType: 'image/jpeg', width: 1200, height: 1600 }),
+    };
+    preparer.withPdf.mockImplementation((_b: Buffer, fn: (h: unknown) => Promise<void>) =>
+      fn(handle),
+    );
+
+    await service.create(scope, [
+      file({ originalname: 'cover.pdf', mimetype: 'application/pdf', buffer: PDF }),
+      file({ originalname: 'page-3.png' }),
+    ]);
+
+    const numbers = prisma.paperImportPage.create.mock.calls.map(
+      (c: [{ data: { pageNumber: number } }]) => c[0].data.pageNumber,
+    );
+    expect(numbers).toEqual([1, 2, 3]);
+    expect(prisma.paperImport.create.mock.calls[0][0].data.sourceKind).toBe('MIXED');
+  });
+
+  it('keeps the teacher\u2019s own file name, so a source reference means something', async () => {
+    await service.create(scope, [file({ originalname: 'biology-page-1.png' })]);
+    expect(prisma.paperImportPage.create.mock.calls[0][0].data.originalName).toBe(
+      'biology-page-1.png',
+    );
   });
 
   it('refuses an empty upload', async () => {
@@ -235,6 +275,7 @@ describe('who may touch an import', () => {
       {} as AiJobService,
       {} as ExamBuilderService,
       {} as AuditService,
+      {} as ContentGenerationService,
     );
   });
 

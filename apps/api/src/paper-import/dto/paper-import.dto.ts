@@ -15,6 +15,7 @@ import {
 import { Type } from 'class-transformer';
 import { CourseExamMode } from '@darsly/shared-types';
 import { IsOptionalId, LIMITS } from '../../common/validation';
+import { SPEC_LIMITS } from '../exam-spec';
 
 /** Mirrors SetQuizQuestionsDto's ceilings: a draft that could not be saved as
  *  a quiz should be refused while it is still a draft. */
@@ -99,4 +100,66 @@ export class ConfirmImportDto {
  */
 export class RetryImportDto {
   @IsOptional() @IsBoolean() escalate?: boolean;
+}
+
+/** How many of each supported kind. Exactly the exam engine's three types —
+ *  a fourth on the form would be a promise the exam cannot keep. */
+export class SpecTypesDto {
+  @IsInt() @Min(0) @Max(SPEC_LIMITS.MAX_QUESTIONS) MCQ: number;
+  @IsInt() @Min(0) @Max(SPEC_LIMITS.MAX_QUESTIONS) TRUE_FALSE: number;
+  @IsInt() @Min(0) @Max(SPEC_LIMITS.MAX_QUESTIONS) SHORT_ANSWER: number;
+}
+
+/** Percentages, only meaningful when the difficulty is "متنوع". */
+export class SpecMixDto {
+  @IsInt() @Min(0) @Max(100) EASY: number;
+  @IsInt() @Min(0) @Max(100) MEDIUM: number;
+  @IsInt() @Min(0) @Max(100) HARD: number;
+}
+
+/**
+ * What the teacher wants out of the material they uploaded.
+ *
+ * Bounded at the edge as well as in `specProblems`, because the two answer
+ * different questions: this refuses a payload that is not a spec at all, and
+ * that refuses a spec that could not become an exam.
+ */
+export class SetSpecDto {
+  @IsInt()
+  @Min(SPEC_LIMITS.MIN_QUESTIONS)
+  @Max(SPEC_LIMITS.MAX_QUESTIONS)
+  questionCount: number;
+
+  @IsIn(['EASY', 'MEDIUM', 'HARD', 'MIXED'])
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED';
+
+  @IsOptional() @ValidateNested() @Type(() => SpecMixDto) mix?: SpecMixDto;
+
+  @ValidateNested() @Type(() => SpecTypesDto) types: SpecTypesDto;
+
+  @IsOptional() @IsString() @MaxLength(LIMITS.TITLE) title?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(LIMITS.NOTE, { each: true })
+  instructions?: string[];
+
+  @IsOptional() @IsInt() @Min(1) @Max(SPEC_LIMITS.MAX_MARKS) marksPerQuestion?: number | null;
+  @IsOptional()
+  @IsInt()
+  @Min(SPEC_LIMITS.MIN_TIME_MIN)
+  @Max(SPEC_LIMITS.MAX_TIME_MIN)
+  timeLimitMin?: number | null;
+
+  @IsOptional() @IsIn(['AUTO', 'AR', 'EN']) language?: 'AUTO' | 'AR' | 'EN';
+  @IsOptional() @IsBoolean() shuffle?: boolean;
+  @IsOptional() @IsBoolean() showAnswers?: boolean;
+}
+
+/** Why the teacher wants this one written again. Optional, and sent to the
+ *  model so the rewrite is not the same question a second time. */
+export class RegenerateQuestionDto {
+  @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) reason?: string;
 }

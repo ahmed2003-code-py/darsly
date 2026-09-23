@@ -3202,6 +3202,40 @@ model StudentCustomization {
 enum PaperSourceKind {
   IMAGES
   PDF
+  /// Images and PDFs in the same upload. A teacher photographing an exam and
+  /// attaching the printed cover sheet is one exam, not two imports.
+  MIXED
+}
+
+/// Which of the two ways into the Exam Creation Studio this session took.
+///
+/// One table for both because they converge: both hold source files, both
+/// produce a `draft`, both end at the same review screen and the same
+/// `confirm`. What differs is only how the draft was arrived at — transcribed
+/// off an exam that already existed, or written from material that was never
+/// an exam at all.
+enum ExamCreationKind {
+  /// The teacher already had the exam. We read it.
+  PAPER
+  /// The teacher had lectures. We wrote the exam from them.
+  CONTENT
+}
+
+/// Where a session is in its pipeline.
+///
+/// Stored rather than derived so a teacher who reloads the page — or comes
+/// back an hour later — is told what is actually happening, and so the
+/// progress a screen draws is the worker's own record of its work rather than
+/// a guess made in a browser.
+enum ExamCreationStage {
+  UPLOADED
+  /// Getting the words off the pages: a text layer, or a model reading a scan.
+  READING
+  /// Paper: pulling questions out of what was read. Content: writing them.
+  GENERATING
+  /// Deterministic checks on the result, before a teacher is shown it.
+  VALIDATING
+  READY
 }
 
 enum PaperImportStatus {
@@ -3209,6 +3243,10 @@ enum PaperImportStatus {
   UPLOADING
   /// Queued or running: pages are being read.
   PROCESSING
+  /// Content path only: the source has been read and the teacher has not yet
+  /// said what exam they want out of it. Nothing is generated until they do —
+  /// generating first and asking afterwards would be a bill for a guess.
+  CONFIGURING
   /// Every page has been read; the draft is waiting for the teacher.
   REVIEW
   /// The teacher confirmed; `lessonId` names the exam that came out of it.
@@ -3244,11 +3282,32 @@ model PaperImport {
   createdBy String
 
   sourceKind PaperSourceKind
+  /// Which way into the studio this was. See ExamCreationKind.
+  kind       ExamCreationKind  @default(PAPER)
   status     PaperImportStatus @default(UPLOADING)
+  /// The pipeline stage, for the progress a teacher actually watches.
+  stage      ExamCreationStage @default(UPLOADED)
   title      String            @default("")
   /// The job reading these pages. Loose reference: the job row is the queue's,
   /// not ours, and an import outlives it.
   jobId      String?
+
+  /// What the teacher asked for, on the content path: how many questions, of
+  /// which types, at which difficulty, plus the exam settings. Empty on the
+  /// paper path, where the exam is whatever the paper says it is.
+  spec Json @default("{}")
+
+  /// Real progress, written by the worker as it finishes each unit of work —
+  /// a page on the way in, a batch of questions on the way out. Two integers
+  /// rather than a percentage, because a percentage cannot say "8 of 12
+  /// pages", and "8 of 12 pages" is the thing a teacher wants to read.
+  progressDone  Int @default(0)
+  progressTotal Int @default(0)
+
+  /// A stronger, slower re-read is running right now because the teacher
+  /// asked for one. Kept so the screen can say so instead of showing the same
+  /// spinner it showed for the cheap pass.
+  highAccuracy Boolean @default(false)
 
   /// The structured exam as it currently stands: the aggregate of every page's
   /// extraction, plus whatever the teacher has edited since. This is what the
@@ -3260,14 +3319,24 @@ model PaperImport {
 
   /// What it cost us to read this stack, for the question "how much does a
   /// ten-page import cost Darsly". Summed from the pages as each one lands.
-  inputTokens    Int @default(0)
-  outputTokens   Int @default(0)
-  costCents      Int @default(0)
+  inputTokens       Int @default(0)
+  outputTokens      Int @default(0)
+  costCents         Int @default(0)
   /// How many pages needed the expensive model. The number that says whether
   /// the cheap-first strategy is still working.
-  escalatedPages Int @default(0)
+  escalatedPages    Int @default(0)
+  /// The same question for the content path: chunks whose first generation
+  /// attempt failed validation and had to be written again.
+  escalatedChunks   Int @default(0)
+  /// How many times any stage of this session was retried. Together with
+  /// costCents this is what answers "what did a *successful* exam cost", which
+  /// is the only cost worth optimising.
+  retryCount        Int @default(0)
+  /// How many model calls the questions were written in. One call per question
+  /// is the expensive way to do this and this number is how we would notice.
+  generationBatches Int @default(0)
   /// Wall-clock of the last completed extraction run, in milliseconds.
-  durationMs     Int @default(0)
+  durationMs        Int @default(0)
 
   error String?
 
@@ -3280,7 +3349,8 @@ model PaperImport {
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 
-  pages PaperImportPage[]
+  pages  PaperImportPage[]
+  chunks ExamSourceChunk[]
 
   @@index([academyId, createdAt])
   @@index([tenantId, status])
@@ -3299,6 +3369,10 @@ model PaperImportPage {
 
   pageNumber   Int
   originalKey  String
+  /// The name the teacher's own file had. Kept so a generated question can
+  /// say "biology.pdf — page 8": the storage key is ours and means nothing to
+  /// the person checking whether a question is really in their lecture.
+  originalName String  @default("")
   originalMime String
   bytes        Int     @default(0)
   renderKey    String?
@@ -3336,4 +3410,38 @@ model PaperImportPage {
 
   @@unique([importId, pageNumber])
   @@index([importId, status])
+}
+
+/// One readable piece of the uploaded material, on the content path.
+///
+/// Questions are written from chunks, not from the whole upload: sending a
+/// fifty-page lecture to a model once per batch of questions is the most
+/// expensive possible way to write an exam, and the least likely to cover the
+/// material evenly. Each chunk carries where it came from, so every generated
+/// question can say "biology.pdf, page 8" and a teacher can check it.
+///
+/// Deliberately not embeddings. There is no vector store in this project and a
+/// lecture is tens of chunks, not millions — the selection that matters here
+/// is "cover the material and match the topic", which plain word overlap does
+/// well enough at this size. A retrieval system would be a larger thing to own
+/// than the feature it serves.
+model ExamSourceChunk {
+  id       String      @id @default(cuid())
+  importId String
+  import   PaperImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  /// Reading order across the whole upload.
+  index        Int
+  text         String
+  /// Where a teacher would look to check a question written from this.
+  sourceFile   String @default("")
+  page         Int?
+  /// Roughly how many tokens the text is, for batching decisions. Estimated
+  /// deterministically; no tokeniser is worth a dependency here.
+  tokensApprox Int    @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([importId, index])
+  @@index([importId])
 }

@@ -21,7 +21,13 @@ import { AcademyContext, CurrentAcademy, RequirePermission } from '../academy/ac
 import { AcademyMembershipGuard } from '../academy/guards/academy-membership.guard';
 import { PermissionGuard } from '../academy/guards/permission.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { ConfirmImportDto, RetryImportDto, SaveDraftDto } from './dto/paper-import.dto';
+import {
+  ConfirmImportDto,
+  RegenerateQuestionDto,
+  RetryImportDto,
+  SaveDraftDto,
+  SetSpecDto,
+} from './dto/paper-import.dto';
 import { ExamExportService } from './exam-export.service';
 import { ImportScope, PaperImportService } from './paper-import.service';
 
@@ -65,7 +71,10 @@ export class PaperImportController {
 
   @Post('paper-imports')
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: '[teacher] Upload photos of a paper exam, or one PDF' })
+  @ApiOperation({
+    summary:
+      '[teacher] Start a session: photographs and/or PDFs of an exam, or of lecture material',
+  })
   @UseInterceptors(
     FilesInterceptor('files', MAX_FILES, {
       // Kept in memory: the pages are validated, normalised and handed to the
@@ -83,8 +92,14 @@ export class PaperImportController {
     @CurrentUser() user: JwtPayload,
     @CurrentAcademy() ctx: AcademyContext,
     @UploadedFiles() files?: Express.Multer.File[],
+    /** `CONTENT` when the files are lecture material to write an exam from;
+     *  anything else is an exam to transcribe. A form field, because this
+     *  arrives as multipart alongside the files. */
+    @Body('kind') kind?: string,
   ) {
-    return this.imports.create(this.scope(user, ctx), files ?? []);
+    return this.imports.create(this.scope(user, ctx), files ?? [], {
+      kind: kind === 'CONTENT' ? 'CONTENT' : 'PAPER',
+    });
   }
 
   @Get('paper-imports')
@@ -157,6 +172,39 @@ export class PaperImportController {
     @Body() dto: ConfirmImportDto,
   ) {
     return this.imports.confirm(this.scope(user, ctx), id, dto);
+  }
+
+  @Put('paper-imports/:id/spec')
+  @ApiOperation({ summary: '[teacher] Say what exam to write, and start writing it' })
+  setSpec(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: SetSpecDto,
+  ) {
+    return this.imports.setSpec(this.scope(user, ctx), id, dto);
+  }
+
+  @Post('paper-imports/:id/questions/:questionId/regenerate')
+  @ApiOperation({ summary: '[teacher] Write one question again — only that one' })
+  regenerate(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Param('questionId') questionId: string,
+    @Body() dto: RegenerateQuestionDto,
+  ) {
+    return this.imports.regenerateQuestion(this.scope(user, ctx), id, questionId, dto);
+  }
+
+  @Post('paper-imports/:id/cancel')
+  @ApiOperation({ summary: '[teacher] Stop the work that has not happened yet' })
+  cancel(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
+    return this.imports.cancel(this.scope(user, ctx), id);
   }
 
   @Delete('paper-imports/:id')

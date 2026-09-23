@@ -63,7 +63,7 @@ const AdminAcademyStudioPage = lazyPage(() => import('./pages/admin/AdminAcademy
 const AdminStudioPage = lazyPage(() => import('./pages/admin/AdminStudioPage'));
 const TeacherAnalyticsPage = lazyPage(() => import('./pages/teacher/TeacherAnalyticsPage'));
 const QuizBuilderPage = lazyPage(() => import('./pages/teacher/QuizBuilderPage'));
-const PaperImportPage = lazyPage(() => import('./pages/teacher/PaperImportPage'));
+const ExamStudioPage = lazyPage(() => import('./pages/teacher/ExamStudioPage'));
 const ExamPrintPage = lazyPage(() => import('./pages/teacher/ExamPrintPage'));
 const TeacherCoursesPage = lazyPage(() => import('./pages/teacher/TeacherCoursesPage'));
 const ChallengesPage = lazyPage(() => import('./pages/student/ChallengesPage'));
@@ -413,20 +413,26 @@ export default function App() {
             }
           />
           <Route
-            path="/teacher/paper-imports"
+            path="/teacher/exam-studio"
             element={
               <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
-                <PaperImportPage />
+                <ExamStudioPage />
               </RequireAuth>
             }
           />
           <Route
-            path="/teacher/paper-imports/:id"
+            path="/teacher/exam-studio/:id"
             element={
               <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
-                <PaperImportPage />
+                <ExamStudioPage />
               </RequireAuth>
             }
+          />
+          {/* The studio used to be "paper import" and only did half of what it
+              does now. Links a teacher bookmarked still work. */}
+          <Route
+            path="/teacher/paper-imports"
+            element={<Navigate to="/teacher/exam-studio" replace />}
           />
           <Route
             path="/teacher/lessons/:lessonId/exam/print"

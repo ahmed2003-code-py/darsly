@@ -315,6 +315,13 @@ export interface DraftQuestion {
   /** Which page(s) of the original this came off. The review screen shows it
    *  so a teacher can check a question against the paper it was read from. */
   sourcePages: number[];
+  /** Content path only: which chunk of the uploaded material this question
+   *  was written from. What makes "regenerate this one" cheap, and what makes
+   *  the grounding claim checkable. Null on the paper path. */
+  sourceChunk?: number | null;
+  /** Content path only: the file the material came from, for "biology.pdf —
+   *  page 8" on the review screen. */
+  sourceFile?: string;
   unsupportedKind: string;
   /** Flagged for the teacher's eye: low confidence, or a type we cannot keep. */
   needsReview: boolean;
@@ -334,7 +341,12 @@ export type DraftWarningCode =
   | 'NOT_READ'
   | 'NO_ANSWER_KEY'
   | 'NUMBER_GAP'
-  | 'NO_QUESTIONS';
+  | 'NO_QUESTIONS'
+  /// Content path: the material did not support the number of questions asked
+  /// for, and we said so rather than inventing the difference.
+  | 'NOT_ENOUGH_CONTENT'
+  /// Content path: two questions came out the same.
+  | 'DUPLICATE_QUESTION';
 
 /**
  * Something the teacher needs to be told.

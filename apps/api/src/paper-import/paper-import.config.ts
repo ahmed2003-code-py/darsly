@@ -137,4 +137,63 @@ export class PaperImportConfig {
    * long, and falls through to the picture.
    */
   readonly textLayerMinChars = Math.max(0, num(process.env.PAPER_IMPORT_TEXT_LAYER_MIN, 250));
+
+  // ── Writing an exam from lecture material ────────────────────────────────
+  //
+  // Reading a lecture page is the same job as reading an exam page, so it uses
+  // the same two models above and needs no configuration of its own. Writing
+  // questions is a different job, and gets its own.
+
+  /**
+   * The model that writes the questions.
+   *
+   * The middle tier, not the cheap one and not the flagship. Transcribing a
+   * page is copying; writing a fair exam question with a defensible key and
+   * three wrong-but-plausible options is not, and the cheap model's questions
+   * are noticeably thinner. At roughly six cents for a twenty-question exam
+   * this is affordable in a way the flagship (a dollar or so for the same
+   * work) is not, which is why the flagship stays where it is: reserved for a
+   * batch that has already failed, or for a teacher who asked.
+   */
+  readonly generationModel = process.env.PAPER_IMPORT_GENERATION_MODEL ?? 'gpt-6-sol';
+  readonly generationPrice: AiPrice = {
+    inPerMToken: num(process.env.PAPER_IMPORT_GENERATION_PRICE_IN, 200),
+    outPerMToken: num(process.env.PAPER_IMPORT_GENERATION_PRICE_OUT, 1000),
+  };
+  readonly generationEffort = (process.env.PAPER_IMPORT_GENERATION_EFFORT ??
+    'medium') as AiReasoningEffort;
+
+  /**
+   * How many questions one model call writes.
+   *
+   * Never one call per question — that is the same instructions and the same
+   * source material paid for twenty times, and it is also how a model ends up
+   * writing the same question twice without knowing it. Eight is large enough
+   * to amortise the prompt and to let the model avoid repeating itself, small
+   * enough that a failed batch is a cheap thing to retry.
+   */
+  readonly generationBatchSize = Math.max(
+    1,
+    Math.min(20, num(process.env.PAPER_IMPORT_BATCH_SIZE, 8)),
+  );
+
+  /** Source material sent with one batch, in approximate tokens. A ceiling on
+   *  the biggest single lever on generation cost. */
+  readonly generationSourceTokens = Math.max(
+    500,
+    num(process.env.PAPER_IMPORT_BATCH_SOURCE_TOKENS, 6000),
+  );
+
+  /** How many times a batch that fails deterministic validation is written
+   *  again before the shortfall is simply reported to the teacher. Two, then
+   *  stop: a third attempt on the same material rarely reads differently and
+   *  the teacher can write the missing question faster than we can. */
+  readonly generationMaxAttempts = Math.max(
+    1,
+    Math.min(4, num(process.env.PAPER_IMPORT_GENERATION_ATTEMPTS, 2)),
+  );
+
+  /** Ceiling on how much lecture material one session may hold, in pages.
+   *  Fifty pages is a chapter; past that a teacher is uploading a textbook. */
+  readonly maxContentPages = Math.max(1, num(process.env.PAPER_IMPORT_MAX_CONTENT_PAGES, 60));
 }

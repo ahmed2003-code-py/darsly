@@ -1046,11 +1046,11 @@ export default function CourseBuilderPage() {
                 paper. Lands back in this course when it is confirmed. */}
             <div className="mt-2 grid grid-cols-2 gap-2">
               <Link
-                to={`/teacher/paper-imports?course=${id}`}
+                to={`/teacher/exam-studio?course=${id}`}
                 className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
               >
-                <span className="material-symbols-outlined text-base">document_scanner</span>
-                {t('paper.importFromPaper')}
+                <span className="material-symbols-outlined text-base">auto_awesome</span>
+                {t('examStudio.entry')}
               </Link>
               <Link
                 to={`/teacher/lessons/${selected!.id}/exam/print?course=${id}`}

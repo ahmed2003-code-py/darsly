@@ -32,6 +32,9 @@ import { StudentPriceService } from '../payments/student-price.service';
 import { PaperImportCoreModule } from '../paper-import/paper-import-core.module';
 import { PaperExtractionService } from '../paper-import/paper-extraction.service';
 import { PaperImportHandler } from '../paper-import/paper-import.handler';
+import { ContentGenerationService } from '../paper-import/content-generation.service';
+import { QuestionGeneratorService } from '../paper-import/question-generator.service';
+import { SourceReaderService } from '../paper-import/source-reader.service';
 
 /**
  * Academy Studio (AI site) module. Slice 2 wires the job infrastructure only;
@@ -57,6 +60,9 @@ import { PaperImportHandler } from '../paper-import/paper-import.handler';
     AiJobWorker,
     LiveSummaryHandler,
     PaperExtractionService,
+    SourceReaderService,
+    QuestionGeneratorService,
+    ContentGenerationService,
     PaperImportHandler,
     AcademyMediaProcessor,
     AcademyMediaService,
@@ -86,6 +92,9 @@ import { PaperImportHandler } from '../paper-import/paper-import.handler';
     },
   ],
   exports: [
+    // The teacher-facing module needs this one for "write question 7 again",
+    // which is answered in the request rather than on the queue.
+    ContentGenerationService,
     AcademySiteConfig,
     AiClient,
     AiJobService,

@@ -5,11 +5,17 @@ import { AiJobHandler, AiJobResult } from '../academy-site/jobs/ai-job.handler';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { aggregatePages, PageExtraction, PageInput } from './extraction.schema';
+import { ContentGenerationService } from './content-generation.service';
 import { ExtractionTier, PaperExtractionService } from './paper-extraction.service';
 
-/** The stages, in the order they run. Written onto the job so the teacher's
- *  screen can say which one is happening instead of spinning. */
-export const PAPER_IMPORT_STAGES = ['reading', 'extracting', 'validating', 'ready'] as const;
+/**
+ * Which half of the content path a job is for.
+ *
+ * The teacher speaks between them — the material is read as soon as it is
+ * uploaded, and the questions are not written until they have said what exam
+ * they want — so they cannot be one job.
+ */
+export type ContentPhase = 'READ' | 'GENERATE';
 
 /**
  * Reads a stack of already-stored pages and leaves a draft behind.
@@ -33,10 +39,15 @@ export class PaperImportHandler implements AiJobHandler {
     private readonly prisma: PrismaService,
     private readonly storage: StorageProvider,
     private readonly extraction: PaperExtractionService,
+    private readonly content: ContentGenerationService,
   ) {}
 
   async handle(job: AiJob): Promise<AiJobResult | void> {
-    const input = job.input as { importId?: string; tier?: ExtractionTier };
+    const input = job.input as {
+      importId?: string;
+      tier?: ExtractionTier;
+      phase?: ContentPhase;
+    };
     const importId = input?.importId;
     if (!importId) throw new AiJobError('No importId on job', 'TERMINAL');
     // Set only by a teacher pressing "read it again more carefully".
@@ -51,15 +62,40 @@ export class PaperImportHandler implements AiJobHandler {
     // a job that was still in the queue.
     if (record.status === 'COMPLETED' || record.status === 'CANCELED') return;
 
-    const started = Date.now();
-    await this.prisma.paperImport.update({
-      where: { id: importId },
-      data: { status: 'PROCESSING', error: null },
-    });
+    // The content path: reading lecture material, or writing questions from
+    // what was read. Both live in their own service; this handler is the one
+    // registration on the one queue, and dispatches.
+    if (record.kind === 'CONTENT') {
+      const started = Date.now();
+      const result =
+        input.phase === 'GENERATE'
+          ? await this.content.generate(record)
+          : await this.content.read(record);
+      await this.prisma.paperImport.update({
+        where: { id: importId },
+        data: { durationMs: Date.now() - started, highAccuracy: false },
+      });
+      return { costCents: Math.ceil(result.millicents / 1000) };
+    }
 
+    const started = Date.now();
     // Only what has not been read yet. On a retry that is the failed pages
     // alone; on a first run it is all of them.
     const todo = record.pages.filter((p) => p.status === 'PENDING' || p.status === 'FAILED');
+    const alreadyDone = record.pages.length - todo.length;
+
+    await this.prisma.paperImport.update({
+      where: { id: importId },
+      data: {
+        status: 'PROCESSING',
+        stage: 'READING',
+        error: null,
+        progressDone: alreadyDone,
+        progressTotal: record.pages.length,
+        highAccuracy: tier === 'STRONG',
+      },
+    });
+
     let index = 0;
     for (const page of todo) {
       index += 1;
@@ -70,11 +106,21 @@ export class PaperImportHandler implements AiJobHandler {
         })
         .catch(() => undefined);
       await this.readPage(importId, page, tier);
+      // Real progress: written after the page actually came back, so a
+      // teacher reading "8 of 12" is reading the worker's own count.
+      await this.prisma.paperImport.update({
+        where: { id: importId },
+        data: { progressDone: alreadyDone + index },
+      });
     }
 
     await this.prisma.aiJob
       .update({ where: { id: job.id }, data: { stage: 'validating' } })
       .catch(() => undefined);
+    await this.prisma.paperImport.update({
+      where: { id: importId },
+      data: { stage: 'VALIDATING' },
+    });
 
     const summary = await this.assemble(importId, Date.now() - started);
     this.logger.log(
@@ -175,6 +221,8 @@ export class PaperImportHandler implements AiJobHandler {
         // has to be told about; anything partial is a review with warnings on
         // it, because a draft missing one page is still worth editing.
         status: allFailed ? 'FAILED' : 'REVIEW',
+        stage: 'READY',
+        highAccuracy: false,
         error: allFailed ? 'None of the uploaded pages could be read' : null,
         title: draft.title,
         draft: draft as unknown as Prisma.InputJsonValue,

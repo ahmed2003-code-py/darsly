@@ -78,12 +78,21 @@ jobs:
       # No Postgres service container on purpose: the integration specs skip
       # themselves when DATABASE_URL is unreachable, which keeps this job at
       # roughly half a minute. Wiring a real database is its own change.
-      # Worker count is pinned rather than left to Jest's default (cores - 1).
-      # The default is a property of whatever machine picks up the job, and on
-      # a larger runner it forks enough workers to exhaust memory — the suite
-      # was OOM-killed (exit 137) exactly this way while this file was written.
+      # Jest is invoked directly, from apps/api, rather than through `npm test`.
+      #
+      # The root script is `npm run test --workspace=apps/api`, so
+      # `npm test -- --maxWorkers=2` hands the flag to the OUTER npm, which
+      # treats it as an npm option and runs a bare `jest`. Verified: the same
+      # command with `--testPathPattern=zzz-does-not-exist` still ran all 1,539
+      # tests. The pin was a silent no-op.
+      #
+      # It is worth pinning for real: Jest's default is cores - 1, which is a
+      # property of whatever machine picks up the job, and on a larger runner
+      # it forks enough workers to exhaust memory — the suite was OOM-killed
+      # (exit 137) exactly this way while this file was written.
       - name: Test
-        run: npm test -- --maxWorkers=2
+        working-directory: apps/api
+        run: npx jest --maxWorkers=2
 
       - name: Build
         run: npm run build

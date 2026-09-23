@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AuthTokens, JwtPayload, Role } from '@darsly/shared-types';
 import * as argon2 from 'argon2';
+import { AuthConfig } from './auth.config';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface DeviceContext {
@@ -20,10 +21,11 @@ export class TokenService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly config: AuthConfig,
   ) {}
 
   private get maxSessions() {
-    return Number(process.env.MAX_CONCURRENT_SESSIONS_DEFAULT ?? 2);
+    return this.config.maxConcurrentSessions;
   }
 
   /**
@@ -157,12 +159,12 @@ export class TokenService {
     };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_ACCESS_SECRET,
-        expiresIn: Number(process.env.JWT_ACCESS_TTL ?? 900),
+        secret: this.config.accessSecret,
+        expiresIn: this.config.accessTtlSeconds,
       }),
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_REFRESH_SECRET,
-        expiresIn: Number(process.env.JWT_REFRESH_TTL ?? 2_592_000),
+        secret: this.config.refreshSecret,
+        expiresIn: this.config.refreshTtlSeconds,
       }),
     ]);
     return { accessToken, refreshToken };

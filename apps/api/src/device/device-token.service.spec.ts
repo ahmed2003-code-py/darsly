@@ -1,5 +1,6 @@
 import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException } from '@nestjs/common';
+import { AuthConfig } from '../auth/auth.config';
 import { DeviceTokenService } from './device-token.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -31,7 +32,10 @@ describe('DeviceTokenService', () => {
         findUnique: jest.fn().mockImplementation(() => (device ? { ...device } : null)),
       },
     } as unknown as PrismaService;
-    service = new DeviceTokenService(jwt, prisma);
+    // Real AuthConfig, not a stub: these tests set DEVICE_JWT_* env vars and
+    // assert the fallback chain, which is exactly the behaviour AuthConfig now
+    // owns. Stubbing it would test the stub.
+    service = new DeviceTokenService(jwt, prisma, new AuthConfig());
   });
 
   afterEach(() => {

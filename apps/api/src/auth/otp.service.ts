@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { randomInt } from 'crypto';
+import { AuthConfig } from './auth.config';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -13,18 +14,22 @@ import { PrismaService } from '../prisma/prisma.service';
 export class OtpService {
   private readonly logger = new Logger(OtpService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: AuthConfig,
+  ) {}
 
   private get ttlSeconds() {
-    return Number(process.env.OTP_TTL_SECONDS ?? 300);
+    return this.config.otpTtlSeconds;
   }
   private get maxAttempts() {
-    return Number(process.env.OTP_MAX_ATTEMPTS ?? 5);
+    return this.config.otpMaxAttempts;
   }
   private get devMode() {
     // Default OFF, and never on in production — the "0000" universal code and
-    // logged OTPs must never be reachable on a real deploy.
-    return process.env.OTP_DEV_MODE === 'true' && process.env.NODE_ENV !== 'production';
+    // logged OTPs must never be reachable on a real deploy. Both halves of
+    // that live in AuthConfig.otpDevMode now.
+    return this.config.otpDevMode;
   }
 
   async request(phone: string): Promise<{ expiresInSeconds: number }> {

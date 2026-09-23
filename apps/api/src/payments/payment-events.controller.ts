@@ -2,22 +2,20 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Post,
   Query,
-  ServiceUnavailableException,
-  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
-import * as crypto from 'crypto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { IsOptionalId, LIMITS } from '../common/validation';
+import { ListenerKeyGuard } from './listener-key.guard';
 import { PaymentMatchingService } from './payment-matching.service';
 
 class PaymentEventDto {
@@ -61,25 +59,20 @@ export class PaymentEventsController {
 
   // ── Android notification listener → backend ────────────────────────────────
 
+  /**
+   * Legacy ingest. The current path is `POST /device/sms-events`, which
+   * authenticates a per-device JWT and can be revoked one device at a time.
+   *
+   * Authentication is a guard rather than the first lines of this method, so
+   * it runs before the global ValidationPipe: an unauthenticated caller used
+   * to be answered with this endpoint's full DTO schema instead of a 401.
+   */
   @Post('payment-events')
   @Public()
+  @UseGuards(ListenerKeyGuard)
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: '[device] Ingest a transfer notification (X-Listener-Key auth)' })
-  ingest(@Headers('x-listener-key') key: string | undefined, @Body() dto: PaymentEventDto) {
-    const expected = process.env.PAYMENT_LISTENER_KEY;
-    if (!expected) {
-      throw new ServiceUnavailableException({ message: 'Listener not configured', code: 'LISTENER_UNSET' });
-    }
-    // Compared as bytes, because that is what timingSafeEqual measures. The
-    // guard used to compare string lengths, and a header of the same character
-    // length but a different UTF-8 byte length ("…é") got past it and made
-    // timingSafeEqual throw RangeError — a 500 where the answer is 401. It
-    // failed closed either way, but an unauthenticated caller could put noise
-    // in the error monitoring of a money endpoint at will.
-    const given = Buffer.from(key ?? '', 'utf8');
-    const want = Buffer.from(expected, 'utf8');
-    const ok = given.length === want.length && crypto.timingSafeEqual(given, want);
-    if (!ok) throw new UnauthorizedException('Invalid listener key');
+  @ApiOperation({ summary: '[device, legacy] Ingest a transfer notification (X-Listener-Key auth); prefer POST /device/sms-events' })
+  ingest(@Body() dto: PaymentEventDto) {
     return this.matching.ingest(dto);
   }
 

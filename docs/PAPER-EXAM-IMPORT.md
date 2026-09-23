@@ -61,18 +61,42 @@ to read "Question 3" off a page.
 **3. Expensive only where the cheap one demonstrably failed, and only on that
 page.** `pageProblem()` is a deterministic check on the cheap model's answer —
 no questions at all, a question whose text is a fragment, a multiple-choice
-question with one option, or the model's own `lowConfidence` admission. Only a
-page that fails it is re-read by `PAPER_IMPORT_FALLBACK_MODEL`. One bad
-photograph in a twenty-page paper costs one escalation, not twenty.
+question with one option, **a question that is an apology rather than a
+transcription, every question on the page reading the same**, or the model's
+own `lowConfidence` admission. Only a page that fails it is re-read by
+`PAPER_IMPORT_FALLBACK_MODEL`. One bad photograph in a twenty-page paper costs
+one escalation, not twenty.
 
 Note the asymmetry in how the model's self-report is used: it is believed when
 it says "I could not read this" and ignored when it says "I could". A model's
 confidence in its own output is not evidence; its admission of failure is.
 
-**4. Pixels are the other lever.** Image tokens scale with area, so
-`PAPER_IMPORT_RENDER_DIM` (1600px on the long edge) is the single largest
-number in the config. Pages are also greyscaled and re-encoded — an exam is ink
-on paper, and colour is bytes spent on nothing.
+The two checks in bold are there because of a real import and are worth
+keeping: a hand-written 1947 arithmetic paper came back as five questions that
+all read `[نص السؤال غير واضح]`. Every structural check passed — the strings
+were long enough, the types were plausible, the shape was valid — so the
+fallback was never asked and a teacher got a draft of nothing. The extraction
+prompt now forbids placeholders outright, `looksLikePlaceholder()` catches them
+anyway, and a page whose questions all read the same escalates on that alone.
+
+**The third tier is a person, not a rule.** Some papers neither model can read.
+For those the review screen notices that most of the draft came back flagged or
+repeated and offers **"read it again more carefully"**, which re-reads the whole
+paper on `PAPER_IMPORT_STRONG_MODEL` (the flagship, ~20× the fallback) and
+replaces the draft. Nothing reaches that model automatically: it costs real
+money per page, and the only party entitled to spend it is a teacher who has
+looked at a result and judged it not good enough.
+
+**4. Pixels are the other lever — counted the way the provider counts them.**
+Image tokens are 32×32 patches, and each model has a patch budget, so a page is
+sized to land just inside `PAPER_IMPORT_PATCH_BUDGET` at its own aspect ratio
+rather than to a flat pixel count. This started as a flat 1600px long edge,
+which was ~1,900 tokens against a budget of ~3,000 — detail given up to save a
+fifth of a cent on the cheap model. Two related corrections came with it:
+`detail` is `original`, which is what the provider's vision guide recommends
+for reading text and small detail (it was `high`, the setting for pictures being
+looked at rather than read), and JPEG quality is 92 rather than 82, which is
+free, because tokens come from pixel dimensions and not from file size.
 
 **5. Aggregation is plain code.** Stitching pages into one exam is
 concatenation, page-break joins and renumbering. Asking a model to do it would
@@ -113,6 +137,12 @@ its type, mark the right answer, reorder, delete, add a question the extraction
 missed, and open the original page beside the question it came from. Nothing
 about models, tokens or escalation is shown; what is shown is which questions
 to look at.
+
+Warnings are sent as a `code` plus `params` and worded on the screen, not on
+the server. The first version composed the sentences server-side, and an
+Arabic teacher reviewing an Arabic exam read half of them in English — the
+server does not know the language of a page it cannot see. `detail` survives
+as a fallback for a client with no translation for a newer code.
 
 **Unsupported question types are surfaced, never converted.** A matching
 exercise or a diagram to label has nowhere to live in
@@ -198,7 +228,9 @@ Everything is per page, and the original upload is never destroyed.
 - Only a stack where *nothing* could be read ends in FAILED.
 - **Retry re-reads only the failed pages.** The successful ones already hold
   their answers, and re-reading them is a second bill for work already done
-  correctly.
+  correctly. The exception is a teacher asking for the whole paper to be read
+  again on the strongest model, where the pages that "succeeded" are exactly
+  the ones being rejected.
 - A page whose stored bytes have gone is marked failed rather than retried
   forever.
 - Confirming twice is refused with the exam the first confirm produced, so one
@@ -226,9 +258,11 @@ is in the Dockerfile, beside ffmpeg and yt-dlp, for the same reason they are.
 
 ## Known limits
 
-- Handwriting is read as well as the model reads handwriting; a page of it
-  will usually escalate and may still need editing. That is surfaced, not
-  hidden.
+- Handwriting is read as well as the model reads handwriting. Modern
+  handwriting usually escalates to the fallback and comes back usable; a
+  decades-old manuscript often needs the teacher-triggered third tier, and may
+  still need editing. All of that is surfaced, never hidden — and the offer to
+  re-read appears before the teacher starts retyping the exam by hand.
 - An answer key is only set where the paper itself marks one. Most papers do
   not, and the review screen says so rather than guessing — a guessed key is a
   class marked wrong.

@@ -79,18 +79,44 @@ export class PagePreparerService {
         code: 'PAPER_IMAGE_TOO_LARGE',
       });
     }
+    const target = this.fitToPatchBudget(meta.width ?? 0, meta.height ?? 0);
     const pipeline = this.sharp(input)
       .rotate()
       .grayscale()
       .resize({
-        width: this.config.maxRenderDim,
-        height: this.config.maxRenderDim,
+        width: target.width,
+        height: target.height,
         fit: 'inside',
         withoutEnlargement: true,
       })
-      .jpeg({ quality: 82, mozjpeg: true });
+      .jpeg({ quality: this.config.renderQuality, mozjpeg: true });
     const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
     return { data, mimeType: 'image/jpeg', width: info.width, height: info.height };
+  }
+
+  /**
+   * The largest size worth sending, in the units the bill is actually in.
+   *
+   * Image tokens are 32x32 patches, and the model has a patch budget: a page
+   * bigger than the budget is resized by the provider anyway, and a page
+   * smaller than it is detail thrown away for nothing. So the page is sized to
+   * land just inside the budget at its own aspect ratio, rather than to a flat
+   * pixel count that suits a portrait scan and starves a landscape one.
+   */
+  fitToPatchBudget(width: number, height: number): { width: number; height: number } {
+    const cap = this.config.maxRenderDim;
+    if (!width || !height) return { width: cap, height: cap };
+    const budget = this.config.renderPatchBudget;
+    const ratio = width / height;
+    // budget = (w/32)*(h/32) and w = h*ratio, so h = sqrt(budget*1024/ratio).
+    let h = Math.floor(Math.sqrt((budget * 1024) / ratio));
+    let w = Math.round(h * ratio);
+    if (Math.max(w, h) > cap) {
+      const shrink = cap / Math.max(w, h);
+      w = Math.round(w * shrink);
+      h = Math.round(h * shrink);
+    }
+    return { width: Math.max(1, w), height: Math.max(1, h) };
   }
 
   /**

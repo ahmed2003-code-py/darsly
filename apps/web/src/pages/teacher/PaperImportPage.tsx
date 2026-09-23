@@ -15,6 +15,7 @@ import {
   editQuestion,
   ExamDraft,
   fetchImport,
+  looksUnreadable,
   moveQuestion,
   phaseOf,
   progressPct,
@@ -24,6 +25,7 @@ import {
   setCorrect,
   unsupportedCount,
   uploadPaper,
+  warningKey,
 } from '../../lib/paperImport';
 
 /**
@@ -269,6 +271,12 @@ function ReviewStep({
   const unsupported = unsupportedCount(draft);
 
   const save = useMutation({ mutationFn: () => saveDraft(record.id, draft) });
+  // Replaces the draft, edits included — which is what a teacher asking for it
+  // wants, because the draft they are discarding is the one they could not use.
+  const reread = useMutation({
+    mutationFn: () => retryImport(record.id, true),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['paper-import', record.id] }),
+  });
   const confirm = useMutation({
     mutationFn: async () => {
       await saveDraft(record.id, draft);
@@ -313,18 +321,43 @@ function ReviewStep({
         }
       />
 
+      {/* A paper that came back mostly unreadable is not something to edit
+          question by question. The offer to read it again properly comes
+          first, before the teacher starts retyping an exam by hand. */}
+      {looksUnreadable(draft) && (
+        <div className="card mb-6 border-primary/20 bg-primary-fixed">
+          <p className="mb-1 font-heading font-semibold text-on-surface">
+            {t('paper.unreadableTitle')}
+          </p>
+          <p className="mb-4 text-sm text-on-surface-variant">{t('paper.unreadableHint')}</p>
+          <button
+            className="btn-primary"
+            disabled={reread.isPending}
+            onClick={() => reread.mutate()}
+          >
+            {reread.isPending ? t('paper.rereading') : t('paper.rereadStrong')}
+          </button>
+          <ErrorNote error={reread.error} />
+        </div>
+      )}
+
       {record.warnings.length > 0 && (
         <div className="card mb-6 border-error/20 bg-error-container">
           <p className="mb-2 font-heading font-semibold text-on-error-container">
             {t('paper.warningsTitle')}
           </p>
           <ul className="list-disc space-y-1 ps-5 text-sm text-on-error-container">
-            {record.warnings.map((w, i) => (
-              <li key={i}>
-                {w.page ? `${t('paper.page', { n: w.page })}: ` : ''}
-                {w.detail}
-              </li>
-            ))}
+            {record.warnings.map((w, i) => {
+              const key = warningKey(w.code);
+              return (
+                <li key={i}>
+                  {w.page ? `${t('paper.page', { n: w.page })}: ` : ''}
+                  {/* Composed here, in the reader's language. `detail` is the
+                      server's fallback, for a code this build predates. */}
+                  {key ? t(key, { ...(w.params ?? {}), defaultValue: w.detail }) : w.detail}
+                </li>
+              );
+            })}
           </ul>
           {record.pages.some((p) => p.status === 'FAILED') && (
             <button

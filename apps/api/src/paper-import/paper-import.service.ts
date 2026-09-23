@@ -12,7 +12,7 @@ import { assertMagicMatchesMime } from '../common/image.util';
 import { CourseScope } from '../courses/courses.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
-import { ConfirmImportDto, SaveDraftDto } from './dto/paper-import.dto';
+import { ConfirmImportDto, RetryImportDto, SaveDraftDto } from './dto/paper-import.dto';
 import { ExamBuilderService } from './exam-builder.service';
 import { DraftWarning, ExamDraft } from './extraction.schema';
 import { PAPER_IMAGE_MIME, PAPER_PDF_MIME, PagePreparerService } from './page-preparer.service';
@@ -348,29 +348,55 @@ export class PaperImportService {
   }
 
   /**
-   * Read the pages that failed, again — and only those.
+   * Read the pages again.
    *
-   * The successful pages keep their answers, so a retry after one bad photo
-   * costs one page, not the stack. A retry with nothing to retry is refused
-   * rather than silently spending nothing and looking like it worked.
+   * By default only the ones that failed: the successful pages already hold
+   * their answers, so a retry after one bad photograph costs one page rather
+   * than the stack, and a retry with nothing to retry is refused instead of
+   * spending nothing and looking like it worked.
+   *
+   * `escalate` is the other request — the whole paper, on the flagship model,
+   * because the cheap read was structurally valid and still wrong. It replaces
+   * the draft, edits included, which is what a teacher asking for it wants:
+   * the draft they are discarding is the one they could not use.
    */
-  async retry(scope: ImportScope, id: string) {
+  async retry(scope: ImportScope, id: string, dto: RetryImportDto = {}) {
     const record = await this.requireEditable(scope, id, ['REVIEW', 'FAILED', 'PROCESSING']);
-    const failed = await this.prisma.paperImportPage.count({
-      where: { importId: record.id, status: { in: ['FAILED', 'PENDING'] } },
-    });
-    if (!failed) {
-      throw new ConflictException({
-        message: 'Every page was read successfully — there is nothing to retry',
-        code: 'NOTHING_TO_RETRY',
+
+    if (dto.escalate) {
+      // The whole paper goes back on the queue, to be read by the flagship.
+      // Every page, not just the failed ones: a teacher asks for this when the
+      // result was structurally fine and simply wrong, and the pages that
+      // "succeeded" are exactly the ones that were wrong.
+      await this.prisma.paperImportPage.updateMany({
+        where: { importId: record.id },
+        data: { status: 'PENDING', error: null },
       });
+    } else {
+      const failed = await this.prisma.paperImportPage.count({
+        where: { importId: record.id, status: { in: ['FAILED', 'PENDING'] } },
+      });
+      if (!failed) {
+        throw new ConflictException({
+          message: 'Every page was read successfully — there is nothing to retry',
+          code: 'NOTHING_TO_RETRY',
+        });
+      }
     }
+
     const job = await this.jobs.enqueue(
       scope.academyId,
       'PAPER_IMPORT',
-      { importId: record.id },
+      { importId: record.id, ...(dto.escalate ? { tier: 'STRONG' } : {}) },
       { conflictsWith: ['PAPER_IMPORT'] },
     );
+    await this.audit.log({
+      actorUserId: scope.userId,
+      academyId: scope.academyId,
+      action: dto.escalate ? 'paper-import.reread-strong' : 'paper-import.retry',
+      entity: 'PaperImport',
+      entityId: record.id,
+    });
     return this.prisma.paperImport.update({
       where: { id: record.id },
       data: { status: 'PROCESSING', jobId: job.id, error: null },

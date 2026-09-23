@@ -1,4 +1,9 @@
-import { aggregatePages, pageProblem, PageExtraction } from './extraction.schema';
+import {
+  aggregatePages,
+  looksLikePlaceholder,
+  pageProblem,
+  PageExtraction,
+} from './extraction.schema';
 
 const page = (over: Partial<PageExtraction> = {}): PageExtraction => ({
   examTitle: '',
@@ -62,6 +67,47 @@ describe('deciding whether a page was read well enough', () => {
 
   it('escalates nothing at all', () => {
     expect(pageProblem(null)).toBe('INVALID');
+  });
+
+  // The failure that shipped: a scan of 1947 handwriting came back as five
+  // questions that all read "[نص السؤال غير واضح]". Every structural check
+  // passed — the strings were long enough, the types were plausible — so the
+  // fallback model was never asked, and a teacher got a draft of nothing.
+  it('escalates a page where the model wrote an apology instead of a question', () => {
+    const excuse = question({ type: 'SHORT_ANSWER', options: [], text: '[نص السؤال غير واضح]' });
+    expect(pageProblem(page({ questions: [excuse] }))).toBe('PLACEHOLDER');
+  });
+
+  it('escalates a page whose questions all read the same', () => {
+    const same = () =>
+      question({ type: 'SHORT_ANSWER', options: [], text: 'The question text was not recovered' });
+    expect(pageProblem(page({ questions: [same(), same(), same()] }))).toBe('REPEATED_TEXT');
+  });
+
+  it('does not call two genuinely identical short prompts a failure on their own', () => {
+    // One question repeated is a paper that repeats a question; three or more
+    // identical is a page that was not read. The check needs more than one,
+    // and this is the boundary it sits on.
+    const single = question({ type: 'SHORT_ANSWER', options: [], text: 'Define osmosis here.' });
+    expect(pageProblem(page({ questions: [single] }))).toBeNull();
+  });
+
+  it('knows an apology from a question that happens to mention one', () => {
+    expect(looksLikePlaceholder('[unclear]')).toBe(true);
+    expect(looksLikePlaceholder('(illegible)')).toBe(true);
+    expect(looksLikePlaceholder('النص غير مقروء')).toBe(true);
+    expect(looksLikePlaceholder('I could not read this')).toBe(true);
+    expect(looksLikePlaceholder('ما هي عاصمة مصر؟')).toBe(false);
+    expect(
+      looksLikePlaceholder(
+        'Explain why the diagram of the reaction is unclear and what a chemist would do about it',
+      ),
+    ).toBe(false);
+    expect(
+      looksLikePlaceholder(
+        'اشرح لماذا يبدو الرسم البياني غير واضح في التجربة وما أثر ذلك على النتيجة النهائية',
+      ),
+    ).toBe(false);
   });
 
   it('does not escalate an Arabic page — the check is about shape, not script', () => {
@@ -157,6 +203,32 @@ describe('stitching the pages into one exam', () => {
     expect(q.type).toBe('UNSUPPORTED');
     expect(q.needsReview).toBe(true);
     expect(warnings.find((w) => w.code === 'UNSUPPORTED_TYPE')?.detail).toBe('matching');
+  });
+
+  it('tells the teacher a question was never really read, rather than letting it through', () => {
+    const excuse = question({ type: 'SHORT_ANSWER', options: [], text: '[نص السؤال غير واضح]' });
+    const { draft, warnings } = aggregatePages([
+      { pageNumber: 1, extraction: page({ questions: [excuse] }) },
+    ]);
+    expect(warnings.some((w) => w.code === 'NOT_READ')).toBe(true);
+    expect(draft.sections[0].questions[0].needsReview).toBe(true);
+  });
+
+  it('hands the screen values to compose a sentence from, not an English sentence', () => {
+    // The product is Arabic-first, and a server writing "Page 2 could not be
+    // read" has decided the language of a page it cannot see. An Arabic
+    // teacher reviewing an Arabic exam read half these warnings in English.
+    const odd = question({ type: 'UNSUPPORTED', unsupportedKind: 'توصيل', options: [] });
+    const { warnings } = aggregatePages([
+      { pageNumber: 1, extraction: page({ questions: [odd] }) },
+      { pageNumber: 2, extraction: null, failed: true },
+    ]);
+    expect(warnings.find((w) => w.code === 'PAGE_FAILED')?.params).toEqual({ page: 2 });
+    expect(warnings.find((w) => w.code === 'UNSUPPORTED_TYPE')?.params).toMatchObject({
+      kind: 'توصيل',
+    });
+    // The English text stays as a fallback for a client with no translations.
+    expect(warnings.every((w) => typeof w.detail === 'string' && w.detail.length)).toBe(true);
   });
 
   it('says so when the paper carried no answer key', () => {

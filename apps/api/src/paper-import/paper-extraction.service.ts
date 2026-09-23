@@ -9,6 +9,17 @@ import {
   pageProblem,
 } from './extraction.schema';
 
+/**
+ * Which ladder a page is read on.
+ *
+ * AUTO is the normal one: cheap first, expensive only where the cheap answer
+ * failed a check. STRONG skips straight to the flagship and is never chosen by
+ * a rule — a teacher chooses it, having looked at a result that was not good
+ * enough, which is the only party entitled to spend twenty times as much on a
+ * page they have already paid to read once.
+ */
+export type ExtractionTier = 'AUTO' | 'STRONG';
+
 /** What reading one page produced, and what it cost. */
 export interface PageExtractionResult {
   extraction: PageExtraction | null;
@@ -58,7 +69,20 @@ export class PaperExtractionService {
     pageNumber: number;
     image?: Buffer;
     text?: string | null;
+    tier?: ExtractionTier;
   }): Promise<PageExtractionResult> {
+    // The teacher asked for the best read available. There is no cheap first
+    // pass here: they have already seen what the cheap pass produced.
+    if (input.tier === 'STRONG') {
+      const strong = await this.readWith(
+        this.config.strongModel,
+        this.config.strongPrice,
+        this.config.strongEffort,
+        input,
+      );
+      return { ...strong, escalationReason: 'LOW_CONFIDENCE', escalated: true };
+    }
+
     const first = await this.readWith(
       this.config.primaryModel,
       this.config.primaryPrice,
@@ -129,9 +153,10 @@ export class PaperExtractionService {
         price,
         reasoningEffort: effort,
         maxTokens: this.config.maxTokens,
-        // A page of an exam is small print that has to be read exactly. `low`
-        // detail halves the tokens and loses the diacritics with them.
-        imageDetail: 'high',
+        // A page of an exam is small print that has to be read exactly, which
+        // is the case the provider's guide names for `original`. It was
+        // `high` — the setting for a picture being looked at rather than read.
+        imageDetail: this.config.imageDetail,
         system: EXTRACTION_SYSTEM_PROMPT,
         schemaName: 'exam_page_extraction',
         schema: PAGE_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,

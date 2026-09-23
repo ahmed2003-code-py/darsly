@@ -3149,6 +3149,20 @@
     "importFromPaper": "Import from paper",
     "createManually": "Create manually",
     "timeLimit": "Time: {{n}} minutes",
-    "endOfPaper": "— End of paper —"
+    "endOfPaper": "— End of paper —",
+    "unreadableTitle": "Most of this paper did not come back clearly",
+    "unreadableHint": "Old or handwritten papers can be hard to read. Reading it again more carefully usually fixes it — it takes longer and replaces what is on screen now.",
+    "rereadStrong": "Read it again more carefully",
+    "rereading": "Reading it again…",
+    "warn": {
+      "PAGE_FAILED": "Page {{page}} could not be read. Its questions are missing — read it again, or add them by hand.",
+      "PAGE_BLANK": "Page {{page}} had no questions on it and was skipped.",
+      "UNSUPPORTED_TYPE": "Question {{number}} is a \"{{kind}}\" question, which this platform cannot store. Change its type or delete it.",
+      "LOW_CONFIDENCE": "Question {{number}} was hard to read. Check it against the page.",
+      "NOT_READ": "Question {{number}} could not be read off the page at all.",
+      "NO_ANSWER_KEY": "The paper did not mark any answers, so none are set. Choose the right answer for each question before students sit it.",
+      "NUMBER_GAP": "The paper numbers {{numbers}} are missing. Check whether a page did not upload.",
+      "NO_QUESTIONS": "Nothing readable came off these pages."
+    }
   }
 }

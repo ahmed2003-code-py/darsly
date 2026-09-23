@@ -86,3 +86,17 @@ export class ConfirmImportDto {
   /** The teacher has seen the unsupported questions and accepts losing them. */
   @IsOptional() @IsBoolean() dropUnsupported?: boolean;
 }
+
+/**
+ * "Read the pages again."
+ *
+ * Two different requests wearing one button. The default re-reads the pages
+ * that failed and nothing else, which costs a page or two. `escalate` re-reads
+ * the WHOLE paper on the flagship model, which is what a teacher wants when
+ * the result was structurally fine and simply wrong — old handwriting read as
+ * five identical questions. It costs real money, so it is never automatic and
+ * never implied: the teacher asks for it by name.
+ */
+export class RetryImportDto {
+  @IsOptional() @IsBoolean() escalate?: boolean;
+}

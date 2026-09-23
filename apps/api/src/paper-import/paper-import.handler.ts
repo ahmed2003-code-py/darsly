@@ -5,7 +5,7 @@ import { AiJobHandler, AiJobResult } from '../academy-site/jobs/ai-job.handler';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { aggregatePages, PageExtraction, PageInput } from './extraction.schema';
-import { PaperExtractionService } from './paper-extraction.service';
+import { ExtractionTier, PaperExtractionService } from './paper-extraction.service';
 
 /** The stages, in the order they run. Written onto the job so the teacher's
  *  screen can say which one is happening instead of spinning. */
@@ -36,8 +36,11 @@ export class PaperImportHandler implements AiJobHandler {
   ) {}
 
   async handle(job: AiJob): Promise<AiJobResult | void> {
-    const importId = (job.input as { importId?: string })?.importId;
+    const input = job.input as { importId?: string; tier?: ExtractionTier };
+    const importId = input?.importId;
     if (!importId) throw new AiJobError('No importId on job', 'TERMINAL');
+    // Set only by a teacher pressing "read it again more carefully".
+    const tier: ExtractionTier = input.tier === 'STRONG' ? 'STRONG' : 'AUTO';
 
     const record = await this.prisma.paperImport.findFirst({
       where: { id: importId, deletedAt: null },
@@ -66,7 +69,7 @@ export class PaperImportHandler implements AiJobHandler {
           data: { stage: `reading ${index}/${todo.length}` },
         })
         .catch(() => undefined);
-      await this.readPage(importId, page);
+      await this.readPage(importId, page, tier);
     }
 
     await this.prisma.aiJob
@@ -82,7 +85,11 @@ export class PaperImportHandler implements AiJobHandler {
   }
 
   /** One page, start to finish, with its own cost recorded on its own row. */
-  private async readPage(importId: string, page: PaperImportPage): Promise<void> {
+  private async readPage(
+    importId: string,
+    page: PaperImportPage,
+    tier: ExtractionTier,
+  ): Promise<void> {
     let image: Buffer | undefined;
     let text: string | null = null;
     try {
@@ -116,6 +123,7 @@ export class PaperImportHandler implements AiJobHandler {
       pageNumber: page.pageNumber,
       image,
       text,
+      tier,
     });
 
     const failed = !result.extraction;

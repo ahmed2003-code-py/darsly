@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AiPrice, AiReasoningEffort } from '../academy-site/ai/ai.client';
+import { AiImageDetail, AiPrice, AiReasoningEffort } from '../academy-site/ai/ai.client';
 
 function num(v: string | undefined, fallback: number): number {
   const n = Number(v);
@@ -38,6 +38,18 @@ export class PaperImportConfig {
    * Never the default — escalation is per page, never per import.
    */
   readonly fallbackModel = process.env.PAPER_IMPORT_FALLBACK_MODEL ?? 'gpt-6-sol';
+  /**
+   * The one a teacher asks for by hand, and nothing asks for on its own.
+   *
+   * There is a kind of paper the two models above cannot read: a hand-written
+   * exam from decades ago, faded ink, a script nobody writes any more. The
+   * flagship reads those — it is what a teacher gets if they photograph the
+   * same page into ChatGPT — and it costs twenty times the fallback, so it is
+   * never reached by an automatic rule. It runs only when a teacher looks at a
+   * bad result and presses "read it again more carefully", which is a person
+   * spending their own budget on a page they have seen.
+   */
+  readonly strongModel = process.env.PAPER_IMPORT_STRONG_MODEL ?? 'gpt-6-astra';
 
   /** Cents per million tokens, so cost is right per call rather than per
    *  AI_MODEL. Defaults are the published prices for the models above. */
@@ -49,12 +61,33 @@ export class PaperImportConfig {
     inPerMToken: num(process.env.PAPER_IMPORT_FALLBACK_PRICE_IN, 200),
     outPerMToken: num(process.env.PAPER_IMPORT_FALLBACK_PRICE_OUT, 1000),
   };
+  readonly strongPrice: AiPrice = {
+    inPerMToken: num(process.env.PAPER_IMPORT_STRONG_PRICE_IN, 1000),
+    outPerMToken: num(process.env.PAPER_IMPORT_STRONG_PRICE_OUT, 5000),
+  };
 
   /** Reading a page off a picture is not a reasoning problem. `low` on the
    *  first pass; the escalation buys thinking as well as a bigger model. */
   readonly primaryEffort = (process.env.PAPER_IMPORT_PRIMARY_EFFORT ?? 'low') as AiReasoningEffort;
+  /**
+   * The escalation buys thinking as well as a bigger model. `high`, not
+   * `medium`: a page reaches the fallback only because the first read of it
+   * was demonstrably wrong, and the thing that reads an unclear word is
+   * reading the words around it — which is what the effort pays for.
+   */
   readonly fallbackEffort = (process.env.PAPER_IMPORT_FALLBACK_EFFORT ??
-    'medium') as AiReasoningEffort;
+    'high') as AiReasoningEffort;
+  readonly strongEffort = (process.env.PAPER_IMPORT_STRONG_EFFORT ?? 'high') as AiReasoningEffort;
+
+  /**
+   * How hard the provider looks at the page.
+   *
+   * `original`, which is what the provider's own vision guide recommends for
+   * optical character recognition and small detail. This was `high` — a
+   * setting for pictures that are being looked at rather than read — which is
+   * the wrong end of the only choice that matters for a page of handwriting.
+   */
+  readonly imageDetail = (process.env.PAPER_IMPORT_IMAGE_DETAIL ?? 'original') as AiImageDetail;
 
   /** A stack, not a textbook. Past this the teacher is importing the wrong
    *  thing and the bill is real. */
@@ -63,13 +96,35 @@ export class PaperImportConfig {
   readonly maxImageBytes = num(process.env.PAPER_IMPORT_MAX_IMAGE_SIZE, 15 * 1024 * 1024);
   readonly maxPdfBytes = num(process.env.PAPER_IMPORT_MAX_PDF_SIZE, 40 * 1024 * 1024);
   /**
-   * Longest edge of the picture actually sent to the model, in pixels.
+   * How big a picture is worth sending, counted the way the provider counts
+   * it: in 32x32 pixel patches, which is what image tokens actually are.
    *
-   * Image tokens scale with area, so this is the single biggest lever on cost.
-   * 1600 is enough to read 10pt Arabic print off an A4 scan; going to 2200
-   * nearly doubles the tokens and changed nothing in the answers.
+   * This used to be a flat 1600px long edge, chosen to hold cost down. That
+   * reasoning was half right and the number was too small: a page sent at
+   * 1600px is ~1,900 image tokens, the model's own budget allows ~2,500
+   * patches (~3,000 tokens), and the difference is a fifth of a cent on the
+   * cheap model. A fifth of a cent is not a reason to send a blurrier
+   * photograph of somebody's handwriting.
+   *
+   * Sizing to the budget rather than to a pixel count also means an A4 page
+   * and a phone snapshot both arrive at the resolution the model can actually
+   * use, instead of one of them being wasted and the other starved.
    */
-  readonly maxRenderDim = Math.max(600, num(process.env.PAPER_IMPORT_RENDER_DIM, 1600));
+  readonly renderPatchBudget = Math.max(256, num(process.env.PAPER_IMPORT_PATCH_BUDGET, 2500));
+  /** A hard ceiling on the long edge, whatever the budget works out to. */
+  readonly maxRenderDim = Math.max(600, num(process.env.PAPER_IMPORT_RENDER_DIM, 2400));
+  /**
+   * JPEG quality of the page that is sent.
+   *
+   * Free, and that is the whole point: image tokens are counted from the pixel
+   * dimensions, not from the file size, so a more compressed picture costs
+   * exactly the same as a clean one and only loses strokes. 82 was a number
+   * carried over from thinking about bytes.
+   */
+  readonly renderQuality = Math.min(
+    100,
+    Math.max(40, num(process.env.PAPER_IMPORT_RENDER_QUALITY, 92)),
+  );
   /** Output ceiling per page. A dense page of MCQs is ~1.5k tokens of JSON. */
   readonly maxTokens = Math.max(500, num(process.env.PAPER_IMPORT_MAX_TOKENS, 6000));
   /**

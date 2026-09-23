@@ -21,7 +21,7 @@ import { AcademyContext, CurrentAcademy, RequirePermission } from '../academy/ac
 import { AcademyMembershipGuard } from '../academy/guards/academy-membership.guard';
 import { PermissionGuard } from '../academy/guards/permission.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { ConfirmImportDto, SaveDraftDto } from './dto/paper-import.dto';
+import { ConfirmImportDto, RetryImportDto, SaveDraftDto } from './dto/paper-import.dto';
 import { ExamExportService } from './exam-export.service';
 import { ImportScope, PaperImportService } from './paper-import.service';
 
@@ -136,13 +136,16 @@ export class PaperImportController {
   }
 
   @Post('paper-imports/:id/retry')
-  @ApiOperation({ summary: '[teacher] Read the failed pages again (only those)' })
+  @ApiOperation({
+    summary: '[teacher] Read the failed pages again — or the whole paper, on the strongest model',
+  })
   retry(
     @CurrentUser() user: JwtPayload,
     @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
+    @Body() dto: RetryImportDto,
   ) {
-    return this.imports.retry(this.scope(user, ctx), id);
+    return this.imports.retry(this.scope(user, ctx), id, dto);
   }
 
   @Post('paper-imports/:id/confirm')

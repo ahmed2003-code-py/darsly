@@ -7,9 +7,11 @@ import {
   editQuestion,
   ExamDraft,
   moveQuestion,
+  looksUnreadable,
   needsReviewCount,
   phaseOf,
   progressPct,
+  warningKey,
   removeQuestion,
   renumber,
   setCorrect,
@@ -229,5 +231,95 @@ describe('deciding whether the draft is fit to confirm', () => {
     expect(allQuestions(after)[0].text).toBe('ما هي عاصمة مصر؟');
     expect(allQuestions(after)[0].options[0].text).toBe('القاهرة');
     expect(draftProblems(after)).toEqual([]);
+  });
+});
+
+/**
+ * Noticing that a paper did not come back readable.
+ *
+ * The signal behind "read it again more carefully". It exists because of a
+ * real import: a hand-written 1947 exam came back as five questions that all
+ * said "[نص السؤال غير واضح]", and the screen offered the teacher nothing but
+ * the chance to retype the exam themselves.
+ */
+describe('noticing a paper the model could not read', () => {
+  const placeholderDraft = (count: number): ExamDraft => ({
+    title: 'الامتحان النهائي',
+    instructions: [],
+    sections: [
+      {
+        title: '',
+        questions: Array.from({ length: count }, (_, i) =>
+          question({
+            id: `q${i}`,
+            number: i + 1,
+            type: 'SHORT_ANSWER',
+            options: [],
+            text: '[نص السؤال غير واضح]',
+            needsReview: true,
+          }),
+        ),
+      },
+    ],
+  });
+
+  it('offers to read the paper again when every question came back the same', () => {
+    expect(looksUnreadable(placeholderDraft(5))).toBe(true);
+  });
+
+  it('offers it when most questions are flagged for the teacher to check', () => {
+    const half: ExamDraft = draft([
+      question({ id: 'a', text: 'A real question about osmosis', needsReview: true }),
+      question({ id: 'b', text: 'Another real question entirely', needsReview: true }),
+      question({ id: 'c', text: 'A third one, this time fine' }),
+    ]);
+    expect(looksUnreadable(half)).toBe(true);
+  });
+
+  it('stays out of the way of a paper that came back fine', () => {
+    const fine: ExamDraft = draft([
+      question({ id: 'a', text: 'What is the capital of Egypt?' }),
+      question({ id: 'b', text: 'Define an exothermic reaction.' }),
+      question({ id: 'c', text: 'State Newton\u2019s first law.' }),
+    ]);
+    expect(looksUnreadable(fine)).toBe(false);
+  });
+
+  it('says nothing about an empty draft — that is a different problem', () => {
+    expect(looksUnreadable(draft([]))).toBe(false);
+    expect(looksUnreadable(null)).toBe(false);
+  });
+
+  it('does not fire on one flagged question out of many', () => {
+    const mostlyFine: ExamDraft = draft([
+      question({ id: 'a', text: 'What is the capital of Egypt?' }),
+      question({ id: 'b', text: 'Define an exothermic reaction.' }),
+      question({ id: 'c', text: 'State the first law of motion.' }),
+      question({ id: 'd', text: 'Name three states of matter.', needsReview: true }),
+    ]);
+    expect(looksUnreadable(mostlyFine)).toBe(false);
+  });
+});
+
+describe('wording a warning in the language of whoever is reading it', () => {
+  it('names a translation key for every warning the server can send', () => {
+    for (const code of [
+      'PAGE_FAILED',
+      'PAGE_BLANK',
+      'UNSUPPORTED_TYPE',
+      'LOW_CONFIDENCE',
+      'NOT_READ',
+      'NO_ANSWER_KEY',
+      'NUMBER_GAP',
+      'NO_QUESTIONS',
+    ]) {
+      expect(warningKey(code)).toBe(`paper.warn.${code}`);
+    }
+  });
+
+  it('falls back to the server text for a code this build predates', () => {
+    // A deploy where the API is ahead of the browser must not leave a blank
+    // line where a warning should be.
+    expect(warningKey('SOMETHING_NEWER')).toBeNull();
   });
 });

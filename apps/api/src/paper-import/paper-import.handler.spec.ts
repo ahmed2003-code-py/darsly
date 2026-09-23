@@ -253,6 +253,30 @@ describe('reading a stack on the queue', () => {
     );
   });
 
+  it('passes the teacher-chosen tier through to the reader', async () => {
+    prisma.paperImport.findFirst.mockResolvedValue({
+      id: 'imp1',
+      status: 'REVIEW',
+      pages: [page()],
+    });
+
+    await handler.handle({ id: 'job1', input: { importId: 'imp1', tier: 'STRONG' } } as never);
+
+    expect(extract.mock.calls[0][0].tier).toBe('STRONG');
+  });
+
+  it('reads on the ordinary ladder when no tier was asked for', async () => {
+    prisma.paperImport.findFirst.mockResolvedValue({
+      id: 'imp1',
+      status: 'PROCESSING',
+      pages: [page()],
+    });
+
+    await handler.handle(job);
+
+    expect(extract.mock.calls[0][0].tier).toBe('AUTO');
+  });
+
   it('refuses a job that names no import', async () => {
     await expect(handler.handle({ id: 'job1', input: {} } as unknown as AiJob)).rejects.toThrow();
   });

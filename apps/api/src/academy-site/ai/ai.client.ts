@@ -33,8 +33,19 @@ export interface AiStructuredResult<T> {
 
 type ContentPart =
   | { type: 'input_text'; text: string }
-  | { type: 'input_image'; image_url: string; detail: 'auto' | 'low' | 'high' };
+  | { type: 'input_image'; image_url: string; detail: AiImageDetail };
 type InputMessage = { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[] };
+
+/**
+ * How hard the provider looks at a picture.
+ *
+ * `low` resizes to 512x512 and is for "is there a cat in this". `high` fits
+ * the model's own patch budget. `original` keeps the picture as sent (up to
+ * the model's limits) and is what the provider's own guide recommends for
+ * optical character recognition and small detail — which is exactly what
+ * reading a question off an exam paper is.
+ */
+export type AiImageDetail = 'auto' | 'low' | 'high' | 'original';
 
 /** GPT-5 / GPT-6 / o-series are reasoning models: they use the default
  *  temperature only (a custom value returns 400) and benefit from an explicit
@@ -56,7 +67,7 @@ export interface AiPrice {
 }
 
 /** How hard the model thinks before answering. Cheap work asks for less. */
-export type AiReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+export type AiReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 /** Options every call shares. `model` overrides AI_MODEL for this call only —
  *  that is what lets one feature read pages on a cheap model and escalate a
@@ -66,9 +77,9 @@ interface AiCallOverrides {
   price?: AiPrice;
   reasoningEffort?: AiReasoningEffort;
   /** `low` costs a fraction of `high` and is enough for a picture that is
-   *  only being looked at, not read. Defaults to `high`, which is what every
-   *  existing caller was getting. */
-  imageDetail?: 'auto' | 'low' | 'high';
+   *  only being looked at, not read; `original` is for reading text off one.
+   *  Defaults to `high`, which is what every existing caller was getting. */
+  imageDetail?: AiImageDetail;
 }
 
 /**

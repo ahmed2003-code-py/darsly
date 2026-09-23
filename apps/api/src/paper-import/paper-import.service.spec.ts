@@ -300,4 +300,44 @@ describe('who may touch an import', () => {
       response: { code: 'NOTHING_TO_RETRY' },
     });
   });
+
+  it('re-reads the whole paper on the flagship when the teacher asks for it', async () => {
+    // Not a retry of failures: the pages that "succeeded" are exactly the ones
+    // the teacher is rejecting, so every one of them goes back on the queue.
+    prisma.paperImport.findFirst.mockResolvedValue({ id: 'imp1', status: 'REVIEW' });
+    prisma.paperImportPage.count.mockResolvedValue(0);
+    prisma.paperImportPage.updateMany = jest.fn().mockResolvedValue({ count: 3 });
+    prisma.paperImport.update = jest.fn().mockResolvedValue({ id: 'imp1' });
+    (service as unknown as { jobs: { enqueue: jest.Mock } }).jobs = {
+      enqueue: jest.fn().mockResolvedValue({ id: 'job9' }),
+    };
+    (service as unknown as { audit: { log: jest.Mock } }).audit = {
+      log: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await service.retry(scope, 'imp1', { escalate: true });
+
+    expect(prisma.paperImportPage.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'PENDING' }) }),
+    );
+    const enqueue = (service as unknown as { jobs: { enqueue: jest.Mock } }).jobs.enqueue;
+    expect(enqueue.mock.calls[0][2]).toEqual({ importId: 'imp1', tier: 'STRONG' });
+  });
+
+  it('does not mark an ordinary retry as the expensive one', async () => {
+    prisma.paperImport.findFirst.mockResolvedValue({ id: 'imp1', status: 'REVIEW' });
+    prisma.paperImportPage.count.mockResolvedValue(2);
+    prisma.paperImport.update = jest.fn().mockResolvedValue({ id: 'imp1' });
+    (service as unknown as { jobs: { enqueue: jest.Mock } }).jobs = {
+      enqueue: jest.fn().mockResolvedValue({ id: 'job9' }),
+    };
+    (service as unknown as { audit: { log: jest.Mock } }).audit = {
+      log: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await service.retry(scope, 'imp1');
+
+    const enqueue = (service as unknown as { jobs: { enqueue: jest.Mock } }).jobs.enqueue;
+    expect(enqueue.mock.calls[0][2]).toEqual({ importId: 'imp1' });
+  });
 });

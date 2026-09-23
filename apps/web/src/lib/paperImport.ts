@@ -47,8 +47,28 @@ export interface ExamDraft {
 
 export interface DraftWarning {
   code: string;
+  /** Values the sentence needs. The sentence itself is composed here, in the
+   *  reader's language — the server does not know what that is. */
+  params?: Record<string, string | number>;
+  /** Readable fallback for a warning this build has no wording for yet. */
   detail: string;
   page?: number;
+}
+
+/** The i18n key for a warning, or null when this build does not know it and
+ *  should show the server's fallback text instead of an empty line. */
+export function warningKey(code: string): string | null {
+  const known = [
+    'PAGE_FAILED',
+    'PAGE_BLANK',
+    'UNSUPPORTED_TYPE',
+    'LOW_CONFIDENCE',
+    'NOT_READ',
+    'NO_ANSWER_KEY',
+    'NUMBER_GAP',
+    'NO_QUESTIONS',
+  ];
+  return known.includes(code) ? `paper.warn.${code}` : null;
 }
 
 export interface ImportPage {
@@ -324,8 +344,32 @@ export async function saveDraft(id: string, draft: ExamDraft): Promise<void> {
   await api.put(`/teacher/paper-imports/${id}/draft`, draft);
 }
 
-export async function retryImport(id: string): Promise<void> {
-  await api.post(`/teacher/paper-imports/${id}/retry`);
+/**
+ * Read the pages again.
+ *
+ * `escalate` is the teacher saying the result was not good enough — old
+ * handwriting read as five identical questions, say. It re-reads the whole
+ * paper on the strongest model and replaces the draft, which is why it is a
+ * separate, named request and not something that happens on its own.
+ */
+export async function retryImport(id: string, escalate = false): Promise<void> {
+  await api.post(`/teacher/paper-imports/${id}/retry`, { escalate });
+}
+
+/**
+ * Did this import come back readable?
+ *
+ * The question the "read it again more carefully" button asks. A draft where
+ * most questions are flagged, or where the same text appears more than once,
+ * is a draft nobody should be editing question by question — it is a paper the
+ * cheap model could not read.
+ */
+export function looksUnreadable(draft: ExamDraft | null | undefined): boolean {
+  const questions = allQuestions(draft);
+  if (!questions.length) return false;
+  const texts = questions.map((q) => q.text.trim()).filter(Boolean);
+  if (texts.length > 1 && new Set(texts).size < texts.length) return true;
+  return needsReviewCount(draft) / questions.length >= 0.5;
 }
 
 export async function confirmImport(

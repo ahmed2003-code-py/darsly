@@ -165,6 +165,59 @@ describe('choosing which model reads a page', () => {
     expect(message.content).toContain('Mitochondrion');
   });
 
+  it('escalates a page the model apologised on instead of transcribing', async () => {
+    // The page that shipped: structurally valid, and five apologies.
+    const apologies: PageExtraction = {
+      ...good,
+      questions: Array.from({ length: 5 }, (_, i) => ({
+        ...good.questions[0],
+        number: i + 1,
+        type: 'SHORT_ANSWER' as const,
+        options: [],
+        text: '[نص السؤال غير واضح]',
+      })),
+    };
+    completeStructured.mockResolvedValueOnce(answer(apologies)).mockResolvedValueOnce(answer(good));
+
+    const result = await service.extractPage({ pageNumber: 1, image: Buffer.from('jpeg') });
+
+    expect(completeStructured).toHaveBeenCalledTimes(2);
+    expect(completeStructured.mock.calls[1][0].model).toBe(config.fallbackModel);
+    expect(result.extraction).toEqual(good);
+  });
+
+  it('reads the page at the detail level meant for reading text, not looking at pictures', async () => {
+    completeStructured.mockResolvedValueOnce(answer(good));
+    await service.extractPage({ pageNumber: 1, image: Buffer.from('jpeg') });
+    expect(completeStructured.mock.calls[0][0].imageDetail).toBe('original');
+  });
+
+  it('goes straight to the flagship when a teacher asks for it, with no cheap pass first', async () => {
+    completeStructured.mockResolvedValueOnce(answer(good));
+
+    const result = await service.extractPage({
+      pageNumber: 1,
+      image: Buffer.from('jpeg'),
+      tier: 'STRONG',
+    });
+
+    // One call, on the strongest model. The teacher has already seen and
+    // rejected what the cheap pass produced; paying for it again is waste.
+    expect(completeStructured).toHaveBeenCalledTimes(1);
+    expect(completeStructured.mock.calls[0][0].model).toBe(config.strongModel);
+    expect(result.escalated).toBe(true);
+  });
+
+  it('never reaches the flagship on its own', async () => {
+    completeStructured.mockResolvedValue(answer(unreadable));
+
+    await service.extractPage({ pageNumber: 1, image: Buffer.from('jpeg') });
+
+    const models = completeStructured.mock.calls.map((c) => c[0].model);
+    expect(models).toEqual([config.primaryModel, config.fallbackModel]);
+    expect(models).not.toContain(config.strongModel);
+  });
+
   it('asks the cheap model to think as little as the job needs', async () => {
     completeStructured.mockResolvedValueOnce(answer(good));
     await service.extractPage({ pageNumber: 1, image: Buffer.from('jpeg') });

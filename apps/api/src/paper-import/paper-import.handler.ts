@@ -98,6 +98,20 @@ export class PaperImportHandler implements AiJobHandler {
 
     let index = 0;
     for (const page of todo) {
+      // Put down from the drafts list while this was reading: stop here rather
+      // than spend a model call per remaining page on something nobody wants.
+      const live = await this.prisma.paperImport.findFirst({
+        where: { id: importId, deletedAt: null, status: { not: 'CANCELED' } },
+        select: { id: true },
+      });
+      if (!live) {
+        // What was already spent is still spent — the budget has to see it.
+        const spent = await this.prisma.paperImportPage.aggregate({
+          where: { importId },
+          _sum: { costMillicents: true },
+        });
+        return { costCents: Math.ceil((spent._sum.costMillicents ?? 0) / 1000) };
+      }
       index += 1;
       await this.prisma.aiJob
         .update({

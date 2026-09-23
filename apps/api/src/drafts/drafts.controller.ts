@@ -78,6 +78,32 @@ export class DraftsController {
     return this.drafts.find(this.scope(user, ctx), scopeKey);
   }
 
+  @Delete()
+  @ApiOperation({
+    summary: '[teacher] Clear my unfinished work (my own only, never a colleague’s)',
+  })
+  clearAll(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Query('courseId') courseId?: string,
+    @Query('kind') kind?: string,
+  ) {
+    return this.drafts.clearAll(this.scope(user, ctx), {
+      courseId: courseId || undefined,
+      kind: kind === 'EXAM_STUDIO' ? 'EXAM_STUDIO' : undefined,
+    });
+  }
+
+  @Delete('sessions/:id')
+  @ApiOperation({ summary: '[teacher] Put down one Exam Studio session from the drafts list' })
+  dropSession(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
+    return this.drafts.dropSession(this.scope(user, ctx), id);
+  }
+
   @Delete(':scopeKey')
   @ApiOperation({ summary: '[teacher] Throw a draft away, or clear a saved one' })
   discard(

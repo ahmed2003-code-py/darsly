@@ -207,3 +207,70 @@ describe('keeping half-finished work', () => {
     await expect(service.list(scope)).resolves.toHaveLength(1);
   });
 });
+
+describe('clearing unfinished work', () => {
+  let prisma: any;
+  let service: DraftsService;
+
+  beforeEach(() => {
+    prisma = {
+      contentDraft: { deleteMany: jest.fn().mockResolvedValue({ count: 2 }) },
+      paperImport: {
+        findFirst: jest.fn().mockResolvedValue({ id: 's1' }),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 's1' }, { id: 's2' }])
+          .mockResolvedValue([{ jobId: 'j1' }, { jobId: null }]),
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      aiJob: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    };
+    service = new DraftsService(prisma as PrismaService);
+  });
+
+  it('clear all takes only what this person started — never a colleague’s, even for an owner who can see them', async () => {
+    const res = await service.clearAll({ ...scope, manageAll: true });
+    expect(prisma.contentDraft.deleteMany.mock.calls[0][0].where).toMatchObject({
+      academyId: 'acad1',
+      tenantId: 'teacher1',
+    });
+    expect(prisma.paperImport.findMany.mock.calls[0][0].where).toMatchObject({
+      academyId: 'acad1',
+      createdBy: 'user1',
+      deletedAt: null,
+    });
+    expect(res.removed).toBe(4);
+  });
+
+  it('a session put down is soft-deleted and its job stopped, running or queued — so the next exam can start now', async () => {
+    prisma.paperImport.findMany.mockReset().mockResolvedValue([{ jobId: 'j1' }]);
+    await service.dropSession(scope, 's1');
+    expect(prisma.paperImport.findFirst.mock.calls[0][0].where).toMatchObject({
+      id: 's1',
+      academyId: 'acad1',
+      createdBy: 'user1',
+    });
+    expect(prisma.paperImport.updateMany.mock.calls[0][0].data).toMatchObject({
+      status: 'CANCELED',
+      deletedAt: expect.any(Date),
+    });
+    expect(prisma.aiJob.updateMany.mock.calls[0][0].where).toMatchObject({
+      id: { in: ['j1'] },
+      status: { in: ['QUEUED', 'RUNNING'] },
+    });
+  });
+
+  it('a session that is not yours to put down is not found', async () => {
+    prisma.paperImport.findFirst.mockResolvedValue(null);
+    await expect(service.dropSession(scope, 'theirs')).rejects.toMatchObject({
+      response: { code: 'DRAFT_NOT_FOUND' },
+    });
+    expect(prisma.paperImport.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('the studio screen clears only studio sessions, and leaves lesson drafts alone', async () => {
+    await service.clearAll(scope, { kind: 'EXAM_STUDIO' });
+    expect(prisma.contentDraft.deleteMany).not.toHaveBeenCalled();
+  });
+});

@@ -3365,7 +3365,7 @@
   },
   "drafts": {
     "title": "Still unfinished",
-    "hint": "We save what you write as you go. Pick up where you left off.",
+    "hint": "Your work is saved as you go — pick up where you left off, or clear what you no longer need.",
     "resume": "Go to draft",
     "discard": "Discard",
     "discardTitle": "Discard this draft?",
@@ -3397,6 +3397,27 @@
       "CONFIGURING": "Waiting for you to say what exam you want",
       "REVIEW": "Ready for you to review",
       "FAILED": "Stopped and needs a decision"
+    },
+    "studioTitle": "Exams you started and have not finished",
+    "remove": "Delete",
+    "removeTitle": "Delete this?",
+    "removeBody": "“{{name}}” will be removed from the list. This cannot be undone.",
+    "removeRunningBody": "“{{name}}” is still being prepared — deleting it stops that work. This cannot be undone.",
+    "removeConfirm": "Delete",
+    "removedOne": "Deleted",
+    "clearAll": "Clear all",
+    "clearAllTitle": "Clear all unfinished work?",
+    "clearAllBody": "{{count}} items will be removed, and any exam still being prepared will be stopped. Only your own work is affected. This cannot be undone.",
+    "clearAllConfirm": "Clear all",
+    "removedAll_one": "Deleted 1 item",
+    "removedAll_other": "Deleted {{count}} items",
+    "showAll": "Show all (+{{count}})",
+    "showLess": "Show less",
+    "pages_one": "1 page",
+    "pages_other": "{{count}} pages",
+    "studioName": {
+      "PAPER": "Imported paper exam",
+      "CONTENT": "Exam from material"
     }
   }
 }

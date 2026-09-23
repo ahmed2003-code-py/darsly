@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ContentDraftKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CourseScope } from '../courses/courses.service';
@@ -221,6 +221,95 @@ export class DraftsService {
       where: { tenantId, scopeKey, academyId: scope.academyId },
     });
     return { removed: count };
+  }
+
+  /**
+   * Put one Exam Studio session down, from the drafts list.
+   *
+   * The list used to refuse this ("do it in the studio, where you can see
+   * what you would throw away"), which left a teacher with twelve rows and no
+   * way to thin them. The session is soft-deleted — the pages and the ledger
+   * of what it cost stay on file — and anything it still has queued or
+   * running is stopped, so the one-exam-at-a-time slot is free the moment it
+   * goes rather than a page later.
+   */
+  async dropSession(scope: DraftScope, id: string): Promise<{ removed: number }> {
+    const session = await this.prisma.paperImport.findFirst({
+      where: {
+        id,
+        academyId: scope.academyId,
+        deletedAt: null,
+        ...(scope.manageAll ? {} : { createdBy: scope.userId }),
+      },
+      select: { id: true },
+    });
+    if (!session)
+      throw new NotFoundException({ message: 'Draft not found', code: 'DRAFT_NOT_FOUND' });
+    return { removed: await this.putDown(scope.academyId, [session.id]) };
+  }
+
+  /**
+   * Everything on the list, gone — the caller's own only.
+   *
+   * An academy owner *sees* every teacher's unfinished work; "clear all" on
+   * that screen must still not reach into somebody else's half-written
+   * lesson. So this is always scoped to what this person started, whatever
+   * they are allowed to look at.
+   */
+  async clearAll(
+    scope: DraftScope,
+    opts: { courseId?: string; kind?: 'EXAM_STUDIO' } = {},
+  ): Promise<{ removed: number }> {
+    const tenantId = scope.authorTenantId;
+    const [forms, sessions] = await Promise.all([
+      opts.kind === 'EXAM_STUDIO' || !tenantId
+        ? Promise.resolve({ count: 0 })
+        : this.prisma.contentDraft.deleteMany({
+            where: {
+              academyId: scope.academyId,
+              tenantId,
+              ...(opts.courseId ? { courseId: opts.courseId } : {}),
+            },
+          }),
+      this.prisma.paperImport.findMany({
+        where: {
+          academyId: scope.academyId,
+          deletedAt: null,
+          createdBy: scope.userId,
+          status: { in: ['UPLOADING', 'PROCESSING', 'CONFIGURING', 'REVIEW', 'FAILED'] },
+          ...(opts.courseId ? { OR: [{ courseId: opts.courseId }, { courseId: null }] } : {}),
+        },
+        select: { id: true },
+      }),
+    ]);
+    const dropped = await this.putDown(
+      scope.academyId,
+      sessions.map((s) => s.id),
+    );
+    return { removed: forms.count + dropped };
+  }
+
+  /** Soft-delete sessions and stop their jobs, in one transaction. */
+  private async putDown(academyId: string, ids: string[]): Promise<number> {
+    if (!ids.length) return 0;
+    const rows = await this.prisma.paperImport.findMany({
+      where: { id: { in: ids }, academyId },
+      select: { jobId: true },
+    });
+    const jobIds = rows.map((r) => r.jobId).filter((j): j is string => !!j);
+    const [{ count }] = await this.prisma.$transaction([
+      this.prisma.paperImport.updateMany({
+        where: { id: { in: ids }, academyId },
+        data: { deletedAt: new Date(), status: 'CANCELED' },
+      }),
+      // RUNNING as well as QUEUED. The worker checks between pages and stops;
+      // marking the job now is what lets the next exam start straight away.
+      this.prisma.aiJob.updateMany({
+        where: { id: { in: jobIds }, academyId, status: { in: ['QUEUED', 'RUNNING'] } },
+        data: { status: 'CANCELED' },
+      }),
+    ]);
+    return count;
   }
 
   /** Old rows, cleaned up as a side effect of listing rather than on a

@@ -92,8 +92,6 @@ function ModeChoice({ courseId }: { courseId: string | null }) {
   return (
     <div className="page">
       <PageHeader title={t('examStudio.title')} subtitle={t('examStudio.subtitle')} />
-      {/* An exam already on its way comes before starting another one. */}
-      <DraftsBar only="EXAM_STUDIO" />
       <div className="grid gap-4 sm:grid-cols-2">
         <Choice
           icon="description"
@@ -107,6 +105,11 @@ function ModeChoice({ courseId }: { courseId: string | null }) {
           body={t('examStudio.modeContentHint')}
           onClick={() => setMode('CONTENT')}
         />
+      </div>
+      {/* Below the two ways in, not above them: this screen is for starting,
+          and a long list on top pushed the choice it exists for off the page. */}
+      <div className="mt-8">
+        <DraftsBar only="EXAM_STUDIO" title={t('drafts.studioTitle')} />
       </div>
     </div>
   );

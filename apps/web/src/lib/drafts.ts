@@ -69,6 +69,20 @@ export async function discardDraft(scopeKey: string): Promise<void> {
   await api.delete(`/teacher/drafts/${encodeURIComponent(scopeKey)}`);
 }
 
+/** Put one Exam Studio session down (and stop it, if it is still reading). */
+export async function dropStudioSession(id: string): Promise<void> {
+  await api.delete(`/teacher/drafts/sessions/${encodeURIComponent(id)}`);
+}
+
+/** Everything on the list — the caller's own only; the server enforces that. */
+export async function clearDrafts(opts: {
+  courseId?: string;
+  kind?: 'EXAM_STUDIO';
+}): Promise<{ removed: number }> {
+  const { data } = await api.delete('/teacher/drafts', { params: opts });
+  return data;
+}
+
 /**
  * Where a draft is picked up again.
  *

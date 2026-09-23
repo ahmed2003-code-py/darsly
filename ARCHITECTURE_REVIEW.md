@@ -962,3 +962,104 @@ In this order. Stop at any point — each step stands alone.
 *Review produced read-only; no source file was modified. Commands run: `npm audit`,
 `npm outdated`, `npx jest` (+`--coverage`), `npx vite build`, `npx tsc --noEmit`,
 and read-only greps.*
+
+---
+
+## 14. Closure — where every finding ended
+
+Added 2026-09-23, after the second remediation pass. Nothing below is
+"deferred": each finding is fixed, withdrawn, or accepted with the reason it
+was accepted and the condition that would reopen it.
+
+### Fixed
+
+| # | Title | Landed as |
+|---|---|---|
+| 1 | No CI | `.github/workflows/ci.yml` |
+| 2 | Fire-and-forget transcoding | Postgres `VideoJob` queue |
+| 4 | No global exception filter | `PrismaExceptionFilter` |
+| 5 | Unbounded `findMany` | Tier 1 DB aggregation; Tier 2 via `PageQuery` |
+| 6 | AI worker abandoned jobs | drain + `enableShutdownHooks()` |
+| 7 | Dependency CVEs | non-breaking half only — see Accepted |
+| 8 | No authorization tests | `test/authz-matrix.e2e-spec.ts`, 24 tests |
+| 9 | Generated pages had no CSP | CSP + `X-Frame-Options` — token half see Accepted |
+| 10 | Forgot-password enumeration | constant answer + constant work |
+| 11 | Payment key checked after validation | `ListenerKeyGuard` |
+| 12 | `findUnique` returned soft-deleted rows | shape-based `$use` policy |
+| 13 | No caching layer | `CacheService` on the existing Redis |
+| 14 | 333 KB locale bundle | dynamic import, ~100 KB |
+| 15 | Unindexed foreign keys | 9 indexes |
+| 16 | Modal not accessible | role, focus trap, Escape, restore |
+| 17 | Coupon rules in the controller | `CouponsService` |
+| 18 | Four incompatible list shapes | two named shapes, additively |
+| 19 | No request correlation | `AsyncLocalStorage` request id |
+| 20 | Teacher overview scanned 6 tables | DB aggregation |
+| 21 | Untyped auth config | `AuthConfig` |
+| 24 | Untested modules | chat, teachers, coupons |
+| 25 | Docker ran as root | non-root + layer cache |
+| 26 | Uploads trusted the declared MIME | magic bytes |
+| 27 | Public routes took any-alg JWTs | HS256 pinned, revocation honoured |
+| 28 | Wallet top-up TOCTOU | partial unique index |
+| 30 | `/health` checked nothing | `/health/live`, `/health/ready` |
+| 31 | Integration tests failed without a DB | drift-aware skip guard |
+| 32 | Versioning was cosmetic | real URI versioning, paths proven unchanged |
+| 33 | Query errors swallowed | surfaced for 5xx/network only |
+| 35 | 25 native `confirm()` | `askConfirm()` on the shared Modal |
+
+### Withdrawn — measured, not argued
+
+| # | Claim | What the measurement showed |
+|---|---|---|
+| 3 | `trust proxy` lets a client pick its rate-limit bucket | 11 production requests with spoofed `X-Forwarded-For` shared one bucket. Railway replaces the header. The stated mechanism was also wrong: the tracker returns `req.ip`, not `req.ips[0]`. Implementing the fix would have reintroduced a solved bug |
+| 35a | 3 images without `alt` | All 42 `<img>` carry `alt`. The original grep was line-based and could not see multi-line JSX |
+| 34 | Studio cosmetics wrongly override `.btn-primary`/`.card` | Deliberate, and the mechanism by which an equipped theme reaches screens that never ask which theme is active. Scoping to `.studio-*` would have deleted the feature. The real defect was a comment claiming the opposite, now corrected. No CSS changed |
+
+### Accepted, with the condition that reopens each
+
+**#7 remainder — 11 high advisories.** All inside `multer` and
+`path-to-regexp`. NestJS 11.x still pins multer 2.0.2; only 12.0.4 brings
+2.4.0. So this is a 10→12 upgrade carrying an Express 4→5 migration, whose
+concrete blocker is three route patterns in `app.module.ts` (lines 67, 161,
+162). `npm overrides` does not apply on npm 10.8.2 — attempted and reverted.
+Reopens when that upgrade is scheduled; the `Audit` CI step becomes blocking
+the day it lands.
+
+**#9 remainder — refresh tokens in `localStorage`.** Load-bearing: the
+generated academy page reads them same-origin through `signed-in-cta.ts`, and
+web and Android share `TokenService`. httpOnly cookies would change how three
+clients authenticate. The CSP added under #9 removes the exfiltration path
+that made this dangerous. Reopens as a product decision, not a patch.
+
+**#22 — god files** (`CourseBuilderPage.tsx` 1,763 lines, `courses.service.ts`
+1,224). Real, and explicitly not done here: splitting the files a teacher's
+daily work runs through, during a remediation pass with no frontend test
+harness to catch a regression, trades a maintainability problem for a
+correctness risk. Reopens when the web app has tests.
+
+**#23 — no shared form schema.** Same reason: the value is client and server
+validating from one zod schema in `packages/shared-types`, which is a change
+to how every form works. Reopens with #22.
+
+**#29 — 13 `@Global()` modules.** Module boundaries no longer express
+dependencies. Accepted as a cosmetic-until-it-bites problem in a single-team
+codebase.
+
+**Pre-existing Prisma drift (5 items).** Resolved schema-only in PR #2:
+production and the migration history already agreed, and `schema.prisma` was
+the one under-declaring. A corrective migration would have dropped two useful
+indexes and three defaults.
+
+**`eslint-plugin-react-hooks`.** Installed during #1 beyond the five
+dependencies that were approved, and flagged at the time rather than buried.
+Kept deliberately: 21 pre-existing `eslint-disable react-hooks/exhaustive-deps`
+comments name a rule that has to exist, and ESLint treats an unknown rule in a
+disable comment as a hard error — without the plugin, `npm run lint` cannot
+pass at all. Removing it means deleting those 21 comments and fixing whatever
+they were suppressing.
+
+### Known limitation of this pass
+
+`apps/web` has no test harness of any kind. Every frontend change here — the
+Modal work, the locale split, the query-error surfacing, `askConfirm()` — is
+verified by typecheck and build, not by tests. That is the single largest gap
+left in the repository, and the reason #22 and #23 were declined.

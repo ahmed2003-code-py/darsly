@@ -69,6 +69,12 @@ const SOFT_DELETE_MODELS = new Set([
   'GroupSession',
 ]);
 
+/**
+ * The reads the soft-delete filter is applied to unconditionally.
+ *
+ * `findUnique`/`findUniqueOrThrow` are handled separately, by shape — see
+ * `filtersUniqueRead` below.
+ */
 const READ_ACTIONS = new Set([
   'findFirst',
   'findFirstOrThrow',
@@ -77,6 +83,44 @@ const READ_ACTIONS = new Set([
   'aggregate',
   'groupBy',
 ]);
+
+const UNIQUE_READ_ACTIONS = new Set(['findUnique', 'findUniqueOrThrow']);
+
+/**
+ * Should this unique read hide soft-deleted rows?
+ *
+ * Only when it is a lookup **by primary id**, and that distinction is the
+ * whole policy.
+ *
+ * `findUnique({ where: { id } })` means "fetch this thing". A thing the
+ * application has deleted should not come back, and it was coming back:
+ * production holds 1,438 soft-deleted rows across 27 models — 205 lessons,
+ * 146 enrollments, 74 payments, 41 courses — so an id taken from a URL really
+ * did resolve to rows the rest of the system treats as gone. That is the bug
+ * this exists to close, and it covers 113 of the call sites.
+ *
+ * `findUnique({ where: { studentId_courseId: {…} } })` means something
+ * different: "does a row already occupy this natural key". Every one of the
+ * twenty compound-key lookups in this codebase asks that immediately before a
+ * create or an upsert — re-enrolment, coupon re-creation, idempotent
+ * certificate issue, review upsert. The unique constraint **counts
+ * soft-deleted rows**, so a lookup that hid them would report the key free,
+ * the create would hit P2002, and a student re-enrolling after a deleted
+ * enrolment would be told "already enrolled". Those lookups must see
+ * everything, and they are left alone.
+ *
+ * This is deliberately not a list of opt-outs. An opt-out list is a list of
+ * sites someone has to remember to update, and getting one wrong here means a
+ * P2002 in a payment path. The shape of the query already carries the intent.
+ *
+ * Prisma 5's `extendedWhereUnique` is what makes the id case possible at all —
+ * `where: { id, deletedAt: null }` was a type error before it.
+ */
+function filtersUniqueRead(where: unknown): boolean {
+  if (!where || typeof where !== 'object') return false;
+  const keys = Object.keys(where as Record<string, unknown>);
+  return keys.length === 1 && keys[0] === 'id';
+}
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -114,11 +158,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     // FKs intact), and top-level reads transparently hide deleted rows. A
     // query that explicitly sets `deletedAt` (e.g. a restore/trash view) wins.
     // Nested relation reads (include/select) are filtered explicitly where the
-    // content tree is loaded; findUnique is intentionally left untouched so
-    // compound-unique lookups keep working.
+    // content tree is loaded. findUnique IS filtered now — see READ_ACTIONS
+    // above for why it was not, and what changed.
     this.$use(async (params, next) => {
       const model = params.model;
       if (model && SOFT_DELETE_MODELS.has(model)) {
+        // Unique reads are filtered by the shape of their `where` — see
+        // `filtersUniqueRead`.
+        if (UNIQUE_READ_ACTIONS.has(params.action) && filtersUniqueRead(params.args?.where)) {
+          params.args = params.args ?? {};
+          params.args.where = { deletedAt: null, ...(params.args.where ?? {}) };
+          return next(params);
+        }
         if (params.action === 'delete') {
           params.action = 'update';
           params.args = { ...params.args, data: { deletedAt: new Date() } };

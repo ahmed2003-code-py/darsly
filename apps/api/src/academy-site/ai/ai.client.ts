@@ -174,21 +174,48 @@ export class AiClient {
     });
 
     const text: string = resp.output_text ?? '';
+    const refusal = this.extractRefusal(resp);
+    if (refusal) {
+      throw new AiJobError(`AI refused the request: ${this.redact(refusal)}`, 'TERMINAL');
+    }
+
+    /**
+     * Truncation, checked before parsing rather than only when the output is
+     * empty.
+     *
+     * A response cut off at the token ceiling does not come back empty — it
+     * comes back as half a JSON document, which then failed `JSON.parse` and
+     * was reported as "Structured output was not valid JSON". Production spent
+     * a page on that message: the retry policy was wrong (raising the ceiling
+     * would have fixed it, trying again would not), and the diagnosis sent
+     * everyone looking for a schema bug that was not there.
+     */
+    if (resp.status === 'incomplete') {
+      const why = resp.incomplete_details?.reason ?? 'unknown';
+      throw new AiJobError(
+        `AI response was cut off before it finished (${why}); raise max_output_tokens`,
+        'RETRYABLE',
+      );
+    }
     if (!text) {
-      const refusal = this.extractRefusal(resp);
-      if (refusal)
-        throw new AiJobError(`AI refused the request: ${this.redact(refusal)}`, 'TERMINAL');
-      if (resp.status === 'incomplete') {
-        throw new AiJobError('AI response was truncated (token budget)', 'RETRYABLE');
-      }
       throw new AiJobError('AI returned empty output', 'RETRYABLE');
     }
+
     let data: T;
     try {
-      // Guaranteed schema-valid JSON under Structured Outputs; parse is safe.
+      // Schema-valid JSON under Structured Outputs; a parse failure here means
+      // the contract was not honoured, not that the text needs repairing.
       data = JSON.parse(text) as T;
-    } catch {
-      throw new AiJobError('Structured output was not valid JSON', 'RETRYABLE');
+    } catch (e) {
+      // Enough to tell a truncation from a prose answer from an empty object,
+      // without putting the document itself in a log.
+      throw new AiJobError(
+        `Structured output was not valid JSON ` +
+          `(status=${resp.status ?? 'n/a'}, ${text.length} chars, ` +
+          `starts ${JSON.stringify(text.slice(0, 24))}, ends ${JSON.stringify(text.slice(-24))}, ` +
+          `${(e as Error).message})`,
+        'RETRYABLE',
+      );
     }
     const { inputTokens, outputTokens } = this.usage(resp);
     return {

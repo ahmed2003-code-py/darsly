@@ -25,6 +25,12 @@ export type ExtractionTier = 'AUTO' | 'STRONG';
 
 /** What reading one page produced, and what it cost. */
 export interface PageExtractionResult {
+  /**
+   * What actually happened to this page, so a failure can be described
+   * instead of being flattened into "nothing readable". Absent on the
+   * single-call path, which predates the distinction.
+   */
+  outcome?: string;
   extraction: PageExtraction | null;
   model: string;
   /** Null when the cheap model's answer was good enough — the normal case. */
@@ -165,6 +171,7 @@ export class PaperExtractionService {
       return {
         extraction: null,
         model: this.config.primaryModel,
+        outcome: read.outcome,
         escalationReason: 'ERROR',
         escalated: read.cost.escalated,
         inputTokens: read.cost.inputTokens,
@@ -193,13 +200,35 @@ export class PaperExtractionService {
     }
 
     const shaped = await this.structure(read.transcript, pageNumber);
-    const extraction = shaped.data ?? transcriptAsFallback(read.transcript);
 
+    /**
+     * Never lose a page that was read.
+     *
+     * This is the line production died on. `shaped.data` came back as an
+     * object with an EMPTY questions array — truthy — so the `??` never
+     * reached the fallback, the page became zero questions, and the teacher
+     * was told «مفيش حاجة مقروءة طلعت من الصفحات دي» about a page whose text
+     * had been transcribed successfully a moment earlier.
+     *
+     * The expensive, irreversible half is the reading. If that worked, its
+     * words reach the teacher even when the cheap half that shapes them did
+     * not: retyping a paragraph takes minutes, re-photographing a page means
+     * going back to wherever the paper is.
+     */
+    const shapedNothing = !shaped.data?.questions?.length;
+    const transcriptHasText = read.transcript.regions.some((r) => (r.text ?? '').trim().length > 4);
+    const extraction =
+      shapedNothing && transcriptHasText ? transcriptAsFallback(read.transcript) : shaped.data;
+
+    if (shapedNothing && transcriptHasText) {
+      this.logger.warn(
+        `Page ${pageNumber}: structuring produced no questions — keeping the transcript as ` +
+          `${read.transcript.regions.length} written question(s) rather than losing the page`,
+      );
+    }
     // Confidence from the reading flows into the flag the review screen
     // already understands, so a question nobody could read cleanly arrives
     // marked rather than looking as settled as the rest.
-    if (extraction && !shaped.data)
-      this.logger.warn(`Page ${pageNumber}: kept the transcript, structuring failed`);
     if (extraction) {
       extraction.questions = extraction.questions.map((q) => ({
         ...q,
@@ -208,13 +237,15 @@ export class PaperExtractionService {
     }
 
     this.logger.log(
-      `Page ${pageNumber}: ${read.cost.calls} call(s) (${read.cost.cropCalls} crop), ` +
-        `confidence ${read.transcript.confidence.toFixed(2)}, ` +
+      `Page ${pageNumber}: ${read.outcome} in ${read.cost.calls} call(s) ` +
+        `(${read.cost.cropCalls} crop), visual=${read.confidence.visual.toFixed(2)} ` +
+        `read=${read.confidence.transcription.toFixed(2)} seg=${read.confidence.segmentation}, ` +
         `${((read.cost.millicents + shaped.millicents) / 1000).toFixed(2)}¢`,
     );
 
     return {
       extraction,
+      outcome: read.outcome,
       model: this.config.primaryModel,
       // Reported as an escalation only when one actually happened, so the
       // number that watches the cheap-first strategy stays honest.

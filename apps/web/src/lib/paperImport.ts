@@ -95,6 +95,8 @@ export interface DraftWarning {
 export function warningKey(code: string): string | null {
   const known = [
     'PAGE_FAILED',
+    'PAGE_PROVIDER_ERROR',
+    'PAGE_OUTPUT_INVALID',
     'PAGE_BLANK',
     'UNSUPPORTED_TYPE',
     'LOW_CONFIDENCE',

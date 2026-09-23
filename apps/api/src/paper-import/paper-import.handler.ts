@@ -178,9 +178,12 @@ export class PaperImportHandler implements AiJobHandler {
       data: {
         status: failed ? 'FAILED' : result.escalated ? 'ESCALATED' : 'EXTRACTED',
         model: result.model,
-        escalationReason: result.escalationReason,
         attempts: { increment: 1 },
         error: result.error,
+        // Kept on the row so a failure can be diagnosed later without the log:
+        // "which of the seven ways did this page fail" is the first question
+        // anybody asks, and it used to have no answer.
+        escalationReason: result.escalationReason ?? (failed ? (result.outcome ?? null) : null),
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costMillicents: result.millicents,
@@ -205,6 +208,9 @@ export class PaperImportHandler implements AiJobHandler {
       pageNumber: p.pageNumber,
       extraction: (p.extracted as PageExtraction | null) ?? null,
       failed: p.status === 'FAILED',
+      // So the teacher is told what actually went wrong rather than being
+      // told their page was blank.
+      outcome: p.escalationReason ?? undefined,
     }));
     const { draft, warnings } = aggregatePages(inputs);
 

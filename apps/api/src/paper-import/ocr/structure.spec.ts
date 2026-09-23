@@ -89,6 +89,8 @@ describe('turning a page into questions, in two stages', () => {
     },
     error: null,
     needsReview: false,
+    outcome: 'SUCCESS',
+    confidence: { visual: 0.8, segmentation: 1, transcription: 0.94, overall: 0.9 },
     ...over,
   });
 
@@ -138,6 +140,41 @@ describe('turning a page into questions, in two stages', () => {
     expect(out.extraction?.questions).toHaveLength(2);
     expect(out.extraction?.questions[0].text).toContain('١٢٨');
     expect(out.error).toBeNull();
+  });
+
+  it('keeps the transcript when the shaping call returns no questions at all', async () => {
+    // Not a thrown error — a well-formed answer with an empty list. The guard
+    // was `shaped.data ?? fallback`, and `{questions: []}` is truthy, so the
+    // fallback never ran and a page that had been read perfectly well reached
+    // the teacher as "no questions found".
+    transcribe.mockResolvedValue(read(transcript()));
+    completeStructured.mockResolvedValue({
+      data: { ...extraction(), questions: [] },
+      inputTokens: 900,
+      outputTokens: 400,
+      costCents: 0,
+    });
+
+    const out = await service.extractPage({ pageNumber: 1, image: Buffer.from('jpeg') });
+
+    expect(out.extraction?.questions).toHaveLength(2);
+    expect(out.extraction?.questions[0].text).toContain('١٢٨');
+  });
+
+  it('does not invent questions when the page really was blank', async () => {
+    // The other side of the same guard: an empty list is right when there was
+    // nothing on the page to keep.
+    transcribe.mockResolvedValue(read(transcript({ blank: true, regions: [] })));
+    completeStructured.mockResolvedValue({
+      data: { ...extraction(), blank: true, questions: [] },
+      inputTokens: 900,
+      outputTokens: 400,
+      costCents: 0,
+    });
+
+    const out = await service.extractPage({ pageNumber: 1, image: Buffer.from('jpeg') });
+
+    expect(out.extraction?.questions).toHaveLength(0);
   });
 
   it('marks every question when the reading itself was doubtful', async () => {

@@ -25,6 +25,50 @@ export interface TranscriptionCost {
   escalated: boolean;
 }
 
+/**
+ * How reading a page ended, in the system's own words.
+ *
+ * Everything used to arrive downstream as "no questions", which reached the
+ * teacher as «مفيش حاجة مقروءة طلعت من الصفحات دي» — a sentence that says the
+ * page is blank. Production produced it for a page that was read fine and then
+ * lost to a provider returning half a JSON document. Telling someone their
+ * handwriting is illegible when in fact our request was cut off is worse than
+ * telling them nothing.
+ */
+export type TranscriptionOutcome =
+  /** The page really has nothing readable on it. */
+  | 'NO_TEXT'
+  /** Read, and good enough to use as it stands. */
+  | 'SUCCESS'
+  /** Read, with parts the teacher needs to look at. */
+  | 'PARTIAL_SUCCESS'
+  /** Read, but nothing came back above the bar. */
+  | 'LOW_CONFIDENCE'
+  /** The page could not be divided, so no crop could be aimed anywhere. */
+  | 'SEGMENTATION_FAILED'
+  /** The provider answered, but not with the shape it was asked for. */
+  | 'STRUCTURED_OUTPUT_FAILED'
+  /** The provider did not answer. */
+  | 'PROVIDER_ERROR';
+
+/**
+ * Confidence, kept apart by what it is about.
+ *
+ * One number was doing four jobs. Production reported 0.16 for a page whose
+ * real problem was a malformed provider response — the image was fine, the
+ * segmentation was fine, and 0.16 described neither.
+ */
+export interface TranscriptionConfidence {
+  /** From the pixels: focus, ink separation, lighting. No model involved. */
+  visual: number;
+  /** Whether the page divided into something crops could be aimed at. */
+  segmentation: number;
+  /** What the model said about its own reading. */
+  transcription: number;
+  /** The lowest of the above, which is what a teacher is really being told. */
+  overall: number;
+}
+
 export interface TranscriptionResult {
   transcript: PageTranscript | null;
   cost: TranscriptionCost;
@@ -32,6 +76,8 @@ export interface TranscriptionResult {
   /** True when something is still unreadable after every pass, so the teacher
    *  is shown it rather than a confident-sounding guess. */
   needsReview: boolean;
+  outcome: TranscriptionOutcome;
+  confidence: TranscriptionConfidence;
 }
 
 /**
@@ -89,11 +135,41 @@ export class TranscriberService {
         cost,
         error: `Image could not be prepared: ${(e as Error).message}`.slice(0, 400),
         needsReview: true,
+        outcome: 'PROVIDER_ERROR',
+        confidence: { visual: 0, segmentation: 0, transcription: 0, overall: 0 },
       };
     }
 
+    // From the pixels alone, before any model has seen it. A page that scores
+    // well here and badly below has a provider problem, not a legibility one.
+    const visual = Math.max(
+      0,
+      Math.min(1, prepared.quality.sharpness * 0.5 + prepared.quality.contrast * 0.5),
+    );
+
     const strong = opts.tier === 'STRONG';
     const images = [prepared.base, ...(prepared.enhanced ? [prepared.enhanced] : [])];
+    const trace = (line: string) => this.logger.debug(`[p${opts.pageNumber}] ${line}`);
+    /**
+     * Stop asking a tier that has stopped answering.
+     *
+     * Once the crop loop was fixed, a provider returning malformed output was
+     * asked six more times on the same page — once per region — and failed
+     * every time. Two strikes is enough to conclude the problem is the tier
+     * and not the crop, and the cheap tier's reading is kept instead.
+     */
+    const failures = new Map<string, number>();
+    const broken = (tier: string) => (failures.get(tier) ?? 0) >= 2;
+    const noteFailure = (tier: string) => failures.set(tier, (failures.get(tier) ?? 0) + 1);
+    trace(
+      `IMAGE_ANALYSIS ${prepared.quality.width}x${prepared.quality.height} ` +
+        `sharp=${prepared.quality.sharpness.toFixed(2)} sep=${prepared.quality.contrast.toFixed(2)} ` +
+        `light=${prepared.quality.lighting.toFixed(2)} skew=${prepared.quality.skewDegrees} ` +
+        `textH=${prepared.quality.textHeightPx}`,
+    );
+    trace(
+      `PREPROCESS_COMPLETE variants=${images.length} base=${prepared.base.width}x${prepared.base.height}`,
+    );
 
     // ── pass A: the whole page ────────────────────────────────────────────
     const pageCall = await this.read(
@@ -106,51 +182,88 @@ export class TranscriberService {
     );
     this.add(cost, pageCall);
     if (!pageCall.data) {
-      return { transcript: null, cost, error: pageCall.error, needsReview: true };
+      const malformed = (pageCall.error ?? '').includes('not valid JSON');
+      return {
+        transcript: null,
+        cost,
+        error: pageCall.error,
+        needsReview: true,
+        outcome: malformed ? 'STRUCTURED_OUTPUT_FAILED' : 'PROVIDER_ERROR',
+        confidence: { visual, segmentation: 0, transcription: 0, overall: 0 },
+      };
     }
 
     let transcript = normalise(pageCall.data);
+    trace(
+      `PAGE_PASS regions=${transcript.regions.length} confidence=${transcript.confidence.toFixed(2)}`,
+    );
     if (!this.config.ocrMultiPass || transcript.blank) {
-      return { transcript, cost, error: null, needsReview: this.needsReview(transcript) };
+      return this.finish(transcript, cost, visual, 1, trace);
     }
 
     // Where the regions actually are on the page, so a re-read can be a crop
     // rather than another look at the same fifty pixels per line.
-    const boxes = await this.locate(original, transcript.regions.length);
+    const boxes = await this.locate(original, transcript.regions.length, trace);
+    trace(`SEGMENTATION_RESULT boxes=${boxes.length} forRegions=${transcript.regions.length}`);
 
     // ── pass B: the regions it could not read ─────────────────────────────
     const ranked = transcript.regions
       .map((region, index) => ({ region, index }))
       .filter(({ region }) => region.confidence < this.config.ocrAcceptConfidence)
       .sort((a, b) => a.region.confidence - b.region.confidence);
+    trace(
+      `TRIAGE below=${ranked.length}/${transcript.regions.length} ` +
+        `accept=${this.config.ocrAcceptConfidence} maxCrops=${this.config.ocrMaxRegionCrops}`,
+    );
 
     /**
-     * Two ways to end up re-reading the whole page instead of cropping it.
+     * Crop if there is anything to crop at. Re-read the page only if there is
+     * not.
      *
-     * The first is that everything is doubtful: a page where every region is
-     * below the bar is a bad page, not a good page with a bad question on it,
-     * and eleven crops cost more than one better look.
+     * This was backwards, and production found it on the first real page. The
+     * cap on how many regions may be cropped was written as a condition for
+     * cropping AT ALL, so a page where every question was doubtful — the exact
+     * page crops exist for — had its seven ready boxes thrown away in favour
+     * of one more look at the whole sheet at the same resolution that had
+     * already failed. The log said `boxes=7` and `0 crop` in the same breath.
      *
-     * The second is that there is nothing to crop. A page the segmenter could
-     * not divide has no boxes to aim at, and the first version of this simply
-     * fell through both branches and did nothing at all — the worst outcome
-     * available, since the reading was known to be poor and a whole-page
-     * re-read was still on the table.
+     * The cap now does what it was named for: it limits how many crops, worst
+     * region first. A crop is a smaller picture than the page it came from, so
+     * six of them is not obviously dearer than one page re-read, and they are
+     * the only thing in the pipeline that gives the model pixels it did not
+     * already have.
      */
-    const nothingToCropButSomethingWrong = !boxes.length && ranked.length > 0;
-    const tooMuchWrongToCrop = ranked.length > this.config.ocrMaxRegionCrops;
-    if (!strong && (nothingToCropButSomethingWrong || (boxes.length && tooMuchWrongToCrop))) {
+    if (boxes.length) {
+      for (const { region, index } of ranked.slice(0, this.config.ocrMaxRegionCrops)) {
+        const box = boxes[index];
+        if (!box) continue;
+        trace(
+          `CROP_CREATED id=q${index + 1} bbox=${box.left},${box.top},${box.width}x${box.height}`,
+        );
+        const resolved = await this.rereadRegion(
+          original,
+          box,
+          region,
+          cost,
+          strong,
+          trace,
+          index,
+          {
+            broken,
+            noteFailure,
+          },
+        );
+        transcript = mergeRegion(transcript, index, resolved);
+      }
+    } else if (ranked.length && !strong && !broken('fallback')) {
+      // Nothing to aim a crop at, and the reading is known to be poor: one
+      // more look at the whole page is all that is left.
+      trace('NO_BOXES re-reading whole page on fallback');
       const retry = await this.read(images, 'fallback', `Page ${opts.pageNumber}. Transcribe it.`);
       this.add(cost, retry);
       cost.escalated = true;
       if (retry.data && transcriptIsUsable(retry.data)) transcript = normalise(retry.data);
-    } else {
-      for (const { region, index } of ranked.slice(0, this.config.ocrMaxRegionCrops)) {
-        const box = boxes[index];
-        if (!box) continue;
-        const resolved = await this.rereadRegion(original, box, region, cost, strong);
-        transcript = mergeRegion(transcript, index, resolved);
-      }
+      else noteFailure('fallback');
     }
 
     // ── pass C: the numbers ───────────────────────────────────────────────
@@ -174,7 +287,49 @@ export class TranscriberService {
       transcript = mergeRegion(transcript, i, updated);
     }
 
-    return { transcript, cost, error: null, needsReview: this.needsReview(transcript) };
+    return this.finish(transcript, cost, visual, boxes.length ? 1 : 0, trace);
+  }
+
+  /** One place that decides what happened, so the states cannot drift apart
+   *  from the numbers that justify them. */
+  private finish(
+    transcript: PageTranscript,
+    cost: TranscriptionCost,
+    visual: number,
+    segmentation: number,
+    trace: (line: string) => void,
+  ): TranscriptionResult {
+    const needsReview = this.needsReview(transcript);
+    const readable = transcript.regions.filter(
+      (r) => (r.text ?? '').replace(UNCLEAR, '').trim().length > 4,
+    );
+    const transcription = transcript.blank
+      ? 1
+      : readable.length
+        ? Math.max(...transcript.regions.map((r) => r.confidence))
+        : 0;
+
+    const outcome: TranscriptionOutcome = transcript.blank
+      ? 'NO_TEXT'
+      : !readable.length
+        ? 'LOW_CONFIDENCE'
+        : !segmentation && needsReview
+          ? 'SEGMENTATION_FAILED'
+          : needsReview
+            ? 'PARTIAL_SUCCESS'
+            : 'SUCCESS';
+
+    const confidence = {
+      visual,
+      segmentation,
+      transcription,
+      overall: Math.min(visual, transcription || 0, segmentation || 1),
+    };
+    trace(
+      `PAGE_DONE outcome=${outcome} visual=${visual.toFixed(2)} seg=${segmentation} ` +
+        `transcription=${transcription.toFixed(2)} calls=${cost.calls} crops=${cost.cropCalls}`,
+    );
+    return { transcript, cost, error: null, needsReview, outcome, confidence };
   }
 
   // ── passes ───────────────────────────────────────────────────────────────
@@ -192,6 +347,12 @@ export class TranscriberService {
     region: TranscriptRegion,
     cost: TranscriptionCost,
     strong: boolean,
+    trace: (line: string) => void = () => undefined,
+    index = 0,
+    circuit: { broken: (t: string) => boolean; noteFailure: (t: string) => void } = {
+      broken: () => false,
+      noteFailure: () => undefined,
+    },
   ): Promise<TranscriptRegion> {
     const candidates: Candidate[] = [
       { text: region.text, confidence: region.confidence, evidence: 'page' },
@@ -204,6 +365,13 @@ export class TranscriberService {
       // model, because a better model at the same resolution is the expensive
       // way to not solve this.
       const tier = pass === 0 ? (strong ? 'strong' : 'primary') : strong ? 'strong' : 'fallback';
+      // A tier that has already failed twice on this page is not going to
+      // answer for this region either, and asking is six more calls for
+      // nothing — which is exactly what happened the first time crops ran.
+      if (circuit.broken(tier)) {
+        trace(`SKIP region=q${index + 1} pass=${pass} tier=${tier} (tier failing on this page)`);
+        break;
+      }
       const crop = await this.images.crop(original, box, { upscale: true });
       const call = await this.read(
         [crop],
@@ -219,7 +387,15 @@ export class TranscriberService {
       this.add(cost, call);
       cost.cropCalls += 1;
       if (pass > 0) cost.escalated = true;
-      if (!call.data?.regions?.length) continue;
+      trace(
+        `TRANSCRIPTION_RESULT region=q${index + 1} pass=${pass} tier=${tier} ` +
+          `ok=${!!call.data} confidence=${call.data?.regions?.[0]?.confidence ?? 'n/a'}` +
+          (call.error ? ` error="${call.error.slice(0, 80)}"` : ''),
+      );
+      if (!call.data?.regions?.length) {
+        if (call.error) circuit.noteFailure(tier);
+        continue;
+      }
 
       const read = normaliseRegion(call.data.regions[0], region.label);
       candidates.push({
@@ -295,7 +471,11 @@ export class TranscriberService {
   /** Where the regions are, measured from the page's own ink. Returns an
    *  empty list when the page did not divide convincingly, which is the
    *  signal to stop trying to crop it. */
-  private async locate(original: Buffer, regionCount: number): Promise<Band[]> {
+  private async locate(
+    original: Buffer,
+    regionCount: number,
+    trace: (line: string) => void = () => undefined,
+  ): Promise<Band[]> {
     try {
       const sharp = require('sharp');
       const meta = await sharp(original).rotate().metadata();
@@ -307,6 +487,10 @@ export class TranscriberService {
         .toBuffer({ resolveWithObject: true });
 
       const result = segment(new Uint8Array(small.data), small.info.width, small.info.height);
+      trace(
+        `SEGMENTATION bands=${result.blocks.length} lines=${result.lines.length} ` +
+          `confident=${result.confident} textH=${result.textHeightPx}`,
+      );
       if (!result.confident) return [];
       const factor = (meta.width ?? small.info.width) / small.info.width;
       const blocks = scaleBoxes(result.blocks, factor);
@@ -353,7 +537,7 @@ export class TranscriberService {
         model,
         price,
         reasoningEffort: effort,
-        maxTokens: this.config.maxTokens,
+        maxTokens: this.config.ocrMaxTokens,
         imageDetail: this.config.imageDetail,
         system: TRANSCRIBE_SYSTEM,
         schemaName: 'page_transcript',

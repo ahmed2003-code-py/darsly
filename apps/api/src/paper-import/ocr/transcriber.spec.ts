@@ -134,14 +134,28 @@ describe('reading a page in as many looks as it needs', () => {
     expect(completeStructured.mock.calls.map((c) => c[0].model)).toContain(config.fallbackModel);
   });
 
-  it('reads the page again rather than cropping all of it', async () => {
-    // A page where everything is doubtful is a bad page, not a good page with
-    // a bad question on it, and eleven crops cost more than one better look.
+  it('caps the number of crops on a bad page — it does not stop cropping', async () => {
+    // This is the bug that produced `0 crop` in production. A page where every
+    // region is doubtful is the page that most needs a closer look, and the
+    // limit on how many crops it is worth is a budget, not an off switch:
+    // seven ready crops were being thrown away and the whole page re-read at
+    // the resolution that had already failed.
+    const tight = Object.assign(new PaperImportConfig(), {
+      ocrMaxRegionCrops: 3,
+    }) as PaperImportConfig;
+    const tightService = new TranscriberService(
+      {
+        completeStructured,
+        costMillicents: (i: number, o: number) => Math.round((i + o) / 100),
+      } as unknown as AiClient,
+      images,
+      tight,
+    );
     const allBad = page({
       confidence: 0.3,
-      regions: Array.from({ length: 12 }, (_, i) => ({
+      regions: Array.from({ length: 7 }, (_, i) => ({
         label: String(i + 1),
-        text: 'x',
+        text: `سؤال ${i + 1}`,
         confidence: 0.3,
         uncertain: [],
         math: [],
@@ -150,10 +164,65 @@ describe('reading a page in as many looks as it needs', () => {
     completeStructured.mockResolvedValue(answer(allBad));
     const image = await renderFixture(fixture('dense-seven').render);
 
+    const out = await tightService.transcribe(image, { pageNumber: 1 });
+
+    // Three regions were worth a crop, and each is allowed two looks — the
+    // same model at crop resolution, then a stronger one if that still failed.
+    // What must not happen is nought.
+    expect(out.cost.cropCalls).toBeGreaterThanOrEqual(3);
+    expect(out.cost.cropCalls).toBeLessThanOrEqual(6);
+  });
+
+  it('stops asking a model that has already failed twice on this page', async () => {
+    // When cropping was fixed, the next thing production did was spend six
+    // more calls asking a tier that had failed on every previous region. A
+    // provider that is failing on this page is failing on this page.
+    const doubtful = page({
+      confidence: 0.3,
+      regions: Array.from({ length: 7 }, (_, i) => ({
+        label: String(i + 1),
+        text: `سؤال ${i + 1}`,
+        confidence: 0.3,
+        uncertain: [],
+        math: [],
+      })),
+    });
+    completeStructured
+      .mockResolvedValueOnce(answer(doubtful))
+      .mockRejectedValue(new Error('OpenAI request failed (503)'));
+    const image = await renderFixture(fixture('dense-seven').render);
+
     const out = await service.transcribe(image, { pageNumber: 1 });
 
-    expect(out.cost.cropCalls).toBe(0);
-    expect(completeStructured.mock.calls.map((c) => c[0].model)).toContain(config.fallbackModel);
+    // Two failures per tier is the budget; seven regions times two passes
+    // would have been fourteen.
+    expect(out.cost.cropCalls).toBeLessThanOrEqual(6);
+    // And the page itself is still returned, at the confidence it was read at.
+    expect(out.transcript?.regions).toHaveLength(7);
+  });
+
+  it('says which part of the reading it is unsure about, separately', async () => {
+    // One number called "confidence" cannot tell a teacher whether the photo
+    // was bad, the page would not divide, or the words were unreadable.
+    completeStructured.mockResolvedValue(answer(page()));
+    const image = await renderFixture(fixture('clean-print-ar').render);
+
+    const out = await service.transcribe(image, { pageNumber: 1 });
+
+    expect(out.outcome).toBe('SUCCESS');
+    expect(out.confidence.visual).toBeGreaterThan(0);
+    expect(out.confidence.transcription).toBeGreaterThan(0.9);
+    expect(out.confidence.overall).toBeGreaterThan(0);
+  });
+
+  it('reports a page the provider would not read as a provider error', async () => {
+    completeStructured.mockRejectedValue(new Error('OpenAI request failed (503)'));
+    const image = await renderFixture(fixture('clean-print-ar').render);
+
+    const out = await service.transcribe(image, { pageNumber: 1 });
+
+    expect(out.outcome).toBe('PROVIDER_ERROR');
+    expect(out.needsReview).toBe(true);
   });
 
   it('crops a flagged number on its own, even inside a region it could read', async () => {

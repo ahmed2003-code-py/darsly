@@ -221,6 +221,17 @@ export class PaperImportConfig {
   // and a hard page is accepted as read.
 
   /**
+   * Output ceiling for a transcription call, separately from the rest.
+   *
+   * Transcribing a dense page is the longest output this product asks for —
+   * every word on the sheet, plus a confidence and an uncertainty list per
+   * region — and a reasoning model spends part of the same budget thinking
+   * before it writes any of it. The shared 6,000 was set for extraction, and
+   * a run that exceeds it comes back as half a JSON document.
+   */
+  readonly ocrMaxTokens = Math.max(2000, num(process.env.PAPER_IMPORT_OCR_MAX_TOKENS, 16000));
+
+  /**
    * At or above this, a region is taken as read and never looked at again.
    *
    * 0.90 is deliberately high for a document that becomes an exam. A wrong
@@ -250,7 +261,11 @@ export class PaperImportConfig {
    */
   readonly ocrMaxRegionCrops = Math.max(
     0,
-    Math.min(30, num(process.env.PAPER_IMPORT_OCR_MAX_CROPS, 6)),
+    // Ten, not six: a seven-question page is ordinary, and a cap of six left
+    // its last question unread. A crop is a smaller picture than the page it
+    // came from, so ten of them is not the extravagance the low number
+    // implied it was.
+    Math.min(30, num(process.env.PAPER_IMPORT_OCR_MAX_CROPS, 10)),
   );
   /** How many flagged fragments inside one region get their own crop. */
   readonly ocrMaxFragmentCrops = Math.max(

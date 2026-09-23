@@ -3205,7 +3205,9 @@
       "NUMBER_GAP": "The paper numbers {{numbers}} are missing. Check whether a page did not upload.",
       "NO_QUESTIONS": "Nothing readable came off these pages.",
       "NOT_ENOUGH_CONTENT": "The material you uploaded supports {{got}} of the {{wanted}} questions you asked for. Upload more material, or ask for fewer.",
-      "DUPLICATE_QUESTION": "Question {{number}} repeats an earlier one. Rewrite it or delete it."
+      "DUPLICATE_QUESTION": "Question {{number}} repeats an earlier one. Rewrite it or delete it.",
+      "PAGE_PROVIDER_ERROR": "Page {{page}} could not be processed — the reading service did not respond. Your file is safe; read the failed pages again.",
+      "PAGE_OUTPUT_INVALID": "Page {{page}} was read but the result came back malformed, so it was not used. Your file is safe; read the failed pages again."
     }
   },
   "examStudio": {

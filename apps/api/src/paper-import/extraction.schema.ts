@@ -335,6 +335,12 @@ export interface ExamDraft {
 
 export type DraftWarningCode =
   | 'PAGE_FAILED'
+  /// The provider did not answer at all. Nothing is known about the page, and
+  /// telling a teacher their handwriting is illegible would be a lie.
+  | 'PAGE_PROVIDER_ERROR'
+  /// The provider answered, but not in the shape it was asked for. Also not
+  /// the teacher's fault, and also not "nothing readable".
+  | 'PAGE_OUTPUT_INVALID'
   | 'PAGE_BLANK'
   | 'UNSUPPORTED_TYPE'
   | 'LOW_CONFIDENCE'
@@ -372,6 +378,16 @@ export interface PageInput {
   extraction: PageExtraction | null;
   /** Set when the page could not be read at all, after escalation. */
   failed?: boolean;
+  /**
+   * Why, in the pipeline's own words.
+   *
+   * Every failure used to arrive here as the same thing and leave as "nothing
+   * readable came off these pages" — which a teacher reads as "your
+   * handwriting is illegible". Production produced that sentence for a page
+   * that had been transcribed fine and then lost to a malformed provider
+   * response. What went wrong decides what they are told.
+   */
+  outcome?: string;
 }
 
 let counter = 0;
@@ -414,10 +430,18 @@ export function aggregatePages(pages: PageInput[]): { draft: ExamDraft; warnings
 
   for (const page of ordered) {
     if (page.failed) {
+      // The three of these are different things to be told, and only the
+      // first is about the page.
+      const code =
+        page.outcome === 'PROVIDER_ERROR'
+          ? 'PAGE_PROVIDER_ERROR'
+          : page.outcome === 'STRUCTURED_OUTPUT_FAILED'
+            ? 'PAGE_OUTPUT_INVALID'
+            : 'PAGE_FAILED';
       warnings.push({
-        code: 'PAGE_FAILED',
+        code,
         params: { page: page.pageNumber },
-        detail: `Page ${page.pageNumber} could not be read. Its questions are missing — retry it, or add them by hand.`,
+        detail: `Page ${page.pageNumber} could not be read (${page.outcome ?? 'unknown'}).`,
         page: page.pageNumber,
       });
       continue;

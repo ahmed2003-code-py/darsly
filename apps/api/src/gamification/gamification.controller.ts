@@ -28,7 +28,9 @@ export class GamificationController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: '[student] The whole learning profile: level, XP, streak, missions, rank' })
+  @ApiOperation({
+    summary: '[student] The whole learning profile: level, XP, streak, missions, rank',
+  })
   snapshot(@CurrentUser() user: JwtPayload) {
     return this.students.snapshot(user.sub);
   }
@@ -67,19 +69,33 @@ export class GamificationController {
     @Query('period') period: LeaderboardPeriod = 'WEEKLY',
   ) {
     const studentId = await this.students.studentIdOf(user.sub);
-    const safeScope: LeaderboardScope = ['GLOBAL', 'ACADEMY', 'COURSE'].includes(scope) ? scope : 'GLOBAL';
-    const safePeriod: LeaderboardPeriod = ['WEEKLY', 'MONTHLY', 'ALLTIME'].includes(period) ? period : 'WEEKLY';
+    const safeScope: LeaderboardScope = ['GLOBAL', 'ACADEMY', 'COURSE'].includes(scope)
+      ? scope
+      : 'GLOBAL';
+    const safePeriod: LeaderboardPeriod = ['WEEKLY', 'MONTHLY', 'ALLTIME'].includes(period)
+      ? period
+      : 'WEEKLY';
 
     if (safeScope === 'ACADEMY') {
-      const member = await this.prisma.enrollment.count({ where: { studentId, tenantId: scopeId } });
+      const member = await this.prisma.enrollment.count({
+        where: { studentId, tenantId: scopeId },
+      });
       if (!member) throw new ForbiddenException('You are not enrolled with this academy');
     }
     if (safeScope === 'COURSE') {
-      const member = await this.prisma.enrollment.count({ where: { studentId, courseId: scopeId } });
+      const member = await this.prisma.enrollment.count({
+        where: { studentId, courseId: scopeId },
+      });
       if (!member) throw new ForbiddenException('You are not enrolled in this course');
     }
 
-    return this.leaderboard.board({ scope: safeScope, scopeId, period: safePeriod, studentId, limit: 20 });
+    return this.leaderboard.board({
+      scope: safeScope,
+      scopeId,
+      period: safePeriod,
+      studentId,
+      limit: 20,
+    });
   }
 
   @Get('rewards')

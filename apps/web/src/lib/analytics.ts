@@ -41,8 +41,20 @@ export interface AttendanceStats {
   counts: { present: number; absent: number; late: number; excused: number };
   attendanceRatePct: number | null;
   trend: { date: string; present: number; total: number; ratePct: number | null }[];
-  byGroup: { groupId: string; name: string; present: number; total: number; ratePct: number | null }[];
-  atRisk: { studentId: string; fullName: string; groupId: string; groupName: string; streak: number }[];
+  byGroup: {
+    groupId: string;
+    name: string;
+    present: number;
+    total: number;
+    ratePct: number | null;
+  }[];
+  atRisk: {
+    studentId: string;
+    fullName: string;
+    groupId: string;
+    groupName: string;
+    streak: number;
+  }[];
 }
 
 export interface GroupAnalyticsRow {
@@ -108,19 +120,26 @@ export interface FinancialOverview {
 function useAcademyAnalytics<T>(path: string, range?: AnalyticsRange) {
   return useQuery<T>({
     queryKey: ['academy-analytics', path, range],
-    queryFn: async () => (await api.get(`/teacher/analytics/${path}`, { params: range ? { range } : undefined })).data,
+    queryFn: async () =>
+      (await api.get(`/teacher/analytics/${path}`, { params: range ? { range } : undefined })).data,
   });
 }
 
-export const useStudentsOverview = (range: AnalyticsRange) => useAcademyAnalytics<StudentsOverview>('students', range);
-export const useGrowth = (range: AnalyticsRange) => useAcademyAnalytics<GrowthPoint[]>('growth', range);
+export const useStudentsOverview = (range: AnalyticsRange) =>
+  useAcademyAnalytics<StudentsOverview>('students', range);
+export const useGrowth = (range: AnalyticsRange) =>
+  useAcademyAnalytics<GrowthPoint[]>('growth', range);
 export const useEnrollmentBreakdown = () => useAcademyAnalytics<EnrollmentBreakdown>('enrollments');
-export const useAttendanceStats = (range: AnalyticsRange) => useAcademyAnalytics<AttendanceStats>('attendance', range);
-export const useGroupsAnalytics = () => useAcademyAnalytics<{ total: number; groups: GroupAnalyticsRow[] }>('groups');
-export const useSchedulingOverview = (range: AnalyticsRange) => useAcademyAnalytics<SchedulingOverview>('scheduling', range);
+export const useAttendanceStats = (range: AnalyticsRange) =>
+  useAcademyAnalytics<AttendanceStats>('attendance', range);
+export const useGroupsAnalytics = () =>
+  useAcademyAnalytics<{ total: number; groups: GroupAnalyticsRow[] }>('groups');
+export const useSchedulingOverview = (range: AnalyticsRange) =>
+  useAcademyAnalytics<SchedulingOverview>('scheduling', range);
 export const useCoursesAnalytics = () => useAcademyAnalytics<CourseAnalyticsRow[]>('courses');
 export const useStaffAnalytics = () => useAcademyAnalytics<StaffAnalyticsRow[]>('teachers');
-export const useFinancialOverview = (range: AnalyticsRange) => useAcademyAnalytics<FinancialOverview>('financial', range);
+export const useFinancialOverview = (range: AnalyticsRange) =>
+  useAcademyAnalytics<FinancialOverview>('financial', range);
 
 // ── Platform (admin) additions ──────────────────────────────────────────
 
@@ -135,7 +154,12 @@ export interface PlatformFinancial {
   rangeDays: number;
   grossCents: number;
   commissionCents: number;
-  paymentConversion: { paid: number; pending: number; rejected: number; convertedPct: number | null };
+  paymentConversion: {
+    paid: number;
+    pending: number;
+    rejected: number;
+    convertedPct: number | null;
+  };
 }
 
 export interface ActiveAcademyRate {
@@ -162,7 +186,8 @@ export function usePlatformFinancial(range: AnalyticsRange) {
 export function useActiveAcademyRate(range: AnalyticsRange) {
   return useQuery<ActiveAcademyRate>({
     queryKey: ['admin-active-academies', range],
-    queryFn: async () => (await api.get('/admin/analytics/active-academies', { params: { range } })).data,
+    queryFn: async () =>
+      (await api.get('/admin/analytics/active-academies', { params: { range } })).data,
   });
 }
 
@@ -174,10 +199,22 @@ export interface CenterOverview {
   students: number;
   courses: { total: number; published: number };
   groups: number;
-  sessions: { upcoming7d: number; upcomingPhysical: number; upcomingLive: number; completed30d: number };
+  sessions: {
+    upcoming7d: number;
+    upcomingPhysical: number;
+    upcomingLive: number;
+    completed30d: number;
+  };
   attendance: { records30d: number; presentRate: number | null };
   subjectsActive: number | null;
-  recentActivity: { id: string; action: string; entity: string; entityId: string | null; at: string; by: string | null }[];
+  recentActivity: {
+    id: string;
+    action: string;
+    entity: string;
+    entityId: string | null;
+    at: string;
+    by: string | null;
+  }[];
 }
 export const useCenterOverview = () => useAcademyAnalytics<CenterOverview>('center');
 
@@ -189,7 +226,8 @@ export interface MyTeaching {
   sessions: { upcoming: number; upcomingPhysical: number; upcomingLive: number; completed: number };
   attendance: { records: number; presentRate: number | null };
 }
-export const useMyTeaching = (range: AnalyticsRange) => useAcademyAnalytics<MyTeaching>('me', range);
+export const useMyTeaching = (range: AnalyticsRange) =>
+  useAcademyAnalytics<MyTeaching>('me', range);
 
 // ── Phase 8: Center activity trail (owner-only) ─────────────────────────────
 
@@ -211,7 +249,11 @@ export function useCenterActivity() {
   return useInfiniteQuery<ActivityPage>({
     queryKey: ['academy-analytics', 'activity'],
     queryFn: async ({ pageParam }) =>
-      (await api.get('/teacher/analytics/activity', { params: pageParam ? { cursor: pageParam } : undefined })).data,
+      (
+        await api.get('/teacher/analytics/activity', {
+          params: pageParam ? { cursor: pageParam } : undefined,
+        })
+      ).data,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });

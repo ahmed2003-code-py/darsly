@@ -44,7 +44,13 @@ export function DeleteButton({
   const [phase, setPhase] = useState<Phase>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(
+    () => () => {
+      alive.current = false;
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const disarm = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -77,7 +83,8 @@ export function DeleteButton({
     }
   }
 
-  const text = phase === 'armed' ? (confirmLabel ?? t('common.confirmDelete')) : (label ?? t('common.delete'));
+  const text =
+    phase === 'armed' ? (confirmLabel ?? t('common.confirmDelete')) : (label ?? t('common.delete'));
   const showText = !compact || phase !== 'idle';
   const open = phase === 'armed';
   const eaten = phase === 'working' || phase === 'done';
@@ -100,7 +107,12 @@ export function DeleteButton({
       {/* The bin. Its lid is a separate line so it can tip, and it tips the
           moment the button is armed — the container is open before anything
           goes into it, which is the whole promise of the gesture. */}
-      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 overflow-visible" fill="none" aria-hidden>
+      <svg
+        viewBox="0 0 24 24"
+        className="h-[18px] w-[18px] shrink-0 overflow-visible"
+        fill="none"
+        aria-hidden
+      >
         <path
           d="M4 7h16"
           stroke="currentColor"
@@ -108,18 +120,32 @@ export function DeleteButton({
           strokeLinecap="round"
           style={{
             transformOrigin: '20% 60%',
-            transform: motion.off ? undefined : `rotate(${open || eaten ? -22 : 0}deg) translateY(${open || eaten ? -1 : 0}px)`,
+            transform: motion.off
+              ? undefined
+              : `rotate(${open || eaten ? -22 : 0}deg) translateY(${open || eaten ? -1 : 0}px)`,
             transition: `transform ${motion.dur * 260}ms cubic-bezier(.2,.9,.3,1.3)`,
           }}
         />
-        <path d="M10 4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+        <path
+          d="M10 4h4"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
           style={{
             transformOrigin: '20% 60%',
-            transform: motion.off ? undefined : `rotate(${open || eaten ? -22 : 0}deg) translateY(${open || eaten ? -1 : 0}px)`,
+            transform: motion.off
+              ? undefined
+              : `rotate(${open || eaten ? -22 : 0}deg) translateY(${open || eaten ? -1 : 0}px)`,
             transition: `transform ${motion.dur * 260}ms cubic-bezier(.2,.9,.3,1.3)`,
           }}
         />
-        <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
         {/* What the bin swallowed, rising inside it and settling. */}
         {eaten && !motion.off && (
           <rect x="7.5" y="10" width="9" height="9" rx="1.5" fill="currentColor" opacity="0.9">

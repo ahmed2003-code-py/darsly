@@ -9,7 +9,9 @@ describe('the S3 driver, as R2 needs it', () => {
   const fakeSdk = {
     S3Client: class {
       opts: any;
-      constructor(opts: any) { this.opts = opts; }
+      constructor(opts: any) {
+        this.opts = opts;
+      }
       async send(cmd: any) {
         sent.push(cmd);
         if (cmd.kind === 'ListObjectsV2Command') {
@@ -17,7 +19,9 @@ describe('the S3 driver, as R2 needs it', () => {
           const page = cmd.input.ContinuationToken ? Number(cmd.input.ContinuationToken) : 0;
           const n = page < 2 ? 1000 : 7;
           return {
-            Contents: Array.from({ length: n }, (_, i) => ({ Key: `${cmd.input.Prefix}${page * 1000 + i}` })),
+            Contents: Array.from({ length: n }, (_, i) => ({
+              Key: `${cmd.input.Prefix}${page * 1000 + i}`,
+            })),
             IsTruncated: page < 2,
             NextContinuationToken: page < 2 ? String(page + 1) : undefined,
           };
@@ -25,8 +29,14 @@ describe('the S3 driver, as R2 needs it', () => {
         return {};
       }
     },
-    ListObjectsV2Command: class { kind = 'ListObjectsV2Command'; constructor(public input: any) {} },
-    DeleteObjectsCommand: class { kind = 'DeleteObjectsCommand'; constructor(public input: any) {} },
+    ListObjectsV2Command: class {
+      kind = 'ListObjectsV2Command';
+      constructor(public input: any) {}
+    },
+    DeleteObjectsCommand: class {
+      kind = 'DeleteObjectsCommand';
+      constructor(public input: any) {}
+    },
   };
 
   beforeEach(() => {

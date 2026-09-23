@@ -31,7 +31,13 @@ export interface GamificationSnapshot {
     quizAccuracy: number | null;
     activeCourses: number;
   };
-  rank: { weekly: number; weeklyXp: number; division: string; divisionIcon: string; best: number | null };
+  rank: {
+    weekly: number;
+    weeklyXp: number;
+    division: string;
+    divisionIcon: string;
+    best: number | null;
+  };
   activeTitle: string | null;
   titles: { key: string; labelAr: string; labelEn: string; icon: string }[];
   achievements: {
@@ -102,7 +108,14 @@ export interface GamificationOutcome {
   leveledUp: boolean;
   levelNameAr?: string;
   levelNameEn?: string;
-  achievements: { key: string; icon: string; titleAr: string; titleEn: string; xpReward: number; coinReward: number }[];
+  achievements: {
+    key: string;
+    icon: string;
+    titleAr: string;
+    titleEn: string;
+    xpReward: number;
+    coinReward: number;
+  }[];
   missions: { id: string; template: string; kind: string; xpReward: number; coinReward: number }[];
 }
 

@@ -31,7 +31,11 @@ export default function CourseDetailPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
 
-  const { data: course, isLoading, error } = useQuery({
+  const {
+    data: course,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['course', id],
     queryFn: async () => (await api.get(`/courses/${id}`)).data,
     retry: false,
@@ -117,7 +121,8 @@ export default function CourseDetailPage() {
   const canEnroll =
     isStudent &&
     !otherYear &&
-    (!enrollmentStatus || ['REJECTED', 'REVOKED', 'EXPIRED'].includes(enrollmentStatus) ||
+    (!enrollmentStatus ||
+      ['REJECTED', 'REVOKED', 'EXPIRED'].includes(enrollmentStatus) ||
       (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess));
 
   return (
@@ -129,14 +134,21 @@ export default function CourseDetailPage() {
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-outline">
               {course.subject && <Badge>{course.subject.nameAr}</Badge>}
               {(course.grades ?? []).map((g: { id: string; nameAr: string }) => (
-                <Badge key={g.id} tone="neutral">{g.nameAr}</Badge>
+                <Badge key={g.id} tone="neutral">
+                  {g.nameAr}
+                </Badge>
               ))}
-              {course.status !== 'PUBLISHED' && <Badge tone="warn">{t(`teacher.courses.status.${course.status}`)}</Badge>}
+              {course.status !== 'PUBLISHED' && (
+                <Badge tone="warn">{t(`teacher.courses.status.${course.status}`)}</Badge>
+              )}
             </div>
             <h1 className="mb-3 font-heading text-3xl font-extrabold">{course.title}</h1>
             <Markdown className="mb-4 text-on-surface-variant">{course.description}</Markdown>
             <div className="flex flex-wrap items-center gap-5 text-sm text-on-surface-variant">
-              <Link to={`/t/${course.teacher.slug}`} className="flex items-center gap-2 font-bold text-primary hover:underline">
+              <Link
+                to={`/t/${course.teacher.slug}`}
+                className="flex items-center gap-2 font-bold text-primary hover:underline"
+              >
                 <span className="material-symbols-outlined">person</span>
                 {course.teacher.fullName}
               </Link>
@@ -158,22 +170,38 @@ export default function CourseDetailPage() {
                   <span className="font-normal text-outline">({course.reviewsCount})</span>
                 </span>
               )}
-              {course.viewer.hasAccess && course.viewer.enrollmentStatus === 'ACTIVE' && user?.role === Role.STUDENT && (
-                <button className="flex items-center gap-1 text-primary hover:underline" onClick={() => setReviewOpen(true)}>
-                  <span className="material-symbols-outlined text-base">rate_review</span>
-                  {t('review.write')}
-                </button>
-              )}
+              {course.viewer.hasAccess &&
+                course.viewer.enrollmentStatus === 'ACTIVE' &&
+                user?.role === Role.STUDENT && (
+                  <button
+                    className="flex items-center gap-1 text-primary hover:underline"
+                    onClick={() => setReviewOpen(true)}
+                  >
+                    <span className="material-symbols-outlined text-base">rate_review</span>
+                    {t('review.write')}
+                  </button>
+                )}
             </div>
             {user?.role === Role.STUDENT && (
-              <div className="mt-4"><SaveHeart courseId={course.id} /></div>
+              <div className="mt-4">
+                <SaveHeart courseId={course.id} />
+              </div>
             )}
           </div>
           {course.id && (
             <>
-              <ReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} courseId={course.id} />
-              <PaymentModal open={payOpen} onClose={() => setPayOpen(false)} courseId={course.id}
-                amountCents={priced?.totalCents ?? course.priceCents} couponCode={priced?.coupon?.code} />
+              <ReviewModal
+                open={reviewOpen}
+                onClose={() => setReviewOpen(false)}
+                courseId={course.id}
+              />
+              <PaymentModal
+                open={payOpen}
+                onClose={() => setPayOpen(false)}
+                courseId={course.id}
+                amountCents={priced?.totalCents ?? course.priceCents}
+                couponCode={priced?.coupon?.code}
+              />
             </>
           )}
 
@@ -190,7 +218,9 @@ export default function CourseDetailPage() {
                   <h2 className="font-heading text-lg font-extrabold">{t('course.examTitle')}</h2>
 
                   {course.entryExam.awaitingGrading ? (
-                    <p className="mt-1 text-sm text-on-surface-variant">{t('course.examWaiting')}</p>
+                    <p className="mt-1 text-sm text-on-surface-variant">
+                      {t('course.examWaiting')}
+                    </p>
                   ) : (
                     <p className="mt-1 text-sm text-on-surface-variant">{t('course.examBody')}</p>
                   )}
@@ -204,27 +234,31 @@ export default function CourseDetailPage() {
                   {/* Failed, and the teacher left something to watch. The lesson
                       comes first: sending somebody straight back to a paper they
                       just failed is not teaching them anything. */}
-                  {course.entryExam.attempted
-                    && !course.entryExam.awaitingGrading
-                    && course.entryExam.remedialLessonId && (
-                    <div className="mt-3 rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
-                      <p className="text-sm font-bold">{t('course.examRemedial')}</p>
-                      <p className="mt-0.5 text-xs text-on-surface-variant">{t('course.examRemedialBody')}</p>
-                      <Link
-                        to={`/learn/${course.id}/${course.entryExam.remedialLessonId}`}
-                        className="btn-primary mt-2 inline-flex items-center gap-1.5 py-2 text-sm"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">play_circle</span>
-                        {t('course.examRemedial')}
-                      </Link>
-                    </div>
-                  )}
+                  {course.entryExam.attempted &&
+                    !course.entryExam.awaitingGrading &&
+                    course.entryExam.remedialLessonId && (
+                      <div className="mt-3 rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
+                        <p className="text-sm font-bold">{t('course.examRemedial')}</p>
+                        <p className="mt-0.5 text-xs text-on-surface-variant">
+                          {t('course.examRemedialBody')}
+                        </p>
+                        <Link
+                          to={`/learn/${course.id}/${course.entryExam.remedialLessonId}`}
+                          className="btn-primary mt-2 inline-flex items-center gap-1.5 py-2 text-sm"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">play_circle</span>
+                          {t('course.examRemedial')}
+                        </Link>
+                      </div>
+                    )}
 
                   {!course.entryExam.awaitingGrading && (
                     <Link
                       to={`/learn/${course.id}/${course.entryExam.lessonId}`}
                       className={`mt-3 inline-flex items-center gap-1.5 py-2 text-sm ${
-                        course.entryExam.remedialLessonId && course.entryExam.attempted ? 'btn-ghost' : 'btn-primary'
+                        course.entryExam.remedialLessonId && course.entryExam.attempted
+                          ? 'btn-ghost'
+                          : 'btn-primary'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">edit_note</span>
@@ -262,7 +296,9 @@ export default function CourseDetailPage() {
                       </span>
                       <span className="flex items-center gap-3 text-sm text-outline">
                         {t('course.lessonsCount', { count: u.lessons.length })}
-                        <span className="material-symbols-outlined">{open ? 'expand_less' : 'expand_more'}</span>
+                        <span className="material-symbols-outlined">
+                          {open ? 'expand_less' : 'expand_more'}
+                        </span>
                       </span>
                     </button>
                   )}
@@ -273,36 +309,54 @@ export default function CourseDetailPage() {
                           <>
                             <span
                               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                                l.locked ? 'bg-surface-container-high text-outline' : 'bg-secondary-container text-on-secondary-container'
+                                l.locked
+                                  ? 'bg-surface-container-high text-outline'
+                                  : 'bg-secondary-container text-on-secondary-container'
                               }`}
                             >
                               <span className="material-symbols-outlined">
-                                {l.locked ? 'lock' : LESSON_ICON[l.type] ?? 'play_circle'}
+                                {l.locked ? 'lock' : (LESSON_ICON[l.type] ?? 'play_circle')}
                               </span>
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className="truncate font-bold">{l.title}</p>
                               <p className="flex flex-wrap items-center gap-3 text-xs text-outline">
                                 {l.durationSec > 0 && <span>{duration(l.durationSec)}</span>}
-                                {l.locked && l.dripUnlockAt && <span>{t('course.unlocksOn', { date: dateShort(l.dripUnlockAt) })}</span>}
+                                {l.locked && l.dripUnlockAt && (
+                                  <span>
+                                    {t('course.unlocksOn', { date: dateShort(l.dripUnlockAt) })}
+                                  </span>
+                                )}
                                 {l.locked && !l.dripUnlockAt && l.dripAfterEnrollDays != null && (
-                                  <span>{t('course.unlocksAfterDays', { count: l.dripAfterEnrollDays })}</span>
+                                  <span>
+                                    {t('course.unlocksAfterDays', { count: l.dripAfterEnrollDays })}
+                                  </span>
                                 )}
                                 {l.attachments?.length > 0 && (
-                                  <span>{t('course.attachmentsCount', { count: l.attachments.length })}</span>
+                                  <span>
+                                    {t('course.attachmentsCount', { count: l.attachments.length })}
+                                  </span>
                                 )}
                               </p>
                             </div>
-                            {l.isFreePreview && <Badge tone="teal">{t('course.freePreview')}</Badge>}
+                            {l.isFreePreview && (
+                              <Badge tone="teal">{t('course.freePreview')}</Badge>
+                            )}
                             {!l.locked && (
                               <span className="material-symbols-outlined text-primary">
-                                {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : 'play_circle'}
+                                {l.type === 'QUIZ'
+                                  ? 'quiz'
+                                  : l.type === 'ASSIGNMENT'
+                                    ? 'assignment'
+                                    : 'play_circle'}
                               </span>
                             )}
                           </>
                         );
                         return l.locked ? (
-                          <li key={l.id} className="flex items-center gap-4 px-6 py-4 opacity-60">{Row}</li>
+                          <li key={l.id} className="flex items-center gap-4 px-6 py-4 opacity-60">
+                            {Row}
+                          </li>
                         ) : (
                           <li key={l.id}>
                             <Link
@@ -339,48 +393,68 @@ export default function CourseDetailPage() {
                   className="h-full w-full bg-black object-contain"
                 />
               ) : (
-                course.thumbnailUrl && <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                course.thumbnailUrl && (
+                  <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                )
               )}
             </div>
             <div className="p-6">
               <p className="text-sm text-outline">{t('course.priceLabel')}</p>
               <p className="mb-4 font-heading text-4xl font-extrabold">
-                {course.priceCents === 0 ? t('common.free') : egp(priced?.totalCents ?? course.priceCents)}
+                {course.priceCents === 0
+                  ? t('common.free')
+                  : egp(priced?.totalCents ?? course.priceCents)}
                 {course.pricingModel === 'MONTHLY_SUBSCRIPTION' && (
-                  <span className="text-sm font-normal text-outline"> / {t('course.perMonth')}</span>
+                  <span className="text-sm font-normal text-outline">
+                    {' '}
+                    / {t('course.perMonth')}
+                  </span>
                 )}
               </p>
 
               {priced && priced.discountCents > 0 && (
                 <div className="mb-4 space-y-1 rounded-lg bg-secondary-container/40 p-3 text-sm">
-                  <p className="flex justify-between"><span>{t('course.basePrice')}</span><span>{egp(priced.basePriceCents)}</span></p>
-                  <p className="flex justify-between text-secondary"><span>{t('course.discount')} ({priced.coupon?.code})</span><span>-{egp(priced.discountCents)}</span></p>
-                  <p className="flex justify-between font-bold"><span>{t('course.total')}</span><span>{egp(priced.totalCents)}</span></p>
+                  <p className="flex justify-between">
+                    <span>{t('course.basePrice')}</span>
+                    <span>{egp(priced.basePriceCents)}</span>
+                  </p>
+                  <p className="flex justify-between text-secondary">
+                    <span>
+                      {t('course.discount')} ({priced.coupon?.code})
+                    </span>
+                    <span>-{egp(priced.discountCents)}</span>
+                  </p>
+                  <p className="flex justify-between font-bold">
+                    <span>{t('course.total')}</span>
+                    <span>{egp(priced.totalCents)}</span>
+                  </p>
                 </div>
               )}
 
               {statusBanner && (
-                <p className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-bold ${
-                  statusBanner.tone === 'teal'
-                    ? 'bg-secondary-container/50 text-on-secondary-container'
-                    : statusBanner.tone === 'warn'
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-error-container text-on-error-container'
-                }`}>
+                <p
+                  className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-bold ${
+                    statusBanner.tone === 'teal'
+                      ? 'bg-secondary-container/50 text-on-secondary-container'
+                      : statusBanner.tone === 'warn'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-error-container text-on-error-container'
+                  }`}
+                >
                   <span className="material-symbols-outlined">{statusBanner.icon}</span>
                   {statusBanner.text}
                 </p>
               )}
               {flash && !statusBanner && (
-                <p className="mb-4 rounded-lg bg-secondary-container/50 px-4 py-3 text-sm font-bold text-on-secondary-container">{flash}</p>
+                <p className="mb-4 rounded-lg bg-secondary-container/50 px-4 py-3 text-sm font-bold text-on-secondary-container">
+                  {flash}
+                </p>
               )}
 
               {otherYear && (
                 <p className="mb-1 flex items-start gap-2 rounded-xl bg-secondary-container/60 px-4 py-3 text-sm font-bold text-on-secondary-container">
                   <span className="material-symbols-outlined text-base">school</span>
-                  <span>
-                    {t('course.otherYear', { years: yearNames })}
-                  </span>
+                  <span>{t('course.otherYear', { years: yearNames })}</span>
                 </p>
               )}
               {canEnroll && (
@@ -409,12 +483,15 @@ export default function CourseDetailPage() {
                   >
                     {course.priceCents > 0
                       ? t('course.payAndEnroll')
-                      : ['EXPIRED'].includes(enrollmentStatus ?? '') || (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess)
+                      : ['EXPIRED'].includes(enrollmentStatus ?? '') ||
+                          (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess)
                         ? t('course.renew')
                         : t('course.enroll')}
                   </button>
                   <p className="mt-3 flex items-center justify-center gap-1 text-center text-xs text-outline">
-                    <span className="material-symbols-outlined text-sm">{course.priceCents > 0 ? 'verified_user' : 'bolt'}</span>
+                    <span className="material-symbols-outlined text-sm">
+                      {course.priceCents > 0 ? 'verified_user' : 'bolt'}
+                    </span>
                     {course.priceCents > 0 ? t('course.payHint') : t('course.autoApproveHint')}
                   </p>
                 </>
@@ -427,7 +504,9 @@ export default function CourseDetailPage() {
                   <ul className="space-y-1 text-sm text-on-surface-variant">
                     {course.bundleCourses.map((b: any) => (
                       <li key={b.id}>
-                        <Link className="text-primary hover:underline" to={`/course/${b.id}`}>• {b.title}</Link>
+                        <Link className="text-primary hover:underline" to={`/course/${b.id}`}>
+                          • {b.title}
+                        </Link>
                       </li>
                     ))}
                   </ul>

@@ -28,23 +28,37 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
         {STEPS.map((s, idx) => (
           <div key={s.key} className="flex flex-1 items-center last:flex-none">
             <div className="flex flex-col items-center">
-              <div className={`grid h-10 w-10 place-items-center rounded-full border-2 transition ${
-                idx < i ? 'border-primary bg-primary text-on-primary'
-                : idx === i ? 'border-primary text-primary'
-                : 'border-outline-variant text-on-surface-variant'
-              }`}>
-                <span className="material-symbols-outlined text-[20px]">{idx < i ? 'check' : s.icon}</span>
+              <div
+                className={`grid h-10 w-10 place-items-center rounded-full border-2 transition ${
+                  idx < i
+                    ? 'border-primary bg-primary text-on-primary'
+                    : idx === i
+                      ? 'border-primary text-primary'
+                      : 'border-outline-variant text-on-surface-variant'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  {idx < i ? 'check' : s.icon}
+                </span>
               </div>
-              <span className={`mt-1 text-xs font-semibold ${idx === i ? 'text-primary' : 'text-on-surface-variant'}`}>
+              <span
+                className={`mt-1 text-xs font-semibold ${idx === i ? 'text-primary' : 'text-on-surface-variant'}`}
+              >
                 {t(`studio.wizard.steps.${s.key}`)}
               </span>
             </div>
-            {idx < STEPS.length - 1 && <div className={`mx-2 h-0.5 flex-1 ${idx < i ? 'bg-primary' : 'bg-outline-variant'}`} />}
+            {idx < STEPS.length - 1 && (
+              <div
+                className={`mx-2 h-0.5 flex-1 ${idx < i ? 'bg-primary' : 'bg-outline-variant'}`}
+              />
+            )}
           </div>
         ))}
       </div>
 
-      <p className="mb-4 text-center text-on-surface-variant">{t(`studio.wizard.steps.${step.key}H`)}</p>
+      <p className="mb-4 text-center text-on-surface-variant">
+        {t(`studio.wizard.steps.${step.key}H`)}
+      </p>
 
       <div className="mb-4">
         {step.key === 'facts' && <FactsForm onSaved={next} />}
@@ -56,13 +70,17 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
 
       <div className="flex items-center justify-between">
         <button className="btn-secondary" onClick={i === 0 ? onExit : back}>
-          <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">{i === 0 ? 'close' : 'arrow_back'}</span>
+          <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">
+            {i === 0 ? 'close' : 'arrow_back'}
+          </span>
           {i === 0 ? t('studio.wizard.skip') : t('studio.wizard.prev')}
         </button>
         {i < STEPS.length - 1 ? (
           <button className="btn-primary" onClick={next}>
             {t('studio.wizard.next')}
-            <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">arrow_forward</span>
+            <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">
+              arrow_forward
+            </span>
           </button>
         ) : (
           <button className="btn-primary" onClick={onExit}>

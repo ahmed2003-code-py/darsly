@@ -41,13 +41,20 @@ export function assembleFixed(input: AssembleFixedInput): SiteDocument {
     ...(input.coverId ? { mediaId: input.coverId } : {}),
   });
 
-  blocks.push({ type: 'about', id: randomUUID(), heading: copy.about.heading, body: copy.about.body });
+  blocks.push({
+    type: 'about',
+    id: randomUUID(),
+    heading: copy.about.heading,
+    body: copy.about.body,
+  });
 
   if (toolkit.length) {
     blocks.push({
       type: 'toolkit',
       id: randomUUID(),
-      heading: filled(copy.toolkitHeading) ? copy.toolkitHeading : bilingual('محاور المتابعة', 'What we cover'),
+      heading: filled(copy.toolkitHeading)
+        ? copy.toolkitHeading
+        : bilingual('محاور المتابعة', 'What we cover'),
       items: toolkit,
     });
   }
@@ -56,13 +63,21 @@ export function assembleFixed(input: AssembleFixedInput): SiteDocument {
     blocks.push({
       type: 'credentials',
       id: randomUUID(),
-      heading: filled(copy.credentialsHeading) ? copy.credentialsHeading : bilingual('الإنجازات', 'Track record'),
+      heading: filled(copy.credentialsHeading)
+        ? copy.credentialsHeading
+        : bilingual('الإنجازات', 'Track record'),
       items: credentials,
     });
   }
 
   // Live — resolved at render/hydration time, never frozen into the document.
-  blocks.push({ type: 'courses', id: randomUUID(), heading: bilingual('الدورات', 'Courses'), mode: 'auto', limit: 12 });
+  blocks.push({
+    type: 'courses',
+    id: randomUUID(),
+    heading: bilingual('الدورات', 'Courses'),
+    mode: 'auto',
+    limit: 12,
+  });
 
   if (galleryIds.length) {
     blocks.push({
@@ -76,21 +91,41 @@ export function assembleFixed(input: AssembleFixedInput): SiteDocument {
   // Exactly three, matching the reference's fixed "journey" step count.
   const steps = (copy.process ?? []).slice(0, 3);
   if (steps.length) {
-    blocks.push({ type: 'process', id: randomUUID(), heading: bilingual('الطريقة', 'How it works'), steps });
+    blocks.push({
+      type: 'process',
+      id: randomUUID(),
+      heading: bilingual('الطريقة', 'How it works'),
+      steps,
+    });
   }
 
   // Exactly three, matching the reference's fixed FAQ count.
   const faq = copy.faq.slice(0, 3);
   if (faq.length) {
-    blocks.push({ type: 'faq', id: randomUUID(), heading: bilingual('أسئلة شائعة', 'FAQ'), items: faq });
+    blocks.push({
+      type: 'faq',
+      id: randomUUID(),
+      heading: bilingual('أسئلة شائعة', 'FAQ'),
+      items: faq,
+    });
   }
 
-  blocks.push({ type: 'contact', id: randomUUID(), heading: bilingual('تواصل معنا', 'Contact'), socials });
+  blocks.push({
+    type: 'contact',
+    id: randomUUID(),
+    heading: bilingual('تواصل معنا', 'Contact'),
+    socials,
+  });
 
   // Optional pull-quote, in the teacher's own voice — the reference design has a
   // tile for it in the gallery grid but does not require one to exist.
   if (filled(copy.quote?.text)) {
-    blocks.push({ type: 'quote', id: randomUUID(), text: copy.quote!.text, attribution: copy.quote!.attribution });
+    blocks.push({
+      type: 'quote',
+      id: randomUUID(),
+      text: copy.quote!.text,
+      attribution: copy.quote!.attribution,
+    });
   }
 
   return {

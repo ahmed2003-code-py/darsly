@@ -81,7 +81,12 @@ export class AiClient {
     const resp = await this.callResponses(opts);
     const text: string = resp.output_text ?? '';
     const { inputTokens, outputTokens } = this.usage(resp);
-    return { text, inputTokens, outputTokens, costCents: this.costCents(inputTokens, outputTokens) };
+    return {
+      text,
+      inputTokens,
+      outputTokens,
+      costCents: this.costCents(inputTokens, outputTokens),
+    };
   }
 
   /**
@@ -106,7 +111,8 @@ export class AiClient {
     const text: string = resp.output_text ?? '';
     if (!text) {
       const refusal = this.extractRefusal(resp);
-      if (refusal) throw new AiJobError(`AI refused the request: ${this.redact(refusal)}`, 'TERMINAL');
+      if (refusal)
+        throw new AiJobError(`AI refused the request: ${this.redact(refusal)}`, 'TERMINAL');
       if (resp.status === 'incomplete') {
         throw new AiJobError('AI response was truncated (token budget)', 'RETRYABLE');
       }
@@ -120,7 +126,12 @@ export class AiClient {
       throw new AiJobError('Structured output was not valid JSON', 'RETRYABLE');
     }
     const { inputTokens, outputTokens } = this.usage(resp);
-    return { data, inputTokens, outputTokens, costCents: this.costCents(inputTokens, outputTokens) };
+    return {
+      data,
+      inputTokens,
+      outputTokens,
+      costCents: this.costCents(inputTokens, outputTokens),
+    };
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
@@ -150,7 +161,11 @@ export class AiClient {
               role: m.role,
               content: [
                 { type: 'input_text', text: m.content },
-                ...m.images.map((image_url) => ({ type: 'input_image' as const, image_url, detail: 'high' as const })),
+                ...m.images.map((image_url) => ({
+                  type: 'input_image' as const,
+                  image_url,
+                  detail: 'high' as const,
+                })),
               ],
             }
           : { role: m.role, content: m.content },
@@ -166,7 +181,12 @@ export class AiClient {
     if (reasoning) params.reasoning = { effort: 'low' };
     if (opts.format) {
       params.text = {
-        format: { type: 'json_schema', name: opts.format.name, strict: true, schema: opts.format.schema },
+        format: {
+          type: 'json_schema',
+          name: opts.format.name,
+          strict: true,
+          schema: opts.format.schema,
+        },
       };
     }
 
@@ -174,7 +194,8 @@ export class AiClient {
       return await this.getClient().responses.create(params as any);
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status;
-      const terminal = typeof status === 'number' && status >= 400 && status < 500 && status !== 429;
+      const terminal =
+        typeof status === 'number' && status >= 400 && status < 500 && status !== 429;
       throw new AiJobError(
         `OpenAI request failed${status ? ` (${status})` : ''}: ${this.redact(String(e?.message ?? e))}`,
         terminal ? 'TERMINAL' : 'RETRYABLE',

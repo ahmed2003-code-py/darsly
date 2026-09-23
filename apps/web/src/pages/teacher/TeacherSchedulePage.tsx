@@ -11,7 +11,8 @@ import {
   useCreateSession,
   useMyHomeAcademySlug,
   useRooms,
-  useMySchedule, useSchedule,
+  useMySchedule,
+  useSchedule,
   useUpdateRoom,
 } from '../../lib/scheduling';
 import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Skeleton } from '../../components/ui';
@@ -88,7 +89,9 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [mode, setMode] = useState<'ONLINE' | 'PHYSICAL' | 'HYBRID'>('PHYSICAL');
-  const [locationType, setLocationType] = useState<'CENTER' | 'TEACHER' | 'STUDENT' | 'OTHER'>('CENTER');
+  const [locationType, setLocationType] = useState<'CENTER' | 'TEACHER' | 'STUDENT' | 'OTHER'>(
+    'CENTER',
+  );
   const [locationNote, setLocationNote] = useState('');
   const [joinUrl, setJoinUrl] = useState('');
   const createSession = useCreateSession(groupId);
@@ -103,7 +106,12 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
         startAt: new Date(start).toISOString(),
         endAt: new Date(end).toISOString(),
         mode,
-        ...(physical ? { locationType: roomId ? 'CENTER' : locationType, ...(locationNote ? { locationNote } : {}) } : {}),
+        ...(physical
+          ? {
+              locationType: roomId ? 'CENTER' : locationType,
+              ...(locationNote ? { locationNote } : {}),
+            }
+          : {}),
         ...(physical && roomId ? { roomId } : {}),
         ...(online && joinUrl ? { joinUrl } : {}),
         ...(teacherUserId ? { teacherUserId } : {}),
@@ -117,62 +125,134 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
       <form onSubmit={submit} className="grid gap-4">
         <label className="grid gap-1.5">
           <span className="text-sm font-bold">{t('schedule.group')}</span>
-          <select value={groupId} onChange={(e) => { setGroupId(e.target.value); setTeacherUserId(''); }} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" required>
+          <select
+            value={groupId}
+            onChange={(e) => {
+              setGroupId(e.target.value);
+              setTeacherUserId('');
+            }}
+            className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            required
+          >
             <option value="">{t('schedule.selectGroup')}</option>
-            {groupsData?.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            {groupsData?.groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
           </select>
         </label>
         <label className="grid gap-1.5">
           <span className="text-sm font-bold">{t('schedule.mode')}</span>
-          <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary">
-            {(['PHYSICAL', 'ONLINE', 'HYBRID'] as const).map((m) => <option key={m} value={m}>{t(`schedule.modes.${m}`)}</option>)}
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value as typeof mode)}
+            className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+          >
+            {(['PHYSICAL', 'ONLINE', 'HYBRID'] as const).map((m) => (
+              <option key={m} value={m}>
+                {t(`schedule.modes.${m}`)}
+              </option>
+            ))}
           </select>
         </label>
         {physical && (
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.locationType')}</span>
-            <select value={roomId ? 'CENTER' : locationType} onChange={(e) => setLocationType(e.target.value as typeof locationType)} disabled={!!roomId} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary">
-              {(['CENTER', 'TEACHER', 'STUDENT', 'OTHER'] as const).map((l) => <option key={l} value={l}>{t(`schedule.locations.${l}`)}</option>)}
+            <select
+              value={roomId ? 'CENTER' : locationType}
+              onChange={(e) => setLocationType(e.target.value as typeof locationType)}
+              disabled={!!roomId}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            >
+              {(['CENTER', 'TEACHER', 'STUDENT', 'OTHER'] as const).map((l) => (
+                <option key={l} value={l}>
+                  {t(`schedule.locations.${l}`)}
+                </option>
+              ))}
             </select>
           </label>
         )}
         {physical && (
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.room')}</span>
-            <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary">
+            <select
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            >
               <option value="">{t('schedule.noRoom')}</option>
-              {rooms?.filter((r) => r.status === 'ACTIVE').map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {rooms
+                ?.filter((r) => r.status === 'ACTIVE')
+                .map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
             </select>
           </label>
         )}
         {physical && !roomId && (
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.locationNote')}</span>
-            <input value={locationNote} onChange={(e) => setLocationNote(e.target.value)} maxLength={120} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" />
+            <input
+              value={locationNote}
+              onChange={(e) => setLocationNote(e.target.value)}
+              maxLength={120}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            />
           </label>
         )}
         {online && (
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.joinUrl')}</span>
-            <input type="url" dir="ltr" value={joinUrl} onChange={(e) => setJoinUrl(e.target.value)} placeholder="https://" className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" />
+            <input
+              type="url"
+              dir="ltr"
+              value={joinUrl}
+              onChange={(e) => setJoinUrl(e.target.value)}
+              placeholder="https://"
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            />
             <span className="text-xs text-outline">{t('schedule.joinUrlHint')}</span>
           </label>
         )}
         <label className="grid gap-1.5">
           <span className="text-sm font-bold">{t('schedule.teacher')}</span>
-          <select value={teacherUserId} onChange={(e) => setTeacherUserId(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" disabled={!groupId}>
+          <select
+            value={teacherUserId}
+            onChange={(e) => setTeacherUserId(e.target.value)}
+            className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            disabled={!groupId}
+          >
             <option value="">{t('schedule.noTeacher')}</option>
-            {group?.assignments.map((a) => <option key={a.userId} value={a.userId}>{a.fullName}</option>)}
+            {group?.assignments.map((a) => (
+              <option key={a.userId} value={a.userId}>
+                {a.fullName}
+              </option>
+            ))}
           </select>
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.start')}</span>
-            <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" required />
+            <input
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+              required
+            />
           </label>
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.end')}</span>
-            <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" required />
+            <input
+              type="datetime-local"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+              required
+            />
           </label>
         </div>
         <button type="submit" className="btn-primary py-2.5" disabled={createSession.isPending}>
@@ -186,12 +266,28 @@ function CreateSessionModal({ open, onClose }: { open: boolean; onClose: () => v
 
 /** One session chip — the small, colored, always-legible unit both the
  *  month grid and the day-detail panel are built from. */
-function SessionChip({ s, onCancel, cancelling, dense }: { s: ScheduleSession; onCancel: () => void; cancelling: boolean; dense?: boolean }) {
+function SessionChip({
+  s,
+  onCancel,
+  cancelling,
+  dense,
+}: {
+  s: ScheduleSession;
+  onCancel: () => void;
+  cancelling: boolean;
+  dense?: boolean;
+}) {
   const { t, i18n } = useTranslation();
-  const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+  const timeLabel = (iso: string) =>
+    new Date(iso).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   if (dense) {
     return (
-      <p className={`truncate rounded-md px-1.5 py-0.5 text-[11px] font-bold ${s.status === 'CANCELLED' ? 'bg-surface-container-high text-outline line-through' : 'bg-primary-fixed text-on-primary-fixed-variant'}`}>
+      <p
+        className={`truncate rounded-md px-1.5 py-0.5 text-[11px] font-bold ${s.status === 'CANCELLED' ? 'bg-surface-container-high text-outline line-through' : 'bg-primary-fixed text-on-primary-fixed-variant'}`}
+      >
         <span dir="ltr">{timeLabel(s.startAt)}</span> {s.group?.name ?? s.title ?? ''}
       </p>
     );
@@ -199,17 +295,29 @@ function SessionChip({ s, onCancel, cancelling, dense }: { s: ScheduleSession; o
   return (
     <div className={`card p-3 ${s.status === 'CANCELLED' ? 'opacity-50' : ''}`}>
       <p className="truncate font-heading text-sm font-bold">{s.group?.name ?? s.title ?? ''}</p>
-      <p className="text-xs text-on-surface-variant tabular-nums" dir="ltr">{timeLabel(s.startAt)}–{timeLabel(s.endAt)}</p>
+      <p className="text-xs text-on-surface-variant tabular-nums" dir="ltr">
+        {timeLabel(s.startAt)}–{timeLabel(s.endAt)}
+      </p>
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        {s.academy && <Badge tone={s.academy.kind === 'CENTER' ? 'teal' : 'neutral'}>{s.academy.name}</Badge>}
-        {(s.kind === 'LIVE' || s.mode) && <Badge tone="warn">{t(`schedule.modes.${s.kind === 'LIVE' ? 'ONLINE' : s.mode}`)}</Badge>}
-        {s.locationType && s.locationType !== 'CENTER' && <Badge tone="neutral">{t(`schedule.locations.${s.locationType}`)}</Badge>}
+        {s.academy && (
+          <Badge tone={s.academy.kind === 'CENTER' ? 'teal' : 'neutral'}>{s.academy.name}</Badge>
+        )}
+        {(s.kind === 'LIVE' || s.mode) && (
+          <Badge tone="warn">{t(`schedule.modes.${s.kind === 'LIVE' ? 'ONLINE' : s.mode}`)}</Badge>
+        )}
+        {s.locationType && s.locationType !== 'CENTER' && (
+          <Badge tone="neutral">{t(`schedule.locations.${s.locationType}`)}</Badge>
+        )}
         {s.room && <Badge tone="neutral">{s.room.name}</Badge>}
         {s.teacher && <Badge tone="primary">{s.teacher.fullName}</Badge>}
         {s.status === 'CANCELLED' && <Badge tone="error">{t('schedule.cancelled')}</Badge>}
       </div>
       {s.status === 'SCHEDULED' && s.kind !== 'LIVE' && (
-        <button className="mt-2 text-xs font-bold text-error hover:underline" onClick={onCancel} disabled={cancelling}>
+        <button
+          className="mt-2 text-xs font-bold text-error hover:underline"
+          onClick={onCancel}
+          disabled={cancelling}
+        >
           {t('schedule.cancel')}
         </button>
       )}
@@ -227,14 +335,28 @@ function CalendarTab() {
   const cancelSession = useCancelSession();
   const locale = i18n.language === 'ar' ? 'ar-EG' : 'en-GB';
 
-  const rangeStart = view === 'day' ? startOfDay(anchor) : view === 'week' ? startOfWeek(anchor) : startOfWeek(startOfMonth(anchor));
-  const rangeEnd = view === 'day' ? addDays(rangeStart, 1) : view === 'week' ? addDays(rangeStart, 7) : addDays(rangeStart, 42);
+  const rangeStart =
+    view === 'day'
+      ? startOfDay(anchor)
+      : view === 'week'
+        ? startOfWeek(anchor)
+        : startOfWeek(startOfMonth(anchor));
+  const rangeEnd =
+    view === 'day'
+      ? addDays(rangeStart, 1)
+      : view === 'week'
+        ? addDays(rangeStart, 7)
+        : addDays(rangeStart, 42);
   const days = useMemo(() => {
     if (view === 'month') return monthGrid(anchor);
     return Array.from({ length: view === 'day' ? 1 : 7 }, (_, i) => addDays(rangeStart, i));
   }, [rangeStart, view, anchor]);
   const [allWorkspaces, setAllWorkspaces] = useState(false);
-  const center = useSchedule(allWorkspaces ? undefined : slug, rangeStart.toISOString(), rangeEnd.toISOString());
+  const center = useSchedule(
+    allWorkspaces ? undefined : slug,
+    rangeStart.toISOString(),
+    rangeEnd.toISOString(),
+  );
   const mine = useMySchedule(allWorkspaces, rangeStart.toISOString(), rangeEnd.toISOString());
   const sessions = allWorkspaces ? mine.data : center.data;
   const isLoading = allWorkspaces ? mine.isLoading : center.isLoading;
@@ -254,7 +376,11 @@ function CalendarTab() {
     else if (view === 'week') setAnchor((a) => addDays(a, 7 * dir));
     else setAnchor((a) => addMonths(a, dir));
   };
-  const goToday = () => { const now = new Date(); setAnchor(now); setSelectedDay(isoDate(now)); };
+  const goToday = () => {
+    const now = new Date();
+    setAnchor(now);
+    setSelectedDay(isoDate(now));
+  };
 
   const headerLabel =
     view === 'month'
@@ -263,10 +389,13 @@ function CalendarTab() {
         ? `${rangeStart.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} – ${addDays(rangeStart, 6).toLocaleDateString(locale, { day: 'numeric', month: 'short' })}`
         : anchor.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const weekdayLabels = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(new Date()), i).toLocaleDateString(locale, { weekday: 'short' }));
+  const weekdayLabels = Array.from({ length: 7 }, (_, i) =>
+    addDays(startOfWeek(new Date()), i).toLocaleDateString(locale, { weekday: 'short' }),
+  );
   const todayIso = isoDate(new Date());
   const dayNumLabel = (d: Date) => d.toLocaleDateString(locale, { day: 'numeric' });
-  const dayLabel = (d: Date) => d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
+  const dayLabel = (d: Date) =>
+    d.toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <div>
@@ -275,7 +404,10 @@ function CalendarTab() {
           <button className="btn-secondary px-3 py-2" onClick={() => step(-1)}>
             <span className="material-symbols-outlined">chevron_right</span>
           </button>
-          <button className="rounded-lg border border-outline px-3 py-2 text-sm font-bold hover:bg-surface-container-low" onClick={goToday}>
+          <button
+            className="rounded-lg border border-outline px-3 py-2 text-sm font-bold hover:bg-surface-container-low"
+            onClick={goToday}
+          >
             {t('schedule.today')}
           </button>
           <button className="btn-secondary px-3 py-2" onClick={() => step(1)}>
@@ -303,7 +435,8 @@ function CalendarTab() {
             ))}
           </div>
           <button className="btn-primary px-5 py-2 text-sm" onClick={() => setShowCreate(true)}>
-            <span className="material-symbols-outlined align-middle text-lg">add</span> {t('schedule.createSession')}
+            <span className="material-symbols-outlined align-middle text-lg">add</span>{' '}
+            {t('schedule.createSession')}
           </button>
         </div>
       </div>
@@ -315,7 +448,9 @@ function CalendarTab() {
           <div className="overflow-hidden rounded-2xl border border-outline-variant/50">
             <div className="grid grid-cols-7 border-b border-outline-variant/50 bg-surface-container-lowest">
               {weekdayLabels.map((w) => (
-                <p key={w} className="p-2 text-center text-xs font-bold text-on-surface-variant">{w}</p>
+                <p key={w} className="p-2 text-center text-xs font-bold text-on-surface-variant">
+                  {w}
+                </p>
               ))}
             </div>
             <div className="grid grid-cols-7">
@@ -336,15 +471,29 @@ function CalendarTab() {
                   >
                     <span
                       className={`mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
-                        isToday ? 'bg-primary text-on-primary' : inMonth ? 'text-on-surface' : 'text-outline'
+                        isToday
+                          ? 'bg-primary text-on-primary'
+                          : inMonth
+                            ? 'text-on-surface'
+                            : 'text-outline'
                       }`}
                     >
                       {dayNumLabel(d)}
                     </span>
                     <div className="space-y-0.5">
-                      {daySessions.slice(0, 2).map((s) => <SessionChip key={s!.id} s={s!} dense onCancel={() => {}} cancelling={false} />)}
+                      {daySessions.slice(0, 2).map((s) => (
+                        <SessionChip
+                          key={s!.id}
+                          s={s!}
+                          dense
+                          onCancel={() => {}}
+                          cancelling={false}
+                        />
+                      ))}
                       {daySessions.length > 2 && (
-                        <p className="px-1.5 text-[11px] font-bold text-on-surface-variant">{t('schedule.moreSessions', { count: daySessions.length - 2 })}</p>
+                        <p className="px-1.5 text-[11px] font-bold text-on-surface-variant">
+                          {t('schedule.moreSessions', { count: daySessions.length - 2 })}
+                        </p>
                       )}
                     </div>
                   </button>
@@ -355,12 +504,23 @@ function CalendarTab() {
 
           <div className="mt-5">
             <p className="mb-3 font-heading text-lg font-bold">
-              {new Date(`${selectedDay}T00:00:00`).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+              {new Date(`${selectedDay}T00:00:00`).toLocaleDateString(locale, {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}
             </p>
             <div className="grid gap-2">
-              {!(byDay.get(selectedDay) ?? []).length && <p className="text-sm text-outline">{t('schedule.noSessions')}</p>}
+              {!(byDay.get(selectedDay) ?? []).length && (
+                <p className="text-sm text-outline">{t('schedule.noSessions')}</p>
+              )}
               {(byDay.get(selectedDay) ?? []).map((s) => (
-                <SessionChip key={s!.id} s={s!} onCancel={() => cancelSession.mutate(s!.id)} cancelling={cancelSession.isPending} />
+                <SessionChip
+                  key={s!.id}
+                  s={s!}
+                  onCancel={() => cancelSession.mutate(s!.id)}
+                  cancelling={cancelSession.isPending}
+                />
               ))}
             </div>
           </div>
@@ -369,11 +529,20 @@ function CalendarTab() {
         <div className={`grid gap-4 ${view === 'week' ? 'md:grid-cols-7' : ''}`}>
           {days.map((d) => (
             <div key={isoDate(d)} className="min-w-0">
-              <p className="mb-2 text-center text-sm font-bold text-on-surface-variant">{dayLabel(d)}</p>
+              <p className="mb-2 text-center text-sm font-bold text-on-surface-variant">
+                {dayLabel(d)}
+              </p>
               <div className="grid gap-2">
-                {(byDay.get(isoDate(d)) ?? []).length === 0 && <p className="text-center text-xs text-outline">{t('schedule.noSessions')}</p>}
+                {(byDay.get(isoDate(d)) ?? []).length === 0 && (
+                  <p className="text-center text-xs text-outline">{t('schedule.noSessions')}</p>
+                )}
                 {(byDay.get(isoDate(d)) ?? []).map((s) => (
-                  <SessionChip key={s!.id} s={s!} onCancel={() => cancelSession.mutate(s!.id)} cancelling={cancelSession.isPending} />
+                  <SessionChip
+                    key={s!.id}
+                    s={s!}
+                    onCancel={() => cancelSession.mutate(s!.id)}
+                    cancelling={cancelSession.isPending}
+                  />
                 ))}
               </div>
             </div>
@@ -400,8 +569,19 @@ function RoomsTab() {
     e.preventDefault();
     if (!name.trim()) return;
     createRoom.mutate(
-      { name: name.trim(), location: location.trim() || undefined, capacity: capacity ? Number(capacity) : undefined },
-      { onSuccess: () => { setShowCreate(false); setName(''); setLocation(''); setCapacity(''); } },
+      {
+        name: name.trim(),
+        location: location.trim() || undefined,
+        capacity: capacity ? Number(capacity) : undefined,
+      },
+      {
+        onSuccess: () => {
+          setShowCreate(false);
+          setName('');
+          setLocation('');
+          setCapacity('');
+        },
+      },
     );
   };
 
@@ -411,7 +591,8 @@ function RoomsTab() {
     <div>
       <div className="mb-4 flex justify-end">
         <button className="btn-primary px-5 py-2.5 text-sm" onClick={() => setShowCreate(true)}>
-          <span className="material-symbols-outlined align-middle text-lg">add</span> {t('schedule.addRoom')}
+          <span className="material-symbols-outlined align-middle text-lg">add</span>{' '}
+          {t('schedule.addRoom')}
         </button>
       </div>
       {!rooms?.length ? (
@@ -425,10 +606,19 @@ function RoomsTab() {
                 {r.status === 'ARCHIVED' && <Badge tone="neutral">{t('schedule.archived')}</Badge>}
               </div>
               {r.location && <p className="text-sm text-on-surface-variant">{r.location}</p>}
-              {r.capacity && <p className="text-xs text-outline">{t('schedule.capacity', { count: r.capacity })}</p>}
+              {r.capacity && (
+                <p className="text-xs text-outline">
+                  {t('schedule.capacity', { count: r.capacity })}
+                </p>
+              )}
               <button
                 className="mt-2 self-start rounded-lg border border-outline px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:bg-surface-container-low"
-                onClick={() => updateRoom.mutate({ roomId: r.id, status: r.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE' })}
+                onClick={() =>
+                  updateRoom.mutate({
+                    roomId: r.id,
+                    status: r.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE',
+                  })
+                }
                 disabled={updateRoom.isPending}
               >
                 {r.status === 'ACTIVE' ? t('schedule.archiveRoom') : t('schedule.reactivateRoom')}
@@ -442,17 +632,34 @@ function RoomsTab() {
         <form onSubmit={submit} className="grid gap-4">
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.roomName')}</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" required />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+              required
+            />
           </label>
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.location')}</span>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" />
+            <input
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            />
           </label>
           <label className="grid gap-1.5">
             <span className="text-sm font-bold">{t('schedule.capacityLabel')}</span>
-            <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary" />
+            <input
+              type="number"
+              min={1}
+              value={capacity}
+              onChange={(e) => setCapacity(e.target.value)}
+              className="rounded-xl border border-outline-variant px-4 py-2.5 outline-none focus:border-primary"
+            />
           </label>
-          <button type="submit" className="btn-primary py-2.5" disabled={createRoom.isPending}>{t('common.save')}</button>
+          <button type="submit" className="btn-primary py-2.5" disabled={createRoom.isPending}>
+            {t('common.save')}
+          </button>
           <ErrorNote error={createRoom.error} />
         </form>
       </Modal>
@@ -473,7 +680,9 @@ export default function TeacherSchedulePage() {
           <button
             key={tb}
             className={`rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
-              tab === tb ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+              tab === tb
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
             }`}
             onClick={() => setParams(tb === 'calendar' ? {} : { tab: tb })}
           >

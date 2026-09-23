@@ -101,7 +101,11 @@ function translate(key: string, count: number): string | null {
 export function resolveError(error: unknown): ResolvedError {
   if (!error) return { message: '', code: null, status: null, generic: true };
 
-  const err = error as { response?: { status?: number; data?: ApiErrorBody }; message?: string; code?: string };
+  const err = error as {
+    response?: { status?: number; data?: ApiErrorBody };
+    message?: string;
+    code?: string;
+  };
   const status = typeof err.response?.status === 'number' ? err.response.status : null;
   const data = err.response?.data;
   const code = typeof data?.code === 'string' ? data.code : null;

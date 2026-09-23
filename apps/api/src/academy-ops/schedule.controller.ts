@@ -18,11 +18,19 @@ export class ScheduleController {
   @Get('schedule')
   @UseGuards(AcademyMembershipGuard)
   @ApiOperation({ summary: '[academy] Sessions in a date range — role-scoped' })
-  schedule(@CurrentAcademy() ctx: AcademyContext, @Query('from') from?: string, @Query('to') to?: string) {
+  schedule(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
     if (!from || !to) throw new BadRequestException('from and to are required');
     const fromDate = new Date(from);
     const toDate = new Date(to);
-    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()) || !(toDate > fromDate)) {
+    if (
+      Number.isNaN(fromDate.getTime()) ||
+      Number.isNaN(toDate.getTime()) ||
+      !(toDate > fromDate)
+    ) {
       throw new BadRequestException('Invalid date range');
     }
     if (toDate.getTime() - fromDate.getTime() > MAX_RANGE_DAYS * 86_400_000) {

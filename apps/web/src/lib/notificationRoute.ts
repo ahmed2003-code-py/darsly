@@ -58,7 +58,13 @@ export function notificationRoute(n: NotificationLike, role?: string): string | 
       // A payment waiting on someone: the teacher acts on it from the roster,
       // where pending enrolments live; the admin has a screen of its own.
       if (str(meta.paymentId)) {
-        return isAdmin ? '/admin/payments' : isTeacher ? '/teacher/students' : courseId ? `/course/${courseId}` : '/my-courses';
+        return isAdmin
+          ? '/admin/payments'
+          : isTeacher
+            ? '/teacher/students'
+            : courseId
+              ? `/course/${courseId}`
+              : '/my-courses';
       }
       // A new review — `rating` is what marks it. The public course page is
       // where reviews are actually shown, including to the teacher; the

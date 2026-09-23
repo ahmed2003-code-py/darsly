@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtPayload } from '@darsly/shared-types';
 import { AcademyService } from '../academy.service';
 

@@ -1,4 +1,15 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Logger, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Logger,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, PayoutStatus, Role, TeacherStatus } from '@darsly/shared-types';
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
@@ -58,7 +69,10 @@ export class AdminController {
     seedDatabase(this.prisma, (m) => logger.log(m))
       .then((s) => logger.log('reseed complete ' + JSON.stringify(s)))
       .catch((e) => logger.error('reseed failed: ' + String(e)));
-    return { started: true, note: 'Wiping + reseeding in the background. Log in with Darsly@123 in ~1 min.' };
+    return {
+      started: true,
+      note: 'Wiping + reseeding in the background. Log in with Darsly@123 in ~1 min.',
+    };
   }
 
   @Get('overview')
@@ -75,7 +89,11 @@ export class AdminController {
 
   @Patch('teachers/:id/status')
   @ApiOperation({ summary: '[admin] Approve / reject / suspend a teacher' })
-  setStatus(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: TeacherStatusDto) {
+  setStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: TeacherStatusDto,
+  ) {
     return this.admin.setTeacherStatus(id, dto.status, user.sub);
   }
 
@@ -87,7 +105,11 @@ export class AdminController {
 
   @Patch('payouts/:id')
   @ApiOperation({ summary: '[admin] Advance a payout (APPROVED/PROCESSING/COMPLETED/REJECTED)' })
-  async processPayout(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: ProcessPayoutDto) {
+  async processPayout(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ProcessPayoutDto,
+  ) {
     const result = await this.payouts.process(id, dto.status, user.sub, dto.note);
     await this.auditService.log({
       actorUserId: user.sub,

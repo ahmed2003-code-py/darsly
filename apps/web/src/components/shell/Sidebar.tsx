@@ -39,7 +39,9 @@ export default function Sidebar({
         <span className="brand-tile h-11 w-11 shrink-0" aria-hidden />
         {labels && (
           <div className="min-w-0">
-            <h1 className="font-heading text-xl font-bold tracking-tight text-on-surface">{t('brand')}</h1>
+            <h1 className="font-heading text-xl font-bold tracking-tight text-on-surface">
+              {t('brand')}
+            </h1>
             <p className="text-xs text-on-surface-variant">{roleLabel}</p>
           </div>
         )}
@@ -69,7 +71,9 @@ export default function Sidebar({
                 {isActive && <span className="shell-nav-indicator" aria-hidden />}
                 <span
                   className={`material-symbols-outlined shell-nav-icon text-[20px] ${
-                    isActive ? 'text-student-accent-ink' : 'text-outline group-hover:text-on-surface'
+                    isActive
+                      ? 'text-student-accent-ink'
+                      : 'text-outline group-hover:text-on-surface'
                   }`}
                 >
                   {item.icon}
@@ -96,7 +100,7 @@ export default function Sidebar({
         <NavLink
           to="/profile"
           onClick={onNavigate}
-          title={labels ? undefined : user?.fullName ?? undefined}
+          title={labels ? undefined : (user?.fullName ?? undefined)}
           className="flex items-center gap-3 rounded-xl bg-surface-container-low p-3 transition hover:bg-surface-container"
         >
           <span className="studio-frame grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">

@@ -3,7 +3,15 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { dateShort } from '../../lib/format';
-import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Skeleton, Spinner } from '../../components/ui';
+import {
+  Badge,
+  EmptyState,
+  ErrorNote,
+  Modal,
+  PageHeader,
+  Skeleton,
+  Spinner,
+} from '../../components/ui';
 
 /**
  * Everything waiting to be marked, and the room to mark it in.
@@ -51,7 +59,9 @@ export default function GradingPage() {
             key={v}
             onClick={() => setView(v)}
             className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
-              view === v ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              view === v
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
             {t(`grading.view.${v}`)}
@@ -82,11 +92,15 @@ function Queue() {
   return (
     <>
       {total > 0 && (
-        <p className="mb-3 text-sm text-on-surface-variant">{t('grading.subtitleN', { count: total })}</p>
+        <p className="mb-3 text-sm text-on-surface-variant">
+          {t('grading.subtitleN', { count: total })}
+        </p>
       )}
       {isLoading ? (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-2xl" />
+          ))}
         </div>
       ) : !queue?.length ? (
         <EmptyState icon="task_alt" title={t('grading.allDone')} hint={t('grading.allDoneHint')} />
@@ -110,7 +124,9 @@ function Queue() {
                     </span>
                   </span>
                   <Badge tone="warn">{c.pending}</Badge>
-                  <span className={`material-symbols-outlined text-outline transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+                  <span
+                    className={`material-symbols-outlined text-outline transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  >
                     expand_more
                   </span>
                 </button>
@@ -137,7 +153,9 @@ function Queue() {
                               {dateShort(it.submittedAt)}
                             </span>
                           )}
-                          <span className="btn-ghost shrink-0 px-3 py-1.5 text-xs">{t('grading.mark')}</span>
+                          <span className="btn-ghost shrink-0 px-3 py-1.5 text-xs">
+                            {t('grading.mark')}
+                          </span>
                         </button>
                       </li>
                     ))}
@@ -177,7 +195,13 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
   const { data, isLoading } = useQuery<any>({
     queryKey: ['grading-item', item.kind, item.id],
     queryFn: async () =>
-      (await api.get(isQuiz ? `/teacher/grading/quiz-attempts/${item.id}` : `/teacher/grading/submissions/${item.id}`)).data,
+      (
+        await api.get(
+          isQuiz
+            ? `/teacher/grading/quiz-attempts/${item.id}`
+            : `/teacher/grading/submissions/${item.id}`,
+        )
+      ).data,
   });
 
   const [scores, setScores] = useState<Record<string, string>>({});
@@ -201,7 +225,12 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
     onSuccess: onDone,
   });
 
-  if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
+  if (isLoading || !data)
+    return (
+      <div className="grid place-items-center py-12">
+        <Spinner />
+      </div>
+    );
 
   // Every question must have a mark before the paper can be finalised. Leaving
   // one blank used to record a zero, which is a mark nobody chose to give.
@@ -211,11 +240,14 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
       ? 1
       : 0;
   const awarded = isQuiz
-    ? data.questions.reduce((n: number, q: any) => n + (scoreFrom(scores[q.id] ?? '', q.points) ?? 0), 0)
-    : scoreFrom(score, data.maxScore ?? 100) ?? 0;
+    ? data.questions.reduce(
+        (n: number, q: any) => n + (scoreFrom(scores[q.id] ?? '', q.points) ?? 0),
+        0,
+      )
+    : (scoreFrom(score, data.maxScore ?? 100) ?? 0);
   const outOf = isQuiz
     ? data.questions.reduce((n: number, q: any) => n + q.points, 0)
-    : data.maxScore ?? 100;
+    : (data.maxScore ?? 100);
 
   return (
     <div>
@@ -240,15 +272,27 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <p className="mb-1 text-xs font-bold text-on-surface-variant">{t('grading.studentAnswer')}</p>
-                    <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm" dir="auto">
+                    <p className="mb-1 text-xs font-bold text-on-surface-variant">
+                      {t('grading.studentAnswer')}
+                    </p>
+                    <div
+                      className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm"
+                      dir="auto"
+                    >
                       {q.answer || <span className="text-outline">{t('grading.blank')}</span>}
                     </div>
                   </div>
                   <div>
-                    <p className="mb-1 text-xs font-bold text-on-surface-variant">{t('grading.modelAnswer')}</p>
-                    <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-secondary/40 bg-secondary-container/25 p-3 text-sm" dir="auto">
-                      {q.modelAnswer || <span className="text-outline">{t('grading.noModel')}</span>}
+                    <p className="mb-1 text-xs font-bold text-on-surface-variant">
+                      {t('grading.modelAnswer')}
+                    </p>
+                    <div
+                      className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-secondary/40 bg-secondary-container/25 p-3 text-sm"
+                      dir="auto"
+                    >
+                      {q.modelAnswer || (
+                        <span className="text-outline">{t('grading.noModel')}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -257,7 +301,9 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
                     opinion to weigh, never as a mark already given. */}
                 {q.ai && (
                   <p className="mt-2 flex items-start gap-2 rounded-xl bg-surface-container-low px-3 py-2 text-xs leading-5 text-on-surface-variant">
-                    <span className="material-symbols-outlined text-[16px] leading-5 text-primary">auto_awesome</span>
+                    <span className="material-symbols-outlined text-[16px] leading-5 text-primary">
+                      auto_awesome
+                    </span>
                     <span>
                       {t('grading.aiSaid', { pct: q.ai.similarityPct ?? 0 })}
                       {q.ai.reason ? ` — ${q.ai.reason}` : ''}
@@ -278,18 +324,30 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
         <div className="space-y-4">
           <div>
             <p className="mb-1 text-xs font-bold text-on-surface-variant">{t('grading.prompt')}</p>
-            <div className="whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm" dir="auto">{data.prompt}</div>
+            <div
+              className="whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm"
+              dir="auto"
+            >
+              {data.prompt}
+            </div>
           </div>
           <div>
-            <p className="mb-1 text-xs font-bold text-on-surface-variant">{t('grading.studentAnswer')}</p>
-            <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl border border-outline-variant/60 p-3 text-sm" dir="auto">
+            <p className="mb-1 text-xs font-bold text-on-surface-variant">
+              {t('grading.studentAnswer')}
+            </p>
+            <div
+              className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl border border-outline-variant/60 p-3 text-sm"
+              dir="auto"
+            >
               {data.body || <span className="text-outline">{t('grading.blank')}</span>}
             </div>
             {data.hasFile && <p className="mt-1 text-xs text-outline">{t('grading.hasFile')}</p>}
           </div>
           <ScoreField value={score} max={data.maxScore ?? 100} onChange={setScore} />
           <div>
-            <p className="mb-1 text-xs font-bold text-on-surface-variant">{t('grading.feedback')}</p>
+            <p className="mb-1 text-xs font-bold text-on-surface-variant">
+              {t('grading.feedback')}
+            </p>
             <textarea
               className="input min-h-20"
               dir="auto"
@@ -309,7 +367,9 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
           {awarded} / {outOf}
         </span>
         {unmarked > 0 && (
-          <span className="text-xs text-on-surface-variant">{t('grading.unmarkedN', { count: unmarked })}</span>
+          <span className="text-xs text-on-surface-variant">
+            {t('grading.unmarkedN', { count: unmarked })}
+          </span>
         )}
         <button
           className="btn-primary ms-auto"
@@ -332,7 +392,15 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
  * question's own points, and says what it is out of next to the box rather than
  * in a placeholder that vanishes the moment anyone types.
  */
-function ScoreField({ value, max, onChange }: { value: string; max: number; onChange: (v: string) => void }) {
+function ScoreField({
+  value,
+  max,
+  onChange,
+}: {
+  value: string;
+  max: number;
+  onChange: (v: string) => void;
+}) {
   const { t } = useTranslation();
   const clamped = scoreFrom(value, max);
   return (
@@ -348,7 +416,11 @@ function ScoreField({ value, max, onChange }: { value: string; max: number; onCh
         aria-label={t('grading.award')}
       />
       <span className="text-sm text-on-surface-variant">{t('grading.outOf', { max })}</span>
-      <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => onChange(String(max))}>
+      <button
+        type="button"
+        className="btn-ghost px-3 py-1 text-xs"
+        onClick={() => onChange(String(max))}
+      >
         {t('grading.full')}
       </button>
       <button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={() => onChange('0')}>
@@ -389,7 +461,15 @@ interface AnalysisCourse {
 type Paper = { kind: 'QUIZ' | 'ASSIGNMENT'; lessonId: string; lessonTitle: string };
 
 /** One search box, used at every level. Hidden when there is nothing to sift. */
-function Search({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+function Search({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
   return (
     <div className="relative mb-4">
       <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 grid place-items-center text-[20px] text-outline">
@@ -413,9 +493,14 @@ function Crumbs({ steps }: { steps: { label: string; onClick?: () => void }[] })
     <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm">
       {steps.map((s, i) => (
         <span key={i} className="flex items-center gap-1">
-          {i > 0 && <span className="material-symbols-outlined text-[18px] text-outline">chevron_left</span>}
+          {i > 0 && (
+            <span className="material-symbols-outlined text-[18px] text-outline">chevron_left</span>
+          )}
           {s.onClick ? (
-            <button onClick={s.onClick} className="rounded px-1 font-bold text-primary hover:underline">
+            <button
+              onClick={s.onClick}
+              className="rounded px-1 font-bold text-primary hover:underline"
+            >
               {s.label}
             </button>
           ) : (
@@ -442,20 +527,63 @@ function Analysis() {
   // The trail is rebuilt from the state rather than remembered, so there is no
   // way for it to describe somewhere you are not.
   const crumbs = [
-    { label: t('grading.allCourses'), onClick: course ? () => { setCourse(null); setPaper(null); setAttemptId(null); setQ(''); } : undefined },
-    ...(course ? [{ label: course.courseTitle, onClick: paper ? () => { setPaper(null); setAttemptId(null); setQ(''); } : undefined }] : []),
-    ...(paper ? [{ label: paper.lessonTitle, onClick: attemptId ? () => { setAttemptId(null); setQ(''); } : undefined }] : []),
+    {
+      label: t('grading.allCourses'),
+      onClick: course
+        ? () => {
+            setCourse(null);
+            setPaper(null);
+            setAttemptId(null);
+            setQ('');
+          }
+        : undefined,
+    },
+    ...(course
+      ? [
+          {
+            label: course.courseTitle,
+            onClick: paper
+              ? () => {
+                  setPaper(null);
+                  setAttemptId(null);
+                  setQ('');
+                }
+              : undefined,
+          },
+        ]
+      : []),
+    ...(paper
+      ? [
+          {
+            label: paper.lessonTitle,
+            onClick: attemptId
+              ? () => {
+                  setAttemptId(null);
+                  setQ('');
+                }
+              : undefined,
+          },
+        ]
+      : []),
   ];
 
   if (isLoading) {
     return (
       <div className="space-y-3">
-        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 rounded-2xl" />
+        ))}
       </div>
     );
   }
   if (!data?.length) {
-    return <EmptyState icon="query_stats" title={t('grading.noResults')} hint={t('grading.noResultsHint')} />;
+    return (
+      <EmptyState
+        icon="query_stats"
+        title={t('grading.noResults')}
+        hint={t('grading.noResultsHint')}
+      />
+    );
   }
 
   if (attemptId) {
@@ -488,7 +616,9 @@ function Analysis() {
   const courses = data.filter((c) => c.courseTitle.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <>
-      {data.length > 4 && <Search value={q} onChange={setQ} placeholder={t('grading.searchCourses')} />}
+      {data.length > 4 && (
+        <Search value={q} onChange={setQ} placeholder={t('grading.searchCourses')} />
+      )}
       {!courses.length ? (
         <EmptyState icon="search_off" title={t('grading.noMatch')} />
       ) : (
@@ -501,7 +631,10 @@ function Analysis() {
             return (
               <button
                 key={c.courseId}
-                onClick={() => { setCourse(c); setQ(''); }}
+                onClick={() => {
+                  setCourse(c);
+                  setQ('');
+                }}
                 className="card flex items-center gap-3 text-start transition-colors hover:bg-surface-container-low"
               >
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary-container text-on-primary-container">
@@ -510,12 +643,17 @@ function Analysis() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-heading font-bold">{c.courseTitle}</span>
                   <span className="mt-0.5 block text-xs text-on-surface-variant">
-                    {t('grading.papersN', { count: c.quizzes.length })} · {t('grading.workN', { count: c.assignments.length })}
+                    {t('grading.papersN', { count: c.quizzes.length })} ·{' '}
+                    {t('grading.workN', { count: c.assignments.length })}
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">
-                  {waiting > 0 && <Badge tone="warn">{t('grading.waitingN', { count: waiting })}</Badge>}
-                  {reports > 0 && <Badge tone="error">{t('grading.reportsN', { count: reports })}</Badge>}
+                  {waiting > 0 && (
+                    <Badge tone="warn">{t('grading.waitingN', { count: waiting })}</Badge>
+                  )}
+                  {reports > 0 && (
+                    <Badge tone="error">{t('grading.reportsN', { count: reports })}</Badge>
+                  )}
                 </span>
               </button>
             );
@@ -528,10 +666,20 @@ function Analysis() {
 
 /** A course's papers, with exams and written work kept apart. */
 function CourseView({
-  course, search, onSearch, onOpen,
-}: { course: AnalysisCourse; search: string; onSearch: (v: string) => void; onOpen: (p: Paper) => void }) {
+  course,
+  search,
+  onSearch,
+  onOpen,
+}: {
+  course: AnalysisCourse;
+  search: string;
+  onSearch: (v: string) => void;
+  onOpen: (p: Paper) => void;
+}) {
   const { t } = useTranslation();
-  const [kind, setKind] = useState<'QUIZ' | 'ASSIGNMENT'>(course.quizzes.length ? 'QUIZ' : 'ASSIGNMENT');
+  const [kind, setKind] = useState<'QUIZ' | 'ASSIGNMENT'>(
+    course.quizzes.length ? 'QUIZ' : 'ASSIGNMENT',
+  );
   const rows = (kind === 'QUIZ' ? course.quizzes : course.assignments).filter((p) =>
     `${p.lessonTitle} ${p.unitTitle}`.toLowerCase().includes(search.trim().toLowerCase()),
   );
@@ -544,7 +692,9 @@ function CourseView({
             key={k}
             onClick={() => setKind(k)}
             className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
-              kind === k ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              kind === k
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
             {t(`grading.kindPlural.${k}`)}
@@ -575,13 +725,20 @@ function CourseView({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-bold">{p.lessonTitle}</span>
                   <span className="block truncate text-xs text-on-surface-variant">
-                    {p.unitTitle} · {t('grading.attemptsN', { count: p.attempts ?? p.submissions ?? 0 })}
+                    {p.unitTitle} ·{' '}
+                    {t('grading.attemptsN', { count: p.attempts ?? p.submissions ?? 0 })}
                     {p.avgPct != null ? ` · ${t('grading.avg', { pct: p.avgPct })}` : ''}
-                    {p.avgScore != null ? ` · ${t('grading.avgScore', { score: p.avgScore, max: p.maxScore ?? 100 })}` : ''}
+                    {p.avgScore != null
+                      ? ` · ${t('grading.avgScore', { score: p.avgScore, max: p.maxScore ?? 100 })}`
+                      : ''}
                   </span>
                 </span>
-                {p.pendingGrading > 0 && <Badge tone="warn">{t('grading.waitingN', { count: p.pendingGrading })}</Badge>}
-                {(p.openReports ?? 0) > 0 && <Badge tone="error">{t('grading.reportsN', { count: p.openReports })}</Badge>}
+                {p.pendingGrading > 0 && (
+                  <Badge tone="warn">{t('grading.waitingN', { count: p.pendingGrading })}</Badge>
+                )}
+                {(p.openReports ?? 0) > 0 && (
+                  <Badge tone="error">{t('grading.reportsN', { count: p.openReports })}</Badge>
+                )}
                 <span className="material-symbols-outlined text-outline">chevron_left</span>
               </button>
             </li>
@@ -594,22 +751,37 @@ function CourseView({
 
 /** One paper: who sat it, and — for an exam — how each question landed. */
 function PaperView({
-  paper, search, onSearch, onOpenAttempt,
-}: { paper: Paper; search: string; onSearch: (v: string) => void; onOpenAttempt: (id: string) => void }) {
+  paper,
+  search,
+  onSearch,
+  onOpenAttempt,
+}: {
+  paper: Paper;
+  search: string;
+  onSearch: (v: string) => void;
+  onOpenAttempt: (id: string) => void;
+}) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<'students' | 'questions'>('students');
   const isQuiz = paper.kind === 'QUIZ';
   const { data, isLoading } = useQuery<any>({
     queryKey: ['grading-students', paper.kind, paper.lessonId],
     queryFn: async () =>
-      (await api.get(
-        isQuiz
-          ? `/teacher/grading/quizzes/${paper.lessonId}/students`
-          : `/teacher/grading/assignments/${paper.lessonId}/students`,
-      )).data,
+      (
+        await api.get(
+          isQuiz
+            ? `/teacher/grading/quizzes/${paper.lessonId}/students`
+            : `/teacher/grading/assignments/${paper.lessonId}/students`,
+        )
+      ).data,
   });
 
-  if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
+  if (isLoading || !data)
+    return (
+      <div className="grid place-items-center py-12">
+        <Spinner />
+      </div>
+    );
 
   const students = (data.students ?? []).filter((s: any) =>
     s.studentName.toLowerCase().includes(search.trim().toLowerCase()),
@@ -624,7 +796,9 @@ function PaperView({
               key={k}
               onClick={() => setTab(k)}
               className={`rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
-                tab === k ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                tab === k
+                  ? 'bg-primary text-on-primary'
+                  : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
               }`}
             >
               {t(`grading.paperTab.${k}`)}
@@ -647,8 +821,12 @@ function PaperView({
               {students.map((s: any) => {
                 const pending = s.needsManualGrading || s.needsGrading;
                 const mark = isQuiz
-                  ? s.scorePct != null ? `${s.scorePct}%` : '—'
-                  : s.score != null ? `${s.score}/${data.maxScore ?? 100}` : '—';
+                  ? s.scorePct != null
+                    ? `${s.scorePct}%`
+                    : '—'
+                  : s.score != null
+                    ? `${s.score}/${data.maxScore ?? 100}`
+                    : '—';
                 return (
                   <li key={s.attemptId ?? s.submissionId}>
                     <button
@@ -664,15 +842,21 @@ function PaperView({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-bold">{s.studentName}</span>
                         {s.submittedAt && (
-                          <span className="block text-xs text-outline">{dateShort(s.submittedAt)}</span>
+                          <span className="block text-xs text-outline">
+                            {dateShort(s.submittedAt)}
+                          </span>
                         )}
                       </span>
                       {pending ? (
                         <Badge tone="warn">{t('grading.pending')}</Badge>
                       ) : (
-                        <Badge tone={isQuiz ? (s.passed ? 'neutral' : 'error') : 'neutral'}>{mark}</Badge>
+                        <Badge tone={isQuiz ? (s.passed ? 'neutral' : 'error') : 'neutral'}>
+                          {mark}
+                        </Badge>
                       )}
-                      {isQuiz && <span className="material-symbols-outlined text-outline">chevron_left</span>}
+                      {isQuiz && (
+                        <span className="material-symbols-outlined text-outline">chevron_left</span>
+                      )}
                     </button>
                   </li>
                 );
@@ -710,10 +894,15 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
     queryKey: ['grading-review', attemptId],
     queryFn: async () => (await api.get(`/teacher/grading/quiz-attempts/${attemptId}/review`)).data,
   });
-  if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
+  if (isLoading || !data)
+    return (
+      <div className="grid place-items-center py-12">
+        <Spinner />
+      </div>
+    );
 
   const earned = data.questions.reduce(
-    (n: number, q: any) => n + (q.correct === true ? q.points : q.awardedPoints ?? 0),
+    (n: number, q: any) => n + (q.correct === true ? q.points : (q.awardedPoints ?? 0)),
     0,
   );
   const outOf = data.questions.reduce((n: number, q: any) => n + q.points, 0);
@@ -736,17 +925,24 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
         ) : (
           <span className="flex items-center gap-4">
             <span className="text-end">
-              <span className="block font-heading text-sm font-bold tabular-nums text-on-surface-variant" dir="ltr">
+              <span
+                className="block font-heading text-sm font-bold tabular-nums text-on-surface-variant"
+                dir="ltr"
+              >
                 {earned} / {outOf}
               </span>
               <span className="text-xs text-outline">{t('grading.marksEarned')}</span>
             </span>
             <span
               className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-center ${
-                data.passed ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                data.passed
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
               }`}
             >
-              <span className="font-heading text-xl font-extrabold tabular-nums" dir="ltr">{data.scorePct}%</span>
+              <span className="font-heading text-xl font-extrabold tabular-nums" dir="ltr">
+                {data.scorePct}%
+              </span>
             </span>
           </span>
         )}
@@ -756,13 +952,18 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
         {data.questions.map((q: any, i: number) => {
           // A written answer is "right" here only in the sense of having earned
           // its marks; nobody called it correct, somebody awarded it something.
-          const full = q.correct === true || (q.awardedPoints != null && q.awardedPoints >= q.points);
+          const full =
+            q.correct === true || (q.awardedPoints != null && q.awardedPoints >= q.points);
           const none = q.correct === false || (q.awardedPoints != null && q.awardedPoints === 0);
           return (
             <li
               key={q.id}
               className={`card border-s-4 ${
-                full ? 'border-s-emerald-500' : none ? 'border-s-rose-500' : 'border-s-outline-variant'
+                full
+                  ? 'border-s-emerald-500'
+                  : none
+                    ? 'border-s-rose-500'
+                    : 'border-s-outline-variant'
               }`}
             >
               <div className="mb-3 flex items-start gap-2">
@@ -789,8 +990,13 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
 
               {q.correct === null ? (
                 <>
-                  <p className="mb-1 text-xs font-bold text-on-surface-variant">{t('grading.studentAnswer')}</p>
-                  <div className="whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm" dir="auto">
+                  <p className="mb-1 text-xs font-bold text-on-surface-variant">
+                    {t('grading.studentAnswer')}
+                  </p>
+                  <div
+                    className="whitespace-pre-wrap rounded-xl bg-surface-container-low p-3 text-sm"
+                    dir="auto"
+                  >
                     {q.writtenAnswer || <span className="text-outline">{t('grading.blank')}</span>}
                   </div>
 
@@ -804,16 +1010,23 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
                         n: q.awardedPoints,
                         max: q.points,
                       })}
-                      {q.ai?.similarityPct != null && ` · ${t('grading.aiSaid', { pct: q.ai.similarityPct })}`}
+                      {q.ai?.similarityPct != null &&
+                        ` · ${t('grading.aiSaid', { pct: q.ai.similarityPct })}`}
                     </p>
                   )}
                   {q.ai?.reason && (
-                    <p className="mt-1 text-xs leading-5 text-outline" dir="auto">{q.ai.reason}</p>
+                    <p className="mt-1 text-xs leading-5 text-outline" dir="auto">
+                      {q.ai.reason}
+                    </p>
                   )}
 
                   {q.modelAnswer && (
-                    <p className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs" dir="auto">
-                      <b>{t('grading.modelAnswer')}: </b>{q.modelAnswer}
+                    <p
+                      className="mt-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs"
+                      dir="auto"
+                    >
+                      <b>{t('grading.modelAnswer')}: </b>
+                      {q.modelAnswer}
                     </p>
                   )}
                 </>
@@ -847,7 +1060,9 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
                         >
                           {right ? 'check_circle' : chose ? 'cancel' : 'radio_button_unchecked'}
                         </span>
-                        <span className="min-w-0 flex-1" dir="auto">{o.text}</span>
+                        <span className="min-w-0 flex-1" dir="auto">
+                          {o.text}
+                        </span>
                         {chose && (
                           <span
                             className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
@@ -871,8 +1086,12 @@ function AttemptReview({ attemptId }: { attemptId: string }) {
               )}
 
               {q.explanation && (
-                <p className="mt-2 rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant" dir="auto">
-                  <b>{t('assess.take.explanation')}: </b>{q.explanation}
+                <p
+                  className="mt-2 rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant"
+                  dir="auto"
+                >
+                  <b>{t('assess.take.explanation')}: </b>
+                  {q.explanation}
                 </p>
               )}
             </li>
@@ -899,8 +1118,12 @@ function QuizAnalysis({ lessonId }: { lessonId: string }) {
   };
   const fixKey = useMutation({
     mutationFn: async (questionId: string) =>
-      (await api.post(`/teacher/grading/questions/${questionId}/key`, { correctOptionIds: picked })).data,
-    onSuccess: () => { setEditing(null); refresh(); },
+      (await api.post(`/teacher/grading/questions/${questionId}/key`, { correctOptionIds: picked }))
+        .data,
+    onSuccess: () => {
+      setEditing(null);
+      refresh();
+    },
   });
   const dismiss = useMutation({
     mutationFn: async (reportId: string) =>
@@ -908,8 +1131,14 @@ function QuizAnalysis({ lessonId }: { lessonId: string }) {
     onSuccess: refresh,
   });
 
-  if (isLoading || !data) return <div className="grid place-items-center py-12"><Spinner /></div>;
-  if (!data.questions.length) return <p className="text-sm text-on-surface-variant">{t('grading.noKeyed')}</p>;
+  if (isLoading || !data)
+    return (
+      <div className="grid place-items-center py-12">
+        <Spinner />
+      </div>
+    );
+  if (!data.questions.length)
+    return <p className="text-sm text-on-surface-variant">{t('grading.noKeyed')}</p>;
 
   return (
     <div className="space-y-5">
@@ -945,16 +1174,22 @@ function QuizAnalysis({ lessonId }: { lessonId: string }) {
                         className="accent-primary"
                         checked={picked.includes(o.id)}
                         onChange={(e) =>
-                          setPicked((p) => (e.target.checked ? [...p, o.id] : p.filter((x) => x !== o.id)))
+                          setPicked((p) =>
+                            e.target.checked ? [...p, o.id] : p.filter((x) => x !== o.id),
+                          )
                         }
                         aria-label={o.text}
                       />
                     ) : (
-                      <span className={`material-symbols-outlined text-[18px] ${isKey ? 'text-secondary' : 'text-outline/40'}`}>
+                      <span
+                        className={`material-symbols-outlined text-[18px] ${isKey ? 'text-secondary' : 'text-outline/40'}`}
+                      >
                         {isKey ? 'check_circle' : 'radio_button_unchecked'}
                       </span>
                     )}
-                    <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{o.text}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm" dir="auto">
+                      {o.text}
+                    </span>
                     {/* The bar is the point: a crowd on one wrong option is a
                         wrong key far more often than it is a hard question. */}
                     <span className="h-2 w-28 overflow-hidden rounded-full bg-surface-container-high sm:w-40">
@@ -963,7 +1198,12 @@ function QuizAnalysis({ lessonId }: { lessonId: string }) {
                         style={{ width: `${Math.round((n / topCount) * 100)}%` }}
                       />
                     </span>
-                    <span className="w-8 shrink-0 text-end text-xs tabular-nums text-on-surface-variant" dir="ltr">{n}</span>
+                    <span
+                      className="w-8 shrink-0 text-end text-xs tabular-nums text-on-surface-variant"
+                      dir="ltr"
+                    >
+                      {n}
+                    </span>
                   </li>
                 );
               })}
@@ -975,7 +1215,9 @@ function QuizAnalysis({ lessonId }: { lessonId: string }) {
                   <li
                     key={r.id}
                     className={`flex items-start gap-2 rounded-xl px-3 py-2 text-xs leading-5 ${
-                      r.status === 'OPEN' ? 'bg-error-container/30' : 'bg-surface-container-low text-on-surface-variant'
+                      r.status === 'OPEN'
+                        ? 'bg-error-container/30'
+                        : 'bg-surface-container-low text-on-surface-variant'
                     }`}
                   >
                     <span className="material-symbols-outlined text-[16px] leading-5">flag</span>
@@ -1016,7 +1258,10 @@ function QuizAnalysis({ lessonId }: { lessonId: string }) {
               ) : (
                 <button
                   className="btn-ghost py-1.5 text-xs"
-                  onClick={() => { setEditing(q.id); setPicked(q.correctOptionIds); }}
+                  onClick={() => {
+                    setEditing(q.id);
+                    setPicked(q.correctOptionIds);
+                  }}
                 >
                   <span className="material-symbols-outlined text-[18px]">edit</span>
                   {t('grading.fixKey')}

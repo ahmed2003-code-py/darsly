@@ -27,12 +27,22 @@ export class InvitationLinksController {
   @Post('academies/:slug/invitation-links')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
-  @ApiOperation({ summary: '[academy] Create a single-use staff invitation link (TEACHER/ASSISTANT only)' })
-  async create(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateInvitationLinkDto) {
+  @ApiOperation({
+    summary: '[academy] Create a single-use staff invitation link (TEACHER/ASSISTANT only)',
+  })
+  async create(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: CreateInvitationLinkDto,
+  ) {
     const link = await this.links.create(ctx.academyId, user.sub, dto.role);
     await this.audit.log({
-      actorUserId: user.sub, action: 'member.invitationLink.create', entity: 'AcademyInvitationLink', entityId: link.id,
-      academyId: ctx.academyId, meta: { role: link.role, expiresAt: link.expiresAt, viaPlatformAdmin: ctx.isPlatformAdmin },
+      actorUserId: user.sub,
+      action: 'member.invitationLink.create',
+      entity: 'AcademyInvitationLink',
+      entityId: link.id,
+      academyId: ctx.academyId,
+      meta: { role: link.role, expiresAt: link.expiresAt, viaPlatformAdmin: ctx.isPlatformAdmin },
     });
     return link;
   }
@@ -40,7 +50,9 @@ export class InvitationLinksController {
   @Get('academies/:slug/invitation-links')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
-  @ApiOperation({ summary: '[academy] List invitation links (no raw tokens — those exist only at creation)' })
+  @ApiOperation({
+    summary: '[academy] List invitation links (no raw tokens — those exist only at creation)',
+  })
   list(@CurrentAcademy() ctx: AcademyContext) {
     return this.links.list(ctx.academyId);
   }
@@ -49,9 +61,19 @@ export class InvitationLinksController {
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
   @ApiOperation({ summary: '[academy] Revoke an unused invitation link' })
-  async revoke(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  async revoke(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     const result = await this.links.revoke(ctx.academyId, id);
-    await this.audit.log({ actorUserId: user.sub, action: 'member.invitationLink.revoke', entity: 'AcademyInvitationLink', entityId: id, academyId: ctx.academyId });
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'member.invitationLink.revoke',
+      entity: 'AcademyInvitationLink',
+      entityId: id,
+      academyId: ctx.academyId,
+    });
     return result;
   }
 
@@ -67,7 +89,11 @@ export class InvitationLinksController {
   async accept(@CurrentUser() user: JwtPayload, @Param('token') token: string) {
     const membership = await this.links.accept(token, user.sub);
     await this.audit.log({
-      actorUserId: user.sub, action: 'member.invitationLink.accept', entity: 'AcademyMembership', entityId: membership.id, academyId: membership.academyId,
+      actorUserId: user.sub,
+      action: 'member.invitationLink.accept',
+      entity: 'AcademyMembership',
+      entityId: membership.id,
+      academyId: membership.academyId,
     });
     return membership;
   }
@@ -77,8 +103,12 @@ export class InvitationLinksController {
   async decline(@CurrentUser() user: JwtPayload, @Param('token') token: string) {
     const result = await this.links.decline(token, user.sub);
     await this.audit.log({
-      actorUserId: user.sub, action: 'member.invitationLink.decline', entity: 'AcademyInvitationLink', entityId: result.id,
-      academyId: result.academyId, meta: { role: result.role },
+      actorUserId: user.sub,
+      action: 'member.invitationLink.decline',
+      entity: 'AcademyInvitationLink',
+      entityId: result.id,
+      academyId: result.academyId,
+      meta: { role: result.role },
     });
     return { declined: true };
   }

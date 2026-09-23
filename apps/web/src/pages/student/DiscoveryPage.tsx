@@ -129,8 +129,14 @@ export default function DiscoveryPage() {
   const [sheet, setSheet] = useState(false);
 
   const activeChips = [
-    get('gradeId') && { key: 'gradeId', label: name((grades ?? []).find((g) => g.id === get('gradeId'))) },
-    get('language') && { key: 'language', label: t(get('language') === 'ar' ? 'discovery.arabic' : 'discovery.english') },
+    get('gradeId') && {
+      key: 'gradeId',
+      label: name((grades ?? []).find((g) => g.id === get('gradeId'))),
+    },
+    get('language') && {
+      key: 'language',
+      label: t(get('language') === 'ar' ? 'discovery.arabic' : 'discovery.english'),
+    },
     get('priceMin') && { key: 'priceMin', label: `${t('discovery.min')} ${get('priceMin')}` },
     get('priceMax') && { key: 'priceMax', label: `${t('discovery.max')} ${get('priceMax')}` },
   ].filter(Boolean) as { key: string; label: string }[];
@@ -165,18 +171,32 @@ export default function DiscoveryPage() {
 
       <FilterSheet open={sheet} onClose={() => setSheet(false)} count={active}>
         <label className="mb-5 block">
-          <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.grade')}</span>
-          <select className="input" value={get('gradeId')} onChange={(e) => patch({ gradeId: e.target.value })}>
+          <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+            {t('discovery.grade')}
+          </span>
+          <select
+            className="input"
+            value={get('gradeId')}
+            onChange={(e) => patch({ gradeId: e.target.value })}
+          >
             <option value="">{t('discovery.allGrades')}</option>
             {(grades ?? []).map((g) => (
-              <option key={g.id} value={g.id}>{name(g)}</option>
+              <option key={g.id} value={g.id}>
+                {name(g)}
+              </option>
             ))}
           </select>
         </label>
 
         <label className="mb-5 block">
-          <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('discovery.language')}</span>
-          <select className="input" value={get('language')} onChange={(e) => patch({ language: e.target.value })}>
+          <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+            {t('discovery.language')}
+          </span>
+          <select
+            className="input"
+            value={get('language')}
+            onChange={(e) => patch({ language: e.target.value })}
+          >
             <option value="">{t('discovery.allLanguages')}</option>
             <option value="ar">{t('discovery.arabic')}</option>
             <option value="en">{t('discovery.english')}</option>
@@ -186,14 +206,22 @@ export default function DiscoveryPage() {
         <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('discovery.price')}</p>
         <div className="flex items-center gap-2">
           <input
-            className="input" type="number" min={0} inputMode="numeric"
-            placeholder={t('discovery.min')} value={get('priceMin')}
+            className="input"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder={t('discovery.min')}
+            value={get('priceMin')}
             onChange={(e) => patch({ priceMin: e.target.value })}
           />
           <span className="text-outline">—</span>
           <input
-            className="input" type="number" min={0} inputMode="numeric"
-            placeholder={t('discovery.max')} value={get('priceMax')}
+            className="input"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder={t('discovery.max')}
+            value={get('priceMax')}
             onChange={(e) => patch({ priceMax: e.target.value })}
           />
         </div>
@@ -208,7 +236,11 @@ export default function DiscoveryPage() {
           {isLoading ? (
             <CardGridSkeleton count={6} />
           ) : !data?.items.length ? (
-            <EmptyState icon="search_off" title={t('discovery.noResults')} hint={t('discovery.noResultsHint')} />
+            <EmptyState
+              icon="search_off"
+              title={t('discovery.noResults')}
+              hint={t('discovery.noResultsHint')}
+            />
           ) : (
             <Stagger className="grid gap-card sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {data.items.map((tc) => (
@@ -240,10 +272,7 @@ function TeacherCard({
   const isNew = tc.coursesCount === 0;
 
   return (
-    <Link
-      to={`/t/${tc.slug}`}
-      className="card card-hover flex h-full flex-col gap-3 p-5"
-    >
+    <Link to={`/t/${tc.slug}`} className="card card-hover flex h-full flex-col gap-3 p-5">
       <div className="flex items-start gap-3">
         {tc.avatarUrl ? (
           <img
@@ -261,9 +290,14 @@ function TeacherCard({
           <span className="flex items-start gap-1.5">
             {/* Two lines, not an ellipsis. A directory that cuts people's names
                 in half is the first thing that looks unfinished. */}
-            <span className="line-clamp-2 font-heading text-base font-bold leading-snug">{tc.fullName}</span>
+            <span className="line-clamp-2 font-heading text-base font-bold leading-snug">
+              {tc.fullName}
+            </span>
             {tc.verified && (
-              <span className="material-symbols-outlined mt-0.5 shrink-0 text-[16px] text-primary" title={t('discovery.verified')}>
+              <span
+                className="material-symbols-outlined mt-0.5 shrink-0 text-[16px] text-primary"
+                title={t('discovery.verified')}
+              >
                 verified
               </span>
             )}
@@ -293,7 +327,9 @@ function TeacherCard({
       )}
 
       {tc.bio && (
-        <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-on-surface-variant">{stripMarkdown(tc.bio)}</p>
+        <p className="line-clamp-2 flex-1 text-sm leading-relaxed text-on-surface-variant">
+          {stripMarkdown(tc.bio)}
+        </p>
       )}
 
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
@@ -313,12 +349,16 @@ function TeacherCard({
             <span className="text-sm text-on-surface-variant">{t('discovery.noCoursesYet')}</span>
           ) : (
             <>
-              <span className="block text-[11px] text-on-surface-variant">{t('discovery.startingFrom')}</span>
+              <span className="block text-[11px] text-on-surface-variant">
+                {t('discovery.startingFrom')}
+              </span>
               <span className="font-heading text-lg font-bold">{egp(tc.minPriceCents)}</span>
             </>
           )}
         </span>
-        <span className="btn-secondary shrink-0 px-4 py-2 text-xs">{t('discovery.viewProfile')}</span>
+        <span className="btn-secondary shrink-0 px-4 py-2 text-xs">
+          {t('discovery.viewProfile')}
+        </span>
       </span>
     </Link>
   );

@@ -63,7 +63,15 @@ describe('the directions are genuinely different from each other', () => {
 describe('vibeBrief', () => {
   it('carries every axis of the direction into the prompt', () => {
     const brief = vibeBrief('premium');
-    for (const axis of ['mood', 'palette', 'typography', 'geometry', 'rhythm', 'motion', 'decoration']) {
+    for (const axis of [
+      'mood',
+      'palette',
+      'typography',
+      'geometry',
+      'rhythm',
+      'motion',
+      'decoration',
+    ]) {
       expect(brief).toContain(`${axis}:`);
     }
     expect(brief).toContain('how this direction fails');
@@ -92,9 +100,17 @@ describe('the direction outranks the subject', () => {
       academyName: 'a',
       vibe: 'premium',
       profile: {
-        hasCover: false, hasLogo: false, galleryCount: 0, bioLength: 100,
-        subjectsCount: 2, achievementsCount: 1, courseCount: 1, reviewCount: 0,
-        avgRating: 0, bioParagraphs: 1, avgAchievementLength: 10,
+        hasCover: false,
+        hasLogo: false,
+        galleryCount: 0,
+        bioLength: 100,
+        subjectsCount: 2,
+        achievementsCount: 1,
+        courseCount: 1,
+        reviewCount: 0,
+        avgRating: 0,
+        bioParagraphs: 1,
+        avgAchievementLength: 10,
       },
       counts: {},
       archetypeGuess: 'programming',

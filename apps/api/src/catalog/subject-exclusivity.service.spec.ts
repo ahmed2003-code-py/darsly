@@ -23,7 +23,9 @@ function build(world: {
 
   const prisma = {
     studentProfile: {
-      findUnique: jest.fn().mockResolvedValue(world.student === undefined ? { id: 'st_1' } : world.student),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(world.student === undefined ? { id: 'st_1' } : world.student),
     },
     enrollment: {
       findMany: jest.fn(async ({ where }: any) => {
@@ -69,20 +71,29 @@ const WORLD = {
 
 describe('a student studying a subject stops seeing its other teachers', () => {
   it('hides every other teacher of that subject', async () => {
-    const { service } = build({ ...WORLD, enrolments: [{ tenantId: 'mine_ar', status: 'ACTIVE' }] });
+    const { service } = build({
+      ...WORLD,
+      enrolments: [{ tenantId: 'mine_ar', status: 'ACTIVE' }],
+    });
     const hidden = await service.hiddenTeacherIds('u1');
     expect(hidden.sort()).toEqual(['another_ar', 'rival_ar']);
   });
 
   it('never hides the teacher the student actually studies with', async () => {
-    const { service } = build({ ...WORLD, enrolments: [{ tenantId: 'mine_ar', status: 'ACTIVE' }] });
+    const { service } = build({
+      ...WORLD,
+      enrolments: [{ tenantId: 'mine_ar', status: 'ACTIVE' }],
+    });
     expect(await service.hiddenTeacherIds('u1')).not.toContain('mine_ar');
   });
 
   it('leaves every other subject open', async () => {
     // The rule protects a teacher's subject, not their student: physics and
     // chemistry stay browsable from anyone.
-    const { service } = build({ ...WORLD, enrolments: [{ tenantId: 'mine_ar', status: 'ACTIVE' }] });
+    const { service } = build({
+      ...WORLD,
+      enrolments: [{ tenantId: 'mine_ar', status: 'ACTIVE' }],
+    });
     const hidden = await service.hiddenTeacherIds('u1');
     expect(hidden).not.toContain('phys');
     expect(hidden).not.toContain('chem');
@@ -102,7 +113,7 @@ describe('a student studying a subject stops seeing its other teachers', () => {
     expect(hidden).not.toContain('phys');
   });
 
-  it('treats two teachers of one subject as both the student\'s own', async () => {
+  it("treats two teachers of one subject as both the student's own", async () => {
     // A student who signed up with two Arabic teachers before the rule existed
     // keeps both; only third parties go.
     const { service } = build({
@@ -119,7 +130,10 @@ describe('a student studying a subject stops seeing its other teachers', () => {
 describe('what counts as studying with someone', () => {
   it('counts an enrolment awaiting the teacher approval', async () => {
     // The student has asked, and often paid. The choice is made.
-    const { service } = build({ ...WORLD, enrolments: [{ tenantId: 'mine_ar', status: 'PENDING_PAYMENT' }] });
+    const { service } = build({
+      ...WORLD,
+      enrolments: [{ tenantId: 'mine_ar', status: 'PENDING_PAYMENT' }],
+    });
     expect(await service.hiddenTeacherIds('u1')).toContain('rival_ar');
   });
 
@@ -137,7 +151,10 @@ describe('what counts as studying with someone', () => {
   });
 
   it('does not count a rejected request', async () => {
-    const { service } = build({ ...WORLD, enrolments: [{ tenantId: 'mine_ar', status: 'REJECTED' }] });
+    const { service } = build({
+      ...WORLD,
+      enrolments: [{ tenantId: 'mine_ar', status: 'REJECTED' }],
+    });
     expect(await service.hiddenTeacherIds('u1')).toEqual([]);
   });
 });
@@ -162,10 +179,13 @@ describe('who the rule does not apply to', () => {
     expect(await service.hiddenTeacherIds('u1')).toEqual([]);
   });
 
-  it('hides nothing when the student\'s teacher has no subject set', async () => {
+  it("hides nothing when the student's teacher has no subject set", async () => {
     // Nothing to compare against — better to show everyone than to guess.
     const { service } = build({
-      teachers: [{ id: 'mine', subjectIds: [] }, { id: 'other', subjectIds: ['arabic'] }],
+      teachers: [
+        { id: 'mine', subjectIds: [] },
+        { id: 'other', subjectIds: ['arabic'] },
+      ],
       enrolments: [{ tenantId: 'mine', status: 'ACTIVE' }],
     });
     expect(await service.hiddenTeacherIds('u1')).toEqual([]);

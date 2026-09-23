@@ -38,8 +38,9 @@ describe('a pasted video link', () => {
     it('always rebuilds the URL rather than passing the string on', () => {
       // The pasted string carried a playlist and a timestamp; what reaches the
       // downloader carries neither.
-      expect(url(`https://m.youtube.com/watch?v=${ID}&list=PLxx&t=9`))
-        .toBe(`https://www.youtube.com/watch?v=${ID}`);
+      expect(url(`https://m.youtube.com/watch?v=${ID}&list=PLxx&t=9`)).toBe(
+        `https://www.youtube.com/watch?v=${ID}`,
+      );
     });
   });
 

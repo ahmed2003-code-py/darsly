@@ -25,7 +25,8 @@ function useCountdown(until?: string) {
   const [left, setLeft] = useState(0);
   useEffect(() => {
     if (!until) return;
-    const tick = () => setLeft(Math.max(0, Math.floor((new Date(until).getTime() - Date.now()) / 1000)));
+    const tick = () =>
+      setLeft(Math.max(0, Math.floor((new Date(until).getTime() - Date.now()) / 1000)));
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
@@ -54,8 +55,12 @@ export default function AdminDevicesPage() {
 
   const mint = useMutation({
     mutationFn: async () =>
-      (await api.post('/admin/device/enrollment-codes', { phone: phone.trim(), label: label.trim() || undefined }))
-        .data as MintedCode,
+      (
+        await api.post('/admin/device/enrollment-codes', {
+          phone: phone.trim(),
+          label: label.trim() || undefined,
+        })
+      ).data as MintedCode,
     onSuccess: (data) => {
       setMinted(data);
       setCopied(false);
@@ -117,13 +122,18 @@ export default function AdminDevicesPage() {
         {minted && (
           <div
             className={`rounded-2xl border p-5 text-center transition ${
-              left > 0 ? 'border-primary/40 bg-primary-fixed/40' : 'border-error/40 bg-error-container/40'
+              left > 0
+                ? 'border-primary/40 bg-primary-fixed/40'
+                : 'border-error/40 bg-error-container/40'
             }`}
           >
             <p className="text-xs font-bold text-on-surface-variant">
               {t('adminDevices.codeFor', { phone: minted.phone })}
             </p>
-            <p className="my-2 font-heading text-5xl font-extrabold tracking-[0.15em] text-primary" dir="ltr">
+            <p
+              className="my-2 font-heading text-5xl font-extrabold tracking-[0.15em] text-primary"
+              dir="ltr"
+            >
               {minted.code}
             </p>
             {left > 0 ? (
@@ -141,7 +151,11 @@ export default function AdminDevicesPage() {
                 {copied ? t('adminDevices.copied') : t('adminDevices.copy')}
               </button>
               {left === 0 && (
-                <button className="btn-primary" onClick={() => mint.mutate()} disabled={mint.isPending}>
+                <button
+                  className="btn-primary"
+                  onClick={() => mint.mutate()}
+                  disabled={mint.isPending}
+                >
                   {t('adminDevices.generateAgain')}
                 </button>
               )}
@@ -167,16 +181,22 @@ export default function AdminDevicesPage() {
             <div key={d.id} className="card flex flex-wrap items-center gap-4">
               <span
                 className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${
-                  d.revokedAt ? 'bg-error-container text-on-error-container' : 'bg-primary-fixed text-on-primary-fixed'
+                  d.revokedAt
+                    ? 'bg-error-container text-on-error-container'
+                    : 'bg-primary-fixed text-on-primary-fixed'
                 }`}
               >
                 <span className="material-symbols-outlined">smartphone</span>
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-bold" dir="ltr">{d.phone}</p>
+                <p className="font-bold" dir="ltr">
+                  {d.phone}
+                </p>
                 <p className="text-sm text-on-surface-variant">
                   {d.model ?? '—'}
-                  {typeof d.smsCount === 'number' ? ` · ${t('adminDevices.smsCount', { count: d.smsCount })}` : ''}
+                  {typeof d.smsCount === 'number'
+                    ? ` · ${t('adminDevices.smsCount', { count: d.smsCount })}`
+                    : ''}
                 </p>
                 <p className="text-xs text-outline">
                   {d.revokedAt
@@ -188,7 +208,9 @@ export default function AdminDevicesPage() {
                 <button
                   className="btn-ghost text-error"
                   disabled={revoke.isPending}
-                  onClick={async () => (await askConfirm(t('adminDevices.revokeConfirm'))) && revoke.mutate(d.id)}
+                  onClick={async () =>
+                    (await askConfirm(t('adminDevices.revokeConfirm'))) && revoke.mutate(d.id)
+                  }
                 >
                   {t('adminDevices.revoke')}
                 </button>

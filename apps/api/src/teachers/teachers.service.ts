@@ -142,10 +142,14 @@ export class TeachersService {
     });
 
     if (query.priceMinCents != null) {
-      cards = cards.filter((c) => c.minPriceCents != null && c.minPriceCents >= query.priceMinCents!);
+      cards = cards.filter(
+        (c) => c.minPriceCents != null && c.minPriceCents >= query.priceMinCents!,
+      );
     }
     if (query.priceMaxCents != null) {
-      cards = cards.filter((c) => c.minPriceCents != null && c.minPriceCents <= query.priceMaxCents!);
+      cards = cards.filter(
+        (c) => c.minPriceCents != null && c.minPriceCents <= query.priceMaxCents!,
+      );
     }
     if (query.minRating != null) {
       cards = cards.filter((c) => (c.avgRating ?? 0) >= query.minRating!);
@@ -180,7 +184,11 @@ export class TeachersService {
       ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
       : {};
     const teacher = await this.prisma.teacherProfile.findFirst({
-      where: { slug, status: 'APPROVED', user: { isActive: true, ownedAcademies: { some: MARKETPLACE_TEACHER } } },
+      where: {
+        slug,
+        status: 'APPROVED',
+        user: { isActive: true, ownedAcademies: { some: MARKETPLACE_TEACHER } },
+      },
       include: {
         user: {
           select: {
@@ -207,7 +215,12 @@ export class TeachersService {
             grades: { include: { grade: true } },
             units: {
               where: { deletedAt: null },
-              include: { lessons: { where: { deletedAt: null }, select: { durationSec: true, isFreePreview: true } } },
+              include: {
+                lessons: {
+                  where: { deletedAt: null },
+                  select: { durationSec: true, isFreePreview: true },
+                },
+              },
             },
             _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
           },
@@ -226,7 +239,9 @@ export class TeachersService {
       this.prisma.enrollment.count({ where: { tenantId: teacher.id, status: 'ACTIVE' } }),
       this.prisma.review.findMany({
         where: { tenantId: teacher.id },
-        include: { student: { include: { user: { select: { fullName: true, avatarUrl: true } } } } },
+        include: {
+          student: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
@@ -297,4 +312,3 @@ export class TeachersService {
     };
   }
 }
-

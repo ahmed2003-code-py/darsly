@@ -42,7 +42,10 @@ export class RedisIoAdapter extends IoAdapter {
     }
     const sub = pub.duplicate();
     try {
-      await Promise.all([pub.connect().catch(() => undefined), sub.connect().catch(() => undefined)]);
+      await Promise.all([
+        pub.connect().catch(() => undefined),
+        sub.connect().catch(() => undefined),
+      ]);
       // ioredis with lazyConnect resolves connect() even on failure until a
       // command actually runs; a cheap PING confirms the pair is really live
       // before wiring the adapter in.

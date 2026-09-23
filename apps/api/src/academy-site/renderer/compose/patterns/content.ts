@@ -2,7 +2,13 @@ import { SiteBlock } from '../../../schema/site-document';
 import { normalizeItems } from '../../../text.util';
 import { escapeHtml } from '../../html.util';
 import {
-  SECTION_CLOSE, hasImage, i18n, image, itemText, sectionHead, sectionOpen,
+  SECTION_CLOSE,
+  hasImage,
+  i18n,
+  image,
+  itemText,
+  sectionHead,
+  sectionOpen,
 } from '../helpers';
 import { registerPattern } from '../registry';
 
@@ -116,7 +122,10 @@ registerPattern({
     if (!items.length) return '';
     const block = b as Of<'toolkit'>;
     const cells = items
-      .map((it, i) => `<div class="cell"><span class="n">${String(i + 1).padStart(2, '0')}</span><span class="t">${itemText(it)}</span></div>`)
+      .map(
+        (it, i) =>
+          `<div class="cell"><span class="n">${String(i + 1).padStart(2, '0')}</span><span class="t">${itemText(it)}</span></div>`,
+      )
       .join('');
     return `${sectionOpen('toolkit', spec, ctx, { extraClass: 'toolkit toolkit-matrix' })}
       ${sectionHead('toolkit', block.heading)}<div class="matrix">${cells}</div>${SECTION_CLOSE}`;
@@ -126,9 +135,10 @@ registerPattern({
 registerPattern({
   id: 'toolkit.marquee',
   section: 'toolkit',
-  brief: 'Subjects scrolling past in a continuous band. Energetic; best as a quiet strip between louder sections.',
+  brief:
+    'Subjects scrolling past in a continuous band. Energetic; best as a quiet strip between louder sections.',
   needs: { items: 5 },
-  base: .9,
+  base: 0.9,
   weight: { languages: 1.3, exam_prep: 1.2, programming: 1.05 },
   js: ['marquee'],
   css: () => `.toolkit-marquee .marquee{margin-top:1.5em}
@@ -231,7 +241,10 @@ registerPattern({
     if (!block.items.length) return '';
     ctx.useEffect('counters');
     const cells = block.items
-      .map((s) => `<div class="stat card"><span class="v" data-count>${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`)
+      .map(
+        (s) =>
+          `<div class="stat card"><span class="v" data-count>${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`,
+      )
       .join('');
     return `${sectionOpen('stats', spec, ctx, { extraClass: 'stats' })}
       ${sectionHead('stats', block.heading)}<div class="stat-grid">${cells}</div>${SECTION_CLOSE}`;
@@ -255,7 +268,10 @@ registerPattern({
     if (!block.items.length) return '';
     ctx.useEffect('counters');
     const cells = block.items
-      .map((s) => `<div class="stat"><span class="v" data-count>${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`)
+      .map(
+        (s) =>
+          `<div class="stat"><span class="v" data-count>${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`,
+      )
       .join('');
     return `${sectionOpen('stats', spec, ctx, { extraClass: 'stats stats-big' })}
       ${sectionHead('stats', block.heading)}<div class="stat-grid">${cells}</div>${SECTION_CLOSE}`;
@@ -266,7 +282,7 @@ registerPattern({
   id: 'stats.strip',
   section: 'stats',
   brief: 'A single quiet line of figures. Use as punctuation between two heavier sections.',
-  base: .9,
+  base: 0.9,
   js: ['counters'],
   css: () => `.stats-strip .stat-row{display:flex;flex-wrap:wrap;gap:2.4em;align-items:baseline;justify-content:space-between;border-block:1px solid var(--rule);padding-block:1.4em}
 .stats-strip .stat{display:flex;align-items:baseline;gap:.6em;padding:0}
@@ -277,7 +293,10 @@ registerPattern({
     if (!block.items.length) return '';
     ctx.useEffect('counters');
     const cells = block.items
-      .map((s) => `<div class="stat"><span class="v" data-count>${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`)
+      .map(
+        (s) =>
+          `<div class="stat"><span class="v" data-count>${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`,
+      )
       .join('');
     return `${sectionOpen('stats', spec, ctx, { extraClass: 'stats stats-strip' })}
       <div class="stat-row">${cells}</div>${SECTION_CLOSE}`;
@@ -302,7 +321,10 @@ registerPattern({
     const block = b as Of<'timeline'>;
     if (!block.items.length) return '';
     const li = block.items
-      .map((it) => `<li><span class="m">${i18n(it.marker)}</span><h3>${i18n(it.title)}</h3><p>${i18n(it.body)}</p></li>`)
+      .map(
+        (it) =>
+          `<li><span class="m">${i18n(it.marker)}</span><h3>${i18n(it.title)}</h3><p>${i18n(it.body)}</p></li>`,
+      )
       .join('');
     return `${sectionOpen('timeline', spec, ctx, { extraClass: 'timeline' })}
       ${sectionHead('timeline', block.heading)}<ol class="tl">${li}</ol>${SECTION_CLOSE}`;
@@ -312,7 +334,8 @@ registerPattern({
 registerPattern({
   id: 'timeline.columns',
   section: 'timeline',
-  brief: 'The same journey laid out horizontally as connected columns. Reads as progress, not history.',
+  brief:
+    'The same journey laid out horizontally as connected columns. Reads as progress, not history.',
   needs: { items: 3 },
   base: 1,
   weight: { exam_prep: 1.3, programming: 1.2 },
@@ -326,7 +349,10 @@ registerPattern({
     const block = b as Of<'timeline'>;
     if (!block.items.length) return '';
     const li = block.items
-      .map((it) => `<li><span class="m">${i18n(it.marker)}</span><h3>${i18n(it.title)}</h3><p>${i18n(it.body)}</p></li>`)
+      .map(
+        (it) =>
+          `<li><span class="m">${i18n(it.marker)}</span><h3>${i18n(it.title)}</h3><p>${i18n(it.body)}</p></li>`,
+      )
       .join('');
     return `${sectionOpen('timeline', spec, ctx, { extraClass: 'timeline' })}
       ${sectionHead('timeline', block.heading)}<ol class="tl-cols">${li}</ol>${SECTION_CLOSE}`;
@@ -349,7 +375,9 @@ registerPattern({
   render: (b, spec, ctx) => {
     const block = b as Of<'process'>;
     if (!block.steps.length) return '';
-    const li = block.steps.map((s) => `<li><h3>${i18n(s.title)}</h3><p>${i18n(s.body)}</p></li>`).join('');
+    const li = block.steps
+      .map((s) => `<li><h3>${i18n(s.title)}</h3><p>${i18n(s.body)}</p></li>`)
+      .join('');
     return `${sectionOpen('process', spec, ctx, { extraClass: 'process' })}
       ${sectionHead('process', block.heading)}<ol class="steps">${li}</ol>${SECTION_CLOSE}`;
   },
@@ -372,7 +400,9 @@ registerPattern({
   render: (b, spec, ctx) => {
     const block = b as Of<'process'>;
     if (!block.steps.length) return '';
-    const li = block.steps.map((s) => `<li><h3>${i18n(s.title)}</h3><p>${i18n(s.body)}</p></li>`).join('');
+    const li = block.steps
+      .map((s) => `<li><h3>${i18n(s.title)}</h3><p>${i18n(s.body)}</p></li>`)
+      .join('');
     return `${sectionOpen('process', spec, ctx, { extraClass: 'process' })}
       ${sectionHead('process', block.heading)}<ol class="rail">${li}</ol>${SECTION_CLOSE}`;
   },
@@ -383,7 +413,8 @@ registerPattern({
 registerPattern({
   id: 'quote.statement',
   section: 'quote',
-  brief: 'One sentence set large, alone on the page. The cheapest way to give a long page a moment of quiet.',
+  brief:
+    'One sentence set large, alone on the page. The cheapest way to give a long page a moment of quiet.',
   base: 1,
   css: () => `.quote-block .wrap{max-width:min(var(--w,var(--wrap)),840px);text-align:center}
 .quote-block blockquote{margin:0;font-family:var(--font-h);font-weight:calc(var(--wh) - 100);font-size:var(--h2);line-height:1.35;letter-spacing:var(--tr);color:var(--fg)}
@@ -420,7 +451,10 @@ registerPattern({
     if (!block.items.length) return '';
     ctx.useEffect('faq');
     const items = block.items
-      .map((f) => `<details class="faq-item"><summary>${i18n(f.q)}</summary><div class="a">${i18n(f.a)}</div></details>`)
+      .map(
+        (f) =>
+          `<details class="faq-item"><summary>${i18n(f.q)}</summary><div class="a">${i18n(f.a)}</div></details>`,
+      )
       .join('');
     return `${sectionOpen('faq', spec, ctx, { extraClass: 'faq' })}
       ${sectionHead('faq', block.heading)}<div class="faq-list">${items}</div>${SECTION_CLOSE}`;
@@ -430,7 +464,8 @@ registerPattern({
 registerPattern({
   id: 'faq.two-column',
   section: 'faq',
-  brief: 'Heading held to one side with the questions beside it. Keeps a long FAQ from reading as a support article.',
+  brief:
+    'Heading held to one side with the questions beside it. Keeps a long FAQ from reading as a support article.',
   base: 1,
   weight: { university: 1.25, programming: 1.2 },
   js: ['faq'],
@@ -440,7 +475,10 @@ registerPattern({
     if (!block.items.length) return '';
     ctx.useEffect('faq');
     const items = block.items
-      .map((f) => `<details class="faq-item"><summary>${i18n(f.q)}</summary><div class="a">${i18n(f.a)}</div></details>`)
+      .map(
+        (f) =>
+          `<details class="faq-item"><summary>${i18n(f.q)}</summary><div class="a">${i18n(f.a)}</div></details>`,
+      )
       .join('');
     return `${sectionOpen('faq', spec, ctx, { extraClass: 'faq faq-two' })}
       <div class="split"><div>${sectionHead('faq', block.heading)}</div><div>${items}</div></div>${SECTION_CLOSE}`;
@@ -450,8 +488,9 @@ registerPattern({
 registerPattern({
   id: 'faq.plain',
   section: 'faq',
-  brief: 'Questions and answers open, with no accordion. Honest and fast to read when there are only a few.',
-  base: .95,
+  brief:
+    'Questions and answers open, with no accordion. Honest and fast to read when there are only a few.',
+  base: 0.95,
   css: () => `.faq-plain dl{margin:0;max-width:min(100%,860px)}
 .faq-plain dt{font-family:var(--font-h);font-weight:600;font-size:1.05rem;color:var(--fg);padding-top:1.3em;border-top:1px solid var(--rule);margin-top:1.3em}
 .faq-plain dt:first-of-type{border-top:0;margin-top:0;padding-top:0}

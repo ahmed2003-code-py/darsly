@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
 import { ProofStorageService } from '../storage/proof-storage.service';
@@ -71,7 +78,10 @@ export class ManualPaymentsService {
     });
     if (!course) throw new NotFoundException('Course not found');
     if (course.priceCents <= 0) {
-      throw new BadRequestException({ message: 'This course is free — just enrol', code: 'COURSE_FREE' });
+      throw new BadRequestException({
+        message: 'This course is free — just enrol',
+        code: 'COURSE_FREE',
+      });
     }
     // No money enters a Center before the finance phase — this is the one
     // place a Payment row is created, so the door is closed here regardless
@@ -86,13 +96,20 @@ export class ManualPaymentsService {
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
     });
-    if (enrollment?.status === 'ACTIVE' && (!enrollment.expiresAt || enrollment.expiresAt > new Date())) {
+    if (
+      enrollment?.status === 'ACTIVE' &&
+      (!enrollment.expiresAt || enrollment.expiresAt > new Date())
+    ) {
       throw new ConflictException({ message: 'Already enrolled', code: 'ALREADY_ENROLLED' });
     }
     const pending = await this.prisma.payment.findFirst({
       where: { studentId: student.id, courseId: course.id, status: 'PENDING' },
     });
-    if (pending) throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+    if (pending)
+      throw new ConflictException({
+        message: 'A payment is already under review',
+        code: 'PAYMENT_PENDING',
+      });
 
     // Checked before any money is named: the course being for another year is a
     // refusal, and taking a proof of payment for it would mean refunding it.
@@ -104,9 +121,14 @@ export class ManualPaymentsService {
     // see payer-reference.ts. A blank or malformed one could never match, and
     // every payment carrying one went to an admin to resolve by hand.
     // A cash claim carries whatever receipt number the student was given, if any.
-    const reference = isCash ? (dto.reference ?? '').trim().slice(0, 120) : normalizePayerReference(dto.method, dto.reference, await this.receivingHandles());
+    const reference = isCash
+      ? (dto.reference ?? '').trim().slice(0, 120)
+      : normalizePayerReference(dto.method, dto.reference, await this.receivingHandles());
 
-    const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
+    const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(
+      course,
+      dto.couponCode,
+    );
 
     // A wallet contribution is never automatic — it's the student's money and
     // their call whether it goes toward this purchase or stays put for
@@ -141,7 +163,11 @@ export class ManualPaymentsService {
     const needsProof = !isWalletMethod && !isCash && cashDueCents > 0;
     const reading = needsProof ? await this.proofReader.read(dto.proofImageUrl ?? '') : null;
     if (needsProof) {
-      const check = checkProofAgainstClaim(reading, { amountCents: cashDueCents }, await this.receivingHandles());
+      const check = checkProofAgainstClaim(
+        reading,
+        { amountCents: cashDueCents },
+        await this.receivingHandles(),
+      );
       if (check.verdict === 'DISAGREES') {
         throw new BadRequestException({
           message: check.problems.join(' '),
@@ -185,10 +211,21 @@ export class ManualPaymentsService {
       const enr = enrollment
         ? await tx.enrollment.update({
             where: { id: enrollment.id },
-            data: { status: 'PENDING_PAYMENT', approvedAt: null, revokedReason: null, hiddenAt: null },
+            data: {
+              status: 'PENDING_PAYMENT',
+              approvedAt: null,
+              revokedReason: null,
+              hiddenAt: null,
+            },
           })
         : await tx.enrollment.create({
-            data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, academyId: course.academyId ?? course.tenantId, status: 'PENDING_PAYMENT' },
+            data: {
+              studentId: student.id,
+              courseId: course.id,
+              tenantId: course.tenantId,
+              academyId: course.academyId ?? course.tenantId,
+              status: 'PENDING_PAYMENT',
+            },
           });
 
       const created = await tx.payment.create({
@@ -210,9 +247,24 @@ export class ManualPaymentsService {
           reference,
           couponId,
           status: 'PENDING',
-          ...(isCash ? { cashOrigin: 'STUDENT_REPORTED' as const, cashReceiver: cashReceiver!, note: dto.note?.trim().slice(0, 300) || null } : {}),
+          ...(isCash
+            ? {
+                cashOrigin: 'STUDENT_REPORTED' as const,
+                cashReceiver: cashReceiver!,
+                note: dto.note?.trim().slice(0, 300) || null,
+              }
+            : {}),
         },
-        select: { id: true, status: true, amountCents: true, walletCents: true, enrollmentId: true, createdAt: true, method: true, cashReceiver: true },
+        select: {
+          id: true,
+          status: true,
+          amountCents: true,
+          walletCents: true,
+          enrollmentId: true,
+          createdAt: true,
+          method: true,
+          cashReceiver: true,
+        },
       });
 
       if (wantsWallet && walletCents > 0) {
@@ -221,7 +273,10 @@ export class ManualPaymentsService {
         // differ if another submit landed in between.
         const liveBalance = await this.ledger.walletBalance(student.id, tx);
         if (liveBalance < walletCents) {
-          throw new ConflictException({ message: 'Wallet balance changed — try again', code: 'BALANCE_CHANGED' });
+          throw new ConflictException({
+            message: 'Wallet balance changed — try again',
+            code: 'BALANCE_CHANGED',
+          });
         }
         await this.ledger.reserveWalletPortion(student.id, created.id, walletCents, tx);
       }
@@ -237,11 +292,16 @@ export class ManualPaymentsService {
     if (wantsWallet && cashDueCents === 0) {
       await this.applyVerification(
         {
-          id: payment.id, status: payment.status, courseId: course.id,
-          enrollmentId: payment.enrollmentId, studentId: student.id, couponId: couponId ?? null,
+          id: payment.id,
+          status: payment.status,
+          courseId: course.id,
+          enrollmentId: payment.enrollmentId,
+          studentId: student.id,
+          couponId: couponId ?? null,
           // Paid entirely from the wallet, so the price re-check deliberately
           // skips it: the escrow is reserved against this exact total.
-          amountCents: payment.amountCents, walletCents: payment.walletCents,
+          amountCents: payment.amountCents,
+          walletCents: payment.walletCents,
         },
         'system',
         true,
@@ -250,15 +310,17 @@ export class ManualPaymentsService {
       return { ...payment, status: 'PAID' };
     }
 
-    if (!isWalletMethod) await this.notifications.create({
-      userId: course.teacher.user.id,
-      type: 'ANNOUNCEMENT',
-      title: 'دفعة جديدة بانتظار المراجعة 💳',
-      body: walletCents > 0
-        ? `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}» (جزء من الرصيد، والباقي تحويل).`
-        : `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}».`,
-      meta: { paymentId: payment.id, courseId: course.id },
-    });
+    if (!isWalletMethod)
+      await this.notifications.create({
+        userId: course.teacher.user.id,
+        type: 'ANNOUNCEMENT',
+        title: 'دفعة جديدة بانتظار المراجعة 💳',
+        body:
+          walletCents > 0
+            ? `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}» (جزء من الرصيد، والباقي تحويل).`
+            : `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}».`,
+        meta: { paymentId: payment.id, courseId: course.id },
+      });
     return payment;
   }
 
@@ -276,7 +338,9 @@ export class ManualPaymentsService {
   /** See wallet.service: our own numbers are not an answer to "from where". */
   private async receivingHandles(): Promise<string[]> {
     try {
-      const accounts = await this.prisma.platformPaymentAccount.findMany({ select: { handle: true } });
+      const accounts = await this.prisma.platformPaymentAccount.findMany({
+        select: { handle: true },
+      });
       return accounts.map((a) => a.handle);
     } catch {
       return [];
@@ -299,8 +363,11 @@ export class ManualPaymentsService {
     const enrolled = await this.prisma.enrollment.findUnique({
       where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
     });
-    if (enrolled?.status === 'ACTIVE' && !enrolled.deletedAt &&
-        (!enrolled.expiresAt || enrolled.expiresAt > new Date())) {
+    if (
+      enrolled?.status === 'ACTIVE' &&
+      !enrolled.deletedAt &&
+      (!enrolled.expiresAt || enrolled.expiresAt > new Date())
+    ) {
       throw new ConflictException({ message: 'Already enrolled', code: 'ALREADY_ENROLLED' });
     }
     // Same gate as every other way in: paying from a balance already inside the
@@ -337,7 +404,10 @@ export class ManualPaymentsService {
 
   /** For audit-log attribution — tenantId already equals academyId. */
   async academyIdFor(paymentId: string): Promise<string | null> {
-    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId }, select: { tenantId: true, academyId: true } });
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { tenantId: true, academyId: true },
+    });
     return payment?.academyId ?? payment?.tenantId ?? null;
   }
 
@@ -350,11 +420,21 @@ export class ManualPaymentsService {
   // receiver is the course's author in person; the CENTER receiver is anyone
   // holding `payment.collect` in THAT Center. Nothing else may confirm.
 
-  private async resolveCashReceiver(course: { tenantId: string; academyId: string | null }, wanted?: 'TEACHER' | 'CENTER') {
+  private async resolveCashReceiver(
+    course: { tenantId: string; academyId: string | null },
+    wanted?: 'TEACHER' | 'CENTER',
+  ) {
     const receiver = wanted ?? 'TEACHER';
     if (receiver === 'CENTER') {
-      const org = await this.prisma.academy.findUnique({ where: { id: course.academyId ?? course.tenantId }, select: { kind: true } });
-      if (org?.kind !== 'CENTER') throw new BadRequestException({ message: 'Only a Center can receive cash at its desk', code: 'CASH_RECEIVER_INVALID' });
+      const org = await this.prisma.academy.findUnique({
+        where: { id: course.academyId ?? course.tenantId },
+        select: { kind: true },
+      });
+      if (org?.kind !== 'CENTER')
+        throw new BadRequestException({
+          message: 'Only a Center can receive cash at its desk',
+          code: 'CASH_RECEIVER_INVALID',
+        });
     }
     return receiver;
   }
@@ -365,23 +445,39 @@ export class ManualPaymentsService {
    * cross-academy read); 403 when it is, but the caller is not its receiver.
    */
   private async cashAuthority(actor: Actor, ctx: AcademyContext, paymentId: string) {
-    const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, deletedAt: null } });
-    const orgId = payment ? payment.academyId ?? payment.tenantId : null;
-    if (!payment || (orgId !== ctx.academyId && actor.role !== Role.SUPER_ADMIN)) throw new NotFoundException('Payment not found');
-    if (payment.method !== 'CASH') throw new BadRequestException({ message: 'Not a cash payment', code: 'NOT_CASH' });
+    const payment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, deletedAt: null },
+    });
+    const orgId = payment ? (payment.academyId ?? payment.tenantId) : null;
+    if (!payment || (orgId !== ctx.academyId && actor.role !== Role.SUPER_ADMIN))
+      throw new NotFoundException('Payment not found');
+    if (payment.method !== 'CASH')
+      throw new BadRequestException({ message: 'Not a cash payment', code: 'NOT_CASH' });
     if (actor.role === Role.SUPER_ADMIN) return payment;
     if (payment.cashReceiver === 'CENTER') {
-      if (!ctx.can('payment.collect')) throw new ForbiddenException({ message: 'Only the Center\'s cash collector can confirm this', code: 'CASH_NOT_RECEIVER' });
+      if (!ctx.can('payment.collect'))
+        throw new ForbiddenException({
+          message: "Only the Center's cash collector can confirm this",
+          code: 'CASH_NOT_RECEIVER',
+        });
       return payment;
     }
-    const author = await this.prisma.teacherProfile.findUnique({ where: { id: payment.tenantId }, select: { userId: true } });
-    if (author?.userId !== actor.sub) throw new ForbiddenException({ message: 'Only the teacher who received the cash can confirm it', code: 'CASH_NOT_RECEIVER' });
+    const author = await this.prisma.teacherProfile.findUnique({
+      where: { id: payment.tenantId },
+      select: { userId: true },
+    });
+    if (author?.userId !== actor.sub)
+      throw new ForbiddenException({
+        message: 'Only the teacher who received the cash can confirm it',
+        code: 'CASH_NOT_RECEIVER',
+      });
     return payment;
   }
 
   async confirmCash(actor: Actor, ctx: AcademyContext, paymentId: string) {
     const payment = await this.cashAuthority(actor, ctx, paymentId);
-    if (payment.status !== 'PENDING') throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
+    if (payment.status !== 'PENDING')
+      throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     // Confirmation IS settlement for cash (see above): settle=true books the
     // ledger inside the same status flip, and the flip's updateMany guard is
     // what makes a concurrent second confirmation lose (NOT_PENDING).
@@ -390,7 +486,12 @@ export class ManualPaymentsService {
 
   async rejectCash(actor: Actor, ctx: AcademyContext, paymentId: string, reason?: string) {
     await this.cashAuthority(actor, ctx, paymentId);
-    return this.reject({ sub: actor.sub, role: Role.SUPER_ADMIN }, paymentId, reason, /* preAuthorized */ true);
+    return this.reject(
+      { sub: actor.sub, role: Role.SUPER_ADMIN },
+      paymentId,
+      reason,
+      /* preAuthorized */ true,
+    );
   }
 
   /**
@@ -404,36 +505,79 @@ export class ManualPaymentsService {
       include: { teacher: { select: { userId: true } } },
     });
     if (!course) throw new NotFoundException('Course not found');
-    if (course.priceCents <= 0) throw new BadRequestException({ message: 'This course is free — just enrol', code: 'COURSE_FREE' });
+    if (course.priceCents <= 0)
+      throw new BadRequestException({
+        message: 'This course is free — just enrol',
+        code: 'COURSE_FREE',
+      });
     await assertSplitConfigured(this.prisma, course);
     const receiver = await this.resolveCashReceiver(course, dto.receiver);
     const isAuthor = course.teacher.userId === actor.sub;
     if (receiver === 'TEACHER' && !isAuthor && actor.role !== Role.SUPER_ADMIN) {
-      throw new ForbiddenException({ message: 'Only the course\'s teacher can record cash they received', code: 'CASH_NOT_RECEIVER' });
+      throw new ForbiddenException({
+        message: "Only the course's teacher can record cash they received",
+        code: 'CASH_NOT_RECEIVER',
+      });
     }
     if (receiver === 'CENTER' && !ctx.can('payment.collect') && actor.role !== Role.SUPER_ADMIN) {
-      throw new ForbiddenException({ message: 'Recording Center cash needs the payment.collect permission', code: 'CASH_NOT_RECEIVER' });
+      throw new ForbiddenException({
+        message: 'Recording Center cash needs the payment.collect permission',
+        code: 'CASH_NOT_RECEIVER',
+      });
     }
-    const student = await this.prisma.studentProfile.findUnique({ where: { id: dto.studentId }, select: { id: true, gradeId: true, track: true } });
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: dto.studentId },
+      select: { id: true, gradeId: true, track: true },
+    });
     if (!student) throw new NotFoundException('Student not found');
 
-    const enrollment = await this.prisma.enrollment.findUnique({ where: { studentId_courseId: { studentId: student.id, courseId: course.id } } });
-    if (enrollment?.status === 'ACTIVE' && (!enrollment.expiresAt || enrollment.expiresAt > new Date())) {
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
+    });
+    if (
+      enrollment?.status === 'ACTIVE' &&
+      (!enrollment.expiresAt || enrollment.expiresAt > new Date())
+    ) {
       throw new ConflictException({ message: 'Already enrolled', code: 'ALREADY_ENROLLED' });
     }
-    const pending = await this.prisma.payment.findFirst({ where: { studentId: student.id, courseId: course.id, status: 'PENDING' } });
-    if (pending) throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+    const pending = await this.prisma.payment.findFirst({
+      where: { studentId: student.id, courseId: course.id, status: 'PENDING' },
+    });
+    if (pending)
+      throw new ConflictException({
+        message: 'A payment is already under review',
+        code: 'PAYMENT_PENDING',
+      });
     await assertCourseYear(this.prisma, course.id, student.gradeId, enrollment);
     await assertCourseTrack(this.prisma, course.id, student.track, enrollment);
 
-    const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(course, dto.couponCode);
+    const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(
+      course,
+      dto.couponCode,
+    );
     const origin = receiver === 'CENTER' ? 'CENTER_RECORDED' : 'TEACHER_RECORDED';
 
     const created = await this.submitTransaction(async (tx) => {
       if (couponId) await reserveCouponUse(tx, couponId, couponMaxUses);
       const enr = enrollment
-        ? await tx.enrollment.update({ where: { id: enrollment.id }, data: { status: 'PENDING_PAYMENT', approvedAt: null, revokedReason: null, hiddenAt: null } })
-        : await tx.enrollment.create({ data: { studentId: student.id, courseId: course.id, tenantId: course.tenantId, academyId: course.academyId ?? course.tenantId, status: 'PENDING_PAYMENT' } });
+        ? await tx.enrollment.update({
+            where: { id: enrollment.id },
+            data: {
+              status: 'PENDING_PAYMENT',
+              approvedAt: null,
+              revokedReason: null,
+              hiddenAt: null,
+            },
+          })
+        : await tx.enrollment.create({
+            data: {
+              studentId: student.id,
+              courseId: course.id,
+              tenantId: course.tenantId,
+              academyId: course.academyId ?? course.tenantId,
+              status: 'PENDING_PAYMENT',
+            },
+          });
       return tx.payment.create({
         data: {
           studentId: student.id,
@@ -460,7 +604,13 @@ export class ManualPaymentsService {
       });
     });
     await this.applyVerification(created, actor.sub, false, true);
-    return { id: created.id, status: 'PAID', amountCents: created.amountCents, cashOrigin: origin, cashReceiver: receiver };
+    return {
+      id: created.id,
+      status: 'PAID',
+      amountCents: created.amountCents,
+      cashOrigin: origin,
+      cashReceiver: receiver,
+    };
   }
 
   async verify(user: { sub: string; role: string; tenantId?: string }, paymentId: string) {
@@ -549,7 +699,10 @@ export class ManualPaymentsService {
   } as const;
 
   /** Whether settling this payment will read a balance before writing to it. */
-  private static drawsOnWallet(payment: { method?: string | null; walletCents?: number | null }): boolean {
+  private static drawsOnWallet(payment: {
+    method?: string | null;
+    walletCents?: number | null;
+  }): boolean {
     return payment.method === 'WALLET' || (payment.walletCents ?? 0) > 0;
   }
 
@@ -558,7 +711,9 @@ export class ManualPaymentsService {
    * answer the caller expects rather than a server error. See the call site for
    * how two simultaneous purchases of one course reach it.
    */
-  private async submitTransaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  private async submitTransaction<T>(
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
     try {
       return await this.prisma.$transaction(work);
     } catch (e) {
@@ -579,7 +734,10 @@ export class ManualPaymentsService {
    * conflict to retry rather than a 500. The same translation PayoutsService
    * makes for the same error.
    */
-  private async runSettlement<T>(serializable: boolean, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  private async runSettlement<T>(
+    serializable: boolean,
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
     try {
       return await this.prisma.$transaction(
         work,
@@ -598,8 +756,14 @@ export class ManualPaymentsService {
 
   private async applyVerification(
     payment: {
-      id: string; status: string; courseId: string; enrollmentId: string | null;
-      studentId: string; couponId: string | null; amountCents: number; walletCents: number;
+      id: string;
+      status: string;
+      courseId: string;
+      enrollmentId: string | null;
+      studentId: string;
+      couponId: string | null;
+      amountCents: number;
+      walletCents: number;
       // How it was funded, so settlement can pick its isolation level.
       method?: string | null;
     },
@@ -616,9 +780,10 @@ export class ManualPaymentsService {
       where: { id: payment.courseId },
       select: { id: true, tenantId: true, pricingModel: true, title: true },
     });
-    const expiresAt = course?.pricingModel === 'MONTHLY_SUBSCRIPTION'
-      ? new Date(Date.now() + 30 * 86_400_000)
-      : null;
+    const expiresAt =
+      course?.pricingModel === 'MONTHLY_SUBSCRIPTION'
+        ? new Date(Date.now() + 30 * 86_400_000)
+        : null;
 
     /**
      * The price is checked again HERE, not at the moment the student paid.
@@ -711,7 +876,6 @@ export class ManualPaymentsService {
       return true;
     });
 
-
     if (!handled) {
       if (auto) return { ok: true, alreadyHandled: true };
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
@@ -744,9 +908,12 @@ export class ManualPaymentsService {
 
     // Non-critical follow-ups (a failure here never un-credits the teacher).
     await this.ledger.ensureInvoice(payment.id);
-    await this.notifyStudent(payment.studentId, 'ENROLLMENT_APPROVED',
+    await this.notifyStudent(
+      payment.studentId,
+      'ENROLLMENT_APPROVED',
       auto ? 'تم تأكيد دفعتك تلقائياً ✅' : 'تم تأكيد دفعتك ✅',
-      `تم تفعيل اشتراكك في «${course?.title ?? 'الدورة'}». مذاكرة سعيدة!`);
+      `تم تفعيل اشتراكك في «${course?.title ?? 'الدورة'}». مذاكرة سعيدة!`,
+    );
     return { ok: true };
   }
 
@@ -761,7 +928,10 @@ export class ManualPaymentsService {
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.status !== 'PAID') {
-      throw new BadRequestException({ message: 'Only a verified payment can be settled', code: 'NOT_PAID' });
+      throw new BadRequestException({
+        message: 'Only a verified payment can be settled',
+        code: 'NOT_PAID',
+      });
     }
     if (payment.settledAt) return { ok: true, alreadySettled: true };
 
@@ -780,7 +950,12 @@ export class ManualPaymentsService {
     return { ok: true, settledBy: actorId };
   }
 
-  async reject(user: { sub: string; role: string; tenantId?: string }, paymentId: string, reason?: string, preAuthorized = false) {
+  async reject(
+    user: { sub: string; role: string; tenantId?: string },
+    paymentId: string,
+    reason?: string,
+    preAuthorized = false,
+  ) {
     const payment = preAuthorized
       ? await this.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })
       : await this.authorizePayment(user, paymentId);
@@ -793,7 +968,11 @@ export class ManualPaymentsService {
     await this.prisma.$transaction(async (tx) => {
       const flip = await tx.payment.updateMany({
         where: { id: paymentId, status: 'PENDING' },
-        data: { status: 'REJECTED', rejectedReason: reason?.trim() || null, verifiedById: user.sub },
+        data: {
+          status: 'REJECTED',
+          rejectedReason: reason?.trim() || null,
+          verifiedById: user.sub,
+        },
       });
       if (flip.count === 0) {
         throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
@@ -806,7 +985,12 @@ export class ManualPaymentsService {
       // pending, since it settles the moment it's submitted): hand it back
       // rather than leaving it stuck in this payment's escrow account.
       if (payment.walletCents > 0) {
-        await this.ledger.releaseWalletReservation(payment.studentId, payment.id, payment.walletCents, tx);
+        await this.ledger.releaseWalletReservation(
+          payment.studentId,
+          payment.id,
+          payment.walletCents,
+          tx,
+        );
       }
       if (payment.enrollmentId) {
         await tx.enrollment.updateMany({
@@ -815,8 +999,14 @@ export class ManualPaymentsService {
         });
       }
     });
-    await this.notifyStudent(payment.studentId, 'ANNOUNCEMENT', 'لم يتم تأكيد الدفعة ❌',
-      reason?.trim() ? `السبب: ${reason.trim()}. يمكنك إعادة رفع إثبات صحيح.` : 'يرجى إعادة رفع إثبات دفع صحيح.');
+    await this.notifyStudent(
+      payment.studentId,
+      'ANNOUNCEMENT',
+      'لم يتم تأكيد الدفعة ❌',
+      reason?.trim()
+        ? `السبب: ${reason.trim()}. يمكنك إعادة رفع إثبات صحيح.`
+        : 'يرجى إعادة رفع إثبات دفع صحيح.',
+    );
     return { ok: true };
   }
 
@@ -827,15 +1017,30 @@ export class ManualPaymentsService {
    * collector sees only payments for courses they authored — another
    * teacher's students and amounts are that teacher's business.
    */
-  teacherQueue(ctx: AcademyContext, authorTenantId: string | undefined, status = 'PENDING', method?: string) {
+  teacherQueue(
+    ctx: AcademyContext,
+    authorTenantId: string | undefined,
+    status = 'PENDING',
+    method?: string,
+  ) {
     const wholeOrg = ctx.role === 'OWNER' || ctx.can('payment.collect');
-    return this.list({ academyId: ctx.academyId, status, method, tenantId: wholeOrg ? undefined : (authorTenantId ?? '__none__') });
+    return this.list({
+      academyId: ctx.academyId,
+      status,
+      method,
+      tenantId: wholeOrg ? undefined : (authorTenantId ?? '__none__'),
+    });
   }
   adminQueue(status = 'PENDING') {
     return this.list({ status });
   }
 
-  private async list(where: { academyId?: string; status?: string; method?: string; tenantId?: string }) {
+  private async list(where: {
+    academyId?: string;
+    status?: string;
+    method?: string;
+    tenantId?: string;
+  }) {
     const rows = await this.prisma.payment.findMany({
       where: {
         ...(where.academyId ? { academyId: where.academyId } : {}),
@@ -900,7 +1105,8 @@ export class ManualPaymentsService {
     if (!payment) throw new NotFoundException('Payment not found');
     const isAdmin = user.role === Role.SUPER_ADMIN;
     const isOwnerTeacher = user.role === Role.TEACHER && user.tenantId === payment.tenantId;
-    if (!isAdmin && !isOwnerTeacher) throw new ForbiddenException('Not allowed to review this payment');
+    if (!isAdmin && !isOwnerTeacher)
+      throw new ForbiddenException('Not allowed to review this payment');
     return payment;
   }
 
@@ -919,17 +1125,28 @@ export class ManualPaymentsService {
    * a card payment and a bank transfer end up crediting a teacher different
    * amounts for the same course.
    */
-  async quote(course: { id: string; priceCents: number; tenantId: string; academyId?: string | null }, couponCode?: string) {
+  async quote(
+    course: { id: string; priceCents: number; tenantId: string; academyId?: string | null },
+    couponCode?: string,
+  ) {
     let discount = 0;
     let couponId: string | null = null;
     let couponMaxUses: number | null = null;
     if (couponCode) {
       const coupon = await this.prisma.coupon.findFirst({
-        where: { tenantId: course.tenantId, code: couponCode.trim().toUpperCase(), isActive: true, deletedAt: null },
+        where: {
+          tenantId: course.tenantId,
+          code: couponCode.trim().toUpperCase(),
+          isActive: true,
+          deletedAt: null,
+        },
       });
-      if (coupon && (!coupon.expiresAt || coupon.expiresAt > new Date()) &&
-          (coupon.maxUses == null || coupon.usedCount < coupon.maxUses) &&
-          (!coupon.courseId || coupon.courseId === course.id)) {
+      if (
+        coupon &&
+        (!coupon.expiresAt || coupon.expiresAt > new Date()) &&
+        (coupon.maxUses == null || coupon.usedCount < coupon.maxUses) &&
+        (!coupon.courseId || coupon.courseId === course.id)
+      ) {
         discount = coupon.percentOff
           ? Math.round((course.priceCents * coupon.percentOff) / 100)
           : Math.min(coupon.amountOffCents ?? 0, course.priceCents);
@@ -954,7 +1171,10 @@ export class ManualPaymentsService {
   }
 
   private async notifyStudent(studentId: string, type: string, title: string, body: string) {
-    const s = await this.prisma.studentProfile.findUnique({ where: { id: studentId }, select: { userId: true } });
+    const s = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { userId: true },
+    });
     if (s) await this.notifications.create({ userId: s.userId, type: type as any, title, body });
   }
 }

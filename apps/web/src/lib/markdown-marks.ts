@@ -62,7 +62,8 @@ export function applyMark(value: string, start: number, end: number, mark: Mark)
     // Already marked: take it off, and keep the same words selected.
     if (wrappedWith(value, start, end, w)) {
       return {
-        value: value.slice(0, start - w.length) + value.slice(start, end) + value.slice(end + w.length),
+        value:
+          value.slice(0, start - w.length) + value.slice(start, end) + value.slice(end + w.length),
         start: start - w.length,
         end: end - w.length,
       };
@@ -94,5 +95,9 @@ export function applyMark(value: string, start: number, end: number, mark: Mark)
   });
 
   const block = marked.join('\n');
-  return { value: value.slice(0, from) + block + value.slice(to), start: from, end: from + block.length };
+  return {
+    value: value.slice(0, from) + block + value.slice(to),
+    start: from,
+    end: from + block.length,
+  };
 }

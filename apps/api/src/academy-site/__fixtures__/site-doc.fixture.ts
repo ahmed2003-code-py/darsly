@@ -42,7 +42,11 @@ const lt = (ar: string, en: string) => ({ ar, en });
 /** One representative teacher per archetype, with the copy a good run produces. */
 export interface Persona {
   archetype: Archetype;
-  hero: { headline: { ar: string; en: string }; subheadline: { ar: string; en: string }; ctaLabel: { ar: string; en: string } };
+  hero: {
+    headline: { ar: string; en: string };
+    subheadline: { ar: string; en: string };
+    ctaLabel: { ar: string; en: string };
+  };
   about: { heading: { ar: string; en: string }; body: { ar: string; en: string } };
   toolkit: { ar: string; en: string }[];
   credentials: { ar: string; en: string }[];
@@ -77,7 +81,10 @@ export const PERSONAS: Record<'programming' | 'math_science' | 'languages', Pers
     ],
     credentials: [
       lt('مهندس برمجيات لأكثر من ثماني سنوات', 'Software engineer for over eight years'),
-      lt('درّبت أكثر من ٤٠٠ طالب على البرمجة العملية', 'Trained more than 400 students in practical programming'),
+      lt(
+        'درّبت أكثر من ٤٠٠ طالب على البرمجة العملية',
+        'Trained more than 400 students in practical programming',
+      ),
       lt('مساهم في مشاريع مفتوحة المصدر', 'Contributor to open-source projects'),
     ],
     stats: [
@@ -88,7 +95,10 @@ export const PERSONAS: Record<'programming' | 'math_science' | 'languages', Pers
     faq: [
       {
         q: lt('محتاج خبرة قبل ما أبدأ؟', 'Do I need experience to start?'),
-        a: lt('لا، المسار بيبدأ من الصفر ومعاه مراجعة أسبوعية.', 'No. The track starts from zero and includes a weekly review.'),
+        a: lt(
+          'لا، المسار بيبدأ من الصفر ومعاه مراجعة أسبوعية.',
+          'No. The track starts from zero and includes a weekly review.',
+        ),
       },
       {
         q: lt('إيه اللغات اللي بتشرحها؟', 'Which languages do you teach?'),
@@ -120,7 +130,10 @@ export const PERSONAS: Record<'programming' | 'math_science' | 'languages', Pers
       lt('الإحصاء', 'Statistics'),
     ],
     credentials: [
-      lt('اثنا عشر عاماً في تدريس الثانوية العامة', 'Twelve years teaching the secondary certificate'),
+      lt(
+        'اثنا عشر عاماً في تدريس الثانوية العامة',
+        'Twelve years teaching the secondary certificate',
+      ),
       lt('مؤلف مذكرات مراجعة معتمدة', 'Author of approved revision booklets'),
     ],
     stats: [
@@ -166,7 +179,10 @@ export const PERSONAS: Record<'programming' | 'math_science' | 'languages', Pers
     faq: [
       {
         q: lt('المستوى المطلوب للبدء؟', 'What level do I need to start?'),
-        a: lt('من المبتدئ للمتوسط، وفيه اختبار تحديد مستوى قبل البداية.', 'Beginner to intermediate; there is a placement check first.'),
+        a: lt(
+          'من المبتدئ للمتوسط، وفيه اختبار تحديد مستوى قبل البداية.',
+          'Beginner to intermediate; there is a placement check first.',
+        ),
       },
     ],
   },
@@ -194,8 +210,15 @@ export interface FixtureOptions {
  */
 export function buildFixtureDoc(opts: FixtureOptions): SiteDocument {
   const {
-    dna: dnaKey, persona: personaKey, hasCover = false, hasGallery = false, hasLogo = true,
-    withStats = false, withCta = false, design, defaultLang = 'ar',
+    dna: dnaKey,
+    persona: personaKey,
+    hasCover = false,
+    hasGallery = false,
+    hasLogo = true,
+    withStats = false,
+    withCta = false,
+    design,
+    defaultLang = 'ar',
   } = opts;
   const dna = resolveDna(dnaKey);
   const p = PERSONAS[personaKey];
@@ -223,13 +246,35 @@ export function buildFixtureDoc(opts: FixtureOptions): SiteDocument {
     items: p.credentials,
   });
   if (withStats) {
-    blocks.push({ type: 'stats', id: 'blk-stats', heading: lt('أرقام', 'By the numbers'), items: p.stats });
+    blocks.push({
+      type: 'stats',
+      id: 'blk-stats',
+      heading: lt('أرقام', 'By the numbers'),
+      items: p.stats,
+    });
   }
-  blocks.push({ type: 'courses', id: 'blk-courses', heading: lt('الدورات', 'Courses'), mode: 'auto', limit: 6 });
+  blocks.push({
+    type: 'courses',
+    id: 'blk-courses',
+    heading: lt('الدورات', 'Courses'),
+    mode: 'auto',
+    limit: 6,
+  });
   if (hasGallery) {
-    blocks.push({ type: 'gallery', id: 'blk-gallery', heading: lt('معرض الصور', 'Gallery'), mediaIds: GALLERY_IDS });
+    blocks.push({
+      type: 'gallery',
+      id: 'blk-gallery',
+      heading: lt('معرض الصور', 'Gallery'),
+      mediaIds: GALLERY_IDS,
+    });
   }
-  blocks.push({ type: 'reviews', id: 'blk-reviews', heading: lt('آراء الطلاب', 'Student Reviews'), mode: 'auto', limit: 6 });
+  blocks.push({
+    type: 'reviews',
+    id: 'blk-reviews',
+    heading: lt('آراء الطلاب', 'Student Reviews'),
+    mode: 'auto',
+    limit: 6,
+  });
   blocks.push({ type: 'faq', id: 'blk-faq', heading: lt('الأسئلة الشائعة', 'FAQ'), items: p.faq });
   blocks.push({
     type: 'contact',

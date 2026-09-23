@@ -2,12 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createReadStream, promises as fs } from 'fs';
 import * as path from 'path';
 import { Readable } from 'stream';
-import {
-  PutOptions,
-  RangeRequest,
-  StorageProvider,
-  StoredObjectStream,
-} from './storage.provider';
+import { PutOptions, RangeRequest, StorageProvider, StoredObjectStream } from './storage.provider';
 
 /**
  * Dev/default driver: objects are files under STORAGE_LOCAL_PATH. Keys map

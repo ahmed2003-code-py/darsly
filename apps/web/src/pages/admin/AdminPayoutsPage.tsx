@@ -5,7 +5,11 @@ import { dateShort, egp } from '../../lib/format';
 import { Badge, EmptyState, PageHeader, Spinner } from '../../components/ui';
 
 const TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral' | 'primary'> = {
-  COMPLETED: 'teal', REQUESTED: 'warn', APPROVED: 'primary', PROCESSING: 'primary', REJECTED: 'error',
+  COMPLETED: 'teal',
+  REQUESTED: 'warn',
+  APPROVED: 'primary',
+  PROCESSING: 'primary',
+  REJECTED: 'error',
 };
 
 export default function AdminPayoutsPage() {
@@ -55,16 +59,26 @@ export default function AdminPayoutsPage() {
                   </td>
                   <td className="px-6 py-4 font-heading font-bold">{egp(p.amountCents)}</td>
                   <td className="px-6 py-4">{t(`wallet.${p.method}`)}</td>
-                  <td className="px-6 py-4"><Badge tone={TONE[p.status] ?? 'neutral'}>{t(`wallet.payoutStatus.${p.status}`)}</Badge></td>
+                  <td className="px-6 py-4">
+                    <Badge tone={TONE[p.status] ?? 'neutral'}>
+                      {t(`wallet.payoutStatus.${p.status}`)}
+                    </Badge>
+                  </td>
                   <td className="px-6 py-4">
                     {!['COMPLETED', 'REJECTED'].includes(p.status) ? (
                       <div className="flex gap-2">
-                        <button className="btn-secondary px-3 py-1.5 text-xs" disabled={process.isPending}
-                          onClick={() => process.mutate({ id: p.id, status: 'COMPLETED' })}>
+                        <button
+                          className="btn-secondary px-3 py-1.5 text-xs"
+                          disabled={process.isPending}
+                          onClick={() => process.mutate({ id: p.id, status: 'COMPLETED' })}
+                        >
                           {t('admin.complete')}
                         </button>
-                        <button className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
-                          disabled={process.isPending} onClick={() => process.mutate({ id: p.id, status: 'REJECTED' })}>
+                        <button
+                          className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
+                          disabled={process.isPending}
+                          onClick={() => process.mutate({ id: p.id, status: 'REJECTED' })}
+                        >
                           {t('admin.reject')}
                         </button>
                       </div>

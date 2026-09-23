@@ -28,14 +28,27 @@ export default function SavedCoursesPage() {
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((c: any) => (
             <div key={c.id} className="card card-hover flex flex-col overflow-hidden p-0">
-              <Link to={`/course/${c.id}`} className="relative block h-40 bg-surface-container-high">
-                {c.thumbnailUrl && <img src={c.thumbnailUrl} alt="" className="h-full w-full object-cover" />}
+              <Link
+                to={`/course/${c.id}`}
+                className="relative block h-40 bg-surface-container-high"
+              >
+                {c.thumbnailUrl && (
+                  <img src={c.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                )}
                 <button
                   className="absolute end-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-surface-container-lowest/90 text-error shadow-card backdrop-blur transition hover:scale-105"
-                  onClick={(e) => { e.preventDefault(); unsave.mutate(c.id); }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    unsave.mutate(c.id);
+                  }}
                   title={t('saved.remove')}
                 >
-                  <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    favorite
+                  </span>
                 </button>
               </Link>
               <div className="flex flex-1 flex-col p-5">
@@ -43,7 +56,9 @@ export default function SavedCoursesPage() {
                 <p className="mb-3 text-sm text-primary">{c.teacherName}</p>
                 <div className="mt-auto flex items-center justify-between text-sm">
                   <span className="text-outline">{c.subject}</span>
-                  <span className="font-heading font-extrabold">{c.priceCents === 0 ? t('common.free') : egp(c.priceCents)}</span>
+                  <span className="font-heading font-extrabold">
+                    {c.priceCents === 0 ? t('common.free') : egp(c.priceCents)}
+                  </span>
                 </div>
               </div>
             </div>

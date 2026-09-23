@@ -164,7 +164,8 @@ export interface ChallengeLeaderboardRow {
 export function useTeacherChallenges(status?: string) {
   return useQuery<TeacherChallenge[]>({
     queryKey: ['teacher-challenges', status],
-    queryFn: async () => (await api.get('/teacher/challenges', { params: status ? { status } : {} })).data,
+    queryFn: async () =>
+      (await api.get('/teacher/challenges', { params: status ? { status } : {} })).data,
   });
 }
 
@@ -217,4 +218,3 @@ export function useChallengeDetail(id: string | undefined) {
     enabled: !!id,
   });
 }
-

@@ -72,20 +72,23 @@ describe('ChallengeScoringService', () => {
       [99, 10],
       [100, 10],
     ];
-    it.each(cases)('at %s%% of allowed time used, the speed bonus is +%s%%', (usedPct, expectedBonusPct) => {
-      const allowedTimeSec = 20;
-      const timeTakenMs = (usedPct / 100) * allowedTimeSec * 1000;
-      const r = svc.scoreAnswer({
-        isCorrect: true,
-        onTime: true,
-        basePoints: 100,
-        scoring: 'SPEED_BASED',
-        timeTakenMs,
-        allowedTimeSec,
-      });
-      expect(r.speedBonusPct).toBe(expectedBonusPct);
-      expect(r.xpAwarded).toBe(100 + Math.round((100 * expectedBonusPct) / 100));
-    });
+    it.each(cases)(
+      'at %s%% of allowed time used, the speed bonus is +%s%%',
+      (usedPct, expectedBonusPct) => {
+        const allowedTimeSec = 20;
+        const timeTakenMs = (usedPct / 100) * allowedTimeSec * 1000;
+        const r = svc.scoreAnswer({
+          isCorrect: true,
+          onTime: true,
+          basePoints: 100,
+          scoring: 'SPEED_BASED',
+          timeTakenMs,
+          allowedTimeSec,
+        });
+        expect(r.speedBonusPct).toBe(expectedBonusPct);
+        expect(r.xpAwarded).toBe(100 + Math.round((100 * expectedBonusPct) / 100));
+      },
+    );
 
     it('zero elapsed time (answered the instant the question appeared) is the fastest tier, not a divide-by-zero', () => {
       const r = svc.scoreAnswer({
@@ -150,7 +153,13 @@ describe('ChallengeScoringService', () => {
   describe('summarize', () => {
     it('an attempt with no answered questions summarizes to a clean zero, not NaN', () => {
       const r = svc.summarize([]);
-      expect(r).toEqual({ score: 0, correctCount: 0, wrongCount: 0, accuracyPct: 0, speedPct: null });
+      expect(r).toEqual({
+        score: 0,
+        correctCount: 0,
+        wrongCount: 0,
+        accuracyPct: 0,
+        speedPct: null,
+      });
     });
 
     it('sums xp, counts correct/wrong, and averages speed only across timed answers', () => {

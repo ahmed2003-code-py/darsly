@@ -61,7 +61,12 @@ export class RedisThrottlerStorageService implements ThrottlerStorage {
       const blockPttl = await client.pttl(blockKey);
       if (blockPttl > 0) {
         const blockSec = Math.ceil(blockPttl / 1000);
-        return { totalHits: 0, timeToExpire: blockSec, isBlocked: true, timeToBlockExpire: blockSec };
+        return {
+          totalHits: 0,
+          timeToExpire: blockSec,
+          isBlocked: true,
+          timeToBlockExpire: blockSec,
+        };
       }
 
       const hits = await client.incr(hitsKey);
@@ -79,15 +84,27 @@ export class RedisThrottlerStorageService implements ThrottlerStorage {
 
       if (hits > limit) {
         await client.set(blockKey, '1', 'PX', blockDuration);
-        return { totalHits: hits, timeToExpire: Math.ceil(pttl / 1000), isBlocked: true, timeToBlockExpire: Math.ceil(blockDuration / 1000) };
+        return {
+          totalHits: hits,
+          timeToExpire: Math.ceil(pttl / 1000),
+          isBlocked: true,
+          timeToBlockExpire: Math.ceil(blockDuration / 1000),
+        };
       }
 
-      return { totalHits: hits, timeToExpire: Math.ceil(pttl / 1000), isBlocked: false, timeToBlockExpire: 0 };
+      return {
+        totalHits: hits,
+        timeToExpire: Math.ceil(pttl / 1000),
+        isBlocked: false,
+        timeToBlockExpire: 0,
+      };
     } catch (e) {
       const now = Date.now();
       if (now - this.lastErrorLoggedAt > 10_000) {
         this.lastErrorLoggedAt = now;
-        this.logger.error(`Redis throttler storage unavailable, failing open: ${(e as Error).message}`);
+        this.logger.error(
+          `Redis throttler storage unavailable, failing open: ${(e as Error).message}`,
+        );
       }
       return this.open();
     }

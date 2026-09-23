@@ -70,14 +70,38 @@ describe('golden — representative pages render exactly as they do today', () =
   // image (which switches the hero variant and inverts the text colour) and an
   // AI-composed design (which overrides the preset palette).
   const cases: { name: string; opts: FixtureOptions }[] = [
-    { name: 'editorial_dark · programming · no cover', opts: { dna: 'editorial_dark', persona: 'programming' } },
-    { name: 'academic_precise · math · no cover', opts: { dna: 'academic_precise', persona: 'math_science' } },
-    { name: 'creative_serif · languages · gallery', opts: { dna: 'creative_serif', persona: 'languages', hasGallery: true } },
-    { name: 'warm_mentor · math · cover', opts: { dna: 'warm_mentor', persona: 'math_science', hasCover: true } },
-    { name: 'bold_energetic · programming · cover + gallery', opts: { dna: 'bold_energetic', persona: 'programming', hasCover: true, hasGallery: true } },
-    { name: 'royal_night · languages · AI design', opts: { dna: 'royal_night', persona: 'languages', design: FIXTURE_DESIGN } },
-    { name: 'sunrise_warm · programming · stats + cta', opts: { dna: 'sunrise_warm', persona: 'programming', withStats: true, withCta: true } },
-    { name: 'academic_precise · languages · english default', opts: { dna: 'academic_precise', persona: 'languages', defaultLang: 'en' } },
+    {
+      name: 'editorial_dark · programming · no cover',
+      opts: { dna: 'editorial_dark', persona: 'programming' },
+    },
+    {
+      name: 'academic_precise · math · no cover',
+      opts: { dna: 'academic_precise', persona: 'math_science' },
+    },
+    {
+      name: 'creative_serif · languages · gallery',
+      opts: { dna: 'creative_serif', persona: 'languages', hasGallery: true },
+    },
+    {
+      name: 'warm_mentor · math · cover',
+      opts: { dna: 'warm_mentor', persona: 'math_science', hasCover: true },
+    },
+    {
+      name: 'bold_energetic · programming · cover + gallery',
+      opts: { dna: 'bold_energetic', persona: 'programming', hasCover: true, hasGallery: true },
+    },
+    {
+      name: 'royal_night · languages · AI design',
+      opts: { dna: 'royal_night', persona: 'languages', design: FIXTURE_DESIGN },
+    },
+    {
+      name: 'sunrise_warm · programming · stats + cta',
+      opts: { dna: 'sunrise_warm', persona: 'programming', withStats: true, withCta: true },
+    },
+    {
+      name: 'academic_precise · languages · english default',
+      opts: { dna: 'academic_precise', persona: 'languages', defaultLang: 'en' },
+    },
   ];
 
   for (const c of cases) {
@@ -107,8 +131,17 @@ describe('golden — the whole matrix is byte-stable', () => {
     // knob that broke rather than "something in the design changed".
     const axes: Record<string, Partial<NonNullable<SiteTheme['design']>>[]> = {
       density: [{ density: 'compact' }, { density: 'regular' }, { density: 'airy' }],
-      headingScale: [{ headingScale: 'restrained' }, { headingScale: 'balanced' }, { headingScale: 'dramatic' }],
-      heroTreatment: [{ heroTreatment: 'flat' }, { heroTreatment: 'gradient' }, { heroTreatment: 'mesh' }, { heroTreatment: 'spotlight' }],
+      headingScale: [
+        { headingScale: 'restrained' },
+        { headingScale: 'balanced' },
+        { headingScale: 'dramatic' },
+      ],
+      heroTreatment: [
+        { heroTreatment: 'flat' },
+        { heroTreatment: 'gradient' },
+        { heroTreatment: 'mesh' },
+        { heroTreatment: 'spotlight' },
+      ],
       bodyFont: [{ bodyFont: 'sans' }, { bodyFont: 'serif' }, { bodyFont: 'mono' }],
       motion: [{ motion: 'calm' }, { motion: 'lively' }, { motion: 'cinematic' }],
       radius: [{ radius: 0 }, { radius: 14 }, { radius: 28 }],
@@ -118,7 +151,11 @@ describe('golden — the whole matrix is byte-stable', () => {
       for (const value of values) {
         const label = Object.values(value)[0];
         matrix[`${axis}=${label}`] = digest(
-          render({ dna: 'royal_night', persona: 'programming', design: { ...FIXTURE_DESIGN, ...value } }),
+          render({
+            dna: 'royal_night',
+            persona: 'programming',
+            design: { ...FIXTURE_DESIGN, ...value },
+          }),
         );
       }
     }
@@ -147,7 +184,12 @@ describe('golden — the whole matrix is byte-stable', () => {
 
 describe('golden — compilation is deterministic', () => {
   it('produces identical bytes for identical input', () => {
-    const opts: FixtureOptions = { dna: 'editorial_dark', persona: 'programming', hasCover: true, hasGallery: true };
+    const opts: FixtureOptions = {
+      dna: 'editorial_dark',
+      persona: 'programming',
+      hasCover: true,
+      hasGallery: true,
+    };
     expect(render(opts)).toBe(render(opts));
   });
 

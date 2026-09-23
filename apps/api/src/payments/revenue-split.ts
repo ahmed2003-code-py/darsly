@@ -34,7 +34,10 @@ export async function resolveTeacherSharePercent(
   tenantId: string,
 ): Promise<number | null> {
   if (academy.kind !== 'CENTER') return null;
-  const author = await db.teacherProfile.findUnique({ where: { id: tenantId }, select: { userId: true } });
+  const author = await db.teacherProfile.findUnique({
+    where: { id: tenantId },
+    select: { userId: true },
+  });
   const membership = author
     ? await db.academyMembership.findFirst({
         where: { academyId: academy.id, userId: author.userId, deletedAt: null },
@@ -62,17 +65,35 @@ export async function assertSplitConfigured(
   }
 }
 
-export async function computeSplit(db: Db, payment: { tenantId: string; academyId: string | null }, netCents: number): Promise<RevenueSplit> {
+export async function computeSplit(
+  db: Db,
+  payment: { tenantId: string; academyId: string | null },
+  netCents: number,
+): Promise<RevenueSplit> {
   const academyId = payment.academyId ?? payment.tenantId;
   const academy = await db.academy.findUnique({
     where: { id: academyId },
     select: { id: true, kind: true, teacherSharePercent: true },
   });
   if (!academy || academy.kind !== 'CENTER') {
-    return { kind: 'PERSONAL', academyId, tenantId: payment.tenantId, teacherSharePercent: null, teacherCents: netCents, academyCents: 0 };
+    return {
+      kind: 'PERSONAL',
+      academyId,
+      tenantId: payment.tenantId,
+      teacherSharePercent: null,
+      teacherCents: netCents,
+      academyCents: 0,
+    };
   }
   const pct = await resolveTeacherSharePercent(db, academy, payment.tenantId);
   if (pct == null) throw new BadRequestException(SPLIT_NOT_CONFIGURED);
   const teacherCents = Math.round((netCents * pct) / 100);
-  return { kind: 'CENTER', academyId, tenantId: payment.tenantId, teacherSharePercent: pct, teacherCents, academyCents: netCents - teacherCents };
+  return {
+    kind: 'CENTER',
+    academyId,
+    tenantId: payment.tenantId,
+    teacherSharePercent: pct,
+    teacherCents,
+    academyCents: netCents - teacherCents,
+  };
 }

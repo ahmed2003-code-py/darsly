@@ -27,12 +27,18 @@ export async function reserveCouponUse(
     data: { usedCount: { increment: 1 } },
   });
   if (reserved.count === 0) {
-    throw new ConflictException({ message: 'Coupon usage limit reached', code: 'COUPON_LIMIT_REACHED' });
+    throw new ConflictException({
+      message: 'Coupon usage limit reached',
+      code: 'COUPON_LIMIT_REACHED',
+    });
   }
 }
 
 /** Give a reserved use back (floored at zero) — a payment that failed or was rejected. */
-export async function releaseCouponUse(tx: Prisma.TransactionClient, couponId: string | null): Promise<void> {
+export async function releaseCouponUse(
+  tx: Prisma.TransactionClient,
+  couponId: string | null,
+): Promise<void> {
   if (!couponId) return;
   await tx.coupon.updateMany({
     where: { id: couponId, usedCount: { gt: 0 } },

@@ -73,7 +73,10 @@ export class GamificationAnalyticsService {
    * the cheapest question. `groupBy` makes Postgres do the de-duplication and
    * return one row per learner instead of one per event.
    */
-  private async activeLearners(scope: Prisma.GamificationEventWhereInput, since: Date): Promise<number> {
+  private async activeLearners(
+    scope: Prisma.GamificationEventWhereInput,
+    since: Date,
+  ): Promise<number> {
     const rows = await this.prisma.gamificationEvent.groupBy({
       by: ['studentId'],
       where: { ...scope, createdAt: { gte: since } },
@@ -173,7 +176,11 @@ export class GamificationAnalyticsService {
     const studentIds = tenantId ? await this.studentsOf(tenantId) : null;
     const where: Prisma.StudentProfileWhereInput = studentIds ? { id: { in: studentIds } } : {};
     const [agg, alive] = await Promise.all([
-      this.prisma.studentProfile.aggregate({ where, _avg: { currentStreak: true }, _max: { longestStreak: true } }),
+      this.prisma.studentProfile.aggregate({
+        where,
+        _avg: { currentStreak: true },
+        _max: { longestStreak: true },
+      }),
       this.prisma.studentProfile.count({ where: { ...where, currentStreak: { gte: 3 } } }),
     ]);
     return {

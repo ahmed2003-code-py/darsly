@@ -1,5 +1,10 @@
 import {
-  BACKDROPS, DENSITIES, DesignFingerprint, DesignSpec, HEADING_FAMILIES, TYPE_SCALES,
+  BACKDROPS,
+  DENSITIES,
+  DesignFingerprint,
+  DesignSpec,
+  HEADING_FAMILIES,
+  TYPE_SCALES,
 } from '../schema/design-spec';
 import { SiteBlock } from '../schema/site-document';
 import { lighten, darken, relLuminance } from '../renderer/color.util';
@@ -80,12 +85,16 @@ export function enforceDivergence(
     {
       name: 'backdrop',
       differs: current.backdrop !== closest.backdrop,
-      apply: () => { d.decoration.backdrop = rotate(BACKDROPS, d.decoration.backdrop, step + 1); },
+      apply: () => {
+        d.decoration.backdrop = rotate(BACKDROPS, d.decoration.backdrop, step + 1);
+      },
     },
     {
       name: 'heading typeface',
       differs: current.headingFamily !== closest.headingFamily,
-      apply: () => { d.typography.headingFamily = rotate(HEADING_FAMILIES, d.typography.headingFamily, step + 1); },
+      apply: () => {
+        d.typography.headingFamily = rotate(HEADING_FAMILIES, d.typography.headingFamily, step + 1);
+      },
     },
     {
       name: 'hero pattern',
@@ -101,12 +110,16 @@ export function enforceDivergence(
     {
       name: 'type scale',
       differs: current.scale !== closest.scale,
-      apply: () => { d.typography.scale = rotate(TYPE_SCALES, d.typography.scale, step + 1); },
+      apply: () => {
+        d.typography.scale = rotate(TYPE_SCALES, d.typography.scale, step + 1);
+      },
     },
     {
       name: 'density',
       differs: current.densityBand !== closest.densityBand,
-      apply: () => { d.rhythm.density = rotate(DENSITIES, d.rhythm.density, step + 1); },
+      apply: () => {
+        d.rhythm.density = rotate(DENSITIES, d.rhythm.density, step + 1);
+      },
     },
     {
       name: 'radius',
@@ -114,7 +127,8 @@ export function enforceDivergence(
       apply: () => {
         const bands = [2, 14, 28];
         const now = d.geometry.radius;
-        d.geometry.radius = bands[(bands.findIndex((b) => Math.abs(b - now) < 7) + 1 + step) % bands.length];
+        d.geometry.radius =
+          bands[(bands.findIndex((b) => Math.abs(b - now) < 7) + 1 + step) % bands.length];
       },
     },
   ];

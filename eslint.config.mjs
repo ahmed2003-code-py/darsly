@@ -50,94 +50,101 @@ function allWarn(configs) {
 
 export default allWarn(
   tseslint.config(
-  {
-    // Nothing generated, vendored, built, or outside the TypeScript apps.
-    // `scripts/` holds 60+ standalone audit tools that are run by hand and are
-    // not part of any tsconfig; linting them is its own piece of work.
-    ignores: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/coverage/**',
-      'android/**',
-      'scripts/**',
-      'apps/api/prisma/**',
-      'apps/web/public/**',
-      '**/*.config.js',
-      '**/*.config.mjs',
-      '**/*.config.ts',
-    ],
-  },
+    {
+      // Nothing generated, vendored, built, or outside the TypeScript apps.
+      // `scripts/` holds 60+ standalone audit tools that are run by hand and are
+      // not part of any tsconfig; linting them is its own piece of work.
+      ignores: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/coverage/**',
+        'android/**',
+        'scripts/**',
+        'apps/api/prisma/**',
+        'apps/web/public/**',
+        '**/*.config.js',
+        '**/*.config.mjs',
+        '**/*.config.ts',
+      ],
+    },
 
-  js.configs.recommended,
+    js.configs.recommended,
 
-  // Type-aware linting, scoped to the three TypeScript source trees. It needs
-  // a real type-checker, which is why it is not applied to loose files: a file
-  // no tsconfig owns makes the parser throw rather than skip.
-  {
-    files: ['apps/api/src/**/*.ts', 'apps/web/src/**/*.{ts,tsx}', 'packages/shared-types/src/**/*.ts'],
-    extends: [...tseslint.configs.recommendedTypeChecked],
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
+    // Type-aware linting, scoped to the three TypeScript source trees. It needs
+    // a real type-checker, which is why it is not applied to loose files: a file
+    // no tsconfig owns makes the parser throw rather than skip.
+    {
+      files: [
+        'apps/api/src/**/*.ts',
+        'apps/web/src/**/*.{ts,tsx}',
+        'packages/shared-types/src/**/*.ts',
+      ],
+      extends: [...tseslint.configs.recommendedTypeChecked],
+      languageOptions: {
+        parserOptions: {
+          projectService: true,
+          tsconfigRootDir: import.meta.dirname,
+        },
+      },
+      rules: {
+        // The three that catch defects rather than taste.
+        //
+        // no-floating-promises is the one that matters most here: the codebase
+        // has real fire-and-forget calls (see ARCHITECTURE_REVIEW.md §11 #2,
+        // video-processing.service.ts), and an un-awaited promise in a NestJS
+        // request handler is a silently swallowed failure.
+        '@typescript-eslint/no-floating-promises': 'warn',
+        '@typescript-eslint/no-explicit-any': 'warn',
+        '@typescript-eslint/no-unused-vars': [
+          'warn',
+          { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+        ],
+
+        // Everything else recommendedTypeChecked would assert is off for now.
+        // These are the noisy-but-not-wrong ones; they come back individually,
+        // each with the commit that cleans up after it.
+        '@typescript-eslint/no-unsafe-assignment': 'off',
+        '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
+        '@typescript-eslint/no-unsafe-return': 'off',
+        '@typescript-eslint/no-unsafe-argument': 'off',
+        '@typescript-eslint/require-await': 'off',
+        '@typescript-eslint/no-misused-promises': 'off',
+        '@typescript-eslint/restrict-template-expressions': 'off',
+        '@typescript-eslint/unbound-method': 'off',
+        'no-unused-vars': 'off', // superseded by the TypeScript-aware version above
       },
     },
-    rules: {
-      // The three that catch defects rather than taste.
-      //
-      // no-floating-promises is the one that matters most here: the codebase
-      // has real fire-and-forget calls (see ARCHITECTURE_REVIEW.md §11 #2,
-      // video-processing.service.ts), and an un-awaited promise in a NestJS
-      // request handler is a silently swallowed failure.
-      '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
 
-      // Everything else recommendedTypeChecked would assert is off for now.
-      // These are the noisy-but-not-wrong ones; they come back individually,
-      // each with the commit that cleans up after it.
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
-      '@typescript-eslint/no-unsafe-argument': 'off',
-      '@typescript-eslint/require-await': 'off',
-      '@typescript-eslint/no-misused-promises': 'off',
-      '@typescript-eslint/restrict-template-expressions': 'off',
-      '@typescript-eslint/unbound-method': 'off',
-      'no-unused-vars': 'off', // superseded by the TypeScript-aware version above
+    /**
+     * React Hooks rules, for a reason that is not "a React app should have them".
+     *
+     * The web source already carries 21 `// eslint-disable-next-line
+     * react-hooks/exhaustive-deps` comments, written against a plugin nobody
+     * ever installed. ESLint treats a disable comment naming an unknown rule as
+     * a hard error, so without this the very first lint run reports 21 errors
+     * that say nothing about the code. Installing the real plugin is what those
+     * comments were always assuming, and it means a genuine stale-closure bug in
+     * a dependency array is now caught instead of waved through.
+     */
+    {
+      files: ['apps/web/src/**/*.{ts,tsx}'],
+      plugins: { 'react-hooks': reactHooks },
+      rules: {
+        'react-hooks/rules-of-hooks': 'warn',
+        'react-hooks/exhaustive-deps': 'warn',
+      },
     },
-  },
 
-  /**
-   * React Hooks rules, for a reason that is not "a React app should have them".
-   *
-   * The web source already carries 21 `// eslint-disable-next-line
-   * react-hooks/exhaustive-deps` comments, written against a plugin nobody
-   * ever installed. ESLint treats a disable comment naming an unknown rule as
-   * a hard error, so without this the very first lint run reports 21 errors
-   * that say nothing about the code. Installing the real plugin is what those
-   * comments were always assuming, and it means a genuine stale-closure bug in
-   * a dependency array is now caught instead of waved through.
-   */
-  {
-    files: ['apps/web/src/**/*.{ts,tsx}'],
-    plugins: { 'react-hooks': reactHooks },
-    rules: {
-      'react-hooks/rules-of-hooks': 'warn',
-      'react-hooks/exhaustive-deps': 'warn',
+    // Specs assert on shapes the type system cannot see, so `any` there is a
+    // tool rather than a smell.
+    {
+      files: ['**/*.spec.ts'],
+      rules: { '@typescript-eslint/no-explicit-any': 'off' },
     },
-  },
 
-  // Specs assert on shapes the type system cannot see, so `any` there is a
-  // tool rather than a smell.
-  {
-    files: ['**/*.spec.ts'],
-    rules: { '@typescript-eslint/no-explicit-any': 'off' },
-  },
-
-  // Last: turns off every rule Prettier already decides.
-  prettier,
+    // Last: turns off every rule Prettier already decides.
+    prettier,
   ),
 );

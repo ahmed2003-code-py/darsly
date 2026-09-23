@@ -48,7 +48,10 @@ function Section({
 
 /** A password box with an eye — what you typed, when you want to see it. */
 function PasswordInput({
-  value, onChange, autoComplete, minLength,
+  value,
+  onChange,
+  autoComplete,
+  minLength,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -77,7 +80,9 @@ function PasswordInput({
         onClick={() => setShown((v) => !v)}
         aria-label={shown ? 'hide password' : 'show password'}
       >
-        <span className="material-symbols-outlined text-xl">{shown ? 'visibility_off' : 'visibility'}</span>
+        <span className="material-symbols-outlined text-xl">
+          {shown ? 'visibility_off' : 'visibility'}
+        </span>
       </button>
     </span>
   );
@@ -137,7 +142,12 @@ export default function ProfilePage() {
 
   const avatar = useMutation({
     mutationFn: async (file: File) => {
-      const dataUrl = await imageToDataUrl(file, { maxW: 512, maxH: 512, quality: 0.85, square: true });
+      const dataUrl = await imageToDataUrl(file, {
+        maxW: 512,
+        maxH: 512,
+        quality: 0.85,
+        square: true,
+      });
       return (await api.post('/me/avatar', { dataUrl })).data;
     },
     onSuccess: (d) => syncUser({ avatarUrl: d.avatarUrl }),
@@ -148,11 +158,13 @@ export default function ProfilePage() {
   });
   const saveName = useMutation({
     mutationFn: async () =>
-      (await api.patch('/me/profile', {
-        fullName: name.trim(),
-        ...(isStudent && gradeId ? { gradeId } : {}),
-        ...(isStudent && track ? { track } : {}),
-      })).data,
+      (
+        await api.patch('/me/profile', {
+          fullName: name.trim(),
+          ...(isStudent && gradeId ? { gradeId } : {}),
+          ...(isStudent && track ? { track } : {}),
+        })
+      ).data,
     onSuccess: (d) => {
       syncUser({ fullName: d.fullName });
       // Every listing is filtered by the year, so they all have to be re-asked.
@@ -169,7 +181,8 @@ export default function ProfilePage() {
   const [pwMismatch, setPwMismatch] = useState(false);
   const changePassword = useMutation({
     mutationFn: async () =>
-      (await api.post('/auth/change-password', { currentPassword: currentPw, newPassword: newPw })).data,
+      (await api.post('/auth/change-password', { currentPassword: currentPw, newPassword: newPw }))
+        .data,
     onSuccess: () => {
       setCurrentPw('');
       setNewPw('');
@@ -271,7 +284,12 @@ export default function ProfilePage() {
 
           <div className="mt-6 border-t border-outline-variant/40 pt-6">
             <Field label={t('profile.fullName')}>
-              <input className="input" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+              <input
+                className="input"
+                maxLength={80}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </Field>
             {isStudent && (
               <Field label={t('auth.grade')} hint={t('profile.gradeHint')}>
@@ -326,105 +344,128 @@ export default function ProfilePage() {
             per cell, so the settings block wrapped underneath the 22rem
             identity card and had to squeeze its own two columns into it. */}
         <div className="space-y-4 sm:space-y-5">
-        {/* The learning half of a profile. A student's identity here is what
+          {/* The learning half of a profile. A student's identity here is what
             they have learned, not only what their account settings say. */}
-        <LearningSection />
+          <LearningSection />
 
-        {/* A teacher's equivalent of the year above: the two answers every
+          {/* A teacher's equivalent of the year above: the two answers every
             course they publish is filed under. It lives here because this is
             where the course form sends them looking for it. */}
-        <TeachingSection role={data?.role} />
-        <MessagingSection role={data?.role} />
+          <TeachingSection role={data?.role} />
+          <MessagingSection role={data?.role} />
 
-        {/* Two-up once there is room for it — these blocks are three rows
+          {/* Two-up once there is room for it — these blocks are three rows
             each, not articles. */}
-        <div className="grid gap-4 sm:gap-5 xl:grid-cols-2">
-        <Section icon="badge" title={t('profile.sectionAccount')}>
-          <ReadOnlyRow
-            label={t('profile.email')}
-            value={data?.email ?? t('profile.notSet')}
-            hint={data?.email ? t('profile.emailLocked') : undefined}
-          />
-          <ReadOnlyRow
-            label={t('profile.phone')}
-            value={data?.phone ?? t('profile.notSet')}
-            hint={data?.phone ? t('profile.phoneLocked') : undefined}
-          />
-          {data?.createdAt && (
-            <ReadOnlyRow label={t('profile.memberSince')} value={dateShort(data.createdAt)} />
-          )}
-        </Section>
-
-        <Section icon="tune" title={t('profile.sectionPrefs')}>
-          <Field label={t('profile.language')} hint={t('profile.languageHint')}>
-            <select
-              className="input py-2"
-              value={i18n.language.startsWith('ar') ? 'ar' : 'en'}
-              onChange={(e) => void setLanguage(e.target.value as 'ar' | 'en')}
-            >
-              <option value="ar">العربية</option>
-              <option value="en">English</option>
-            </select>
-          </Field>
-        </Section>
-
-        <Section icon="lock" title={t('profile.sectionSecurity')}>
-          <p className="font-semibold">{t('profile.password')}</p>
-          <p className="mb-4 text-sm text-on-surface-variant">{t('profile.passwordHint')}</p>
-          <form onSubmit={submitPassword} className="grid gap-3 sm:max-w-md">
-            <Field label={t('profile.currentPassword')}>
-              <PasswordInput value={currentPw} onChange={setCurrentPw} autoComplete="current-password" />
-            </Field>
-            <Field label={t('profile.newPassword')} hint={t('auth.passwordHint')}>
-              <PasswordInput value={newPw} onChange={setNewPw} autoComplete="new-password" minLength={8} />
-            </Field>
-            <Field label={t('profile.confirmPassword')}>
-              <PasswordInput
-                value={confirmPw}
-                onChange={(v) => { setConfirmPw(v); setPwMismatch(false); }}
-                autoComplete="new-password"
+          <div className="grid gap-4 sm:gap-5 xl:grid-cols-2">
+            <Section icon="badge" title={t('profile.sectionAccount')}>
+              <ReadOnlyRow
+                label={t('profile.email')}
+                value={data?.email ?? t('profile.notSet')}
+                hint={data?.email ? t('profile.emailLocked') : undefined}
               />
-            </Field>
-            {pwMismatch && (
-              <p className="rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container" role="alert">
-                {t('profile.passwordMismatch')}
-              </p>
-            )}
-            <div className="flex flex-wrap items-center gap-3">
-              <button className="btn-primary w-full sm:w-auto" disabled={changePassword.isPending || !currentPw || !newPw || !confirmPw}>
-                {changePassword.isPending ? t('common.saving') : t('profile.changePassword')}
-              </button>
-              {changePassword.isSuccess && (
-                <span className="flex items-center gap-1 text-sm font-semibold text-secondary">
-                  <span className="material-symbols-outlined text-base">check_circle</span>
-                  {t('profile.passwordChanged')}
-                </span>
+              <ReadOnlyRow
+                label={t('profile.phone')}
+                value={data?.phone ?? t('profile.notSet')}
+                hint={data?.phone ? t('profile.phoneLocked') : undefined}
+              />
+              {data?.createdAt && (
+                <ReadOnlyRow label={t('profile.memberSince')} value={dateShort(data.createdAt)} />
               )}
-            </div>
-            {changePassword.error && (
-              <p className="rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container" role="alert">
-                {authErrorText(changePassword.error, t)}
-              </p>
-            )}
-          </form>
-        </Section>
+            </Section>
 
-        <Section icon="logout" title={t('profile.sectionSession')}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold">{t('profile.logoutTitle')}</p>
-              <p className="text-sm text-on-surface-variant">{t('profile.logoutHint')}</p>
-            </div>
-            <button
-              className="w-full rounded-xl border border-error/40 px-5 py-2.5 font-bold text-error transition hover:bg-error-container/40 sm:w-auto"
-              onClick={async () => (await askConfirm(t('profile.logoutConfirm'))) && logout()}
-            >
-              <span className="material-symbols-outlined me-1 align-middle text-base">logout</span>
-              {t('dashboard.logout')}
-            </button>
+            <Section icon="tune" title={t('profile.sectionPrefs')}>
+              <Field label={t('profile.language')} hint={t('profile.languageHint')}>
+                <select
+                  className="input py-2"
+                  value={i18n.language.startsWith('ar') ? 'ar' : 'en'}
+                  onChange={(e) => void setLanguage(e.target.value as 'ar' | 'en')}
+                >
+                  <option value="ar">العربية</option>
+                  <option value="en">English</option>
+                </select>
+              </Field>
+            </Section>
+
+            <Section icon="lock" title={t('profile.sectionSecurity')}>
+              <p className="font-semibold">{t('profile.password')}</p>
+              <p className="mb-4 text-sm text-on-surface-variant">{t('profile.passwordHint')}</p>
+              <form onSubmit={submitPassword} className="grid gap-3 sm:max-w-md">
+                <Field label={t('profile.currentPassword')}>
+                  <PasswordInput
+                    value={currentPw}
+                    onChange={setCurrentPw}
+                    autoComplete="current-password"
+                  />
+                </Field>
+                <Field label={t('profile.newPassword')} hint={t('auth.passwordHint')}>
+                  <PasswordInput
+                    value={newPw}
+                    onChange={setNewPw}
+                    autoComplete="new-password"
+                    minLength={8}
+                  />
+                </Field>
+                <Field label={t('profile.confirmPassword')}>
+                  <PasswordInput
+                    value={confirmPw}
+                    onChange={(v) => {
+                      setConfirmPw(v);
+                      setPwMismatch(false);
+                    }}
+                    autoComplete="new-password"
+                  />
+                </Field>
+                {pwMismatch && (
+                  <p
+                    className="rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container"
+                    role="alert"
+                  >
+                    {t('profile.passwordMismatch')}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="btn-primary w-full sm:w-auto"
+                    disabled={changePassword.isPending || !currentPw || !newPw || !confirmPw}
+                  >
+                    {changePassword.isPending ? t('common.saving') : t('profile.changePassword')}
+                  </button>
+                  {changePassword.isSuccess && (
+                    <span className="flex items-center gap-1 text-sm font-semibold text-secondary">
+                      <span className="material-symbols-outlined text-base">check_circle</span>
+                      {t('profile.passwordChanged')}
+                    </span>
+                  )}
+                </div>
+                {changePassword.error && (
+                  <p
+                    className="rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container"
+                    role="alert"
+                  >
+                    {authErrorText(changePassword.error, t)}
+                  </p>
+                )}
+              </form>
+            </Section>
+
+            <Section icon="logout" title={t('profile.sectionSession')}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">{t('profile.logoutTitle')}</p>
+                  <p className="text-sm text-on-surface-variant">{t('profile.logoutHint')}</p>
+                </div>
+                <button
+                  className="w-full rounded-xl border border-error/40 px-5 py-2.5 font-bold text-error transition hover:bg-error-container/40 sm:w-auto"
+                  onClick={async () => (await askConfirm(t('profile.logoutConfirm'))) && logout()}
+                >
+                  <span className="material-symbols-outlined me-1 align-middle text-base">
+                    logout
+                  </span>
+                  {t('dashboard.logout')}
+                </button>
+              </div>
+            </Section>
           </div>
-        </Section>
-        </div>
         </div>
       </div>
     </div>
@@ -466,7 +507,9 @@ function LearningSection() {
               type="button"
               onClick={() => setTitle.mutate(null)}
               className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                !g.activeTitle ? 'border-primary bg-primary-fixed text-on-primary-fixed' : 'border-outline-variant text-on-surface-variant'
+                !g.activeTitle
+                  ? 'border-primary bg-primary-fixed text-on-primary-fixed'
+                  : 'border-outline-variant text-on-surface-variant'
               }`}
             >
               {t('gamification.titles.none')}
@@ -480,7 +523,9 @@ function LearningSection() {
                   type="button"
                   onClick={() => setTitle.mutate(ti.key)}
                   className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                    on ? 'border-primary bg-primary-fixed text-on-primary-fixed' : 'border-outline-variant text-on-surface-variant'
+                    on
+                      ? 'border-primary bg-primary-fixed text-on-primary-fixed'
+                      : 'border-outline-variant text-on-surface-variant'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[18px]">{ti.icon}</span>
@@ -590,10 +635,12 @@ function TeachingSection({ role }: { role?: string }) {
 
   const save = useMutation({
     mutationFn: async () =>
-      (await api.patch('/teacher/profile', {
-        subjectIds: draft!.subjectIds.length ? draft!.subjectIds : undefined,
-        stages: draft!.stages,
-      })).data,
+      (
+        await api.patch('/teacher/profile', {
+          subjectIds: draft!.subjectIds.length ? draft!.subjectIds : undefined,
+          stages: draft!.stages,
+        })
+      ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['teacher-profile'] });
       qc.invalidateQueries({ queryKey: ['teacher-courses'] });
@@ -604,7 +651,9 @@ function TeachingSection({ role }: { role?: string }) {
   const toggle = (st: string) =>
     setDraft({
       ...draft,
-      stages: draft.stages.includes(st) ? draft.stages.filter((x) => x !== st) : [...draft.stages, st],
+      stages: draft.stages.includes(st)
+        ? draft.stages.filter((x) => x !== st)
+        : [...draft.stages, st],
     });
   const saved: string[] = (profile?.subjects ?? []).map((s: { subjectId: string }) => s.subjectId);
   const unchanged =
@@ -622,15 +671,24 @@ function TeachingSection({ role }: { role?: string }) {
           onChange={(subjectIds) => setDraft({ ...draft, subjectIds })}
         />
       </Field>
-      <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('auth.stages')}</span>
+      <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+        {t('auth.stages')}
+      </span>
       <div className="flex flex-wrap gap-2">
         {STAGES.map((st) => {
           const on = draft.stages.includes(st);
           return (
-            <button key={st} type="button" aria-pressed={on} onClick={() => toggle(st)}
+            <button
+              key={st}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggle(st)}
               className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                on ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant text-on-surface-variant hover:border-outline'
-              }`}>
+                on
+                  ? 'border-primary bg-primary text-on-primary'
+                  : 'border-outline-variant text-on-surface-variant hover:border-outline'
+              }`}
+            >
               {t(`stage.${st}`)}
             </button>
           );
@@ -638,11 +696,16 @@ function TeachingSection({ role }: { role?: string }) {
       </div>
       <p className="mt-1.5 text-xs text-outline">{t('academy.teachHint')}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button className="btn-primary w-full sm:w-auto" disabled={save.isPending || unchanged}
-          onClick={() => save.mutate()}>
+        <button
+          className="btn-primary w-full sm:w-auto"
+          disabled={save.isPending || unchanged}
+          onClick={() => save.mutate()}
+        >
           {save.isPending ? t('common.saving') : t('common.save')}
         </button>
-        {save.isSuccess && <span className="text-sm font-semibold text-primary">{t('common.saved')}</span>}
+        {save.isSuccess && (
+          <span className="text-sm font-semibold text-primary">{t('common.saved')}</span>
+        )}
       </div>
       <ErrorNote error={save.error} />
     </Section>

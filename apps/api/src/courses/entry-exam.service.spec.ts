@@ -7,12 +7,19 @@ import { EntryExamService } from './entry-exam.service';
  * a teacher has actually asked for an exam, and it must always leave a way
  * forward — the exam itself, and whatever the exam sends them to watch.
  */
-function ctx(over: {
-  examLessonId?: string | null;
-  examMode?: 'GATE' | 'FINAL';
-  remedialLessonId?: string | null;
-  attempts?: { passed: boolean | null; scorePct: number | null; needsManualGrading?: boolean; gradedAt?: Date | null }[];
-} = {}) {
+function ctx(
+  over: {
+    examLessonId?: string | null;
+    examMode?: 'GATE' | 'FINAL';
+    remedialLessonId?: string | null;
+    attempts?: {
+      passed: boolean | null;
+      scorePct: number | null;
+      needsManualGrading?: boolean;
+      gradedAt?: Date | null;
+    }[];
+  } = {},
+) {
   const prisma: any = {
     course: {
       findFirst: jest.fn().mockResolvedValue({
@@ -23,9 +30,13 @@ function ctx(over: {
       }),
     },
     quiz: {
-      findUnique: jest.fn().mockResolvedValue(
-        over.examLessonId ? { id: 'quiz1', remedialLessonId: over.remedialLessonId ?? null } : null,
-      ),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue(
+          over.examLessonId
+            ? { id: 'quiz1', remedialLessonId: over.remedialLessonId ?? null }
+            : null,
+        ),
     },
     quizAttempt: {
       findMany: jest.fn().mockResolvedValue(
@@ -50,8 +61,12 @@ describe('EntryExamService', () => {
     const { svc, prisma } = ctx();
     const state = await svc.stateFor('c1', 's1');
     expect(state).toEqual({
-      lessonId: null, passed: true, attempted: false,
-      remedialLessonId: null, bestScorePct: null, awaitingGrading: false,
+      lessonId: null,
+      passed: true,
+      attempted: false,
+      remedialLessonId: null,
+      bestScorePct: null,
+      awaitingGrading: false,
     });
     // And it does not go looking for attempts it has no reason to want.
     expect(prisma.quizAttempt.findMany).not.toHaveBeenCalled();
@@ -60,7 +75,9 @@ describe('EntryExamService', () => {
 
   it('shuts the course until the exam is passed', async () => {
     const { svc } = ctx({ examLessonId: 'exam', attempts: [] });
-    await expect(svc.requirePassed('c1', 's1', 'lesson-2', false)).rejects.toThrow(ForbiddenException);
+    await expect(svc.requirePassed('c1', 's1', 'lesson-2', false)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   /** A refusal with no way forward is a dead end, not a gate. */
@@ -184,7 +201,11 @@ describe('EntryExamService', () => {
   it('names the exam in the refusal, so the client can send them to it', async () => {
     const { svc } = ctx({ examLessonId: 'exam', remedialLessonId: 'watch-this', attempts: [] });
     await expect(svc.requirePassed('c1', 's1', 'lesson-2', false)).rejects.toMatchObject({
-      response: { code: 'ENTRY_EXAM_REQUIRED', examLessonId: 'exam', remedialLessonId: 'watch-this' },
+      response: {
+        code: 'ENTRY_EXAM_REQUIRED',
+        examLessonId: 'exam',
+        remedialLessonId: 'watch-this',
+      },
     });
   });
 });

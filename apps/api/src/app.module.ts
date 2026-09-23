@@ -75,9 +75,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
               setHeaders(res, path) {
                 res.setHeader(
                   'Cache-Control',
-                  HASHED_ASSET.test(path)
-                    ? 'public, max-age=31536000, immutable'
-                    : 'no-cache',
+                  HASHED_ASSET.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache',
                 );
               },
             },

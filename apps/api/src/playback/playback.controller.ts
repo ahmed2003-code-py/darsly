@@ -170,10 +170,7 @@ export class PlaybackController {
     if (file.endsWith('.m3u8')) {
       // Rewrite the placeholder key URI to this session's signed key endpoint.
       let text = (await this.storage.getBuffer(key)).toString('utf8');
-      text = text.replace(
-        new RegExp(KEY_URI_PLACEHOLDER, 'g'),
-        `/api/v1/playback/key/${token}`,
-      );
+      text = text.replace(new RegExp(KEY_URI_PLACEHOLDER, 'g'), `/api/v1/playback/key/${token}`);
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       res.setHeader('Cache-Control', 'no-store');
       return res.send(text);

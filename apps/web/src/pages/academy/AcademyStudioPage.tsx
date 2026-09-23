@@ -73,7 +73,12 @@ export default function AcademyStudioPage() {
     if (i >= 0 && i < FLOW.length - 1) setTab(FLOW[i + 1]);
   };
 
-  if (isLoading) return <div className="mx-auto max-w-container px-6 py-8"><Spinner /></div>;
+  if (isLoading)
+    return (
+      <div className="mx-auto max-w-container px-6 py-8">
+        <Spinner />
+      </div>
+    );
   if (!academy) return <NoOwnedAcademy />;
   if (overview.isError && isFeatureDisabled(overview.error)) {
     return (
@@ -99,13 +104,13 @@ export default function AcademyStudioPage() {
             <h1 className="display">{t('studio.title')}</h1>
             <p className="mt-2 max-w-prose text-on-surface-variant">{t('studio.subtitle')}</p>
           </div>
-            {academy.kind === 'CENTER' && (
-              <Link to="/center/studio" className="btn-secondary shrink-0">
-                <span className="material-symbols-outlined text-[20px]">palette</span>
-                {t('centerStudio.title')}
-              </Link>
-            )}
-            {ov?.status === 'PUBLISHED' && (
+          {academy.kind === 'CENTER' && (
+            <Link to="/center/studio" className="btn-secondary shrink-0">
+              <span className="material-symbols-outlined text-[20px]">palette</span>
+              {t('centerStudio.title')}
+            </Link>
+          )}
+          {ov?.status === 'PUBLISHED' && (
             <Link to={`/a/${academy.slug}`} target="_blank" className="btn-secondary shrink-0">
               <span className="material-symbols-outlined text-[20px]">open_in_new</span>
               {t('studio.viewPublished')}
@@ -152,38 +157,38 @@ export default function AcademyStudioPage() {
               {t('studio.stepOf', { n: FLOW.indexOf(tab) + 1, total: FLOW.length })}
             </p>
             <div className="scroll-x -mx-6 px-6 sm:mx-0 sm:min-w-0 sm:flex-1 sm:px-0">
-            <div
-              ref={stripRef}
-              className="flex w-max items-stretch rounded-xl border border-outline-variant bg-surface-container-lowest sm:w-full sm:overflow-hidden"
-            >
-              {FLOW.map((key, i) => {
-                const meta = TABS.find((x) => x.key === key)!;
-                const on = tab === key;
-                const done = FLOW.indexOf(tab) > i;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setTab(key)}
-                    aria-current={on ? 'step' : undefined}
-                    data-step={key}
-                    className={`relative flex shrink-0 items-center justify-center gap-2 px-4 py-3 font-heading text-sm font-semibold transition-colors sm:flex-1 sm:shrink ${
-                      on
-                        ? 'bg-primary text-on-primary'
-                        : done
-                          ? 'text-on-surface hover:bg-surface-container-low'
-                          : 'text-on-surface-variant hover:bg-surface-container-low'
-                    } ${i > 0 ? 'border-s border-outline-variant' : ''}`}
-                  >
-                    <span
-                      className={`material-symbols-outlined text-[19px] ${on ? '' : done ? 'text-primary' : 'text-outline'}`}
+              <div
+                ref={stripRef}
+                className="flex w-max items-stretch rounded-xl border border-outline-variant bg-surface-container-lowest sm:w-full sm:overflow-hidden"
+              >
+                {FLOW.map((key, i) => {
+                  const meta = TABS.find((x) => x.key === key)!;
+                  const on = tab === key;
+                  const done = FLOW.indexOf(tab) > i;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setTab(key)}
+                      aria-current={on ? 'step' : undefined}
+                      data-step={key}
+                      className={`relative flex shrink-0 items-center justify-center gap-2 px-4 py-3 font-heading text-sm font-semibold transition-colors sm:flex-1 sm:shrink ${
+                        on
+                          ? 'bg-primary text-on-primary'
+                          : done
+                            ? 'text-on-surface hover:bg-surface-container-low'
+                            : 'text-on-surface-variant hover:bg-surface-container-low'
+                      } ${i > 0 ? 'border-s border-outline-variant' : ''}`}
                     >
-                      {done ? 'check_circle' : meta.icon}
-                    </span>
-                    <span className="whitespace-nowrap">{t(`studio.tabs.${key}`)}</span>
-                  </button>
-                );
-              })}
-            </div>
+                      <span
+                        className={`material-symbols-outlined text-[19px] ${on ? '' : done ? 'text-primary' : 'text-outline'}`}
+                      >
+                        {done ? 'check_circle' : meta.icon}
+                      </span>
+                      <span className="whitespace-nowrap">{t(`studio.tabs.${key}`)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex items-center gap-2 sm:ps-3">
               <button
@@ -223,14 +228,20 @@ export default function AcademyStudioPage() {
                     key={s}
                     onClick={() => setSettingsSub(s)}
                     className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                      settingsSub === s ? 'bg-primary text-on-primary' : 'border border-outline-variant text-on-surface-variant'
+                      settingsSub === s
+                        ? 'bg-primary text-on-primary'
+                        : 'border border-outline-variant text-on-surface-variant'
                     }`}
                   >
                     {s === 'branding' ? t('studio.tabs.settings') : t('studio.tabs.team')}
                   </button>
                 ))}
               </div>
-              {settingsSub === 'branding' ? <BrandingTab slug={academy.slug} /> : <MembersTab slug={academy.slug} />}
+              {settingsSub === 'branding' ? (
+                <BrandingTab slug={academy.slug} />
+              ) : (
+                <MembersTab slug={academy.slug} />
+              )}
             </div>
           )}
         </>
@@ -238,7 +249,6 @@ export default function AcademyStudioPage() {
     </div>
   );
 }
-
 
 /**
  * A teacher who owns nothing is not a teacher with no page.
@@ -259,33 +269,60 @@ function NoOwnedAcademy() {
   });
   const centers = (academies ?? []).filter((a) => a.role !== 'STUDENT' && a.role !== 'OWNER');
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
-  const copy = (url: string) => { void navigator.clipboard?.writeText(url); };
+  const copy = (url: string) => {
+    void navigator.clipboard?.writeText(url);
+  };
 
   return (
     <div className="mx-auto max-w-container px-6 py-8">
-      <PageHeader title={t('studio.title')} subtitle={centers.length ? t('studio.centerTeacherSubtitle') : t('studio.noAcademy')} />
+      <PageHeader
+        title={t('studio.title')}
+        subtitle={centers.length ? t('studio.centerTeacherSubtitle') : t('studio.noAcademy')}
+      />
       <div className="grid gap-4 md:grid-cols-2">
         {centers.map((c) => (
           <div key={c.academyId} className="card p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">{t('studio.centerDoor')}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
+              {t('studio.centerDoor')}
+            </p>
             <p className="mt-1 font-heading text-xl font-bold">{c.name}</p>
             <p className="mt-1 text-sm text-on-surface-variant">{t('studio.centerDoorHint')}</p>
-            <p className="mt-3 truncate font-mono text-sm" dir="ltr">{origin}/a/{c.slug}</p>
+            <p className="mt-3 truncate font-mono text-sm" dir="ltr">
+              {origin}/a/{c.slug}
+            </p>
             <div className="mt-3 flex gap-2">
-              <Link to={`/a/${c.slug}`} className="btn-primary px-4 py-2 text-sm">{t('studio.openPage')}</Link>
-              <button className="btn-secondary px-4 py-2 text-sm" onClick={() => copy(`${origin}/a/${c.slug}`)}>{t('studio.copyLink')}</button>
+              <Link to={`/a/${c.slug}`} className="btn-primary px-4 py-2 text-sm">
+                {t('studio.openPage')}
+              </Link>
+              <button
+                className="btn-secondary px-4 py-2 text-sm"
+                onClick={() => copy(`${origin}/a/${c.slug}`)}
+              >
+                {t('studio.copyLink')}
+              </button>
             </div>
           </div>
         ))}
         {profile?.slug && (
           <div className="card p-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">{t('studio.profileDoor')}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
+              {t('studio.profileDoor')}
+            </p>
             <p className="mt-1 font-heading text-xl font-bold">{t('studio.profileDoorTitle')}</p>
             <p className="mt-1 text-sm text-on-surface-variant">{t('studio.profileDoorHint')}</p>
-            <p className="mt-3 truncate font-mono text-sm" dir="ltr">{origin}/t/{profile.slug}</p>
+            <p className="mt-3 truncate font-mono text-sm" dir="ltr">
+              {origin}/t/{profile.slug}
+            </p>
             <div className="mt-3 flex gap-2">
-              <Link to={`/t/${profile.slug}`} className="btn-primary px-4 py-2 text-sm">{t('studio.openPage')}</Link>
-              <button className="btn-secondary px-4 py-2 text-sm" onClick={() => copy(`${origin}/t/${profile.slug}`)}>{t('studio.copyLink')}</button>
+              <Link to={`/t/${profile.slug}`} className="btn-primary px-4 py-2 text-sm">
+                {t('studio.openPage')}
+              </Link>
+              <button
+                className="btn-secondary px-4 py-2 text-sm"
+                onClick={() => copy(`${origin}/t/${profile.slug}`)}
+              >
+                {t('studio.copyLink')}
+              </button>
             </div>
           </div>
         )}

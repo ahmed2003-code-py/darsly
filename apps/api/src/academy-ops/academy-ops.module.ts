@@ -26,7 +26,8 @@ import { SessionsService } from './sessions.service';
     NeedsAttentionController,
     RoomsController,
     SessionsController,
-    ScheduleController, MyScheduleController,
+    ScheduleController,
+    MyScheduleController,
   ],
   providers: [
     AcademyOpsAccessService,

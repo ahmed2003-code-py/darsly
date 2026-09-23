@@ -87,7 +87,15 @@ export function weekKey(at: Date = new Date()): string {
   return `${p.year}-W${String(week).padStart(2, '0')}`;
 }
 
-const WEEKDAY_INDEX: Record<string, number> = { Sat: 0, Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6 };
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sat: 0,
+  Sun: 1,
+  Mon: 2,
+  Tue: 3,
+  Wed: 4,
+  Thu: 5,
+  Fri: 6,
+};
 
 /** Midnight Cairo on the Saturday that opens this week, as a UTC instant. */
 export function startOfCairoWeek(at: Date = new Date()): Date {

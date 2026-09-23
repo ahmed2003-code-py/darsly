@@ -52,25 +52,59 @@ function build(rows: unknown[] = [], total = rows.length) {
   } as unknown as StudentPriceService;
   // Nothing is hidden here: exclusivity has its own suite, and letting it
   // return anything would make every assertion below depend on it.
-  const openToEveryone = { hiddenTeacherIds: jest.fn().mockResolvedValue([]) } as unknown as SubjectExclusivityService;
-  return { service: new CoursesService(prisma, price, openToEveryone, noStorage, noVideoProcessing, noYoutubeImport, noLessonDescription, noMedia, entryExamMock), prisma, calls };
+  const openToEveryone = {
+    hiddenTeacherIds: jest.fn().mockResolvedValue([]),
+  } as unknown as SubjectExclusivityService;
+  return {
+    service: new CoursesService(
+      prisma,
+      price,
+      openToEveryone,
+      noStorage,
+      noVideoProcessing,
+      noYoutubeImport,
+      noLessonDescription,
+      noMedia,
+      entryExamMock,
+    ),
+    prisma,
+    calls,
+  };
 }
 
 const course = (over: Record<string, unknown> = {}) => ({
-  id: 'c1', tenantId: 't1', title: 'test', description: '', thumbnailUrl: null,
-  subject: null, grades: [], pricingModel: 'ONE_TIME', priceCents: 10000, currency: 'EGP',
+  id: 'c1',
+  tenantId: 't1',
+  title: 'test',
+  description: '',
+  thumbnailUrl: null,
+  subject: null,
+  grades: [],
+  pricingModel: 'ONE_TIME',
+  priceCents: 10000,
+  currency: 'EGP',
   createdAt: new Date(0),
   units: [{ lessons: [{ durationSec: 600, isFreePreview: true }] }],
   _count: { enrollments: 3 },
-  teacher: { id: 't1', slug: 'ahmed', language: 'ar', verifiedAt: new Date(0), user: { fullName: 'Ahmed', avatarUrl: null } },
+  teacher: {
+    id: 't1',
+    slug: 'ahmed',
+    language: 'ar',
+    verifiedAt: new Date(0),
+    user: { fullName: 'Ahmed', avatarUrl: null },
+  },
   ...over,
 });
 
 /** These courses name no exam, so the gate is open and says so. */
 const entryExamMock: any = {
   stateFor: jest.fn().mockResolvedValue({
-    lessonId: null, passed: true, attempted: false,
-    remedialLessonId: null, bestScorePct: null, awaitingGrading: false,
+    lessonId: null,
+    passed: true,
+    attempted: false,
+    remedialLessonId: null,
+    bestScorePct: null,
+    awaitingGrading: false,
   }),
   requirePassed: jest.fn().mockResolvedValue(undefined),
   isAllowedWhileLocked: () => true,
@@ -104,10 +138,12 @@ describe('a published course is findable', () => {
     expect(calls.where).toMatchObject({ status: 'PUBLISHED', deletedAt: null });
   });
 
-  it('takes the teacher\'s catalogue with them when they are suspended', async () => {
+  it("takes the teacher's catalogue with them when they are suspended", async () => {
     const { service, calls } = build();
     await service.discover({});
-    expect(calls.where).toMatchObject({ teacher: { status: 'APPROVED', user: { isActive: true } } });
+    expect(calls.where).toMatchObject({
+      teacher: { status: 'APPROVED', user: { isActive: true } },
+    });
   });
 });
 
@@ -131,7 +167,8 @@ describe('every filter resolves in the database', () => {
 
   it('filters subject and teacher directly', async () => {
     expect(await whereFor({ subjectId: 's1', teacherId: 't9' })).toMatchObject({
-      subjectId: 's1', tenantId: 't9',
+      subjectId: 's1',
+      tenantId: 't9',
     });
   });
 
@@ -141,27 +178,37 @@ describe('every filter resolves in the database', () => {
     await service.discover({}, 'user-1');
     const where = (prisma.course.findMany as jest.Mock).mock.calls[0][0].where;
     // Their year, and courses that named no year at all.
-    expect(yearClause(where)).toEqual([{ grades: { some: { gradeId: 'prep-2' } } }, { grades: { none: {} } }]);
+    expect(yearClause(where)).toEqual([
+      { grades: { some: { gradeId: 'prep-2' } } },
+      { grades: { none: {} } },
+    ]);
   });
 
   it('lets a student ask to look outside their own year', async () => {
     const { service, prisma } = build();
     (prisma.studentProfile.findFirst as jest.Mock).mockResolvedValue({ gradeId: 'prep-2' });
     await service.discover({ allStages: true }, 'user-1');
-    expect(yearClause((prisma.course.findMany as jest.Mock).mock.calls[0][0].where)).toBeUndefined();
+    expect(
+      yearClause((prisma.course.findMany as jest.Mock).mock.calls[0][0].where),
+    ).toBeUndefined();
   });
 
   it('narrows nothing for a visitor who is not signed in', async () => {
     const { service, prisma } = build();
     await service.discover({});
-    expect(yearClause((prisma.course.findMany as jest.Mock).mock.calls[0][0].where)).toBeUndefined();
+    expect(
+      yearClause((prisma.course.findMany as jest.Mock).mock.calls[0][0].where),
+    ).toBeUndefined();
   });
 
   it('filters by the exact year asked for', async () => {
     const where = await whereFor({ gradeId: 'g1' });
     // The year itself, and courses that were never narrowed — an empty list
     // means "not yet decided", not "for nobody".
-    expect(yearClause(where)).toEqual([{ grades: { some: { gradeId: 'g1' } } }, { grades: { none: {} } }]);
+    expect(yearClause(where)).toEqual([
+      { grades: { some: { gradeId: 'g1' } } },
+      { grades: { none: {} } },
+    ]);
   });
 
   /**
@@ -173,7 +220,10 @@ describe('every filter resolves in the database', () => {
    */
   it('keeps the year filter when the student also searches', async () => {
     const where = await whereFor({ gradeId: 'g1', q: 'python' });
-    expect(yearClause(where)).toEqual([{ grades: { some: { gradeId: 'g1' } } }, { grades: { none: {} } }]);
+    expect(yearClause(where)).toEqual([
+      { grades: { some: { gradeId: 'g1' } } },
+      { grades: { none: {} } },
+    ]);
     expect(JSON.stringify(searchClause(where))).toContain('python');
   });
 
@@ -181,7 +231,7 @@ describe('every filter resolves in the database', () => {
     expect(await whereFor({ language: 'en' })).toMatchObject({ teacher: { language: 'en' } });
   });
 
-  it('searches the title, the description and the teacher\'s name', async () => {
+  it("searches the title, the description and the teacher's name", async () => {
     const where = await whereFor({ q: ' algebra ' });
     expect(searchClause(where)).toHaveLength(3);
     expect(JSON.stringify(searchClause(where))).toContain('algebra');
@@ -201,7 +251,9 @@ describe('every filter resolves in the database', () => {
   });
 
   it('lets free override the range rather than contradict it', async () => {
-    expect(await whereFor({ free: true, priceMinCents: 1000 })).toMatchObject({ priceCents: { equals: 0 } });
+    expect(await whereFor({ free: true, priceMinCents: 1000 })).toMatchObject({
+      priceCents: { equals: 0 },
+    });
   });
 
   it('finds courses that let you watch something first', async () => {
@@ -268,10 +320,18 @@ describe('sorting', () => {
 
 describe('ratings', () => {
   it('asks for the whole page in one query rather than one per card', async () => {
-    const { service, prisma } = build([course({ id: 'a' }), course({ id: 'b' }), course({ id: 'c' })]);
+    const { service, prisma } = build([
+      course({ id: 'a' }),
+      course({ id: 'b' }),
+      course({ id: 'c' }),
+    ]);
     await service.discover({});
-    expect((prisma.review.groupBy as jest.Mock)).toHaveBeenCalledTimes(1);
-    expect((prisma.review.groupBy as jest.Mock).mock.calls[0][0].where.courseId.in).toEqual(['a', 'b', 'c']);
+    expect(prisma.review.groupBy as jest.Mock).toHaveBeenCalledTimes(1);
+    expect((prisma.review.groupBy as jest.Mock).mock.calls[0][0].where.courseId.in).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
   });
 
   it('asks for nothing at all when the page is empty', async () => {
@@ -285,7 +345,10 @@ describe('prices carry the platform fee', () => {
   it('runs every card through the student price service', async () => {
     const price = jest.fn(async (items: unknown[]) => items);
     const prisma = {
-      course: { count: jest.fn().mockResolvedValue(1), findMany: jest.fn().mockResolvedValue([course()]) },
+      course: {
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([course()]),
+      },
       review: { groupBy: jest.fn().mockResolvedValue([]) },
       studentProfile: { findFirst: jest.fn().mockResolvedValue(null) },
       gradeLevel: { findUnique: jest.fn().mockResolvedValue({ stage: 'SECONDARY' }) },
@@ -315,7 +378,7 @@ describe('prices carry the platform fee', () => {
  * that its answer reaches the SQL, and that it composes with the filter a
  * student is most likely to have on at the time.
  */
-describe('a student is not shown the catalogues of their teacher\'s rivals', () => {
+describe("a student is not shown the catalogues of their teacher's rivals", () => {
   function buildWith(hidden: string[]) {
     const calls: { where?: Record<string, unknown> } = {};
     const prisma = {
@@ -327,13 +390,15 @@ describe('a student is not shown the catalogues of their teacher\'s rivals', () 
         }),
       },
       review: { groupBy: jest.fn().mockResolvedValue([]) },
-    studentProfile: { findFirst: jest.fn().mockResolvedValue(null) },
-    gradeLevel: { findUnique: jest.fn().mockResolvedValue({ stage: 'SECONDARY' }) },
+      studentProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+      gradeLevel: { findUnique: jest.fn().mockResolvedValue({ stage: 'SECONDARY' }) },
     } as unknown as PrismaService;
     const service = new CoursesService(
       prisma,
       { applyToMany: jest.fn(async (i: unknown[]) => i) } as unknown as StudentPriceService,
-      { hiddenTeacherIds: jest.fn().mockResolvedValue(hidden) } as unknown as SubjectExclusivityService,
+      {
+        hiddenTeacherIds: jest.fn().mockResolvedValue(hidden),
+      } as unknown as SubjectExclusivityService,
       noStorage,
       noVideoProcessing,
       noYoutubeImport,

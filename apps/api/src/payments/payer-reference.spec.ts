@@ -29,8 +29,12 @@ describe('a wallet number', () => {
     // last is the same number with its leading zero left off, which is a
     // thing people do and not a different wallet.
     for (const typed of [
-      '01284120292', '+201284120292', '201284120292',
-      '0128 412 0292', '0128-412-0292', '1284120292',
+      '01284120292',
+      '+201284120292',
+      '201284120292',
+      '0128 412 0292',
+      '0128-412-0292',
+      '1284120292',
     ]) {
       expect(normalizePayerReference('VODAFONE_CASH', typed)).toBe('01284120292');
     }
@@ -38,17 +42,23 @@ describe('a wallet number', () => {
 
   it('is refused when it could not be an Egyptian wallet', () => {
     for (const bad of [
-      '0123456',      // too short to be a number at all
-      '09984120292',  // not one of the four live prefixes
-      '12345678901',  // right length, wrong shape
-      '0100258992',   // one digit short of a real one
+      '0123456', // too short to be a number at all
+      '09984120292', // not one of the four live prefixes
+      '12345678901', // right length, wrong shape
+      '0100258992', // one digit short of a real one
     ]) {
       expect(() => normalizePayerReference('VODAFONE_CASH', bad)).toThrow();
     }
   });
 
   it('names what is wrong, so the student can fix it themselves', () => {
-    const err: any = (() => { try { normalizePayerReference('VODAFONE_CASH', '0123'); } catch (e) { return e; } })();
+    const err: any = (() => {
+      try {
+        normalizePayerReference('VODAFONE_CASH', '0123');
+      } catch (e) {
+        return e;
+      }
+    })();
     expect(err.getResponse()).toMatchObject({ code: 'BAD_WALLET_NUMBER', kind: 'WALLET_NUMBER' });
   });
 });
@@ -70,10 +80,19 @@ describe('a transfer reference', () => {
 describe('leaving it out', () => {
   it('is refused for Vodafone Cash, which really does share one', () => {
     const kindOf = (method: string) => {
-      try { normalizePayerReference(method, ''); } catch (e: any) { return e.getResponse(); }
+      try {
+        normalizePayerReference(method, '');
+      } catch (e: any) {
+        return e.getResponse();
+      }
     };
-    expect(kindOf('VODAFONE_CASH')).toMatchObject({ code: 'REFERENCE_REQUIRED', kind: 'WALLET_NUMBER' });
-    expect(kindOf('VODAFONE_CASH')).toMatchObject({ message: expect.stringContaining('wallet number') });
+    expect(kindOf('VODAFONE_CASH')).toMatchObject({
+      code: 'REFERENCE_REQUIRED',
+      kind: 'WALLET_NUMBER',
+    });
+    expect(kindOf('VODAFONE_CASH')).toMatchObject({
+      message: expect.stringContaining('wallet number'),
+    });
   });
 
   it('treats whitespace as leaving it out', () => {

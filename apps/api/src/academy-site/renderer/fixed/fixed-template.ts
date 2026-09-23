@@ -42,8 +42,10 @@ const text = (lt: LT | undefined, fallbackAr = '', fallbackEn = fallbackAr): str
 };
 /** The Arabic (or only) reading, unescaped — for callers that still need to
  * split or slice the text themselves before it goes back through bi(). */
-const raw = (lt: LT | undefined, fallback = ''): string => (lt?.ar?.trim() || lt?.en?.trim() || fallback).toString();
-const rawEn = (lt: LT | undefined, fallback = ''): string => (lt?.en?.trim() || lt?.ar?.trim() || fallback).toString();
+const raw = (lt: LT | undefined, fallback = ''): string =>
+  (lt?.ar?.trim() || lt?.en?.trim() || fallback).toString();
+const rawEn = (lt: LT | undefined, fallback = ''): string =>
+  (lt?.en?.trim() || lt?.ar?.trim() || fallback).toString();
 /** For <title> / meta attributes, which cannot hold markup — always one language. */
 const plain = (lt: LT | undefined, fallback = ''): string => escapeHtml(raw(lt, fallback));
 
@@ -59,7 +61,8 @@ const listItemText = (it: ListItem | undefined): string => {
   const [ar, en] = listItemPair(it);
   return bi(escapeHtml(ar), escapeHtml(en));
 };
-const firstWords = (s: string, n: number): string => s.split(/\s+/).filter(Boolean).slice(0, n).join(' ');
+const firstWords = (s: string, n: number): string =>
+  s.split(/\s+/).filter(Boolean).slice(0, n).join(' ');
 const paragraphsOf = (s: string): string =>
   s
     .split(/\n{2,}/)
@@ -135,7 +138,8 @@ export function renderFixedSite(doc: SiteDocument, ctx: RenderContext): string {
   const quote = findBlock(blocks, 'quote');
 
   const socials = contact?.socials ?? [];
-  const socialUrl = (platform: string) => safeUrl(socials.find((s) => s.platform.toLowerCase() === platform)?.url);
+  const socialUrl = (platform: string) =>
+    safeUrl(socials.find((s) => s.platform.toLowerCase() === platform)?.url);
   const ytUrl = socialUrl('youtube');
   const fbUrl = socialUrl('facebook');
   const waUrl = socialUrl('whatsapp');
@@ -157,16 +161,20 @@ export function renderFixedSite(doc: SiteDocument, ctx: RenderContext): string {
   const subEn = rawEn(hero?.subheadline);
   const brandSmallAr = firstWords(subAr, 4);
   const brandSmallEn = firstWords(subEn, 4);
-  const brandSmall = brandSmallAr || brandSmallEn ? bi(escapeHtml(brandSmallAr), escapeHtml(brandSmallEn)) : '';
+  const brandSmall =
+    brandSmallAr || brandSmallEn ? bi(escapeHtml(brandSmallAr), escapeHtml(brandSmallEn)) : '';
 
   const navLinks: string[] = [];
   if (about) navLinks.push(navLink('about', u('navAbout')));
   if (credentials) navLinks.push(navLink('credentials', u('navAchievements')));
-  navLinks.push(`<a href="#courses" data-section="courses" id="navCoursesLink" hidden>${u('navCourses')}</a>`);
+  navLinks.push(
+    `<a href="#courses" data-section="courses" id="navCoursesLink" hidden>${u('navCourses')}</a>`,
+  );
   if (gallery && galleryMedia.length) navLinks.push(navLink('gallery', u('navGallery')));
   if (process || faq) navLinks.push(navLink('journey', u('navJourney')));
 
-  const secondaryHref = gallery && galleryMedia.length ? '#gallery' : credentials ? '#credentials' : '#about';
+  const secondaryHref =
+    gallery && galleryMedia.length ? '#gallery' : credentials ? '#credentials' : '#about';
 
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -283,15 +291,21 @@ function heroSection(
         <a class="btn btn-primary" href="/register?academy=${escapeAttr(slug)}" target="_top">${cta} <svg class="icon arrow"><use href="#i-arrow"/></svg></a>
         <a class="btn btn-ghost" href="${secondaryHref}">${u('learnMore')}</a>
       </div>
-      ${follow ? `<div class="follow hero-in">
+      ${
+        follow
+          ? `<div class="follow hero-in">
         <span>${u('followMe')}</span>
         <span class="links">
           ${ytUrl ? `<a class="social-btn yt" href="${escapeAttr(ytUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(UI.youtube[0])}"><svg class="icon"><use href="#i-yt"/></svg></a>` : ''}
           ${fbUrl ? `<a class="social-btn fb" href="${escapeAttr(fbUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(UI.facebook[0])}"><svg class="icon"><use href="#i-fb"/></svg></a>` : ''}
         </span>
-      </div>` : ''}
+      </div>`
+          : ''
+      }
     </div>
-    ${photoUrl ? `<div class="hero-photo hero-in" id="heroPhoto">
+    ${
+      photoUrl
+        ? `<div class="hero-photo hero-in" id="heroPhoto">
       <div class="hero-photo-ring" aria-hidden="true"></div>
       <div class="hero-photo-frame" id="tiltFrame">
         <img src="${escapeAttr(photoUrl)}" alt="">
@@ -299,7 +313,9 @@ function heroSection(
       <span class="chip chip-1"><svg class="icon"><use href="#i-cap"/></svg> ${u('chipLearnOnline')}</span>
       <span class="chip chip-2"><svg class="icon"><use href="#i-book"/></svg> ${u('chipOngoing')}</span>
       <span class="chip chip-3"><svg class="icon"><use href="#i-star"/></svg> ${u('chipYearRound')}</span>
-    </div>` : ''}
+    </div>`
+        : ''
+    }
   </div>
 </section>`;
 }
@@ -317,19 +333,27 @@ function aboutSection(
       <span class="eyebrow">${u('aboutEyebrow')}</span>
       <h2>${text(about.heading, ...UI.aboutHeading)}</h2>
       ${paragraphs}
-      ${doubled.length ? `<div class="toolkit-label">${u('focusAreas')}</div>
+      ${
+        doubled.length
+          ? `<div class="toolkit-label">${u('focusAreas')}</div>
       <div class="marquee-wrap">
         <div class="marquee-track">
           ${doubled.map((t) => `<span class="tag"><svg class="icon"><use href="#i-book"/></svg> ${listItemText(t)}</span>`).join('\n          ')}
         </div>
-      </div>` : ''}
+      </div>`
+          : ''
+      }
     </div>
-    ${photoUrl ? `<div class="about-media reveal">
+    ${
+      photoUrl
+        ? `<div class="about-media reveal">
       <div class="about-media-ring" aria-hidden="true"></div>
       <div class="about-media-frame">
         <img src="${escapeAttr(photoUrl)}" alt="">
       </div>
-    </div>` : ''}
+    </div>`
+        : ''
+    }
   </div>
 </section>`;
 }
@@ -367,7 +391,10 @@ function coursesSection(): string {
 }
 
 function gallerySection(
-  media: { id: string; m: { url: string; width?: number | null; height?: number | null; mimeType?: string | null } }[],
+  media: {
+    id: string;
+    m: { url: string; width?: number | null; height?: number | null; mimeType?: string | null };
+  }[],
   quote: Extract<SiteBlock, { type: 'quote' }> | undefined,
 ): string {
   const tiles = media.map(({ m }) => {
@@ -414,17 +441,26 @@ function journeySection(
   const items = (faq?.items ?? []).slice(0, 3);
   return `<section class="section soft" id="journey">
   <div class="wrap">
-    ${steps.length ? `<div class="section-head center reveal">
+    ${
+      steps.length
+        ? `<div class="section-head center reveal">
       <span class="eyebrow">${u('journeyEyebrow')}</span>
       <h2>${u('journeyHeading')}</h2>
     </div>
     <div class="steps stagger">
       ${steps
-        .map((s, i) => `<div class="step glow"><span class="step-n">${NUM[i]}</span><h3>${text(s.title)}</h3><p>${text(s.body)}</p></div>`)
+        .map(
+          (s, i) =>
+            `<div class="step glow"><span class="step-n">${NUM[i]}</span><h3>${text(s.title)}</h3><p>${text(s.body)}</p></div>`,
+        )
         .join('\n      ')}
-    </div>` : ''}
+    </div>`
+        : ''
+    }
     ${items.length ? `<div class="faq-inner-head reveal">${u('faqHead')}</div>` : ''}
-    ${items.length ? `
+    ${
+      items.length
+        ? `
     <div class="faq-list reveal">
       ${items
         .map(
@@ -434,7 +470,9 @@ function journeySection(
       </div>`,
         )
         .join('\n      ')}
-    </div>` : ''}
+    </div>`
+        : ''
+    }
   </div>
 </section>`;
 }
@@ -476,7 +514,13 @@ const SPRITE = `<svg style="display:none">
   <symbol id="i-fb" viewBox="0 0 24 24"><path d="M14 9h3V6h-3c-2 0-3.5 1.6-3.5 3.5V11H8v3h2.5v6H14v-6h2.6l.4-3h-3v-1.3c0-.5.3-.7.7-.7Z" fill="currentColor" stroke="none"/></symbol>
 </svg>`;
 
-function css(tk: { primary: string; accent: string; primaryInk: string; primaryDark: string; accentDark: string }): string {
+function css(tk: {
+  primary: string;
+  accent: string;
+  primaryInk: string;
+  primaryDark: string;
+  accentDark: string;
+}): string {
   return `
 :root{
   --bg:#ffffff; --bg-soft:#f6f8ff;

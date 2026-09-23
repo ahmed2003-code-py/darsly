@@ -14,18 +14,28 @@ describe('isGrowthRange', () => {
 describe('AdminAnalyticsService', () => {
   it('growthTrend zero-fills and converts bigint counts to numbers', async () => {
     const today = new Date();
-    const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([{ day: today, academies: 2n, students: 5n, enrollments: 9n }]) };
+    const prisma: any = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValue([{ day: today, academies: 2n, students: 5n, enrollments: 9n }]),
+    };
     const ledger: any = {};
     const analytics: any = {};
     const svc = new AdminAnalyticsService(prisma, ledger, analytics);
 
     const trend = await svc.growthTrend(30);
-    expect(trend).toEqual([{ date: today.toISOString().slice(0, 10), academies: 2, students: 5, enrollments: 9 }]);
+    expect(trend).toEqual([
+      { date: today.toISOString().slice(0, 10), academies: 2, students: 5, enrollments: 9 },
+    ]);
   });
 
   it('revenueTrend delegates to LedgerService.revenueTrend with the same range', async () => {
     const prisma: any = {};
-    const ledger: any = { revenueTrend: jest.fn().mockResolvedValue([{ date: '2026-01-01', grossCents: 100, feeCents: 20 }]) };
+    const ledger: any = {
+      revenueTrend: jest
+        .fn()
+        .mockResolvedValue([{ date: '2026-01-01', grossCents: 100, feeCents: 20 }]),
+    };
     const analytics: any = {};
     const svc = new AdminAnalyticsService(prisma, ledger, analytics);
 
@@ -37,7 +47,9 @@ describe('AdminAnalyticsService', () => {
   it('attendanceAggregate delegates to AnalyticsService.attendanceStats with null ctx/tenantId', async () => {
     const prisma: any = {};
     const ledger: any = {};
-    const analytics: any = { attendanceStats: jest.fn().mockResolvedValue({ attendanceRatePct: 88 }) };
+    const analytics: any = {
+      attendanceStats: jest.fn().mockResolvedValue({ attendanceRatePct: 88 }),
+    };
     const svc = new AdminAnalyticsService(prisma, ledger, analytics);
 
     const result = await svc.attendanceAggregate(30);
@@ -55,14 +67,21 @@ describe('AdminAnalyticsService', () => {
         ]),
       },
     };
-    const ledger: any = { platformTotals: jest.fn().mockResolvedValue({ grossCents: 1000, commissionCents: 200 }) };
+    const ledger: any = {
+      platformTotals: jest.fn().mockResolvedValue({ grossCents: 1000, commissionCents: 200 }),
+    };
     const analytics: any = {};
     const svc = new AdminAnalyticsService(prisma, ledger, analytics);
 
     const result = await svc.financialOverview(30);
     // 6 paid / (6 paid + 2 rejected) = 75%, the 3 still-pending submissions
     // excluded from the denominator since they haven't been decided yet.
-    expect(result.paymentConversion).toEqual({ paid: 6, pending: 3, rejected: 2, convertedPct: 75 });
+    expect(result.paymentConversion).toEqual({
+      paid: 6,
+      pending: 3,
+      rejected: 2,
+      convertedPct: 75,
+    });
     expect(result.grossCents).toBe(1000);
     expect(result.commissionCents).toBe(200);
   });
@@ -81,7 +100,12 @@ describe('AdminAnalyticsService', () => {
     const svc = new AdminAnalyticsService(prisma, ledger, analytics);
 
     const result = await svc.activeAcademyRate(7);
-    expect(result).toEqual({ rangeDays: 7, totalActiveAcademies: 5, academiesWithRecentEnrollment: 2, ratePct: 40 });
+    expect(result).toEqual({
+      rangeDays: 7,
+      totalActiveAcademies: 5,
+      academiesWithRecentEnrollment: 2,
+      ratePct: 40,
+    });
     // Grouped in the database, not read whole and de-duplicated here: this is
     // a platform-wide query with no tenant filter, so the difference is every
     // enrollment on the platform versus one row per academy.

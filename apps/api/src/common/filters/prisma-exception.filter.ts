@@ -59,7 +59,10 @@ export class PrismaExceptionFilter implements ExceptionFilter {
    * Everything absent from this table is left as a 500 on purpose — see
    * `catch` below.
    */
-  private static readonly MAPPED: Record<string, { status: number; code: string; message: string }> = {
+  private static readonly MAPPED: Record<
+    string,
+    { status: number; code: string; message: string }
+  > = {
     // Unique constraint. The row already exists, which is a conflict with the
     // current state of the resource, not a malformed request.
     P2002: {

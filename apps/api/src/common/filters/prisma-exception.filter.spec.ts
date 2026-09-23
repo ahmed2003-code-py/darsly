@@ -122,7 +122,10 @@ describe('PrismaExceptionFilter', () => {
    * adding the filter cannot change an existing answer.
    */
   it('is scoped to Prisma errors only, so HttpExceptions are never intercepted', () => {
-    const caught = Reflect.getMetadata('__filterCatchExceptions__', PrismaExceptionFilter) as unknown[];
+    const caught = Reflect.getMetadata(
+      '__filterCatchExceptions__',
+      PrismaExceptionFilter,
+    ) as unknown[];
 
     expect(caught).toEqual([Prisma.PrismaClientKnownRequestError]);
     expect(caught).not.toContain(NotFoundException);

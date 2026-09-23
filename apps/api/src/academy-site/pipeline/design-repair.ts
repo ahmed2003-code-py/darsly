@@ -1,5 +1,11 @@
 import {
-  ACCENT_MARKS, BACKDROPS, DIVIDERS, DesignSpec, ENTRANCES, HEADING_FAMILIES, IMAGE_TREATMENTS,
+  ACCENT_MARKS,
+  BACKDROPS,
+  DIVIDERS,
+  DesignSpec,
+  ENTRANCES,
+  HEADING_FAMILIES,
+  IMAGE_TREATMENTS,
   SCROLL_EFFECTS,
 } from '../schema/design-spec';
 import { contrastRatio, isHex, mix, relLuminance } from '../renderer/color.util';
@@ -114,14 +120,26 @@ export function repairDesign(input: DesignSpec): RepairResult {
   const surfaceRatio = contrastRatio(p.surface, p.background);
   if (surfaceRatio < SURFACE_MIN) {
     p.surface = mix(p.background, p.ink, 0.06);
-    warn('surface-indistinct', 'surface was indistinguishable from the background', 'palette.surface');
+    warn(
+      'surface-indistinct',
+      'surface was indistinguishable from the background',
+      'palette.surface',
+    );
   } else if (surfaceRatio > SURFACE_MAX) {
     p.surface = pullToward(p.surface, p.background, SURFACE_MAX);
-    warn('surface-overpowering', 'surface was far enough from the background to read as a second theme', 'palette.surface');
+    warn(
+      'surface-overpowering',
+      'surface was far enough from the background to read as a second theme',
+      'palette.surface',
+    );
   }
   if (contrastRatio(p.surfaceAlt, p.background) > SURFACE_MAX) {
     p.surfaceAlt = pullToward(p.surfaceAlt, p.background, SURFACE_MAX);
-    warn('surface-alt-overpowering', 'the second surface was too far from the background', 'palette.surfaceAlt');
+    warn(
+      'surface-alt-overpowering',
+      'the second surface was too far from the background',
+      'palette.surfaceAlt',
+    );
   }
   if (contrastRatio(p.surfaceAlt, p.surface) < 1.02) {
     p.surfaceAlt = mix(p.surface, p.ink, 0.05);
@@ -134,7 +152,11 @@ export function repairDesign(input: DesignSpec): RepairResult {
   const brandRatio = contrastRatio(p.primary, p.accent);
   if (brandRatio < 1.12 && p.primary.toLowerCase() !== p.accent.toLowerCase()) {
     p.accent = nudgeApart(p.accent, p.primary);
-    warn('accent-indistinct', 'the accent was nearly identical to the primary and was separated', 'palette.accent');
+    warn(
+      'accent-indistinct',
+      'the accent was nearly identical to the primary and was separated',
+      'palette.accent',
+    );
   }
 
   // A filled button has to read as a *shape* against the page before anyone
@@ -160,7 +182,11 @@ export function repairDesign(input: DesignSpec): RepairResult {
   const accentGap = contrastRatio(p.accent, p.background);
   if (accentGap < 1.6 && p.accent.toLowerCase() !== p.primary.toLowerCase()) {
     p.accent = pushToContrast(p.accent, p.background, 1.6);
-    warn('accent-indistinct-on-page', 'the accent was almost invisible against the page and was lifted', 'palette.accent');
+    warn(
+      'accent-indistinct-on-page',
+      'the accent was almost invisible against the page and was lifted',
+      'palette.accent',
+    );
   }
 
   // `mode` is the model describing its own palette, and it can simply be wrong.
@@ -169,24 +195,39 @@ export function repairDesign(input: DesignSpec): RepairResult {
   const derivedMode = relLuminance(p.background) > 0.5 ? 'light' : 'dark';
   if (p.mode !== derivedMode) {
     p.mode = derivedMode;
-    warn('mode-corrected', `the palette was described as ${input.palette.mode} but reads as ${derivedMode}`, 'palette.mode');
+    warn(
+      'mode-corrected',
+      `the palette was described as ${input.palette.mode} but reads as ${derivedMode}`,
+      'palette.mode',
+    );
   }
 
   // ── Type ──────────────────────────────────────────────────────────────────
   if (!HEADING_FAMILIES.includes(d.typography.headingFamily)) {
     d.typography.headingFamily = 'sans';
-    warn('heading-family-unknown', 'unknown heading typeface, fell back to sans', 'typography.headingFamily');
+    warn(
+      'heading-family-unknown',
+      'unknown heading typeface, fell back to sans',
+      'typography.headingFamily',
+    );
   }
   // Every amplifier at once is not a strong design, it is an unreadable one:
   // condensed uppercase at monumental scale with tight tracking closes the
   // counters until the words stop being letters.
   const t = d.typography;
-  const shouting = t.scale === 'monumental' && t.headingCase === 'upper'
-    && (t.headingFamily === 'condensed' || t.headingWeight >= 900) && t.tracking === 'tight';
+  const shouting =
+    t.scale === 'monumental' &&
+    t.headingCase === 'upper' &&
+    (t.headingFamily === 'condensed' || t.headingWeight >= 900) &&
+    t.tracking === 'tight';
   if (shouting) {
     t.scale = 'dramatic';
     t.tracking = 'normal';
-    warn('typography-overloaded', 'monumental uppercase condensed tight type was eased to stay readable', 'typography.scale');
+    warn(
+      'typography-overloaded',
+      'monumental uppercase condensed tight type was eased to stay readable',
+      'typography.scale',
+    );
   }
 
   // ── Geometry ──────────────────────────────────────────────────────────────
@@ -199,7 +240,11 @@ export function repairDesign(input: DesignSpec): RepairResult {
   // as a rendering fault rather than a decision.
   if (d.geometry.shadow === 'brutal' && d.geometry.border === 'none') {
     d.geometry.border = 'hairline';
-    warn('brutal-needs-border', 'a hard offset shadow was given a border to sit against', 'geometry.border');
+    warn(
+      'brutal-needs-border',
+      'a hard offset shadow was given a border to sit against',
+      'geometry.border',
+    );
   }
 
   // ── Motion ────────────────────────────────────────────────────────────────
@@ -208,14 +253,26 @@ export function repairDesign(input: DesignSpec): RepairResult {
     warn('scrollfx-cleaned', 'duplicate or unknown scroll effects were dropped', 'motion.scrollFx');
   }
   if (fx.length > MAX_SCROLL_FX) {
-    warn('scrollfx-budget', `${fx.length} scroll effects were requested; the page keeps ${MAX_SCROLL_FX}`, 'motion.scrollFx');
+    warn(
+      'scrollfx-budget',
+      `${fx.length} scroll effects were requested; the page keeps ${MAX_SCROLL_FX}`,
+      'motion.scrollFx',
+    );
   }
   d.motion.scrollFx = fx.slice(0, MAX_SCROLL_FX);
   // A marquee, a parallax and a cinematic entrance together mean nothing on the
   // page is ever still, and the copy is what the visitor came for.
-  if (d.motion.intensity === 'cinematic' && d.motion.scrollFx.includes('marquee') && d.motion.scrollFx.includes('parallax')) {
+  if (
+    d.motion.intensity === 'cinematic' &&
+    d.motion.scrollFx.includes('marquee') &&
+    d.motion.scrollFx.includes('parallax')
+  ) {
     d.motion.scrollFx = d.motion.scrollFx.filter((f) => f !== 'marquee');
-    warn('motion-overloaded', 'a cinematic page with both parallax and a marquee gave up the marquee', 'motion.scrollFx');
+    warn(
+      'motion-overloaded',
+      'a cinematic page with both parallax and a marquee gave up the marquee',
+      'motion.scrollFx',
+    );
   }
   if (!ENTRANCES.includes(d.motion.entrance)) {
     d.motion.entrance = 'rise';
@@ -229,7 +286,11 @@ export function repairDesign(input: DesignSpec): RepairResult {
   }
   const accents = unique(d.decoration.accents).filter((a) => ACCENT_MARKS.includes(a));
   if (accents.length > MAX_ACCENTS) {
-    warn('accent-budget', `${accents.length} accent marks were requested; the page keeps ${MAX_ACCENTS}`, 'decoration.accents');
+    warn(
+      'accent-budget',
+      `${accents.length} accent marks were requested; the page keeps ${MAX_ACCENTS}`,
+      'decoration.accents',
+    );
   }
   d.decoration.accents = accents.slice(0, MAX_ACCENTS);
   if (!DIVIDERS.includes(d.decoration.dividers)) {
@@ -238,12 +299,20 @@ export function repairDesign(input: DesignSpec): RepairResult {
   }
   if (!IMAGE_TREATMENTS.includes(d.decoration.imageTreatment)) {
     d.decoration.imageTreatment = 'rounded';
-    warn('image-treatment-unknown', 'unknown image treatment, fell back to rounded', 'decoration.imageTreatment');
+    warn(
+      'image-treatment-unknown',
+      'unknown image treatment, fell back to rounded',
+      'decoration.imageTreatment',
+    );
   }
   // Grain is a film effect: on a light page it is not texture, it is dirt.
   if (d.geometry.grain && derivedMode === 'light') {
     d.geometry.grain = false;
-    warn('grain-light-page', 'film grain was removed from a light page, where it reads as dirt', 'geometry.grain');
+    warn(
+      'grain-light-page',
+      'film grain was removed from a light page, where it reads as dirt',
+      'geometry.grain',
+    );
   }
 
   return { design: d, verdicts: v };

@@ -35,7 +35,10 @@ export class AdminThemeController {
   }
 
   @Get('catalog')
-  @ApiOperation({ summary: '[admin] Every look the console can wear: presets, every Academy brand, every store theme' })
+  @ApiOperation({
+    summary:
+      '[admin] Every look the console can wear: presets, every Academy brand, every store theme',
+  })
   catalog() {
     return this.theme.catalog();
   }

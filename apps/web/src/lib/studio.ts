@@ -167,27 +167,53 @@ function clean(theme: unknown): StudioTheme | null {
  */
 const BRAND_ALLOWED = new Set([
   // The accent family.
-  '--c-primary', '--c-primary-text', '--c-on-primary', '--c-primary-hover',
-  '--c-primary-container', '--c-on-primary-container',
-  '--c-primary-fixed', '--c-primary-fixed-dim',
-  '--c-on-primary-fixed', '--c-on-primary-fixed-variant',
-  '--c-inverse-primary', '--c-surface-tint',
-  '--c-brand-accent', '--c-on-brand-accent',
-  '--c-accent-50', '--c-accent-100', '--c-accent-200', '--c-accent-300',
-  '--c-accent-400', '--c-accent-500', '--c-accent-600', '--c-accent-700',
-  '--c-accent-800', '--c-accent-900',
+  '--c-primary',
+  '--c-primary-text',
+  '--c-on-primary',
+  '--c-primary-hover',
+  '--c-primary-container',
+  '--c-on-primary-container',
+  '--c-primary-fixed',
+  '--c-primary-fixed-dim',
+  '--c-on-primary-fixed',
+  '--c-on-primary-fixed-variant',
+  '--c-inverse-primary',
+  '--c-surface-tint',
+  '--c-brand-accent',
+  '--c-on-brand-accent',
+  '--c-accent-50',
+  '--c-accent-100',
+  '--c-accent-200',
+  '--c-accent-300',
+  '--c-accent-400',
+  '--c-accent-500',
+  '--c-accent-600',
+  '--c-accent-700',
+  '--c-accent-800',
+  '--c-accent-900',
   // The ground, for a skin that brings one. This is what separates a skin from
   // a tint: without it the platform's greys stay underneath and the result is
   // the same app in a different colour. Every value is derived and floored on
   // the server, and `written[]` means removing the skin puts the academy back
   // exactly as it was.
-  '--c-background', '--c-on-background',
-  '--c-surface', '--c-surface-dim', '--c-surface-bright',
-  '--c-surface-container-lowest', '--c-surface-container-low',
-  '--c-surface-container', '--c-surface-container-high',
-  '--c-surface-container-highest', '--c-surface-variant',
-  '--c-on-surface', '--c-on-surface-variant', '--c-outline', '--c-line',
-  '--c-inverse-surface', '--c-inverse-on-surface', '--c-shadow',
+  '--c-background',
+  '--c-on-background',
+  '--c-surface',
+  '--c-surface-dim',
+  '--c-surface-bright',
+  '--c-surface-container-lowest',
+  '--c-surface-container-low',
+  '--c-surface-container',
+  '--c-surface-container-high',
+  '--c-surface-container-highest',
+  '--c-surface-variant',
+  '--c-on-surface',
+  '--c-on-surface-variant',
+  '--c-outline',
+  '--c-line',
+  '--c-inverse-surface',
+  '--c-inverse-on-surface',
+  '--c-shadow',
 ]);
 
 function brandTokens(input: unknown): Record<string, string> {
@@ -243,9 +269,7 @@ const ICON_WEIGHTS = [300, 400, 500, 600];
 const CARD_LAYOUTS = ['grid', 'imageFirst', 'editorial'];
 const TYPE_SCALES = ['default', 'compact', 'editorial'];
 const CARDS = ['minimal', 'soft', 'elevated', 'paper', 'glass', 'outlined'];
-const PATTERNS = [
-  'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays', 'stadium',
-];
+const PATTERNS = ['none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays', 'stadium'];
 
 /** A style is a name from a closed list, or the default. Never a value. */
 function styles(input: unknown): StudioStyles {
@@ -265,7 +289,10 @@ function styles(input: unknown): StudioStyles {
     motion: pick(s.motion, MOTIONS, 'subtle'),
     icons: {
       fill: s.icons?.fill === 0 ? 0 : 1,
-      weight: typeof s.icons?.weight === 'number' && ICON_WEIGHTS.includes(s.icons.weight) ? s.icons.weight : 400,
+      weight:
+        typeof s.icons?.weight === 'number' && ICON_WEIGHTS.includes(s.icons.weight)
+          ? s.icons.weight
+          : 400,
     },
     cardLayout: pick(s.cardLayout, CARD_LAYOUTS, 'grid'),
     typeScale: pick(s.typeScale, TYPE_SCALES, 'default'),
@@ -364,8 +391,11 @@ function paint(input: StudioThemes | null): void {
   root.setAttribute('data-s-button', s.button);
   root.setAttribute('data-s-card', s.card);
   for (const [attr, value] of [
-    ['frame', s.frame], ['effect', s.effect],
-    ['pattern', s.pattern], ['font', s.font], ['radius', s.radius],
+    ['frame', s.frame],
+    ['effect', s.effect],
+    ['pattern', s.pattern],
+    ['font', s.font],
+    ['radius', s.radius],
   ] as const) {
     if (value) root.setAttribute(`data-s-${attr}`, value);
     else root.removeAttribute(`data-s-${attr}`);
@@ -404,11 +434,30 @@ function paint(input: StudioThemes | null): void {
 
 /** Every attribute this module may write on the root, so a clear is a clear. */
 const SHELL_ATTRS = [
-  'button', 'card', 'nav', 'frame', 'effect', 'pattern', 'font', 'radius', 'glow',
+  'button',
+  'card',
+  'nav',
+  'frame',
+  'effect',
+  'pattern',
+  'font',
+  'radius',
+  'glow',
   // `nav` above is the retired shape attribute, still cleared for anyone whose
   // cached copy predates the shell.
-  'nav-desktop', 'nav-tablet', 'nav-mobile', 'nav-labels', 'nav-active',
-  'header', 'header-sticky', 'footer', 'density', 'width', 'motion', 'card-layout', 'type',
+  'nav-desktop',
+  'nav-tablet',
+  'nav-mobile',
+  'nav-labels',
+  'nav-active',
+  'header',
+  'header-sticky',
+  'footer',
+  'density',
+  'width',
+  'motion',
+  'card-layout',
+  'type',
 ];
 
 /**
@@ -581,4 +630,3 @@ export function releaseStudio(): void {
   // Nothing is repainted and nothing is dropped: only the claim is given up,
   // so the next arrival knows to check whose look this is.
 }
-

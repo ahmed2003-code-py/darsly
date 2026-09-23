@@ -63,14 +63,22 @@ export default function PublishTab({ slug }: { slug: string }) {
     qc.invalidateQueries({ queryKey: ['my-academies'] });
   };
 
-  const publish = useMutation({ mutationFn: async () => (await api.post('/academy/site/publish')).data, onSuccess: refresh });
-  const unpublish = useMutation({ mutationFn: async () => (await api.post('/academy/site/unpublish')).data, onSuccess: refresh });
+  const publish = useMutation({
+    mutationFn: async () => (await api.post('/academy/site/publish')).data,
+    onSuccess: refresh,
+  });
+  const unpublish = useMutation({
+    mutationFn: async () => (await api.post('/academy/site/unpublish')).data,
+    onSuccess: refresh,
+  });
   const publishSnap = useMutation({
-    mutationFn: async (snapshotId: string) => (await api.post(`/academy/site/snapshots/${snapshotId}/publish`)).data,
+    mutationFn: async (snapshotId: string) =>
+      (await api.post(`/academy/site/snapshots/${snapshotId}/publish`)).data,
     onSuccess: refresh,
   });
   const rollback = useMutation({
-    mutationFn: async (snapshotId: string) => (await api.post('/academy/site/rollback', { snapshotId })).data,
+    mutationFn: async (snapshotId: string) =>
+      (await api.post('/academy/site/rollback', { snapshotId })).data,
     onSuccess: refresh,
   });
   const unlock = useMutation({
@@ -82,7 +90,8 @@ export default function PublishTab({ slug }: { slug: string }) {
     onSuccess: refresh,
   });
   const removeSnap = useMutation({
-    mutationFn: async (snapshotId: string) => (await api.delete(`/academy/site/snapshots/${snapshotId}`)).data,
+    mutationFn: async (snapshotId: string) =>
+      (await api.delete(`/academy/site/snapshots/${snapshotId}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-snapshots'] }),
   });
 
@@ -120,7 +129,9 @@ export default function PublishTab({ slug }: { slug: string }) {
             {t('studio.publish.blocking')}
           </p>
           <ul className="list-disc space-y-1 ps-6 text-sm text-on-surface-variant">
-            {ov.quality.errors.map((e) => <li key={e}>{e}</li>)}
+            {ov.quality.errors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -131,7 +142,9 @@ export default function PublishTab({ slug }: { slug: string }) {
             {t('studio.publish.suggestions', { n: ov.quality.warnings.length })}
           </summary>
           <ul className="mt-2 list-disc space-y-1 ps-6 text-sm text-on-surface-variant">
-            {ov.quality.warnings.map((w) => <li key={w}>{w}</li>)}
+            {ov.quality.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
           </ul>
         </details>
       )}
@@ -147,8 +160,13 @@ export default function PublishTab({ slug }: { slug: string }) {
           </p>
           <p className="text-sm text-on-surface-variant">{t('studio.publish.lockedHint')}</p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button className="btn-primary" disabled={unlock.isPending}
-              onClick={async () => { if (await askConfirm(t('studio.publish.confirmUnlock'))) unlock.mutate(); }}>
+            <button
+              className="btn-primary"
+              disabled={unlock.isPending}
+              onClick={async () => {
+                if (await askConfirm(t('studio.publish.confirmUnlock'))) unlock.mutate();
+              }}
+            >
               <span className="material-symbols-outlined text-[18px]">lock_open</span>
               {unlock.isPending ? t('studio.publish.publishing') : t('studio.publish.unlockBtn')}
             </button>
@@ -163,15 +181,24 @@ export default function PublishTab({ slug }: { slug: string }) {
       {!ov?.htmlLocked && ov?.canRestoreHandAuthored && (
         <div className="card border-s-4 border-s-outline">
           <p className="mb-1 flex items-center gap-2 text-sm font-bold">
-            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">undo</span>
+            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
+              undo
+            </span>
             {t('studio.publish.restoreHandTitle')}
           </p>
           <p className="text-sm text-on-surface-variant">{t('studio.publish.restoreHandHint')}</p>
           <div className="mt-3">
-            <button className="btn-secondary" disabled={relock.isPending}
-              onClick={async () => { if (await askConfirm(t('studio.publish.confirmRestoreHand'))) relock.mutate(); }}>
+            <button
+              className="btn-secondary"
+              disabled={relock.isPending}
+              onClick={async () => {
+                if (await askConfirm(t('studio.publish.confirmRestoreHand'))) relock.mutate();
+              }}
+            >
               <span className="material-symbols-outlined text-[18px]">history</span>
-              {relock.isPending ? t('studio.publish.publishing') : t('studio.publish.restoreHandBtn')}
+              {relock.isPending
+                ? t('studio.publish.publishing')
+                : t('studio.publish.restoreHandBtn')}
             </button>
           </div>
           <ErrorNote error={relock.error} />
@@ -181,35 +208,51 @@ export default function PublishTab({ slug }: { slug: string }) {
       {/* Status hero */}
       <div className="card">
         <div className="flex flex-wrap items-start gap-4">
-          <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${STATUS_CIRCLE[status]}`}>
+          <div
+            className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${STATUS_CIRCLE[status]}`}
+          >
             <span className="material-symbols-outlined">{STATUS_ICON[status]}</span>
           </div>
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-3">
               <h2 className="font-heading text-xl font-bold">{t('studio.publish.title')}</h2>
               <Badge tone={STATUS_TONE[status]}>{t(`studio.status.${status}`)}</Badge>
-              {ov?.hasDraft && <span className="text-sm text-on-surface-variant">{t('studio.publish.draftV', { v: ov.version })}</span>}
+              {ov?.hasDraft && (
+                <span className="text-sm text-on-surface-variant">
+                  {t('studio.publish.draftV', { v: ov.version })}
+                </span>
+              )}
             </div>
             <p className="text-sm text-on-surface-variant">{t(`studio.publish.hints.${status}`)}</p>
 
             {isPublished && (
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-on-surface-variant">{t('studio.publish.liveAt')}:</span>
-                <Link to={`/a/${slug}`} target="_blank"
-                  className="inline-flex items-center gap-1 rounded-lg bg-surface-container px-2.5 py-1 font-mono text-xs font-semibold text-primary hover:underline">
-                  /a/{slug}<span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                <Link
+                  to={`/a/${slug}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1 rounded-lg bg-surface-container px-2.5 py-1 font-mono text-xs font-semibold text-primary hover:underline"
+                >
+                  /a/{slug}
+                  <span className="material-symbols-outlined text-[14px]">open_in_new</span>
                 </Link>
-                {ov?.publishedAt && <span className="text-on-surface-variant">· {dateShort(ov.publishedAt)}</span>}
+                {ov?.publishedAt && (
+                  <span className="text-on-surface-variant">· {dateShort(ov.publishedAt)}</span>
+                )}
               </div>
             )}
             {/* Only when there is one. Gated on `isPublished` alone, this told
                 every published academy it had unpushed changes forever, which
                 is the same sentence whether or not the publish just worked. */}
             {isPublished && canPublish && (
-              <p className="mt-2 text-xs text-on-surface-variant">{t('studio.publish.hasNewerDraft')}</p>
+              <p className="mt-2 text-xs text-on-surface-variant">
+                {t('studio.publish.hasNewerDraft')}
+              </p>
             )}
             {status === 'REJECTED' && ov?.moderationReason && (
-              <p className="mt-3 text-sm text-error">{t('studio.publish.reason', { reason: ov.moderationReason })}</p>
+              <p className="mt-3 text-sm text-error">
+                {t('studio.publish.reason', { reason: ov.moderationReason })}
+              </p>
             )}
           </div>
         </div>
@@ -218,8 +261,14 @@ export default function PublishTab({ slug }: { slug: string }) {
 
         <div className="mt-4 flex flex-wrap gap-2">
           {canPublish && (
-            <button className="btn-primary" onClick={() => publish.mutate()} disabled={publish.isPending}>
-              <span className="material-symbols-outlined text-[20px]">{isPublished ? 'sync' : 'publish'}</span>
+            <button
+              className="btn-primary"
+              onClick={() => publish.mutate()}
+              disabled={publish.isPending}
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {isPublished ? 'sync' : 'publish'}
+              </span>
               {publish.isPending ? t('studio.publish.publishing') : primaryLabel}
             </button>
           )}
@@ -229,7 +278,11 @@ export default function PublishTab({ slug }: { slug: string }) {
                 <span className="material-symbols-outlined text-[20px]">open_in_new</span>
                 {t('studio.publish.viewPage')}
               </Link>
-              <button className="btn-secondary" onClick={() => unpublish.mutate()} disabled={unpublish.isPending}>
+              <button
+                className="btn-secondary"
+                onClick={() => unpublish.mutate()}
+                disabled={unpublish.isPending}
+              >
                 <span className="material-symbols-outlined text-[20px]">visibility_off</span>
                 {t('studio.publish.unpublish')}
               </button>
@@ -252,12 +305,26 @@ export default function PublishTab({ slug }: { slug: string }) {
         ) : (
           <div className="mt-2 divide-y divide-outline-variant">
             {snapshots.data.map((s, idx) => (
-              <SnapshotRow key={s.id} s={s} isCurrent={idx === 0}
-                rolling={rollback.isPending} deleting={removeSnap.isPending}
+              <SnapshotRow
+                key={s.id}
+                s={s}
+                isCurrent={idx === 0}
+                rolling={rollback.isPending}
+                deleting={removeSnap.isPending}
                 publishing={publishSnap.isPending && publishSnap.variables === s.id}
-                onPublish={async () => { if (await askConfirm(t('studio.publish.confirmPublish', { n: s.version }))) publishSnap.mutate(s.id); }}
-                onRollback={async () => { if (await askConfirm(t('studio.publish.confirmRestore', { n: s.version }))) rollback.mutate(s.id); }}
-                onDelete={async () => { if (await askConfirm(t('studio.publish.confirmDelete', { n: s.version }))) removeSnap.mutate(s.id); }} />
+                onPublish={async () => {
+                  if (await askConfirm(t('studio.publish.confirmPublish', { n: s.version })))
+                    publishSnap.mutate(s.id);
+                }}
+                onRollback={async () => {
+                  if (await askConfirm(t('studio.publish.confirmRestore', { n: s.version })))
+                    rollback.mutate(s.id);
+                }}
+                onDelete={async () => {
+                  if (await askConfirm(t('studio.publish.confirmDelete', { n: s.version })))
+                    removeSnap.mutate(s.id);
+                }}
+              />
             ))}
           </div>
         )}
@@ -266,32 +333,58 @@ export default function PublishTab({ slug }: { slug: string }) {
   );
 }
 
-function SnapshotRow({ s, isCurrent, rolling, deleting, publishing, onPublish, onRollback, onDelete }: {
-  s: Snapshot; isCurrent: boolean; rolling: boolean; deleting: boolean; publishing: boolean;
-  onPublish: () => void; onRollback: () => void; onDelete: () => void;
+function SnapshotRow({
+  s,
+  isCurrent,
+  rolling,
+  deleting,
+  publishing,
+  onPublish,
+  onRollback,
+  onDelete,
+}: {
+  s: Snapshot;
+  isCurrent: boolean;
+  rolling: boolean;
+  deleting: boolean;
+  publishing: boolean;
+  onPublish: () => void;
+  onRollback: () => void;
+  onDelete: () => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const preview = useQuery<string>({
     queryKey: ['snap-preview', s.id],
-    queryFn: async () => (await api.get(`/academy/site/snapshots/${s.id}/preview`, { responseType: 'text' })).data,
+    queryFn: async () =>
+      (await api.get(`/academy/site/snapshots/${s.id}/preview`, { responseType: 'text' })).data,
     enabled: open,
     retry: false,
   });
-  const reason = s.reason ? t(`studio.publish.reasons.${s.reason}`, { defaultValue: s.reason }) : '—';
+  const reason = s.reason
+    ? t(`studio.publish.reasons.${s.reason}`, { defaultValue: s.reason })
+    : '—';
   return (
     <div className="py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-semibold">
             {t('studio.publish.version', { n: s.version })}
-            {isCurrent && <span className="ms-2 text-xs font-bold text-teal-600">{t('studio.publish.current')}</span>}
+            {isCurrent && (
+              <span className="ms-2 text-xs font-bold text-teal-600">
+                {t('studio.publish.current')}
+              </span>
+            )}
           </p>
-          <p className="text-sm text-on-surface-variant">{reason} • {dateShort(s.createdAt)}</p>
+          <p className="text-sm text-on-surface-variant">
+            {reason} • {dateShort(s.createdAt)}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={() => setOpen((o) => !o)}>
-            <span className="material-symbols-outlined text-[18px]">{open ? 'visibility_off' : 'visibility'}</span>
+            <span className="material-symbols-outlined text-[18px]">
+              {open ? 'visibility_off' : 'visibility'}
+            </span>
             {open ? t('studio.publish.hide') : t('studio.publish.preview')}
           </button>
           <button className="btn-primary" disabled={publishing} onClick={onPublish}>
@@ -305,8 +398,12 @@ function SnapshotRow({ s, isCurrent, rolling, deleting, publishing, onPublish, o
             </button>
           )}
           {!isCurrent && (
-            <button className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-error transition hover:bg-error-container/40"
-              aria-label={t('studio.publish.delete')} disabled={deleting} onClick={onDelete}>
+            <button
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-error transition hover:bg-error-container/40"
+              aria-label={t('studio.publish.delete')}
+              disabled={deleting}
+              onClick={onDelete}
+            >
               <span className="material-symbols-outlined text-[20px]">delete</span>
             </button>
           )}
@@ -314,11 +411,17 @@ function SnapshotRow({ s, isCurrent, rolling, deleting, publishing, onPublish, o
       </div>
       {open && (
         <div className="mt-3">
-          {preview.isLoading ? <Spinner /> : preview.isError ? (
+          {preview.isLoading ? (
+            <Spinner />
+          ) : preview.isError ? (
             <p className="text-sm text-error">{t('studio.preview.loadError')}</p>
           ) : (
-            <iframe title={t('studio.publish.version', { n: s.version })} srcDoc={preview.data}
-              className="w-full rounded-xl border border-outline-variant bg-white" style={{ height: '60vh' }} />
+            <iframe
+              title={t('studio.publish.version', { n: s.version })}
+              srcDoc={preview.data}
+              className="w-full rounded-xl border border-outline-variant bg-white"
+              style={{ height: '60vh' }}
+            />
           )}
         </div>
       )}

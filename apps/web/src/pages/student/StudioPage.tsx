@@ -40,7 +40,14 @@ const TABS: Tab[] = ['style', 'collection', 'shop'];
  * things a fourteen-year-old has to have an opinion about.
  */
 const CATEGORIES = [
-  'THEME', 'ACCENT', 'NAV_STYLE', 'HEADER_STYLE', 'BUTTON_STYLE', 'CARD_STYLE', 'FRAME', 'EFFECT',
+  'THEME',
+  'ACCENT',
+  'NAV_STYLE',
+  'HEADER_STYLE',
+  'BUTTON_STYLE',
+  'CARD_STYLE',
+  'FRAME',
+  'EFFECT',
 ] as const;
 type Category = (typeof CATEGORIES)[number];
 
@@ -69,8 +76,16 @@ const RARITY_TONE: Record<string, string> = {
 
 /** A palette to pick from, so choosing a colour is not a blank canvas. */
 const SWATCHES = [
-  '#4a32c9', '#7c3aed', '#2563eb', '#0d9488', '#059669',
-  '#ca8a04', '#ea580c', '#be123c', '#db2777', '#475569',
+  '#4a32c9',
+  '#7c3aed',
+  '#2563eb',
+  '#0d9488',
+  '#059669',
+  '#ca8a04',
+  '#ea580c',
+  '#be123c',
+  '#db2777',
+  '#475569',
 ];
 
 interface StudioItem {
@@ -243,7 +258,9 @@ export default function StudioPage() {
       {previewing && (
         <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-student-accent-border bg-student-accent-soft px-4 py-3">
           <span className="material-symbols-outlined text-student-accent-ink">visibility</span>
-          <p className="me-auto text-sm font-bold text-student-accent-ink">{t('myStudio.previewing')}</p>
+          <p className="me-auto text-sm font-bold text-student-accent-ink">
+            {t('myStudio.previewing')}
+          </p>
           <button
             className="studio-btn rounded-xl border border-outline-variant px-4 py-2 text-sm font-bold"
             onClick={() => {
@@ -455,7 +472,10 @@ function ProfileCard({ data, t, ar }: { data: any; t: any; ar: boolean }) {
         <div className="min-w-0 flex-1">
           <p className="truncate font-heading text-lg font-extrabold">{name}</p>
           <p className="truncate text-sm text-on-surface-variant">
-            {t('myStudio.levelLine', { level: b.level, name: ar ? b.levelName.ar : b.levelName.en })}
+            {t('myStudio.levelLine', {
+              level: b.level,
+              name: ar ? b.levelName.ar : b.levelName.en,
+            })}
           </p>
         </div>
       </div>
@@ -470,7 +490,12 @@ function ProfileCard({ data, t, ar }: { data: any; t: any; ar: boolean }) {
       <div className="mt-4 grid grid-cols-3 gap-3 border-t border-outline-variant pt-4">
         <Stat icon="star" value={b.xp} label={t('myStudio.xp')} />
         <Stat icon="paid" value={b.coins} label={t('myStudio.coins')} />
-        <Stat icon="local_fire_department" value={data.student.streak} label={t('myStudio.streak')} tone="streak" />
+        <Stat
+          icon="local_fire_department"
+          value={data.student.streak}
+          label={t('myStudio.streak')}
+          tone="streak"
+        />
       </div>
     </div>
   );
@@ -528,7 +553,11 @@ function BoughtDialog({
   if (!item) return null;
   const cfg = item.config as { accent?: string; secondary?: string };
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="s-pop-in w-full max-w-sm rounded-2xl bg-surface-container-lowest p-6 text-center shadow-modal">
         <span
           className="s-shine mx-auto grid h-16 w-16 place-items-center rounded-full"
@@ -938,7 +967,9 @@ function ItemCard({
 
       <div className="mt-3 flex items-start gap-2">
         <p className="min-w-0 flex-1 font-heading font-bold">{ar ? item.name.ar : item.name.en}</p>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${RARITY_TONE[item.rarity]}`}>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${RARITY_TONE[item.rarity]}`}
+        >
           {t(`myStudio.rarity.${item.rarity}`)}
         </span>
       </div>
@@ -1078,7 +1109,10 @@ function ThemePreview({
         {/* The bar: a mark and two rows, the shapes anyone recognises as an app. */}
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-md" style={{ background: accent }} />
-          <span className="h-1.5 w-8 rounded-full" style={{ background: ink ?? '#ffffff', opacity: 0.5 }} />
+          <span
+            className="h-1.5 w-8 rounded-full"
+            style={{ background: ink ?? '#ffffff', opacity: 0.5 }}
+          />
           <span
             className="ms-auto h-3 w-7 rounded-full"
             style={{ background: value, opacity: 0.9 }}
@@ -1089,12 +1123,18 @@ function ThemePreview({
         <span
           className="mt-auto flex flex-col gap-1.5 rounded-lg p-2"
           style={{
-            background: panel ?? (ground ?? '#ffffff'),
+            background: panel ?? ground ?? '#ffffff',
             border: `1px solid ${ink ?? '#ffffff'}1f`,
           }}
         >
-          <span className="h-1.5 w-2/3 rounded-full" style={{ background: ink ?? '#101010', opacity: 0.85 }} />
-          <span className="h-1.5 w-1/3 rounded-full" style={{ background: ink ?? '#101010', opacity: 0.4 }} />
+          <span
+            className="h-1.5 w-2/3 rounded-full"
+            style={{ background: ink ?? '#101010', opacity: 0.85 }}
+          />
+          <span
+            className="h-1.5 w-1/3 rounded-full"
+            style={{ background: ink ?? '#101010', opacity: 0.4 }}
+          />
           <span className="mt-0.5 flex items-center gap-1.5">
             <span className="h-3.5 w-12 rounded-md" style={{ background: accent }} />
             <span className="h-3.5 w-8 rounded-md" style={{ background: value, opacity: 0.85 }} />
@@ -1181,7 +1221,8 @@ const CARD_RADIUS: Record<string, string> = {
  * radii are the stylesheet's own; only the scale is generous.
  */
 function StylePreview({ category, style }: { category: Category; style: string }) {
-  const shell = 'relative grid h-24 w-full place-items-center overflow-hidden rounded-xl bg-surface-container-high p-3';
+  const shell =
+    'relative grid h-24 w-full place-items-center overflow-hidden rounded-xl bg-surface-container-high p-3';
 
   if (category === 'FRAME') {
     const colour = FRAME_COLOUR[style] ?? '#9ca3af';
@@ -1237,7 +1278,13 @@ function StylePreview({ category, style }: { category: Category; style: string }
       <span className={`${shell} !place-items-stretch !p-2`}>
         <span className="relative flex h-full w-full gap-1.5 overflow-hidden rounded-lg bg-surface-container-lowest p-1.5">
           {glass && (
-            <span className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(60% 80% at 15% 30%, rgb(var(--c-primary) / 0.45), transparent 70%)' }} />
+            <span
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(60% 80% at 15% 30%, rgb(var(--c-primary) / 0.45), transparent 70%)',
+              }}
+            />
           )}
           {!hidden && (
             <span
@@ -1246,7 +1293,11 @@ function StylePreview({ category, style }: { category: Category; style: string }
                 width: rail ? '14%' : '32%',
                 borderRadius: floating ? '8px' : '4px',
                 margin: floating ? '2px' : 0,
-                background: minimal ? 'transparent' : glass ? 'rgb(var(--c-surface-container-lowest) / 0.55)' : 'rgb(var(--c-surface-container-high))',
+                background: minimal
+                  ? 'transparent'
+                  : glass
+                    ? 'rgb(var(--c-surface-container-lowest) / 0.55)'
+                    : 'rgb(var(--c-surface-container-high))',
                 backdropFilter: glass ? 'blur(4px)' : undefined,
                 boxShadow: floating ? '0 6px 14px -8px rgb(0 0 0 / 0.5)' : undefined,
                 borderInlineEnd: minimal ? '1px solid rgb(var(--c-line) / 0.25)' : undefined,
@@ -1254,16 +1305,31 @@ function StylePreview({ category, style }: { category: Category; style: string }
             >
               <span className="h-3 w-3 rounded-sm bg-primary" />
               {[0, 1, 2, 3].map((i) => (
-                <span key={i} className={`flex w-full items-center gap-1 px-1 ${rail ? 'justify-center' : ''}`}>
-                  <span className={`h-2 w-2 shrink-0 rounded-sm ${i === 0 ? 'bg-primary' : 'bg-on-surface/30'}`} />
-                  {!rail && <span className={`h-1 flex-1 rounded-full ${i === 0 ? 'bg-primary' : 'bg-on-surface/20'}`} />}
+                <span
+                  key={i}
+                  className={`flex w-full items-center gap-1 px-1 ${rail ? 'justify-center' : ''}`}
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-sm ${i === 0 ? 'bg-primary' : 'bg-on-surface/30'}`}
+                  />
+                  {!rail && (
+                    <span
+                      className={`h-1 flex-1 rounded-full ${i === 0 ? 'bg-primary' : 'bg-on-surface/20'}`}
+                    />
+                  )}
                 </span>
               ))}
             </span>
           )}
           <span className="relative flex min-w-0 flex-1 flex-col gap-1.5">
             <span className="flex h-4 items-center gap-1 rounded-sm bg-surface-container-high px-1">
-              {hidden && [0, 1, 2].map((i) => <span key={i} className={`h-1.5 w-4 rounded-full ${i === 0 ? 'bg-primary' : 'bg-on-surface/25'}`} />)}
+              {hidden &&
+                [0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 w-4 rounded-full ${i === 0 ? 'bg-primary' : 'bg-on-surface/25'}`}
+                  />
+                ))}
               <span className="ms-auto h-2 w-6 rounded-full bg-on-surface/20" />
             </span>
             <span className="h-2 w-2/3 rounded-full bg-on-surface/50" />
@@ -1291,7 +1357,13 @@ function StylePreview({ category, style }: { category: Category; style: string }
       <span className={`${shell} !place-items-stretch !p-2`}>
         <span className="relative flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-lg bg-surface-container-lowest p-1.5">
           {glass && (
-            <span className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(70% 60% at 70% 20%, rgb(var(--c-primary) / 0.45), transparent 70%)' }} />
+            <span
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(70% 60% at 70% 20%, rgb(var(--c-primary) / 0.45), transparent 70%)',
+              }}
+            />
           )}
           <span
             className="relative flex items-center gap-1.5 px-1.5"
@@ -1299,7 +1371,11 @@ function StylePreview({ category, style }: { category: Category; style: string }
               height: compact ? '10px' : editorial ? '22px' : '14px',
               margin: floating ? '2px 4px 0' : 0,
               borderRadius: floating ? '999px' : '3px',
-              background: minimal ? 'transparent' : glass ? 'rgb(var(--c-surface-container-lowest) / 0.55)' : 'rgb(var(--c-surface-container-high))',
+              background: minimal
+                ? 'transparent'
+                : glass
+                  ? 'rgb(var(--c-surface-container-lowest) / 0.55)'
+                  : 'rgb(var(--c-surface-container-high))',
               backdropFilter: glass ? 'blur(4px)' : undefined,
               boxShadow: floating ? '0 6px 14px -8px rgb(0 0 0 / 0.5)' : undefined,
               borderBottom: minimal ? '0' : undefined,
@@ -1309,7 +1385,10 @@ function StylePreview({ category, style }: { category: Category; style: string }
             {folded ? (
               <span className="h-2 w-2 rounded-full bg-on-surface/40" />
             ) : (
-              <span className={`h-2 rounded-full bg-surface-container-lowest ${centered ? 'mx-auto w-1/2' : editorial ? 'ms-auto w-1/5' : 'w-2/5'}`} style={{ border: '1px solid rgb(var(--c-line) / 0.3)' }} />
+              <span
+                className={`h-2 rounded-full bg-surface-container-lowest ${centered ? 'mx-auto w-1/2' : editorial ? 'ms-auto w-1/5' : 'w-2/5'}`}
+                style={{ border: '1px solid rgb(var(--c-line) / 0.3)' }}
+              />
             )}
             <span className="ms-auto flex gap-1">
               <span className="h-2 w-2 rounded-full bg-on-surface/30" />
@@ -1426,8 +1505,12 @@ function UnlockDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <Swatch item={item} />
-        <p className="mt-3 font-heading text-lg font-extrabold">{ar ? item.name.ar : item.name.en}</p>
-        <p className="mt-1 text-sm text-on-surface-variant">{ar ? item.description.ar : item.description.en}</p>
+        <p className="mt-3 font-heading text-lg font-extrabold">
+          {ar ? item.name.ar : item.name.en}
+        </p>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {ar ? item.description.ar : item.description.en}
+        </p>
 
         <div className="mt-4 space-y-1.5 rounded-xl bg-surface-container-low p-3 text-sm">
           <p className="flex justify-between">

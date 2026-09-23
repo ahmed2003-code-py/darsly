@@ -29,27 +29,38 @@ const GROUND = { light: '#fdfdfb', dark: '#0e0e12' };
 /** Perceived lightness of a hex colour, for assertions about which way it moved. */
 const relLum = (hex: string) => {
   const n = parseInt(hex.slice(1), 16);
-  const f = (c: number) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  const f = (c: number) =>
+    c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4;
   return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
 };
 
 function makePrisma(over: Record<string, any> = {}): any {
   const base: any = {
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ id: 's1' }) },
-    cosmeticItem: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]), upsert: jest.fn() },
+    cosmeticItem: {
+      findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      upsert: jest.fn(),
+    },
     studentCosmetic: {
       findUnique: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({ id: 'own1' }),
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
-    studentCustomization: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
+    studentCustomization: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({}),
+    },
     studentGamification: {
       findUnique: jest.fn().mockResolvedValue({ coins: 1000, xp: 5000 }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     studentAchievement: { findMany: jest.fn().mockResolvedValue([]) },
-    enrollment: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+    enrollment: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     academy: { findMany: jest.fn().mockResolvedValue([]) },
     gamificationEvent: { create: jest.fn().mockResolvedValue({}) },
   };
@@ -60,7 +71,9 @@ function makePrisma(over: Record<string, any> = {}): any {
   return prisma;
 }
 
-const notifications = { create: jest.fn().mockResolvedValue({}) } as unknown as NotificationsService;
+const notifications = {
+  create: jest.fn().mockResolvedValue({}),
+} as unknown as NotificationsService;
 const config = {
   levelProgress: jest.fn().mockResolvedValue({
     level: { level: 5, nameAr: 'x', nameEn: 'x', minXp: 0, icon: 'e', coinReward: 0 },
@@ -226,7 +239,9 @@ describe('StudioService — wearing', () => {
 
   it('equips an owned item into its own slot', async () => {
     const prisma = makePrisma();
-    prisma.cosmeticItem.findUnique.mockResolvedValue(item({ category: 'BUTTON_STYLE', key: 'button-pill' }));
+    prisma.cosmeticItem.findUnique.mockResolvedValue(
+      item({ category: 'BUTTON_STYLE', key: 'button-pill' }),
+    );
     prisma.studentCosmetic.findUnique.mockResolvedValue({ id: 'o1' });
     await svc(prisma).equip('u1', 'button-pill');
     expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(
@@ -293,13 +308,22 @@ describe('StudioService — a teacher’s look as the way back', () => {
     const prisma = makePrisma();
     prisma.enrollment.findMany.mockResolvedValue([{ tenantId: 'a1', createdAt: new Date() }]);
     prisma.academy.findMany.mockResolvedValue([
-      { id: 'a1', name: 'Academy', colorPrimary: '#2f5fe0', colorAccent: '#7c3aed', brandTokens: null, owner: { fullName: 'Amr' } },
+      {
+        id: 'a1',
+        name: 'Academy',
+        colorPrimary: '#2f5fe0',
+        colorAccent: '#7c3aed',
+        brandTokens: null,
+        owner: { fullName: 'Amr' },
+      },
     ]);
     prisma.cosmeticItem.findMany.mockResolvedValue([]);
     // `studentProfile.findUnique` stands in for two different reads here: the
     // id lookup that authorises the call, and the profile the overview renders.
     prisma.studentProfile.findUnique.mockResolvedValue({
-      id: 's1', currentStreak: 0, user: { fullName: 'Student', avatarUrl: null },
+      id: 's1',
+      currentStreak: 0,
+      user: { fullName: 'Student', avatarUrl: null },
     });
     return prisma;
   };
@@ -318,8 +342,16 @@ describe('StudioService — a teacher’s look as the way back', () => {
   it('offers the way back while a bought theme is worn', async () => {
     const prisma = withTeacher();
     prisma.studentCustomization.findUnique.mockResolvedValue({
-      themeKey: 'theme-egyptian-king', academyId: null, accentKey: null, accentHex: null,
-      buttonKey: null, cardKey: null, navKey: null, avatarKey: null, frameKey: null, effectKey: null,
+      themeKey: 'theme-egyptian-king',
+      academyId: null,
+      accentKey: null,
+      accentHex: null,
+      buttonKey: null,
+      cardKey: null,
+      navKey: null,
+      avatarKey: null,
+      frameKey: null,
+      effectKey: null,
     });
     const out = await svc(prisma).overview('u1');
     expect(out.equipped.themeKey).toBe('theme-egyptian-king');
@@ -329,8 +361,16 @@ describe('StudioService — a teacher’s look as the way back', () => {
   it('marks the teacher in use once that teacher is chosen', async () => {
     const prisma = withTeacher();
     prisma.studentCustomization.findUnique.mockResolvedValue({
-      themeKey: null, academyId: 'a1', accentKey: null, accentHex: null,
-      buttonKey: null, cardKey: null, navKey: null, avatarKey: null, frameKey: null, effectKey: null,
+      themeKey: null,
+      academyId: 'a1',
+      accentKey: null,
+      accentHex: null,
+      buttonKey: null,
+      cardKey: null,
+      navKey: null,
+      avatarKey: null,
+      frameKey: null,
+      effectKey: null,
     });
     const out = await svc(prisma).overview('u1');
     expect(out.academyThemes[0].equipped).toBe(true);
@@ -343,49 +383,77 @@ describe('StudioService — Center branding resolves by organisation (Enrollment
     prisma.enrollment.findMany.mockResolvedValue(enrollments);
     prisma.academy.findMany.mockResolvedValue(academies);
     prisma.cosmeticItem.findMany.mockResolvedValue([]);
-    prisma.studentProfile.findUnique.mockResolvedValue({ id: 's1', currentStreak: 0, user: { fullName: 'Student', avatarUrl: null } });
+    prisma.studentProfile.findUnique.mockResolvedValue({
+      id: 's1',
+      currentStreak: 0,
+      user: { fullName: 'Student', avatarUrl: null },
+    });
     return prisma;
   };
-  const academy = (id: string, name: string) => ({ id, name, colorPrimary: '#111111', colorAccent: '#222222', brandTokens: null, owner: { fullName: 'Owner' } });
+  const academy = (id: string, name: string) => ({
+    id,
+    name,
+    colorPrimary: '#111111',
+    colorAccent: '#222222',
+    brandTokens: null,
+    owner: { fullName: 'Owner' },
+  });
 
   it('1. personal course: the teacher own academy is offered (academyId == tenantId) — unchanged behaviour', async () => {
-    const prisma = overviewPrisma([{ tenantId: 'teacherA', academyId: 'teacherA', createdAt: new Date() }], [academy('teacherA', 'Academy A')]);
+    const prisma = overviewPrisma(
+      [{ tenantId: 'teacherA', academyId: 'teacherA', createdAt: new Date() }],
+      [academy('teacherA', 'Academy A')],
+    );
     const out = await svc(prisma).overview('u1');
     expect(prisma.academy.findMany.mock.calls[0][0].where.id.in).toEqual(['teacherA']);
     expect(out.academyThemes.map((a: any) => a.academyId)).toEqual(['teacherA']);
   });
 
   it('2. Center course: the CENTER is offered, not the authoring teacher personal academy', async () => {
-    const prisma = overviewPrisma([{ tenantId: 'teacherA', academyId: 'centerX', createdAt: new Date() }], [academy('centerX', 'Center X')]);
+    const prisma = overviewPrisma(
+      [{ tenantId: 'teacherA', academyId: 'centerX', createdAt: new Date() }],
+      [academy('centerX', 'Center X')],
+    );
     const out = await svc(prisma).overview('u1');
     expect(prisma.academy.findMany.mock.calls[0][0].where.id.in).toEqual(['centerX']);
     expect(out.academyThemes.map((a: any) => a.academyId)).toEqual(['centerX']);
   });
 
   it('a legacy row with no academyId still resolves to its author academy', async () => {
-    const prisma = overviewPrisma([{ tenantId: 'teacherA', academyId: null, createdAt: new Date() }], [academy('teacherA', 'Academy A')]);
+    const prisma = overviewPrisma(
+      [{ tenantId: 'teacherA', academyId: null, createdAt: new Date() }],
+      [academy('teacherA', 'Academy A')],
+    );
     await svc(prisma).overview('u1');
     expect(prisma.academy.findMany.mock.calls[0][0].where.id.in).toEqual(['teacherA']);
   });
 
   it('2b. equipAcademy accepts the Center of a Center enrolment', async () => {
-    const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) } });
+    const prisma = makePrisma({
+      enrollment: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) },
+    });
     await svc(prisma).equipAcademy('u1', 'centerX');
     const where = prisma.enrollment.findFirst.mock.calls[0][0].where;
     expect(where.OR).toEqual([{ academyId: 'centerX' }, { academyId: null, tenantId: 'centerX' }]);
     expect(where.studentId).toBe('s1');
-    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { academyId: 'centerX', themeKey: null } }));
+    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { academyId: 'centerX', themeKey: null } }),
+    );
   });
 
   it('3. an unrelated Center the student never enrolled in is refused (no row matches the organisation filter)', async () => {
     const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue(null) } });
-    await expect(svc(prisma).equipAcademy('u1', 'centerY')).rejects.toMatchObject({ response: { code: 'NOT_ENROLLED' } });
+    await expect(svc(prisma).equipAcademy('u1', 'centerY')).rejects.toMatchObject({
+      response: { code: 'NOT_ENROLLED' },
+    });
     expect(prisma.studentCustomization.upsert).not.toHaveBeenCalled();
   });
 
   it('4. cross-Center: the filter is keyed on the requested id AND the student — a membership elsewhere cannot satisfy it', async () => {
     const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue(null) } });
-    await expect(svc(prisma).equipAcademy('u1', 'centerZ')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc(prisma).equipAcademy('u1', 'centerZ')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     const where = prisma.enrollment.findFirst.mock.calls[0][0].where;
     expect(where.studentId).toBe('s1');
     expect(JSON.stringify(where)).toContain('centerZ');
@@ -393,9 +461,13 @@ describe('StudioService — Center branding resolves by organisation (Enrollment
   });
 
   it('5. teacher academy branding is untouched: the author personal academy still wears for a personal course', async () => {
-    const prisma = makePrisma({ enrollment: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) } });
+    const prisma = makePrisma({
+      enrollment: { findFirst: jest.fn().mockResolvedValue({ id: 'e1' }) },
+    });
     await svc(prisma).equipAcademy('u1', 'teacherA');
-    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: { academyId: 'teacherA', themeKey: null } }));
+    expect(prisma.studentCustomization.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { academyId: 'teacherA', themeKey: null } }),
+    );
   });
 });
 
@@ -433,7 +505,9 @@ describe('StudioService — reset', () => {
 describe('StudioService — identity', () => {
   // The whole of the cross-student guarantee: there is no student id to send.
   it('refuses an account with no student profile', async () => {
-    const prisma = makePrisma({ studentProfile: { findUnique: jest.fn().mockResolvedValue(null) } });
+    const prisma = makePrisma({
+      studentProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+    });
     await expect(svc(prisma).overview('u1')).rejects.toThrow(ForbiddenException);
     await expect(svc(prisma).unlock('u1', 'theme-ocean')).rejects.toThrow(ForbiddenException);
     await expect(svc(prisma).equip('u1', 'theme-ocean')).rejects.toThrow(ForbiddenException);
@@ -528,17 +602,29 @@ describe('studio theme derivation', () => {
         glow: true,
       },
     });
-    expect(themes.styles).toMatchObject({ font: 'display', radius: 'sharp', pattern: 'web', glow: true });
+    expect(themes.styles).toMatchObject({
+      font: 'display',
+      radius: 'sharp',
+      pattern: 'web',
+      glow: true,
+    });
   });
 
   it('holds the second colour to the same floors as the first', () => {
     for (const hex of ['#ffffff', '#ffff00', '#0284c7']) {
       for (const mode of ['light', 'dark'] as const) {
         const themes = deriveStudioThemes({
-          themeConfig: { accent: '#dc2626', accentDark: '#f87171', secondary: hex, secondaryDark: hex },
+          themeConfig: {
+            accent: '#dc2626',
+            accentDark: '#f87171',
+            secondary: hex,
+            secondaryDark: hex,
+          },
         });
         const t = themes[mode].tokens;
-        expect(contrastRatio(fromTriple(t['--s-secondary-ink']), GROUND[mode])).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(fromTriple(t['--s-secondary-ink']), GROUND[mode]),
+        ).toBeGreaterThanOrEqual(4.5);
         expect(
           contrastRatio(fromTriple(t['--s-on-secondary']), fromTriple(t['--s-secondary'])),
         ).toBeGreaterThanOrEqual(4.5);
@@ -565,12 +651,20 @@ describe('studio theme derivation', () => {
   it('restates only the accent family, never a surface or the ink', () => {
     const brand = deriveBrand('#7c3aed', 'light');
     for (const name of Object.keys(brand)) {
-      expect(name).toMatch(/^--c-(primary|on-primary|inverse-primary|surface-tint|brand-accent|on-brand-accent|accent-)/);
+      expect(name).toMatch(
+        /^--c-(primary|on-primary|inverse-primary|surface-tint|brand-accent|on-brand-accent|accent-)/,
+      );
     }
     // The things that would make the app unreadable are not reachable.
     for (const forbidden of [
-      '--c-background', '--c-surface', '--c-on-surface', '--c-on-background',
-      '--c-error', '--c-outline', '--c-line', '--c-surface-container',
+      '--c-background',
+      '--c-surface',
+      '--c-on-surface',
+      '--c-on-background',
+      '--c-error',
+      '--c-outline',
+      '--c-line',
+      '--c-surface-container',
     ]) {
       expect(Object.keys(brand)).not.toContain(forbidden);
     }
@@ -588,7 +682,10 @@ describe('studio theme derivation', () => {
   });
 
   it('emits every brand token as plain "R G B"', () => {
-    const brand = { ...deriveBrand('#15803d', 'dark'), ...deriveSurfaces({ background: '#101018' }) };
+    const brand = {
+      ...deriveBrand('#15803d', 'dark'),
+      ...deriveSurfaces({ background: '#101018' }),
+    };
     for (const value of Object.values(brand)) {
       expect(value).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$|^0 0 0$/);
     }
@@ -602,7 +699,12 @@ describe('studio theme derivation', () => {
   /** A wash is a mood, not a new page: the ground must stay close to itself. */
   it('tints the page without moving it far from the platform ground', () => {
     const themes = deriveStudioThemes({
-      themeConfig: { accent: '#15803d', accentDark: '#4ade80', wash: '#15803d', washDark: '#22c55e' },
+      themeConfig: {
+        accent: '#15803d',
+        accentDark: '#4ade80',
+        wash: '#15803d',
+        washDark: '#22c55e',
+      },
     });
     for (const mode of ['light', 'dark'] as const) {
       const wash = fromTriple(themes[mode].tokens['--s-wash']);
@@ -676,12 +778,16 @@ describe('Egyptian King', () => {
       // Long-form reading is held to AAA, the same floor the academy palette uses.
       expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
       // Secondary text and the quietest ink still clear the text floor.
-      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(
+        4.5,
+      );
       expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
       // …and on a card, which is where most of that text actually sits.
       const card = fromTriple(brand['--c-surface-container-highest']);
       expect(contrastRatio(fromTriple(brand['--c-on-surface']), card)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(brand['--c-on-surface-variant']), card),
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -697,13 +803,18 @@ describe('Egyptian King', () => {
       const brand = themes[mode].brand;
       const card = fromTriple(brand['--c-surface-container-highest']);
       // The label clears the text floor on the hardest surface in the skin…
-      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(
+        4.5,
+      );
       expect(
         contrastRatio(fromTriple(brand['--c-primary-text']), fromTriple(brand['--c-background'])),
       ).toBeGreaterThanOrEqual(4.5);
       // …and the text on the soft fill built from the colour clears it too.
       expect(
-        contrastRatio(fromTriple(brand['--c-on-primary-fixed']), fromTriple(brand['--c-primary-fixed'])),
+        contrastRatio(
+          fromTriple(brand['--c-on-primary-fixed']),
+          fromTriple(brand['--c-primary-fixed']),
+        ),
       ).toBeGreaterThanOrEqual(4.5);
 
       // The fill stays the colour the theme asked for: still unmistakably red,
@@ -743,10 +854,14 @@ describe('Egyptian King', () => {
       expect(t['--s-gold']).toBeDefined();
       // Gold as a label, on the page and on the deepest card.
       for (const on of ['--c-background', '--c-surface-container-highest']) {
-        expect(contrastRatio(fromTriple(t['--s-gold-ink']), fromTriple(brand[on]))).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(fromTriple(t['--s-gold-ink']), fromTriple(brand[on])),
+        ).toBeGreaterThanOrEqual(4.5);
       }
       // …and whatever sits on gold when gold is the fill.
-      expect(contrastRatio(fromTriple(t['--s-on-gold']), fromTriple(t['--s-gold']))).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(t['--s-on-gold']), fromTriple(t['--s-gold'])),
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -823,7 +938,9 @@ describe('Egyptian King', () => {
       expect(r).toBeGreaterThan(b);
       // Gold is its own colour and is held to the same floors — against the
       // ground this skin actually lays down, which is its own, not the app's.
-      const ground = fromTriple(deriveStudioThemes({ themeConfig: cfg })[mode].brand['--c-background']);
+      const ground = fromTriple(
+        deriveStudioThemes({ themeConfig: cfg })[mode].brand['--c-background'],
+      );
       expect(contrastRatio(fromTriple(t['--s-secondary-ink']), ground)).toBeGreaterThanOrEqual(4.5);
       expect(
         contrastRatio(fromTriple(t['--s-on-accent']), fromTriple(t['--s-accent'])),
@@ -860,8 +977,12 @@ describe('Egyptian King', () => {
   it('cannot reach an error colour or a secondary through the ground', () => {
     const names = Object.keys(deriveSurfaces({ background: '#0a0e16' }));
     for (const forbidden of [
-      '--c-error', '--c-on-error', '--c-error-container',
-      '--c-secondary', '--c-tertiary', '--c-primary',
+      '--c-error',
+      '--c-on-error',
+      '--c-error-container',
+      '--c-secondary',
+      '--c-tertiary',
+      '--c-primary',
     ]) {
       expect(names).not.toContain(forbidden);
     }
@@ -879,10 +1000,7 @@ describe('Egyptian King', () => {
    */
   it('names every brand token the client is willing to accept', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const client = readFileSync(
-      join(__dirname, '../../../web/src/lib/studio.ts'),
-      'utf8',
-    );
+    const client = readFileSync(join(__dirname, '../../../web/src/lib/studio.ts'), 'utf8');
     const allowed = new Set(
       (client.match(/const BRAND_ALLOWED[\s\S]*?\];/)?.[0] ?? '').match(/--[a-z0-9-]+/g) ?? [],
     );
@@ -957,11 +1075,15 @@ describe('Rose & Lavender', () => {
       const brand = themes()[mode].brand;
       const bg = fromTriple(brand['--c-background']);
       expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
-      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(
+        4.5,
+      );
       expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
       const card = fromTriple(brand['--c-surface-container-highest']);
       expect(contrastRatio(fromTriple(brand['--c-on-surface']), card)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(fromTriple(brand['--c-on-surface-variant']), card),
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -993,7 +1115,9 @@ describe('Rose & Lavender', () => {
     for (const mode of ['light', 'dark'] as const) {
       const brand = themes()[mode].brand;
       const card = fromTriple(brand['--c-surface-container-highest']);
-      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(
+        4.5,
+      );
       expect(
         contrastRatio(fromTriple(brand['--c-primary-text']), fromTriple(brand['--c-background'])),
       ).toBeGreaterThanOrEqual(4.5);
@@ -1001,7 +1125,10 @@ describe('Rose & Lavender', () => {
         contrastRatio(fromTriple(brand['--c-on-primary']), fromTriple(brand['--c-primary'])),
       ).toBeGreaterThanOrEqual(4.5);
       expect(
-        contrastRatio(fromTriple(brand['--c-on-primary-fixed']), fromTriple(brand['--c-primary-fixed'])),
+        contrastRatio(
+          fromTriple(brand['--c-on-primary-fixed']),
+          fromTriple(brand['--c-primary-fixed']),
+        ),
       ).toBeGreaterThanOrEqual(4.5);
     }
   });
@@ -1036,7 +1163,9 @@ describe('Rose & Lavender', () => {
     for (const mode of ['light', 'dark'] as const) {
       const { tokens, brand } = t[mode];
       for (const on of ['--c-background', '--c-surface-container-highest']) {
-        expect(contrastRatio(fromTriple(tokens['--s-gold-ink']), fromTriple(brand[on]))).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(fromTriple(tokens['--s-gold-ink']), fromTriple(brand[on])),
+        ).toBeGreaterThanOrEqual(4.5);
       }
       expect(
         contrastRatio(fromTriple(tokens['--s-on-gold']), fromTriple(tokens['--s-gold'])),
@@ -1129,22 +1258,35 @@ describe('every theme in the catalogue is legible', () => {
       // A theme that lays down its own ground owns the text on it too.
       if (brand['--c-on-surface']) {
         expect(contrastRatio(fromTriple(brand['--c-on-surface']), bg)).toBeGreaterThanOrEqual(7);
-        expect(contrastRatio(fromTriple(brand['--c-on-surface']), card)).toBeGreaterThanOrEqual(4.5);
-        expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg)).toBeGreaterThanOrEqual(4.5);
-        expect(contrastRatio(fromTriple(brand['--c-on-surface-variant']), card)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(fromTriple(brand['--c-on-surface']), card)).toBeGreaterThanOrEqual(
+          4.5,
+        );
+        expect(
+          contrastRatio(fromTriple(brand['--c-on-surface-variant']), bg),
+        ).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(fromTriple(brand['--c-on-surface-variant']), card),
+        ).toBeGreaterThanOrEqual(4.5);
         expect(contrastRatio(fromTriple(brand['--c-outline']), bg)).toBeGreaterThanOrEqual(4.5);
       }
       // The brand as a label, and whatever sits on it as a fill.
-      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(fromTriple(brand['--c-primary-text']), card)).toBeGreaterThanOrEqual(
+        4.5,
+      );
       expect(
         contrastRatio(fromTriple(brand['--c-on-primary']), fromTriple(brand['--c-primary'])),
       ).toBeGreaterThanOrEqual(4.5);
       // And each of the student's own families, wherever the theme names one.
       for (const family of ['accent', 'secondary', 'gold'] as const) {
         if (!tokens[`--s-${family}-ink`]) continue;
-        expect(contrastRatio(fromTriple(tokens[`--s-${family}-ink`]), card)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(fromTriple(tokens[`--s-${family}-ink`]), card)).toBeGreaterThanOrEqual(
+          4.5,
+        );
         expect(
-          contrastRatio(fromTriple(tokens[`--s-on-${family}`]), fromTriple(tokens[`--s-${family}`])),
+          contrastRatio(
+            fromTriple(tokens[`--s-on-${family}`]),
+            fromTriple(tokens[`--s-${family}`]),
+          ),
         ).toBeGreaterThanOrEqual(4.5);
       }
     }
@@ -1162,7 +1304,9 @@ describe('the catalogue is a ladder', () => {
   const priceOf = (key: string) => CATALOG.find((c) => c.key === key)!.costCoins;
 
   it('sells single-slot changes for less than any theme', () => {
-    const cheapest = Math.min(...CATALOG.filter((c) => c.category === 'THEME').map((c) => c.costCoins));
+    const cheapest = Math.min(
+      ...CATALOG.filter((c) => c.category === 'THEME').map((c) => c.costCoins),
+    );
     for (const c of CATALOG.filter((c) =>
       ['BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE'].includes(c.category),
     )) {
@@ -1248,7 +1392,9 @@ describe('the catalogue is a ladder', () => {
   it('lists every category cheapest first', () => {
     const cats = new Set(CATALOG.map((c) => c.category));
     for (const cat of cats) {
-      const inOrder = CATALOG.filter((c) => c.category === cat).sort((a, b) => a.sortOrder - b.sortOrder);
+      const inOrder = CATALOG.filter((c) => c.category === cat).sort(
+        (a, b) => a.sortOrder - b.sortOrder,
+      );
       // Earned items carry no price and sit at the end of their own rung.
       const priced = inOrder.filter((c) => !c.requiredAchievement).map((c) => c.costCoins);
       expect(priced).toEqual([...priced].sort((a, b) => a - b));
@@ -1298,7 +1444,7 @@ describe('the catalogue is a ladder', () => {
  * shell does not know is dropped, not guessed at.
  */
 describe('a theme can shape the shell', () => {
-  it('resolves to today\'s app when it says nothing', () => {
+  it("resolves to today's app when it says nothing", () => {
     expect(deriveLayout(undefined)).toEqual(DEFAULT_LAYOUT);
     expect(deriveLayout({})).toEqual(DEFAULT_LAYOUT);
     const t = deriveStudioThemes({ themeConfig: { accent: '#4a32c9' } });
@@ -1319,7 +1465,13 @@ describe('a theme can shape the shell', () => {
       density: 'spacious',
       width: 'wide',
     });
-    expect(l.nav).toEqual({ desktop: 'rail', tablet: 'rail', mobile: 'drawer', labels: false, active: 'pill' });
+    expect(l.nav).toEqual({
+      desktop: 'rail',
+      tablet: 'rail',
+      mobile: 'drawer',
+      labels: false,
+      active: 'pill',
+    });
     expect(l.header).toEqual({ variant: 'floating', sticky: false });
     expect(l.footer).toBe('stats');
     expect(l.density).toBe('spacious');
@@ -1361,7 +1513,12 @@ describe('a theme can shape the shell', () => {
     expect(t.styles.cardLayout).toBe('editorial');
     expect(t.styles.typeScale).toBe('editorial');
     const bad = deriveStudioThemes({
-      themeConfig: { accent: '#4a32c9', motion: 'wild', icons: { fill: 7, weight: 900 }, cardLayout: 'x' } as any,
+      themeConfig: {
+        accent: '#4a32c9',
+        motion: 'wild',
+        icons: { fill: 7, weight: 900 },
+        cardLayout: 'x',
+      } as any,
     });
     expect(bad.styles.motion).toBe('subtle');
     expect(bad.styles.icons).toEqual({ fill: 1, weight: 400 });
@@ -1409,7 +1566,7 @@ describe('a bought sidebar or header stacks on the theme', () => {
     expect(t.styles.layout.nav.desktop).toBe('floating');
   });
 
-  it('refuses a name the shell does not have, and keeps the theme\'s', () => {
+  it("refuses a name the shell does not have, and keeps the theme's", () => {
     const t = deriveStudioThemes({ themeConfig: king, nav: 'Theme7Sidebar', header: '<script>' });
     expect(t.styles.layout).toEqual(deriveLayout(king.layout));
   });
@@ -1423,9 +1580,13 @@ describe('a bought sidebar or header stacks on the theme', () => {
   });
 
   it('sells every sidebar and header shape the shell can draw, and no other', () => {
-    const navs = CATALOG.filter((c) => c.category === 'NAV_STYLE').map((c) => (c.config as any).style).sort();
+    const navs = CATALOG.filter((c) => c.category === 'NAV_STYLE')
+      .map((c) => (c.config as any).style)
+      .sort();
     expect(navs).toEqual(['floating', 'glass', 'hidden', 'minimal', 'rail']);
-    const headers = CATALOG.filter((c) => c.category === 'HEADER_STYLE').map((c) => (c.config as any).style).sort();
+    const headers = CATALOG.filter((c) => c.category === 'HEADER_STYLE')
+      .map((c) => (c.config as any).style)
+      .sort();
     expect(headers).toEqual(['centered', 'compact', 'editorial', 'floating', 'glass', 'minimal']);
     // `expanded` and `standard` are the defaults — there is nothing to sell.
   });
@@ -1441,16 +1602,25 @@ describe('a bought sidebar or header stacks on the theme', () => {
  * platform indigo on the day the course lapsed, with nothing on screen to
  * explain it and no way to get it back.
  */
-describe('StudioService — a teacher\'s look, once earned', () => {
+describe("StudioService — a teacher's look, once earned", () => {
   const enrolled = () => {
     const prisma = makePrisma();
     prisma.enrollment.findMany.mockResolvedValue([{ tenantId: 'a1', createdAt: new Date() }]);
     prisma.academy.findMany.mockResolvedValue([
-      { id: 'a1', name: 'Academy', colorPrimary: '#2f5fe0', colorAccent: '#7c3aed', brandTokens: null, owner: { fullName: 'Amr' } },
+      {
+        id: 'a1',
+        name: 'Academy',
+        colorPrimary: '#2f5fe0',
+        colorAccent: '#7c3aed',
+        brandTokens: null,
+        owner: { fullName: 'Amr' },
+      },
     ]);
     prisma.cosmeticItem.findMany.mockResolvedValue([]);
     prisma.studentProfile.findUnique.mockResolvedValue({
-      id: 's1', currentStreak: 0, user: { fullName: 'Student', avatarUrl: null },
+      id: 's1',
+      currentStreak: 0,
+      user: { fullName: 'Student', avatarUrl: null },
     });
     return prisma;
   };
@@ -1483,7 +1653,9 @@ describe('StudioService — a teacher\'s look, once earned', () => {
   it('lets a student wear the colours of a course that has ended', async () => {
     const prisma = enrolled();
     prisma.enrollment.findFirst.mockResolvedValue({ id: 'e1' });
-    prisma.studentCustomization.upsert = jest.fn().mockResolvedValue({ academyId: 'a1', themeKey: null });
+    prisma.studentCustomization.upsert = jest
+      .fn()
+      .mockResolvedValue({ academyId: 'a1', themeKey: null });
     await svc(prisma).equipAcademy('u1', 'a1');
     expect(prisma.enrollment.findFirst.mock.calls[0][0].where.status.in).toContain('EXPIRED');
   });

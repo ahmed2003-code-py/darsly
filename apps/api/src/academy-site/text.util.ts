@@ -30,7 +30,10 @@ export function stripMarkdown(input: string): string {
 
 /** Strip Markdown and collapse a possibly multi-line value to one clean line. */
 export function cleanLine(input: string): string {
-  return stripMarkdown(input).replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  return stripMarkdown(input)
+    .replace(/\s*\n\s*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 export interface CleanListOptions {
@@ -53,7 +56,9 @@ export function cleanList(items: unknown, opts: CleanListOptions = {}): string[]
   const out: string[] = [];
   for (const raw of items) {
     if (typeof raw !== 'string') continue;
-    const cleaned = cleanLine(raw).slice(0, maxLen === Infinity ? undefined : maxLen).trim();
+    const cleaned = cleanLine(raw)
+      .slice(0, maxLen === Infinity ? undefined : maxLen)
+      .trim();
     if (cleaned.length < min) continue;
     const key = cleaned.toLowerCase();
     if (seen.has(key)) continue;

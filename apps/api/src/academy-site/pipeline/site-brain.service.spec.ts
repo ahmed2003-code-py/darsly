@@ -37,8 +37,21 @@ function ctx(over: Partial<VariantSelectionContext> = {}): VariantSelectionConte
 
 describe('SiteBrainService.arrange — section order', () => {
   it('opens with the hero and closes with contact, whatever the archetype', () => {
-    for (const a of ['programming', 'math_science', 'languages', 'exam_prep', 'university', 'general'] as Archetype[]) {
-      const d = doc({ dna: 'warm_mentor', persona: 'programming', hasGallery: true, withStats: true, withCta: true });
+    for (const a of [
+      'programming',
+      'math_science',
+      'languages',
+      'exam_prep',
+      'university',
+      'general',
+    ] as Archetype[]) {
+      const d = doc({
+        dna: 'warm_mentor',
+        persona: 'programming',
+        hasGallery: true,
+        withStats: true,
+        withCta: true,
+      });
       brain.arrange(d, a);
       expect(order(d)[0]).toBe('hero');
       expect(order(d).slice(-2)).toEqual(['contact', 'cta']);
@@ -46,15 +59,34 @@ describe('SiteBrainService.arrange — section order', () => {
   });
 
   it('leads a programming page with the courses and the toolkit', () => {
-    const d = doc({ dna: 'royal_night', persona: 'programming', hasGallery: true, withStats: true });
+    const d = doc({
+      dna: 'royal_night',
+      persona: 'programming',
+      hasGallery: true,
+      withStats: true,
+    });
     brain.arrange(d, 'programming');
     expect(order(d)).toEqual([
-      'hero', 'courses', 'toolkit', 'about', 'credentials', 'stats', 'gallery', 'reviews', 'faq', 'contact',
+      'hero',
+      'courses',
+      'toolkit',
+      'about',
+      'credentials',
+      'stats',
+      'gallery',
+      'reviews',
+      'faq',
+      'contact',
     ]);
   });
 
   it('leads an exam-prep page with the track record and social proof', () => {
-    const d = doc({ dna: 'bold_energetic', persona: 'math_science', hasGallery: true, withStats: true });
+    const d = doc({
+      dna: 'bold_energetic',
+      persona: 'math_science',
+      hasGallery: true,
+      withStats: true,
+    });
     brain.arrange(d, 'exam_prep');
     const seen = order(d);
     expect(seen.indexOf('credentials')).toBeLessThan(seen.indexOf('courses'));
@@ -81,7 +113,12 @@ describe('SiteBrainService.arrange — section order', () => {
   });
 
   it('is idempotent — arranging twice changes nothing', () => {
-    const d = doc({ dna: 'warm_mentor', persona: 'programming', hasGallery: true, withStats: true });
+    const d = doc({
+      dna: 'warm_mentor',
+      persona: 'programming',
+      hasGallery: true,
+      withStats: true,
+    });
     brain.arrange(d, 'university');
     const once = order(d);
     brain.arrange(d, 'university');
@@ -89,7 +126,13 @@ describe('SiteBrainService.arrange — section order', () => {
   });
 
   it('never drops or duplicates a section', () => {
-    const d = doc({ dna: 'warm_mentor', persona: 'languages', hasGallery: true, withStats: true, withCta: true });
+    const d = doc({
+      dna: 'warm_mentor',
+      persona: 'languages',
+      hasGallery: true,
+      withStats: true,
+      withCta: true,
+    });
     const before = [...order(d)].sort();
     brain.arrange(d, 'programming');
     expect([...order(d)].sort()).toEqual(before);
@@ -97,7 +140,8 @@ describe('SiteBrainService.arrange — section order', () => {
 });
 
 describe('SiteBrainService.assignVariants — layout selection', () => {
-  const variantOf = (d: SiteDocument, type: string) => d.blocks.find((b) => b.type === type)?.variant;
+  const variantOf = (d: SiteDocument, type: string) =>
+    d.blocks.find((b) => b.type === type)?.variant;
 
   it('gives a page with a cover photo the split hero', () => {
     const d = doc({ dna: 'warm_mentor', persona: 'programming', hasCover: true });
@@ -138,7 +182,13 @@ describe('SiteBrainService.assignVariants — layout selection', () => {
   });
 
   it('assigns a registered variant to every block', () => {
-    const d = doc({ dna: 'sunrise_warm', persona: 'programming', hasGallery: true, withStats: true, withCta: true });
+    const d = doc({
+      dna: 'sunrise_warm',
+      persona: 'programming',
+      hasGallery: true,
+      withStats: true,
+      withCta: true,
+    });
     brain.assignVariants(d, ctx());
     for (const b of d.blocks) {
       expect(b.variant).toBeTruthy();

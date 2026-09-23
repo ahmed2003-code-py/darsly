@@ -55,7 +55,11 @@ export default function AdminWalletPage() {
   });
   const reject = useMutation({
     mutationFn: async (id: string) =>
-      (await api.post(`/admin/wallet/topups/${id}/reject`, { reason: t('walletAdmin.rejectReason') })).data,
+      (
+        await api.post(`/admin/wallet/topups/${id}/reject`, {
+          reason: t('walletAdmin.rejectReason'),
+        })
+      ).data,
     onSuccess: invalidate,
   });
 
@@ -70,7 +74,9 @@ export default function AdminWalletPage() {
             key={s}
             onClick={() => setTab(s)}
             className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
-              tab === s ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              tab === s
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
             {t(`walletAdmin.tab.${s}`)}
@@ -79,7 +85,11 @@ export default function AdminWalletPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
+          ))}
+        </div>
       ) : !rows?.length ? (
         <EmptyState icon="account_balance_wallet" title={t('walletAdmin.none')} />
       ) : (
@@ -95,7 +105,9 @@ export default function AdminWalletPage() {
               </button>
               <div className="min-w-0 flex-1">
                 <p className="font-bold">{r.studentName}</p>
-                <p className="text-xs text-outline" dir="ltr">{r.studentPhone ?? ''}</p>
+                <p className="text-xs text-outline" dir="ltr">
+                  {r.studentPhone ?? ''}
+                </p>
                 <p className="mt-1 text-sm text-on-surface-variant">
                   {paymentMethodLabel(r.method)}
                   {r.reference ? ` · ${r.reference}` : ''} · {dateShort(r.createdAt)}
@@ -129,19 +141,30 @@ export default function AdminWalletPage() {
                   </p>
                 )}
               </div>
-              <span className="font-heading text-xl font-extrabold text-primary tabular-nums" dir="ltr">
+              <span
+                className="font-heading text-xl font-extrabold text-primary tabular-nums"
+                dir="ltr"
+              >
                 {egp(r.amountCents)}
               </span>
               {r.status === 'PENDING' && (
-              <div className="flex gap-2">
-                <button className="btn-ghost" disabled={reject.isPending} onClick={() => reject.mutate(r.id)}>
-                  {t('walletAdmin.reject')}
-                </button>
-                <button className="btn-primary" disabled={approve.isPending} onClick={() => approve.mutate(r.id)}>
-                  <span className="material-symbols-outlined text-[20px]">check_circle</span>
-                  {t('walletAdmin.approve')}
-                </button>
-              </div>
+                <div className="flex gap-2">
+                  <button
+                    className="btn-ghost"
+                    disabled={reject.isPending}
+                    onClick={() => reject.mutate(r.id)}
+                  >
+                    {t('walletAdmin.reject')}
+                  </button>
+                  <button
+                    className="btn-primary"
+                    disabled={approve.isPending}
+                    onClick={() => approve.mutate(r.id)}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">check_circle</span>
+                    {t('walletAdmin.approve')}
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -149,7 +172,9 @@ export default function AdminWalletPage() {
       )}
 
       <Modal open={!!proof} onClose={() => setProof(null)} title={t('walletAdmin.proof')} wide>
-        {proof && <img src={proof} alt="" className="mx-auto max-h-[70vh] rounded-lg object-contain" />}
+        {proof && (
+          <img src={proof} alt="" className="mx-auto max-h-[70vh] rounded-lg object-contain" />
+        )}
       </Modal>
     </div>
   );

@@ -59,7 +59,13 @@ export async function assertCourseYear(
     where: { courseId },
     select: { gradeId: true, grade: { select: { nameAr: true } } },
   });
-  if (yearAdmits(rows.map((r) => r.gradeId), studentGradeId)) return;
+  if (
+    yearAdmits(
+      rows.map((r) => r.gradeId),
+      studentGradeId,
+    )
+  )
+    return;
   throw new ForbiddenException({
     message: 'This course is for another year',
     code: 'COURSE_OTHER_YEAR',

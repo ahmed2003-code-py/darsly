@@ -29,13 +29,31 @@ interface SiteDoc {
 }
 const EMPTY_LT: LT = { ar: '', en: '' };
 const BLOCK_ICON: Record<string, string> = {
-  hero: 'wallpaper', about: 'info', toolkit: 'sell', credentials: 'workspace_premium',
-  stats: 'bar_chart', process: 'route', faq: 'quiz', cta: 'ads_click',
-  courses: 'menu_book', reviews: 'reviews', gallery: 'photo_library', contact: 'call', quote: 'format_quote',
+  hero: 'wallpaper',
+  about: 'info',
+  toolkit: 'sell',
+  credentials: 'workspace_premium',
+  stats: 'bar_chart',
+  process: 'route',
+  faq: 'quiz',
+  cta: 'ads_click',
+  courses: 'menu_book',
+  reviews: 'reviews',
+  gallery: 'photo_library',
+  contact: 'call',
+  quote: 'format_quote',
 };
 
-function LocalizedInput({ label, value, multiline, onChange }: {
-  label: string; value: LT; multiline?: boolean; onChange: (v: LT) => void;
+function LocalizedInput({
+  label,
+  value,
+  multiline,
+  onChange,
+}: {
+  label: string;
+  value: LT;
+  multiline?: boolean;
+  onChange: (v: LT) => void;
 }) {
   const { t } = useTranslation();
   const Cmp: any = multiline ? 'textarea' : 'input';
@@ -44,13 +62,21 @@ function LocalizedInput({ label, value, multiline, onChange }: {
       <div className="grid gap-2 sm:grid-cols-2">
         <div>
           <span className="mb-1 block text-xs text-outline">{t('studio.editor.ar')}</span>
-          <Cmp className={`input ${multiline ? 'min-h-[80px]' : ''}`} dir="rtl"
-            value={value?.ar ?? ''} onChange={(e: any) => onChange({ ...value, ar: e.target.value })} />
+          <Cmp
+            className={`input ${multiline ? 'min-h-[80px]' : ''}`}
+            dir="rtl"
+            value={value?.ar ?? ''}
+            onChange={(e: any) => onChange({ ...value, ar: e.target.value })}
+          />
         </div>
         <div>
           <span className="mb-1 block text-xs text-outline">{t('studio.editor.en')}</span>
-          <Cmp className={`input ${multiline ? 'min-h-[80px]' : ''}`} dir="ltr"
-            value={value?.en ?? ''} onChange={(e: any) => onChange({ ...value, en: e.target.value })} />
+          <Cmp
+            className={`input ${multiline ? 'min-h-[80px]' : ''}`}
+            dir="ltr"
+            value={value?.en ?? ''}
+            onChange={(e: any) => onChange({ ...value, en: e.target.value })}
+          />
         </div>
       </div>
     </Field>
@@ -91,7 +117,12 @@ export default function EditorTab({ onNext }: { onNext?: () => void }) {
       </div>
     );
   }
-  if (isError) return <div className="card"><ErrorNote error={error} /></div>;
+  if (isError)
+    return (
+      <div className="card">
+        <ErrorNote error={error} />
+      </div>
+    );
   if (!doc) return <Spinner />;
 
   const patchSeo = (field: 'title' | 'description', v: LT) => {
@@ -118,11 +149,24 @@ export default function EditorTab({ onNext }: { onNext?: () => void }) {
           <p className="text-sm text-on-surface-variant">{t('studio.editor.hint')}</p>
         </div>
         <div className="flex items-center gap-3">
-          {saved && <span className="flex items-center gap-1 text-sm font-bold text-teal-600"><span className="material-symbols-outlined text-[18px]">check_circle</span>{t('studio.editor.saved')}</span>}
-          <button className="btn-secondary" onClick={() => save.mutate(doc)} disabled={save.isPending}>
+          {saved && (
+            <span className="flex items-center gap-1 text-sm font-bold text-teal-600">
+              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+              {t('studio.editor.saved')}
+            </span>
+          )}
+          <button
+            className="btn-secondary"
+            onClick={() => save.mutate(doc)}
+            disabled={save.isPending}
+          >
             {save.isPending ? t('studio.editor.saving') : t('studio.editor.save')}
           </button>
-          {onNext && <button className="btn-primary" onClick={onNext}>{t('studio.continue')}</button>}
+          {onNext && (
+            <button className="btn-primary" onClick={onNext}>
+              {t('studio.continue')}
+            </button>
+          )}
         </div>
       </div>
       <ErrorNote error={save.error} />
@@ -132,41 +176,132 @@ export default function EditorTab({ onNext }: { onNext?: () => void }) {
           <span className="material-symbols-outlined text-primary">travel_explore</span>
           <h3 className="font-heading font-bold">{t('studio.editor.seo')}</h3>
         </div>
-        <LocalizedInput label={t('studio.editor.metaTitle')} value={doc.seo?.title ?? EMPTY_LT} onChange={(v) => patchSeo('title', v)} />
-        <LocalizedInput label={t('studio.editor.metaDesc')} value={doc.seo?.description ?? EMPTY_LT} multiline onChange={(v) => patchSeo('description', v)} />
+        <LocalizedInput
+          label={t('studio.editor.metaTitle')}
+          value={doc.seo?.title ?? EMPTY_LT}
+          onChange={(v) => patchSeo('title', v)}
+        />
+        <LocalizedInput
+          label={t('studio.editor.metaDesc')}
+          value={doc.seo?.description ?? EMPTY_LT}
+          multiline
+          onChange={(v) => patchSeo('description', v)}
+        />
       </div>
 
       {doc.blocks.map((b, i) => (
         <div key={b.id} className="card">
           <div className="mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">{BLOCK_ICON[b.type] ?? 'widgets'}</span>
-            <h3 className="font-heading font-bold">{t(`studio.editor.blocks.${b.type}`, { defaultValue: b.type })}</h3>
+            <span className="material-symbols-outlined text-primary">
+              {BLOCK_ICON[b.type] ?? 'widgets'}
+            </span>
+            <h3 className="font-heading font-bold">
+              {t(`studio.editor.blocks.${b.type}`, { defaultValue: b.type })}
+            </h3>
           </div>
 
-          {b.headline && <LocalizedInput label={t('studio.editor.heading')} value={b.headline} onChange={(v) => patchBlock(i, { headline: v })} />}
-          {b.heading && <LocalizedInput label={t('studio.editor.heading')} value={b.heading} onChange={(v) => patchBlock(i, { heading: v })} />}
-          {b.subheadline && <LocalizedInput label={t('studio.editor.subheading')} value={b.subheadline} multiline onChange={(v) => patchBlock(i, { subheadline: v })} />}
-          {b.body && <LocalizedInput label={t('studio.editor.body')} value={b.body} multiline onChange={(v) => patchBlock(i, { body: v })} />}
-          {b.ctaLabel && <LocalizedInput label={t('studio.editor.ctaBtn')} value={b.ctaLabel} onChange={(v) => patchBlock(i, { ctaLabel: v })} />}
-          {b.buttonLabel && <LocalizedInput label={t('studio.editor.btn')} value={b.buttonLabel} onChange={(v) => patchBlock(i, { buttonLabel: v })} />}
-          {b.text && <LocalizedInput label={t('studio.editor.body')} value={b.text} multiline onChange={(v) => patchBlock(i, { text: v })} />}
-          {b.attribution && <LocalizedInput label={t('studio.editor.attribution')} value={b.attribution} onChange={(v) => patchBlock(i, { attribution: v })} />}
+          {b.headline && (
+            <LocalizedInput
+              label={t('studio.editor.heading')}
+              value={b.headline}
+              onChange={(v) => patchBlock(i, { headline: v })}
+            />
+          )}
+          {b.heading && (
+            <LocalizedInput
+              label={t('studio.editor.heading')}
+              value={b.heading}
+              onChange={(v) => patchBlock(i, { heading: v })}
+            />
+          )}
+          {b.subheadline && (
+            <LocalizedInput
+              label={t('studio.editor.subheading')}
+              value={b.subheadline}
+              multiline
+              onChange={(v) => patchBlock(i, { subheadline: v })}
+            />
+          )}
+          {b.body && (
+            <LocalizedInput
+              label={t('studio.editor.body')}
+              value={b.body}
+              multiline
+              onChange={(v) => patchBlock(i, { body: v })}
+            />
+          )}
+          {b.ctaLabel && (
+            <LocalizedInput
+              label={t('studio.editor.ctaBtn')}
+              value={b.ctaLabel}
+              onChange={(v) => patchBlock(i, { ctaLabel: v })}
+            />
+          )}
+          {b.buttonLabel && (
+            <LocalizedInput
+              label={t('studio.editor.btn')}
+              value={b.buttonLabel}
+              onChange={(v) => patchBlock(i, { buttonLabel: v })}
+            />
+          )}
+          {b.text && (
+            <LocalizedInput
+              label={t('studio.editor.body')}
+              value={b.text}
+              multiline
+              onChange={(v) => patchBlock(i, { text: v })}
+            />
+          )}
+          {b.attribution && (
+            <LocalizedInput
+              label={t('studio.editor.attribution')}
+              value={b.attribution}
+              onChange={(v) => patchBlock(i, { attribution: v })}
+            />
+          )}
 
           {b.type === 'process' && Array.isArray(b.steps) && (
             <div className="space-y-4">
               {b.steps.map((s: any, si: number) => (
                 <div key={si} className="rounded-xl border border-outline-variant p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-on-surface-variant">{t('studio.editor.step', { n: si + 1 })}</span>
-                    <button type="button" className="text-error" aria-label={t('studio.publish.delete')}
-                      onClick={() => patchBlock(i, { steps: b.steps!.filter((_, x) => x !== si) })}>
+                    <span className="text-sm font-semibold text-on-surface-variant">
+                      {t('studio.editor.step', { n: si + 1 })}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-error"
+                      aria-label={t('studio.publish.delete')}
+                      onClick={() => patchBlock(i, { steps: b.steps!.filter((_, x) => x !== si) })}
+                    >
                       <span className="material-symbols-outlined text-[20px]">delete</span>
                     </button>
                   </div>
-                  <LocalizedInput label={t('studio.editor.title2')} value={s.title}
-                    onChange={(v) => { const next = structuredClone(doc); (next.blocks[i].steps as any[])[si] = { ...(next.blocks[i].steps as any[])[si], title: v }; setDoc(next); }} />
-                  <LocalizedInput label={t('studio.editor.body')} value={s.body} multiline
-                    onChange={(v) => { const next = structuredClone(doc); (next.blocks[i].steps as any[])[si] = { ...(next.blocks[i].steps as any[])[si], body: v }; setDoc(next); }} />
+                  <LocalizedInput
+                    label={t('studio.editor.title2')}
+                    value={s.title}
+                    onChange={(v) => {
+                      const next = structuredClone(doc);
+                      (next.blocks[i].steps as any[])[si] = {
+                        ...(next.blocks[i].steps as any[])[si],
+                        title: v,
+                      };
+                      setDoc(next);
+                    }}
+                  />
+                  <LocalizedInput
+                    label={t('studio.editor.body')}
+                    value={s.body}
+                    multiline
+                    onChange={(v) => {
+                      const next = structuredClone(doc);
+                      (next.blocks[i].steps as any[])[si] = {
+                        ...(next.blocks[i].steps as any[])[si],
+                        body: v,
+                      };
+                      setDoc(next);
+                    }}
+                  />
                 </div>
               ))}
             </div>
@@ -177,19 +312,41 @@ export default function EditorTab({ onNext }: { onNext?: () => void }) {
               {b.items.map((it: any, ii: number) => (
                 <div key={ii} className="rounded-xl border border-outline-variant p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-on-surface-variant">{t('studio.editor.question', { n: ii + 1 })}</span>
-                    <button type="button" className="text-error" aria-label={t('studio.publish.delete')}
-                      onClick={() => patchBlock(i, { items: b.items!.filter((_, x) => x !== ii) })}>
+                    <span className="text-sm font-semibold text-on-surface-variant">
+                      {t('studio.editor.question', { n: ii + 1 })}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-error"
+                      aria-label={t('studio.publish.delete')}
+                      onClick={() => patchBlock(i, { items: b.items!.filter((_, x) => x !== ii) })}
+                    >
                       <span className="material-symbols-outlined text-[20px]">delete</span>
                     </button>
                   </div>
-                  <LocalizedInput label={t('studio.editor.q')} value={it.q} onChange={(v) => patchItem(i, ii, { q: v })} />
-                  <LocalizedInput label={t('studio.editor.a')} value={it.a} multiline onChange={(v) => patchItem(i, ii, { a: v })} />
+                  <LocalizedInput
+                    label={t('studio.editor.q')}
+                    value={it.q}
+                    onChange={(v) => patchItem(i, ii, { q: v })}
+                  />
+                  <LocalizedInput
+                    label={t('studio.editor.a')}
+                    value={it.a}
+                    multiline
+                    onChange={(v) => patchItem(i, ii, { a: v })}
+                  />
                 </div>
               ))}
               {b.items.length < 8 && (
-                <button type="button" className="text-sm font-bold text-primary hover:underline"
-                  onClick={() => patchBlock(i, { items: [...b.items!, { q: { ar: '', en: '' }, a: { ar: '', en: '' } }] })}>
+                <button
+                  type="button"
+                  className="text-sm font-bold text-primary hover:underline"
+                  onClick={() =>
+                    patchBlock(i, {
+                      items: [...b.items!, { q: { ar: '', en: '' }, a: { ar: '', en: '' } }],
+                    })
+                  }
+                >
                   {t('studio.editor.addQ')}
                 </button>
               )}
@@ -200,8 +357,22 @@ export default function EditorTab({ onNext }: { onNext?: () => void }) {
             <div className="space-y-3">
               {b.items.map((it: any, ii: number) => (
                 <div key={ii} className="flex items-end gap-2">
-                  <div className="flex-1"><LocalizedInput label={t('studio.editor.label')} value={it.label} onChange={(v) => patchItem(i, ii, { label: v })} /></div>
-                  <div className="w-28"><Field label={t('studio.editor.value')}><input className="input" value={it.value ?? ''} onChange={(e) => patchItem(i, ii, { value: e.target.value })} /></Field></div>
+                  <div className="flex-1">
+                    <LocalizedInput
+                      label={t('studio.editor.label')}
+                      value={it.label}
+                      onChange={(v) => patchItem(i, ii, { label: v })}
+                    />
+                  </div>
+                  <div className="w-28">
+                    <Field label={t('studio.editor.value')}>
+                      <input
+                        className="input"
+                        value={it.value ?? ''}
+                        onChange={(e) => patchItem(i, ii, { value: e.target.value })}
+                      />
+                    </Field>
+                  </div>
                 </div>
               ))}
             </div>

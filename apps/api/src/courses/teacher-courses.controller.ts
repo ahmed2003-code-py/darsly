@@ -67,7 +67,11 @@ export class TeacherCoursesController {
    * course offered here; a TEACHER member only their own.
    */
   private scope(user: JwtPayload, ctx: AcademyContext): CourseScope {
-    return { academyId: ctx.academyId, authorTenantId: user.tenantId, manageAll: ctx.role === 'OWNER' };
+    return {
+      academyId: ctx.academyId,
+      authorTenantId: user.tenantId,
+      manageAll: ctx.role === 'OWNER',
+    };
   }
 
   // ── Courses ──────────────────────────────────────────────────────────────
@@ -80,13 +84,21 @@ export class TeacherCoursesController {
 
   @Get('courses/:id')
   @ApiOperation({ summary: '[teacher] Course with full curriculum tree' })
-  get(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  get(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     return this.courses.getMine(this.scope(user, ctx), id);
   }
 
   @Post('courses')
   @ApiOperation({ summary: '[teacher] Create course (starts as DRAFT)' })
-  async create(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateCourseDto) {
+  async create(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: CreateCourseDto,
+  ) {
     const course = await this.courses.create(this.scope(user, ctx), dto);
     await this.audit.log({
       actorUserId: user.sub,
@@ -101,7 +113,8 @@ export class TeacherCoursesController {
   @Patch('courses/:id')
   @ApiOperation({ summary: '[teacher] Update course (incl. publish/archive via status)' })
   async update(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: UpdateCourseDto,
   ) {
@@ -117,7 +130,11 @@ export class TeacherCoursesController {
 
   @Delete('courses/:id')
   @ApiOperation({ summary: '[teacher] Delete course (archives instead if it has enrollments)' })
-  async remove(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  async remove(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     const result = await this.courses.remove(this.scope(user, ctx), id);
     await this.audit.log({
       actorUserId: user.sub,
@@ -131,7 +148,8 @@ export class TeacherCoursesController {
   @Patch('courses/:id/thumbnail')
   @ApiOperation({ summary: '[teacher] Set course thumbnail (client-resized base64 image)' })
   async setThumbnail(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: SetThumbnailDto,
   ) {
@@ -153,7 +171,8 @@ export class TeacherCoursesController {
     }),
   )
   async setIntroVideo(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
   ) {
@@ -175,7 +194,8 @@ export class TeacherCoursesController {
   @Delete('courses/:id/intro-video')
   @ApiOperation({ summary: '[teacher] Remove the course intro clip' })
   async removeIntroVideo(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
   ) {
     const result = await this.courses.removeIntroVideo(this.scope(user, ctx), id);
@@ -191,7 +211,8 @@ export class TeacherCoursesController {
   @Patch('courses/:id/bundle')
   @ApiOperation({ summary: '[teacher] Set the child courses of a BUNDLE course' })
   setBundle(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: SetBundleItemsDto,
   ) {
@@ -203,7 +224,8 @@ export class TeacherCoursesController {
   @Post('courses/:courseId/units')
   @ApiOperation({ summary: '[teacher] Add unit' })
   createUnit(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('courseId') courseId: string,
     @Body() dto: UpsertUnitDto,
   ) {
@@ -212,20 +234,30 @@ export class TeacherCoursesController {
 
   @Patch('units/:id')
   @ApiOperation({ summary: '[teacher] Rename unit' })
-  updateUnit(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: UpsertUnitDto) {
+  updateUnit(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: UpsertUnitDto,
+  ) {
     return this.courses.updateUnit(this.scope(user, ctx), id, dto);
   }
 
   @Delete('units/:id')
   @ApiOperation({ summary: '[teacher] Delete unit (cascades to its lessons)' })
-  removeUnit(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  removeUnit(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     return this.courses.removeUnit(this.scope(user, ctx), id);
   }
 
   @Patch('courses/:courseId/units/reorder')
   @ApiOperation({ summary: '[teacher] Reorder units (drag & drop)' })
   reorderUnits(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('courseId') courseId: string,
     @Body() dto: ReorderDto,
   ) {
@@ -237,7 +269,8 @@ export class TeacherCoursesController {
   @Post('units/:unitId/lessons')
   @ApiOperation({ summary: '[teacher] Add lesson to a section (drip, preview, caps, video asset)' })
   createLesson(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('unitId') unitId: string,
     @Body() dto: CreateLessonDto,
   ) {
@@ -247,7 +280,8 @@ export class TeacherCoursesController {
   @Post('courses/:courseId/lessons')
   @ApiOperation({ summary: '[teacher] Add a lesson straight to the course, no section required' })
   addLessonDirect(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('courseId') courseId: string,
     @Body() dto: CreateLessonDto,
   ) {
@@ -255,9 +289,12 @@ export class TeacherCoursesController {
   }
 
   @Post('courses/:courseId/lessons/import-youtube')
-  @ApiOperation({ summary: '[teacher] Bulk-create lessons from YouTube links (metadata + protected video)' })
+  @ApiOperation({
+    summary: '[teacher] Bulk-create lessons from YouTube links (metadata + protected video)',
+  })
   importYoutube(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('courseId') courseId: string,
     @Body() dto: ImportYoutubeDto,
   ) {
@@ -267,7 +304,8 @@ export class TeacherCoursesController {
   @Patch('lessons/:id')
   @ApiOperation({ summary: '[teacher] Update lesson settings' })
   updateLesson(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: UpdateLessonDto,
   ) {
@@ -276,20 +314,29 @@ export class TeacherCoursesController {
 
   @Delete('lessons/:id')
   @ApiOperation({ summary: '[teacher] Delete lesson' })
-  removeLesson(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  removeLesson(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     return this.courses.removeLesson(this.scope(user, ctx), id);
   }
 
   @Delete('lessons/:id/video')
-  @ApiOperation({ summary: '[teacher] Remove a lesson\'s video and clean up its storage' })
-  removeLessonVideo(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  @ApiOperation({ summary: "[teacher] Remove a lesson's video and clean up its storage" })
+  removeLessonVideo(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     return this.courses.removeLessonVideo(this.scope(user, ctx), id);
   }
 
   @Patch('units/:unitId/lessons/reorder')
   @ApiOperation({ summary: '[teacher] Reorder lessons within a unit' })
   reorderLessons(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
     @Param('unitId') unitId: string,
     @Body() dto: ReorderDto,
   ) {

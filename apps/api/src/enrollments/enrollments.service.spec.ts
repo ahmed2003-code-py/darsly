@@ -1,26 +1,46 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { EnrollmentsService } from './enrollments.service';
 
-const STUDENT = { id: 's1', userId: 'u1', gradeId: null, track: null, user: { fullName: 'Student One' } };
+const STUDENT = {
+  id: 's1',
+  userId: 'u1',
+  gradeId: null,
+  track: null,
+  user: { fullName: 'Student One' },
+};
 const COURSE = {
-  id: 'c1', tenantId: 'a1', status: 'PUBLISHED', priceCents: 0, currency: 'EGP',
-  pricingModel: 'ONE_TIME', teacher: { user: { id: 'teacherUser1', fullName: 'Teacher' } },
+  id: 'c1',
+  tenantId: 'a1',
+  status: 'PUBLISHED',
+  priceCents: 0,
+  currency: 'EGP',
+  pricingModel: 'ONE_TIME',
+  teacher: { user: { id: 'teacherUser1', fullName: 'Teacher' } },
 };
 
 function makeDeps(overrides: { academy?: any; flagEnabled?: boolean } = {}) {
   const enrollmentRows = new Map<string, any>();
   const prisma: any = {
-    studentProfile: { findUnique: jest.fn().mockResolvedValue(STUDENT), findFirst: jest.fn().mockResolvedValue(STUDENT) },
+    studentProfile: {
+      findUnique: jest.fn().mockResolvedValue(STUDENT),
+      findFirst: jest.fn().mockResolvedValue(STUDENT),
+    },
     course: { findFirst: jest.fn().mockResolvedValue(COURSE), findUnique: jest.fn() },
     courseGrade: { findMany: jest.fn().mockResolvedValue([]) },
     academy: {
-      findUnique: jest.fn().mockResolvedValue({ feeType: 'PERCENT', feeValue: 20, ...(overrides.academy ?? { enrollmentMode: 'AUTOMATIC' }) }),
+      findUnique: jest.fn().mockResolvedValue({
+        feeType: 'PERCENT',
+        feeValue: 20,
+        ...(overrides.academy ?? { enrollmentMode: 'AUTOMATIC' }),
+      }),
     },
     coupon: { findFirst: jest.fn() },
     payment: { findFirst: jest.fn().mockResolvedValue(null) },
     enrollment: {
       findUnique: jest.fn().mockResolvedValue(null),
-      findFirst: jest.fn(async ({ where }: any) => (where.id ? enrollmentRows.get(where.id) ?? null : null)),
+      findFirst: jest.fn(async ({ where }: any) =>
+        where.id ? (enrollmentRows.get(where.id) ?? null) : null,
+      ),
       findUniqueOrThrow: jest.fn(async ({ where }: any) => enrollmentRows.get(where.id)),
       create: jest.fn(async ({ data }: any) => {
         const row = { id: `enr_${enrollmentRows.size + 1}`, ...data };
@@ -51,7 +71,7 @@ function makeDeps(overrides: { academy?: any; flagEnabled?: boolean } = {}) {
 
 describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
   describe('enroll() — AUTOMATIC mode (must be byte-for-byte unchanged)', () => {
-    it('activates a free course immediately, never touching the academy/flag lookups\' outcome', async () => {
+    it("activates a free course immediately, never touching the academy/flag lookups' outcome", async () => {
       const { svc, prisma } = makeDeps({ academy: { enrollmentMode: 'AUTOMATIC' } });
       const result = await svc.enroll('u1', 'c1');
       expect(result.status).toBe('ACTIVE');
@@ -64,11 +84,16 @@ describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
 
   describe('enroll() — MANUAL/DEMO mode, free course', () => {
     it('goes to PENDING_APPROVAL instead of ACTIVE when the flag is on', async () => {
-      const { svc, prisma } = makeDeps({ academy: { enrollmentMode: 'MANUAL' }, flagEnabled: true });
+      const { svc, prisma } = makeDeps({
+        academy: { enrollmentMode: 'MANUAL' },
+        flagEnabled: true,
+      });
       const result = await svc.enroll('u1', 'c1');
       expect(result.status).toBe('PENDING_APPROVAL');
       expect(prisma.enrollment.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'PENDING_APPROVAL', approvedAt: null }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'PENDING_APPROVAL', approvedAt: null }),
+        }),
       );
     });
 
@@ -109,8 +134,14 @@ describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
     it('activates a PENDING_APPROVAL enrollment and tags source MANUAL_APPROVAL', async () => {
       const { svc, prisma } = makeDeps();
       prisma.enrollment.findFirst.mockResolvedValueOnce({
-        id: 'enr_1', tenantId: 'a1', status: 'PENDING_APPROVAL',
-        course: COURSE, student: STUDENT, studentId: 's1', courseId: 'c1', payments: [],
+        id: 'enr_1',
+        tenantId: 'a1',
+        status: 'PENDING_APPROVAL',
+        course: COURSE,
+        student: STUDENT,
+        studentId: 's1',
+        courseId: 'c1',
+        payments: [],
       });
       prisma._rows.set('enr_1', { id: 'enr_1', status: 'PENDING_APPROVAL' });
       const result = await svc.approve('a1', 'enr_1');
@@ -121,7 +152,14 @@ describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
     it('refuses to approve an enrollment that is not PENDING_APPROVAL', async () => {
       const { svc, prisma } = makeDeps();
       prisma.enrollment.findFirst.mockResolvedValueOnce({
-        id: 'enr_1', tenantId: 'a1', status: 'ACTIVE', course: COURSE, student: STUDENT, studentId: 's1', courseId: 'c1', payments: [],
+        id: 'enr_1',
+        tenantId: 'a1',
+        status: 'ACTIVE',
+        course: COURSE,
+        student: STUDENT,
+        studentId: 's1',
+        courseId: 'c1',
+        payments: [],
       });
       await expect(svc.approve('a1', 'enr_1')).rejects.toBeInstanceOf(BadRequestException);
     });
@@ -129,7 +167,14 @@ describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
     it('is idempotent: a second concurrent approve on the same row is refused, not double-activated', async () => {
       const { svc, prisma } = makeDeps();
       prisma.enrollment.findFirst.mockResolvedValue({
-        id: 'enr_1', tenantId: 'a1', status: 'PENDING_APPROVAL', course: COURSE, student: STUDENT, studentId: 's1', courseId: 'c1', payments: [],
+        id: 'enr_1',
+        tenantId: 'a1',
+        status: 'PENDING_APPROVAL',
+        course: COURSE,
+        student: STUDENT,
+        studentId: 's1',
+        courseId: 'c1',
+        payments: [],
       });
       prisma._rows.set('enr_1', { id: 'enr_1', status: 'PENDING_APPROVAL' });
       await svc.approve('a1', 'enr_1'); // first succeeds, row is now ACTIVE
@@ -147,7 +192,14 @@ describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
     it('rejects a PENDING_APPROVAL enrollment with a reason', async () => {
       const { svc, prisma } = makeDeps();
       prisma.enrollment.findFirst.mockResolvedValue({
-        id: 'enr_1', tenantId: 'a1', status: 'PENDING_APPROVAL', course: COURSE, student: STUDENT, studentId: 's1', courseId: 'c1', payments: [],
+        id: 'enr_1',
+        tenantId: 'a1',
+        status: 'PENDING_APPROVAL',
+        course: COURSE,
+        student: STUDENT,
+        studentId: 's1',
+        courseId: 'c1',
+        payments: [],
       });
       prisma._rows.set('enr_1', { id: 'enr_1', status: 'PENDING_APPROVAL' });
       const result = await svc.reject('a1', 'enr_1', 'not eligible');
@@ -197,8 +249,14 @@ describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
     it('refuses re-demo-enrolling an already-ACTIVE, unexpired enrollment', async () => {
       const { svc, prisma } = makeDeps({ academy: { enrollmentMode: 'DEMO' } });
       prisma.studentProfile.findFirst.mockResolvedValue(STUDENT);
-      prisma.enrollment.findUnique.mockResolvedValue({ id: 'enr_1', status: 'ACTIVE', expiresAt: null });
-      await expect(svc.demoEnroll('a1', { studentUserId: 'u1' }, 'c1')).rejects.toBeInstanceOf(ConflictException);
+      prisma.enrollment.findUnique.mockResolvedValue({
+        id: 'enr_1',
+        status: 'ACTIVE',
+        expiresAt: null,
+      });
+      await expect(svc.demoEnroll('a1', { studentUserId: 'u1' }, 'c1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('404s for a student who does not exist', async () => {
@@ -207,7 +265,7 @@ describe('EnrollmentsService — enrollment modes (Phase 5)', () => {
       await expect(svc.demoEnroll('a1', { studentUserId: 'nonexistent' }, 'c1')).rejects.toThrow();
     });
 
-    it("404s for a course belonging to a different academy — never cross-academy-enrolls", async () => {
+    it('404s for a course belonging to a different academy — never cross-academy-enrolls', async () => {
       const { svc, prisma } = makeDeps({ academy: { enrollmentMode: 'DEMO' } });
       prisma.studentProfile.findFirst.mockResolvedValue(STUDENT);
       prisma.course.findFirst.mockResolvedValue(null); // tenant-scoped query found nothing

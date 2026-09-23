@@ -1,6 +1,14 @@
 import { SiteBlock } from '../../../schema/site-document';
 import {
-  ENROLLING_BADGE, actions, hasImage, headline, i18n, image, sectionOpen, SECTION_CLOSE, COURSES_ANCHOR,
+  ENROLLING_BADGE,
+  actions,
+  hasImage,
+  headline,
+  i18n,
+  image,
+  sectionOpen,
+  SECTION_CLOSE,
+  COURSES_ANCHOR,
 } from '../helpers';
 import { registerPattern } from '../registry';
 import { ComposeContext } from '../types';
@@ -63,7 +71,7 @@ registerPattern({
 registerPattern({
   id: 'hero.split-portrait',
   section: 'hero',
-  brief: 'Copy on one side, the teacher\'s photograph on the other. Needs a cover image.',
+  brief: "Copy on one side, the teacher's photograph on the other. Needs a cover image.",
   needs: { media: true },
   base: 1.3,
   css: () => `${HERO_BASE}
@@ -87,7 +95,8 @@ registerPattern({
 registerPattern({
   id: 'hero.editorial',
   section: 'hero',
-  brief: 'Oversized left-aligned headline running most of the screen width. No image. Authoritative.',
+  brief:
+    'Oversized left-aligned headline running most of the screen width. No image. Authoritative.',
   base: 1,
   weight: { university: 1.4, math_science: 1.2, languages: 1.15 },
   css: () => `${HERO_BASE}
@@ -107,7 +116,8 @@ registerPattern({
 registerPattern({
   id: 'hero.image-full',
   section: 'hero',
-  brief: 'The cover photograph fills the screen behind the headline, under a scrim. Cinematic. Needs a strong cover image.',
+  brief:
+    'The cover photograph fills the screen behind the headline, under a scrim. Cinematic. Needs a strong cover image.',
   needs: { media: true },
   base: 1.15,
   weight: { exam_prep: 1.35, languages: 1.2 },
@@ -137,7 +147,8 @@ registerPattern({
 registerPattern({
   id: 'hero.bento',
   section: 'hero',
-  brief: 'The headline shares the first screen with panels — image, badge, supporting note. Modern, technical, product-like.',
+  brief:
+    'The headline shares the first screen with panels — image, badge, supporting note. Modern, technical, product-like.',
   base: 1,
   weight: { programming: 1.5, exam_prep: 1.1 },
   css: () => `${HERO_BASE}
@@ -154,9 +165,10 @@ registerPattern({
 .hero-bento h1{max-width:14ch}`,
   render: (b, spec, ctx) => {
     const block = b as Hero;
-    const media = block.mediaId && hasImage(block.mediaId, ctx)
-      ? `<div class="b-media b-wide">${image(block.mediaId, ctx, { ratio: '16:9', treatment: spec.imageTreatment, eager: true })}</div>`
-      : '';
+    const media =
+      block.mediaId && hasImage(block.mediaId, ctx)
+        ? `<div class="b-media b-wide">${image(block.mediaId, ctx, { ratio: '16:9', treatment: spec.imageTreatment, eager: true })}</div>`
+        : '';
     return `${sectionOpen('hero', spec, ctx, { extraClass: 'hero hero-bento' })}
       <div class="bento">
         <div class="b-copy">${copy(block, ctx)}</div>
@@ -173,7 +185,8 @@ registerPattern({
 registerPattern({
   id: 'hero.offset-collage',
   section: 'hero',
-  brief: 'Headline with the photograph offset and overlapping. Warm, human, art-directed. Needs a cover image.',
+  brief:
+    'Headline with the photograph offset and overlapping. Warm, human, art-directed. Needs a cover image.',
   needs: { media: true },
   base: 1.05,
   weight: { languages: 1.45, general: 1.1 },

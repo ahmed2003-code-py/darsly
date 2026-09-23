@@ -39,7 +39,8 @@ export const GamificationEventType = {
   STUDY_WINDOW: 'STUDY_WINDOW',
 } as const;
 
-export type GamificationEventType = (typeof GamificationEventType)[keyof typeof GamificationEventType];
+export type GamificationEventType =
+  (typeof GamificationEventType)[keyof typeof GamificationEventType];
 
 /**
  * Which aggregate counter an event advances. Achievements are evaluated against

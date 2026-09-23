@@ -21,39 +21,60 @@ export interface DesignDna {
 
 export const DESIGN_DNA = {
   editorial_dark: {
-    preset: 'premium', style: 'elegant', headingFont: 'serif',
+    preset: 'premium',
+    style: 'elegant',
+    headingFont: 'serif',
     palette: { primary: '#6366F1', accent: '#E3B341' },
-    description: 'Dark, editorial, luxury. Serif headlines, indigo + gold. For established, authoritative teachers who signal prestige.',
+    description:
+      'Dark, editorial, luxury. Serif headlines, indigo + gold. For established, authoritative teachers who signal prestige.',
   },
   royal_night: {
-    preset: 'premium', style: 'bold', headingFont: 'sans',
+    preset: 'premium',
+    style: 'bold',
+    headingFont: 'sans',
     palette: { primary: '#3B82F6', accent: '#A78BFA' },
-    description: 'Dark, confident, modern. Bold sans, blue + violet. A premium tech feel for senior/university teachers.',
+    description:
+      'Dark, confident, modern. Bold sans, blue + violet. A premium tech feel for senior/university teachers.',
   },
   bold_energetic: {
-    preset: 'energetic', style: 'bold', headingFont: 'display',
+    preset: 'energetic',
+    style: 'bold',
+    headingFont: 'display',
     palette: { primary: '#FB3B6C', accent: '#22D3EE' },
-    description: 'Dark with vibrant animated gradients, pink + cyan display type. For youth, motivation and exam-prep audiences.',
+    description:
+      'Dark with vibrant animated gradients, pink + cyan display type. For youth, motivation and exam-prep audiences.',
   },
   warm_mentor: {
-    preset: 'warm', style: 'modern', headingFont: 'sans',
+    preset: 'warm',
+    style: 'modern',
+    headingFont: 'sans',
     palette: { primary: '#D2603A', accent: '#0F766E' },
-    description: 'Warm cream light theme, terracotta + teal, friendly and rounded. For school-stage students and the parents who choose for them.',
+    description:
+      'Warm cream light theme, terracotta + teal, friendly and rounded. For school-stage students and the parents who choose for them.',
   },
   sunrise_warm: {
-    preset: 'warm', style: 'modern', headingFont: 'display',
+    preset: 'warm',
+    style: 'modern',
+    headingFont: 'display',
     palette: { primary: '#EA580C', accent: '#F59E0B' },
-    description: 'Bright, upbeat light theme, orange + amber. Energetic but approachable — great for junior stages and clubs.',
+    description:
+      'Bright, upbeat light theme, orange + amber. Energetic but approachable — great for junior stages and clubs.',
   },
   academic_precise: {
-    preset: 'academic', style: 'minimal', headingFont: 'sans',
+    preset: 'academic',
+    style: 'minimal',
+    headingFont: 'sans',
     palette: { primary: '#1D4ED8', accent: '#0EA5E9' },
-    description: 'Crisp white, minimal, high-contrast, blue. For university, STEM and rigorous, results-focused positioning.',
+    description:
+      'Crisp white, minimal, high-contrast, blue. For university, STEM and rigorous, results-focused positioning.',
   },
   creative_serif: {
-    preset: 'warm', style: 'elegant', headingFont: 'serif',
+    preset: 'warm',
+    style: 'elegant',
+    headingFont: 'serif',
     palette: { primary: '#7C3AED', accent: '#DB2777' },
-    description: 'Light editorial with an elegant serif, violet + pink — refined yet warm. For languages, humanities and personal-brand teachers.',
+    description:
+      'Light editorial with an elegant serif, violet + pink — refined yet warm. For languages, humanities and personal-brand teachers.',
   },
 } as const satisfies Record<string, DesignDna>;
 

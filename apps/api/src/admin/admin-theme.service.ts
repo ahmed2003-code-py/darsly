@@ -8,7 +8,13 @@ import {
   AdminThemeTokens,
   presetEntry,
 } from '@darsly/shared-types';
-import { AppTheme, BrandPalette, deriveAppTheme, deriveAppThemeFor, paletteFromBrandTokens } from '../branding/app-theme';
+import {
+  AppTheme,
+  BrandPalette,
+  deriveAppTheme,
+  deriveAppThemeFor,
+  paletteFromBrandTokens,
+} from '../branding/app-theme';
 import { PrismaService } from '../prisma/prisma.service';
 import { safeHex, ThemeConfig } from '../studio/studio-theme';
 
@@ -25,12 +31,25 @@ export interface AdminThemeCatalog {
 }
 
 const ACADEMY_SELECT = {
-  id: true, name: true, slug: true, kind: true, logoUrl: true, brandTokens: true, colorPrimary: true, colorAccent: true,
+  id: true,
+  name: true,
+  slug: true,
+  kind: true,
+  logoUrl: true,
+  brandTokens: true,
+  colorPrimary: true,
+  colorAccent: true,
   owner: { select: { fullName: true } },
 } satisfies Prisma.AcademySelect;
 type AcademyRow = Prisma.AcademyGetPayload<{ select: typeof ACADEMY_SELECT }>;
 
-const COSMETIC_SELECT = { key: true, nameAr: true, nameEn: true, rarity: true, config: true } satisfies Prisma.CosmeticItemSelect;
+const COSMETIC_SELECT = {
+  key: true,
+  nameAr: true,
+  nameEn: true,
+  rarity: true,
+  config: true,
+} satisfies Prisma.CosmeticItemSelect;
 type CosmeticRow = Prisma.CosmeticItemGetPayload<{ select: typeof COSMETIC_SELECT }>;
 
 /**
@@ -74,7 +93,10 @@ export class AdminThemeService {
   }
 
   async get(userId: string): Promise<AdminThemePreference> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { adminThemePreference: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { adminThemePreference: true },
+    });
     const stored = (user?.adminThemePreference as { themeId?: unknown } | null)?.themeId;
     if (typeof stored !== 'string' || !stored) return { themeId: null, theme: null };
     const theme = await this.resolve(stored);
@@ -83,7 +105,11 @@ export class AdminThemeService {
 
   async set(userId: string, themeId: string | null): Promise<AdminThemePreference> {
     const theme = themeId === null ? null : await this.resolve(themeId);
-    if (themeId !== null && !theme) throw new BadRequestException({ message: `Unknown admin theme: ${themeId}`, code: 'ADMIN_THEME_UNKNOWN' });
+    if (themeId !== null && !theme)
+      throw new BadRequestException({
+        message: `Unknown admin theme: ${themeId}`,
+        code: 'ADMIN_THEME_UNKNOWN',
+      });
     await this.prisma.user.update({
       where: { id: userId },
       data: { adminThemePreference: theme ? { themeId: theme.id } : Prisma.DbNull },
@@ -104,11 +130,17 @@ export class AdminThemeService {
       return preset ? bothModesPreset(preset) : null;
     }
     if (ns === 'academy') {
-      const row = await this.prisma.academy.findFirst({ where: { id: ref, deletedAt: null, status: { not: 'ARCHIVED' } }, select: ACADEMY_SELECT });
+      const row = await this.prisma.academy.findFirst({
+        where: { id: ref, deletedAt: null, status: { not: 'ARCHIVED' } },
+        select: ACADEMY_SELECT,
+      });
       return row ? academyEntry(row) : null;
     }
     if (ns === 'cosmetic') {
-      const row = await this.prisma.cosmeticItem.findFirst({ where: { key: ref, category: 'THEME', isActive: true }, select: COSMETIC_SELECT });
+      const row = await this.prisma.cosmeticItem.findFirst({
+        where: { key: ref, category: 'THEME', isActive: true },
+        select: COSMETIC_SELECT,
+      });
       return row ? cosmeticEntry(row) : null;
     }
     return null;
@@ -127,7 +159,9 @@ export class AdminThemeService {
  * than inventing a second set of rules is the point — an admin look and an
  * academy look go dark by the same means.
  */
-function bothModes(palette: BrandPalette | null): Pick<AdminThemeEntry, 'mode' | 'tokens' | 'modes'> {
+function bothModes(
+  palette: BrandPalette | null,
+): Pick<AdminThemeEntry, 'mode' | 'tokens' | 'modes'> {
   const native = deriveAppTheme(palette);
   const modes = {
     light: adminTokensFrom(deriveAppThemeFor(palette, 'light')),
@@ -149,7 +183,10 @@ function bothModesPreset(preset: AdminThemePreset): AdminThemeEntry {
   const derived = adminTokensFrom(deriveAppThemeFor(paletteFromAdminTokens(preset.tokens), other));
   return {
     ...presetEntry(preset),
-    modes: { [preset.mode]: preset.tokens, [other]: derived } as Record<AdminThemeMode, AdminThemeTokens>,
+    modes: { [preset.mode]: preset.tokens, [other]: derived } as Record<
+      AdminThemeMode,
+      AdminThemeTokens
+    >,
   };
 }
 
@@ -167,7 +204,10 @@ function paletteFromAdminTokens(tokens: AdminThemeTokens): BrandPalette {
 
 /** `"110 91 211"` → `"#6E5BD3"`. The inverse of app-theme's `triple()`. */
 function hexFromTriple(triple: string): string {
-  const parts = triple.trim().split(/\s+/).map((n) => Math.max(0, Math.min(255, Number(n) | 0)));
+  const parts = triple
+    .trim()
+    .split(/\s+/)
+    .map((n) => Math.max(0, Math.min(255, Number(n) | 0)));
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '#000000';
   return `#${parts.map((n) => n.toString(16).padStart(2, '0')).join('')}`;
 }
@@ -180,7 +220,13 @@ function academyEntry(a: AcademyRow): AdminThemeEntry {
     name: a.name,
     subtitle: a.owner?.fullName ?? null,
     ...bothModes(palette),
-    meta: { academyId: a.id, academyKind: a.kind, slug: a.slug, logoUrl: a.logoUrl, ownerName: a.owner?.fullName ?? null },
+    meta: {
+      academyId: a.id,
+      academyKind: a.kind,
+      slug: a.slug,
+      logoUrl: a.logoUrl,
+      ownerName: a.owner?.fullName ?? null,
+    },
   };
 }
 
@@ -192,7 +238,11 @@ function cosmeticEntry(c: CosmeticRow): AdminThemeEntry {
     name: c.nameAr,
     subtitle: c.nameEn,
     ...bothModes(paletteFromCosmetic(cfg)),
-    meta: { cosmeticKey: c.key, rarity: c.rarity, pattern: typeof cfg.pattern === 'string' ? cfg.pattern : null },
+    meta: {
+      cosmeticKey: c.key,
+      rarity: c.rarity,
+      pattern: typeof cfg.pattern === 'string' ? cfg.pattern : null,
+    },
   };
 }
 
@@ -206,7 +256,11 @@ export function paletteFromCosmetic(cfg: ThemeConfig): BrandPalette {
   const ground = cfg.surfaces ?? null;
   const dark = !!ground;
   const primary = (dark ? safeHex(cfg.accentDark) : null) ?? safeHex(cfg.accent) ?? undefined;
-  const accent = (dark ? safeHex(cfg.secondaryDark) ?? safeHex(cfg.goldDark) : null) ?? safeHex(cfg.secondary) ?? safeHex(cfg.gold) ?? primary;
+  const accent =
+    (dark ? (safeHex(cfg.secondaryDark) ?? safeHex(cfg.goldDark)) : null) ??
+    safeHex(cfg.secondary) ??
+    safeHex(cfg.gold) ??
+    primary;
   return {
     primary,
     accent,

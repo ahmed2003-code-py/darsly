@@ -23,7 +23,11 @@ describe('MailService', () => {
 
   const message = () => ({
     to: 'student@example.com',
-    ...resetPasswordEmail({ name: 'أحمد', resetUrl: 'https://app/reset?token=x', expiresInMinutes: 30 }),
+    ...resetPasswordEmail({
+      name: 'أحمد',
+      resetUrl: 'https://app/reset?token=x',
+      expiresInMinutes: 30,
+    }),
   });
 
   it('does not call the provider when no API key is configured', async () => {
@@ -53,7 +57,11 @@ describe('MailService', () => {
 
   it('reports a provider rejection instead of throwing into the caller', async () => {
     process.env.RESEND_API_KEY = 're_test_key';
-    fetchMock.mockResolvedValue({ ok: false, status: 403, text: async () => 'domain not verified' });
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => 'domain not verified',
+    });
     await expect(service.send(message())).resolves.toEqual({
       delivered: false,
       reason: 'provider-error',
@@ -71,7 +79,9 @@ describe('MailService', () => {
 
   it('builds web links without doubling slashes', () => {
     process.env.WEB_URL = 'https://darsly.app/';
-    expect(service.webUrl('/reset-password?token=a')).toBe('https://darsly.app/reset-password?token=a');
+    expect(service.webUrl('/reset-password?token=a')).toBe(
+      'https://darsly.app/reset-password?token=a',
+    );
     expect(service.webUrl()).toBe('https://darsly.app');
   });
 
@@ -120,13 +130,17 @@ describe('MailService', () => {
 
   describe('no-provider dev seam never logs a token in production', () => {
     it('outside production the body (with its link) is logged for local use', async () => {
-      delete process.env.RESEND_API_KEY; delete process.env.MAIL_TRANSPORT; delete process.env.NODE_ENV;
+      delete process.env.RESEND_API_KEY;
+      delete process.env.MAIL_TRANSPORT;
+      delete process.env.NODE_ENV;
       const warn = service['logger'].warn as jest.Mock;
       await service.send(message());
       expect(warn.mock.calls[0][0]).toContain('https://app/reset?token=x');
     });
     it('in production only the envelope is logged — the link/token never reaches the log', async () => {
-      delete process.env.RESEND_API_KEY; delete process.env.MAIL_TRANSPORT; process.env.NODE_ENV = 'production';
+      delete process.env.RESEND_API_KEY;
+      delete process.env.MAIL_TRANSPORT;
+      process.env.NODE_ENV = 'production';
       const warn = service['logger'].warn as jest.Mock;
       await service.send(message());
       expect(warn.mock.calls[0][0]).toContain('[MAIL:NOT-SENT]');
@@ -149,7 +163,11 @@ describe('MailService', () => {
     });
 
     it('still carries the real recipient and message content — only delivery is redirected', async () => {
-      await service.send({ ...message(), to: 'real-center-owner@example.com', centerOwnerTestRedirect: true });
+      await service.send({
+        ...message(),
+        to: 'real-center-owner@example.com',
+        centerOwnerTestRedirect: true,
+      });
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       // The real recipient appears in the subject and body, never silently dropped.
       expect(body.subject).toContain('real-center-owner@example.com');
@@ -173,7 +191,7 @@ describe('MailService', () => {
       expect(body.to).toEqual(['student@example.com']);
     });
 
-    it('never mutates the caller\'s input object — the real `to` stays intact after send()', async () => {
+    it("never mutates the caller's input object — the real `to` stays intact after send()", async () => {
       const input = { ...message(), centerOwnerTestRedirect: true };
       await service.send(input);
       expect(input.to).toBe('student@example.com');
@@ -211,7 +229,12 @@ describe('email templates', () => {
       reviewUrl: 'https://app/admin/teachers',
     });
     expect(subject).toContain('عمرو فاروق');
-    for (const piece of ['amr@example.com', '+201001234567', 'رياضيات، فيزياء', 'https://app/admin/teachers']) {
+    for (const piece of [
+      'amr@example.com',
+      '+201001234567',
+      'رياضيات، فيزياء',
+      'https://app/admin/teachers',
+    ]) {
       expect(html).toContain(piece);
       expect(text).toContain(piece);
     }

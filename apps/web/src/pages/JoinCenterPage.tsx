@@ -2,7 +2,12 @@ import { m } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AuthShell, { rise } from '../components/AuthShell';
-import { useAcceptInvitationLink, useDeclineInvitationLink, useInvitationPreview, type InvitationPreview } from '../lib/invitationLinks';
+import {
+  useAcceptInvitationLink,
+  useDeclineInvitationLink,
+  useInvitationPreview,
+  type InvitationPreview,
+} from '../lib/invitationLinks';
 import { useMyAcademies } from '../lib/academy';
 import { withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
@@ -22,7 +27,10 @@ export default function JoinCenterPage() {
   const signedIn = useAuthStore((s) => !!s.accessToken);
   const { data: preview, isLoading, isError } = useInvitationPreview(token);
 
-  if (!signedIn) return <SignedOutLanding token={token!} preview={preview} loading={isLoading} invalid={isError} />;
+  if (!signedIn)
+    return (
+      <SignedOutLanding token={token!} preview={preview} loading={isLoading} invalid={isError} />
+    );
 
   return (
     <div className="page mx-auto max-w-md">
@@ -69,7 +77,8 @@ function DecisionCard({ token, preview }: { token: string; preview: InvitationPr
         navigate('/teacher', { replace: true });
       },
     });
-  const doDecline = () => decline.mutate(token, { onSuccess: () => navigate('/', { replace: true }) });
+  const doDecline = () =>
+    decline.mutate(token, { onSuccess: () => navigate('/', { replace: true }) });
 
   return (
     <div className="card p-6 text-center">
@@ -97,11 +106,25 @@ function DecisionCard({ token, preview }: { token: string; preview: InvitationPr
  * Both carry this page as the redirect, so the token survives either journey.
  * The role is shown, never chosen — the link already decided it.
  */
-function SignedOutLanding({ token, preview, loading, invalid }: { token: string; preview?: InvitationPreview; loading: boolean; invalid: boolean }) {
+function SignedOutLanding({
+  token,
+  preview,
+  loading,
+  invalid,
+}: {
+  token: string;
+  preview?: InvitationPreview;
+  loading: boolean;
+  invalid: boolean;
+}) {
   const { t } = useTranslation();
   const here = `/join/${encodeURIComponent(token)}`;
-  const title = preview ? t('joinCenter.landingTitle', { name: preview.academyName }) : t('joinCenter.title');
-  const subtitle = preview ? t('joinCenter.landingSubtitle', { role: roleLabel(t, preview.role) }) : undefined;
+  const title = preview
+    ? t('joinCenter.landingTitle', { name: preview.academyName })
+    : t('joinCenter.title');
+  const subtitle = preview
+    ? t('joinCenter.landingSubtitle', { role: roleLabel(t, preview.role) })
+    : undefined;
 
   return (
     <AuthShell title={title} subtitle={subtitle} brandName={preview?.academyName}>
@@ -110,14 +133,22 @@ function SignedOutLanding({ token, preview, loading, invalid }: { token: string;
       ) : invalid || !preview ? (
         <m.div variants={rise}>
           <InvalidCard />
-          <Link to="/login" className="btn-secondary mt-4 block w-full py-3 text-center">{t('auth.loginLink')}</Link>
+          <Link to="/login" className="btn-secondary mt-4 block w-full py-3 text-center">
+            {t('auth.loginLink')}
+          </Link>
         </m.div>
       ) : (
         <m.div variants={rise} className="space-y-3">
-          <Link to={withRedirect('/register', here)} className="btn-primary block w-full py-3 text-center">
+          <Link
+            to={withRedirect('/register', here)}
+            className="btn-primary block w-full py-3 text-center"
+          >
             {t('joinCenter.createAccount')}
           </Link>
-          <Link to={withRedirect('/login', here)} className="btn-secondary block w-full py-3 text-center">
+          <Link
+            to={withRedirect('/login', here)}
+            className="btn-secondary block w-full py-3 text-center"
+          >
             {t('joinCenter.signInToAccept')}
           </Link>
         </m.div>

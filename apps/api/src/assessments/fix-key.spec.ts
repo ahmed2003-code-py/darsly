@@ -28,26 +28,46 @@ function ctx(over: { attempts?: any[]; type?: string; oldKey?: string[] } = {}) 
     correctOptionId: (over.oldKey ?? ['a'])[0],
     correctOptionIds: over.oldKey ?? ['a'],
     // 40 marks on the paper, so this question is a quarter of it.
-    quiz: { id: 'quiz1', passingScore: 50, lessonId: 'l1', lesson: { title: 'الدرس' }, questions: [{ points: 10 }, { points: 30 }] },
+    quiz: {
+      id: 'quiz1',
+      passingScore: 50,
+      lessonId: 'l1',
+      lesson: { title: 'الدرس' },
+      questions: [{ points: 10 }, { points: 30 }],
+    },
   };
   const prisma: any = {
     quizQuestion: {
       findFirst: jest.fn().mockResolvedValue(question),
-      update: jest.fn(async (a: any) => { updates.push({ kind: 'key', ...a.data }); return a.data; }),
+      update: jest.fn(async (a: any) => {
+        updates.push({ kind: 'key', ...a.data });
+        return a.data;
+      }),
     },
     quizAttempt: {
       findMany: jest.fn().mockResolvedValue(over.attempts ?? []),
-      update: jest.fn(async (a: any) => { updates.push({ kind: 'attempt', id: a.where.id, ...a.data }); return a.data; }),
+      update: jest.fn(async (a: any) => {
+        updates.push({ kind: 'attempt', id: a.where.id, ...a.data });
+        return a.data;
+      }),
     },
     questionReport: { updateMany: jest.fn().mockResolvedValue({ count: 3 }) },
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1' }) },
   };
   const svc = new GradingService(prisma, { create: jest.fn() } as any);
-  return { svc, prisma, updates, scoreOf: (id: string) => updates.find((u) => u.kind === 'attempt' && u.id === id) };
+  return {
+    svc,
+    prisma,
+    updates,
+    scoreOf: (id: string) => updates.find((u) => u.kind === 'attempt' && u.id === id),
+  };
 }
 
 const attempt = (id: string, chose: string, scorePct: number) => ({
-  id, studentId: 's-' + id, scorePct, answers: { q1: chose },
+  id,
+  studentId: 's-' + id,
+  scorePct,
+  answers: { q1: chose },
 });
 
 describe('correcting a question key', () => {
@@ -100,7 +120,7 @@ describe('correcting a question key', () => {
     expect(prisma.quizAttempt.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          needsManualGrading: false,   // still being marked: it will meet the new key then
+          needsManualGrading: false, // still being marked: it will meet the new key then
           voidedAt: null,
           submittedAt: { not: null },
           scorePct: { not: null },
@@ -140,10 +160,12 @@ describe('correcting a question key', () => {
     expect(scoreOf('F')).toMatchObject({ scorePct: 75 });
   });
 
-  it('cannot reach a question in another teacher\'s course', async () => {
+  it("cannot reach a question in another teacher's course", async () => {
     const { svc, prisma } = ctx();
     prisma.quizQuestion.findFirst.mockResolvedValue(null);
     await expect(svc.fixKey('t1', 'u-teacher', 'q1', ['b'])).rejects.toThrow();
-    expect(prisma.quizQuestion.findFirst.mock.calls[0][0].where.quiz.lesson.unit.course.tenantId).toBe('t1');
+    expect(
+      prisma.quizQuestion.findFirst.mock.calls[0][0].where.quiz.lesson.unit.course.tenantId,
+    ).toBe('t1');
   });
 });

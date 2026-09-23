@@ -54,8 +54,12 @@ export const typographySchema = z.object({
   /** How far headlines are allowed to dominate the page. */
   scale: z.enum(TYPE_SCALES),
   headingWeight: z.union([
-    z.literal(400), z.literal(500), z.literal(600),
-    z.literal(700), z.literal(800), z.literal(900),
+    z.literal(400),
+    z.literal(500),
+    z.literal(600),
+    z.literal(700),
+    z.literal(800),
+    z.literal(900),
   ]),
   headingCase: z.enum(HEADING_CASES),
   tracking: z.enum(TRACKINGS),
@@ -92,7 +96,12 @@ export const rhythmSchema = z.object({
 export const MOTION_INTENSITIES = ['calm', 'lively', 'cinematic'] as const;
 export const ENTRANCES = ['fade', 'rise', 'slide', 'mask-reveal', 'stagger-grid'] as const;
 export const SCROLL_EFFECTS = [
-  'parallax', 'sticky-headings', 'progress-bar', 'counters', 'pointer-glow', 'marquee',
+  'parallax',
+  'sticky-headings',
+  'progress-bar',
+  'counters',
+  'pointer-glow',
+  'marquee',
 ] as const;
 
 export const motionSchema = z.object({
@@ -105,16 +114,36 @@ export const motionSchema = z.object({
 });
 
 export const BACKDROPS = [
-  'none', 'gradient-wash', 'mesh', 'spotlight', 'grid-lines',
-  'dot-matrix', 'blueprint', 'topography', 'orbits', 'aurora',
+  'none',
+  'gradient-wash',
+  'mesh',
+  'spotlight',
+  'grid-lines',
+  'dot-matrix',
+  'blueprint',
+  'topography',
+  'orbits',
+  'aurora',
 ] as const;
 export const ACCENT_MARKS = [
-  'rule-lines', 'numbered-sections', 'corner-brackets', 'sticker-badges',
-  'underline-swash', 'blob', 'ring',
+  'rule-lines',
+  'numbered-sections',
+  'corner-brackets',
+  'sticker-badges',
+  'underline-swash',
+  'blob',
+  'ring',
 ] as const;
 export const DIVIDERS = ['none', 'hairline', 'gradient', 'wave', 'notch'] as const;
 export const IMAGE_TREATMENTS = [
-  'plain', 'rounded', 'duotone', 'ring', 'tilt', 'mask-arch', 'mask-blob', 'grid-overlay',
+  'plain',
+  'rounded',
+  'duotone',
+  'ring',
+  'tilt',
+  'mask-arch',
+  'mask-blob',
+  'grid-overlay',
 ] as const;
 
 export const decorationSchema = z.object({

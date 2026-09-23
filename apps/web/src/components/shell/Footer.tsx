@@ -30,8 +30,12 @@ export default function Footer({ variant }: { variant: string }) {
             <span className="brand-tile h-6 w-6" aria-hidden />
             {t('brand')}
           </span>
-          <Link to="/profile" className="hover:text-on-surface">{t('nav.profile', 'الملف الشخصي')}</Link>
-          <Link to="/messages" className="hover:text-on-surface">{t('nav.messages')}</Link>
+          <Link to="/profile" className="hover:text-on-surface">
+            {t('nav.profile', 'الملف الشخصي')}
+          </Link>
+          <Link to="/messages" className="hover:text-on-surface">
+            {t('nav.messages')}
+          </Link>
           <span className="ms-auto">© {new Date().getFullYear()}</span>
         </div>
       </footer>
@@ -42,7 +46,10 @@ export default function Footer({ variant }: { variant: string }) {
     const g = data;
     const cell = (icon: string, value: string | number, label: string, cls: string) => (
       <span className="flex items-center gap-2">
-        <span className={`material-symbols-outlined text-[18px] ${cls}`} style={{ fontVariationSettings: "'FILL' 1" }}>
+        <span
+          className={`material-symbols-outlined text-[18px] ${cls}`}
+          style={{ fontVariationSettings: "'FILL' 1" }}
+        >
           {icon}
         </span>
         <span className="font-heading text-sm font-extrabold tabular-nums">{value}</span>
@@ -56,9 +63,17 @@ export default function Footer({ variant }: { variant: string }) {
             <>
               {cell('star', g.xp ?? 0, t('gamification.xp', 'نقطة'), 'text-student-gold-ink')}
               {cell('toll', g.coins ?? 0, t('gamification.coins', 'عملة'), 'text-student-gold-ink')}
-              {cell('local_fire_department', g.streak?.current ?? 0, t('gamification.streak', 'سلسلة'), 'text-student-secondary-ink')}
+              {cell(
+                'local_fire_department',
+                g.streak?.current ?? 0,
+                t('gamification.streak', 'سلسلة'),
+                'text-student-secondary-ink',
+              )}
               {g.level && (
-                <Link to="/learning" className="ms-auto text-xs font-bold text-student-accent-ink hover:underline">
+                <Link
+                  to="/learning"
+                  className="ms-auto text-xs font-bold text-student-accent-ink hover:underline"
+                >
                   {t('gamification.level', 'المستوى')} {g.level.level}
                 </Link>
               )}

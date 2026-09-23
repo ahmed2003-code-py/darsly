@@ -61,7 +61,9 @@ export default function ColorModeToggle() {
       title={t(`colorMode.${next}`)}
       aria-label={t(`colorMode.${next}`)}
     >
-      <span className="material-symbols-outlined">{mode === 'dark' ? 'light_mode' : 'dark_mode'}</span>
+      <span className="material-symbols-outlined">
+        {mode === 'dark' ? 'light_mode' : 'dark_mode'}
+      </span>
     </button>
   );
 }

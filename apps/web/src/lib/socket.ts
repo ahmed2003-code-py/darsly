@@ -35,4 +35,3 @@ export function getSocket(): Socket | null {
   });
   return socket;
 }
-

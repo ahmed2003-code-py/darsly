@@ -138,16 +138,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    */
   constructor() {
     super(
-      process.env.PRISMA_QUERY_LOG === 'true'
-        ? { log: [{ emit: 'event', level: 'query' }] }
-        : {},
+      process.env.PRISMA_QUERY_LOG === 'true' ? { log: [{ emit: 'event', level: 'query' }] } : {},
     );
     if (process.env.PRISMA_QUERY_LOG === 'true') {
       // `as never` because the event name is only on the generated client type
       // when a log config was passed, and this constructor decides that at runtime.
-      (this as never as { $on: (e: string, cb: (q: { duration: number; query: string }) => void) => void }).$on(
-        'query',
-        (q) => console.log(`[sql ${String(q.duration).padStart(4)}ms] ${q.query.slice(0, 160)}`),
+      (
+        this as never as {
+          $on: (e: string, cb: (q: { duration: number; query: string }) => void) => void;
+        }
+      ).$on('query', (q) =>
+        console.log(`[sql ${String(q.duration).padStart(4)}ms] ${q.query.slice(0, 160)}`),
       );
     }
   }

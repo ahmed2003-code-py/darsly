@@ -35,7 +35,18 @@ export default function AuthShell({
   // Blobs drift on a loop; each has its own path and period so they never
   // fall into step. Mirrored so the loop has no visible seam.
   const drift = (dx: number, dy: number, seconds: number) =>
-    still ? {} : { x: [0, dx, 0], y: [0, dy, 0], transition: { duration: seconds, repeat: Infinity, repeatType: 'mirror' as const, ease: 'easeInOut' } };
+    still
+      ? {}
+      : {
+          x: [0, dx, 0],
+          y: [0, dy, 0],
+          transition: {
+            duration: seconds,
+            repeat: Infinity,
+            repeatType: 'mirror' as const,
+            ease: 'easeInOut',
+          },
+        };
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
@@ -59,12 +70,18 @@ export default function AuthShell({
           {/* concentric rings, low contrast */}
           <m.span
             className="absolute -end-40 -top-40 h-[34rem] w-[34rem] rounded-full border border-white/10"
-            animate={still ? {} : { rotate: 360, transition: { duration: 120, repeat: Infinity, ease: 'linear' } }}
+            animate={
+              still
+                ? {}
+                : { rotate: 360, transition: { duration: 120, repeat: Infinity, ease: 'linear' } }
+            }
           >
             <span className="absolute start-1/2 top-0 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/50" />
           </m.span>
           <span className="absolute -end-28 -top-28 h-[26rem] w-[26rem] rounded-full border border-white/10" />
-          <span className="material-symbols-outlined absolute -bottom-10 end-6 text-[13rem] leading-none text-white/[0.06]">school</span>
+          <span className="material-symbols-outlined absolute -bottom-10 end-6 text-[13rem] leading-none text-white/[0.06]">
+            school
+          </span>
           <span className="absolute inset-y-0 end-0 w-px bg-white/10" />
         </div>
 
@@ -78,7 +95,9 @@ export default function AuthShell({
             <span className="material-symbols-outlined text-2xl">school</span>
           </span>
           <div className="leading-none">
-            <p className="font-heading text-2xl font-bold tracking-tight">{brandName ?? t('brand')}</p>
+            <p className="font-heading text-2xl font-bold tracking-tight">
+              {brandName ?? t('brand')}
+            </p>
             <p className="mt-1 text-xs text-on-primary/70">{brandTagline ?? t('brandTagline')}</p>
           </div>
         </m.div>
@@ -94,13 +113,19 @@ export default function AuthShell({
             className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-on-primary/80"
           >
             <span className="relative flex h-1.5 w-1.5">
-              {!still && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70" />}
+              {!still && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70" />
+              )}
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white/90" />
             </span>
             {t('auth.platformTagline')}
           </m.span>
-          <m.h2 variants={rise} className="display text-on-primary">{t('auth.brandHeadline')}</m.h2>
-          <m.p variants={rise} className="mt-4 text-on-primary/75">{t('auth.brandSub')}</m.p>
+          <m.h2 variants={rise} className="display text-on-primary">
+            {t('auth.brandHeadline')}
+          </m.h2>
+          <m.p variants={rise} className="mt-4 text-on-primary/75">
+            {t('auth.brandSub')}
+          </m.p>
           <ul className="mt-9 space-y-2.5">
             {[
               ['play_lesson', 'auth.featureVideo'],
@@ -128,7 +153,10 @@ export default function AuthShell({
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7, duration: 0.5 }}
         >
-          <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-base">encrypted</span>{t('auth.secureNote')}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-base">encrypted</span>
+            {t('auth.secureNote')}
+          </span>
         </m.div>
       </aside>
 
@@ -161,7 +189,9 @@ export default function AuthShell({
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-on-primary">
               <span className="material-symbols-outlined">school</span>
             </span>
-            <span className="font-heading text-xl font-bold tracking-tight text-on-surface">{brandName ?? t('brand')}</span>
+            <span className="font-heading text-xl font-bold tracking-tight text-on-surface">
+              {brandName ?? t('brand')}
+            </span>
           </div>
 
           <h1 className="display text-on-surface">{title}</h1>
@@ -213,7 +243,10 @@ export function AuthSegmented<T extends string>({
   onChange: (v: T) => void;
   options: { value: T; label: string; icon?: string }[];
 }) {
-  const idx = Math.max(0, options.findIndex((o) => o.value === value));
+  const idx = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
   const w = 100 / options.length;
   return (
     <m.div
@@ -251,8 +284,24 @@ export function AuthSegmented<T extends string>({
 
 /** Labelled input with an inline leading icon + optional password reveal. */
 export function AuthField({
-  icon, type = 'text', value, onChange, placeholder, label, dir, autoComplete, reveal, onReveal, revealed, maxLength,
-  pattern, inputMode, title, optional, hint, autoFocus,
+  icon,
+  type = 'text',
+  value,
+  onChange,
+  placeholder,
+  label,
+  dir,
+  autoComplete,
+  reveal,
+  onReveal,
+  revealed,
+  maxLength,
+  pattern,
+  inputMode,
+  title,
+  optional,
+  hint,
+  autoFocus,
 }: {
   icon: string;
   type?: string;
@@ -282,15 +331,22 @@ export function AuthField({
     <m.label variants={rise} className="group mb-4 block">
       <span className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-on-surface-variant">
         {label}
-        {optional && <span className="text-xs font-normal text-outline">{t('common.optional')}</span>}
+        {optional && (
+          <span className="text-xs font-normal text-outline">{t('common.optional')}</span>
+        )}
       </span>
       {/* `dir` sits on the row, not just the input. An email or a phone number
           is written left-to-right inside an Arabic page, and with only the
           input flipped the icon stayed on the page's side while the text began
           on the other — a leading icon with a field's width between it and the
           first character, and the reveal button crowded against the text. */}
-      <span dir={dir} className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-200 ease-premium focus-within:-translate-y-px focus-within:border-accent-500 focus-within:shadow-glow focus-within:ring-4 focus-within:ring-accent-500/10">
-        <span className="ms-3 material-symbols-outlined shrink-0 text-[20px] text-outline transition-colors duration-200 group-focus-within:text-primary">{icon}</span>
+      <span
+        dir={dir}
+        className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-200 ease-premium focus-within:-translate-y-px focus-within:border-accent-500 focus-within:shadow-glow focus-within:ring-4 focus-within:ring-accent-500/10"
+      >
+        <span className="ms-3 material-symbols-outlined shrink-0 text-[20px] text-outline transition-colors duration-200 group-focus-within:text-primary">
+          {icon}
+        </span>
         <input
           className="w-full min-w-0 bg-transparent px-3 py-2.5 outline-none placeholder:text-outline"
           type={type}
@@ -307,8 +363,15 @@ export function AuthField({
           required={!optional}
         />
         {reveal && (
-          <button type="button" className="shrink-0 pe-3 text-outline transition-colors hover:text-primary" onClick={onReveal} tabIndex={-1}>
-            <span className="material-symbols-outlined text-xl">{revealed ? 'visibility_off' : 'visibility'}</span>
+          <button
+            type="button"
+            className="shrink-0 pe-3 text-outline transition-colors hover:text-primary"
+            onClick={onReveal}
+            tabIndex={-1}
+          >
+            <span className="material-symbols-outlined text-xl">
+              {revealed ? 'visibility_off' : 'visibility'}
+            </span>
           </button>
         )}
       </span>

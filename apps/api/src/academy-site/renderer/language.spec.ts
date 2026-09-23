@@ -86,7 +86,7 @@ describe('a field written in one language shows that language', () => {
     expect(read.filter((t) => t === '')).toHaveLength(0);
   });
 
-  it('still prefers the visitor\'s language wherever it exists', () => {
+  it("still prefers the visitor's language wherever it exists", () => {
     const read = readAs(html, 'en');
     expect(read.some((t) => /[A-Za-z]/.test(t))).toBe(true);
   });
@@ -125,7 +125,9 @@ describe('the teacher is told which half is missing', () => {
   });
 
   it('stays quiet when both languages are there', () => {
-    const codes = gate.evaluate(buildComposition({ design: WARM_DESIGN })).warnings.map((w) => w.code);
+    const codes = gate
+      .evaluate(buildComposition({ design: WARM_DESIGN }))
+      .warnings.map((w) => w.code);
     expect(codes).not.toContain('single-language');
   });
 

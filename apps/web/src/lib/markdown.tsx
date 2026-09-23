@@ -69,8 +69,13 @@ function Anchor({ href, bare, children }: { href: string; bare?: boolean; childr
     );
   }
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={className}
-      dir={bare ? 'ltr' : undefined}>
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer nofollow"
+      className={className}
+      dir={bare ? 'ltr' : undefined}
+    >
       {children}
     </a>
   );
@@ -95,12 +100,31 @@ function inline(src: string, key: string): ReactNode[] {
     if (m.index > last) out.push(src.slice(last, m.index));
     const k = `${key}-${n++}`;
 
-    if (m[1]) out.push(<strong key={k} className="font-bold">{inline(m[2], k)}</strong>);
-    else if (m[3]) out.push(<em key={k} className="italic">{inline(m[4], k)}</em>);
-    else if (m[5]) out.push(<s key={k} className="opacity-70">{inline(m[5], k)}</s>);
+    if (m[1])
+      out.push(
+        <strong key={k} className="font-bold">
+          {inline(m[2], k)}
+        </strong>,
+      );
+    else if (m[3])
+      out.push(
+        <em key={k} className="italic">
+          {inline(m[4], k)}
+        </em>,
+      );
+    else if (m[5])
+      out.push(
+        <s key={k} className="opacity-70">
+          {inline(m[5], k)}
+        </s>,
+      );
     else if (m[6]) {
       out.push(
-        <code key={k} className="rounded bg-surface-container-high px-1.5 py-0.5 font-mono text-[0.9em]" dir="ltr">
+        <code
+          key={k}
+          className="rounded bg-surface-container-high px-1.5 py-0.5 font-mono text-[0.9em]"
+          dir="ltr"
+        >
           {m[6]}
         </code>,
       );
@@ -110,14 +134,24 @@ function inline(src: string, key: string): ReactNode[] {
       // so it degrades to that text rather than disappearing.
       out.push(
         href ? (
-          <Anchor key={k} href={href}>{inline(m[7], k)}</Anchor>
+          <Anchor key={k} href={href}>
+            {inline(m[7], k)}
+          </Anchor>
         ) : (
           <span key={k}>{inline(m[7], k)}</span>
         ),
       );
     } else if (m[9]) {
       const href = safeHref(m[9]);
-      out.push(href ? <Anchor key={k} href={href} bare>{m[9]}</Anchor> : m[9]);
+      out.push(
+        href ? (
+          <Anchor key={k} href={href} bare>
+            {m[9]}
+          </Anchor>
+        ) : (
+          m[9]
+        ),
+      );
     }
     last = m.index + whole.length;
   }
@@ -129,7 +163,9 @@ function inline(src: string, key: string): ReactNode[] {
 function withBreaks(text: string, key: string): ReactNode[] {
   const lines = text.split('\n');
   return lines.flatMap((line, i) =>
-    i === 0 ? inline(line, `${key}-${i}`) : [<br key={`${key}-br-${i}`} />, ...inline(line, `${key}-${i}`)],
+    i === 0
+      ? inline(line, `${key}-${i}`)
+      : [<br key={`${key}-br-${i}`} />, ...inline(line, `${key}-${i}`)],
   );
 }
 
@@ -171,13 +207,19 @@ function blocks(src: string): ReactNode[] {
       const close = fence[1][0];
       const body: string[] = [];
       i++;
-      while (i < lines.length && !new RegExp(`^\\s{0,3}${close === '`' ? '`' : '~'}{3,}\\s*$`).test(lines[i])) {
+      while (
+        i < lines.length &&
+        !new RegExp(`^\\s{0,3}${close === '`' ? '`' : '~'}{3,}\\s*$`).test(lines[i])
+      ) {
         body.push(lines[i++]);
       }
       i++; // the closing fence, or the end of the text
       out.push(
-        <pre key={key} dir="ltr"
-          className="mb-3 overflow-x-auto rounded-xl bg-surface-container-high p-3 text-sm last:mb-0">
+        <pre
+          key={key}
+          dir="ltr"
+          className="mb-3 overflow-x-auto rounded-xl bg-surface-container-high p-3 text-sm last:mb-0"
+        >
           <code className="font-mono">{body.join('\n')}</code>
         </pre>,
       );
@@ -216,13 +258,19 @@ function blocks(src: string): ReactNode[] {
       }
       const cls = 'mb-3 space-y-1 ps-5 last:mb-0';
       const children = items.map((it, k) => (
-        <li key={`${key}-${k}`} className="leading-relaxed">{inline(it, `${key}-${k}`)}</li>
+        <li key={`${key}-${k}`} className="leading-relaxed">
+          {inline(it, `${key}-${k}`)}
+        </li>
       ));
       out.push(
         ordered ? (
-          <ol key={key} className={`list-decimal ${cls}`}>{children}</ol>
+          <ol key={key} className={`list-decimal ${cls}`}>
+            {children}
+          </ol>
         ) : (
-          <ul key={key} className={`list-disc ${cls}`}>{children}</ul>
+          <ul key={key} className={`list-disc ${cls}`}>
+            {children}
+          </ul>
         ),
       );
       continue;
@@ -232,8 +280,10 @@ function blocks(src: string): ReactNode[] {
       const body: string[] = [];
       while (i < lines.length && QUOTE.test(lines[i])) body.push(QUOTE.exec(lines[i++])![1]);
       out.push(
-        <blockquote key={key}
-          className="mb-3 border-s-4 border-primary/40 ps-3 italic text-on-surface-variant last:mb-0">
+        <blockquote
+          key={key}
+          className="mb-3 border-s-4 border-primary/40 ps-3 italic text-on-surface-variant last:mb-0"
+        >
           {withBreaks(body.join('\n'), key)}
         </blockquote>,
       );
@@ -244,7 +294,9 @@ function blocks(src: string): ReactNode[] {
     const body: string[] = [];
     while (i < lines.length && lines[i].trim() && !isBlockStart(lines[i])) body.push(lines[i++]);
     out.push(
-      <p key={key} className="mb-3 leading-relaxed last:mb-0">{withBreaks(body.join('\n'), key)}</p>,
+      <p key={key} className="mb-3 leading-relaxed last:mb-0">
+        {withBreaks(body.join('\n'), key)}
+      </p>,
     );
   }
   return out;
@@ -252,8 +304,12 @@ function blocks(src: string): ReactNode[] {
 
 function isBlockStart(line: string): boolean {
   return (
-    HEADING.test(line) || BULLET.test(line) || NUMBER.test(line) ||
-    QUOTE.test(line) || RULE.test(line) || FENCE.test(line)
+    HEADING.test(line) ||
+    BULLET.test(line) ||
+    NUMBER.test(line) ||
+    QUOTE.test(line) ||
+    RULE.test(line) ||
+    FENCE.test(line)
   );
 }
 
@@ -264,10 +320,20 @@ function isBlockStart(line: string): boolean {
  * English, or Arabic that opens with an English product name, and the browser
  * decides that per block better than we can.
  */
-export function Markdown({ children, className = '' }: { children?: string | null; className?: string }) {
+export function Markdown({
+  children,
+  className = '',
+}: {
+  children?: string | null;
+  className?: string;
+}) {
   const src = (children ?? '').trim();
   if (!src) return null;
-  return <div dir="auto" className={className}>{blocks(src)}</div>;
+  return (
+    <div dir="auto" className={className}>
+      {blocks(src)}
+    </div>
+  );
 }
 
 /**

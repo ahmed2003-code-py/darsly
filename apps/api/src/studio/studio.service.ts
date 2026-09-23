@@ -146,7 +146,10 @@ export class StudioService implements OnModuleInit {
         where: { isActive: true },
         orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }],
       }),
-      this.prisma.studentCosmetic.findMany({ where: { studentId }, select: { itemId: true, source: true } }),
+      this.prisma.studentCosmetic.findMany({
+        where: { studentId },
+        select: { itemId: true, source: true },
+      }),
       this.customizationOf(studentId),
       this.prisma.studentGamification.findUnique({ where: { studentId } }),
       this.prisma.studentProfile.findUnique({
@@ -215,7 +218,11 @@ export class StudioService implements OnModuleInit {
     const academies = await this.prisma.academy.findMany({
       where: { id: { in: ids }, deletedAt: null, status: { not: 'ARCHIVED' } },
       select: {
-        id: true, name: true, colorPrimary: true, colorAccent: true, brandTokens: true,
+        id: true,
+        name: true,
+        colorPrimary: true,
+        colorAccent: true,
+        brandTokens: true,
         owner: { select: { fullName: true } },
       },
     });
@@ -264,7 +271,8 @@ export class StudioService implements OnModuleInit {
       },
       select: { id: true },
     });
-    if (!enrolled) throw new ForbiddenException({ message: 'Not your academy', code: 'NOT_ENROLLED' });
+    if (!enrolled)
+      throw new ForbiddenException({ message: 'Not your academy', code: 'NOT_ENROLLED' });
 
     await this.prisma.studentCustomization.upsert({
       where: { studentId },
@@ -275,7 +283,9 @@ export class StudioService implements OnModuleInit {
   }
 
   /** The equipped set, with the row created lazily on first read. */
-  private async customizationOf(studentId: string): Promise<EquipSlots & { accentHex: string | null }> {
+  private async customizationOf(
+    studentId: string,
+  ): Promise<EquipSlots & { accentHex: string | null }> {
     const row = await this.prisma.studentCustomization.findUnique({ where: { studentId } });
     return {
       academyId: row?.academyId ?? null,
@@ -299,12 +309,7 @@ export class StudioService implements OnModuleInit {
    * stops a hidden "unlock" button being the only thing between somebody and a
    * legendary theme.
    */
-  private toItemDto(
-    item: CosmeticItem,
-    ownedIds: Set<string>,
-    earned: Set<string>,
-    level: number,
-  ) {
+  private toItemDto(item: CosmeticItem, ownedIds: Set<string>, earned: Set<string>, level: number) {
     const owned = ownedIds.has(item.id) || item.isStarter;
     const gate = item.requiredAchievement;
     return {
@@ -348,14 +353,18 @@ export class StudioService implements OnModuleInit {
   }
 
   /** Resolve the worn set into tokens, on the server, where the floors are. */
-  private themeFor(items: CosmeticItem[], worn: EquipSlots & { accentHex: string | null }): StudioThemes {
+  private themeFor(
+    items: CosmeticItem[],
+    worn: EquipSlots & { accentHex: string | null },
+  ): StudioThemes {
     const byKey = new Map(items.map((i) => [i.key, i]));
     const cfg = (key: string | null): Record<string, unknown> =>
-      (key ? ((byKey.get(key)?.config ?? {}) as Record<string, unknown>) : {});
+      key ? ((byKey.get(key)?.config ?? {}) as Record<string, unknown>) : {};
 
     const themeConfig = cfg(worn.themeKey) as ThemeConfig;
     // An unlocked accent is a hex in its own config; a mixed one is on the row.
-    const accentFromItem = worn.accentKey === CUSTOM_ACCENT ? null : safeHex(cfg(worn.accentKey).hex);
+    const accentFromItem =
+      worn.accentKey === CUSTOM_ACCENT ? null : safeHex(cfg(worn.accentKey).hex);
 
     return deriveStudioThemes({
       themeConfig,
@@ -374,8 +383,15 @@ export class StudioService implements OnModuleInit {
     const studentId = await this.studentIdOf(userId);
     const worn = await this.customizationOf(studentId);
     const keys = [
-      worn.themeKey, worn.accentKey, worn.buttonKey, worn.cardKey,
-      worn.navKey, worn.headerKey, worn.avatarKey, worn.frameKey, worn.effectKey,
+      worn.themeKey,
+      worn.accentKey,
+      worn.buttonKey,
+      worn.cardKey,
+      worn.navKey,
+      worn.headerKey,
+      worn.avatarKey,
+      worn.frameKey,
+      worn.effectKey,
     ].filter((k): k is string => !!k);
     const items = keys.length
       ? await this.prisma.cosmeticItem.findMany({ where: { key: { in: keys } } })
@@ -399,7 +415,8 @@ export class StudioService implements OnModuleInit {
     const studentId = await this.studentIdOf(userId);
     const item = await this.prisma.cosmeticItem.findUnique({ where: { key } });
     if (!item || !item.isActive) throw new NotFoundException('This item is not available');
-    if (item.isStarter) throw new BadRequestException({ message: 'Already yours', code: 'ALREADY_OWNED' });
+    if (item.isStarter)
+      throw new BadRequestException({ message: 'Already yours', code: 'ALREADY_OWNED' });
 
     const already = await this.prisma.studentCosmetic.findUnique({
       where: { studentId_itemId: { studentId, itemId: item.id } },
@@ -591,8 +608,16 @@ export class StudioService implements OnModuleInit {
       where: { studentId },
       update: {
         academyId: null,
-        themeKey: null, accentKey: null, accentHex: null, buttonKey: null,
-        cardKey: null, navKey: null, headerKey: null, avatarKey: null, frameKey: null, effectKey: null,
+        themeKey: null,
+        accentKey: null,
+        accentHex: null,
+        buttonKey: null,
+        cardKey: null,
+        navKey: null,
+        headerKey: null,
+        avatarKey: null,
+        frameKey: null,
+        effectKey: null,
       },
       create: { studentId },
     });

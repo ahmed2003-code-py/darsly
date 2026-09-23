@@ -1,4 +1,8 @@
-import { ExecutionContext, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ListenerKeyGuard } from './listener-key.guard';
 
 /**
@@ -27,7 +31,9 @@ describe('the transfer-ingestion listener key', () => {
   /** Just enough ExecutionContext for a guard that only reads one header. */
   const ctx = (key?: string) =>
     ({
-      switchToHttp: () => ({ getRequest: () => ({ headers: key === undefined ? {} : { 'x-listener-key': key } }) }),
+      switchToHttp: () => ({
+        getRequest: () => ({ headers: key === undefined ? {} : { 'x-listener-key': key } }),
+      }),
     }) as unknown as ExecutionContext;
 
   beforeEach(() => {
@@ -44,7 +50,9 @@ describe('the transfer-ingestion listener key', () => {
   });
 
   it('refuses a wrong key of the same length', () => {
-    expect(() => guard.canActivate(ctx('b-listener-key-of-known-length!!'))).toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(ctx('b-listener-key-of-known-length!!'))).toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('refuses a missing key', () => {
@@ -78,7 +86,9 @@ describe('the transfer-ingestion listener key', () => {
 
   it('refuses a repeated header rather than trusting the array form', () => {
     const arrayHeader = {
-      switchToHttp: () => ({ getRequest: () => ({ headers: { 'x-listener-key': [KEY, 'other'] } }) }),
+      switchToHttp: () => ({
+        getRequest: () => ({ headers: { 'x-listener-key': [KEY, 'other'] } }),
+      }),
     } as unknown as ExecutionContext;
 
     expect(() => guard.canActivate(arrayHeader)).toThrow(UnauthorizedException);

@@ -58,7 +58,9 @@ export class GamificationService {
     try {
       return await this.recordOrThrow(input);
     } catch (e) {
-      this.logger.error(`gamification event ${input.type} failed for ${input.studentId}: ${(e as Error).message}`);
+      this.logger.error(
+        `gamification event ${input.type} failed for ${input.studentId}: ${(e as Error).message}`,
+      );
       return EMPTY_OUTCOME;
     }
   }
@@ -147,7 +149,8 @@ export class GamificationService {
       });
     } catch (e) {
       // The unique key did its job: this exact action has already been paid.
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return EMPTY_OUTCOME;
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')
+        return EMPTY_OUTCOME;
       throw e;
     }
 
@@ -204,7 +207,9 @@ export class GamificationService {
     if (input.type !== 'ACHIEVEMENT_UNLOCKED' && input.type !== 'LEVEL_UP') {
       outcome.achievements = await this.grantAchievements(input.studentId, agg, input.tenantId);
       if (outcome.achievements.length) {
-        const refreshed = await this.prisma.studentGamification.findUnique({ where: { studentId: input.studentId } });
+        const refreshed = await this.prisma.studentGamification.findUnique({
+          where: { studentId: input.studentId },
+        });
         if (refreshed) outcome.totalXp = refreshed.xp;
       }
     }
@@ -273,12 +278,17 @@ export class GamificationService {
 
     await this.notify(agg.studentId, {
       title: `🎉 وصلت للمستوى ${tier.level} — ${tier.nameAr}`,
-      body: tier.coinReward > 0 ? `كسبت ${tier.coinReward} عملة مع الترقية.` : 'استمر، أنت في طريقك.',
+      body:
+        tier.coinReward > 0 ? `كسبت ${tier.coinReward} عملة مع الترقية.` : 'استمر، أنت في طريقك.',
       meta: { kind: 'level_up', level: tier.level, icon: tier.icon, coins: tier.coinReward },
     });
 
-    const updated = await this.prisma.studentGamification.findUnique({ where: { studentId: agg.studentId } });
-    return updated ? { agg: updated, level: tier.level, nameAr: tier.nameAr, nameEn: tier.nameEn } : null;
+    const updated = await this.prisma.studentGamification.findUnique({
+      where: { studentId: agg.studentId },
+    });
+    return updated
+      ? { agg: updated, level: tier.level, nameAr: tier.nameAr, nameEn: tier.nameEn }
+      : null;
   }
 
   /**
@@ -322,7 +332,13 @@ export class GamificationService {
     const marker = `STUDY_WINDOW:${studentId}:${dayKey()}`;
     try {
       await this.prisma.gamificationEvent.create({
-        data: { studentId, type: 'STUDY_WINDOW', idempotencyKey: marker, xpAwarded: 0, coinsAwarded: 0 },
+        data: {
+          studentId,
+          type: 'STUDY_WINDOW',
+          idempotencyKey: marker,
+          xpAwarded: 0,
+          coinsAwarded: 0,
+        },
       });
     } catch {
       return; // already noted today
@@ -333,7 +349,10 @@ export class GamificationService {
   }
 
   /** Consume one charge of an active XP boost, if the event qualifies. */
-  private async consumeBoost(studentId: string, type: GamificationEventType): Promise<{ multiplier: number } | null> {
+  private async consumeBoost(
+    studentId: string,
+    type: GamificationEventType,
+  ): Promise<{ multiplier: number } | null> {
     if (type !== 'LESSON_COMPLETED') return null;
     const active = await this.prisma.rewardRedemption.findFirst({
       where: { studentId, status: 'ACTIVE', reward: { kind: 'XP_BOOST' } },
@@ -344,7 +363,10 @@ export class GamificationService {
     const remaining = Number(meta.remaining ?? 0);
     const multiplier = Number(meta.multiplier ?? 1);
     if (remaining <= 0 || multiplier <= 1) {
-      await this.prisma.rewardRedemption.update({ where: { id: active.id }, data: { status: 'FULFILLED' } });
+      await this.prisma.rewardRedemption.update({
+        where: { id: active.id },
+        data: { status: 'FULFILLED' },
+      });
       return null;
     }
     await this.prisma.rewardRedemption.update({
@@ -367,7 +389,10 @@ export class GamificationService {
   async checkUnitCompletion(studentId: string, lessonId: string): Promise<GamificationOutcome> {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
-      select: { unitId: true, unit: { select: { courseId: true, course: { select: { tenantId: true } } } } },
+      select: {
+        unitId: true,
+        unit: { select: { courseId: true, course: { select: { tenantId: true } } } },
+      },
     });
     if (!lesson) return EMPTY_OUTCOME;
 

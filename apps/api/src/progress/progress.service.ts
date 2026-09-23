@@ -53,8 +53,13 @@ export class ProgressService {
     const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
     if (!student) {
       return {
-        currentStreak: 0, longestStreak: 0, weeklyGoalLessons: 5,
-        lessonsCompletedThisWeek: 0, weeklyGoalPct: 0, totalLessonsCompleted: 0, activeCourses: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        weeklyGoalLessons: 5,
+        lessonsCompletedThisWeek: 0,
+        weeklyGoalPct: 0,
+        totalLessonsCompleted: 0,
+        activeCourses: 0,
       };
     }
     const weekStart = startOfWeek();
@@ -89,7 +94,9 @@ export class ProgressService {
    * gamification engine reads the result and rewards milestones; it does not
    * keep a second streak of its own.
    */
-  async touchActivity(studentId: string): Promise<{ rolled: boolean; currentStreak: number; freezeUsed: boolean } | null> {
+  async touchActivity(
+    studentId: string,
+  ): Promise<{ rolled: boolean; currentStreak: number; freezeUsed: boolean } | null> {
     const student = await this.prisma.studentProfile.findUnique({ where: { id: studentId } });
     if (!student) return null;
     const today = startOfDay(new Date());

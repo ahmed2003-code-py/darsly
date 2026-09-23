@@ -57,8 +57,10 @@ const flatten = (obj, prefix = '') =>
 const ar = flatten(JSON.parse(readFileSync(join(WEB, 'src/i18n/ar.json'), 'utf8')));
 const en = flatten(JSON.parse(readFileSync(join(WEB, 'src/i18n/en.json'), 'utf8')));
 
-for (const key of Object.keys(ar)) if (!(key in en)) fail.push(`i18n: "${key}" missing from en.json`);
-for (const key of Object.keys(en)) if (!(key in ar)) fail.push(`i18n: "${key}" missing from ar.json`);
+for (const key of Object.keys(ar))
+  if (!(key in en)) fail.push(`i18n: "${key}" missing from en.json`);
+for (const key of Object.keys(en))
+  if (!(key in ar)) fail.push(`i18n: "${key}" missing from ar.json`);
 
 // The language switcher legitimately names the other language in its own script.
 const ALLOW_ARABIC_IN_ENGLISH = new Set(['common.language']);

@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role } from '@darsly/shared-types';
 import { createHash, randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
@@ -34,7 +39,13 @@ export class AdminCentersService {
 
     const existing = await this.prisma.user.findUnique({
       where: { email: adminEmail },
-      select: { id: true, role: true, isActive: true, fullName: true, teacherProfile: { select: { status: true } } },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+        fullName: true,
+        teacherProfile: { select: { status: true } },
+      },
     });
 
     if (existing) {
@@ -45,7 +56,13 @@ export class AdminCentersService {
           select: { id: true, slug: true, name: true, status: true, kind: true },
         });
         await tx.academyMembership.create({
-          data: { userId: existing.id, academyId: a.id, role: 'OWNER', status: 'ACTIVE', joinedAt: new Date() },
+          data: {
+            userId: existing.id,
+            academyId: a.id,
+            role: 'OWNER',
+            status: 'ACTIVE',
+            joinedAt: new Date(),
+          },
         });
         return a;
       });
@@ -54,16 +71,32 @@ export class AdminCentersService {
       // it cannot resolve rather than refusing, and the list is editable after.
       await this.centerThemes.grantAtCreation(academy.id, dto.themeIds ?? [], adminUserId);
       await this.audit.log({
-        actorUserId: adminUserId, action: 'center.create', entity: 'Academy', entityId: academy.id, academyId: academy.id,
-        meta: { adminUserId: existing.id, adminIdentity: existing.role, activation: 'NOT_REQUIRED', themeGrants: dto.themeIds?.length ?? 0 },
+        actorUserId: adminUserId,
+        action: 'center.create',
+        entity: 'Academy',
+        entityId: academy.id,
+        academyId: academy.id,
+        meta: {
+          adminUserId: existing.id,
+          adminIdentity: existing.role,
+          activation: 'NOT_REQUIRED',
+          themeGrants: dto.themeIds?.length ?? 0,
+        },
       });
-      return { ...academy, admin: { id: existing.id, role: existing.role, activation: 'NOT_REQUIRED' as const } };
+      return {
+        ...academy,
+        admin: { id: existing.id, role: existing.role, activation: 'NOT_REQUIRED' as const },
+      };
     }
 
     const phone = dto.adminPhone ? normalizeEgyptianPhone(dto.adminPhone) : null;
     if (phone) {
-      const phoneTaken = await this.prisma.user.findUnique({ where: { phone }, select: { id: true } });
-      if (phoneTaken) throw new ConflictException({ message: 'Phone already registered', code: 'PHONE_TAKEN' });
+      const phoneTaken = await this.prisma.user.findUnique({
+        where: { phone },
+        select: { id: true },
+      });
+      if (phoneTaken)
+        throw new ConflictException({ message: 'Phone already registered', code: 'PHONE_TAKEN' });
     }
 
     const rawToken = randomBytes(32).toString('base64url');
@@ -72,7 +105,13 @@ export class AdminCentersService {
       // No password, not active: the account cannot sign in until the admin
       // activates it and chooses their own password. No profile of any kind.
       const user = await tx.user.create({
-        data: { role: Role.STAFF, email: adminEmail, phone, fullName: dto.adminName.trim(), isActive: false },
+        data: {
+          role: Role.STAFF,
+          email: adminEmail,
+          phone,
+          fullName: dto.adminName.trim(),
+          isActive: false,
+        },
         select: { id: true, fullName: true },
       });
       const a = await tx.academy.create({
@@ -111,13 +150,25 @@ export class AdminCentersService {
     });
     const activation = delivery.delivered ? ('EMAIL_SENT' as const) : ('EMAIL_FAILED' as const);
     await this.audit.log({
-      actorUserId: adminUserId, action: 'center.create', entity: 'Academy', entityId: created.academy.id, academyId: created.academy.id,
-      meta: { adminUserId: created.user.id, adminIdentity: Role.STAFF, activation, themeGrants: dto.themeIds?.length ?? 0, ...(delivery.delivered ? {} : { deliveryFailure: delivery.reason }) },
+      actorUserId: adminUserId,
+      action: 'center.create',
+      entity: 'Academy',
+      entityId: created.academy.id,
+      academyId: created.academy.id,
+      meta: {
+        adminUserId: created.user.id,
+        adminIdentity: Role.STAFF,
+        activation,
+        themeGrants: dto.themeIds?.length ?? 0,
+        ...(delivery.delivered ? {} : { deliveryFailure: delivery.reason }),
+      },
     });
     return {
       ...created.academy,
       admin: { id: created.user.id, role: Role.STAFF, activation },
-      delivery: delivery.delivered ? { delivered: true as const } : { delivered: false as const, reason: delivery.reason },
+      delivery: delivery.delivered
+        ? { delivered: true as const }
+        : { delivered: false as const, reason: delivery.reason },
       // Handed to the SUPER_ADMIN who just minted this token, in the same
       // response — not a separate retrieval endpoint, and not public. Lets a
       // Center be activated for testing without depending on live email at
@@ -130,11 +181,20 @@ export class AdminCentersService {
   async resendActivation(academyId: string, adminUserId: string) {
     const academy = await this.prisma.academy.findFirst({
       where: { id: academyId, kind: 'CENTER', deletedAt: null },
-      select: { id: true, name: true, owner: { select: { id: true, email: true, fullName: true, isActive: true, passwordHash: true } } },
+      select: {
+        id: true,
+        name: true,
+        owner: {
+          select: { id: true, email: true, fullName: true, isActive: true, passwordHash: true },
+        },
+      },
     });
     if (!academy) throw new NotFoundException('Center not found');
     if (academy.owner.isActive && academy.owner.passwordHash) {
-      throw new BadRequestException({ message: 'This admin has already activated their account', code: 'ALREADY_ACTIVE' });
+      throw new BadRequestException({
+        message: 'This admin has already activated their account',
+        code: 'ALREADY_ACTIVE',
+      });
     }
     if (!academy.owner.email) throw new BadRequestException('Admin has no email');
 
@@ -146,7 +206,12 @@ export class AdminCentersService {
         data: { revokedAt: new Date() },
       }),
       this.prisma.academyActivationToken.create({
-        data: { userId: academy.owner.id, academyId, tokenHash: this.hashToken(rawToken), expiresAt },
+        data: {
+          userId: academy.owner.id,
+          academyId,
+          tokenHash: this.hashToken(rawToken),
+          expiresAt,
+        },
       }),
     ]);
     const activationUrl = this.mail.webUrl(`/activate?token=${encodeURIComponent(rawToken)}`);
@@ -154,19 +219,33 @@ export class AdminCentersService {
       to: academy.owner.email,
       centerOwnerTestRedirect: true, // TEMPORARY TEST ROUTING — same as createCenter
       ...centerAdminActivationEmail({
-        name: academy.owner.fullName, centerName: academy.name,
+        name: academy.owner.fullName,
+        centerName: academy.name,
         activationUrl,
         expiresInDays: ACTIVATION_TTL_DAYS,
       }),
     });
     await this.audit.log({
-      actorUserId: adminUserId, action: 'center.activation.resend', entity: 'Academy', entityId: academyId, academyId,
-      meta: delivery.delivered ? { delivered: true } : { delivered: false, deliveryFailure: delivery.reason },
+      actorUserId: adminUserId,
+      action: 'center.activation.resend',
+      entity: 'Academy',
+      entityId: academyId,
+      academyId,
+      meta: delivery.delivered
+        ? { delivered: true }
+        : { delivered: false, deliveryFailure: delivery.reason },
     });
     // Same rationale as createCenter: the SUPER_ADMIN who just reissued this
     // token gets the link back directly, so a dead mail provider never blocks
     // testing — resend, copy the link, move on.
-    return { ok: true, expiresAt, delivery: delivery.delivered ? { delivered: true as const } : { delivered: false as const, reason: delivery.reason }, activationUrl };
+    return {
+      ok: true,
+      expiresAt,
+      delivery: delivery.delivered
+        ? { delivered: true as const }
+        : { delivered: false as const, reason: delivery.reason },
+      activationUrl,
+    };
   }
 
   /**
@@ -175,21 +254,39 @@ export class AdminCentersService {
    * Suspending stores nothing destructive: memberships remain, buildContext
    * simply refuses them on the next request.
    */
-  async setStatus(academyId: string, status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED', adminUserId: string) {
+  async setStatus(
+    academyId: string,
+    status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED',
+    adminUserId: string,
+  ) {
     const academy = await this.prisma.academy.findFirst({
       where: { id: academyId, deletedAt: null },
       select: { id: true, kind: true, status: true },
     });
     if (!academy) throw new NotFoundException('Center not found');
     if (academy.kind !== 'CENTER') {
-      throw new BadRequestException({ message: 'A personal academy follows its teacher status', code: 'NOT_A_CENTER' });
+      throw new BadRequestException({
+        message: 'A personal academy follows its teacher status',
+        code: 'NOT_A_CENTER',
+      });
     }
     if (status === 'ACTIVE' && academy.status === 'PENDING') {
-      throw new BadRequestException({ message: 'Activate through the admin activation link', code: 'ACTIVATION_PENDING' });
+      throw new BadRequestException({
+        message: 'Activate through the admin activation link',
+        code: 'ACTIVATION_PENDING',
+      });
     }
-    const updated = await this.prisma.academy.update({ where: { id: academyId }, data: { status }, select: { id: true, status: true } });
+    const updated = await this.prisma.academy.update({
+      where: { id: academyId },
+      data: { status },
+      select: { id: true, status: true },
+    });
     await this.audit.log({
-      actorUserId: adminUserId, action: `center.status.${status.toLowerCase()}`, entity: 'Academy', entityId: academyId, academyId,
+      actorUserId: adminUserId,
+      action: `center.status.${status.toLowerCase()}`,
+      entity: 'Academy',
+      entityId: academyId,
+      academyId,
       meta: { from: academy.status, to: status },
     });
     return updated;
@@ -208,21 +305,35 @@ export class AdminCentersService {
       where: { id: academyId, deletedAt: null },
       select: { id: true, slug: true, name: true, kind: true, status: true },
     });
-    if (!academy) throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
+    if (!academy)
+      throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
 
-    const [staffCount, studentCount, activeEnrollments, courseCount, groupCount] = await Promise.all([
-      this.prisma.academyMembership.count({ where: { academyId, role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } } }),
-      // Distinct students, counted by grouping rather than by reading every
-      // enrollment row the Center has ever had.
-      this.prisma.enrollment.groupBy({ by: ['studentId'], where: { academyId } }).then((r) => r.length),
-      this.prisma.enrollment.count({ where: { academyId, status: 'ACTIVE' } }),
-      this.prisma.course.count({ where: { academyId } }),
-      this.prisma.group.count({ where: { academyId } }),
-    ]);
+    const [staffCount, studentCount, activeEnrollments, courseCount, groupCount] =
+      await Promise.all([
+        this.prisma.academyMembership.count({
+          where: { academyId, role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } },
+        }),
+        // Distinct students, counted by grouping rather than by reading every
+        // enrollment row the Center has ever had.
+        this.prisma.enrollment
+          .groupBy({ by: ['studentId'], where: { academyId } })
+          .then((r) => r.length),
+        this.prisma.enrollment.count({ where: { academyId, status: 'ACTIVE' } }),
+        this.prisma.course.count({ where: { academyId } }),
+        this.prisma.group.count({ where: { academyId } }),
+      ]);
 
     return {
-      id: academy.id, slug: academy.slug, name: academy.name, kind: academy.kind, status: academy.status,
-      staffCount, studentCount, activeEnrollments, courseCount, groupCount,
+      id: academy.id,
+      slug: academy.slug,
+      name: academy.name,
+      kind: academy.kind,
+      status: academy.status,
+      staffCount,
+      studentCount,
+      activeEnrollments,
+      courseCount,
+      groupCount,
       // Nothing is destroyed — every table here is soft-deleted, so the row
       // survives for the money trail and can be brought back. Said explicitly
       // because "delete" otherwise reads as irreversible and stops people from
@@ -257,15 +368,22 @@ export class AdminCentersService {
       where: { id: academyId, deletedAt: null },
       select: { id: true, slug: true, name: true, kind: true, status: true },
     });
-    if (!academy) throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
+    if (!academy)
+      throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
     // A PERSONAL academy IS a teacher's identity (its id is their
     // TeacherProfile id); removing it would orphan their courses without
     // removing the account. Deleting the teacher is a different action.
     if (academy.kind !== 'CENTER') {
-      throw new BadRequestException({ message: 'Only a Center can be deleted here', code: 'NOT_A_CENTER' });
+      throw new BadRequestException({
+        message: 'Only a Center can be deleted here',
+        code: 'NOT_A_CENTER',
+      });
     }
     if (confirmSlug.trim().toLowerCase() !== academy.slug.toLowerCase()) {
-      throw new BadRequestException({ message: 'The confirmation does not match this center address', code: 'CONFIRM_MISMATCH' });
+      throw new BadRequestException({
+        message: 'The confirmation does not match this center address',
+        code: 'CONFIRM_MISMATCH',
+      });
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -284,7 +402,11 @@ export class AdminCentersService {
     });
 
     await this.audit.log({
-      actorUserId: adminUserId, action: 'center.delete', entity: 'Academy', entityId: academyId, academyId,
+      actorUserId: adminUserId,
+      action: 'center.delete',
+      entity: 'Academy',
+      entityId: academyId,
+      academyId,
       meta: { slug: academy.slug, name: academy.name, fromStatus: academy.status },
     });
     return { ok: true as const, id: academyId, slug: academy.slug };
@@ -306,18 +428,28 @@ export class AdminCentersService {
    * operation — so it requires a replacement owner in the same call. A Center
    * with no owner has no one who can grant anybody else access again.
    */
-  async revokeAccess(academyId: string, userId: string, adminUserId: string, transferOwnershipTo?: string) {
+  async revokeAccess(
+    academyId: string,
+    userId: string,
+    adminUserId: string,
+    transferOwnershipTo?: string,
+  ) {
     const academy = await this.prisma.academy.findFirst({
       where: { id: academyId, deletedAt: null },
       select: { id: true, kind: true, ownerUserId: true },
     });
-    if (!academy) throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
+    if (!academy)
+      throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
 
     const membership = await this.prisma.academyMembership.findFirst({
       where: { academyId, userId },
       select: { id: true, role: true },
     });
-    if (!membership) throw new NotFoundException({ message: 'This person is not a member of this center', code: 'MEMBERSHIP_NOT_FOUND' });
+    if (!membership)
+      throw new NotFoundException({
+        message: 'This person is not a member of this center',
+        code: 'MEMBERSHIP_NOT_FOUND',
+      });
 
     const isOwner = membership.role === 'OWNER' || academy.ownerUserId === userId;
     if (isOwner && !transferOwnershipTo) {
@@ -330,14 +462,30 @@ export class AdminCentersService {
     let successorId: string | null = null;
     if (isOwner && transferOwnershipTo) {
       if (transferOwnershipTo === userId) {
-        throw new BadRequestException({ message: 'The successor must be a different member', code: 'SUCCESSOR_IS_SAME_USER' });
+        throw new BadRequestException({
+          message: 'The successor must be a different member',
+          code: 'SUCCESSOR_IS_SAME_USER',
+        });
       }
       const successor = await this.prisma.academyMembership.findFirst({
-        where: { academyId, userId: transferOwnershipTo, status: 'ACTIVE', role: { in: ['TEACHER', 'ASSISTANT', 'OWNER'] } },
-        select: { id: true, user: { select: { role: true, isActive: true, teacherProfile: { select: { status: true } } } } },
+        where: {
+          academyId,
+          userId: transferOwnershipTo,
+          status: 'ACTIVE',
+          role: { in: ['TEACHER', 'ASSISTANT', 'OWNER'] },
+        },
+        select: {
+          id: true,
+          user: {
+            select: { role: true, isActive: true, teacherProfile: { select: { status: true } } },
+          },
+        },
       });
       if (!successor) {
-        throw new BadRequestException({ message: 'The successor must already be active staff of this center', code: 'SUCCESSOR_NOT_STAFF' });
+        throw new BadRequestException({
+          message: 'The successor must already be active staff of this center',
+          code: 'SUCCESSOR_NOT_STAFF',
+        });
       }
       this.assertDesignatable(successor.user);
       successorId = transferOwnershipTo;
@@ -345,7 +493,10 @@ export class AdminCentersService {
 
     await this.prisma.$transaction(async (tx) => {
       if (successorId) {
-        await tx.academyMembership.updateMany({ where: { academyId, userId: successorId }, data: { role: 'OWNER' } });
+        await tx.academyMembership.updateMany({
+          where: { academyId, userId: successorId },
+          data: { role: 'OWNER' },
+        });
         await tx.academy.update({ where: { id: academyId }, data: { ownerUserId: successorId } });
       }
       // Group assignments go too: a revoked teacher who kept an assignment row
@@ -359,20 +510,39 @@ export class AdminCentersService {
     });
 
     await this.audit.log({
-      actorUserId: adminUserId, action: 'center.access.revoke', entity: 'AcademyMembership', entityId: membership.id, academyId,
-      meta: { userId, revokedRole: membership.role, ...(successorId ? { ownershipTransferredTo: successorId } : {}) },
+      actorUserId: adminUserId,
+      action: 'center.access.revoke',
+      entity: 'AcademyMembership',
+      entityId: membership.id,
+      academyId,
+      meta: {
+        userId,
+        revokedRole: membership.role,
+        ...(successorId ? { ownershipTransferredTo: successorId } : {}),
+      },
     });
     return { ok: true as const, userId, ownerTransferredTo: successorId };
   }
 
-  private assertDesignatable(user: { role: string; isActive: boolean; teacherProfile: { status: string } | null }) {
-    if (!user.isActive) throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
+  private assertDesignatable(user: {
+    role: string;
+    isActive: boolean;
+    teacherProfile: { status: string } | null;
+  }) {
+    if (!user.isActive)
+      throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
     if (user.role === Role.STAFF) return;
     if (user.role === Role.TEACHER && user.teacherProfile?.status === 'APPROVED') return;
     if (user.role === Role.TEACHER) {
-      throw new BadRequestException({ message: 'Only an approved teacher can be a Center Admin', code: 'TEACHER_NOT_APPROVED' });
+      throw new BadRequestException({
+        message: 'Only an approved teacher can be a Center Admin',
+        code: 'TEACHER_NOT_APPROVED',
+      });
     }
-    throw new BadRequestException({ message: 'This account cannot be a Center Admin', code: 'IDENTITY_NOT_ELIGIBLE' });
+    throw new BadRequestException({
+      message: 'This account cannot be a Center Admin',
+      code: 'IDENTITY_NOT_ELIGIBLE',
+    });
   }
 
   private hashToken(raw: string): string {
@@ -383,8 +553,10 @@ export class AdminCentersService {
   private async exactSlug(raw: string): Promise<string> {
     const slug = slugify(raw);
     const shape = slugShapeError(slug);
-    if (shape) throw new BadRequestException({ message: 'Invalid center address', code: `SLUG_${shape}` });
-    if (await this.slugTaken(slug)) throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
+    if (shape)
+      throw new BadRequestException({ message: 'Invalid center address', code: `SLUG_${shape}` });
+    if (await this.slugTaken(slug))
+      throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
     return slug;
   }
 
@@ -401,7 +573,8 @@ export class AdminCentersService {
   private async resolveSlug(raw: string): Promise<string> {
     const base = slugify(raw);
     const shape = slugShapeError(base);
-    if (shape) throw new BadRequestException({ message: 'Invalid center address', code: `SLUG_${shape}` });
+    if (shape)
+      throw new BadRequestException({ message: 'Invalid center address', code: `SLUG_${shape}` });
     for (const candidate of slugCandidates(base)) {
       if (!(await this.slugTaken(candidate))) return candidate;
     }

@@ -36,13 +36,23 @@ const svc = (prisma: any) =>
   );
 
 const JOIN_ROWS = [
-  { courseId: 'c1', gradeId: 'g1', grade: { id: 'g1', nameAr: 'الأول الثانوي', nameEn: 'Grade 10' } },
-  { courseId: 'c1', gradeId: 'g2', grade: { id: 'g2', nameAr: 'الثاني الثانوي', nameEn: 'Grade 11' } },
+  {
+    courseId: 'c1',
+    gradeId: 'g1',
+    grade: { id: 'g1', nameAr: 'الأول الثانوي', nameEn: 'Grade 10' },
+  },
+  {
+    courseId: 'c1',
+    gradeId: 'g2',
+    grade: { id: 'g2', nameAr: 'الثاني الثانوي', nameEn: 'Grade 11' },
+  },
 ];
 
 describe("a teacher's own course list", () => {
   it('hands back the years themselves, not the rows that join them', async () => {
-    const prisma = { course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: JOIN_ROWS }]) } };
+    const prisma = {
+      course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: JOIN_ROWS }]) },
+    };
     const [course] = await svc(prisma).listMine(T1);
     expect(course.grades).toEqual([
       { id: 'g1', nameAr: 'الأول الثانوي', nameEn: 'Grade 10' },
@@ -51,7 +61,9 @@ describe("a teacher's own course list", () => {
   });
 
   it('gives the edit form ids it can send straight back', async () => {
-    const prisma = { course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: JOIN_ROWS }]) } };
+    const prisma = {
+      course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: JOIN_ROWS }]) },
+    };
     const [course] = await svc(prisma).listMine(T1);
     const gradeIds = ((course.grades ?? []) as { id: string }[]).map((g) => g.id);
     expect(gradeIds).toEqual(['g1', 'g2']);
@@ -59,13 +71,17 @@ describe("a teacher's own course list", () => {
   });
 
   it('does the same for one course opened on its own', async () => {
-    const prisma = { course: { findFirst: jest.fn().mockResolvedValue({ id: 'c1', grades: JOIN_ROWS }) } };
+    const prisma = {
+      course: { findFirst: jest.fn().mockResolvedValue({ id: 'c1', grades: JOIN_ROWS }) },
+    };
     const course = await svc(prisma).getMine(T1, 'c1');
     expect((course.grades as { id: string }[]).map((g) => g.id)).toEqual(['g1', 'g2']);
   });
 
   it('leaves a course with no years alone', async () => {
-    const prisma = { course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: [] }]) } };
+    const prisma = {
+      course: { findMany: jest.fn().mockResolvedValue([{ id: 'c1', grades: [] }]) },
+    };
     const [course] = await svc(prisma).listMine(T1);
     expect(course.grades).toEqual([]);
   });
@@ -85,7 +101,9 @@ describe('changing the price of a course whose subject is no longer yours', () =
   const prismaFor = (courseSubject: string | null, teacherSubjects: string[]) => ({
     academy: { findUnique: jest.fn().mockResolvedValue({ kind: 'PERSONAL' }) },
     course: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1', academyId: 't1', priceCents: 0 }),
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({ id: 'c1', tenantId: 't1', academyId: 't1', priceCents: 0 }),
       findUnique: jest.fn().mockResolvedValue({
         subjectId: courseSubject,
         examLessonId: null,
@@ -136,7 +154,9 @@ describe('changing the price of a course aimed at years you no longer teach', ()
   const prismaFor = (teacherStages: string[]) => ({
     academy: { findUnique: jest.fn().mockResolvedValue({ kind: 'PERSONAL' }) },
     course: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1', academyId: 't1', priceCents: 0 }),
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({ id: 'c1', tenantId: 't1', academyId: 't1', priceCents: 0 }),
       findUnique: jest.fn().mockResolvedValue({
         subjectId: 'maths',
         examLessonId: null,
@@ -145,7 +165,9 @@ describe('changing the price of a course aimed at years you no longer teach', ()
       update: jest.fn(async (args: any) => ({ id: 'c1', ...args.data, grades: [] })),
     },
     teacherProfile: {
-      findUniqueOrThrow: jest.fn().mockResolvedValue({ stages: teacherStages, subjects: [{ subjectId: 'maths' }] }),
+      findUniqueOrThrow: jest
+        .fn()
+        .mockResolvedValue({ stages: teacherStages, subjects: [{ subjectId: 'maths' }] }),
     },
     gradeLevel: { findMany: jest.fn().mockResolvedValue([{ id: 'g9' }]) },
   });

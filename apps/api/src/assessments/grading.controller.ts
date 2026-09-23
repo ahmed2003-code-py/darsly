@@ -41,14 +41,18 @@ export class GradingController {
 
   @Get('teacher/grading/analysis')
   @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] Papers that have been sat, and where students say a question is wrong' })
+  @ApiOperation({
+    summary: '[teacher] Papers that have been sat, and where students say a question is wrong',
+  })
   analysis(@CurrentUser() u: JwtPayload) {
     return this.grading.analysis(u.tenantId!);
   }
 
   @Get('teacher/grading/quizzes/:lessonId')
   @Roles(Role.TEACHER)
-  @ApiOperation({ summary: '[teacher] One paper question by question: what the class chose, and who complained' })
+  @ApiOperation({
+    summary: '[teacher] One paper question by question: what the class chose, and who complained',
+  })
   quizAnalysis(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string) {
     return this.grading.quizAnalysis(u.tenantId!, lessonId);
   }

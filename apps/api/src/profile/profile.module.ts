@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Delete, Get, Module, Patch, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Module,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
@@ -48,9 +57,19 @@ class ProfileController {
     const user = await this.prisma.user.findUnique({
       where: { id: u.sub },
       select: {
-        id: true, fullName: true, email: true, phone: true, avatarUrl: true, role: true, createdAt: true,
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        avatarUrl: true,
+        role: true,
+        createdAt: true,
         studentProfile: {
-          select: { gradeId: true, track: true, grade: { select: { id: true, nameAr: true, nameEn: true, stage: true } } },
+          select: {
+            gradeId: true,
+            track: true,
+            grade: { select: { id: true, nameAr: true, nameEn: true, stage: true } },
+          },
         },
       },
     });
@@ -61,8 +80,14 @@ class ProfileController {
   @ApiOperation({ summary: 'Update my display name, the year I am in, or my school system' })
   async update(@CurrentUser() u: JwtPayload, @Body() dto: UpdateMeDto) {
     if (dto.gradeId) {
-      const grade = await this.prisma.gradeLevel.findFirst({ where: { id: dto.gradeId, isActive: true } });
-      if (!grade) throw new BadRequestException({ message: 'Pick the year you are in', code: 'UNKNOWN_GRADE' });
+      const grade = await this.prisma.gradeLevel.findFirst({
+        where: { id: dto.gradeId, isActive: true },
+      });
+      if (!grade)
+        throw new BadRequestException({
+          message: 'Pick the year you are in',
+          code: 'UNKNOWN_GRADE',
+        });
       // Only a student has a year; anyone else asking for one is ignored rather
       // than refused, since nothing about their account changes either way.
       await this.prisma.studentProfile.updateMany({

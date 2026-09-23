@@ -1,9 +1,4 @@
-import {
-  BodyFamily,
-  ContainerWidth,
-  DesignSpec,
-  HeadingFamily,
-} from '../../schema/design-spec';
+import { BodyFamily, ContainerWidth, DesignSpec, HeadingFamily } from '../../schema/design-spec';
 import { contrastRatio, hexToRgb, isHex, mix, onColor } from '../color.util';
 
 /**
@@ -17,8 +12,12 @@ import { contrastRatio, hexToRgb, isHex, mix, onColor } from '../color.util';
  */
 
 const FALLBACK = {
-  background: '#FFFFFF', ink: '#14141F', surface: '#F7F7FB',
-  surfaceAlt: '#EFEFF6', primary: '#4A32C9', accent: '#4A32C9',
+  background: '#FFFFFF',
+  ink: '#14141F',
+  surface: '#F7F7FB',
+  surfaceAlt: '#EFEFF6',
+  primary: '#4A32C9',
+  accent: '#4A32C9',
 };
 
 const hexOr = (v: string, fallback: string) => (isHex(v) ? v : fallback);
@@ -33,11 +32,26 @@ const hexOr = (v: string, fallback: string) => (isHex(v) ? v : fallback);
  * still has to be able to draw Arabic the moment a visitor asks for it.
  */
 export const FONT_FAMILY: Record<HeadingFamily | BodyFamily, { css: string; google?: string }> = {
-  sans: { css: '"Plus Jakarta Sans","Tajawal",system-ui,-apple-system,"Segoe UI",Arial,sans-serif', google: 'Plus+Jakarta+Sans:wght@400;500;700;800' },
-  serif: { css: '"Fraunces","Tajawal",Georgia,"Times New Roman",serif', google: 'Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700' },
-  display: { css: '"Space Grotesk","Tajawal",system-ui,sans-serif', google: 'Space+Grotesk:wght@500;700' },
-  mono: { css: '"JetBrains Mono","Tajawal",ui-monospace,SFMono-Regular,Menlo,monospace', google: 'JetBrains+Mono:wght@400;700' },
-  condensed: { css: '"Archivo Narrow","Tajawal",Impact,system-ui,sans-serif', google: 'Archivo+Narrow:wght@600;700' },
+  sans: {
+    css: '"Plus Jakarta Sans","Tajawal",system-ui,-apple-system,"Segoe UI",Arial,sans-serif',
+    google: 'Plus+Jakarta+Sans:wght@400;500;700;800',
+  },
+  serif: {
+    css: '"Fraunces","Tajawal",Georgia,"Times New Roman",serif',
+    google: 'Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700',
+  },
+  display: {
+    css: '"Space Grotesk","Tajawal",system-ui,sans-serif',
+    google: 'Space+Grotesk:wght@500;700',
+  },
+  mono: {
+    css: '"JetBrains Mono","Tajawal",ui-monospace,SFMono-Regular,Menlo,monospace',
+    google: 'JetBrains+Mono:wght@400;700',
+  },
+  condensed: {
+    css: '"Archivo Narrow","Tajawal",Impact,system-ui,sans-serif',
+    google: 'Archivo+Narrow:wght@600;700',
+  },
 };
 
 const ARABIC_FAMILY = 'Tajawal:wght@400;700;800';
@@ -76,10 +90,30 @@ export function fontHref(design: DesignSpec): string {
 
 /** Headline sizes per scale: [h1, h2, h3, lead]. */
 const SCALE: Record<string, [string, string, string, string]> = {
-  restrained: ['clamp(2rem,4vw,3rem)', 'clamp(1.45rem,2.4vw,1.95rem)', 'clamp(1.05rem,1.4vw,1.2rem)', 'clamp(1rem,1.2vw,1.12rem)'],
-  balanced: ['clamp(2.5rem,6vw,4rem)', 'clamp(1.8rem,3.4vw,2.6rem)', 'clamp(1.1rem,1.6vw,1.32rem)', 'clamp(1.08rem,1.5vw,1.25rem)'],
-  dramatic: ['clamp(3rem,8vw,5.4rem)', 'clamp(2.15rem,4.4vw,3.3rem)', 'clamp(1.18rem,1.9vw,1.45rem)', 'clamp(1.15rem,1.8vw,1.4rem)'],
-  monumental: ['clamp(3.4rem,11vw,7.5rem)', 'clamp(2.5rem,5.6vw,4.2rem)', 'clamp(1.25rem,2.1vw,1.6rem)', 'clamp(1.2rem,2vw,1.5rem)'],
+  restrained: [
+    'clamp(2rem,4vw,3rem)',
+    'clamp(1.45rem,2.4vw,1.95rem)',
+    'clamp(1.05rem,1.4vw,1.2rem)',
+    'clamp(1rem,1.2vw,1.12rem)',
+  ],
+  balanced: [
+    'clamp(2.5rem,6vw,4rem)',
+    'clamp(1.8rem,3.4vw,2.6rem)',
+    'clamp(1.1rem,1.6vw,1.32rem)',
+    'clamp(1.08rem,1.5vw,1.25rem)',
+  ],
+  dramatic: [
+    'clamp(3rem,8vw,5.4rem)',
+    'clamp(2.15rem,4.4vw,3.3rem)',
+    'clamp(1.18rem,1.9vw,1.45rem)',
+    'clamp(1.15rem,1.8vw,1.4rem)',
+  ],
+  monumental: [
+    'clamp(3.4rem,11vw,7.5rem)',
+    'clamp(2.5rem,5.6vw,4.2rem)',
+    'clamp(1.25rem,2.1vw,1.6rem)',
+    'clamp(1.2rem,2vw,1.5rem)',
+  ],
 };
 
 const TRACKING: Record<string, string> = { tight: '-0.04em', normal: '-0.012em', wide: '0.03em' };
@@ -87,7 +121,12 @@ const MEASURE: Record<string, string> = { narrow: '52ch', normal: '64ch', wide: 
 
 // ── Rhythm ───────────────────────────────────────────────────────────────────
 
-const DENSITY_PAD: Record<string, number> = { compact: 64, regular: 100, airy: 144, expansive: 188 };
+const DENSITY_PAD: Record<string, number> = {
+  compact: 64,
+  regular: 100,
+  airy: 144,
+  expansive: 188,
+};
 const GUTTER: Record<string, string> = { tight: '16px', normal: '24px', generous: '40px' };
 
 export const CONTAINER: Record<ContainerWidth, string> = {
@@ -128,9 +167,15 @@ const clampInt = (v: unknown, lo: number, hi: number, fallback: number) => {
  * one that clashes. It picks six, and these are computed.
  */
 export interface DerivedPalette {
-  background: string; ink: string; surface: string; surfaceAlt: string;
-  primary: string; accent: string;
-  onPrimary: string; onAccent: string; onInk: string;
+  background: string;
+  ink: string;
+  surface: string;
+  surfaceAlt: string;
+  primary: string;
+  accent: string;
+  onPrimary: string;
+  onAccent: string;
+  onInk: string;
   isDark: boolean;
 }
 
@@ -143,7 +188,12 @@ export function derivePalette(design: DesignSpec): DerivedPalette {
   const primary = hexOr(p.primary, FALLBACK.primary);
   const accent = hexOr(p.accent, FALLBACK.accent);
   return {
-    background, ink, surface, surfaceAlt, primary, accent,
+    background,
+    ink,
+    surface,
+    surfaceAlt,
+    primary,
+    accent,
     onPrimary: onColor(primary),
     onAccent: onColor(accent),
     onInk: onColor(ink),
@@ -163,7 +213,10 @@ export function derivePalette(design: DesignSpec): DerivedPalette {
  */
 export function readableOn(color: string, background: string, target = 4.5): string {
   if (contrastRatio(color, background) >= target) return color;
-  const toward = contrastRatio(background, '#FFFFFF') > contrastRatio(background, '#000000') ? '#FFFFFF' : '#000000';
+  const toward =
+    contrastRatio(background, '#FFFFFF') > contrastRatio(background, '#000000')
+      ? '#FFFFFF'
+      : '#000000';
   let best = color;
   for (let w = 0.1; w <= 0.9; w += 0.1) {
     best = mix(color, toward, w);
@@ -183,7 +236,8 @@ export function tokens(design: DesignSpec): string {
   const [h1, h2, h3, lead] = SCALE[t.scale] ?? SCALE.balanced;
   const headFamily = FONT_FAMILY[t.headingFamily]?.css ?? FONT_FAMILY.sans.css;
   const bodyFamily = FONT_FAMILY[t.bodyFamily]?.css ?? FONT_FAMILY.sans.css;
-  const headFamilyAr = ARABIC_HEADING_FAMILY[t.headingFamily]?.css ?? ARABIC_HEADING_FAMILY.sans.css;
+  const headFamilyAr =
+    ARABIC_HEADING_FAMILY[t.headingFamily]?.css ?? ARABIC_HEADING_FAMILY.sans.css;
   const weight = [400, 500, 600, 700, 800, 900].includes(t.headingWeight) ? t.headingWeight : 700;
 
   const radius = clampInt(g.radius, 0, 32, 14);

@@ -1,4 +1,8 @@
-import { cairoWallTimeToInstant, checkProofAgainstClaim, receiptMatchesTransfer } from './proof-check';
+import {
+  cairoWallTimeToInstant,
+  checkProofAgainstClaim,
+  receiptMatchesTransfer,
+} from './proof-check';
 import { ProofReading } from './proof-reader.service';
 
 /** The receipt in the report, field for field. */
@@ -73,24 +77,49 @@ describe('the receipt against the bank SMS', () => {
   const at = (iso: string) => new Date(iso);
 
   it('links them by the amount and the minute', () => {
-    expect(receiptMatchesTransfer(RECEIPT, { amountCents: 200000, occurredAt: at('2026-09-16T04:55:00Z') })).toBe(true);
+    expect(
+      receiptMatchesTransfer(RECEIPT, {
+        amountCents: 200000,
+        occurredAt: at('2026-09-16T04:55:00Z'),
+      }),
+    ).toBe(true);
   });
 
   it('tolerates the few minutes between sending and booking', () => {
-    expect(receiptMatchesTransfer(RECEIPT, { amountCents: 200000, occurredAt: at('2026-09-16T05:05:00Z') })).toBe(true);
+    expect(
+      receiptMatchesTransfer(RECEIPT, {
+        amountCents: 200000,
+        occurredAt: at('2026-09-16T05:05:00Z'),
+      }),
+    ).toBe(true);
   });
 
   it('refuses a transfer an hour away', () => {
-    expect(receiptMatchesTransfer(RECEIPT, { amountCents: 200000, occurredAt: at('2026-09-16T05:55:00Z') })).toBe(false);
+    expect(
+      receiptMatchesTransfer(RECEIPT, {
+        amountCents: 200000,
+        occurredAt: at('2026-09-16T05:55:00Z'),
+      }),
+    ).toBe(false);
   });
 
   it('refuses a different amount however close in time', () => {
-    expect(receiptMatchesTransfer(RECEIPT, { amountCents: 199900, occurredAt: at('2026-09-16T04:55:00Z') })).toBe(false);
+    expect(
+      receiptMatchesTransfer(RECEIPT, {
+        amountCents: 199900,
+        occurredAt: at('2026-09-16T04:55:00Z'),
+      }),
+    ).toBe(false);
   });
 
   it('claims nothing when the receipt had no readable time', () => {
     const noTime = { ...RECEIPT, sentAtLocal: null };
-    expect(receiptMatchesTransfer(noTime, { amountCents: 200000, occurredAt: at('2026-09-16T04:55:00Z') })).toBe(false);
+    expect(
+      receiptMatchesTransfer(noTime, {
+        amountCents: 200000,
+        occurredAt: at('2026-09-16T04:55:00Z'),
+      }),
+    ).toBe(false);
   });
 });
 
@@ -98,8 +127,12 @@ describe('Cairo wall time', () => {
   it('is UTC+3 in summer and UTC+2 in winter', () => {
     // Egypt reinstated summer time: getting this wrong by an hour puts a real
     // transfer outside the tolerance and sends it to a human for nothing.
-    expect(cairoWallTimeToInstant('2026-09-16T07:55')!.toISOString()).toBe('2026-09-16T04:55:00.000Z');
-    expect(cairoWallTimeToInstant('2026-01-16T07:55')!.toISOString()).toBe('2026-01-16T05:55:00.000Z');
+    expect(cairoWallTimeToInstant('2026-09-16T07:55')!.toISOString()).toBe(
+      '2026-09-16T04:55:00.000Z',
+    );
+    expect(cairoWallTimeToInstant('2026-01-16T07:55')!.toISOString()).toBe(
+      '2026-01-16T05:55:00.000Z',
+    );
   });
 
   it('returns null rather than a guess for something it cannot parse', () => {

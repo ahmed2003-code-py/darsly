@@ -19,11 +19,17 @@ export class SecurityController {
 
   @Get('events')
   @ApiOperation({ summary: '[teacher] Security events in my tenant' })
-  events(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Query('resolved') resolved?: string) {
+  events(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Query('resolved') resolved?: string,
+  ) {
     return this.prisma.securityEvent.findMany({
       where: {
         tenantId: ctx.academyId,
-        ...(resolved === undefined ? {} : { resolvedAt: resolved === 'true' ? { not: null } : null }),
+        ...(resolved === undefined
+          ? {}
+          : { resolvedAt: resolved === 'true' ? { not: null } : null }),
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -52,12 +58,18 @@ export class SecurityController {
    */
   @Get('trace/:watermarkId')
   @ApiOperation({ summary: '[teacher] Resolve a watermark ID to its student + session' })
-  async trace(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('watermarkId') watermarkId: string) {
+  async trace(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('watermarkId') watermarkId: string,
+  ) {
     const session = await this.prisma.playbackSession.findFirst({
       where: { watermarkId: watermarkId.trim().toUpperCase(), tenantId: ctx.academyId },
       include: {
         student: { include: { user: { select: { fullName: true, phone: true, email: true } } } },
-        lesson: { select: { title: true, unit: { select: { course: { select: { title: true } } } } } },
+        lesson: {
+          select: { title: true, unit: { select: { course: { select: { title: true } } } } },
+        },
         deviceSession: { select: { deviceName: true, userAgent: true, ip: true } },
       },
     });

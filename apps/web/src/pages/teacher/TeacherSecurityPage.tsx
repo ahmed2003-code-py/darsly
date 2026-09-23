@@ -5,7 +5,9 @@ import { api } from '../../lib/api';
 import { Badge, ErrorNote, PageHeader, Skeleton } from '../../components/ui';
 
 const SEV_TONE: Record<string, 'error' | 'warn' | 'neutral'> = {
-  CRITICAL: 'error', WARNING: 'warn', INFO: 'neutral',
+  CRITICAL: 'error',
+  WARNING: 'warn',
+  INFO: 'neutral',
 };
 
 export default function TeacherSecurityPage() {
@@ -43,7 +45,9 @@ export default function TeacherSecurityPage() {
             <Skeleton className="h-40 rounded-xl" />
           ) : !critical.length ? (
             <div className="card py-10 text-center text-outline">
-              <span className="material-symbols-outlined mb-2 text-4xl text-secondary">verified_user</span>
+              <span className="material-symbols-outlined mb-2 text-4xl text-secondary">
+                verified_user
+              </span>
               <p>{t('security.noAlerts')}</p>
             </div>
           ) : (
@@ -60,7 +64,9 @@ export default function TeacherSecurityPage() {
                     </p>
                   )}
                   {e.meta?.ips && (
-                    <p className="mt-1 text-xs text-outline" dir="ltr">IPs: {(e.meta.ips as string[]).join(' , ')}</p>
+                    <p className="mt-1 text-xs text-outline" dir="ltr">
+                      IPs: {(e.meta.ips as string[]).join(' , ')}
+                    </p>
                   )}
                 </div>
               ))}
@@ -94,22 +100,43 @@ export default function TeacherSecurityPage() {
               {t('security.leakTraceTitle')}
             </h2>
             <p className="mb-4 text-sm text-on-surface-variant">{t('security.leakTraceHint')}</p>
-            <form className="flex gap-2" onSubmit={(e: FormEvent) => { e.preventDefault(); if (wm.trim()) trace.mutate(wm); }}>
-              <input className="input font-mono" dir="ltr" placeholder="DRS-89421-A8X9" value={wm}
-                onChange={(e) => setWm(e.target.value)} />
-              <button className="btn-primary px-6" disabled={!wm.trim() || trace.isPending}>{t('security.trace')}</button>
+            <form
+              className="flex gap-2"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                if (wm.trim()) trace.mutate(wm);
+              }}
+            >
+              <input
+                className="input font-mono"
+                dir="ltr"
+                placeholder="DRS-89421-A8X9"
+                value={wm}
+                onChange={(e) => setWm(e.target.value)}
+              />
+              <button className="btn-primary px-6" disabled={!wm.trim() || trace.isPending}>
+                {t('security.trace')}
+              </button>
             </form>
 
             {trace.data && (
               <div className="mt-4 rounded-xl border border-error/30 bg-error-container/30 p-4">
-                <p className="mb-2 font-heading font-bold text-error">{t('security.tracedStudent')}</p>
+                <p className="mb-2 font-heading font-bold text-error">
+                  {t('security.tracedStudent')}
+                </p>
                 <dl className="grid grid-cols-2 gap-y-1 text-sm">
-                  <dt className="text-outline">{t('security.tracedStudent')}</dt><dd className="font-bold">{trace.data.student.name}</dd>
-                  <dt className="text-outline">{t('security.phone')}</dt><dd dir="ltr">{trace.data.student.phone}</dd>
-                  <dt className="text-outline">{t('security.lesson')}</dt><dd>{trace.data.lesson}</dd>
-                  <dt className="text-outline">{t('security.ip')}</dt><dd dir="ltr">{trace.data.ip ?? '—'}</dd>
-                  <dt className="text-outline">{t('security.device')}</dt><dd className="truncate">{trace.data.device ?? '—'}</dd>
-                  <dt className="text-outline">{t('security.time')}</dt><dd dir="ltr">{new Date(trace.data.startedAt).toLocaleString('en-GB')}</dd>
+                  <dt className="text-outline">{t('security.tracedStudent')}</dt>
+                  <dd className="font-bold">{trace.data.student.name}</dd>
+                  <dt className="text-outline">{t('security.phone')}</dt>
+                  <dd dir="ltr">{trace.data.student.phone}</dd>
+                  <dt className="text-outline">{t('security.lesson')}</dt>
+                  <dd>{trace.data.lesson}</dd>
+                  <dt className="text-outline">{t('security.ip')}</dt>
+                  <dd dir="ltr">{trace.data.ip ?? '—'}</dd>
+                  <dt className="text-outline">{t('security.device')}</dt>
+                  <dd className="truncate">{trace.data.device ?? '—'}</dd>
+                  <dt className="text-outline">{t('security.time')}</dt>
+                  <dd dir="ltr">{new Date(trace.data.startedAt).toLocaleString('en-GB')}</dd>
                 </dl>
               </div>
             )}
@@ -129,8 +156,12 @@ export default function TeacherSecurityPage() {
                       <p className="truncate text-xs text-outline">{s.lesson.title}</p>
                     </div>
                     <div className="text-end">
-                      <p className="font-mono text-xs text-primary" dir="ltr">{s.watermarkId}</p>
-                      <p className="text-xs text-outline" dir="ltr">{s.ip ?? '—'}</p>
+                      <p className="font-mono text-xs text-primary" dir="ltr">
+                        {s.watermarkId}
+                      </p>
+                      <p className="text-xs text-outline" dir="ltr">
+                        {s.ip ?? '—'}
+                      </p>
                     </div>
                   </li>
                 ))}

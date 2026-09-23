@@ -36,7 +36,13 @@ interface Course {
   studentsCount: number;
   avgRating: number | null;
   reviewsCount: number;
-  teacher: { id: string; slug: string; fullName: string; avatarUrl: string | null; verified: boolean };
+  teacher: {
+    id: string;
+    slug: string;
+    fullName: string;
+    avatarUrl: string | null;
+    verified: boolean;
+  };
 }
 
 interface Page {
@@ -131,8 +137,14 @@ export default function BrowseCoursesPage() {
   const [sheet, setSheet] = useState(false);
 
   const activeChips = [
-    get('gradeId') && { key: 'gradeId', label: name((grades ?? []).find((g) => g.id === get('gradeId'))) },
-    get('language') && { key: 'language', label: t(get('language') === 'ar' ? 'browse.arabic' : 'browse.english') },
+    get('gradeId') && {
+      key: 'gradeId',
+      label: name((grades ?? []).find((g) => g.id === get('gradeId'))),
+    },
+    get('language') && {
+      key: 'language',
+      label: t(get('language') === 'ar' ? 'browse.arabic' : 'browse.english'),
+    },
     get('free') === '1' && { key: 'free', label: t('browse.freeOnly') },
     get('hasPreview') === '1' && { key: 'hasPreview', label: t('browse.previewOnly') },
     get('priceMin') && { key: 'priceMin', label: `${t('browse.min')} ${get('priceMin')}` },
@@ -193,16 +205,23 @@ export default function BrowseCoursesPage() {
             </Stagger>
           )}
 
-          <Pager page={page} pages={data?.pages ?? 1} onGo={(p) => patch({ page: String(p) }, false)} />
+          <Pager
+            page={page}
+            pages={data?.pages ?? 1}
+            onGo={(p) => patch({ page: String(p) }, false)}
+          />
         </section>
       </div>
     </div>
   );
 }
 
-
 function SheetFilters({
-  t, get, patch, grades, name,
+  t,
+  get,
+  patch,
+  grades,
+  name,
 }: {
   t: (k: string, o?: Record<string, unknown>) => string;
   get: (k: string) => string;
@@ -213,18 +232,32 @@ function SheetFilters({
   return (
     <>
       <label className="mb-5 block">
-        <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('browse.grade')}</span>
-        <select className="input" value={get('gradeId')} onChange={(e) => patch({ gradeId: e.target.value })}>
+        <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+          {t('browse.grade')}
+        </span>
+        <select
+          className="input"
+          value={get('gradeId')}
+          onChange={(e) => patch({ gradeId: e.target.value })}
+        >
           <option value="">{t('browse.allGrades')}</option>
           {grades.map((g) => (
-            <option key={g.id} value={g.id}>{name(g)}</option>
+            <option key={g.id} value={g.id}>
+              {name(g)}
+            </option>
           ))}
         </select>
       </label>
 
       <label className="mb-5 block">
-        <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('browse.language')}</span>
-        <select className="input" value={get('language')} onChange={(e) => patch({ language: e.target.value })}>
+        <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+          {t('browse.language')}
+        </span>
+        <select
+          className="input"
+          value={get('language')}
+          onChange={(e) => patch({ language: e.target.value })}
+        >
           <option value="">{t('browse.allLanguages')}</option>
           <option value="ar">{t('browse.arabic')}</option>
           <option value="en">{t('browse.english')}</option>
@@ -234,15 +267,23 @@ function SheetFilters({
       <p className="mb-2 text-sm font-semibold text-on-surface-variant">{t('browse.price')}</p>
       <div className="mb-5 flex items-center gap-2">
         <input
-          className="input" type="number" min={0} inputMode="numeric"
-          placeholder={t('browse.min')} value={get('priceMin')}
+          className="input"
+          type="number"
+          min={0}
+          inputMode="numeric"
+          placeholder={t('browse.min')}
+          value={get('priceMin')}
           onChange={(e) => patch({ priceMin: e.target.value })}
           disabled={get('free') === '1'}
         />
         <span className="text-outline">—</span>
         <input
-          className="input" type="number" min={0} inputMode="numeric"
-          placeholder={t('browse.max')} value={get('priceMax')}
+          className="input"
+          type="number"
+          min={0}
+          inputMode="numeric"
+          placeholder={t('browse.max')}
+          value={get('priceMax')}
           onChange={(e) => patch({ priceMax: e.target.value })}
           disabled={get('free') === '1'}
         />
@@ -251,7 +292,9 @@ function SheetFilters({
       <Toggle
         label={t('browse.freeOnly')}
         on={get('free') === '1'}
-        onChange={(v) => patch({ free: v ? '1' : '', ...(v ? { priceMin: '', priceMax: '' } : {}) })}
+        onChange={(v) =>
+          patch({ free: v ? '1' : '', ...(v ? { priceMin: '', priceMax: '' } : {}) })
+        }
       />
       <Toggle
         label={t('browse.previewOnly')}
@@ -262,7 +305,15 @@ function SheetFilters({
   );
 }
 
-function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  label,
+  on,
+  onChange,
+}: {
+  label: string;
+  on: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <label className="flex cursor-pointer items-center gap-2.5 py-1.5 text-sm">
       <input
@@ -275,4 +326,3 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
     </label>
   );
 }
-

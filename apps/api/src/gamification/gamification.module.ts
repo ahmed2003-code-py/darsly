@@ -3,7 +3,10 @@ import { AcademyModule } from '../academy/academy.module';
 import { ProgressModule } from '../progress/progress.module';
 import { AchievementsService } from './achievements.service';
 import { GamificationConfigService } from './gamification.config.service';
-import { AdminGamificationController, TeacherGamificationController } from './gamification-admin.controller';
+import {
+  AdminGamificationController,
+  TeacherGamificationController,
+} from './gamification-admin.controller';
 import { GamificationAnalyticsService } from './gamification-analytics.service';
 import { GamificationController } from './gamification.controller';
 import { GamificationService } from './gamification.service';

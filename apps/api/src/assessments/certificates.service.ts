@@ -37,7 +37,12 @@ export class CertificatesService {
       const n = await this.prisma.certificate.count();
       try {
         return await this.prisma.certificate.create({
-          data: { studentId, courseId, serial: this.serialFor(n + 1 + attempt), verifyToken: this.newVerifyToken() },
+          data: {
+            studentId,
+            courseId,
+            serial: this.serialFor(n + 1 + attempt),
+            verifyToken: this.newVerifyToken(),
+          },
           include: { course: { select: { title: true } } },
         });
       } catch (e) {

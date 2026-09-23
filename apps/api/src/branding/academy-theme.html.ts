@@ -56,7 +56,9 @@ function safeSlug(value: string): string | null {
  */
 export function injectTheme(html: string, theme: AppTheme): string {
   const declarations = Object.entries(theme.tokens)
-    .filter(([name, value]) => /^--c-[a-z0-9-]+$/.test(name) && /^\d{1,3} \d{1,3} \d{1,3}$/.test(value))
+    .filter(
+      ([name, value]) => /^--c-[a-z0-9-]+$/.test(name) && /^\d{1,3} \d{1,3} \d{1,3}$/.test(value),
+    )
     .map(([name, value]) => `${name}:${value}`)
     .join(';');
   if (!declarations) return html;

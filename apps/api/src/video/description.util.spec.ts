@@ -43,9 +43,19 @@ Zaid Mohamed
   it('drops the links, the handles, the credits and the hashtags', () => {
     const out = cleanYoutubeDescription(REAL);
     for (const junk of [
-      'noqta.tv', 'Instagram', 'omr94', 'Snapchat', 'TikTok', 'Facebook',
-      'contact@atnafas.me', 'wa.link', 'Production', 'Producer', 'Adel Hassan',
-      '#شرح', 'Business',
+      'noqta.tv',
+      'Instagram',
+      'omr94',
+      'Snapchat',
+      'TikTok',
+      'Facebook',
+      'contact@atnafas.me',
+      'wa.link',
+      'Production',
+      'Producer',
+      'Adel Hassan',
+      '#شرح',
+      'Business',
     ]) {
       expect(out).not.toContain(junk);
     }
@@ -76,7 +86,8 @@ Zaid Mohamed
 });
 
 describe('is what survived worth showing', () => {
-  const ok = 'في الدرس ده هنشرح قانون نيوتن التاني، ونحل كام مسألة على الكتلة والتسارع خطوة بخطوة عشان تبقى جاهز للامتحان.';
+  const ok =
+    'في الدرس ده هنشرح قانون نيوتن التاني، ونحل كام مسألة على الكتلة والتسارع خطوة بخطوة عشان تبقى جاهز للامتحان.';
 
   it('accepts a real paragraph', () => {
     expect(looksUsableDescription(ok)).toBe(true);

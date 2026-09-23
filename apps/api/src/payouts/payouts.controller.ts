@@ -40,8 +40,17 @@ export class PayoutsController {
 
   @Post('methods')
   @ApiOperation({ summary: '[teacher] Add a payout method (bank / wallet / instapay)' })
-  async addMethod(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMethodDto) {
-    const method = await this.payouts.addMethod(ctx.academyId, dto.method, dto.details, dto.isDefault ?? false);
+  async addMethod(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: AddMethodDto,
+  ) {
+    const method = await this.payouts.addMethod(
+      ctx.academyId,
+      dto.method,
+      dto.details,
+      dto.isDefault ?? false,
+    );
     // Phase 8: where payout money goes is security-sensitive — auditable, but
     // never the account details themselves (no IBAN/wallet number in the log).
     await this.audit.log({
@@ -57,7 +66,11 @@ export class PayoutsController {
 
   @Delete('methods/:id')
   @ApiOperation({ summary: '[teacher] Remove a payout method' })
-  async removeMethod(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  async removeMethod(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     const result = await this.payouts.removeMethod(ctx.academyId, id);
     await this.audit.log({
       actorUserId: user.sub,
@@ -77,7 +90,11 @@ export class PayoutsController {
 
   @Post()
   @ApiOperation({ summary: '[teacher] Request a payout (checks minimum + balance)' })
-  async request(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: RequestPayoutDto) {
+  async request(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: RequestPayoutDto,
+  ) {
     const payout = await this.payouts.request(ctx.academyId, dto.amountCents, dto.methodId);
     await this.audit.log({
       actorUserId: user.sub,

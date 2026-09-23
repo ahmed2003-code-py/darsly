@@ -4,7 +4,15 @@ import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
-import { Badge, EmptyState, ErrorNote, Field, Modal, PageHeader, Spinner } from '../../components/ui';
+import {
+  Badge,
+  EmptyState,
+  ErrorNote,
+  Field,
+  Modal,
+  PageHeader,
+  Spinner,
+} from '../../components/ui';
 
 interface CouponForm {
   code: string;
@@ -15,7 +23,14 @@ interface CouponForm {
   courseId: string;
 }
 
-const EMPTY: CouponForm = { code: '', type: 'percent', value: '', maxUses: '', expiresAt: '', courseId: '' };
+const EMPTY: CouponForm = {
+  code: '',
+  type: 'percent',
+  value: '',
+  maxUses: '',
+  expiresAt: '',
+  courseId: '',
+};
 
 export default function TeacherCouponsPage() {
   const { t } = useTranslation();
@@ -101,7 +116,10 @@ export default function TeacherCouponsPage() {
               {coupons.map((c: any) => (
                 <tr key={c.id} className="border-b border-outline-variant/30 last:border-0">
                   <td className="px-6 py-4">
-                    <span className="rounded-md bg-primary-fixed px-2 py-1 font-mono font-bold text-on-primary-fixed-variant" dir="ltr">
+                    <span
+                      className="rounded-md bg-primary-fixed px-2 py-1 font-mono font-bold text-on-primary-fixed-variant"
+                      dir="ltr"
+                    >
                       {c.code}
                     </span>
                   </td>
@@ -142,39 +160,68 @@ export default function TeacherCouponsPage() {
         {form && (
           <form onSubmit={submit}>
             <Field label={t('teacher.coupons.code')}>
-              <input className="input" dir="ltr" required pattern="[A-Za-z0-9_-]{3,24}"
-                value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              <input
+                className="input"
+                dir="ltr"
+                required
+                pattern="[A-Za-z0-9_-]{3,24}"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+              />
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label={t('teacher.coupons.discountType')}>
-                <select className="input py-2" value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value as CouponForm['type'] })}>
+                <select
+                  className="input py-2"
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value as CouponForm['type'] })}
+                >
                   <option value="percent">{t('teacher.coupons.percentOff')}</option>
                   <option value="amount">{t('teacher.coupons.amountOff')}</option>
                 </select>
               </Field>
               <Field label={t('teacher.coupons.discount')}>
-                <input className="input" inputMode="numeric" required value={form.value}
-                  onChange={(e) => setForm({ ...form, value: e.target.value.replace(/[^\d.]/g, '') })} />
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  required
+                  value={form.value}
+                  onChange={(e) =>
+                    setForm({ ...form, value: e.target.value.replace(/[^\d.]/g, '') })
+                  }
+                />
               </Field>
             </div>
             <Field label={t('teacher.coupons.course')}>
-              <select className="input py-2" value={form.courseId}
-                onChange={(e) => setForm({ ...form, courseId: e.target.value })}>
+              <select
+                className="input py-2"
+                value={form.courseId}
+                onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+              >
                 <option value="">{t('teacher.coupons.allCourses')}</option>
                 {(courses ?? []).map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.title}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
                 ))}
               </select>
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label={t('teacher.coupons.maxUses')} hint={t('teacher.coupons.unlimited')}>
-                <input className="input" inputMode="numeric" value={form.maxUses}
-                  onChange={(e) => setForm({ ...form, maxUses: e.target.value.replace(/\D/g, '') })} />
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  value={form.maxUses}
+                  onChange={(e) => setForm({ ...form, maxUses: e.target.value.replace(/\D/g, '') })}
+                />
               </Field>
               <Field label={t('teacher.coupons.expiresAt')} hint={t('teacher.coupons.noExpiry')}>
-                <input className="input py-2" type="date" value={form.expiresAt}
-                  onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
+                <input
+                  className="input py-2"
+                  type="date"
+                  value={form.expiresAt}
+                  onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
+                />
               </Field>
             </div>
             <button className="btn-primary w-full" disabled={create.isPending}>

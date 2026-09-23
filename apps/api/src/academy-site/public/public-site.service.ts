@@ -93,7 +93,10 @@ export class PublicSiteService {
         select: { slug: true, site: { select: { publishedAt: true, updatedAt: true } } },
       })
       .then((rows) =>
-        rows.map((r) => ({ slug: r.slug, updatedAt: r.site?.publishedAt ?? r.site?.updatedAt ?? new Date() })),
+        rows.map((r) => ({
+          slug: r.slug,
+          updatedAt: r.site?.publishedAt ?? r.site?.updatedAt ?? new Date(),
+        })),
       );
   }
 }

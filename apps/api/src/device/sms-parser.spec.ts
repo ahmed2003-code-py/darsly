@@ -12,10 +12,42 @@ import {
 } from './sms-parser';
 
 const RULES: SenderRuleLike[] = [
-  { brand: 'CIB', matchType: 'CONTAINS', pattern: 'cib', provider: PaymentMethod.BANK_TRANSFER, enabled: true, forwardToBackend: true, priority: 10 },
-  { brand: 'Vodafone Cash', matchType: 'CONTAINS', pattern: 'vodafone', provider: PaymentMethod.VODAFONE_CASH, enabled: true, forwardToBackend: true, priority: 20 },
-  { brand: 'InstaPay', matchType: 'EXACT', pattern: 'InstaPay', provider: PaymentMethod.INSTAPAY, enabled: true, forwardToBackend: true, priority: 30 },
-  { brand: 'Disabled', matchType: 'CONTAINS', pattern: 'off', provider: PaymentMethod.OTHER, enabled: false, forwardToBackend: true, priority: 1 },
+  {
+    brand: 'CIB',
+    matchType: 'CONTAINS',
+    pattern: 'cib',
+    provider: PaymentMethod.BANK_TRANSFER,
+    enabled: true,
+    forwardToBackend: true,
+    priority: 10,
+  },
+  {
+    brand: 'Vodafone Cash',
+    matchType: 'CONTAINS',
+    pattern: 'vodafone',
+    provider: PaymentMethod.VODAFONE_CASH,
+    enabled: true,
+    forwardToBackend: true,
+    priority: 20,
+  },
+  {
+    brand: 'InstaPay',
+    matchType: 'EXACT',
+    pattern: 'InstaPay',
+    provider: PaymentMethod.INSTAPAY,
+    enabled: true,
+    forwardToBackend: true,
+    priority: 30,
+  },
+  {
+    brand: 'Disabled',
+    matchType: 'CONTAINS',
+    pattern: 'off',
+    provider: PaymentMethod.OTHER,
+    enabled: false,
+    forwardToBackend: true,
+    priority: 1,
+  },
 ];
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -42,7 +74,15 @@ describe('classifySender', () => {
     // Observed on a real handset: Vodafone Cash sends from "VF-Cash" while the
     // seeded rule reads "vfcash", so a genuine payment SMS was filed local-only.
     const rules: SenderRuleLike[] = [
-      { brand: 'Vodafone Cash', matchType: 'CONTAINS', pattern: 'vfcash', provider: PaymentMethod.VODAFONE_CASH, enabled: true, forwardToBackend: true, priority: 21 },
+      {
+        brand: 'Vodafone Cash',
+        matchType: 'CONTAINS',
+        pattern: 'vfcash',
+        provider: PaymentMethod.VODAFONE_CASH,
+        enabled: true,
+        forwardToBackend: true,
+        priority: 21,
+      },
     ];
     for (const sender of ['VF-Cash', 'VF Cash', 'VF_Cash', 'VF.Cash', 'VFCash', 'vf-cash']) {
       expect(classifySender(sender, rules)?.brand).toBe('Vodafone Cash');
@@ -75,15 +115,39 @@ describe('classifySender', () => {
 
   it('respects priority order (lower wins) when several rules match', () => {
     const rules: SenderRuleLike[] = [
-      { brand: 'Generic', matchType: 'CONTAINS', pattern: 'bank', provider: PaymentMethod.OTHER, enabled: true, forwardToBackend: false, priority: 100 },
-      { brand: 'CIB', matchType: 'CONTAINS', pattern: 'cib', provider: PaymentMethod.BANK_TRANSFER, enabled: true, forwardToBackend: true, priority: 10 },
+      {
+        brand: 'Generic',
+        matchType: 'CONTAINS',
+        pattern: 'bank',
+        provider: PaymentMethod.OTHER,
+        enabled: true,
+        forwardToBackend: false,
+        priority: 100,
+      },
+      {
+        brand: 'CIB',
+        matchType: 'CONTAINS',
+        pattern: 'cib',
+        provider: PaymentMethod.BANK_TRANSFER,
+        enabled: true,
+        forwardToBackend: true,
+        priority: 10,
+      },
     ];
     expect(classifySender('CIB Bank', rules)?.brand).toBe('CIB');
   });
 
   it('a malformed REGEX rule never throws — it just does not match', () => {
     const rules: SenderRuleLike[] = [
-      { brand: 'Bad', matchType: 'REGEX', pattern: '([', provider: PaymentMethod.OTHER, enabled: true, forwardToBackend: true, priority: 1 },
+      {
+        brand: 'Bad',
+        matchType: 'REGEX',
+        pattern: '([',
+        provider: PaymentMethod.OTHER,
+        enabled: true,
+        forwardToBackend: true,
+        priority: 1,
+      },
     ];
     expect(() => classifySender('anything', rules)).not.toThrow();
     expect(classifySender('anything', rules)).toBeNull();
@@ -129,16 +193,24 @@ describe('parseReference — real wallet SMS carry no transaction id', () => {
   // mobile number is the only identity in the message, and it is what the
   // student types at checkout.
   it('takes the sending mobile number as the transfer identity', () => {
-    expect(parseReference('تم استلام مبلغ 5 جنيه من رقم 01029166461 المسجل بإسم احمد')).toBe('01029166461');
-    expect(parseReference('تم استلام مبلغ 5.00 جنيه من 01002589923؛ رصيدك الحالي 300.00 جنيه')).toBe('01002589923');
+    expect(parseReference('تم استلام مبلغ 5 جنيه من رقم 01029166461 المسجل بإسم احمد')).toBe(
+      '01029166461',
+    );
+    expect(
+      parseReference('تم استلام مبلغ 5.00 جنيه من 01002589923؛ رصيدك الحالي 300.00 جنيه'),
+    ).toBe('01002589923');
   });
 
   it('is not fooled by a balance or a date printed before the number', () => {
-    expect(parseReference('رصيدك 250000 جنيه. تم استلام مبلغ 450 جنيه من 01112223344')).toBe('01112223344');
+    expect(parseReference('رصيدك 250000 جنيه. تم استلام مبلغ 450 جنيه من 01112223344')).toBe(
+      '01112223344',
+    );
   });
 
   it('still prefers an explicitly labelled reference when the bank sends one', () => {
-    expect(parseReference('تم تحويل 5.00 جم، رقم العملية TXN-884213، من 01029166461')).toBe('TXN-884213');
+    expect(parseReference('تم تحويل 5.00 جم، رقم العملية TXN-884213، من 01029166461')).toBe(
+      'TXN-884213',
+    );
   });
 
   it('returns null when the message carries no identity at all', () => {
@@ -156,7 +228,9 @@ describe('isIncomingTransfer — money in, not money out', () => {
     // Seen in production: the listener sits on a phone that also SENDS money, and
     // this was being booked as an incoming payment.
     expect(
-      isIncomingTransfer('يرجى العلم انه تم تنفيذ تحويل لحظي بمبلغ 15.00 جم من حسابك المنتهي بـ ********7717'),
+      isIncomingTransfer(
+        'يرجى العلم انه تم تنفيذ تحويل لحظي بمبلغ 15.00 جم من حسابك المنتهي بـ ********7717',
+      ),
     ).toBe(false);
     expect(isIncomingTransfer('تم خصم مبلغ 50 جنيه من محفظتك')).toBe(false);
     expect(isIncomingTransfer('EGP 100 debited from your account')).toBe(false);

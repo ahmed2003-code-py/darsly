@@ -49,13 +49,13 @@ describe('student registration', () => {
   );
 
   it('rejects a password with no digit', () => {
-    expect(failures(RegisterStudentDto, { ...valid, password: 'passwordonly' })).toContain('password');
+    expect(failures(RegisterStudentDto, { ...valid, password: 'passwordonly' })).toContain(
+      'password',
+    );
   });
 
   it('reports a bad phone as a 400, not an unhandled error', () => {
-    expect(() => normalizeEgyptianPhone('12345')).toThrow(
-      expect.objectContaining({ status: 400 }),
-    );
+    expect(() => normalizeEgyptianPhone('12345')).toThrow(expect.objectContaining({ status: 400 }));
   });
 });
 
@@ -112,9 +112,7 @@ describe('bounded record', () => {
   });
 
   it('rejects a map with more keys than the question ceiling', () => {
-    const answers = Object.fromEntries(
-      Array.from({ length: 201 }, (_, i) => [`q${i}`, 'a']),
-    );
+    const answers = Object.fromEntries(Array.from({ length: 201 }, (_, i) => [`q${i}`, 'a']));
     expect(failures(SubmitAttemptDto, { answers })).toContain('answers');
   });
 

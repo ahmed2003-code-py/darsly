@@ -1,4 +1,14 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { EnrollmentStatus, JwtPayload, Role } from '@darsly/shared-types';
@@ -132,8 +142,14 @@ export class EnrollmentsController {
 
   @Patch('teacher/enrollments/:id/approve')
   @AcademyStaffFeature('student.manage', 'enrollmentApprovalMode')
-  @ApiOperation({ summary: '[academy] Approve a pending (free-course, MANUAL/DEMO-mode) enrollment request' })
-  async approve(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  @ApiOperation({
+    summary: '[academy] Approve a pending (free-course, MANUAL/DEMO-mode) enrollment request',
+  })
+  async approve(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     const enrollment = await this.enrollments.approve(ctx.academyId, id);
     await this.audit.log({
       actorUserId: user.sub,
@@ -168,8 +184,14 @@ export class EnrollmentsController {
 
   @Post('teacher/enrollments/demo')
   @AcademyStaffFeature('student.manage', 'enrollmentApprovalMode')
-  @ApiOperation({ summary: '[academy, MANUAL/DEMO mode only] Grant a student access with zero financial effect' })
-  async demoEnroll(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: DemoEnrollDto) {
+  @ApiOperation({
+    summary: '[academy, MANUAL/DEMO mode only] Grant a student access with zero financial effect',
+  })
+  async demoEnroll(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: DemoEnrollDto,
+  ) {
     if (!dto.studentUserId && !dto.studentEmail) {
       throw new BadRequestException('Provide either studentUserId or studentEmail');
     }
@@ -184,7 +206,11 @@ export class EnrollmentsController {
       entity: 'Enrollment',
       entityId: enrollment.id,
       academyId: ctx.academyId,
-      meta: { studentUserId: dto.studentUserId, studentEmail: dto.studentEmail, courseId: dto.courseId },
+      meta: {
+        studentUserId: dto.studentUserId,
+        studentEmail: dto.studentEmail,
+        courseId: dto.courseId,
+      },
     });
     return enrollment;
   }

@@ -10,7 +10,9 @@ export default function AssignmentBuilderPage() {
   const { lessonId } = useParams();
   const [search] = useSearchParams();
   const fromCourse = search.get('course');
-  const backTo = fromCourse ? `/teacher/courses/${fromCourse}?lesson=${lessonId}` : '/teacher/courses';
+  const backTo = fromCourse
+    ? `/teacher/courses/${fromCourse}?lesson=${lessonId}`
+    : '/teacher/courses';
   const qc = useQueryClient();
 
   const [prompt, setPrompt] = useState('');
@@ -33,9 +35,13 @@ export default function AssignmentBuilderPage() {
 
   const save = useMutation({
     mutationFn: async () =>
-      (await api.put(`/teacher/lessons/${lessonId}/assignment`, {
-        prompt, maxScore, dueAt: dueAt || null,
-      })).data,
+      (
+        await api.put(`/teacher/lessons/${lessonId}/assignment`, {
+          prompt,
+          maxScore,
+          dueAt: dueAt || null,
+        })
+      ).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tassign', lessonId] }),
   });
 
@@ -45,63 +51,136 @@ export default function AssignmentBuilderPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tassign', lessonId] }),
   });
 
-  if (isLoading) return <div className="grid place-items-center py-20"><Spinner /></div>;
+  if (isLoading)
+    return (
+      <div className="grid place-items-center py-20">
+        <Spinner />
+      </div>
+    );
 
   return (
     <div className="page">
       {/* Back to the lesson this assignment belongs to, panel still open. */}
-      <Link to={backTo} className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
-        <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.builder.backCourses')}
+      <Link
+        to={backTo}
+        className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+      >
+        <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>
+        {t('assess.builder.backCourses')}
       </Link>
-      <PageHeader title={t('assess.builder.assignTitle')} subtitle={t('assess.builder.assignSubtitle')} />
+      <PageHeader
+        title={t('assess.builder.assignTitle')}
+        subtitle={t('assess.builder.assignSubtitle')}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card">
           <Field label={t('assess.assign.prompt')}>
-            <textarea className="input min-h-[8rem]" dir="auto" value={prompt}
-              onChange={(e) => setPrompt(e.target.value)} placeholder={t('assess.assign.promptPlaceholder')} />
+            <textarea
+              className="input min-h-[8rem]"
+              dir="auto"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder={t('assess.assign.promptPlaceholder')}
+            />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t('assess.assign.maxScore')}>
-              <input className="input" inputMode="numeric" value={maxScore}
-                onChange={(e) => setMaxScore(Math.max(1, Number(e.target.value.replace(/\D/g, '')) || 1))} />
+              <input
+                className="input"
+                inputMode="numeric"
+                value={maxScore}
+                onChange={(e) =>
+                  setMaxScore(Math.max(1, Number(e.target.value.replace(/\D/g, '')) || 1))
+                }
+              />
             </Field>
             <Field label={t('assess.assign.dueAt')}>
-              <input className="input" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+              <input
+                className="input"
+                type="date"
+                value={dueAt}
+                onChange={(e) => setDueAt(e.target.value)}
+              />
             </Field>
           </div>
-          <button className="btn-primary mt-2 w-full" disabled={save.isPending || !prompt.trim()} onClick={() => save.mutate()}>
+          <button
+            className="btn-primary mt-2 w-full"
+            disabled={save.isPending || !prompt.trim()}
+            onClick={() => save.mutate()}
+          >
             {save.isPending ? t('common.saving') : t('assess.assign.save')}
           </button>
-          {save.isSuccess && <p className="mt-2 text-center text-sm text-secondary">{t('common.saved')}</p>}
+          {save.isSuccess && (
+            <p className="mt-2 text-center text-sm text-secondary">{t('common.saved')}</p>
+          )}
           <ErrorNote error={save.error} />
         </div>
 
         <div className="card">
           <h3 className="mb-3 font-heading font-bold">{t('assess.assign.submissions')}</h3>
           {!data?.submissions?.length ? (
-            <p className="py-6 text-center text-sm text-outline">{t('assess.assign.noSubmissions')}</p>
+            <p className="py-6 text-center text-sm text-outline">
+              {t('assess.assign.noSubmissions')}
+            </p>
           ) : (
             <ul className="space-y-3">
               {data.submissions.map((s: any) => {
-                const g = grading[s.id] ?? { score: s.score != null ? String(s.score) : '', feedback: s.feedback ?? '' };
+                const g = grading[s.id] ?? {
+                  score: s.score != null ? String(s.score) : '',
+                  feedback: s.feedback ?? '',
+                };
                 return (
                   <li key={s.id} className="rounded-xl border border-outline-variant/40 p-3">
                     <div className="mb-1 flex items-center justify-between">
                       <span className="font-bold">{s.student?.user?.fullName}</span>
-                      {s.gradedAt ? <Badge tone="neutral">{s.score}/{data.maxScore}</Badge> : <Badge tone="warn">{t('assess.assign.ungraded')}</Badge>}
+                      {s.gradedAt ? (
+                        <Badge tone="neutral">
+                          {s.score}/{data.maxScore}
+                        </Badge>
+                      ) : (
+                        <Badge tone="warn">{t('assess.assign.ungraded')}</Badge>
+                      )}
                     </div>
-                    {s.body && <p className="mb-2 whitespace-pre-wrap rounded bg-surface-container-low px-3 py-2 text-sm" dir="auto">{s.body}</p>}
+                    {s.body && (
+                      <p
+                        className="mb-2 whitespace-pre-wrap rounded bg-surface-container-low px-3 py-2 text-sm"
+                        dir="auto"
+                      >
+                        {s.body}
+                      </p>
+                    )}
                     <div className="flex items-end gap-2">
                       <label className="text-xs">
                         {t('assess.assign.score')}
-                        <input className="input w-20 py-1 text-sm" inputMode="numeric" value={g.score}
-                          onChange={(e) => setGrading((x) => ({ ...x, [s.id]: { ...g, score: e.target.value.replace(/\D/g, '') } }))} />
+                        <input
+                          className="input w-20 py-1 text-sm"
+                          inputMode="numeric"
+                          value={g.score}
+                          onChange={(e) =>
+                            setGrading((x) => ({
+                              ...x,
+                              [s.id]: { ...g, score: e.target.value.replace(/\D/g, '') },
+                            }))
+                          }
+                        />
                       </label>
-                      <input className="input flex-1 py-1 text-sm" dir="auto" placeholder={t('assess.assign.feedback')} value={g.feedback}
-                        onChange={(e) => setGrading((x) => ({ ...x, [s.id]: { ...g, feedback: e.target.value } }))} />
-                      <button className="btn-primary px-4 py-1.5 text-sm" disabled={grade.isPending || g.score === ''}
-                        onClick={() => grade.mutate({ id: s.id, score: Number(g.score), feedback: g.feedback })}>
+                      <input
+                        className="input flex-1 py-1 text-sm"
+                        dir="auto"
+                        placeholder={t('assess.assign.feedback')}
+                        value={g.feedback}
+                        onChange={(e) =>
+                          setGrading((x) => ({ ...x, [s.id]: { ...g, feedback: e.target.value } }))
+                        }
+                      />
+                      <button
+                        className="btn-primary px-4 py-1.5 text-sm"
+                        disabled={grade.isPending || g.score === ''}
+                        onClick={() =>
+                          grade.mutate({ id: s.id, score: Number(g.score), feedback: g.feedback })
+                        }
+                      >
                         {t('assess.assign.grade')}
                       </button>
                     </div>

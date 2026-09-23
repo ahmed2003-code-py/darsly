@@ -47,7 +47,9 @@ export function useSetSubjectOffered(slug: string | undefined) {
       if (previous) {
         qc.setQueryData<AcademySubjects>(k, {
           ...previous,
-          subjects: previous.subjects.map((s) => (s.id === subjectId ? { ...s, offered: isActive } : s)),
+          subjects: previous.subjects.map((s) =>
+            s.id === subjectId ? { ...s, offered: isActive } : s,
+          ),
         });
       }
       return { previous };
@@ -65,19 +67,25 @@ export function useSetAllSubjectsOffered(slug: string | undefined) {
   const qc = useQueryClient();
   const k = key(slug ?? '');
   return useMutation({
-    mutationFn: async (isActive: boolean) => (await api.put(`/academies/${slug}/subjects`, { isActive })).data,
+    mutationFn: async (isActive: boolean) =>
+      (await api.put(`/academies/${slug}/subjects`, { isActive })).data,
     onMutate: async (isActive) => {
       await qc.cancelQueries({ queryKey: k });
       const previous = qc.getQueryData<AcademySubjects>(k);
       if (previous) {
-        qc.setQueryData<AcademySubjects>(k, { ...previous, subjects: previous.subjects.map((s) => ({ ...s, offered: isActive })) });
+        qc.setQueryData<AcademySubjects>(k, {
+          ...previous,
+          subjects: previous.subjects.map((s) => ({ ...s, offered: isActive })),
+        });
       }
       return { previous };
     },
     onError: (_e, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(k, ctx.previous);
     },
-    onSettled: () => { void qc.invalidateQueries({ queryKey: k }); },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: k });
+    },
   });
 }
 
@@ -92,8 +100,13 @@ export function useSetAllSubjectsOffered(slug: string | undefined) {
 export function useCreateSubject(slug: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: { nameAr: string; nameEn: string; icon?: string; track?: string; isCore?: boolean }) =>
-      (await api.post('/catalog/subjects', body)).data,
+    mutationFn: async (body: {
+      nameAr: string;
+      nameEn: string;
+      icon?: string;
+      track?: string;
+      isCore?: boolean;
+    }) => (await api.post('/catalog/subjects', body)).data,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: key(slug ?? '') });
       void qc.invalidateQueries({ queryKey: ['subjects'] });

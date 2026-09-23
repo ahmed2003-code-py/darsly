@@ -45,7 +45,11 @@ describe('pagination', () => {
 
     it('keeps total as the count of everything, not of the page', () => {
       expect(asPage([1, 2, 3], 97, 2, 3)).toEqual({
-        items: [1, 2, 3], total: 97, page: 2, pageSize: 3, pages: 33,
+        items: [1, 2, 3],
+        total: 97,
+        page: 2,
+        pageSize: 3,
+        pages: 33,
       });
     });
   });

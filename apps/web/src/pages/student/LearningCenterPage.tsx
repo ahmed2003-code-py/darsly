@@ -17,7 +17,14 @@ import { ErrorNote, PageHeader, Skeleton } from '../../components/ui';
 import { Reveal } from '../../components/motion';
 import { Link } from 'react-router-dom';
 
-const TABS = ['overview', 'missions', 'achievements', 'leaderboard', 'rewards', 'activity'] as const;
+const TABS = [
+  'overview',
+  'missions',
+  'achievements',
+  'leaderboard',
+  'rewards',
+  'activity',
+] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -68,7 +75,9 @@ export default function LearningCenterPage() {
             </span>
             <span className="block text-sm text-on-surface-variant">{t('myStudio.subtitle')}</span>
           </span>
-          <span className="material-symbols-outlined text-outline rtl:-scale-x-100">chevron_right</span>
+          <span className="material-symbols-outlined text-outline rtl:-scale-x-100">
+            chevron_right
+          </span>
         </Link>
       </div>
 
@@ -81,7 +90,9 @@ export default function LearningCenterPage() {
               type="button"
               onClick={() => setTab(k)}
               className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition ${
-                tab === k ? 'bg-surface-container-lowest text-primary shadow-hairline' : 'text-on-surface-variant'
+                tab === k
+                  ? 'bg-surface-container-lowest text-primary shadow-hairline'
+                  : 'text-on-surface-variant'
               }`}
             >
               {t(`gamification.tabs.${k}`)}
@@ -121,7 +132,10 @@ function Overview({ g }: { g: ReturnType<typeof useGamification>['data'] & {} })
     [t('gamification.stats.certificates'), g.stats.certificates],
     [t('gamification.stats.assignments'), g.stats.assignmentsDone],
     [t('gamification.stats.live'), g.stats.liveAttended],
-    [t('gamification.stats.accuracy'), g.stats.quizAccuracy != null ? `${g.stats.quizAccuracy}%` : '—'],
+    [
+      t('gamification.stats.accuracy'),
+      g.stats.quizAccuracy != null ? `${g.stats.quizAccuracy}%` : '—',
+    ],
   ];
 
   return (
@@ -131,7 +145,9 @@ function Overview({ g }: { g: ReturnType<typeof useGamification>['data'] & {} })
         <MissionList missions={g.missions} kind="WEEKLY" />
 
         <section>
-          <h2 className="mb-3 font-heading text-lg font-extrabold">{t('gamification.stats.title')}</h2>
+          <h2 className="mb-3 font-heading text-lg font-extrabold">
+            {t('gamification.stats.title')}
+          </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {stats.map(([label, value]) => (
               <div key={label} className="card text-center">
@@ -144,7 +160,9 @@ function Overview({ g }: { g: ReturnType<typeof useGamification>['data'] & {} })
 
         {g.achievements.recent.length > 0 && (
           <section>
-            <h2 className="mb-3 font-heading text-lg font-extrabold">{t('gamification.achievements.title')}</h2>
+            <h2 className="mb-3 font-heading text-lg font-extrabold">
+              {t('gamification.achievements.title')}
+            </h2>
             <div className="scroll-x -mx-6 flex gap-3 px-6 pb-2 sm:mx-0 sm:px-0">
               {g.achievements.recent.map((a) => (
                 <div
@@ -152,11 +170,16 @@ function Overview({ g }: { g: ReturnType<typeof useGamification>['data'] & {} })
                   className="flex min-w-[8.5rem] flex-col items-center gap-1.5 rounded-xl border border-accent-300 bg-primary-fixed/50 p-4 text-center"
                 >
                   <span className="grid h-12 w-12 place-items-center rounded-full bg-primary text-on-primary">
-                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
                       {a.icon}
                     </span>
                   </span>
-                  <span className="text-sm font-semibold">{L({ ar: a.titleAr, en: a.titleEn })}</span>
+                  <span className="text-sm font-semibold">
+                    {L({ ar: a.titleAr, en: a.titleEn })}
+                  </span>
                 </div>
               ))}
             </div>
@@ -166,17 +189,23 @@ function Overview({ g }: { g: ReturnType<typeof useGamification>['data'] & {} })
 
       <aside className="space-y-6">
         <div className="card text-center">
-          <span className="material-symbols-outlined text-[28px] text-student-gold-ink" style={{ fontVariationSettings: "'FILL' 1" }}>
+          <span
+            className="material-symbols-outlined text-[28px] text-student-gold-ink"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
             {g.rank.divisionIcon}
           </span>
           <p className="font-heading text-lg font-extrabold">
             {t(`gamification.leaderboard.divisions.${g.rank.division}`, g.rank.division)}
           </p>
           <p className="text-sm text-on-surface-variant">
-            {t('gamification.rankShort', { n: g.rank.weekly })} · {compactNum(g.rank.weeklyXp)} {t('gamification.xp')}
+            {t('gamification.rankShort', { n: g.rank.weekly })} · {compactNum(g.rank.weeklyXp)}{' '}
+            {t('gamification.xp')}
           </p>
           {g.rank.best != null && (
-            <p className="mt-1 text-xs text-outline">{t('gamification.bestRank', { n: g.rank.best })}</p>
+            <p className="mt-1 text-xs text-outline">
+              {t('gamification.bestRank', { n: g.rank.best })}
+            </p>
           )}
         </div>
         <LeaderboardPanel scope="GLOBAL" compact />
@@ -250,20 +279,35 @@ function RewardsTab() {
         {(data?.rewards ?? []).map((r) => (
           <div key={r.key} className="card flex flex-col">
             <span className="mb-2 grid h-11 w-11 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed">
-              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>{r.icon}</span>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                {r.icon}
+              </span>
             </span>
             <p className="font-heading font-bold">{L({ ar: r.titleAr, en: r.titleEn })}</p>
-            <p className="mt-0.5 flex-1 text-sm text-on-surface-variant">{L({ ar: r.descAr, en: r.descEn })}</p>
+            <p className="mt-0.5 flex-1 text-sm text-on-surface-variant">
+              {L({ ar: r.descAr, en: r.descEn })}
+            </p>
             <div className="mt-3 flex items-center justify-between gap-2">
               <span className="flex items-center gap-1 font-heading font-extrabold text-student-gold-ink">
-                <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>toll</span>
+                <span
+                  className="material-symbols-outlined text-[18px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  toll
+                </span>
                 {r.costCoins}
               </span>
               <button
                 type="button"
                 className="btn-primary px-4 py-1.5 text-sm disabled:opacity-50"
                 disabled={!r.affordable || busy === r.key}
-                onClick={() => { setBusy(r.key); redeem.mutate(r.key); }}
+                onClick={() => {
+                  setBusy(r.key);
+                  redeem.mutate(r.key);
+                }}
               >
                 {busy === r.key
                   ? t('gamification.rewards.buying')
@@ -287,7 +331,11 @@ function ActivityTab() {
   });
   if (isLoading) return <Skeleton className="h-64 rounded-3xl" />;
   if (!data?.length) {
-    return <p className="card py-10 text-center text-sm text-on-surface-variant">{t('gamification.activity.empty')}</p>;
+    return (
+      <p className="card py-10 text-center text-sm text-on-surface-variant">
+        {t('gamification.activity.empty')}
+      </p>
+    );
   }
 
   return (
@@ -297,8 +345,12 @@ function ActivityTab() {
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">
             {t([`gamification.events.${e.type}`, e.type])}
           </span>
-          <span className="shrink-0 text-sm font-bold text-primary">{e.xp > 0 ? `+${e.xp}` : ''}</span>
-          <span className={`shrink-0 text-sm font-bold ${e.coins < 0 ? 'text-outline' : 'text-student-gold-ink'}`}>
+          <span className="shrink-0 text-sm font-bold text-primary">
+            {e.xp > 0 ? `+${e.xp}` : ''}
+          </span>
+          <span
+            className={`shrink-0 text-sm font-bold ${e.coins < 0 ? 'text-outline' : 'text-student-gold-ink'}`}
+          >
             {e.coins !== 0 ? (e.coins > 0 ? `+${e.coins}` : e.coins) : ''}
           </span>
         </div>

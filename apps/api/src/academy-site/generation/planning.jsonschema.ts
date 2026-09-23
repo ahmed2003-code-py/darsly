@@ -34,12 +34,36 @@ export const planningJsonSchema: Record<string, unknown> = {
       // listed here — an optional field is rejected outright with a 400, not
       // silently ignored. Optionality lives in the zod schema instead, which is
       // what actually guards the response.
-      required: ['background', 'ink', 'surface', 'radius', 'density', 'headingScale', 'heroTreatment', 'bodyFont', 'motion'],
+      required: [
+        'background',
+        'ink',
+        'surface',
+        'radius',
+        'density',
+        'headingScale',
+        'heroTreatment',
+        'bodyFont',
+        'motion',
+      ],
       properties: {
-        background: { type: 'string', description: 'Page background, #RRGGBB. Dark or light — your call.' },
-        ink: { type: 'string', description: 'Body text colour, #RRGGBB. Must be legible on the background.' },
-        surface: { type: 'string', description: 'Cards and section bands, #RRGGBB. Close to the background.' },
-        radius: { type: 'integer', minimum: 0, maximum: 28, description: '0 = hard-edged, 28 = very soft.' },
+        background: {
+          type: 'string',
+          description: 'Page background, #RRGGBB. Dark or light — your call.',
+        },
+        ink: {
+          type: 'string',
+          description: 'Body text colour, #RRGGBB. Must be legible on the background.',
+        },
+        surface: {
+          type: 'string',
+          description: 'Cards and section bands, #RRGGBB. Close to the background.',
+        },
+        radius: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 28,
+          description: '0 = hard-edged, 28 = very soft.',
+        },
         density: { type: 'string', enum: ['compact', 'regular', 'airy'] },
         headingScale: { type: 'string', enum: ['restrained', 'balanced', 'dramatic'] },
         heroTreatment: { type: 'string', enum: ['flat', 'gradient', 'mesh', 'spotlight'] },

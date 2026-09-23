@@ -23,7 +23,10 @@ export class NeedsAttentionService {
 
   private async scopedGroupIds(ctx: AcademyContext): Promise<string[] | null> {
     if (ctx.role === 'OWNER') return null; // null = academy-wide, no filter
-    const rows = await this.prisma.groupAssignment.findMany({ where: { userId: ctx.userId }, select: { groupId: true } });
+    const rows = await this.prisma.groupAssignment.findMany({
+      where: { userId: ctx.userId },
+      select: { groupId: true },
+    });
     return rows.map((r) => r.groupId);
   }
 
@@ -65,13 +68,21 @@ export class NeedsAttentionService {
       GROUP BY ranked."studentId", u."fullName", ranked."groupId", g.name
       HAVING COUNT(*) = ${REPEATED_ABSENCE_STREAK} AND COUNT(*) FILTER (WHERE ranked.status = 'ABSENT') = ${REPEATED_ABSENCE_STREAK}
     `;
-    return rows.map((r) => ({ studentId: r.studentId, fullName: r.fullName, groupId: r.groupId, groupName: r.groupName, streak: Number(r.streak) }));
+    return rows.map((r) => ({
+      studentId: r.studentId,
+      fullName: r.fullName,
+      groupId: r.groupId,
+      groupName: r.groupName,
+      streak: Number(r.streak),
+    }));
   }
 
   /** Actively-enrolled students with no gamification activity in
    *  INACTIVITY_DAYS days (or none ever recorded). */
   private async inactiveStudents(academyId: string, scopedGroups: string[] | null) {
-    const rows = await this.prisma.$queryRaw<{ studentId: string; fullName: string; lastActivity: Date | null }[]>`
+    const rows = await this.prisma.$queryRaw<
+      { studentId: string; fullName: string; lastActivity: Date | null }[]
+    >`
       SELECT sp.id AS "studentId", u."fullName", MAX(ge."createdAt") AS "lastActivity"
       FROM "StudentProfile" sp
       JOIN "User" u ON u.id = sp."userId" AND u."deletedAt" IS NULL
@@ -82,13 +93,19 @@ export class NeedsAttentionService {
       GROUP BY sp.id, u."fullName"
       HAVING MAX(ge."createdAt") IS NULL OR MAX(ge."createdAt") < NOW() - (${INACTIVITY_DAYS}::int * INTERVAL '1 day')
     `;
-    return rows.map((r) => ({ studentId: r.studentId, fullName: r.fullName, lastActivityAt: r.lastActivity }));
+    return rows.map((r) => ({
+      studentId: r.studentId,
+      fullName: r.fullName,
+      lastActivityAt: r.lastActivity,
+    }));
   }
 
   /** Groups (in scope) with no attendance session in STALE_ATTENDANCE_DAYS
    *  days, or none ever taken. */
   private async staleGroups(academyId: string, scopedGroups: string[] | null) {
-    const rows = await this.prisma.$queryRaw<{ groupId: string; name: string; lastSession: Date | null }[]>`
+    const rows = await this.prisma.$queryRaw<
+      { groupId: string; name: string; lastSession: Date | null }[]
+    >`
       SELECT g.id AS "groupId", g.name, MAX(s.date) AS "lastSession"
       FROM "Group" g
       LEFT JOIN "AttendanceSession" s ON s."groupId" = g.id AND s."deletedAt" IS NULL

@@ -16,7 +16,11 @@ describe('DeviceTokenService', () => {
   let service: DeviceTokenService;
 
   beforeEach(() => {
-    process.env = { ...OLD_ENV, JWT_ACCESS_SECRET: 'a'.repeat(40), JWT_REFRESH_SECRET: 'b'.repeat(40) };
+    process.env = {
+      ...OLD_ENV,
+      JWT_ACCESS_SECRET: 'a'.repeat(40),
+      JWT_REFRESH_SECRET: 'b'.repeat(40),
+    };
     jwt = new JwtService({});
     device = { id: 'dev1', phone: '+201012345678', refreshTokenHash: null, revokedAt: null };
     prisma = {

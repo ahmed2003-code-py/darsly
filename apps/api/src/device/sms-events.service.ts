@@ -71,12 +71,26 @@ export class SmsEventsService {
           provider: (classification?.provider as any) ?? null,
           amountCents: amountCents ?? undefined,
           reference: reference ?? undefined,
-          matchStatus: willForward ? null : !classification ? 'LOCAL_ONLY' : incoming ? 'LOCAL_ONLY' : 'OUTGOING',
+          matchStatus: willForward
+            ? null
+            : !classification
+              ? 'LOCAL_ONLY'
+              : incoming
+                ? 'LOCAL_ONLY'
+                : 'OUTGOING',
         },
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        return this.handleDuplicate(device.id, dto, classification, amountCents, reference, willForward, receivedAt);
+        return this.handleDuplicate(
+          device.id,
+          dto,
+          classification,
+          amountCents,
+          reference,
+          willForward,
+          receivedAt,
+        );
       }
       throw e;
     }
@@ -85,11 +99,24 @@ export class SmsEventsService {
       // An unmatched sender is local-only whatever the message says; OUTGOING is
       // reserved for a known payment sender reporting money leaving the account.
       return this.result(
-        record.id, false, classification, amountCents, reference, false,
+        record.id,
+        false,
+        classification,
+        amountCents,
+        reference,
+        false,
         !classification || incoming ? 'LOCAL_ONLY' : 'OUTGOING',
       );
     }
-    return this.forward(record.id, device.id, classification!, amountCents!, reference, receivedAt, dto.message);
+    return this.forward(
+      record.id,
+      device.id,
+      classification!,
+      amountCents!,
+      reference,
+      receivedAt,
+      dto.message,
+    );
   }
 
   /**
@@ -111,7 +138,16 @@ export class SmsEventsService {
       where: { deviceId_messageHash: { deviceId, messageHash: dto.messageHash } },
     });
     if (prior && !prior.forwarded && willForward) {
-      return this.forward(prior.id, deviceId, classification!, amountCents!, reference, receivedAt, dto.message, true);
+      return this.forward(
+        prior.id,
+        deviceId,
+        classification!,
+        amountCents!,
+        reference,
+        receivedAt,
+        dto.message,
+        true,
+      );
     }
     return {
       eventId: prior?.id ?? '',
@@ -135,7 +171,9 @@ export class SmsEventsService {
     // Defensive: this is an enrichment, not a precondition. If it fails we simply
     // do not exclude anything — never let it stop an SMS being processed.
     try {
-      const accounts = await this.prisma.platformPaymentAccount.findMany({ select: { handle: true } });
+      const accounts = await this.prisma.platformPaymentAccount.findMany({
+        select: { handle: true },
+      });
       return accounts.map((account) => account.handle);
     } catch {
       return [];
@@ -178,7 +216,15 @@ export class SmsEventsService {
       data: { forwarded: true, paymentEventId: matched.eventId, matchStatus: matched.status },
     });
     this.logger.log(`SMS event ${recordId} forwarded → ${matched.status}`);
-    return this.result(recordId, duplicate, classification, amountCents, reference, true, matched.status);
+    return this.result(
+      recordId,
+      duplicate,
+      classification,
+      amountCents,
+      reference,
+      true,
+      matched.status,
+    );
   }
 
   private result(

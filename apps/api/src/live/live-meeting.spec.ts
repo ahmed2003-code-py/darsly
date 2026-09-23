@@ -54,7 +54,12 @@ function build(world: {
   const prisma = {
     liveSession: {
       findFirst: jest.fn(async ({ where }: any) =>
-        s && s.id === where.id && (where.tenantId === undefined || s.tenantId === where.tenantId) && (where.academyId === undefined || s.academyId === where.academyId) ? { ...s } : null,
+        s &&
+        s.id === where.id &&
+        (where.tenantId === undefined || s.tenantId === where.tenantId) &&
+        (where.academyId === undefined || s.academyId === where.academyId)
+          ? { ...s }
+          : null,
       ),
       findUnique: jest.fn(async () => (s ? { ...s } : null)),
       updateMany: jest.fn(async ({ data }: any) => {
@@ -97,7 +102,9 @@ function build(world: {
     },
     user: { findUnique: jest.fn(async () => ({ fullName: 'أ. أحمد' })) },
     teacherProfile: { findUnique: jest.fn(async () => ({ userId: 'tu_1' })) },
-    $transaction: jest.fn(async (ops: any) => (Array.isArray(ops) ? Promise.all(ops) : ops(prisma))),
+    $transaction: jest.fn(async (ops: any) =>
+      Array.isArray(ops) ? Promise.all(ops) : ops(prisma),
+    ),
   } as unknown as PrismaService;
 
   const daily = {
@@ -115,14 +122,27 @@ function build(world: {
   const gamification = { record: jest.fn(async () => ({})) } as any;
   const realtime = { emitToLive: jest.fn() } as any;
   const jobs = { enqueue: jest.fn(async () => ({ id: 'job_1' })) } as any;
-  const service = new LiveService(prisma, notifications, gamification, daily, realtime, jobs, {} as any);
+  const service = new LiveService(
+    prisma,
+    notifications,
+    gamification,
+    daily,
+    realtime,
+    jobs,
+    {} as any,
+  );
   return { service, prisma, daily, notifications, realtime, jobs, session: s, updated, upserted };
 }
 
 describe('a teacher opens the classroom', () => {
   it('creates the room and hands back an owner token', async () => {
     const { service, daily } = build({
-      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
+      session: {
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() + 5 * MIN),
+      },
     });
     const res = await service.start(T1, 'ls1', 'u_teacher');
     expect(daily.createRoom).toHaveBeenCalledWith('darsly-ls1', expect.any(Number));
@@ -144,7 +164,12 @@ describe('a teacher opens the classroom', () => {
 
   it('refuses to start before the doors open', async () => {
     const { service } = build({
-      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 3 * 3600_000) },
+      session: {
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() + 3 * 3600_000),
+      },
     });
     const err = await service.start(T1, 'ls1', 'u').catch((e) => e);
     expect(err).toBeInstanceOf(BadRequestException);
@@ -153,7 +178,12 @@ describe('a teacher opens the classroom', () => {
 
   it('refuses to start a session whose window has closed', async () => {
     const { service } = build({
-      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 5 * 3600_000) },
+      session: {
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() - 5 * 3600_000),
+      },
     });
     const err = await service.start(T1, 'ls1', 'u').catch((e) => e);
     expect(err.getResponse()).toMatchObject({ code: 'ENDED' });
@@ -163,8 +193,13 @@ describe('a teacher opens the classroom', () => {
     // The refresh case, and the two-tabs case.
     const { service, daily } = build({
       session: {
-        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN),
-        status: 'LIVE', roomName: 'darsly-ls1', roomUrl: 'https://darsly.daily.co/darsly-ls1',
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() + 5 * MIN),
+        status: 'LIVE',
+        roomName: 'darsly-ls1',
+        roomUrl: 'https://darsly.daily.co/darsly-ls1',
       },
     });
     await service.start(T1, 'ls1', 'u');
@@ -173,7 +208,12 @@ describe('a teacher opens the classroom', () => {
 
   it('refuses a second live session while one is already running', async () => {
     const { service, session } = build({
-      session: { id: 'ls2', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
+      session: {
+        id: 'ls2',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() + 5 * MIN),
+      },
       otherLiveCount: 1,
     });
     const err = await service.start(T1, 'ls2', 'u').catch((e) => e);
@@ -187,8 +227,14 @@ describe('a teacher opens the classroom', () => {
     // to throw the lesson away and make everyone rebook.
     const { service, daily } = build({
       session: {
-        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 2 * MIN),
-        durationMin: 60, status: 'ENDED', roomName: null, roomUrl: null,
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() - 2 * MIN),
+        durationMin: 60,
+        status: 'ENDED',
+        roomName: null,
+        roomUrl: null,
       },
     });
     const res = await service.start(T1, 'ls1', 'u');
@@ -200,7 +246,10 @@ describe('a teacher opens the classroom', () => {
   it('will not reopen one whose window has closed', async () => {
     const { service } = build({
       session: {
-        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 5 * 3600_000),
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() - 5 * 3600_000),
         status: 'ENDED',
       },
     });
@@ -210,7 +259,12 @@ describe('a teacher opens the classroom', () => {
 
   it('does not leave a session LIVE when the provider fails', async () => {
     const { service, session } = build({
-      session: { id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN) },
+      session: {
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() + 5 * MIN),
+      },
       dailyFails: true,
     });
     await expect(service.start(T1, 'ls1', 'u')).rejects.toThrow();
@@ -235,11 +289,17 @@ describe('the configured domain is checked, not assumed', () => {
     expect(() => check(svc(), 'https://darsly.daily.co/darsly-ls1')).not.toThrow();
   });
 
-  it('refuses a room on somebody else\'s domain', () => {
+  it("refuses a room on somebody else's domain", () => {
     // The mistake that otherwise looks like success: a key from another team
     // works perfectly and hosts your classes somewhere you do not control.
     process.env.DAILY_DOMAIN = 'darsly.daily.co';
-    const err = (() => { try { check(svc(), 'https://someoneelse.daily.co/x'); } catch (e) { return e as any; } })();
+    const err = (() => {
+      try {
+        check(svc(), 'https://someoneelse.daily.co/x');
+      } catch (e) {
+        return e as any;
+      }
+    })();
     expect(err.getResponse()).toMatchObject({ code: 'LIVE_DOMAIN_MISMATCH' });
   });
 
@@ -270,12 +330,22 @@ describe('the transcription provider is wired by the server, not by hand', () =>
       calls.push({ url, method: init.method ?? 'GET', body });
       if (url.endsWith('/v1/')) {
         if (init.method === 'POST') config = { ...config, ...body.properties };
-        return { ok: true, status: 200, json: async () => ({ config }), text: async () => '' } as any;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ config }),
+          text: async () => '',
+        } as any;
       }
       if (url.endsWith('/rooms')) {
         return roomOk
-          ? { ok: true, status: 200, json: async () => ({ name: 'r', url: 'https://x.daily.co/r' }), text: async () => '' } as any
-          : { ok: false, status: 500, json: async () => ({}), text: async () => 'boom' } as any;
+          ? ({
+              ok: true,
+              status: 200,
+              json: async () => ({ name: 'r', url: 'https://x.daily.co/r' }),
+              text: async () => '',
+            } as any)
+          : ({ ok: false, status: 500, json: async () => ({}), text: async () => 'boom' } as any);
       }
       throw new Error(`unexpected ${url}`);
     }) as any;
@@ -286,7 +356,9 @@ describe('the transcription provider is wired by the server, not by hand', () =>
     logged = [];
     const { Logger } = require('@nestjs/common');
     for (const m of ['log', 'warn', 'error'] as const) {
-      jest.spyOn(Logger.prototype, m).mockImplementation(function (msg: any) { logged.push(String(msg)); });
+      jest.spyOn(Logger.prototype, m).mockImplementation(function (msg: any) {
+        logged.push(String(msg));
+      });
     }
   });
   afterEach(() => {
@@ -335,7 +407,9 @@ describe('the transcription provider is wired by the server, not by hand', () =>
 
     // Now the provider is down: the answer is "unknown", and it is not
     // remembered — the next class tries again.
-    global.fetch = jest.fn(async () => { throw new Error('down'); }) as any;
+    global.fetch = jest.fn(async () => {
+      throw new Error('down');
+    }) as any;
     const t = svc();
     expect(await t.ensureTranscriptionProvider()).toBeNull();
     expect(await t.ensureTranscriptionProvider()).toBeNull();
@@ -363,25 +437,43 @@ describe('the transcription provider is wired by the server, not by hand', () =>
   });
 });
 
-describe('a room\'s words are looked up, not assumed', () => {
+describe("a room's words are looked up, not assumed", () => {
   const svc = () => new (require('./daily.service').DailyService)();
-  const vtt = (...lines: string[]) => ['WEBVTT', '', '1', '00:00:01.000 --> 00:00:02.000', ...lines].join('\n');
+  const vtt = (...lines: string[]) =>
+    ['WEBVTT', '', '1', '00:00:01.000 --> 00:00:02.000', ...lines].join('\n');
 
   const daily = (transcripts: any[], files: Record<string, string>) => {
     global.fetch = jest.fn(async (url: string) => {
-      if (url.endsWith('/transcript')) return { ok: true, status: 200, json: async () => ({ data: transcripts }), text: async () => '' } as any;
+      if (url.endsWith('/transcript'))
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ data: transcripts }),
+          text: async () => '',
+        } as any;
       const m = url.match(/\/transcript\/([^/]+)\/access-link$/);
-      if (m) return { ok: true, status: 200, json: async () => ({ link: `https://files/${m[1]}` }), text: async () => '' } as any;
+      if (m)
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ link: `https://files/${m[1]}` }),
+          text: async () => '',
+        } as any;
       const f = url.match(/^https:\/\/files\/(.+)$/);
       if (f) return { ok: true, status: 200, text: async () => files[f[1]] } as any;
       throw new Error(`unexpected ${url}`);
     }) as any;
   };
 
-  beforeEach(() => { process.env.DAILY_API_KEY = 'daily_test'; });
-  afterEach(() => { delete process.env.DAILY_API_KEY; jest.restoreAllMocks(); });
+  beforeEach(() => {
+    process.env.DAILY_API_KEY = 'daily_test';
+  });
+  afterEach(() => {
+    delete process.env.DAILY_API_KEY;
+    jest.restoreAllMocks();
+  });
 
-  it('joins a rejoined teacher\'s two transcripts, oldest first', async () => {
+  it("joins a rejoined teacher's two transcripts, oldest first", async () => {
     daily(
       [
         { transcriptId: 'b', status: 't_finished', roomName: 'r1' },
@@ -407,7 +499,9 @@ describe('a room\'s words are looked up, not assumed', () => {
   });
 
   it('says "error", not "none", when the provider cannot be reached', async () => {
-    global.fetch = jest.fn(async () => { throw new Error('down'); }) as any;
+    global.fetch = jest.fn(async () => {
+      throw new Error('down');
+    }) as any;
     expect(await svc().transcriptFor('r1')).toEqual({ state: 'error' });
   });
 });
@@ -415,7 +509,8 @@ describe('a room\'s words are looked up, not assumed', () => {
 describe('a student enters the classroom', () => {
   const live = (over: Partial<Session> = {}): Session => ({
     id: 'ls1',
-    tenantId: 't1', academyId: 't1',
+    tenantId: 't1',
+    academyId: 't1',
     startsAt: new Date(Date.now() + 5 * MIN),
     status: 'LIVE',
     roomName: 'darsly-ls1',
@@ -468,7 +563,12 @@ describe('a student enters the classroom', () => {
   it('still sends a Zoom-era session to its own link', async () => {
     // The feature did not take the old way away from anyone already using it.
     const { service } = build({
-      session: live({ status: 'SCHEDULED', roomName: null, roomUrl: null, joinUrl: 'https://meet.example/x' }),
+      session: live({
+        status: 'SCHEDULED',
+        roomName: null,
+        roomUrl: null,
+        joinUrl: 'https://meet.example/x',
+      }),
       booked: true,
     });
     const res = await service.join('u_student', 'ls1');
@@ -481,8 +581,13 @@ describe('attendance is what the room saw, not what the browser claimed', () => 
   it('files one record per person however many times they rejoin', async () => {
     const { service, upserted } = build({
       session: {
-        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() + 5 * MIN),
-        status: 'LIVE', roomName: 'darsly-ls1', roomUrl: 'https://x/y',
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() + 5 * MIN),
+        status: 'LIVE',
+        roomName: 'darsly-ls1',
+        roomUrl: 'https://x/y',
       },
       booked: true,
     });
@@ -490,7 +595,9 @@ describe('attendance is what the room saw, not what the browser claimed', () => 
     await service.join('u_student', 'ls1');
     // Keyed on (session, user), so the second arrival reopens the first row.
     expect(upserted).toHaveLength(2);
-    expect(upserted[0].where).toEqual({ sessionId_userId: { sessionId: 'ls1', userId: 'u_student' } });
+    expect(upserted[0].where).toEqual({
+      sessionId_userId: { sessionId: 'ls1', userId: 'u_student' },
+    });
     expect(upserted[1].update).toMatchObject({ leftAt: null });
   });
 
@@ -506,7 +613,10 @@ describe('attendance is what the room saw, not what the browser claimed', () => 
     // Duration means time in the room. A gap longer than the grace period is
     // absence, and counting it would turn one lesson into a whole evening.
     const { service, updated } = build({
-      attendance: { id: 'a1', lastSeenAt: new Date(Date.now() - (PRESENCE_GRACE_SEC + 600) * 1000) },
+      attendance: {
+        id: 'a1',
+        lastSeenAt: new Date(Date.now() - (PRESENCE_GRACE_SEC + 600) * 1000),
+      },
     });
     await service.heartbeat('u', 'ls1');
     expect(updated[0].durationSeconds).toEqual({ increment: 0 });
@@ -522,8 +632,13 @@ describe('ending the class', () => {
   it('closes the room and checks everyone still inside out', async () => {
     const { service, daily, updated } = build({
       session: {
-        id: 'ls1', tenantId: 't1', academyId: 't1', startsAt: new Date(Date.now() - 10 * MIN),
-        status: 'LIVE', roomName: 'darsly-ls1', roomUrl: 'https://x/y',
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() - 10 * MIN),
+        status: 'LIVE',
+        roomName: 'darsly-ls1',
+        roomUrl: 'https://x/y',
       },
     });
     const res = await service.end(T1, 'ls1');

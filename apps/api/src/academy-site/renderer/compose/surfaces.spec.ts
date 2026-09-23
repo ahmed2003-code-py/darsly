@@ -1,7 +1,12 @@
 import { SECTION_SURFACES } from '../../schema/design-spec';
 import { DesignRulesService } from '../../pipeline/design-rules.service';
 import { SiteBrainService } from '../../pipeline/site-brain.service';
-import { PROFILE, TECHNICAL_DESIGN, WARM_DESIGN, buildComposition } from '../../__fixtures__/composition.fixture';
+import {
+  PROFILE,
+  TECHNICAL_DESIGN,
+  WARM_DESIGN,
+  buildComposition,
+} from '../../__fixtures__/composition.fixture';
 import { fixtureContext } from '../../__fixtures__/site-doc.fixture';
 import { baseCss } from './base';
 import { composeSite } from './compile';
@@ -37,7 +42,11 @@ describe('no pattern paints with a raw palette token', () => {
     const css = pattern.css();
     for (const token of BANNED) {
       const used = new RegExp(`var\\(${token}\\)`).test(css);
-      expect({ pattern: pattern.id, token, used }).toEqual({ pattern: pattern.id, token, used: false });
+      expect({ pattern: pattern.id, token, used }).toEqual({
+        pattern: pattern.id,
+        token,
+        used: false,
+      });
     }
   });
 });
@@ -59,13 +68,16 @@ describe('every surface restates every role', () => {
   // `raised` is a tint of the page, so ink and hairlines still read on it and it
   // has nothing to restate. These three replace the background outright, and
   // are exactly the ones text and rules disappear on.
-  it.each(['inverted', 'accent', 'image'] as const)('%s restates the ink and the hairline', (surface) => {
-    const rule = css.match(new RegExp(`\\.block\\[data-surface=${surface}\\]\\{[^}]*\\}`))![0];
-    expect(rule).toContain('--fg:');
-    expect(rule).toContain('--rule:');
-    expect(rule).toContain('--panel:');
-    expect(rule).toContain('--acc:');
-  });
+  it.each(['inverted', 'accent', 'image'] as const)(
+    '%s restates the ink and the hairline',
+    (surface) => {
+      const rule = css.match(new RegExp(`\\.block\\[data-surface=${surface}\\]\\{[^}]*\\}`))![0];
+      expect(rule).toContain('--fg:');
+      expect(rule).toContain('--rule:');
+      expect(rule).toContain('--panel:');
+      expect(rule).toContain('--acc:');
+    },
+  );
 });
 
 describe('a section reads on whatever band it lands on', () => {
@@ -113,7 +125,10 @@ describe('the alternating rhythm actually alternates', () => {
   it('reaches the page when the design asks for it', () => {
     const design = structuredClone(WARM_DESIGN);
     design.rhythm.sectionRhythm = 'alternating';
-    const html = composeSite(brain.compose(buildComposition({ design }), PROFILE), fixtureContext());
+    const html = composeSite(
+      brain.compose(buildComposition({ design }), PROFILE),
+      fixtureContext(),
+    );
     expect(html).toContain('data-rhythm="alternating"');
     expect(styles(html)).toContain('[data-rhythm=alternating]');
   });

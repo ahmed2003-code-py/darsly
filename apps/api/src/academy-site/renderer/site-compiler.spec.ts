@@ -132,7 +132,10 @@ describe('compileSite — the AI-composed design system', () => {
 
   it('varies the hero backdrop with the chosen treatment', () => {
     const mesh = compileSite(themed({ design }), ctx);
-    const flat = compileSite(themed({ design: { ...design, heroTreatment: 'flat' as const } }), ctx);
+    const flat = compileSite(
+      themed({ design: { ...design, heroTreatment: 'flat' as const } }),
+      ctx,
+    );
     expect(mesh).not.toEqual(flat);
     expect(mesh).toContain('radial-gradient(46% 52% at 12% 8%');
   });
@@ -167,7 +170,9 @@ describe('compileSite — the page script is valid JavaScript', () => {
     // Just the slug resolver — running the whole script would need a DOM, and
     // this test is about the regex, not the page.
     const start = src.indexOf('var SLUG=');
-    const decl = src.slice(start, src.indexOf('})();', start) + 5).replace('location.pathname', 'pathname');
+    const decl = src
+      .slice(start, src.indexOf('})();', start) + 5)
+      .replace('location.pathname', 'pathname');
     const read = new Function('pathname', `${decl}return SLUG;`);
     expect(read('/a/ahmed-elsayed')).toBe('ahmed-elsayed');
     expect(read('/a/ahmed-elsayed?lang=en')).toBe('ahmed-elsayed');
@@ -204,17 +209,28 @@ describe('compileSite — the page is designed, not just typeset', () => {
   });
 });
 
-describe('compileSite — motion is the model\'s decision', () => {
+describe("compileSite — motion is the model's decision", () => {
   const design = {
-    background: '#0B1020', ink: '#EEF2FF', surface: '#141B33',
-    radius: 8, density: 'airy' as const, headingScale: 'dramatic' as const,
-    heroTreatment: 'mesh' as const, bodyFont: 'sans' as const,
+    background: '#0B1020',
+    ink: '#EEF2FF',
+    surface: '#141B33',
+    radius: 8,
+    density: 'airy' as const,
+    headingScale: 'dramatic' as const,
+    heroTreatment: 'mesh' as const,
+    bodyFont: 'sans' as const,
   };
   const withMotion = (motion?: 'calm' | 'lively' | 'cinematic') =>
     compileSite(
       {
         blocks: [{ block: heroBlock(), variant: undefined }],
-        theme: { defaultLang: 'ar', preset: 'warm', primary: '#4A32C9', accent: '#F0A', design: { ...design, ...(motion ? { motion } : {}) } },
+        theme: {
+          defaultLang: 'ar',
+          preset: 'warm',
+          primary: '#4A32C9',
+          accent: '#F0A',
+          design: { ...design, ...(motion ? { motion } : {}) },
+        },
       } as unknown as RenderPlan,
       ctx,
     );

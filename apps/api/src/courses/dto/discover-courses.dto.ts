@@ -12,7 +12,8 @@ const toInt = ({ value }: { value: unknown }) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-const toBool = ({ value }: { value: unknown }) => value === true || value === 'true' || value === '1';
+const toBool = ({ value }: { value: unknown }) =>
+  value === true || value === 'true' || value === '1';
 
 /**
  * Student-facing course discovery.
@@ -23,7 +24,9 @@ const toBool = ({ value }: { value: unknown }) => value === true || value === 't
  * page that grows without bound.
  */
 export class DiscoverCoursesDto {
-  @ApiPropertyOptional({ description: 'Free-text search over course title, description and teacher name.' })
+  @ApiPropertyOptional({
+    description: 'Free-text search over course title, description and teacher name.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(120)
@@ -48,7 +51,7 @@ export class DiscoverCoursesDto {
   @MaxLength(10)
   language?: string;
 
-  @ApiPropertyOptional({ description: 'Only this teacher\'s courses.' })
+  @ApiPropertyOptional({ description: "Only this teacher's courses." })
   @IsOptionalId()
   teacherId?: string;
 

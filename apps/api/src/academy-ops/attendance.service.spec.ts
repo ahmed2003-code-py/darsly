@@ -2,7 +2,15 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 
 function ctx(overrides: Partial<{ academyId: string; userId: string; role: string }> = {}) {
-  return { academyId: 'a1', userId: 'u1', role: 'TEACHER', status: 'ACTIVE', isPlatformAdmin: false, can: () => true, ...overrides } as any;
+  return {
+    academyId: 'a1',
+    userId: 'u1',
+    role: 'TEACHER',
+    status: 'ACTIVE',
+    isPlatformAdmin: false,
+    can: () => true,
+    ...overrides,
+  } as any;
 }
 
 function makeDeps() {
@@ -14,7 +22,9 @@ function makeDeps() {
     $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
   };
   const audit: any = { log: jest.fn() };
-  const access: any = { assertGroupAccess: jest.fn().mockResolvedValue({ id: 'g1', academyId: 'a1' }) };
+  const access: any = {
+    assertGroupAccess: jest.fn().mockResolvedValue({ id: 'g1', academyId: 'a1' }),
+  };
   return { prisma, audit, access };
 }
 
@@ -25,7 +35,10 @@ describe('AttendanceService', () => {
       prisma.groupMembership.findMany.mockResolvedValue([{ studentId: 's1' }]);
       const svc = new AttendanceService(prisma, access, audit);
       await expect(
-        svc.mark(ctx(), 'g1', { date: '2026-09-20', records: [{ studentId: 's2', status: 'PRESENT' }] }),
+        svc.mark(ctx(), 'g1', {
+          date: '2026-09-20',
+          records: [{ studentId: 's2', status: 'PRESENT' }],
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.attendanceSession.upsert).not.toHaveBeenCalled();
     });
@@ -35,14 +48,20 @@ describe('AttendanceService', () => {
       access.assertGroupAccess.mockRejectedValue(new ForbiddenException());
       const svc = new AttendanceService(prisma, access, audit);
       await expect(
-        svc.mark(ctx(), 'g1', { date: '2026-09-20', records: [{ studentId: 's1', status: 'PRESENT' }] }),
+        svc.mark(ctx(), 'g1', {
+          date: '2026-09-20',
+          records: [{ studentId: 's1', status: 'PRESENT' }],
+        }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(prisma.groupMembership.findMany).not.toHaveBeenCalled();
     });
 
     it('upserts one session and one record per student, audits with the count', async () => {
       const { prisma, audit, access } = makeDeps();
-      prisma.groupMembership.findMany.mockResolvedValueOnce([{ studentId: 's1' }, { studentId: 's2' }]);
+      prisma.groupMembership.findMany.mockResolvedValueOnce([
+        { studentId: 's1' },
+        { studentId: 's2' },
+      ]);
       prisma.attendanceSession.upsert.mockResolvedValue({ id: 'sess1' });
       prisma.groupMembership.findMany.mockResolvedValueOnce([]); // sessionFor's re-fetch after marking
       prisma.attendanceSession.findUnique.mockResolvedValue({ id: 'sess1', records: [] });
@@ -50,14 +69,24 @@ describe('AttendanceService', () => {
       const svc = new AttendanceService(prisma, access, audit);
       await svc.mark(ctx(), 'g1', {
         date: '2026-09-20',
-        records: [{ studentId: 's1', status: 'PRESENT' }, { studentId: 's2', status: 'ABSENT' }],
+        records: [
+          { studentId: 's1', status: 'PRESENT' },
+          { studentId: 's2', status: 'ABSENT' },
+        ],
       });
 
       expect(prisma.attendanceSession.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { groupId_date: { groupId: 'g1', date: new Date('2026-09-20') } } }),
+        expect.objectContaining({
+          where: { groupId_date: { groupId: 'g1', date: new Date('2026-09-20') } },
+        }),
       );
       expect(prisma.attendanceRecord.upsert).toHaveBeenCalledTimes(2);
-      expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'attendance.mark', meta: expect.objectContaining({ count: 2 }) }));
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'attendance.mark',
+          meta: expect.objectContaining({ count: 2 }),
+        }),
+      );
     });
   });
 

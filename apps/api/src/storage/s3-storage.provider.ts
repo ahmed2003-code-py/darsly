@@ -1,11 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Readable } from 'stream';
-import {
-  PutOptions,
-  RangeRequest,
-  StorageProvider,
-  StoredObjectStream,
-} from './storage.provider';
+import { PutOptions, RangeRequest, StorageProvider, StoredObjectStream } from './storage.provider';
 
 /**
  * S3-compatible driver (Cloudflare R2, AWS S3, MinIO, DigitalOcean Spaces).
@@ -129,12 +124,19 @@ export class S3StorageProvider extends StorageProvider {
     let token: string | undefined;
     do {
       const listed = await s3.send(
-        new s3._cmds.ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }),
+        new s3._cmds.ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
       );
       const keys = (listed.Contents ?? []).map((o: { Key: string }) => ({ Key: o.Key }));
       if (keys.length) {
         await s3.send(
-          new s3._cmds.DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys, Quiet: true } }),
+          new s3._cmds.DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: keys, Quiet: true },
+          }),
         );
       }
       token = listed.IsTruncated ? listed.NextContinuationToken : undefined;

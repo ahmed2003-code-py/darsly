@@ -96,11 +96,18 @@ describe('a socket whose token is still alive', () => {
       sendMessage: jest.fn().mockResolvedValue({ message: { id: 'm1' }, threadId: 't1' }),
     };
     const live: any = { assertInSession: jest.fn().mockResolvedValue(undefined) };
-    return { gateway: new ChatGateway({} as any, chat, { setServer: jest.fn() } as any, live), chat, live };
+    return {
+      gateway: new ChatGateway({} as any, chat, { setServer: jest.fn() } as any, live),
+      chat,
+      live,
+    };
   };
   const client = () => ({
     data: { user: { sub: 'u1', role: 'STUDENT', exp: Math.floor(Date.now() / 1000) + 600 } },
-    join: jest.fn(), leave: jest.fn(), emit: jest.fn(), disconnect: jest.fn(),
+    join: jest.fn(),
+    leave: jest.fn(),
+    emit: jest.fn(),
+    disconnect: jest.fn(),
     to: jest.fn().mockReturnValue({ emit: jest.fn() }),
   });
 

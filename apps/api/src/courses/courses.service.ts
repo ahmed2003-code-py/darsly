@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import { JwtPayload, Role } from '@darsly/shared-types';
@@ -127,7 +133,14 @@ export class CoursesService {
       ...(query.subjectId ? { subjectId: query.subjectId } : {}),
       ...(Object.keys(priceFilter).length ? { priceCents: priceFilter } : {}),
       ...(query.hasPreview
-        ? { units: { some: { deletedAt: null, lessons: { some: { deletedAt: null, isFreePreview: true } } } } }
+        ? {
+            units: {
+              some: {
+                deletedAt: null,
+                lessons: { some: { deletedAt: null, isFreePreview: true } },
+              },
+            },
+          }
         : {}),
       // The year and the search text are both a set of alternatives, so they
       // are collected here rather than spread: as two `OR` keys on one object
@@ -141,23 +154,25 @@ export class CoursesService {
         // and not the rest of the band. A course that named no year is still
         // shown — it was never narrowed, which is not the same as being for
         // nobody.
-        ...(gradeId
-          ? [{ OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }]
-          : []),
+        ...(gradeId ? [{ OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }] : []),
         // And the other half of the same question: a language-school student
         // sits a different syllabus, so the national system's courses are not
         // theirs to take. A course with no subject was never filed under either
         // system, so it stays — same reasoning as a course with no year.
-        ...(tracks
-          ? [{ OR: [{ subject: { track: { in: tracks } } }, { subjectId: null }] }]
-          : []),
+        ...(tracks ? [{ OR: [{ subject: { track: { in: tracks } } }, { subjectId: null }] }] : []),
         ...(query.q?.trim()
           ? [
               {
                 OR: [
                   { title: { contains: query.q.trim(), mode: 'insensitive' as const } },
                   { description: { contains: query.q.trim(), mode: 'insensitive' as const } },
-                  { teacher: { user: { fullName: { contains: query.q.trim(), mode: 'insensitive' as const } } } },
+                  {
+                    teacher: {
+                      user: {
+                        fullName: { contains: query.q.trim(), mode: 'insensitive' as const },
+                      },
+                    },
+                  },
                 ],
               },
             ]
@@ -170,10 +185,13 @@ export class CoursesService {
     // ordering is within-page only — an honest limitation, and the reason
     // `newest` is the default rather than something that looks smarter.
     const orderBy: Prisma.CourseOrderByWithRelationInput =
-      query.sort === 'priceAsc' ? { priceCents: 'asc' }
-      : query.sort === 'priceDesc' ? { priceCents: 'desc' }
-      : query.sort === 'popular' ? { enrollments: { _count: 'desc' } }
-      : { createdAt: 'desc' };
+      query.sort === 'priceAsc'
+        ? { priceCents: 'asc' }
+        : query.sort === 'priceDesc'
+          ? { priceCents: 'desc' }
+          : query.sort === 'popular'
+            ? { enrollments: { _count: 'desc' } }
+            : { createdAt: 'desc' };
 
     const [total, rows] = await Promise.all([
       this.prisma.course.count({ where }),
@@ -187,13 +205,21 @@ export class CoursesService {
           grades: { include: { grade: true } },
           teacher: {
             select: {
-              id: true, slug: true, language: true, verifiedAt: true,
+              id: true,
+              slug: true,
+              language: true,
+              verifiedAt: true,
               user: { select: { fullName: true, avatarUrl: true } },
             },
           },
           units: {
             where: { deletedAt: null },
-            select: { lessons: { where: { deletedAt: null }, select: { durationSec: true, isFreePreview: true } } },
+            select: {
+              lessons: {
+                where: { deletedAt: null },
+                select: { durationSec: true, isFreePreview: true },
+              },
+            },
           },
           _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
         },
@@ -278,13 +304,19 @@ export class CoursesService {
   /** The caller's own TeacherProfile — required wherever content is authored or media is owned. */
   private author(scope: CourseScope): string {
     if (!scope.authorTenantId) {
-      throw new ForbiddenException({ message: 'Only a teacher can author content', code: 'NOT_AN_AUTHOR' });
+      throw new ForbiddenException({
+        message: 'Only a teacher can author content',
+        code: 'NOT_AN_AUTHOR',
+      });
     }
     return scope.authorTenantId;
   }
 
   private async academyKind(academyId: string): Promise<'PERSONAL' | 'CENTER'> {
-    const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { kind: true } });
+    const a = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { kind: true },
+    });
     if (!a) throw new NotFoundException('Academy not found');
     return a.kind;
   }
@@ -294,17 +326,33 @@ export class CoursesService {
    * a revenue share with its author — the split is what turns a price into
    * money that can be booked. No default percentage is assumed.
    */
-  private async assertCenterPricing(kind: 'PERSONAL' | 'CENTER', academyId: string, tenantId: string, priceCents: number | undefined) {
+  private async assertCenterPricing(
+    kind: 'PERSONAL' | 'CENTER',
+    academyId: string,
+    tenantId: string,
+    priceCents: number | undefined,
+  ) {
     if (kind === 'CENTER' && (priceCents ?? 0) > 0) {
-      await assertSplitConfigured(this.prisma, { tenantId, academyId, priceCents: priceCents ?? 0 });
+      await assertSplitConfigured(this.prisma, {
+        tenantId,
+        academyId,
+        priceCents: priceCents ?? 0,
+      });
     }
   }
 
   /** A Center may only offer subjects it has switched on (opt-in; PERSONAL is never gated). */
   private async assertSubjectOffered(academyId: string, subjectId: string) {
-    const row = await this.prisma.academySubject.findUnique({ where: { academyId_subjectId: { academyId, subjectId } }, select: { isActive: true } });
+    const row = await this.prisma.academySubject.findUnique({
+      where: { academyId_subjectId: { academyId, subjectId } },
+      select: { isActive: true },
+    });
     if (!row?.isActive) {
-      throw new BadRequestException({ message: 'This Center does not offer that subject', code: 'SUBJECT_NOT_OFFERED', subjectId });
+      throw new BadRequestException({
+        message: 'This Center does not offer that subject',
+        code: 'SUBJECT_NOT_OFFERED',
+        subjectId,
+      });
     }
   }
 
@@ -329,8 +377,14 @@ export class CoursesService {
   }
 
   /** `oversight: true` skips the authorship check — for the read-and-unpublish paths only. */
-  private async assertCourse(scope: CourseScope, courseId: string, opts: { oversight?: boolean } = {}) {
-    const course = await this.prisma.course.findFirst({ where: { id: courseId, ...this.scopeWhere(scope) } });
+  private async assertCourse(
+    scope: CourseScope,
+    courseId: string,
+    opts: { oversight?: boolean } = {},
+  ) {
+    const course = await this.prisma.course.findFirst({
+      where: { id: courseId, ...this.scopeWhere(scope) },
+    });
     if (!course) throw new NotFoundException('Course not found');
     if (!opts.oversight) this.assertAuthored(scope, course);
     return course;
@@ -385,7 +439,10 @@ export class CoursesService {
       include: {
         subject: true,
         grades: { include: { grade: true } },
-        units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
+        units: {
+          where: { deletedAt: null },
+          select: { _count: { select: { lessons: { where: { deletedAt: null } } } } },
+        },
         _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -393,7 +450,10 @@ export class CoursesService {
     // `canEdit` is the same question `assertAuthored` answers, told to the
     // screen so it can draw an overseer's list without edit affordances that
     // would 403 on click.
-    return rows.map((r) => ({ ...CoursesService.flattenGrades(r), canEdit: this.canEdit(scope, r) }));
+    return rows.map((r) => ({
+      ...CoursesService.flattenGrades(r),
+      canEdit: this.canEdit(scope, r),
+    }));
   }
 
   /** Whether this caller authored the row — oversight reads, authorship writes. */
@@ -416,12 +476,16 @@ export class CoursesService {
               orderBy: { sortOrder: 'asc' },
               include: {
                 attachments: { where: { deletedAt: null } },
-                videoAsset: { select: { id: true, status: true, durationSec: true, sizeBytes: true } },
+                videoAsset: {
+                  select: { id: true, status: true, durationSec: true, sizeBytes: true },
+                },
               },
             },
           },
         },
-        bundleItems: { include: { course: { select: { id: true, title: true, priceCents: true } } } },
+        bundleItems: {
+          include: { course: { select: { id: true, title: true, priceCents: true } } },
+        },
         _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
       },
     });
@@ -586,12 +650,19 @@ export class CoursesService {
     // is refused outright rather than quietly dropped, so a caller is never
     // told a change was saved that was not.
     if (!scope.authorTenantId || existing.tenantId !== scope.authorTenantId) {
-      const touched = Object.keys(dto).filter((k) => (dto as Record<string, unknown>)[k] !== undefined);
+      const touched = Object.keys(dto).filter(
+        (k) => (dto as Record<string, unknown>)[k] !== undefined,
+      );
       if (touched.some((k) => k !== 'status')) this.assertAuthored(scope, existing);
     }
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
     if (dto.priceCents !== undefined || dto.status === 'PUBLISHED') {
-      await this.assertCenterPricing(await this.academyKind(scope.academyId), scope.academyId, existing.tenantId, dto.priceCents ?? existing.priceCents);
+      await this.assertCenterPricing(
+        await this.academyKind(scope.academyId),
+        scope.academyId,
+        existing.tenantId,
+        dto.priceCents ?? existing.priceCents,
+      );
     }
 
     if (dto.status === 'PUBLISHED') {
@@ -635,10 +706,12 @@ export class CoursesService {
     if (dto.examMode === 'GATE') {
       const named =
         dto.examLessonId ??
-        (await this.prisma.course.findUnique({
-          where: { id: courseId },
-          select: { examLessonId: true },
-        }))?.examLessonId;
+        (
+          await this.prisma.course.findUnique({
+            where: { id: courseId },
+            select: { examLessonId: true },
+          })
+        )?.examLessonId;
       if (!named) {
         throw new BadRequestException({
           message: 'Name the exam lesson before making it a gate',
@@ -669,7 +742,8 @@ export class CoursesService {
             select: { subjectId: true, grades: { select: { gradeId: true } } },
           })
         : null;
-    const wantedSubject = sentSubject && sentSubject !== current?.subjectId ? sentSubject : undefined;
+    const wantedSubject =
+      sentSubject && sentSubject !== current?.subjectId ? sentSubject : undefined;
 
     // The years get the same treatment, and for the same reason: the form
     // restates the ones the course already has, and re-validating those locked
@@ -683,7 +757,8 @@ export class CoursesService {
       gradeIds.every((id) => current.grades.some((g) => g.gradeId === id));
     const wantedYears = sameYears ? undefined : gradeIds;
 
-    const reach = wantedYears || wantedSubject ? await this.reachOf(scope, wantedYears, wantedSubject) : null;
+    const reach =
+      wantedYears || wantedSubject ? await this.reachOf(scope, wantedYears, wantedSubject) : null;
     if (reach?.subjectId && (await this.academyKind(scope.academyId)) === 'CENTER') {
       await this.assertSubjectOffered(scope.academyId, reach.subjectId);
     }
@@ -866,12 +941,18 @@ export class CoursesService {
       try {
         meta = await this.youtubeImport.fetchMetadata(source);
       } catch (err: any) {
-        this.logger.warn(`${source.platform} metadata fetch failed for ${source.id}: ${err.message}`);
+        this.logger.warn(
+          `${source.platform} metadata fetch failed for ${source.id}: ${err.message}`,
+        );
         // Surfaced to the caller (truncated) rather than logged only — yt-dlp's
         // own message usually says WHY (age-restricted, region-locked, a bot
         // check), which is worth more to whoever is looking at this than a
         // bare "failed".
-        results.push({ url, error: 'METADATA_FAILED', detail: String(err.message ?? '').slice(0, 300) });
+        results.push({
+          url,
+          error: 'METADATA_FAILED',
+          detail: String(err.message ?? '').slice(0, 300),
+        });
         continue;
       }
 
@@ -882,7 +963,13 @@ export class CoursesService {
       // returns nothing at all when the source never said what the video
       // teaches. An empty field a teacher fills in beats a full one nobody
       // wrote.
-      meta = { ...meta, description: await this.lessonDescription.write({ title: meta.title, cleaned: meta.description }) };
+      meta = {
+        ...meta,
+        description: await this.lessonDescription.write({
+          title: meta.title,
+          cleaned: meta.description,
+        }),
+      };
 
       // A teacher who retries the same link after a failed download (there's
       // no way to tell them apart from a genuinely new video — nothing here
@@ -907,7 +994,9 @@ export class CoursesService {
           });
           results.push({ url, lesson: lessonOnly, retried: true });
           void this.downloadAndProcessYoutube(videoAsset.id, source).catch((err) =>
-            this.logger.error(`${source.platform} import retry ${source.id} (asset ${videoAsset.id}) failed: ${err.message}`),
+            this.logger.error(
+              `${source.platform} import retry ${source.id} (asset ${videoAsset.id}) failed: ${err.message}`,
+            ),
           );
         } else {
           results.push({ url, lesson: lessonOnly });
@@ -930,7 +1019,9 @@ export class CoursesService {
 
       // Off the request thread — the caller doesn't wait for a download.
       void this.downloadAndProcessYoutube(asset.id, source).catch((err) =>
-        this.logger.error(`${source.platform} import ${source.id} (asset ${asset.id}) failed: ${err.message}`),
+        this.logger.error(
+          `${source.platform} import ${source.id} (asset ${asset.id}) failed: ${err.message}`,
+        ),
       );
     }
     return { results };
@@ -964,7 +1055,9 @@ export class CoursesService {
 
   /** The one unit a course may have for lessons added with no section at all. */
   private async getOrCreateDefaultUnit(courseId: string) {
-    const existing = await this.prisma.courseUnit.findFirst({ where: { courseId, isDefault: true } });
+    const existing = await this.prisma.courseUnit.findFirst({
+      where: { courseId, isDefault: true },
+    });
     if (existing) return existing;
     // Sorted before every named section, so "just add lessons" lessons read
     // first — the closest thing to "no sections at all" the schema allows.
@@ -1031,14 +1124,19 @@ export class CoursesService {
     // it points at can be deleted. The duration goes with it — it was probed
     // from this video, and a lesson with no video has no length to report.
     await this.prisma.$transaction([
-      this.prisma.lesson.update({ where: { id: lessonId }, data: { videoAssetId: null, durationSec: 0 } }),
+      this.prisma.lesson.update({
+        where: { id: lessonId },
+        data: { videoAssetId: null, durationSec: 0 },
+      }),
       this.prisma.videoAsset.delete({ where: { id: asset.id } }),
     ]);
 
     await this.storage.deletePrefix(`hls/${asset.id}`).catch(() => undefined);
     await this.storage.delete(asset.originalKey).catch(() => undefined);
     if (asset.encryptionKeyId) {
-      await this.prisma.hlsEncryptionKey.delete({ where: { id: asset.encryptionKeyId } }).catch(() => undefined);
+      await this.prisma.hlsEncryptionKey
+        .delete({ where: { id: asset.encryptionKeyId } })
+        .catch(() => undefined);
     }
     return { id: lessonId, videoRemoved: true };
   }
@@ -1092,7 +1190,10 @@ export class CoursesService {
               where: { deletedAt: null },
               orderBy: { sortOrder: 'asc' },
               include: {
-                attachments: { where: { deletedAt: null }, select: { id: true, fileName: true, sizeBytes: true } },
+                attachments: {
+                  where: { deletedAt: null },
+                  select: { id: true, fileName: true, sizeBytes: true },
+                },
               },
             },
           },
@@ -1136,12 +1237,18 @@ export class CoursesService {
      * enrolment gate makes, so the two never disagree on one course.
      */
     const forMyYear =
-      yearAdmits(course.grades.map((g) => g.gradeId), studentGrade) ||
+      yearAdmits(
+        course.grades.map((g) => g.gradeId),
+        studentGrade,
+      ) ||
       enrollment?.status === 'ACTIVE' ||
       enrollment?.status === 'EXPIRED';
 
     const now = Date.now();
-    const unlockedByDrip = (lesson: { dripUnlockAt: Date | null; dripAfterEnrollDays: number | null }) => {
+    const unlockedByDrip = (lesson: {
+      dripUnlockAt: Date | null;
+      dripAfterEnrollDays: number | null;
+    }) => {
       if (lesson.dripUnlockAt && lesson.dripUnlockAt.getTime() > now) return false;
       if (
         lesson.dripAfterEnrollDays != null &&
@@ -1207,8 +1314,7 @@ export class CoursesService {
         title: u.title,
         isDefault: u.isDefault,
         lessons: u.lessons.map((l) => {
-          const open =
-            isOwner || l.isFreePreview || (!!activeEnrollment && unlockedByDrip(l));
+          const open = isOwner || l.isFreePreview || (!!activeEnrollment && unlockedByDrip(l));
           return {
             id: l.id,
             title: l.title,

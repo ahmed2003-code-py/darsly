@@ -67,7 +67,10 @@ export class AcademySiteService {
       const parsed = parseSiteDocument(site.draftDoc);
       if (parsed.success) {
         const { errors, warnings } = this.quality.evaluate(parsed.data!);
-        quality = { errors: errors.map((e) => e.message), warnings: warnings.map((w) => w.message) };
+        quality = {
+          errors: errors.map((e) => e.message),
+          warnings: warnings.map((w) => w.message),
+        };
         rationale = parsed.data!.rationale ?? null;
       } else {
         quality = { errors: parsed.errors ?? ['the draft is no longer valid'], warnings: [] };
@@ -80,7 +83,8 @@ export class AcademySiteService {
       // publish leaves the draft in place, so the second reading meant the
       // banner never cleared — a teacher published, saw the same "you have
       // unpublished changes" line, and concluded the button had done nothing.
-      hasDraft: !!site?.draftDoc && JSON.stringify(site.draftDoc) !== JSON.stringify(site.publishedDoc),
+      hasDraft:
+        !!site?.draftDoc && JSON.stringify(site.draftDoc) !== JSON.stringify(site.publishedDoc),
       /// A hand-authored page stands in for the generated one, so nothing the
       /// studio publishes can change how it looks. The studio has to say so.
       htmlLocked: site?.htmlLocked ?? false,
@@ -102,7 +106,8 @@ export class AcademySiteService {
     const doc = site?.draftDoc ?? site?.publishedDoc;
     if (!doc) throw new BadRequestException('لا توجد صفحة للمعاينة بعد — قم بالتوليد أولاً');
     const parsed = parseSiteDocument(doc);
-    if (!parsed.success) throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
+    if (!parsed.success)
+      throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
     const academy = await this.prisma.academy.findUnique({
       where: { id: academyId },
       include: { owner: { select: { fullName: true } } },
@@ -162,7 +167,11 @@ export class AcademySiteService {
   /** The current working draft, for the editor to load. */
   async getDraft(academyId: string) {
     const site = await this.getByAcademy(academyId);
-    return { doc: site?.draftDoc ?? null, version: site?.version ?? 0, status: site?.status ?? 'DRAFT' };
+    return {
+      doc: site?.draftDoc ?? null,
+      version: site?.version ?? 0,
+      status: site?.status ?? 'DRAFT',
+    };
   }
 
   /** Save an edited full document from the editor (zod-validated; media must
@@ -183,7 +192,9 @@ export class AcademySiteService {
     if (!ids.length) return;
     const owned = await this.prisma.academyMedia.count({ where: { academyId, id: { in: ids } } });
     if (owned !== ids.length) {
-      throw new BadRequestException('Document references media that does not belong to this academy');
+      throw new BadRequestException(
+        'Document references media that does not belong to this academy',
+      );
     }
   }
 
@@ -204,7 +215,10 @@ export class AcademySiteService {
     });
     if (!snap) throw new NotFoundException('Snapshot not found');
     await this.prisma.academySiteSnapshot.delete({ where: { id: snapshotId } });
-    await this.log(actorUserId, 'site.snapshot.delete', site.id, { snapshotId, version: snap.version });
+    await this.log(actorUserId, 'site.snapshot.delete', site.id, {
+      snapshotId,
+      version: snap.version,
+    });
     return { id: snapshotId, deleted: true };
   }
 
@@ -213,7 +227,11 @@ export class AcademySiteService {
    * then run the normal publish path (media + quality + moderation aware). Lets
    * the owner push any version live without a separate restore-then-publish.
    */
-  async publishSnapshot(academyId: string, snapshotId: string, actorUserId: string): Promise<AcademySite> {
+  async publishSnapshot(
+    academyId: string,
+    snapshotId: string,
+    actorUserId: string,
+  ): Promise<AcademySite> {
     const site = await this.getOrCreate(academyId);
     const snap = await this.prisma.academySiteSnapshot.findFirst({
       where: { id: snapshotId, siteId: site.id },
@@ -252,7 +270,8 @@ export class AcademySiteService {
     // a button that does nothing. Refuse, and name the way out.
     if (site.htmlLocked) {
       throw new ConflictException({
-        message: 'This page is hand-authored, so publishing cannot change it — hand it to the studio first',
+        message:
+          'This page is hand-authored, so publishing cannot change it — hand it to the studio first',
         code: 'HTML_LOCKED',
       });
     }
@@ -290,9 +309,11 @@ export class AcademySiteService {
     const site = await this.getOrCreate(academyId);
     if (!site.htmlLocked) throw new ConflictException('This page is already built by the studio');
     const doc = site.draftDoc ?? site.publishedDoc;
-    if (!doc) throw new BadRequestException('There is no page to build from yet — generate one first');
+    if (!doc)
+      throw new BadRequestException('There is no page to build from yet — generate one first');
     const parsed = parseSiteDocument(doc);
-    if (!parsed.success) throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
+    if (!parsed.success)
+      throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
     await this.prisma.academySite.update({
       where: { id: site.id },
       data: {
@@ -382,7 +403,11 @@ export class AcademySiteService {
   }
 
   /** Admin emergency takedown of a live site. */
-  async takedown(academyId: string, reason: string | undefined, adminUserId: string): Promise<AcademySite> {
+  async takedown(
+    academyId: string,
+    reason: string | undefined,
+    adminUserId: string,
+  ): Promise<AcademySite> {
     const site = await this.getByAcademy(academyId);
     if (!site) throw new NotFoundException('Site not found');
     const updated = await this.prisma.academySite.update({
@@ -449,10 +474,17 @@ export class AcademySiteService {
     if (!source) throw new BadRequestException('There is no page to upgrade yet');
     const parsed = parseSiteDocument(source);
     if (!parsed.success) {
-      throw new BadRequestException({ message: 'The current page is invalid', errors: parsed.errors });
+      throw new BadRequestException({
+        message: 'The current page is invalid',
+        errors: parsed.errors,
+      });
     }
     if (!needsUpgrade(parsed.data!)) {
-      return { upgraded: false, version: site!.version, reason: 'already on the composition engine' };
+      return {
+        upgraded: false,
+        version: site!.version,
+        reason: 'already on the composition engine',
+      };
     }
     const upgraded = upgradeToComposition(parsed.data!, await this.contentProfile(academyId));
     const { site: updated, snapshot } = await this.saveDraft(academyId, upgraded, 'upgrade');
@@ -463,7 +495,9 @@ export class AcademySiteService {
   /** The live half of the content profile, for pattern selection during upgrade. */
   private async contentProfile(academyId: string): Promise<ContentProfile> {
     const [courseCount, reviews, media, facts] = await Promise.all([
-      this.prisma.course.count({ where: { tenantId: academyId, status: 'PUBLISHED', deletedAt: null } }),
+      this.prisma.course.count({
+        where: { tenantId: academyId, status: 'PUBLISHED', deletedAt: null },
+      }),
       this.prisma.review.aggregate({
         where: { tenantId: academyId, comment: { not: '' } },
         _count: { _all: true },
@@ -523,7 +557,10 @@ export class AcademySiteService {
           },
         );
         // Deliberately not bumping `version`: nothing the teacher authored changed.
-        await this.prisma.academySite.update({ where: { id: site.id }, data: { publishedHtml: html } });
+        await this.prisma.academySite.update({
+          where: { id: site.id },
+          data: { publishedHtml: html },
+        });
         recompiled++;
       } catch {
         failed.push(site.academyId);
@@ -663,7 +700,12 @@ export class AcademySiteService {
     `;
   }
 
-  private log(actorUserId: string, action: string, entityId: string, meta: Record<string, unknown>) {
+  private log(
+    actorUserId: string,
+    action: string,
+    entityId: string,
+    meta: Record<string, unknown>,
+  ) {
     return this.audit.log({ actorUserId, action, entity: 'AcademySite', entityId, meta });
   }
 }

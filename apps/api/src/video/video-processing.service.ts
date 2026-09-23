@@ -97,7 +97,10 @@ export class VideoProcessingService {
         // Streamed, not buffered: a lesson can be a couple of gigabytes, and
         // `getBuffer` held the whole of it in memory on a container that does
         // not have that to spare.
-        stagedTmp = path.join(os.tmpdir(), `darsly-src-${assetId}${path.extname(asset.originalKey)}`);
+        stagedTmp = path.join(
+          os.tmpdir(),
+          `darsly-src-${assetId}${path.extname(asset.originalKey)}`,
+        );
         const { stream } = await this.storage.getStream(asset.originalKey);
         await pipeline(stream, createWriteStream(stagedTmp));
         sourcePath = stagedTmp;

@@ -16,7 +16,10 @@ export class ChallengesController {
 
   @Get()
   @ApiOperation({ summary: '[student] Browse Challenges — available / in progress / completed' })
-  list(@CurrentUser() u: JwtPayload, @Query('tab') tab?: 'available' | 'in_progress' | 'completed') {
+  list(
+    @CurrentUser() u: JwtPayload,
+    @Query('tab') tab?: 'available' | 'in_progress' | 'completed',
+  ) {
     return this.challenges.listForStudent(u.sub, tab);
   }
 
@@ -40,12 +43,18 @@ export class ChallengesController {
 
   @Get(':id/attempts/:attemptId')
   @ApiOperation({ summary: '[student] Reconnect to an in-progress attempt' })
-  getAttempt(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('attemptId') attemptId: string) {
+  getAttempt(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('attemptId') attemptId: string,
+  ) {
     return this.challenges.getAttempt(u.sub, id, attemptId);
   }
 
   @Post(':id/attempts/:attemptId/answers')
-  @ApiOperation({ summary: '[student] Answer the current question — server-timed and server-scored' })
+  @ApiOperation({
+    summary: '[student] Answer the current question — server-timed and server-scored',
+  })
   answer(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
@@ -57,13 +66,23 @@ export class ChallengesController {
 
   @Post(':id/attempts/:attemptId/complete')
   @ApiOperation({ summary: '[student] Finish the attempt and collect the result' })
-  complete(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('attemptId') attemptId: string) {
+  complete(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('attemptId') attemptId: string,
+  ) {
     return this.challenges.complete(u.sub, id, attemptId);
   }
 
   @Post(':id/attempts/:attemptId/retry-mistakes')
-  @ApiOperation({ summary: '[student] A fresh mini attempt containing only the questions I got wrong' })
-  retryMistakes(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('attemptId') attemptId: string) {
+  @ApiOperation({
+    summary: '[student] A fresh mini attempt containing only the questions I got wrong',
+  })
+  retryMistakes(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('attemptId') attemptId: string,
+  ) {
     return this.challenges.retryMistakes(u.sub, id, attemptId);
   }
 }

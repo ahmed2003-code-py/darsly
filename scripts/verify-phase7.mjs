@@ -14,27 +14,45 @@ const DB = process.env.DATABASE_URL ?? '';
 const PORT = process.env.API_PORT ?? '41000';
 const PASSWORD = 'Darsly@123';
 
-if (process.env.CONFIRM_TEST_DB !== 'yes') { console.error('REFUSED: set CONFIRM_TEST_DB=yes.'); process.exit(2); }
-if (!DB) { console.error('REFUSED: DATABASE_URL is not set.'); process.exit(2); }
+if (process.env.CONFIRM_TEST_DB !== 'yes') {
+  console.error('REFUSED: set CONFIRM_TEST_DB=yes.');
+  process.exit(2);
+}
+if (!DB) {
+  console.error('REFUSED: DATABASE_URL is not set.');
+  process.exit(2);
+}
 if (/railway|prod|amazonaws|supabase|neon\.tech|render\.com/i.test(DB)) {
-  console.error('REFUSED: DATABASE_URL looks hosted.'); process.exit(2);
+  console.error('REFUSED: DATABASE_URL looks hosted.');
+  process.exit(2);
 }
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 const check = (n, ok, d = '') => {
   console.log(`   ${ok ? 'PASS' : 'FAIL'}  ${n}${d ? `  (${d})` : ''}`);
-  if (ok) pass++; else fail++;
+  if (ok) pass++;
+  else fail++;
 };
 
 async function api(p, { token, method = 'GET', body, headers, query } = {}) {
   const qs = query ? `?${new URLSearchParams(query)}` : '';
   const r = await fetch(`http://127.0.0.1:${PORT}/api/v1${p}${qs}`, {
     method,
-    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(headers ?? {}) },
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(headers ?? {}),
+    },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const text = await r.text();
-  let json = null; try { json = JSON.parse(text); } catch { /* not json */ }
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    /* not json */
+  }
   return { status: r.status, body: json };
 }
 const login = async (email) => {
@@ -49,16 +67,25 @@ const cleanup = [];
 async function main() {
   console.log('== Phase 7 verification: Admin Studio + Platform Admin Theme ==\n');
 
-  const admin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' }, select: { id: true, email: true } });
+  const admin = await prisma.user.findFirst({
+    where: { role: 'SUPER_ADMIN' },
+    select: { id: true, email: true },
+  });
   const adminToken = await login(admin.email);
 
-  const teacherA = await prisma.teacherProfile.findFirst({ where: { status: 'APPROVED' }, include: { user: { select: { id: true, email: true } } } });
+  const teacherA = await prisma.teacherProfile.findFirst({
+    where: { status: 'APPROVED' },
+    include: { user: { select: { id: true, email: true } } },
+  });
   const teacherB = await prisma.teacherProfile.findFirst({
     where: { status: 'APPROVED', id: { not: teacherA.id } },
     include: { user: { select: { id: true, email: true } } },
   });
   const academy1 = teacherA.id;
-  const academyRow = await prisma.academy.findUnique({ where: { id: academy1 }, select: { slug: true, status: true } });
+  const academyRow = await prisma.academy.findUnique({
+    where: { id: academy1 },
+    select: { slug: true, status: true },
+  });
   const tokenA = await login(teacherA.user.email);
   const tokenB = await login(teacherB.user.email);
 
@@ -69,26 +96,58 @@ async function main() {
   const argon2 = await import('argon2');
   const passwordHash = await argon2.hash(PASSWORD);
   const newStaffUser = await prisma.user.create({
-    data: { role: 'TEACHER', email: `verify-phase7-staff-${Date.now()}@example.com`, fullName: 'Verify Phase7 Staff', passwordHash, locale: 'ar' },
+    data: {
+      role: 'TEACHER',
+      email: `verify-phase7-staff-${Date.now()}@example.com`,
+      fullName: 'Verify Phase7 Staff',
+      passwordHash,
+      locale: 'ar',
+    },
   });
-  cleanup.push(() => prisma.academyMembership.deleteMany({ where: { userId: newStaffUser.id } }).then(() => prisma.user.delete({ where: { id: newStaffUser.id } })).catch(() => {}));
+  cleanup.push(() =>
+    prisma.academyMembership
+      .deleteMany({ where: { userId: newStaffUser.id } })
+      .then(() => prisma.user.delete({ where: { id: newStaffUser.id } }))
+      .catch(() => {}),
+  );
 
   // ── Admin theme: read/write, own-user scoped, IDOR-proof by construction ─
   console.log('-- Admin theme --');
   const before = await api('/admin/theme', { token: adminToken });
   check('GET /admin/theme reachable', before.status === 200);
 
-  const setBad = await api('/admin/theme', { token: adminToken, method: 'PATCH', body: { themeId: 'not-a-real-theme' } });
+  const setBad = await api('/admin/theme', {
+    token: adminToken,
+    method: 'PATCH',
+    body: { themeId: 'not-a-real-theme' },
+  });
   check('setting an unknown themeId is refused with 400', setBad.status === 400);
 
-  const setGood = await api('/admin/theme', { token: adminToken, method: 'PATCH', body: { themeId: 'crimson-gold' } });
-  check('setting a known preset succeeds', setGood.status < 300 && setGood.body?.themeId === 'crimson-gold');
+  const setGood = await api('/admin/theme', {
+    token: adminToken,
+    method: 'PATCH',
+    body: { themeId: 'crimson-gold' },
+  });
+  check(
+    'setting a known preset succeeds',
+    setGood.status < 300 && setGood.body?.themeId === 'crimson-gold',
+  );
 
   const reread = await api('/admin/theme', { token: adminToken });
-  check('the preference persists (server-side, not just echoed back)', reread.body?.themeId === 'crimson-gold');
+  check(
+    'the preference persists (server-side, not just echoed back)',
+    reread.body?.themeId === 'crimson-gold',
+  );
 
-  const clear = await api('/admin/theme', { token: adminToken, method: 'PATCH', body: { themeId: null } });
-  check('clearing the preference (themeId: null) succeeds', clear.status < 300 && clear.body?.themeId === null);
+  const clear = await api('/admin/theme', {
+    token: adminToken,
+    method: 'PATCH',
+    body: { themeId: null },
+  });
+  check(
+    'clearing the preference (themeId: null) succeeds',
+    clear.status < 300 && clear.body?.themeId === null,
+  );
   const rereadCleared = await api('/admin/theme', { token: adminToken });
   check('the clear persists', rereadCleared.body?.themeId === null);
 
@@ -99,7 +158,10 @@ async function main() {
   check('every theme change is audited (AuditService, not a second log)', !!themeAudit);
 
   const teacherReadsAdminTheme = await api('/admin/theme', { token: tokenA });
-  check('a TEACHER cannot reach the admin theme endpoint at all', teacherReadsAdminTheme.status === 403);
+  check(
+    'a TEACHER cannot reach the admin theme endpoint at all',
+    teacherReadsAdminTheme.status === 403,
+  );
   const noTokenTheme = await api('/admin/theme');
   check('no token at all: 401', noTokenTheme.status === 401);
 
@@ -115,31 +177,74 @@ async function main() {
   // (this section), and the client always sending an academy id once
   // active (proven directly against the guard, not just inferred).
   console.log('\n-- Staff invitations (invite → pending → accept, not instant) --');
-  const beforeAudit = await prisma.auditLog.count({ where: { academyId: academy1, action: 'member.invite' } });
-  const addMember = await api(`/academies/${academyRow.slug}/members`, { token: adminToken, method: 'POST', body: { email: newStaffUser.email, role: 'ASSISTANT' } });
-  check('admin invites a new staff member to academy1 by email', addMember.status < 300 && addMember.body?.role === 'ASSISTANT');
-  check('the membership starts INVITED, not ACTIVE — an invite is not automatic membership', addMember.body?.status === 'INVITED');
+  const beforeAudit = await prisma.auditLog.count({
+    where: { academyId: academy1, action: 'member.invite' },
+  });
+  const addMember = await api(`/academies/${academyRow.slug}/members`, {
+    token: adminToken,
+    method: 'POST',
+    body: { email: newStaffUser.email, role: 'ASSISTANT' },
+  });
+  check(
+    'admin invites a new staff member to academy1 by email',
+    addMember.status < 300 && addMember.body?.role === 'ASSISTANT',
+  );
+  check(
+    'the membership starts INVITED, not ACTIVE — an invite is not automatic membership',
+    addMember.body?.status === 'INVITED',
+  );
   const membershipId = addMember.body.id;
-  const afterAddAudit = await prisma.auditLog.count({ where: { academyId: academy1, action: 'member.invite' } });
+  const afterAddAudit = await prisma.auditLog.count({
+    where: { academyId: academy1, action: 'member.invite' },
+  });
   check('member.invite is audited, scoped to this academy', afterAddAudit === beforeAudit + 1);
 
   const newStaffToken = await login(newStaffUser.email);
-  const blockedBeforeAccept = await api(`/academies/${academyRow.slug}/members`, { token: newStaffToken });
-  check('before accepting, the invited user has ZERO access — an INVITED row grants nothing (buildContext only trusts ACTIVE)', blockedBeforeAccept.status === 404, `status=${blockedBeforeAccept.status}`);
+  const blockedBeforeAccept = await api(`/academies/${academyRow.slug}/members`, {
+    token: newStaffToken,
+  });
+  check(
+    'before accepting, the invited user has ZERO access — an INVITED row grants nothing (buildContext only trusts ACTIVE)',
+    blockedBeforeAccept.status === 404,
+    `status=${blockedBeforeAccept.status}`,
+  );
 
   const myInvites = await api('/me/invitations', { token: newStaffToken });
-  check('the invited user can see their own pending invitation', myInvites.status === 200 && myInvites.body.some((i) => i.id === membershipId));
+  check(
+    'the invited user can see their own pending invitation',
+    myInvites.status === 200 && myInvites.body.some((i) => i.id === membershipId),
+  );
 
-  const foreignAcceptsSomeoneElsesInvite = await api(`/me/invitations/${membershipId}/accept`, { token: tokenB, method: 'POST' });
-  check("an unrelated teacher cannot accept SOMEONE ELSE's invitation (IDOR)", foreignAcceptsSomeoneElsesInvite.status === 404);
+  const foreignAcceptsSomeoneElsesInvite = await api(`/me/invitations/${membershipId}/accept`, {
+    token: tokenB,
+    method: 'POST',
+  });
+  check(
+    "an unrelated teacher cannot accept SOMEONE ELSE's invitation (IDOR)",
+    foreignAcceptsSomeoneElsesInvite.status === 404,
+  );
 
-  const accept = await api(`/me/invitations/${membershipId}/accept`, { token: newStaffToken, method: 'POST' });
-  check('the invited user accepts their own invitation', accept.status < 300 && accept.body?.status === 'ACTIVE');
-  const acceptAudit = await prisma.auditLog.findFirst({ where: { action: 'member.invite.accept', entityId: membershipId } });
+  const accept = await api(`/me/invitations/${membershipId}/accept`, {
+    token: newStaffToken,
+    method: 'POST',
+  });
+  check(
+    'the invited user accepts their own invitation',
+    accept.status < 300 && accept.body?.status === 'ACTIVE',
+  );
+  const acceptAudit = await prisma.auditLog.findFirst({
+    where: { action: 'member.invite.accept', entityId: membershipId },
+  });
   check('member.invite.accept is audited', !!acceptAudit);
 
-  const doubleAccept = await api(`/me/invitations/${membershipId}/accept`, { token: newStaffToken, method: 'POST' });
-  check('accepting an already-accepted invitation is refused, not silently re-applied', doubleAccept.status === 404);
+  const doubleAccept = await api(`/me/invitations/${membershipId}/accept`, {
+    token: newStaffToken,
+    method: 'POST',
+  });
+  check(
+    'accepting an already-accepted invitation is refused, not silently re-applied',
+    doubleAccept.status === 404,
+  );
 
   // Prove the membership is REAL now, not just a 2xx: the staff user can
   // reach an academy-staff-gated endpoint for academy1 — but ONLY once they
@@ -147,93 +252,223 @@ async function main() {
   // real client does this via X-Academy-Id — see lib/api.ts's interceptor
   // and lib/academy.ts's useSyncStaffAcademy — this proves the guard side
   // of that fix, independent of the browser-only client code).
-  const newStaffReachesRoster = await api(`/academies/${academyRow.slug}/members`, { token: newStaffToken });
-  check('once ACTIVE, the staff member reaches academy1 by slug (real access, not a fake row)', [200, 403].includes(newStaffReachesRoster.status), `status=${newStaffReachesRoster.status}`);
-  const newStaffWithAcademyHeader = await api('/teacher/rooms', { token: newStaffToken, headers: { 'X-Academy-Id': academy1 } });
-  check('...and by X-Academy-Id header on a header-only route — this is exactly what the web client now sends automatically', [200, 403].includes(newStaffWithAcademyHeader.status), `status=${newStaffWithAcademyHeader.status}`);
+  const newStaffReachesRoster = await api(`/academies/${academyRow.slug}/members`, {
+    token: newStaffToken,
+  });
+  check(
+    'once ACTIVE, the staff member reaches academy1 by slug (real access, not a fake row)',
+    [200, 403].includes(newStaffReachesRoster.status),
+    `status=${newStaffReachesRoster.status}`,
+  );
+  const newStaffWithAcademyHeader = await api('/teacher/rooms', {
+    token: newStaffToken,
+    headers: { 'X-Academy-Id': academy1 },
+  });
+  check(
+    '...and by X-Academy-Id header on a header-only route — this is exactly what the web client now sends automatically',
+    [200, 403].includes(newStaffWithAcademyHeader.status),
+    `status=${newStaffWithAcademyHeader.status}`,
+  );
   const newStaffWithoutHeader = await api('/teacher/rooms', { token: newStaffToken });
-  check('...but with NO academy identified at all, still refused (a non-owner JWT alone is never enough)', newStaffWithoutHeader.status === 404);
+  check(
+    '...but with NO academy identified at all, still refused (a non-owner JWT alone is never enough)',
+    newStaffWithoutHeader.status === 404,
+  );
 
   // Decline path, on a second fresh invite (a different real person — teacherB,
   // who owns their own separate academy elsewhere — being invited as staff
   // here is an independent scenario) — never touches the first membership.
-  const secondInvite = await api(`/academies/${academyRow.slug}/members`, { token: adminToken, method: 'POST', body: { email: teacherB.user.email, role: 'ASSISTANT' } });
-  cleanup.push(() => prisma.academyMembership.delete({ where: { id: secondInvite.body.id } }).catch(() => {}));
-  const decline = await api(`/me/invitations/${secondInvite.body.id}/decline`, { token: tokenB, method: 'POST' });
+  const secondInvite = await api(`/academies/${academyRow.slug}/members`, {
+    token: adminToken,
+    method: 'POST',
+    body: { email: teacherB.user.email, role: 'ASSISTANT' },
+  });
+  cleanup.push(() =>
+    prisma.academyMembership.delete({ where: { id: secondInvite.body.id } }).catch(() => {}),
+  );
+  const decline = await api(`/me/invitations/${secondInvite.body.id}/decline`, {
+    token: tokenB,
+    method: 'POST',
+  });
   check('a different invited user can decline their own invitation', decline.status < 300);
-  const declinedRow = await prisma.academyMembership.findUnique({ where: { id: secondInvite.body.id } });
-  check('a declined invitation ends as LEFT (state transition, never deleted)', declinedRow?.status === 'LEFT');
-  const declineAudit = await prisma.auditLog.findFirst({ where: { action: 'member.invite.decline', entityId: secondInvite.body.id } });
+  const declinedRow = await prisma.academyMembership.findUnique({
+    where: { id: secondInvite.body.id },
+  });
+  check(
+    'a declined invitation ends as LEFT (state transition, never deleted)',
+    declinedRow?.status === 'LEFT',
+  );
+  const declineAudit = await prisma.auditLog.findFirst({
+    where: { action: 'member.invite.decline', entityId: secondInvite.body.id },
+  });
   check('member.invite.decline is audited', !!declineAudit);
 
-  const updateMember = await api(`/academies/${academyRow.slug}/members/${membershipId}`, { token: adminToken, method: 'PATCH', body: { status: 'SUSPENDED' } });
-  check('admin suspends the new member', updateMember.status < 300 && updateMember.body?.status === 'SUSPENDED');
-  const updateAudit = await prisma.auditLog.findFirst({ where: { academyId: academy1, action: 'member.update', entityId: membershipId } });
+  const updateMember = await api(`/academies/${academyRow.slug}/members/${membershipId}`, {
+    token: adminToken,
+    method: 'PATCH',
+    body: { status: 'SUSPENDED' },
+  });
+  check(
+    'admin suspends the new member',
+    updateMember.status < 300 && updateMember.body?.status === 'SUSPENDED',
+  );
+  const updateAudit = await prisma.auditLog.findFirst({
+    where: { academyId: academy1, action: 'member.update', entityId: membershipId },
+  });
   check('member.update is audited', !!updateAudit);
 
-  const reactivate = await api(`/academies/${academyRow.slug}/members/${membershipId}`, { token: adminToken, method: 'PATCH', body: { status: 'ACTIVE' } });
-  check('admin reactivates the member', reactivate.status < 300 && reactivate.body?.status === 'ACTIVE');
+  const reactivate = await api(`/academies/${academyRow.slug}/members/${membershipId}`, {
+    token: adminToken,
+    method: 'PATCH',
+    body: { status: 'ACTIVE' },
+  });
+  check(
+    'admin reactivates the member',
+    reactivate.status < 300 && reactivate.body?.status === 'ACTIVE',
+  );
 
-  const ownerRow = await prisma.academyMembership.findFirst({ where: { academyId: academy1, role: 'OWNER' } });
-  const cannotTouchOwner = await api(`/academies/${academyRow.slug}/members/${ownerRow.id}`, { token: adminToken, method: 'PATCH', body: { status: 'SUSPENDED' } });
-  check('the academy owner cannot be modified through this endpoint (existing guard, unchanged)', cannotTouchOwner.status >= 400);
+  const ownerRow = await prisma.academyMembership.findFirst({
+    where: { academyId: academy1, role: 'OWNER' },
+  });
+  const cannotTouchOwner = await api(`/academies/${academyRow.slug}/members/${ownerRow.id}`, {
+    token: adminToken,
+    method: 'PATCH',
+    body: { status: 'SUSPENDED' },
+  });
+  check(
+    'the academy owner cannot be modified through this endpoint (existing guard, unchanged)',
+    cannotTouchOwner.status >= 400,
+  );
 
-  const removeMember = await api(`/academies/${academyRow.slug}/members/${membershipId}`, { token: adminToken, method: 'DELETE' });
+  const removeMember = await api(`/academies/${academyRow.slug}/members/${membershipId}`, {
+    token: adminToken,
+    method: 'DELETE',
+  });
   check('admin removes the member', removeMember.status < 300);
-  const removeAudit = await prisma.auditLog.findFirst({ where: { academyId: academy1, action: 'member.remove', entityId: membershipId } });
+  const removeAudit = await prisma.auditLog.findFirst({
+    where: { academyId: academy1, action: 'member.remove', entityId: membershipId },
+  });
   check('member.remove is audited', !!removeAudit);
-  const membershipAfterRemove = await prisma.academyMembership.findUnique({ where: { id: membershipId } });
-  check('removal is a state transition (status LEFT), not a hard delete — matches "prefer state transitions" from the spec', membershipAfterRemove?.status === 'LEFT');
+  const membershipAfterRemove = await prisma.academyMembership.findUnique({
+    where: { id: membershipId },
+  });
+  check(
+    'removal is a state transition (status LEFT), not a hard delete — matches "prefer state transitions" from the spec',
+    membershipAfterRemove?.status === 'LEFT',
+  );
 
   // IDOR: an unrelated teacher cannot manage academy1's staff by spoofing the header
-  const foreignStaffAttempt = await api(`/academies/${academyRow.slug}/members`, { token: tokenB, method: 'POST', body: { email: newStaffUser.email, role: 'TEACHER' } });
-  check('an unrelated teacher cannot add staff to academy1 (their own OWNER context resolves to their own academy, not this one)', [403, 404].includes(foreignStaffAttempt.status), `status=${foreignStaffAttempt.status}`);
+  const foreignStaffAttempt = await api(`/academies/${academyRow.slug}/members`, {
+    token: tokenB,
+    method: 'POST',
+    body: { email: newStaffUser.email, role: 'TEACHER' },
+  });
+  check(
+    'an unrelated teacher cannot add staff to academy1 (their own OWNER context resolves to their own academy, not this one)',
+    [403, 404].includes(foreignStaffAttempt.status),
+    `status=${foreignStaffAttempt.status}`,
+  );
 
   // ── Activate / deactivate academy (reuses the existing teacher-status
   //    action — Academy.status is fully derived, never independently set) ──
   console.log('\n-- Activate / deactivate academy --');
-  const beforeStatus = await prisma.academy.findUnique({ where: { id: academy1 }, select: { status: true } });
-  check('academy1 starts ACTIVE (this run\'s baseline)', beforeStatus.status === 'ACTIVE');
+  const beforeStatus = await prisma.academy.findUnique({
+    where: { id: academy1 },
+    select: { status: true },
+  });
+  check("academy1 starts ACTIVE (this run's baseline)", beforeStatus.status === 'ACTIVE');
 
-  const suspend = await api(`/admin/teachers/${academy1}/status`, { token: adminToken, method: 'PATCH', body: { status: 'SUSPENDED' } });
+  const suspend = await api(`/admin/teachers/${academy1}/status`, {
+    token: adminToken,
+    method: 'PATCH',
+    body: { status: 'SUSPENDED' },
+  });
   check('admin suspends academy1 (via the existing setTeacherStatus action)', suspend.status < 300);
-  const afterSuspend = await prisma.academy.findUnique({ where: { id: academy1 }, select: { status: true } });
-  check('Academy.status flips to SUSPENDED — the derived-status contract still holds', afterSuspend.status === 'SUSPENDED');
+  const afterSuspend = await prisma.academy.findUnique({
+    where: { id: academy1 },
+    select: { status: true },
+  });
+  check(
+    'Academy.status flips to SUSPENDED — the derived-status contract still holds',
+    afterSuspend.status === 'SUSPENDED',
+  );
 
-  const suspendedOwnerBlocked = await api(`/academies/${academyRow.slug}/settings`, { token: tokenA });
-  check('the suspended academy\'s own owner is still authenticated (this reuses teacher-approval gating, not a new access-control layer)', [200, 403].includes(suspendedOwnerBlocked.status));
+  const suspendedOwnerBlocked = await api(`/academies/${academyRow.slug}/settings`, {
+    token: tokenA,
+  });
+  check(
+    "the suspended academy's own owner is still authenticated (this reuses teacher-approval gating, not a new access-control layer)",
+    [200, 403].includes(suspendedOwnerBlocked.status),
+  );
 
-  const reactivateAcademy = await api(`/admin/teachers/${academy1}/status`, { token: adminToken, method: 'PATCH', body: { status: 'APPROVED' } });
+  const reactivateAcademy = await api(`/admin/teachers/${academy1}/status`, {
+    token: adminToken,
+    method: 'PATCH',
+    body: { status: 'APPROVED' },
+  });
   check('admin reactivates academy1', reactivateAcademy.status < 300);
-  const afterReactivate = await prisma.academy.findUnique({ where: { id: academy1 }, select: { status: true } });
+  const afterReactivate = await prisma.academy.findUnique({
+    where: { id: academy1 },
+    select: { status: true },
+  });
   check('Academy.status flips back to ACTIVE', afterReactivate.status === 'ACTIVE');
 
   const statusAudit = await prisma.auditLog.findFirst({
     where: { entity: 'TeacherProfile', entityId: academy1, action: 'teacher.status.approved' },
     orderBy: { createdAt: 'desc' },
   });
-  check('the status change is audited (pre-existing AdminService behavior, confirmed still firing)', !!statusAudit);
+  check(
+    'the status change is audited (pre-existing AdminService behavior, confirmed still firing)',
+    !!statusAudit,
+  );
 
-  const nonAdminSuspend = await api(`/admin/teachers/${academy1}/status`, { token: tokenA, method: 'PATCH', body: { status: 'SUSPENDED' } });
-  check('a teacher (even the academy\'s own owner) cannot suspend their own academy', nonAdminSuspend.status === 403);
+  const nonAdminSuspend = await api(`/admin/teachers/${academy1}/status`, {
+    token: tokenA,
+    method: 'PATCH',
+    body: { status: 'SUSPENDED' },
+  });
+  check(
+    "a teacher (even the academy's own owner) cannot suspend their own academy",
+    nonAdminSuspend.status === 403,
+  );
 
   // ── Academy-scoped activity (extends GET /admin/audit-logs, not a second
   //    audit read path) ──────────────────────────────────────────────────
   console.log('\n-- Academy-scoped activity --');
-  const scoped = await api('/admin/audit-logs', { token: adminToken, query: { academyId: academy1 } });
+  const scoped = await api('/admin/audit-logs', {
+    token: adminToken,
+    query: { academyId: academy1 },
+  });
   check('scoped activity read succeeds', scoped.status === 200);
-  check('every row in the scoped view actually belongs to academy1', scoped.body.length > 0 && scoped.body.every(() => true));
-  const scopedIds = new Set((await prisma.auditLog.findMany({ where: { academyId: academy1 }, select: { id: true } })).map((r) => r.id));
-  check('the scoped rows are a subset of academy1\'s real audit rows (no cross-academy leakage)', scoped.body.every((r) => scopedIds.has(r.id)));
+  check(
+    'every row in the scoped view actually belongs to academy1',
+    scoped.body.length > 0 && scoped.body.every(() => true),
+  );
+  const scopedIds = new Set(
+    (await prisma.auditLog.findMany({ where: { academyId: academy1 }, select: { id: true } })).map(
+      (r) => r.id,
+    ),
+  );
+  check(
+    "the scoped rows are a subset of academy1's real audit rows (no cross-academy leakage)",
+    scoped.body.every((r) => scopedIds.has(r.id)),
+  );
 
   const unscoped = await api('/admin/audit-logs', { token: adminToken });
-  check('unscoped GET /admin/audit-logs is unchanged (still platform-wide, default behavior preserved)', unscoped.status === 200 && unscoped.body.length >= scoped.body.length);
+  check(
+    'unscoped GET /admin/audit-logs is unchanged (still platform-wide, default behavior preserved)',
+    unscoped.status === 200 && unscoped.body.length >= scoped.body.length,
+  );
 
-  const nonAdminActivity = await api('/admin/audit-logs', { token: tokenA, query: { academyId: academy1 } });
+  const nonAdminActivity = await api('/admin/audit-logs', {
+    token: tokenA,
+    query: { academyId: academy1 },
+  });
   check('a teacher cannot read audit logs at all, scoped or not', nonAdminActivity.status === 403);
 
   console.log(`\n${pass} passed, ${fail} failed`);
-  for (const fn of cleanup.reverse()) await fn().catch((e) => console.error('cleanup error:', e.message));
+  for (const fn of cleanup.reverse())
+    await fn().catch((e) => console.error('cleanup error:', e.message));
   await prisma.$disconnect();
   process.exit(fail > 0 ? 1 : 0);
 }

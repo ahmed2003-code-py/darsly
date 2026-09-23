@@ -11,7 +11,10 @@ export class NeedsAttentionController {
   constructor(private readonly needsAttention: NeedsAttentionService) {}
 
   @Get()
-  @ApiOperation({ summary: '[academy] Rule-based operational view: repeated absences, inactive students, stale groups' })
+  @ApiOperation({
+    summary:
+      '[academy] Rule-based operational view: repeated absences, inactive students, stale groups',
+  })
   overview(@CurrentAcademy() ctx: AcademyContext) {
     return this.needsAttention.overview(ctx);
   }

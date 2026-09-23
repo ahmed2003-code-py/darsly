@@ -28,7 +28,9 @@ export default function GradeSelect({
         return (
           <optgroup key={st} label={t(`stage.${st}`)}>
             {inStage.map((g) => (
-              <option key={g.id} value={g.id}>{ar ? g.nameAr : g.nameEn}</option>
+              <option key={g.id} value={g.id}>
+                {ar ? g.nameAr : g.nameEn}
+              </option>
             ))}
           </optgroup>
         );

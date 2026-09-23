@@ -8,7 +8,14 @@ import { Spinner } from '../../../components/ui';
 export default function PreviewTab({ onNext }: { onNext?: () => void }) {
   const { t } = useTranslation();
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
-  const { data: html, isLoading, isError, error, refetch, isFetching } = useQuery<string>({
+  const {
+    data: html,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery<string>({
     queryKey: ['studio-preview'],
     queryFn: async () => (await api.get('/academy/site/preview', { responseType: 'text' })).data,
     retry: false,
@@ -23,11 +30,17 @@ export default function PreviewTab({ onNext }: { onNext?: () => void }) {
         <div className="flex items-center gap-2">
           <div className="flex rounded-full border border-outline-variant p-0.5">
             {(['desktop', 'mobile'] as const).map((d) => (
-              <button key={d} onClick={() => setDevice(d)}
+              <button
+                key={d}
+                onClick={() => setDevice(d)}
                 className={`grid h-8 w-9 place-items-center rounded-full transition ${
                   device === d ? 'bg-primary text-on-primary' : 'text-on-surface-variant'
-                }`} aria-label={d}>
-                <span className="material-symbols-outlined text-[18px]">{d === 'desktop' ? 'desktop_windows' : 'smartphone'}</span>
+                }`}
+                aria-label={d}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {d === 'desktop' ? 'desktop_windows' : 'smartphone'}
+                </span>
               </button>
             ))}
           </div>
@@ -36,7 +49,9 @@ export default function PreviewTab({ onNext }: { onNext?: () => void }) {
             {t('studio.preview.refresh')}
           </button>
           {onNext && !noDraft && !isError && (
-            <button className="btn-primary" onClick={onNext}>{t('studio.continue')}</button>
+            <button className="btn-primary" onClick={onNext}>
+              {t('studio.continue')}
+            </button>
           )}
         </div>
       </div>
@@ -53,9 +68,12 @@ export default function PreviewTab({ onNext }: { onNext?: () => void }) {
         <p className="text-sm text-error">{t('studio.preview.loadError')}</p>
       ) : (
         <div className="flex justify-center">
-          <iframe title={t('studio.preview.title')} srcDoc={html}
+          <iframe
+            title={t('studio.preview.title')}
+            srcDoc={html}
             className="rounded-2xl border border-outline-variant bg-white transition-all"
-            style={{ width: device === 'mobile' ? 390 : '100%', height: '72vh' }} />
+            style={{ width: device === 'mobile' ? 390 : '100%', height: '72vh' }}
+          />
         </div>
       )}
     </div>

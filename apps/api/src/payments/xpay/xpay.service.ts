@@ -120,7 +120,8 @@ export class XPayService {
         description: course.title,
         customer: { name: student.user.fullName, email: student.user.email ?? undefined },
       });
-      if (!session.url) throw new BadRequestException('The payment provider did not return a checkout link');
+      if (!session.url)
+        throw new BadRequestException('The payment provider did not return a checkout link');
     } catch (e) {
       await this.unwind(payment.id, existing ? { id: existing.id, status: existing.status } : null);
       throw e;
@@ -175,7 +176,9 @@ export class XPayService {
       .digest('hex');
     // Some providers send `sha256=<hex>` or a comma-separated list; compare
     // against every candidate rather than assuming one shape.
-    const candidates = signature.split(',').map((p) => p.trim().split('=').pop()!.trim().toLowerCase());
+    const candidates = signature
+      .split(',')
+      .map((p) => p.trim().split('=').pop()!.trim().toLowerCase());
     return candidates.some((c) => equals(c, expected));
   }
 
@@ -191,7 +194,8 @@ export class XPayService {
     const object = (event.data?.object ?? event.data ?? {}) as Record<string, unknown>;
     const paymentId =
       (object.reference as string) ??
-      ((object.metadata as Record<string, string> | undefined)?.paymentId ?? '');
+      (object.metadata as Record<string, string> | undefined)?.paymentId ??
+      '';
 
     if (!paymentId) {
       this.logger.warn(`XPay event ${type} carried no reference; ignored`);
@@ -211,12 +215,16 @@ export class XPayService {
       // still cannot grant access to a payment that was not actually made.
       if (payment.gatewayRef) {
         const session = await this.client.getCheckoutSession(payment.gatewayRef);
-        const paid = String(session.status ?? '').trim().toLowerCase();
+        const paid = String(session.status ?? '')
+          .trim()
+          .toLowerCase();
         // Exact match, never substring: "unpaid".includes("paid") is true, and
         // a substring test here would settle a session the provider had just
         // told us was not paid.
         if (!PAID_STATUSES.has(paid)) {
-          this.logger.warn(`XPay says ${payment.gatewayRef} is "${paid}"; not settling ${paymentId}`);
+          this.logger.warn(
+            `XPay says ${payment.gatewayRef} is "${paid}"; not settling ${paymentId}`,
+          );
           return { handled: false, reason: 'not-paid-at-provider' };
         }
       }
@@ -245,9 +253,26 @@ export class XPayService {
 }
 
 /** VERIFY these against the dashboard's event list; matching is by substring. */
-const SUCCESS_EVENTS = ['checkout_session.completed', 'checkout.completed', 'payment.succeeded', 'charge.succeeded'];
-const FAILURE_EVENTS = ['payment.failed', 'charge.failed', 'checkout_session.expired', 'checkout.expired'];
-const PAID_STATUSES = new Set(['paid', 'completed', 'complete', 'succeeded', 'success', 'captured']);
+const SUCCESS_EVENTS = [
+  'checkout_session.completed',
+  'checkout.completed',
+  'payment.succeeded',
+  'charge.succeeded',
+];
+const FAILURE_EVENTS = [
+  'payment.failed',
+  'charge.failed',
+  'checkout_session.expired',
+  'checkout.expired',
+];
+const PAID_STATUSES = new Set([
+  'paid',
+  'completed',
+  'complete',
+  'succeeded',
+  'success',
+  'captured',
+]);
 
 /** Constant-time compare that tolerates length differences. */
 function equals(a: string, b: string): boolean {

@@ -38,7 +38,11 @@ const ids: { users: string[]; students: string[] } = { users: [], students: [] }
 
 async function makeStudent(): Promise<string> {
   const user = await prisma.user.create({
-    data: { role: 'STUDENT', fullName: `QA ${randomUUID().slice(0, 8)}`, email: `qa-${randomUUID()}@example.test` },
+    data: {
+      role: 'STUDENT',
+      fullName: `QA ${randomUUID().slice(0, 8)}`,
+      email: `qa-${randomUUID()}@example.test`,
+    },
   });
   const student = await prisma.studentProfile.create({ data: { userId: user.id } });
   ids.users.push(user.id);
@@ -65,14 +69,34 @@ beforeAll(async () => {
   const achievements = new AchievementsService(prisma);
   const missions = new MissionsService(prisma);
   const notifications: any = { create: jest.fn().mockResolvedValue({}), pushUnread: jest.fn() };
-  engine = new GamificationService(prisma, config, achievements, missions, leaderboard, notifications);
+  engine = new GamificationService(
+    prisma,
+    config,
+    achievements,
+    missions,
+    leaderboard,
+    notifications,
+  );
   const progress: any = {
     summary: jest.fn().mockResolvedValue({
-      currentStreak: 0, longestStreak: 0, weeklyGoalLessons: 5,
-      lessonsCompletedThisWeek: 0, weeklyGoalPct: 0, totalLessonsCompleted: 0, activeCourses: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      weeklyGoalLessons: 5,
+      lessonsCompletedThisWeek: 0,
+      weeklyGoalPct: 0,
+      totalLessonsCompleted: 0,
+      activeCourses: 0,
     }),
   };
-  students = new StudentGamificationService(prisma, engine, config, achievements, missions, leaderboard, progress);
+  students = new StudentGamificationService(
+    prisma,
+    engine,
+    config,
+    achievements,
+    missions,
+    leaderboard,
+    progress,
+  );
   analytics = new GamificationAnalyticsService(prisma);
 }, 30_000);
 
@@ -106,8 +130,18 @@ describe('gamification against a real database', () => {
     if (!guard()) return;
     // The six keys the old computed-badge screen used. Losing one would mean a
     // student opening the app to find an achievement gone.
-    const legacy = ['first_enroll', 'streak_7', 'dedicated', 'quiz_ace', 'first_certificate', 'scholar'];
-    const found = await prisma.achievement.findMany({ where: { key: { in: legacy } }, select: { key: true } });
+    const legacy = [
+      'first_enroll',
+      'streak_7',
+      'dedicated',
+      'quiz_ace',
+      'first_certificate',
+      'scholar',
+    ];
+    const found = await prisma.achievement.findMany({
+      where: { key: { in: legacy } },
+      select: { key: true },
+    });
     expect(found.map((f) => f.key).sort()).toEqual([...legacy].sort());
   });
 
@@ -162,7 +196,11 @@ describe('gamification against a real database', () => {
     };
 
     // Two heartbeats landing together — the unique index is the arbiter.
-    const results = await Promise.all([engine.record(event), engine.record(event), engine.record(event)]);
+    const results = await Promise.all([
+      engine.record(event),
+      engine.record(event),
+      engine.record(event),
+    ]);
     expect(results.filter((r) => r.awarded)).toHaveLength(1);
 
     const events = await prisma.gamificationEvent.count({
@@ -216,7 +254,9 @@ describe('gamification against a real database', () => {
     expect(agg!.xp).toBeGreaterThanOrEqual(tier2!.minXp);
     expect(agg!.level).toBeGreaterThanOrEqual(2);
     // One promotion per tier crossed, not one per event after crossing it.
-    const levelEvents = await prisma.gamificationEvent.count({ where: { studentId, type: 'LEVEL_UP' } });
+    const levelEvents = await prisma.gamificationEvent.count({
+      where: { studentId, type: 'LEVEL_UP' },
+    });
     expect(levelEvents).toBeLessThanOrEqual(levelUps);
   });
 
@@ -254,16 +294,29 @@ describe('gamification against a real database', () => {
     // a earns more than b.
     for (let i = 0; i < 3; i++) {
       await engine.recordOrThrow({
-        studentId: a, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${a}:b-${i}`,
-        tenantId, entityType: 'lesson', entityId: `b-${i}`,
+        studentId: a,
+        type: 'LESSON_COMPLETED',
+        key: `LESSON_COMPLETED:${a}:b-${i}`,
+        tenantId,
+        entityType: 'lesson',
+        entityId: `b-${i}`,
       });
     }
     await engine.recordOrThrow({
-      studentId: b, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${b}:b-0`,
-      tenantId, entityType: 'lesson', entityId: `b-0`,
+      studentId: b,
+      type: 'LESSON_COMPLETED',
+      key: `LESSON_COMPLETED:${b}:b-0`,
+      tenantId,
+      entityType: 'lesson',
+      entityId: `b-0`,
     });
 
-    const board = await leaderboard.board({ scope: 'ACADEMY', scopeId: tenantId, period: 'WEEKLY', studentId: b });
+    const board = await leaderboard.board({
+      scope: 'ACADEMY',
+      scopeId: tenantId,
+      period: 'WEEKLY',
+      studentId: b,
+    });
     expect(board.top[0].studentId).toBe(a);
     expect(board.me!.studentId).toBe(b);
     expect(board.me!.rank).toBe(2);
@@ -279,15 +332,27 @@ describe('gamification against a real database', () => {
     const b = await makeStudent();
 
     await engine.recordOrThrow({
-      studentId: a, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${a}:iso`,
-      tenantId: tenantA, entityType: 'lesson', entityId: 'iso',
+      studentId: a,
+      type: 'LESSON_COMPLETED',
+      key: `LESSON_COMPLETED:${a}:iso`,
+      tenantId: tenantA,
+      entityType: 'lesson',
+      entityId: 'iso',
     });
     await engine.recordOrThrow({
-      studentId: b, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${b}:iso`,
-      tenantId: tenantB, entityType: 'lesson', entityId: 'iso',
+      studentId: b,
+      type: 'LESSON_COMPLETED',
+      key: `LESSON_COMPLETED:${b}:iso`,
+      tenantId: tenantB,
+      entityType: 'lesson',
+      entityId: 'iso',
     });
 
-    const boardA = await leaderboard.board({ scope: 'ACADEMY', scopeId: tenantA, period: 'WEEKLY' });
+    const boardA = await leaderboard.board({
+      scope: 'ACADEMY',
+      scopeId: tenantA,
+      period: 'WEEKLY',
+    });
     const idsOnA = boardA.top.map((r) => r.studentId);
     expect(idsOnA).toContain(a);
     expect(idsOnA).not.toContain(b);
@@ -301,13 +366,21 @@ describe('gamification against a real database', () => {
     const b = await makeStudent();
 
     await engine.recordOrThrow({
-      studentId: a, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${a}:an-1`,
-      tenantId: mine, entityType: 'lesson', entityId: 'an-1',
+      studentId: a,
+      type: 'LESSON_COMPLETED',
+      key: `LESSON_COMPLETED:${a}:an-1`,
+      tenantId: mine,
+      entityType: 'lesson',
+      entityId: 'an-1',
     });
     for (const n of [1, 2]) {
       await engine.recordOrThrow({
-        studentId: b, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${b}:an-${n}`,
-        tenantId: theirs, entityType: 'lesson', entityId: `an-${n}`,
+        studentId: b,
+        type: 'LESSON_COMPLETED',
+        key: `LESSON_COMPLETED:${b}:an-${n}`,
+        tenantId: theirs,
+        entityType: 'lesson',
+        entityId: `an-${n}`,
       });
     }
 
@@ -324,7 +397,10 @@ describe('gamification against a real database', () => {
   it('spends coins atomically — two taps cannot buy one balance twice', async () => {
     if (!guard()) return;
     const studentId = await makeStudent();
-    const user = await prisma.studentProfile.findUnique({ where: { id: studentId }, select: { userId: true } });
+    const user = await prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { userId: true },
+    });
     const reward = await prisma.reward.findUnique({ where: { key: 'streak_freeze' } });
 
     // Fund exactly one purchase.
@@ -345,7 +421,9 @@ describe('gamification against a real database', () => {
     expect(agg!.coins).toBe(0);
     expect(agg!.streakFreezes).toBe(1);
     // The debit is on the ledger too, as a negative amount.
-    const spend = await prisma.gamificationEvent.findFirst({ where: { studentId, type: 'REWARD_REDEEMED' } });
+    const spend = await prisma.gamificationEvent.findFirst({
+      where: { studentId, type: 'REWARD_REDEEMED' },
+    });
     expect(spend!.coinsAwarded).toBe(-reward!.costCoins);
   });
 
@@ -353,8 +431,11 @@ describe('gamification against a real database', () => {
     if (!guard()) return;
     const studentId = await makeStudent();
     await engine.recordOrThrow({
-      studentId, type: 'LESSON_COMPLETED', key: `LESSON_COMPLETED:${studentId}:money`,
-      entityType: 'lesson', entityId: 'money',
+      studentId,
+      type: 'LESSON_COMPLETED',
+      key: `LESSON_COMPLETED:${studentId}:money`,
+      entityType: 'lesson',
+      entityId: 'money',
     });
     // Coins were earned…
     const agg = await prisma.studentGamification.findUnique({ where: { studentId } });

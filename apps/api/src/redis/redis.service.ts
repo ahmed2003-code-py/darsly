@@ -59,7 +59,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       // Must not crash startup over a Redis outage: every consumer already
       // falls open when the client is down, and ioredis keeps retrying in
       // the background per retryStrategy above.
-      this.logger.error(`Redis initial connection failed, continuing without it: ${(e as Error).message}`);
+      this.logger.error(
+        `Redis initial connection failed, continuing without it: ${(e as Error).message}`,
+      );
     }
   }
 

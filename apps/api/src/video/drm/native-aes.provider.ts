@@ -39,7 +39,11 @@ export class NativeAesDrmProvider implements IDrmProvider {
     // decrypt any other asset's segments (defence in depth on top of the per-asset
     // token pinning at the key endpoint).
     const key = await this.keys.createKey();
-    const out = await this.transcoder.packageHls(input.sourcePath, key.keyBytes, KEY_URI_PLACEHOLDER);
+    const out = await this.transcoder.packageHls(
+      input.sourcePath,
+      key.keyBytes,
+      KEY_URI_PLACEHOLDER,
+    );
 
     // Upload every produced file under hls/<assetId>/, preserving structure.
     const prefix = `hls/${input.assetId}`;
@@ -49,9 +53,7 @@ export class NativeAesDrmProvider implements IDrmProvider {
         const rel = path.relative(out.workDir, abs).split(path.sep).join('/');
         const body = await fs.readFile(abs);
         await this.storage.put(`${prefix}/${rel}`, body, {
-          contentType: rel.endsWith('.m3u8')
-            ? 'application/vnd.apple.mpegurl'
-            : 'video/mp2t',
+          contentType: rel.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
           cacheControl: 'private, max-age=31536000',
         });
       }

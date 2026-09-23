@@ -10,7 +10,10 @@ import type { TFunction } from 'i18next';
  */
 const LOOK: Record<string, { icon: string; tone: string }> = {
   CHAT_MESSAGE: { icon: 'forum', tone: 'bg-primary-fixed text-on-primary-fixed' },
-  ENROLLMENT_APPROVED: { icon: 'how_to_reg', tone: 'bg-secondary-container text-on-secondary-container' },
+  ENROLLMENT_APPROVED: {
+    icon: 'how_to_reg',
+    tone: 'bg-secondary-container text-on-secondary-container',
+  },
   NEW_LESSON: { icon: 'play_lesson', tone: 'bg-primary-fixed text-on-primary-fixed' },
   QUIZ_GRADED: { icon: 'grading', tone: 'bg-primary-fixed text-on-primary-fixed' },
   PAYOUT_STATUS: { icon: 'payments', tone: 'bg-secondary-container text-on-secondary-container' },
@@ -39,7 +42,11 @@ export function notificationLook(n: { type?: string; meta?: Record<string, unkno
  * to the date once something is older than a week, where "منذ ١٤ يوم" stops
  * being easier to read than the date itself.
  */
-export function timeAgo(iso: string | Date | null | undefined, t: TFunction, locale: string): string {
+export function timeAgo(
+  iso: string | Date | null | undefined,
+  t: TFunction,
+  locale: string,
+): string {
   if (!iso) return '';
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return '';

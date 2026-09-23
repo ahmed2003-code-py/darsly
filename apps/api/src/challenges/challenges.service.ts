@@ -8,7 +8,11 @@ import { GamificationOutcome } from '../gamification/gamification.types';
 import { isCorrectAnswer } from '../assessments/quizzes.service';
 import { ChallengesAccessService } from './challenges-access.service';
 import { ChallengeScoringService } from './challenge-scoring.service';
-import { SetChallengeQuestionsDto, SubmitChallengeAnswerDto, UpsertChallengeDto } from './dto/challenge.dto';
+import {
+  SetChallengeQuestionsDto,
+  SubmitChallengeAnswerDto,
+  UpsertChallengeDto,
+} from './dto/challenge.dto';
 
 type ChallengeWithQuestions = Prisma.ChallengeGetPayload<{ include: { questions: true } }>;
 
@@ -39,8 +43,22 @@ export class ChallengesService {
    */
   private defaultsFor(type: 'PRACTICE' | 'RANKED') {
     return type === 'RANKED'
-      ? { scoring: 'SPEED_BASED' as const, questionTimeSec: 20, maxAttempts: 1, leaderboardEnabled: true, answerReveal: 'AFTER_SUBMISSION' as const, randomize: 'QUESTIONS' as const }
-      : { scoring: 'STANDARD' as const, questionTimeSec: null, maxAttempts: 3, leaderboardEnabled: false, answerReveal: 'IMMEDIATE' as const, randomize: 'NONE' as const };
+      ? {
+          scoring: 'SPEED_BASED' as const,
+          questionTimeSec: 20,
+          maxAttempts: 1,
+          leaderboardEnabled: true,
+          answerReveal: 'AFTER_SUBMISSION' as const,
+          randomize: 'QUESTIONS' as const,
+        }
+      : {
+          scoring: 'STANDARD' as const,
+          questionTimeSec: null,
+          maxAttempts: 3,
+          leaderboardEnabled: false,
+          answerReveal: 'IMMEDIATE' as const,
+          randomize: 'NONE' as const,
+        };
   }
 
   async create(tenantId: string, dto: UpsertChallengeDto) {
@@ -59,7 +77,8 @@ export class ChallengesService {
         gradeId: dto.gradeId ?? null,
         topic: dto.topic ?? null,
         durationSec: dto.durationSec ?? null,
-        questionTimeSec: dto.questionTimeSec !== undefined ? dto.questionTimeSec : d.questionTimeSec,
+        questionTimeSec:
+          dto.questionTimeSec !== undefined ? dto.questionTimeSec : d.questionTimeSec,
         scoring: dto.scoring ?? d.scoring,
         maxAttempts: dto.maxAttempts ?? d.maxAttempts,
         leaderboardEnabled: dto.leaderboardEnabled ?? d.leaderboardEnabled,
@@ -78,7 +97,11 @@ export class ChallengesService {
     const hasAttempts = await this.prisma.challengeAttempt.count({ where: { challengeId } });
     if (hasAttempts > 0 && challenge.status !== 'DRAFT') {
       const lockedKeys: (keyof UpsertChallengeDto)[] = [
-        'durationSec', 'questionTimeSec', 'scoring', 'maxAttempts', 'type',
+        'durationSec',
+        'questionTimeSec',
+        'scoring',
+        'maxAttempts',
+        'type',
       ];
       const touched = lockedKeys.filter((k) => dto[k] !== undefined);
       if (touched.length) {
@@ -106,7 +129,9 @@ export class ChallengesService {
         ...(dto.questionTimeSec !== undefined ? { questionTimeSec: dto.questionTimeSec } : {}),
         ...(dto.scoring !== undefined ? { scoring: dto.scoring } : {}),
         ...(dto.maxAttempts !== undefined ? { maxAttempts: dto.maxAttempts } : {}),
-        ...(dto.leaderboardEnabled !== undefined ? { leaderboardEnabled: dto.leaderboardEnabled } : {}),
+        ...(dto.leaderboardEnabled !== undefined
+          ? { leaderboardEnabled: dto.leaderboardEnabled }
+          : {}),
         ...(dto.answerReveal !== undefined ? { answerReveal: dto.answerReveal } : {}),
         ...(dto.randomize !== undefined ? { randomize: dto.randomize } : {}),
       },
@@ -256,7 +281,11 @@ export class ChallengesService {
       }
     }
     if (errors.length) {
-      throw new BadRequestException({ message: 'Challenge is not ready to publish', code: 'CHALLENGE_INVALID', errors });
+      throw new BadRequestException({
+        message: 'Challenge is not ready to publish',
+        code: 'CHALLENGE_INVALID',
+        errors,
+      });
     }
 
     return this.prisma.challenge.update({
@@ -292,10 +321,16 @@ export class ChallengesService {
     await this.access.requireTeacherChallenge(tenantId, challengeId);
     const hasAttempts = await this.prisma.challengeAttempt.count({ where: { challengeId } });
     if (hasAttempts > 0) {
-      await this.prisma.challenge.update({ where: { id: challengeId }, data: { status: 'ARCHIVED', archivedAt: new Date() } });
+      await this.prisma.challenge.update({
+        where: { id: challengeId },
+        data: { status: 'ARCHIVED', archivedAt: new Date() },
+      });
       return { deleted: false, archived: true };
     }
-    await this.prisma.challenge.update({ where: { id: challengeId }, data: { deletedAt: new Date() } });
+    await this.prisma.challenge.update({
+      where: { id: challengeId },
+      data: { deletedAt: new Date() },
+    });
     return { deleted: true, archived: false };
   }
 
@@ -332,7 +367,8 @@ export class ChallengesService {
 
     const participants = new Set(attempts.map((a) => a.studentId)).size;
     const completed = attempts.filter((a) => a.status === 'COMPLETED').length;
-    const avg = (nums: number[]) => (nums.length ? Math.round(nums.reduce((s, n) => s + n, 0) / nums.length) : 0);
+    const avg = (nums: number[]) =>
+      nums.length ? Math.round(nums.reduce((s, n) => s + n, 0) / nums.length) : 0;
 
     const perQuestion = new Map<string, { correct: number; total: number }>();
     for (const a of attempts) {
@@ -353,8 +389,12 @@ export class ChallengesService {
       };
     });
     const withStats = questionStats.filter((q) => q.correctPct != null);
-    const hardest = withStats.length ? withStats.reduce((a, b) => (a.correctPct! < b.correctPct! ? a : b)) : null;
-    const easiest = withStats.length ? withStats.reduce((a, b) => (a.correctPct! > b.correctPct! ? a : b)) : null;
+    const hardest = withStats.length
+      ? withStats.reduce((a, b) => (a.correctPct! < b.correctPct! ? a : b))
+      : null;
+    const easiest = withStats.length
+      ? withStats.reduce((a, b) => (a.correctPct! > b.correctPct! ? a : b))
+      : null;
 
     return {
       participants,
@@ -373,7 +413,10 @@ export class ChallengesService {
 
   // ── Student browsing ───────────────────────────────────────────────────────
 
-  async listForStudent(userId: string, tab: 'available' | 'in_progress' | 'completed' = 'available') {
+  async listForStudent(
+    userId: string,
+    tab: 'available' | 'in_progress' | 'completed' = 'available',
+  ) {
     const studentId = await this.access.studentIdOf(userId);
     const enrollments = await this.prisma.enrollment.findMany({
       where: { studentId, status: 'ACTIVE' },
@@ -388,7 +431,8 @@ export class ChallengesService {
       select: { challengeId: true, status: true, score: true, completedAt: true },
     });
     const byChallenge = new Map<string, typeof myAttempts>();
-    for (const a of myAttempts) byChallenge.set(a.challengeId, [...(byChallenge.get(a.challengeId) ?? []), a]);
+    for (const a of myAttempts)
+      byChallenge.set(a.challengeId, [...(byChallenge.get(a.challengeId) ?? []), a]);
 
     const challenges = await this.prisma.challenge.findMany({
       where: {
@@ -398,16 +442,25 @@ export class ChallengesService {
         OR: [{ courseId: null }, { courseId: { in: courseIds } }],
       },
       orderBy: { publishedAt: 'desc' },
-      include: { _count: { select: { questions: true } }, teacher: { select: { user: { select: { fullName: true } } } } },
+      include: {
+        _count: { select: { questions: true } },
+        teacher: { select: { user: { select: { fullName: true } } } },
+      },
     });
 
     return challenges
       .map((c) => {
         const mine = byChallenge.get(c.id) ?? [];
         const inProgress = mine.some((a) => a.status === 'IN_PROGRESS');
-        const completedCount = mine.filter((a) => a.status === 'COMPLETED' || a.status === 'TIMED_OUT').length;
-        const attemptsRemaining = c.maxAttempts === 0 ? null : Math.max(0, c.maxAttempts - completedCount);
-        const bestScore = mine.reduce<number | null>((b, a) => (a.score == null ? b : b == null ? a.score : Math.max(b, a.score)), null);
+        const completedCount = mine.filter(
+          (a) => a.status === 'COMPLETED' || a.status === 'TIMED_OUT',
+        ).length;
+        const attemptsRemaining =
+          c.maxAttempts === 0 ? null : Math.max(0, c.maxAttempts - completedCount);
+        const bestScore = mine.reduce<number | null>(
+          (b, a) => (a.score == null ? b : b == null ? a.score : Math.max(b, a.score)),
+          null,
+        );
         return {
           id: c.id,
           title: c.title,
@@ -454,9 +507,13 @@ export class ChallengesService {
       leaderboardEnabled: challenge.leaderboardEnabled,
       maxAttempts: challenge.maxAttempts,
       attemptsUsed: completedCount,
-      attemptsRemaining: challenge.maxAttempts === 0 ? null : Math.max(0, challenge.maxAttempts - completedCount),
+      attemptsRemaining:
+        challenge.maxAttempts === 0 ? null : Math.max(0, challenge.maxAttempts - completedCount),
       openAttemptId: open?.id ?? null,
-      bestScore: priorAttempts.reduce<number | null>((b, a) => (b == null ? a.score : Math.max(b, a.score)), null),
+      bestScore: priorAttempts.reduce<number | null>(
+        (b, a) => (b == null ? a.score : Math.max(b, a.score)),
+        null,
+      ),
     };
   }
 
@@ -464,30 +521,46 @@ export class ChallengesService {
 
   async startAttempt(userId: string, challengeId: string) {
     const { challenge, studentId } = await this.access.requireStudentAccess(userId, challengeId);
-    const questions = await this.prisma.challengeQuestion.findMany({ where: { challengeId }, orderBy: { sortOrder: 'asc' } });
+    const questions = await this.prisma.challengeQuestion.findMany({
+      where: { challengeId },
+      orderBy: { sortOrder: 'asc' },
+    });
     if (!questions.length) throw new BadRequestException('Challenge has no questions yet');
 
-    const existing = await this.prisma.challengeAttempt.findMany({ where: { challengeId, studentId } });
+    const existing = await this.prisma.challengeAttempt.findMany({
+      where: { challengeId, studentId },
+    });
     const open = existing.find((a) => a.status === 'IN_PROGRESS');
     if (open) {
-      const expired = challenge.durationSec != null && this.isOverdue(open.startedAt, challenge.durationSec);
+      const expired =
+        challenge.durationSec != null && this.isOverdue(open.startedAt, challenge.durationSec);
       if (!expired) return this.attemptState(challenge, open, questions);
       await this.finishOverdue(open.id);
     }
 
     const completedCount = existing.filter((a) => a.status !== 'IN_PROGRESS').length;
     if (challenge.maxAttempts !== 0 && completedCount >= challenge.maxAttempts) {
-      throw new BadRequestException({ message: 'No attempts remaining for this challenge', code: 'NO_ATTEMPTS_LEFT' });
+      throw new BadRequestException({
+        message: 'No attempts remaining for this challenge',
+        code: 'NO_ATTEMPTS_LEFT',
+      });
     }
 
-    const order = this.orderQuestionIds(questions, challenge.randomize, `${studentId}:${challengeId}:${completedCount}`);
+    const order = this.orderQuestionIds(
+      questions,
+      challenge.randomize,
+      `${studentId}:${challengeId}:${completedCount}`,
+    );
     const attempt = await this.prisma.challengeAttempt.create({
       data: {
         challengeId,
         studentId,
         attemptNumber: completedCount + 1,
         questionIds: order,
-        deadlineAt: challenge.durationSec != null ? new Date(Date.now() + challenge.durationSec * 1000) : null,
+        deadlineAt:
+          challenge.durationSec != null
+            ? new Date(Date.now() + challenge.durationSec * 1000)
+            : null,
       },
     });
     return this.attemptState(challenge, attempt, questions);
@@ -509,15 +582,26 @@ export class ChallengesService {
    * refused outright — the only "current" question is the one the server
    * itself has not yet seen an answer for.
    */
-  async answer(userId: string, challengeId: string, attemptId: string, dto: SubmitChallengeAnswerDto) {
+  async answer(
+    userId: string,
+    challengeId: string,
+    attemptId: string,
+    dto: SubmitChallengeAnswerDto,
+  ) {
     const { challenge, studentId } = await this.access.requireStudentAccess(userId, challengeId);
     const attempt = await this.requireOwnAttempt(studentId, challengeId, attemptId);
     if (attempt.status !== 'IN_PROGRESS') {
-      throw new BadRequestException({ message: 'This attempt is no longer open', code: 'ATTEMPT_CLOSED' });
+      throw new BadRequestException({
+        message: 'This attempt is no longer open',
+        code: 'ATTEMPT_CLOSED',
+      });
     }
     if (challenge.durationSec != null && this.isOverdue(attempt.startedAt, challenge.durationSec)) {
       await this.finishOverdue(attempt.id);
-      throw new BadRequestException({ message: 'Time is up for this attempt', code: 'CHALLENGE_TIME_UP' });
+      throw new BadRequestException({
+        message: 'Time is up for this attempt',
+        code: 'CHALLENGE_TIME_UP',
+      });
     }
 
     const existingAnswers = await this.prisma.challengeAnswer.findMany({
@@ -527,16 +611,24 @@ export class ChallengesService {
     const answeredIds = new Set(existingAnswers.map((a) => a.questionId));
     const currentQuestionId = attempt.questionIds.find((id) => !answeredIds.has(id));
     if (!currentQuestionId) {
-      throw new BadRequestException({ message: 'Every question has already been answered', code: 'ATTEMPT_COMPLETE' });
+      throw new BadRequestException({
+        message: 'Every question has already been answered',
+        code: 'ATTEMPT_COMPLETE',
+      });
     }
     if (dto.questionId !== currentQuestionId) {
       // Already-answered question id: this is the idempotent-retry path.
       const already = existingAnswers.find((a) => a.questionId === dto.questionId);
       if (already) return this.answerFeedback(challenge, already);
-      throw new BadRequestException({ message: 'Not the current question', code: 'QUESTION_OUT_OF_ORDER' });
+      throw new BadRequestException({
+        message: 'Not the current question',
+        code: 'QUESTION_OUT_OF_ORDER',
+      });
     }
 
-    const question = await this.prisma.challengeQuestion.findFirst({ where: { id: currentQuestionId, challengeId } });
+    const question = await this.prisma.challengeQuestion.findFirst({
+      where: { id: currentQuestionId, challengeId },
+    });
     if (!question) throw new NotFoundException('Question not found');
 
     const shownAt = existingAnswers[0]?.answeredAt ?? attempt.startedAt;
@@ -547,7 +639,11 @@ export class ChallengesService {
     // only reads it as a fallback when correctOptionIds is empty, which never
     // happens here (publish() refuses to publish a question with none).
     const correct =
-      onTime && isCorrectAnswer({ ...question, correctOptionId: question.correctOptionIds[0] ?? null }, dto.selectedOptionIds);
+      onTime &&
+      isCorrectAnswer(
+        { ...question, correctOptionId: question.correctOptionIds[0] ?? null },
+        dto.selectedOptionIds,
+      );
     const { xpAwarded } = this.scoring.scoreAnswer({
       isCorrect: correct,
       onTime,
@@ -615,14 +711,17 @@ export class ChallengesService {
 
     const allAnswers = await this.prisma.challengeAnswer.findMany({ where: { attemptId } });
     const questionsById = new Map(
-      (await this.prisma.challengeQuestion.findMany({
-        where: { id: { in: allAnswers.map((a) => a.questionId) } },
-        select: { id: true, timeLimitSec: true },
-      })).map((q) => [q.id, q]),
+      (
+        await this.prisma.challengeQuestion.findMany({
+          where: { id: { in: allAnswers.map((a) => a.questionId) } },
+          select: { id: true, timeLimitSec: true },
+        })
+      ).map((q) => [q.id, q]),
     );
     const summary = this.scoring.summarize(
       allAnswers.map((a) => {
-        const allowedTimeSec = questionsById.get(a.questionId)?.timeLimitSec ?? challenge.questionTimeSec ?? null;
+        const allowedTimeSec =
+          questionsById.get(a.questionId)?.timeLimitSec ?? challenge.questionTimeSec ?? null;
         const usedFraction =
           challenge.scoring === 'SPEED_BASED' && a.timeTakenMs != null && allowedTimeSec
             ? Math.min(1, Math.max(0, a.timeTakenMs / (allowedTimeSec * 1000)))
@@ -630,7 +729,8 @@ export class ChallengesService {
         return { isCorrect: a.isCorrect, xpAwarded: a.xpAwarded, usedFraction };
       }),
     );
-    const overdue = challenge.durationSec != null && this.isOverdue(attempt.startedAt, challenge.durationSec);
+    const overdue =
+      challenge.durationSec != null && this.isOverdue(attempt.startedAt, challenge.durationSec);
 
     attempt = await this.prisma.challengeAttempt.update({
       where: { id: attemptId },
@@ -657,15 +757,27 @@ export class ChallengesService {
     });
     await this.prisma.challengeAttempt.update({
       where: { id: attemptId },
-      data: { xpAwarded: gamificationOutcome?.xp ?? 0, coinsAwarded: gamificationOutcome?.coins ?? 0 },
+      data: {
+        xpAwarded: gamificationOutcome?.xp ?? 0,
+        coinsAwarded: gamificationOutcome?.coins ?? 0,
+      },
     });
 
     const streak = await this.progress.touchActivity(studentId);
-    if (streak?.rolled) await this.gamification.checkStreakMilestone(studentId, streak.currentStreak);
+    if (streak?.rolled)
+      await this.gamification.checkStreakMilestone(studentId, streak.currentStreak);
 
     await this.notify(studentId, challenge.title, summary.score, summary.accuracyPct);
 
-    return this.resultOf(challenge, { ...attempt, xpAwarded: gamificationOutcome?.xp ?? 0, coinsAwarded: gamificationOutcome?.coins ?? 0 }, gamificationOutcome);
+    return this.resultOf(
+      challenge,
+      {
+        ...attempt,
+        xpAwarded: gamificationOutcome?.xp ?? 0,
+        coinsAwarded: gamificationOutcome?.coins ?? 0,
+      },
+      gamificationOutcome,
+    );
   }
 
   /**
@@ -678,18 +790,26 @@ export class ChallengesService {
     const { studentId } = await this.access.requireStudentAccess(userId, challengeId);
     const source = await this.requireOwnAttempt(studentId, challengeId, attemptId);
     if (source.status === 'IN_PROGRESS') {
-      throw new BadRequestException({ message: 'Finish the attempt first', code: 'ATTEMPT_IN_PROGRESS' });
+      throw new BadRequestException({
+        message: 'Finish the attempt first',
+        code: 'ATTEMPT_IN_PROGRESS',
+      });
     }
     const wrong = await this.prisma.challengeAnswer.findMany({
       where: { attemptId, isCorrect: false },
       select: { questionId: true },
     });
     if (!wrong.length) {
-      throw new BadRequestException({ message: 'No mistakes to retry — perfect score', code: 'NO_MISTAKES' });
+      throw new BadRequestException({
+        message: 'No mistakes to retry — perfect score',
+        code: 'NO_MISTAKES',
+      });
     }
 
     const challenge = await this.prisma.challenge.findUniqueOrThrow({ where: { id: challengeId } });
-    const priorAttempts = await this.prisma.challengeAttempt.count({ where: { challengeId, studentId } });
+    const priorAttempts = await this.prisma.challengeAttempt.count({
+      where: { challengeId, studentId },
+    });
     const attempt = await this.prisma.challengeAttempt.create({
       data: {
         challengeId,
@@ -732,7 +852,9 @@ export class ChallengesService {
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private async requireOwnAttempt(studentId: string, challengeId: string, attemptId: string) {
-    const attempt = await this.prisma.challengeAttempt.findFirst({ where: { id: attemptId, challengeId, studentId } });
+    const attempt = await this.prisma.challengeAttempt.findFirst({
+      where: { id: attemptId, challengeId, studentId },
+    });
     if (!attempt) throw new NotFoundException('Attempt not found');
     return attempt;
   }
@@ -742,10 +864,12 @@ export class ChallengesService {
   }
 
   private async finishOverdue(attemptId: string) {
-    await this.prisma.challengeAttempt.update({
-      where: { id: attemptId },
-      data: { status: 'TIMED_OUT', completedAt: new Date() },
-    }).catch(() => undefined);
+    await this.prisma.challengeAttempt
+      .update({
+        where: { id: attemptId },
+        data: { status: 'TIMED_OUT', completedAt: new Date() },
+      })
+      .catch(() => undefined);
   }
 
   /** Deterministic per-attempt order: a real shuffle, stable across reloads. */
@@ -765,7 +889,8 @@ export class ChallengesService {
     let state = h >>> 0 || 1;
     const rand = () => {
       // mulberry32
-      state |= 0; state = (state + 0x6d2b79f5) | 0;
+      state |= 0;
+      state = (state + 0x6d2b79f5) | 0;
       let t = Math.imul(state ^ (state >>> 15), 1 | state);
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -780,15 +905,38 @@ export class ChallengesService {
 
   /** The question and progress state a playing student is allowed to see. */
   private async attemptState(
-    challenge: { id: string; durationSec: number | null; questionTimeSec: number | null; answerReveal: string },
-    attempt: { id: string; status: string; startedAt: Date; deadlineAt: Date | null; questionIds: string[] },
-    allQuestions: { id: string; type: string; prompt: string; imageUrl: string | null; options: unknown; timeLimitSec: number | null; points: number }[],
+    challenge: {
+      id: string;
+      durationSec: number | null;
+      questionTimeSec: number | null;
+      answerReveal: string;
+    },
+    attempt: {
+      id: string;
+      status: string;
+      startedAt: Date;
+      deadlineAt: Date | null;
+      questionIds: string[];
+    },
+    allQuestions: {
+      id: string;
+      type: string;
+      prompt: string;
+      imageUrl: string | null;
+      options: unknown;
+      timeLimitSec: number | null;
+      points: number;
+    }[],
   ) {
     const byId = new Map(allQuestions.map((q) => [q.id, q]));
-    const ordered = attempt.questionIds.map((id) => byId.get(id)).filter((q): q is NonNullable<typeof q> => !!q);
+    const ordered = attempt.questionIds
+      .map((id) => byId.get(id))
+      .filter((q): q is NonNullable<typeof q> => !!q);
     // How far in the student already is — needed so a refresh/reconnect (§11)
     // resumes on the right question instead of replaying from the start.
-    const answeredCount = await this.prisma.challengeAnswer.count({ where: { attemptId: attempt.id } });
+    const answeredCount = await this.prisma.challengeAnswer.count({
+      where: { attemptId: attempt.id },
+    });
     return {
       attemptId: attempt.id,
       status: attempt.status,
@@ -837,33 +985,46 @@ export class ChallengesService {
   private async resultOf(
     challenge: { id: string; type: string; answerReveal: string; leaderboardEnabled: boolean },
     attempt: {
-      id: string; status: string; score: number; correctCount: number; wrongCount: number;
-      accuracyPct: number | null; speedPct: number | null; xpAwarded: number; coinsAwarded: number;
+      id: string;
+      status: string;
+      score: number;
+      correctCount: number;
+      wrongCount: number;
+      accuracyPct: number | null;
+      speedPct: number | null;
+      xpAwarded: number;
+      coinsAwarded: number;
     },
     gamification?: GamificationOutcome,
   ) {
     const review =
       challenge.answerReveal === 'NEVER'
         ? []
-        : await this.prisma.challengeAnswer.findMany({
-            where: { attemptId: attempt.id },
-            include: { question: true },
-          }).then((rows) =>
-            rows.map((r) => ({
-              questionId: r.questionId,
-              prompt: r.question.prompt,
-              yourAnswer: r.selectedOptionIds,
-              correctOptionIds: r.question.correctOptionIds,
-              isCorrect: r.isCorrect,
-              explanation: r.question.explanation,
-              topic: r.question.topic,
-            })),
-          );
+        : await this.prisma.challengeAnswer
+            .findMany({
+              where: { attemptId: attempt.id },
+              include: { question: true },
+            })
+            .then((rows) =>
+              rows.map((r) => ({
+                questionId: r.questionId,
+                prompt: r.question.prompt,
+                yourAnswer: r.selectedOptionIds,
+                correctOptionIds: r.question.correctOptionIds,
+                isCorrect: r.isCorrect,
+                explanation: r.question.explanation,
+                topic: r.question.topic,
+              })),
+            );
 
     let rank: number | null = null;
     if (challenge.leaderboardEnabled) {
       const ahead = await this.prisma.challengeAttempt.count({
-        where: { challengeId: challenge.id, status: { in: ['COMPLETED', 'TIMED_OUT'] }, score: { gt: attempt.score } },
+        where: {
+          challengeId: challenge.id,
+          status: { in: ['COMPLETED', 'TIMED_OUT'] },
+          score: { gt: attempt.score },
+        },
       });
       rank = ahead + 1;
     }
@@ -955,7 +1116,10 @@ export class ChallengesService {
   }
 
   private async notify(studentId: string, title: string, score: number, accuracyPct: number) {
-    const student = await this.prisma.studentProfile.findUnique({ where: { id: studentId }, select: { userId: true } });
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { userId: true },
+    });
     if (!student) return;
     await this.notifications
       .create({

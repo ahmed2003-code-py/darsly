@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  GoneException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AcademyRole, Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,7 +13,11 @@ import { assertStaffEligible } from './permissions';
 const TOKEN_BYTES = 32;
 const DEFAULT_TTL_DAYS = 14;
 
-const GONE = () => new GoneException({ message: 'This invitation link is no longer valid', code: 'INVITATION_LINK_INVALID' });
+const GONE = () =>
+  new GoneException({
+    message: 'This invitation link is no longer valid',
+    code: 'INVITATION_LINK_INVALID',
+  });
 
 /**
  * A shareable, single-use staff invitation for one Center + one role — the
@@ -39,21 +49,42 @@ export class InvitationLinksService {
     const rows = await this.prisma.academyInvitationLink.findMany({
       where: { academyId },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, role: true, expiresAt: true, usedAt: true, revokedAt: true, declinedAt: true, createdAt: true, createdByUserId: true },
+      select: {
+        id: true,
+        role: true,
+        expiresAt: true,
+        usedAt: true,
+        revokedAt: true,
+        declinedAt: true,
+        createdAt: true,
+        createdByUserId: true,
+      },
     });
     const now = new Date();
     return rows.map((r) => ({
       ...r,
-      status: r.usedAt ? 'USED' : r.revokedAt ? 'REVOKED' : r.declinedAt ? 'DECLINED' : r.expiresAt <= now ? 'EXPIRED' : 'PENDING',
+      status: r.usedAt
+        ? 'USED'
+        : r.revokedAt
+          ? 'REVOKED'
+          : r.declinedAt
+            ? 'DECLINED'
+            : r.expiresAt <= now
+              ? 'EXPIRED'
+              : 'PENDING',
     }));
   }
 
   async revoke(academyId: string, id: string) {
     const row = await this.prisma.academyInvitationLink.findFirst({ where: { id, academyId } });
     if (!row) throw new NotFoundException('Invitation link not found');
-    if (row.usedAt) throw new BadRequestException({ message: 'Already used', code: 'ALREADY_USED' });
+    if (row.usedAt)
+      throw new BadRequestException({ message: 'Already used', code: 'ALREADY_USED' });
     if (row.revokedAt) return { id, revoked: true };
-    await this.prisma.academyInvitationLink.update({ where: { id }, data: { revokedAt: new Date() } });
+    await this.prisma.academyInvitationLink.update({
+      where: { id },
+      data: { revokedAt: new Date() },
+    });
     return { id, revoked: true };
   }
 
@@ -97,7 +128,10 @@ export class InvitationLinksService {
       where: { userId_academyId: { userId, academyId: row.academyId } },
     });
     if (existing?.status === 'ACTIVE') {
-      throw new ConflictException({ message: 'Already a member of this Center', code: 'ALREADY_MEMBER' });
+      throw new ConflictException({
+        message: 'Already a member of this Center',
+        code: 'ALREADY_MEMBER',
+      });
     }
     // No row, or LEFT/INVITED/SUSPENDED: an explicit accept is exactly the
     // consent the re-invitation lifecycle requires — creates or reactivates
@@ -105,7 +139,13 @@ export class InvitationLinksService {
     return this.prisma.academyMembership.upsert({
       where: { userId_academyId: { userId, academyId: row.academyId } },
       update: { role: row.role, status: 'ACTIVE', joinedAt: new Date() },
-      create: { userId, academyId: row.academyId, role: row.role, status: 'ACTIVE', joinedAt: new Date() },
+      create: {
+        userId,
+        academyId: row.academyId,
+        role: row.role,
+        status: 'ACTIVE',
+        joinedAt: new Date(),
+      },
       select: { id: true, academyId: true, role: true, status: true },
     });
   }
@@ -160,19 +200,36 @@ export class InvitationLinksService {
     const row = await this.prisma.academyInvitationLink.findUnique({
       where: { tokenHash: this.hash(token) },
       select: {
-        tokenHash: true, role: true, academyId: true, expiresAt: true, usedAt: true, revokedAt: true, declinedAt: true,
+        tokenHash: true,
+        role: true,
+        academyId: true,
+        expiresAt: true,
+        usedAt: true,
+        revokedAt: true,
+        declinedAt: true,
         academy: { select: { name: true, status: true, deletedAt: true } },
       },
     });
     if (!row) throw new NotFoundException('Invitation link not found');
     if (row.usedAt || row.revokedAt || row.declinedAt || row.expiresAt <= new Date()) throw GONE();
-    if (row.academy.deletedAt || row.academy.status === 'SUSPENDED' || row.academy.status === 'ARCHIVED') throw GONE();
+    if (
+      row.academy.deletedAt ||
+      row.academy.status === 'SUSPENDED' ||
+      row.academy.status === 'ARCHIVED'
+    )
+      throw GONE();
     return row;
   }
 
   /** The one predicate every claim/decline is bound to: exactly this row, still open, still in date. */
   private claimable(tokenHash: string): Prisma.AcademyInvitationLinkWhereInput {
-    return { tokenHash, usedAt: null, revokedAt: null, declinedAt: null, expiresAt: { gt: new Date() } };
+    return {
+      tokenHash,
+      usedAt: null,
+      revokedAt: null,
+      declinedAt: null,
+      expiresAt: { gt: new Date() },
+    };
   }
 
   /** The membership this user already won with this exact link, if that is what happened. */

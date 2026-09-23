@@ -121,7 +121,10 @@ export default function TeacherDashboardPage() {
       icon: 'menu_book',
       label: t('teacher.statCourses'),
       value: published,
-      hint: drafts > 0 ? t('teacher.statCoursesDrafts', { count: drafts }) : t('teacher.statCoursesAll'),
+      hint:
+        drafts > 0
+          ? t('teacher.statCoursesDrafts', { count: drafts })
+          : t('teacher.statCoursesAll'),
       to: '/teacher/courses',
       urgent: false,
     },
@@ -186,7 +189,9 @@ export default function TeacherDashboardPage() {
               <div className="flex items-start justify-between gap-3">
                 <span
                   className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
-                    s.urgent ? 'bg-amber-500/15 text-amber-600' : 'bg-primary-fixed text-on-primary-fixed'
+                    s.urgent
+                      ? 'bg-amber-500/15 text-amber-600'
+                      : 'bg-primary-fixed text-on-primary-fixed'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[24px]">{s.icon}</span>
@@ -201,7 +206,9 @@ export default function TeacherDashboardPage() {
                 <p className="font-heading text-[2rem] font-bold leading-none tabular-nums tracking-tight">
                   {s.value}
                 </p>
-                <p className="mt-2 truncate text-sm font-semibold text-on-surface-variant">{s.label}</p>
+                <p className="mt-2 truncate text-sm font-semibold text-on-surface-variant">
+                  {s.label}
+                </p>
                 <p className="mt-0.5 truncate text-xs text-outline">{s.hint}</p>
               </div>
             </Link>
@@ -268,7 +275,9 @@ export default function TeacherDashboardPage() {
                     </p>
                   </div>
                   <div className="shrink-0 text-end">
-                    <Badge tone={s.awaiting ? 'warn' : s.latest.status === 'ACTIVE' ? 'teal' : 'neutral'}>
+                    <Badge
+                      tone={s.awaiting ? 'warn' : s.latest.status === 'ACTIVE' ? 'teal' : 'neutral'}
+                    >
                       {t(`myCourses.status.${s.awaiting ? 'PENDING_PAYMENT' : s.latest.status}`)}
                     </Badge>
                     <p className="mt-1 text-xs text-outline">
@@ -318,7 +327,10 @@ export default function TeacherDashboardPage() {
                   {/* Relative to the best-performing course, not to a total —
                       the question is which course is carrying the academy. */}
                   <div className="h-1.5 overflow-hidden rounded-full bg-surface-container-high">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${c.share}%` }} />
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${c.share}%` }}
+                    />
                   </div>
                 </li>
               ))}
@@ -332,8 +344,12 @@ export default function TeacherDashboardPage() {
             >
               <span className="material-symbols-outlined text-[20px] text-outline">edit_note</span>
               <span className="min-w-0 flex-1 text-sm">
-                <span className="font-semibold">{t('teacher.draftsWaiting', { count: drafts })}</span>
-                <span className="block truncate text-xs text-outline">{t('teacher.draftsHint')}</span>
+                <span className="font-semibold">
+                  {t('teacher.draftsWaiting', { count: drafts })}
+                </span>
+                <span className="block truncate text-xs text-outline">
+                  {t('teacher.draftsHint')}
+                </span>
               </span>
             </Link>
           )}

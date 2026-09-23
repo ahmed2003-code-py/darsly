@@ -27,8 +27,11 @@ export class UpdateGroupDto {
 }
 
 export class AddGroupMembersDto {
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(MAX_GROUP_BULK)
-  @IsString({ each: true }) @MaxLength(LIMITS.ID, { each: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_GROUP_BULK)
+  @IsString({ each: true })
+  @MaxLength(LIMITS.ID, { each: true })
   studentIds: string[];
 }
 
@@ -44,7 +47,10 @@ export class AttendanceRecordInput {
 
 export class MarkAttendanceDto {
   @IsDateString({ strict: true }) date: string;
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(MAX_GROUP_BULK)
-  @ValidateNested({ each: true }) @Type(() => AttendanceRecordInput)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_GROUP_BULK)
+  @ValidateNested({ each: true })
+  @Type(() => AttendanceRecordInput)
   records: AttendanceRecordInput[];
 }

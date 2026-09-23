@@ -49,7 +49,9 @@ function MissionRow({ m }: { m: Mission }) {
   return (
     <div
       className={`flex items-center gap-3 rounded-xl border p-3 transition ${
-        m.completed ? 'border-secondary/40 bg-secondary-container/25' : 'border-outline-variant bg-surface-container-lowest'
+        m.completed
+          ? 'border-secondary/40 bg-secondary-container/25'
+          : 'border-outline-variant bg-surface-container-lowest'
       }`}
     >
       <span
@@ -66,19 +68,26 @@ function MissionRow({ m }: { m: Mission }) {
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm font-semibold ${m.completed ? 'text-on-surface-variant line-through' : ''}`}>
+        <p
+          className={`truncate text-sm font-semibold ${m.completed ? 'text-on-surface-variant line-through' : ''}`}
+        >
           {label}
         </p>
         {!m.completed && m.target > 1 && (
           <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-container-high">
-            <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${pct}%` }} />
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-500"
+              style={{ width: `${pct}%` }}
+            />
           </div>
         )}
       </div>
 
       <div className="shrink-0 text-end">
         {m.completed ? (
-          <span className="text-xs font-bold text-secondary">{t('gamification.missions.done')}</span>
+          <span className="text-xs font-bold text-secondary">
+            {t('gamification.missions.done')}
+          </span>
         ) : (
           <>
             {m.target > 1 && (

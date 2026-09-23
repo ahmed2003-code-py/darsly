@@ -19,7 +19,14 @@ const PIN_LAST_SET = new Set(PIN_LAST);
 
 // Base ordering of the middle band (lower = earlier).
 const BASE_ORDER: Record<string, number> = {
-  about: 10, toolkit: 20, credentials: 30, stats: 35, courses: 40, gallery: 50, reviews: 60, faq: 70,
+  about: 10,
+  toolkit: 20,
+  credentials: 30,
+  stats: 35,
+  courses: 40,
+  gallery: 50,
+  reviews: 60,
+  faq: 70,
 };
 
 // Per-archetype overrides — push the sections that make each teacher's case up.
@@ -222,7 +229,9 @@ export class SiteBrainService {
   plan(doc: SiteDocument): RenderPlan {
     const verdicts = this.rules.check(doc);
     if (verdicts.length) {
-      this.logger.debug(`design-rule verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`);
+      this.logger.debug(
+        `design-rule verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`,
+      );
     }
     const blocks = doc.blocks.map((block) => ({
       block,

@@ -1,10 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { AiJob } from '@prisma/client';
 import { AcademySiteConfig } from '../academy-site.config';
 import { AiJobError } from '../ai/ai-job.error';

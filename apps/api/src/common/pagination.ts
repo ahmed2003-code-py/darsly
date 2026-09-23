@@ -47,10 +47,17 @@ export const MAX_PAGE_SIZE = 100;
 /** Query parameters for an offset-paged endpoint. Both optional: omitting them
  *  must reproduce exactly what the endpoint returned before it was paged. */
 export class PageQuery {
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(MAX_PAGE_SIZE)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_PAGE_SIZE)
   limit?: number;
 }
 
@@ -61,7 +68,10 @@ export class PageQuery {
  * `limit`, so that a caller who sends nothing gets byte-identical results. It
  * is not a default anyone should think about; it is the old hard-coded number.
  */
-export function pageArgs(query: PageQuery, fallbackSize: number): { skip: number; take: number; page: number; pageSize: number } {
+export function pageArgs(
+  query: PageQuery,
+  fallbackSize: number,
+): { skip: number; take: number; page: number; pageSize: number } {
   const pageSize = Math.min(Math.max(query.limit ?? fallbackSize, 1), MAX_PAGE_SIZE);
   const page = Math.max(query.page ?? 1, 1);
   return { skip: (page - 1) * pageSize, take: pageSize, page, pageSize };

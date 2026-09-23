@@ -82,7 +82,11 @@ export default function TopBar({
 
   function submitSearch(e: FormEvent) {
     e.preventDefault();
-    navigate(user?.role === Role.TEACHER ? `/teacher/courses?q=${encodeURIComponent(q)}` : `/courses?q=${encodeURIComponent(q)}`);
+    navigate(
+      user?.role === Role.TEACHER
+        ? `/teacher/courses?q=${encodeURIComponent(q)}`
+        : `/courses?q=${encodeURIComponent(q)}`,
+    );
   }
 
   async function markAllRead() {
@@ -102,7 +106,12 @@ export default function TopBar({
   }
   /** Mark it read and go where it points — a notification you can't follow is
    *  just a label. */
-  async function openNotif(n: { id: string; readAt?: string | null; type?: string; meta?: Record<string, unknown> }) {
+  async function openNotif(n: {
+    id: string;
+    readAt?: string | null;
+    type?: string;
+    meta?: Record<string, unknown>;
+  }) {
     setBellOpen(false);
     if (!n.readAt) {
       await api.patch(`/notifications/${n.id}/read`).catch(() => undefined);
@@ -152,7 +161,9 @@ export default function TopBar({
         {nav && (
           <span className="shell-header-brand hidden items-center gap-2 lg:flex">
             <span className="brand-tile h-9 w-9" aria-hidden />
-            <span className="font-heading text-lg font-bold tracking-tight text-on-surface">{t('brand')}</span>
+            <span className="font-heading text-lg font-bold tracking-tight text-on-surface">
+              {t('brand')}
+            </span>
           </span>
         )}
 
@@ -256,14 +267,22 @@ export default function TopBar({
             {bellOpen && (
               <div className="absolute end-0 mt-2 w-80 overflow-hidden rounded-xl bg-surface-container-lowest shadow-modal">
                 <div className="flex items-center gap-3 border-b border-outline-variant/40 px-4 py-3">
-                  <span className="me-auto font-heading font-bold">{t('topbar.notifications')}</span>
+                  <span className="me-auto font-heading font-bold">
+                    {t('topbar.notifications')}
+                  </span>
                   {notif?.unread > 0 && (
-                    <button className="text-xs font-bold text-primary hover:underline" onClick={markAllRead}>
+                    <button
+                      className="text-xs font-bold text-primary hover:underline"
+                      onClick={markAllRead}
+                    >
                       {t('topbar.markAllRead')}
                     </button>
                   )}
                   {notif?.items?.length > 0 && (
-                    <button className="text-xs font-bold text-error hover:underline" onClick={clearAll}>
+                    <button
+                      className="text-xs font-bold text-error hover:underline"
+                      onClick={clearAll}
+                    >
                       {t('topbar.clearAll')}
                     </button>
                   )}
@@ -278,13 +297,17 @@ export default function TopBar({
                     onClick={() => void request()}
                     className="flex w-full items-center gap-2 border-b border-outline-variant/40 bg-primary-fixed/40 px-4 py-3 text-start text-xs font-bold text-on-primary-fixed transition hover:bg-primary-fixed"
                   >
-                    <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+                    <span className="material-symbols-outlined text-[18px]">
+                      notifications_active
+                    </span>
                     {t('topbar.enablePush')}
                   </button>
                 )}
                 <div className="max-h-96 overflow-y-auto">
                   {!notif?.items?.length ? (
-                    <p className="px-4 py-8 text-center text-sm text-outline">{t('topbar.noNotifications')}</p>
+                    <p className="px-4 py-8 text-center text-sm text-outline">
+                      {t('topbar.noNotifications')}
+                    </p>
                   ) : (
                     notif.items.map((n: any) => {
                       const look = notificationLook(n);
@@ -302,15 +325,25 @@ export default function TopBar({
                             onClick={() => void openNotif(n)}
                             className="flex min-w-0 flex-1 gap-3 py-3 ps-4 text-start"
                           >
-                            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${look.tone}`}>
-                              <span className="material-symbols-outlined text-[20px]">{look.icon}</span>
+                            <span
+                              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${look.tone}`}
+                            >
+                              <span className="material-symbols-outlined text-[20px]">
+                                {look.icon}
+                              </span>
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-1.5">
-                                <span className="min-w-0 flex-1 truncate text-sm font-bold">{n.title}</span>
-                                {!n.readAt && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                                <span className="min-w-0 flex-1 truncate text-sm font-bold">
+                                  {n.title}
+                                </span>
+                                {!n.readAt && (
+                                  <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+                                )}
                               </span>
-                              <span className="block text-xs text-on-surface-variant line-clamp-2">{n.body}</span>
+                              <span className="block text-xs text-on-surface-variant line-clamp-2">
+                                {n.body}
+                              </span>
                               <span className="mt-1 block text-[11px] text-outline">
                                 {timeAgo(n.createdAt, t, i18n.language)}
                               </span>

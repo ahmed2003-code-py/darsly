@@ -4,11 +4,7 @@ import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AssignmentsService } from './assignments.service';
-import {
-  GradeSubmissionDto,
-  SubmitAssignmentDto,
-  UpsertAssignmentDto,
-} from './dto/assignment.dto';
+import { GradeSubmissionDto, SubmitAssignmentDto, UpsertAssignmentDto } from './dto/assignment.dto';
 
 @ApiTags('assessments')
 @ApiBearerAuth()
@@ -21,7 +17,11 @@ export class AssignmentsController {
   @Put('teacher/lessons/:lessonId/assignment')
   @Roles(Role.TEACHER)
   @ApiOperation({ summary: '[teacher] Create/update the assignment on a lesson' })
-  upsert(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string, @Body() dto: UpsertAssignmentDto) {
+  upsert(
+    @CurrentUser() u: JwtPayload,
+    @Param('lessonId') lessonId: string,
+    @Body() dto: UpsertAssignmentDto,
+  ) {
     return this.assignments.upsertForTeacher(u.tenantId!, lessonId, dto);
   }
 
@@ -35,7 +35,11 @@ export class AssignmentsController {
   @Post('teacher/assignment-submissions/:submissionId/grade')
   @Roles(Role.TEACHER)
   @ApiOperation({ summary: '[teacher] Grade a submission (score + feedback)' })
-  grade(@CurrentUser() u: JwtPayload, @Param('submissionId') submissionId: string, @Body() dto: GradeSubmissionDto) {
+  grade(
+    @CurrentUser() u: JwtPayload,
+    @Param('submissionId') submissionId: string,
+    @Body() dto: GradeSubmissionDto,
+  ) {
     return this.assignments.gradeSubmission(u.tenantId!, submissionId, dto);
   }
 
@@ -51,7 +55,11 @@ export class AssignmentsController {
   @Post('lessons/:lessonId/assignment/submissions')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] Submit / update my assignment answer' })
-  submit(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string, @Body() dto: SubmitAssignmentDto) {
+  submit(
+    @CurrentUser() u: JwtPayload,
+    @Param('lessonId') lessonId: string,
+    @Body() dto: SubmitAssignmentDto,
+  ) {
     return this.assignments.submit(u.sub, lessonId, dto);
   }
 }

@@ -6,7 +6,10 @@
 import i18n from '../i18n';
 export function imageToDataUrl(
   file: File,
-  opts: { maxW: number; maxH: number; quality?: number; square?: boolean } = { maxW: 800, maxH: 800 },
+  opts: { maxW: number; maxH: number; quality?: number; square?: boolean } = {
+    maxW: 800,
+    maxH: 800,
+  },
 ): Promise<string> {
   const { maxW, maxH, quality = 0.82, square = false } = opts;
   // Reject very large source files before decoding — decoding a 100 MP phone
@@ -25,8 +28,12 @@ export function imageToDataUrl(
       if (img.width * img.height > MAX_SOURCE_PIXELS) {
         return reject(new Error(i18n.t('image.tooManyPixels')));
       }
-      let sx = 0, sy = 0, sw = img.width, sh = img.height;
-      let dw = img.width, dh = img.height;
+      let sx = 0,
+        sy = 0,
+        sw = img.width,
+        sh = img.height;
+      let dw = img.width,
+        dh = img.height;
 
       if (square) {
         const side = Math.min(img.width, img.height);
@@ -50,7 +57,10 @@ export function imageToDataUrl(
       const webp = canvas.toDataURL('image/webp', quality);
       resolve(webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', quality));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('load failed')); };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('load failed'));
+    };
     img.src = url;
   });
 }

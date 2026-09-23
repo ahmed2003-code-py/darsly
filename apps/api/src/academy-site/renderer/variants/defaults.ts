@@ -61,9 +61,10 @@ registerVariant(
   (b, ctx: VariantContext) => {
     const block = b as Of<'hero'>;
     const cover = block.mediaId ? ctx.media(block.mediaId) : undefined;
-    const bg = cover && safeUrl(cover.url)
-      ? ` style="background-image:url('${escapeAttr(safeUrl(cover.url))}')"`
-      : '';
+    const bg =
+      cover && safeUrl(cover.url)
+        ? ` style="background-image:url('${escapeAttr(safeUrl(cover.url))}')"`
+        : '';
     return `<section class="block hero${bg ? ' hero-img' : ''}"${bg}>${bg ? '' : HERO_AURA}<div class="wrap">
         ${HERO_BADGE}
         <h1>${headline(block.headline)}</h1>
@@ -124,9 +125,10 @@ registerVariant(
   (b, ctx: VariantContext) => {
     const block = b as Of<'about'>;
     const img = block.mediaId ? ctx.media(block.mediaId) : undefined;
-    const imgHtml = img && safeUrl(img.url)
-      ? `<img class="about-img" src="${escapeAttr(safeUrl(img.url))}" alt="" loading="lazy">`
-      : '';
+    const imgHtml =
+      img && safeUrl(img.url)
+        ? `<img class="about-img" src="${escapeAttr(safeUrl(img.url))}" alt="" loading="lazy">`
+        : '';
     return `<section class="block numbered about"><div class="wrap about-grid">
         <div>${head('about', block.heading)}<p>${i18n(block.body)}</p></div>${imgHtml}
       </div></section>`;
@@ -181,7 +183,9 @@ registerVariant(
   (b) => {
     const block = b as Of<'credentials'>;
     const items = normalizeItems(block.items, { min: 2, maxLen: 240, cap: 12 });
-    const cards = items.map((it) => `<div class="cred-card"><span>${itemText(it)}</span></div>`).join('');
+    const cards = items
+      .map((it) => `<div class="cred-card"><span>${itemText(it)}</span></div>`)
+      .join('');
     if (!cards) return '';
     return `<section class="block numbered credentials cred-cards"><div class="wrap">
         ${head('credentials', block.heading)}<div class="cred-grid">${cards}</div>
@@ -195,7 +199,10 @@ registerVariant('stats', 'stats_01', (b) => {
   return `<section class="block numbered stats"><div class="wrap">
         ${head('stats', block.heading)}
         <div class="stat-grid">${block.items
-          .map((s) => `<div class="stat"><span class="v">${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`)
+          .map(
+            (s) =>
+              `<div class="stat"><span class="v">${escapeHtml(s.value)}</span><span class="l">${i18n(s.label)}</span></div>`,
+          )
           .join('')}</div>
       </div></section>`;
 });
@@ -257,9 +264,20 @@ registerVariant('gallery', 'gallery_01', (b, ctx: VariantContext) => {
  * so an unknown platform still lines up with the rest of the row.
  */
 const SOCIAL_GLYPH: Record<string, string> = {
-  whatsapp: '💬', telegram: '✈️', facebook: 'f', instagram: '◎', youtube: '▶',
-  tiktok: '♪', linkedin: 'in', twitter: '𝕏', x: '𝕏', email: '✉', mail: '✉',
-  phone: '☎', website: '⌂', site: '⌂',
+  whatsapp: '💬',
+  telegram: '✈️',
+  facebook: 'f',
+  instagram: '◎',
+  youtube: '▶',
+  tiktok: '♪',
+  linkedin: 'in',
+  twitter: '𝕏',
+  x: '𝕏',
+  email: '✉',
+  mail: '✉',
+  phone: '☎',
+  website: '⌂',
+  site: '⌂',
 };
 
 registerVariant('contact', 'contact_01', (b) => {

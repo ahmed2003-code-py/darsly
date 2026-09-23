@@ -25,12 +25,19 @@ export default function AdminAcademiesPage() {
   const status = (params.get('status') as AcademyStatus | null) ?? '';
   // Two separate views: Centers (organisations) and Independent Teachers
   // (PERSONAL workspaces). Never one mixed list.
-  const kind = params.get('kind') === AcademyKind.PERSONAL ? AcademyKind.PERSONAL : AcademyKind.CENTER;
+  const kind =
+    params.get('kind') === AcademyKind.PERSONAL ? AcademyKind.PERSONAL : AcademyKind.CENTER;
   const [searchInput, setSearchInput] = useState(params.get('search') ?? '');
   const search = params.get('search') ?? '';
   const page = Number(params.get('page') ?? '1');
 
-  const { data, isLoading, isFetching } = useAdminAcademies({ search, status, kind, page, pageSize: 20 });
+  const { data, isLoading, isFetching } = useAdminAcademies({
+    search,
+    status,
+    kind,
+    page,
+    pageSize: 20,
+  });
 
   const setKind = (k: AcademyKind) => {
     const next = new URLSearchParams(params);
@@ -40,14 +47,16 @@ export default function AdminAcademiesPage() {
   };
   const setStatus = (s: AcademyStatus | '') => {
     const next = new URLSearchParams(params);
-    if (s) next.set('status', s); else next.delete('status');
+    if (s) next.set('status', s);
+    else next.delete('status');
     next.delete('page');
     setParams(next);
   };
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const next = new URLSearchParams(params);
-    if (searchInput.trim()) next.set('search', searchInput.trim()); else next.delete('search');
+    if (searchInput.trim()) next.set('search', searchInput.trim());
+    else next.delete('search');
     next.delete('page');
     setParams(next);
   };
@@ -62,14 +71,22 @@ export default function AdminAcademiesPage() {
   return (
     <div className="page">
       <PageHeader
-        title={kind === AcademyKind.CENTER ? t('admin.centersTitle') : t('admin.independentTeachersTitle')}
-        subtitle={kind === AcademyKind.CENTER ? t('admin.centersSub') : t('admin.independentTeachersSub')}
-        action={kind === AcademyKind.CENTER ? (
-          <Link to="/admin/centers/new" className="btn-primary">
-            <span className="material-symbols-outlined text-lg">add_business</span>
-            {t('admin.createCenter')}
-          </Link>
-        ) : undefined}
+        title={
+          kind === AcademyKind.CENTER
+            ? t('admin.centersTitle')
+            : t('admin.independentTeachersTitle')
+        }
+        subtitle={
+          kind === AcademyKind.CENTER ? t('admin.centersSub') : t('admin.independentTeachersSub')
+        }
+        action={
+          kind === AcademyKind.CENTER ? (
+            <Link to="/admin/centers/new" className="btn-primary">
+              <span className="material-symbols-outlined text-lg">add_business</span>
+              {t('admin.createCenter')}
+            </Link>
+          ) : undefined
+        }
       />
 
       <div className="mb-4 flex gap-2">
@@ -77,7 +94,9 @@ export default function AdminAcademiesPage() {
           <button
             key={k}
             className={`rounded-full px-4 py-2 font-heading text-sm font-bold transition ${
-              kind === k ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+              kind === k
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
             }`}
             onClick={() => setKind(k)}
           >
@@ -89,7 +108,9 @@ export default function AdminAcademiesPage() {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <form onSubmit={submitSearch} className="flex-1 min-w-[220px]">
           <div className="relative">
-            <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-xl text-outline">search</span>
+            <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-xl text-outline">
+              search
+            </span>
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -101,7 +122,9 @@ export default function AdminAcademiesPage() {
         <div className="flex flex-wrap gap-2">
           <button
             className={`rounded-full px-4 py-2 font-heading text-sm font-bold transition ${
-              !status ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+              !status
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
             }`}
             onClick={() => setStatus('')}
           >
@@ -111,7 +134,9 @@ export default function AdminAcademiesPage() {
             <button
               key={s}
               className={`rounded-full px-4 py-2 font-heading text-sm font-bold transition ${
-                status === s ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+                status === s
+                  ? 'bg-primary text-on-primary'
+                  : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
               }`}
               onClick={() => setStatus(s)}
             >
@@ -123,40 +148,58 @@ export default function AdminAcademiesPage() {
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-2xl" />
+          ))}
         </div>
       ) : !data?.academies.length ? (
         <EmptyState icon="apartment" title={t('admin.academiesEmpty')} />
       ) : (
         <>
-          <div className={`grid gap-4 md:grid-cols-2 xl:grid-cols-3 ${isFetching ? 'opacity-60' : ''}`}>
+          <div
+            className={`grid gap-4 md:grid-cols-2 xl:grid-cols-3 ${isFetching ? 'opacity-60' : ''}`}
+          >
             {data.academies.map((a) => (
-              <Link key={a.id} to={`/admin/academies/${a.id}`} className="card card-hover flex flex-col p-5">
+              <Link
+                key={a.id}
+                to={`/admin/academies/${a.id}`}
+                className="card card-hover flex flex-col p-5"
+              >
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-heading font-bold">{a.name}</p>
-                    <p className="truncate text-xs text-outline" dir="ltr">{a.slug}</p>
+                    <p className="truncate text-xs text-outline" dir="ltr">
+                      {a.slug}
+                    </p>
                   </div>
                   <Badge tone={TONE[a.status]}>{t(`admin.academyStatus.${a.status}`)}</Badge>
                 </div>
                 <p className="mb-3 truncate text-sm text-on-surface-variant">{a.ownerName}</p>
                 <div className="mb-3 grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="font-heading text-lg font-extrabold tabular-nums">{a.teachersCount + a.assistantsCount}</p>
+                    <p className="font-heading text-lg font-extrabold tabular-nums">
+                      {a.teachersCount + a.assistantsCount}
+                    </p>
                     <p className="text-[11px] text-outline">{t('admin.staff')}</p>
                   </div>
                   <div>
-                    <p className="font-heading text-lg font-extrabold tabular-nums">{a.studentsCount}</p>
+                    <p className="font-heading text-lg font-extrabold tabular-nums">
+                      {a.studentsCount}
+                    </p>
                     <p className="text-[11px] text-outline">{t('admin.students')}</p>
                   </div>
                   <div>
-                    <p className="font-heading text-lg font-extrabold tabular-nums">{a.publishedCoursesCount}</p>
+                    <p className="font-heading text-lg font-extrabold tabular-nums">
+                      {a.publishedCoursesCount}
+                    </p>
                     <p className="text-[11px] text-outline">{t('admin.courses')}</p>
                   </div>
                 </div>
                 <div className="mt-auto flex items-center justify-between border-t border-outline-variant/50 pt-3 text-sm">
                   <span className="text-on-surface-variant">{t('admin.netRevenue')}</span>
-                  <span className="font-heading font-bold tabular-nums">{egp(a.netRevenueCents)}</span>
+                  <span className="font-heading font-bold tabular-nums">
+                    {egp(a.netRevenueCents)}
+                  </span>
                 </div>
               </Link>
             ))}
@@ -171,7 +214,9 @@ export default function AdminAcademiesPage() {
               >
                 {t('common.prev')}
               </button>
-              <span className="text-sm text-on-surface-variant tabular-nums">{t('admin.pageOf', { page, total: totalPages })}</span>
+              <span className="text-sm text-on-surface-variant tabular-nums">
+                {t('admin.pageOf', { page, total: totalPages })}
+              </span>
               <button
                 className="btn-secondary px-4 py-2 text-sm disabled:opacity-40"
                 disabled={page >= totalPages}

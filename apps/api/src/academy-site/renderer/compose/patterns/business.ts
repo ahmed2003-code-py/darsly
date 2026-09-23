@@ -2,8 +2,16 @@ import { SiteBlock } from '../../../schema/site-document';
 import { escapeAttr, escapeHtml, safeUrl } from '../../html.util';
 import { RenderMedia } from '../../types';
 import {
-  CONTACT_ANCHOR, COURSES_ANCHOR, SECTION_CLOSE, SOCIAL_GLYPH, actions, i18n, image,
-  sectionHead, sectionOpen, skeleton,
+  CONTACT_ANCHOR,
+  COURSES_ANCHOR,
+  SECTION_CLOSE,
+  SOCIAL_GLYPH,
+  actions,
+  i18n,
+  image,
+  sectionHead,
+  sectionOpen,
+  skeleton,
 } from '../helpers';
 import { registerPattern } from '../registry';
 
@@ -55,7 +63,8 @@ registerPattern({
 registerPattern({
   id: 'courses.bento',
   section: 'courses',
-  brief: 'An uneven grid where the first course takes a double cell. Needs several courses to look deliberate.',
+  brief:
+    'An uneven grid where the first course takes a double cell. Needs several courses to look deliberate.',
   needs: { courses: 4 },
   base: 1.1,
   weight: { programming: 1.4, exam_prep: 1.1 },
@@ -103,8 +112,9 @@ registerPattern({
 registerPattern({
   id: 'courses.list',
   section: 'courses',
-  brief: 'A quiet vertical list with no images. For a small catalogue, or a page whose weight is elsewhere.',
-  base: .9,
+  brief:
+    'A quiet vertical list with no images. For a small catalogue, or a page whose weight is elsewhere.',
+  base: 0.9,
   weight: { university: 1.3, math_science: 1.1 },
   css: () => `${CARD_CSS}
 .courses-list [data-slot]{display:flex;flex-direction:column}
@@ -160,7 +170,7 @@ registerPattern({
   id: 'reviews.spotlight',
   section: 'reviews',
   brief: 'One review at a time, set large. Dignified when there are only a few.',
-  base: .95,
+  base: 0.95,
   weight: { university: 1.2 },
   css: () => `${CARD_CSS}
 .reviews-spot [data-slot]{display:grid;gap:var(--gap);grid-template-columns:1fr}
@@ -215,7 +225,8 @@ registerPattern({
 registerPattern({
   id: 'gallery.immersive',
   section: 'gallery',
-  brief: 'Full-bleed edge-to-edge frames with no container. Needs six or more images to earn the space.',
+  brief:
+    'Full-bleed edge-to-edge frames with no container. Needs six or more images to earn the space.',
   needs: { gallery: 6 },
   base: 1.15,
   fullBleed: true,
@@ -238,7 +249,7 @@ registerPattern({
   id: 'gallery.filmstrip',
   section: 'gallery',
   brief: 'A single scrolling strip. Quiet, and safe with an awkward number of images.',
-  base: .95,
+  base: 0.95,
   css: () => `.gal-strip .g{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(210px,26%);gap:var(--gap);overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:1em}
 .gal-strip img{aspect-ratio:3/4;border-radius:var(--rad);scroll-snap-align:start}
 @media(max-width:640px){.gal-strip .g{grid-auto-columns:minmax(170px,62%)}}`,
@@ -307,7 +318,7 @@ registerPattern({
 registerPattern({
   id: 'contact.band',
   section: 'contact',
-  brief: 'A centred closing band. Works well as the page\'s final full-width statement.',
+  brief: "A centred closing band. Works well as the page's final full-width statement.",
   base: 1,
   css: () => SOCIAL_CSS,
   render: (b, spec, ctx) => {

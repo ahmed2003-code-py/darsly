@@ -5,24 +5,53 @@ import { QuizzesService } from './quizzes.service';
  * short-answer → manual-grading path, and the teacher's finalize-score math.
  */
 const QUESTIONS: any[] = [
-  { id: 'q1', type: 'MCQ', prompt: 'a', options: [], correctOptionId: 'o1', explanation: '', points: 2 },
-  { id: 'q2', type: 'TRUE_FALSE', prompt: 'b', options: [], correctOptionId: 'true', explanation: '', points: 1 },
+  {
+    id: 'q1',
+    type: 'MCQ',
+    prompt: 'a',
+    options: [],
+    correctOptionId: 'o1',
+    explanation: '',
+    points: 2,
+  },
+  {
+    id: 'q2',
+    type: 'TRUE_FALSE',
+    prompt: 'b',
+    options: [],
+    correctOptionId: 'true',
+    explanation: '',
+    points: 1,
+  },
 ];
 
-function makeCtx(questions = QUESTIONS, quizOver: Record<string, unknown> = {}, aiVerdicts?: Map<string, unknown>) {
+function makeCtx(
+  questions = QUESTIONS,
+  quizOver: Record<string, unknown> = {},
+  aiVerdicts?: Map<string, unknown>,
+) {
   const created: any[] = [];
   const prisma: any = {
     quiz: {
       findUnique: jest.fn().mockResolvedValue({
-        id: 'quiz1', lessonId: 'l1', passingScore: 50, questions,
+        id: 'quiz1',
+        lessonId: 'l1',
+        passingScore: 50,
+        questions,
         // Defaults for the settings that used to be stored and never read.
-        timeLimitSec: null, shuffleQuestions: false, maxAttempts: null,
-        aiGrading: false, aiThresholdPct: 60,
+        timeLimitSec: null,
+        shuffleQuestions: false,
+        maxAttempts: null,
+        aiGrading: false,
+        aiThresholdPct: 60,
         ...quizOver,
       }),
     },
     quizAttempt: {
-      create: jest.fn((args: any) => { created.push(args.data); return Promise.resolve({ id: 'a1', ...args.data }); }),
+      create: jest.fn((args: any) => {
+        created.push(args.data);
+        return Promise.resolve({ id: 'a1', ...args.data });
+      }),
       findFirst: jest.fn(),
       // The attempt cap ("you get N tries") counts prior attempts before
       // accepting a submission; without this the service throws before it grades.
@@ -32,7 +61,9 @@ function makeCtx(questions = QUESTIONS, quizOver: Record<string, unknown> = {}, 
     lessonProgress: { upsert: jest.fn().mockResolvedValue({}) },
     // scopeOf() resolves the academy/course an award belongs to.
     lesson: {
-      findUnique: jest.fn().mockResolvedValue({ unit: { courseId: 'c1', course: { tenantId: 't1' } } }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ unit: { courseId: 'c1', course: { tenantId: 't1' } } }),
       update: jest.fn().mockResolvedValue({}),
     },
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1' }) },
@@ -44,7 +75,16 @@ function makeCtx(questions = QUESTIONS, quizOver: Record<string, unknown> = {}, 
   const notifications: any = { create: jest.fn().mockResolvedValue({}) };
   const certificates: any = { checkByLesson: jest.fn().mockResolvedValue(null) };
   const gamification: any = {
-    record: jest.fn().mockResolvedValue({ awarded: false, xp: 0, coins: 0, totalXp: 0, level: 1, leveledUp: false, achievements: [], missions: [] }),
+    record: jest.fn().mockResolvedValue({
+      awarded: false,
+      xp: 0,
+      coins: 0,
+      totalXp: 0,
+      level: 1,
+      leveledUp: false,
+      achievements: [],
+      missions: [],
+    }),
     checkUnitCompletion: jest.fn().mockResolvedValue({ awarded: false }),
     noteStudySession: jest.fn().mockResolvedValue(undefined),
     checkStreakMilestone: jest.fn().mockResolvedValue({ awarded: false }),
@@ -55,7 +95,14 @@ function makeCtx(questions = QUESTIONS, quizOver: Record<string, unknown> = {}, 
     available: true,
     mark: jest.fn().mockResolvedValue(aiVerdicts ?? new Map()),
   };
-  const svc = new QuizzesService(prisma, access, notifications, certificates, gamification, aiGrader);
+  const svc = new QuizzesService(
+    prisma,
+    access,
+    notifications,
+    certificates,
+    gamification,
+    aiGrader,
+  );
   return { svc, prisma, created, notifications, certificates, gamification, aiGrader };
 }
 
@@ -88,7 +135,15 @@ describe('QuizzesService', () => {
   it('scores what it can and leaves only the essay pending', async () => {
     const { svc, created, certificates } = makeCtx([
       ...QUESTIONS,
-      { id: 'q3', type: 'SHORT_ANSWER', prompt: 'explain', options: [], correctOptionId: null, explanation: '', points: 3 },
+      {
+        id: 'q3',
+        type: 'SHORT_ANSWER',
+        prompt: 'explain',
+        options: [],
+        correctOptionId: null,
+        explanation: '',
+        points: 3,
+      },
     ]);
     // 3 of 6 objective points are earned; the 3 essay points could take it to 6.
     // 50% is the pass mark, so it is already decided: passed.
@@ -103,7 +158,15 @@ describe('QuizzesService', () => {
   it('waits only while the outstanding points could still change the verdict', async () => {
     const { svc } = makeCtx([
       ...QUESTIONS,
-      { id: 'q3', type: 'SHORT_ANSWER', prompt: 'explain', options: [], correctOptionId: null, explanation: '', points: 3 },
+      {
+        id: 'q3',
+        type: 'SHORT_ANSWER',
+        prompt: 'explain',
+        options: [],
+        correctOptionId: null,
+        explanation: '',
+        points: 3,
+      },
     ]);
     // 1 of 6 objective points. The essay's 3 could reach 4/6 = 67%, past the
     // 50% mark — so nobody can say yet.
@@ -116,11 +179,21 @@ describe('QuizzesService', () => {
   it('says failed when every remaining point would still not be enough', async () => {
     const { svc } = makeCtx([
       ...QUESTIONS,
-      { id: 'q3', type: 'SHORT_ANSWER', prompt: 'explain', options: [], correctOptionId: null, explanation: '', points: 1 },
+      {
+        id: 'q3',
+        type: 'SHORT_ANSWER',
+        prompt: 'explain',
+        options: [],
+        correctOptionId: null,
+        explanation: '',
+        points: 1,
+      },
     ]);
     // 0 of 3 objective points and 1 left with the teacher: 1/4 = 25%, under the
     // mark whatever the essay scores. Telling them to wait would be a fiction.
-    const res = await svc.submit('u1', 'l1', { answers: { q1: 'wrong', q2: 'false', q3: 'essay' } });
+    const res = await svc.submit('u1', 'l1', {
+      answers: { q1: 'wrong', q2: 'false', q3: 'essay' },
+    });
     expect(res.passed).toBe(false);
     expect(res.needsManualGrading).toBe(true);
   });
@@ -128,8 +201,16 @@ describe('QuizzesService', () => {
   /** A question that asks for two answers is not two questions worth a half. */
   it('takes every right option, or none of the marks', async () => {
     const { svc } = makeCtx([
-      { id: 'm1', type: 'MCQ', prompt: 'pick two', options: [], correctOptionId: 'a',
-        correctOptionIds: ['a', 'b'], explanation: '', points: 2 },
+      {
+        id: 'm1',
+        type: 'MCQ',
+        prompt: 'pick two',
+        options: [],
+        correctOptionId: 'a',
+        correctOptionIds: ['a', 'b'],
+        explanation: '',
+        points: 2,
+      },
     ]);
     expect((await svc.submit('u1', 'l1', { answers: { m1: ['a', 'b'] } })).scorePct).toBe(100);
     expect((await svc.submit('u1', 'l1', { answers: { m1: ['b', 'a'] } })).scorePct).toBe(100);
@@ -141,9 +222,14 @@ describe('QuizzesService', () => {
   it('finalizes the score when the teacher grades short-answer points', async () => {
     const { svc, prisma, notifications } = makeCtx();
     prisma.quizAttempt.findFirst.mockResolvedValue({
-      id: 'a1', studentId: 's1', answers: { q1: 'o1', q2: 'false', q3: 'essay' },
+      id: 'a1',
+      studentId: 's1',
+      answers: { q1: 'o1', q2: 'false', q3: 'essay' },
       quiz: {
-        id: 'quiz1', lessonId: 'l1', passingScore: 50, lesson: { title: 'L' },
+        id: 'quiz1',
+        lessonId: 'l1',
+        passingScore: 50,
+        lesson: { title: 'L' },
         questions: [
           { id: 'q1', type: 'MCQ', correctOptionId: 'o1', points: 2 },
           { id: 'q2', type: 'TRUE_FALSE', correctOptionId: 'true', points: 1 },
@@ -169,15 +255,34 @@ describe('QuizzesService', () => {
  */
 describe('the settings that used to be decoration', () => {
   const ESSAY: any[] = [
-    { id: 'q1', type: 'MCQ', prompt: 'a', options: [], correctOptionId: 'o1', explanation: '', points: 1 },
-    { id: 'e1', type: 'SHORT_ANSWER', prompt: 'why?', options: [], correctOptionId: null,
-      modelAnswer: 'because of X', explanation: '', points: 1 },
+    {
+      id: 'q1',
+      type: 'MCQ',
+      prompt: 'a',
+      options: [],
+      correctOptionId: 'o1',
+      explanation: '',
+      points: 1,
+    },
+    {
+      id: 'e1',
+      type: 'SHORT_ANSWER',
+      prompt: 'why?',
+      options: [],
+      correctOptionId: null,
+      modelAnswer: 'because of X',
+      explanation: '',
+      points: 1,
+    },
   ];
 
   describe('marking a written answer against the model answer', () => {
     it('awards the marks at or above the threshold', async () => {
-      const { svc } = makeCtx(ESSAY, { aiGrading: true, aiThresholdPct: 60 },
-        new Map([['e1', { similarityPct: 72, reason: 'covers X' }]]));
+      const { svc } = makeCtx(
+        ESSAY,
+        { aiGrading: true, aiThresholdPct: 60 },
+        new Map([['e1', { similarityPct: 72, reason: 'covers X' }]]),
+      );
       const res = await svc.submit('u1', 'l1', { answers: { q1: 'o1', e1: 'X is why' } });
       // Both questions marked, nothing left for the teacher.
       expect(res.scorePct).toBe(100);
@@ -187,8 +292,11 @@ describe('the settings that used to be decoration', () => {
     });
 
     it('awards nothing below it, and still does not wait for the teacher', async () => {
-      const { svc } = makeCtx(ESSAY, { aiGrading: true, aiThresholdPct: 60 },
-        new Map([['e1', { similarityPct: 41, reason: 'misses X' }]]));
+      const { svc } = makeCtx(
+        ESSAY,
+        { aiGrading: true, aiThresholdPct: 60 },
+        new Map([['e1', { similarityPct: 41, reason: 'misses X' }]]),
+      );
       const res = await svc.submit('u1', 'l1', { answers: { q1: 'o1', e1: 'something else' } });
       expect(res.scorePct).toBe(50);
       expect(res.needsManualGrading).toBe(false);
@@ -196,8 +304,11 @@ describe('the settings that used to be decoration', () => {
     });
 
     it('counts the threshold itself as a pass, not a near miss', async () => {
-      const { svc } = makeCtx(ESSAY, { aiGrading: true, aiThresholdPct: 60 },
-        new Map([['e1', { similarityPct: 60, reason: 'just about' }]]));
+      const { svc } = makeCtx(
+        ESSAY,
+        { aiGrading: true, aiThresholdPct: 60 },
+        new Map([['e1', { similarityPct: 60, reason: 'just about' }]]),
+      );
       expect((await svc.submit('u1', 'l1', { answers: { e1: 'x' } })).aiFeedback).toMatchObject({
         e1: { awarded: true },
       });
@@ -242,9 +353,11 @@ describe('the settings that used to be decoration', () => {
     it('reuses the sitting whose clock is already running', async () => {
       const { svc, prisma } = makeCtx(QUESTIONS, TIMED);
       prisma.quizAttempt.findFirst.mockImplementation(({ where }: any) =>
-        Promise.resolve(where.submittedAt === null
-          ? { id: 'open1', startedAt: new Date(Date.now() - 60_000) }
-          : null),
+        Promise.resolve(
+          where.submittedAt === null
+            ? { id: 'open1', startedAt: new Date(Date.now() - 60_000) }
+            : null,
+        ),
       );
       await svc.submit('u1', 'l1', { answers: { q1: 'o1', q2: 'true' } });
       // Submitted into the open row rather than opening a second one, which
@@ -258,9 +371,11 @@ describe('the settings that used to be decoration', () => {
     it('refuses a paper sent after time is up, and spends the attempt', async () => {
       const { svc, prisma } = makeCtx(QUESTIONS, TIMED);
       prisma.quizAttempt.findFirst.mockImplementation(({ where }: any) =>
-        Promise.resolve(where.submittedAt === null
-          ? { id: 'open1', startedAt: new Date(Date.now() - 3_600_000) }
-          : null),
+        Promise.resolve(
+          where.submittedAt === null
+            ? { id: 'open1', startedAt: new Date(Date.now() - 3_600_000) }
+            : null,
+        ),
       );
       await expect(svc.submit('u1', 'l1', { answers: { q1: 'o1' } })).rejects.toMatchObject({
         response: { code: 'QUIZ_TIME_UP' },
@@ -323,9 +438,16 @@ describe('the first save of a new quiz', () => {
     const prisma: any = {
       quiz: {
         findUnique: jest.fn().mockResolvedValue(existing),
-        upsert: jest.fn(async (args: any) => existing ?? { id: 'quiz1', lessonId: 'l1', aiGrading: false, ...args.create }),
+        upsert: jest.fn(
+          async (args: any) =>
+            existing ?? { id: 'quiz1', lessonId: 'l1', aiGrading: false, ...args.create },
+        ),
       },
-      quizQuestion: { deleteMany: jest.fn(), create: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      quizQuestion: {
+        deleteMany: jest.fn(),
+        create: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn().mockResolvedValue([]),
     };
     const access: any = {
@@ -349,7 +471,12 @@ describe('the first save of a new quiz', () => {
   });
 
   it("leaves an existing quiz's settings alone", async () => {
-    const { svc, prisma } = ctx({ id: 'quiz1', lessonId: 'l1', passingScore: 80, aiGrading: false });
+    const { svc, prisma } = ctx({
+      id: 'quiz1',
+      lessonId: 'l1',
+      passingScore: 80,
+      aiGrading: false,
+    });
     await svc.setQuestions('t1', 'l1', { questions: [{ prompt: 'why', type: 'MCQ' } as any] });
     // An empty update: saving questions is not the call that changes settings.
     expect(prisma.quiz.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: {} }));
@@ -370,10 +497,28 @@ describe('the first save of a new quiz', () => {
  */
 describe('a paper that has already been sat', () => {
   const PAPER: any[] = [
-    { id: 'q1', type: 'MCQ', prompt: 'a', options: [], correctOptionId: 'o1',
-      correctOptionIds: ['o1'], modelAnswer: '', explanation: 'because', points: 1 },
-    { id: 'q2', type: 'MCQ', prompt: 'b', options: [], correctOptionId: 'o2',
-      correctOptionIds: ['o2'], modelAnswer: '', explanation: '', points: 1 },
+    {
+      id: 'q1',
+      type: 'MCQ',
+      prompt: 'a',
+      options: [],
+      correctOptionId: 'o1',
+      correctOptionIds: ['o1'],
+      modelAnswer: '',
+      explanation: 'because',
+      points: 1,
+    },
+    {
+      id: 'q2',
+      type: 'MCQ',
+      prompt: 'b',
+      options: [],
+      correctOptionId: 'o2',
+      correctOptionIds: ['o2'],
+      modelAnswer: '',
+      explanation: '',
+      points: 1,
+    },
   ];
 
   function ctx(quizOver: Record<string, unknown>, attempts: any[]) {
@@ -381,9 +526,16 @@ describe('a paper that has already been sat', () => {
     const prisma: any = {
       quiz: {
         findUnique: jest.fn().mockResolvedValue({
-          id: 'quiz1', lessonId: 'l1', passingScore: 50, questions: PAPER,
-          timeLimitSec: null, shuffleQuestions: false, maxAttempts: null,
-          aiGrading: false, aiThresholdPct: 60, showAnswers: true,
+          id: 'quiz1',
+          lessonId: 'l1',
+          passingScore: 50,
+          questions: PAPER,
+          timeLimitSec: null,
+          shuffleQuestions: false,
+          maxAttempts: null,
+          aiGrading: false,
+          aiThresholdPct: 60,
+          showAnswers: true,
           ...quizOver,
         }),
       },
@@ -392,7 +544,10 @@ describe('a paper that has already been sat', () => {
         // Opening a sitting looks for one already running before it starts a
         // new one, so a reload does not buy more time.
         findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn(async (a: any) => { created.push(a.data); return { id: 'new', startedAt: new Date(), ...a.data }; }),
+        create: jest.fn(async (a: any) => {
+          created.push(a.data);
+          return { id: 'new', startedAt: new Date(), ...a.data };
+        }),
       },
     };
     const access: any = { requireStudentAccess: jest.fn().mockResolvedValue({ studentId: 's1' }) };
@@ -401,9 +556,13 @@ describe('a paper that has already been sat', () => {
   }
 
   const sitting = (scorePct: number | null, passed: boolean | null = true) => ({
-    id: 'a1', scorePct, passed, needsManualGrading: false,
+    id: 'a1',
+    scorePct,
+    passed,
+    needsManualGrading: false,
     submittedAt: new Date('2026-09-14T12:00:00Z'),
-    answers: { q1: 'o1' }, aiFeedback: null,
+    answers: { q1: 'o1' },
+    aiFeedback: null,
   });
 
   it('hands back the result and the answers they gave', async () => {

@@ -39,13 +39,18 @@ export class UpsertQuizDto {
   /** The lesson to send a student to when they do not pass. `null` clears it. */
   @IsOptionalId() remedialLessonId?: string | null;
   /** Seconds from opening the paper to sending it. `null` removes the limit. */
-  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) timeLimitSec?: number | null;
+  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) timeLimitSec?:
+    number | null;
   @IsOptional() @IsBoolean() shuffleQuestions?: boolean;
   /** How many times a student may sit it. `null` is unlimited. */
   @IsOptional() @IsInt() @Min(1) @Max(50) maxAttempts?: number | null;
   /** Mark the written answers against the model answer instead of queueing them. */
   @IsOptional() @IsBoolean() aiGrading?: boolean;
-  @IsOptional() @IsInt() @Min(MIN_AI_THRESHOLD_PCT) @Max(MAX_AI_THRESHOLD_PCT) aiThresholdPct?: number;
+  @IsOptional()
+  @IsInt()
+  @Min(MIN_AI_THRESHOLD_PCT)
+  @Max(MAX_AI_THRESHOLD_PCT)
+  aiThresholdPct?: number;
   /** Whether the student sees the right answers once they are done with it. */
   @IsOptional() @IsBoolean() showAnswers?: boolean;
 }
@@ -60,11 +65,17 @@ export class QuizQuestionDto {
   // the validator never enforced, so any word reached the grading switch.
   @IsOptional() @IsEnum(QuestionType) type?: QuestionType;
   @IsString() @MaxLength(LIMITS.PROSE) prompt: string;
-  @IsOptional() @IsArray() @ArrayMaxSize(MAX_OPTIONS)
-  @ValidateNested({ each: true }) @Type(() => QuizOptionDto)
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_OPTIONS)
+  @ValidateNested({ each: true })
+  @Type(() => QuizOptionDto)
   options?: QuizOptionDto[];
   @IsOptionalId() correctOptionId?: string | null;
-  @IsOptional() @IsArray() @ArrayMaxSize(MAX_OPTIONS) @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_OPTIONS)
+  @IsString({ each: true })
   correctOptionIds?: string[];
   /** How many the student may pick. Bounded by the option count on save. */
   @IsOptional() @IsInt() @Min(1) @Max(MAX_OPTIONS) maxSelections?: number;
@@ -74,8 +85,10 @@ export class QuizQuestionDto {
 }
 
 export class SetQuizQuestionsDto {
-  @IsArray() @ArrayMaxSize(MAX_QUESTIONS)
-  @ValidateNested({ each: true }) @Type(() => QuizQuestionDto)
+  @IsArray()
+  @ArrayMaxSize(MAX_QUESTIONS)
+  @ValidateNested({ each: true })
+  @Type(() => QuizQuestionDto)
   questions: QuizQuestionDto[];
   /**
    * The automatic-marking setting being saved alongside these questions.
@@ -94,7 +107,11 @@ export class SubmitAttemptDto {
   // { [questionId]: optionId | optionId[] | freeText }. Bounded rather than a
   // bare object: the grader iterates every key, so an unbounded map is billable
   // CPU. An array arrives for a question that asks for more than one answer.
-  @IsBoundedRecord({ maxKeys: MAX_QUESTIONS, maxValueLength: LIMITS.PROSE, allowArrays: MAX_OPTIONS })
+  @IsBoundedRecord({
+    maxKeys: MAX_QUESTIONS,
+    maxValueLength: LIMITS.PROSE,
+    allowArrays: MAX_OPTIONS,
+  })
   answers: Record<string, string | string[]>;
 }
 

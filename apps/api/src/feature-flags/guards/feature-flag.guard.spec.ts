@@ -3,7 +3,9 @@ import { Reflector } from '@nestjs/core';
 import { FeatureFlagGuard } from './feature-flag.guard';
 
 function makeCtx(academyContext: any, metaValue: unknown) {
-  const reflector = { getAllAndOverride: jest.fn().mockReturnValue(metaValue) } as unknown as Reflector;
+  const reflector = {
+    getAllAndOverride: jest.fn().mockReturnValue(metaValue),
+  } as unknown as Reflector;
   const ctx = {
     getHandler: () => ({}),
     getClass: () => ({}),

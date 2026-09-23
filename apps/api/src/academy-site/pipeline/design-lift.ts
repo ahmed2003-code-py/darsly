@@ -24,19 +24,30 @@ const PRESET_PALETTE: Record<string, { background: string; ink: string; surface:
 };
 
 const HEADING_MAP: Record<string, DesignSpec['typography']['headingFamily']> = {
-  sans: 'sans', serif: 'serif', display: 'display',
+  sans: 'sans',
+  serif: 'serif',
+  display: 'display',
 };
 
 const SCALE_MAP: Record<string, DesignSpec['typography']['scale']> = {
-  restrained: 'restrained', balanced: 'balanced', dramatic: 'dramatic',
+  restrained: 'restrained',
+  balanced: 'balanced',
+  dramatic: 'dramatic',
 };
 
 const BACKDROP_MAP: Record<string, DesignSpec['decoration']['backdrop']> = {
-  flat: 'none', gradient: 'gradient-wash', mesh: 'mesh', spotlight: 'spotlight',
+  flat: 'none',
+  gradient: 'gradient-wash',
+  mesh: 'mesh',
+  spotlight: 'spotlight',
 };
 
 const STYLE_RADIUS: Record<string, number> = {
-  modern: 18, bold: 12, elegant: 10, minimal: 10, playful: 26,
+  modern: 18,
+  bold: 12,
+  elegant: 10,
+  minimal: 10,
+  playful: 26,
 };
 
 /**

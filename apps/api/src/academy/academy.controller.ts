@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
 import { AuditService } from '../audit/audit.service';
@@ -43,7 +54,11 @@ export class AcademyController {
   async acceptInvitation(@CurrentUser() user: JwtPayload, @Param('membershipId') id: string) {
     const membership = await this.academy.acceptInvitation(user.sub, id);
     await this.audit.log({
-      actorUserId: user.sub, action: 'member.invite.accept', entity: 'AcademyMembership', entityId: id, academyId: membership.academyId,
+      actorUserId: user.sub,
+      action: 'member.invite.accept',
+      entity: 'AcademyMembership',
+      entityId: id,
+      academyId: membership.academyId,
     });
     return membership;
   }
@@ -52,7 +67,12 @@ export class AcademyController {
   @ApiOperation({ summary: 'Decline a staff invitation' })
   async declineInvitation(@CurrentUser() user: JwtPayload, @Param('membershipId') id: string) {
     const result = await this.academy.declineInvitation(user.sub, id);
-    await this.audit.log({ actorUserId: user.sub, action: 'member.invite.decline', entity: 'AcademyMembership', entityId: id });
+    await this.audit.log({
+      actorUserId: user.sub,
+      action: 'member.invite.decline',
+      entity: 'AcademyMembership',
+      entityId: id,
+    });
     return result;
   }
 
@@ -113,7 +133,11 @@ export class AcademyController {
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('academy.manage')
   @ApiOperation({ summary: '[academy] Update branding & settings' })
-  async updateSettings(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: UpdateAcademyDto) {
+  async updateSettings(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: UpdateAcademyDto,
+  ) {
     // No rebuild needed on a rename: the published page reads its slug from its
     // own URL, so it follows the new address on the next load.
     const updated = await this.academy.updateSettings(ctx.academyId, dto);
@@ -125,7 +149,11 @@ export class AcademyController {
       entity: 'Academy',
       entityId: ctx.academyId,
       academyId: ctx.academyId,
-      meta: { fields: Object.entries(dto).filter(([, v]) => v !== undefined).map(([k]) => k) },
+      meta: {
+        fields: Object.entries(dto)
+          .filter(([, v]) => v !== undefined)
+          .map(([k]) => k),
+      },
     });
     return updated;
   }
@@ -143,8 +171,15 @@ export class AcademyController {
   @Post('academies/:slug/members')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
-  @ApiOperation({ summary: '[academy] Invite an existing user as staff (teacher/assistant) — pending until they accept' })
-  async addMember(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: AddMemberDto) {
+  @ApiOperation({
+    summary:
+      '[academy] Invite an existing user as staff (teacher/assistant) — pending until they accept',
+  })
+  async addMember(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: AddMemberDto,
+  ) {
     const member = await this.academy.addMember(ctx.academyId, dto);
     await this.audit.log({
       actorUserId: user.sub,
@@ -161,7 +196,12 @@ export class AcademyController {
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
   @ApiOperation({ summary: '[academy] Change a member role/status' })
-  async updateMember(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string, @Body() dto: UpdateMemberDto) {
+  async updateMember(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('membershipId') id: string,
+    @Body() dto: UpdateMemberDto,
+  ) {
     const member = await this.academy.updateMember(ctx.academyId, id, dto);
     await this.audit.log({
       actorUserId: user.sub,
@@ -178,7 +218,11 @@ export class AcademyController {
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('member.manage')
   @ApiOperation({ summary: '[academy] Remove a member' })
-  async removeMember(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('membershipId') id: string) {
+  async removeMember(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('membershipId') id: string,
+  ) {
     const result = await this.academy.removeMember(ctx.academyId, id);
     await this.audit.log({
       actorUserId: user.sub,

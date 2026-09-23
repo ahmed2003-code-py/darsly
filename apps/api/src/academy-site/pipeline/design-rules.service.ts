@@ -27,7 +27,10 @@ export class DesignRulesService {
    * variant per section to choose between; `signals` is threaded through now so
    * those rules have their inputs.
    */
-  validatePlan(plan: SitePlanAi, signals: ContentSignals): { tokens: DesignTokenSet; verdicts: RulesVerdict[] } {
+  validatePlan(
+    plan: SitePlanAi,
+    signals: ContentSignals,
+  ): { tokens: DesignTokenSet; verdicts: RulesVerdict[] } {
     const verdicts: RulesVerdict[] = [];
     const dna = resolveDna(plan.designDNA);
     let headingFont = dna.headingFont;
@@ -55,7 +58,12 @@ export class DesignRulesService {
       });
     }
 
-    const tokens: DesignTokenSet = { preset: dna.preset, style: dna.style, headingFont, dna: dna.key };
+    const tokens: DesignTokenSet = {
+      preset: dna.preset,
+      style: dna.style,
+      headingFont,
+      dna: dna.key,
+    };
     return { tokens, verdicts };
   }
 
@@ -78,7 +86,12 @@ export class DesignRulesService {
 
     // Rule: accent should be distinguishable from primary (else the palette
     // reads as a single flat color with no hierarchy).
-    if (isHex(primary) && isHex(accent) && contrastRatio(primary, accent) < 1.15 && primary.toLowerCase() !== accent.toLowerCase()) {
+    if (
+      isHex(primary) &&
+      isHex(accent) &&
+      contrastRatio(primary, accent) < 1.15 &&
+      primary.toLowerCase() !== accent.toLowerCase()
+    ) {
       verdicts.push({
         code: 'accent-indistinct',
         severity: 'warn',

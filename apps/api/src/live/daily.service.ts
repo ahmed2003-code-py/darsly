@@ -227,7 +227,9 @@ export class DailyService implements OnModuleInit {
    * still runs for anyone who never set it.
    */
   private assertExpectedDomain(url: string) {
-    const expected = process.env.DAILY_DOMAIN?.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const expected = process.env.DAILY_DOMAIN?.trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/+$/, '');
     if (!expected) return;
     let host: string;
     try {
@@ -287,9 +289,12 @@ export class DailyService implements OnModuleInit {
    */
   async recording(id: string): Promise<{ status: string; duration?: number } | null> {
     try {
-      return await this.call<{ status: string; duration?: number }>(`/recordings/${encodeURIComponent(id)}`, {
-        method: 'GET',
-      });
+      return await this.call<{ status: string; duration?: number }>(
+        `/recordings/${encodeURIComponent(id)}`,
+        {
+          method: 'GET',
+        },
+      );
     } catch {
       return null;
     }
@@ -340,7 +345,9 @@ export class DailyService implements OnModuleInit {
     if (!key) return Promise.resolve(null);
     if (!this.providerWiring) {
       this.providerWiring = this.wireTranscriptionProvider(key).catch((e) => {
-        this.logger.error(`Could not wire the transcription provider to Daily: ${(e as Error).message}`);
+        this.logger.error(
+          `Could not wire the transcription provider to Daily: ${(e as Error).message}`,
+        );
         this.providerWiring = undefined;
         return null;
       });
@@ -459,7 +466,9 @@ export class DailyService implements OnModuleInit {
       const text = parts.join('\n').trim();
       return text ? { state: 'ready', text } : { state: 'none' };
     } catch (e) {
-      this.logger.warn(`Could not look up transcripts for room ${roomName}: ${(e as Error).message}`);
+      this.logger.warn(
+        `Could not look up transcripts for room ${roomName}: ${(e as Error).message}`,
+      );
       return { state: 'error' };
     }
   }

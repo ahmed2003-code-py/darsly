@@ -142,7 +142,10 @@ export function looksUsableDescription(text: string): boolean {
   if (letters / t.length < 0.5) return false;
 
   // A wall of very short lines is a list of handles or credits, not a paragraph.
-  const lines = t.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = t
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (lines.length >= 3 && lines.every((l) => l.split(/\s+/).length <= 3)) return false;
 
   return true;

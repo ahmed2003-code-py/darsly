@@ -74,7 +74,13 @@ export interface AttendanceSessionResult {
 }
 
 export interface NeedsAttentionResult {
-  repeatedAbsences: { studentId: string; fullName: string; groupId: string; groupName: string; streak: number }[];
+  repeatedAbsences: {
+    studentId: string;
+    fullName: string;
+    groupId: string;
+    groupName: string;
+    streak: number;
+  }[];
   inactiveStudents: { studentId: string; fullName: string; lastActivityAt: string | null }[];
   staleGroups: { groupId: string; name: string; lastSessionAt: string | null }[];
 }
@@ -82,7 +88,12 @@ export interface NeedsAttentionResult {
 export function useRoster(params: { search?: string; page?: number; pageSize?: number }) {
   return useQuery<RosterResult>({
     queryKey: ['teacher-roster', params],
-    queryFn: async () => (await api.get('/teacher/roster', { params: { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 20 } })).data,
+    queryFn: async () =>
+      (
+        await api.get('/teacher/roster', {
+          params: { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 20 },
+        })
+      ).data,
     placeholderData: (prev) => prev,
   });
 }
@@ -90,7 +101,12 @@ export function useRoster(params: { search?: string; page?: number; pageSize?: n
 export function useGroups(params: { page?: number; pageSize?: number }) {
   return useQuery<GroupsResult>({
     queryKey: ['teacher-groups', params],
-    queryFn: async () => (await api.get('/teacher/groups', { params: { page: params.page ?? 1, pageSize: params.pageSize ?? 20 } })).data,
+    queryFn: async () =>
+      (
+        await api.get('/teacher/groups', {
+          params: { page: params.page ?? 1, pageSize: params.pageSize ?? 20 },
+        })
+      ).data,
     placeholderData: (prev) => prev,
   });
 }
@@ -98,7 +114,8 @@ export function useGroups(params: { page?: number; pageSize?: number }) {
 export function useCreateGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (dto: { name: string; description?: string }) => (await api.post('/teacher/groups', dto)).data,
+    mutationFn: async (dto: { name: string; description?: string }) =>
+      (await api.post('/teacher/groups', dto)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-groups'] }),
   });
 }
@@ -114,8 +131,11 @@ export function useGroupDetail(groupId: string | undefined) {
 export function useUpdateGroup(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (dto: { name?: string; description?: string; status?: 'ACTIVE' | 'ARCHIVED' }) =>
-      (await api.patch(`/teacher/groups/${groupId}`, dto)).data,
+    mutationFn: async (dto: {
+      name?: string;
+      description?: string;
+      status?: 'ACTIVE' | 'ARCHIVED';
+    }) => (await api.patch(`/teacher/groups/${groupId}`, dto)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['teacher-group', groupId] });
       qc.invalidateQueries({ queryKey: ['teacher-groups'] });
@@ -126,7 +146,8 @@ export function useUpdateGroup(groupId: string) {
 export function useAddGroupMembers(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (studentIds: string[]) => (await api.post(`/teacher/groups/${groupId}/members`, { studentIds })).data,
+    mutationFn: async (studentIds: string[]) =>
+      (await api.post(`/teacher/groups/${groupId}/members`, { studentIds })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-group', groupId] }),
   });
 }
@@ -134,7 +155,8 @@ export function useAddGroupMembers(groupId: string) {
 export function useRemoveGroupMember(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (studentId: string) => (await api.delete(`/teacher/groups/${groupId}/members/${studentId}`)).data,
+    mutationFn: async (studentId: string) =>
+      (await api.delete(`/teacher/groups/${groupId}/members/${studentId}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-group', groupId] }),
   });
 }
@@ -142,7 +164,8 @@ export function useRemoveGroupMember(groupId: string) {
 export function useUnassignStaff(groupId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (userId: string) => (await api.delete(`/teacher/groups/${groupId}/assignments/${userId}`)).data,
+    mutationFn: async (userId: string) =>
+      (await api.delete(`/teacher/groups/${groupId}/assignments/${userId}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-group', groupId] }),
   });
 }
@@ -150,7 +173,8 @@ export function useUnassignStaff(groupId: string) {
 export function useAttendanceSession(groupId: string | undefined, date: string) {
   return useQuery<AttendanceSessionResult>({
     queryKey: ['teacher-attendance', groupId, date],
-    queryFn: async () => (await api.get(`/teacher/groups/${groupId}/attendance`, { params: { date } })).data,
+    queryFn: async () =>
+      (await api.get(`/teacher/groups/${groupId}/attendance`, { params: { date } })).data,
     enabled: !!groupId && !!date,
   });
 }
@@ -160,7 +184,8 @@ export function useMarkAttendance(groupId: string) {
   return useMutation({
     mutationFn: async (dto: { date: string; records: { studentId: string; status: string }[] }) =>
       (await api.post(`/teacher/groups/${groupId}/attendance`, dto)).data,
-    onSuccess: (_data, dto) => qc.invalidateQueries({ queryKey: ['teacher-attendance', groupId, dto.date] }),
+    onSuccess: (_data, dto) =>
+      qc.invalidateQueries({ queryKey: ['teacher-attendance', groupId, dto.date] }),
   });
 }
 

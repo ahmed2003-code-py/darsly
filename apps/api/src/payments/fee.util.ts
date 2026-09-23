@@ -6,11 +6,7 @@ import { FeeType } from '@prisma/client';
  *
  *   student pays (total) = netCents (academy earning) + feeCents (this)
  */
-export function computeServiceFee(
-  feeType: FeeType,
-  feeValue: number,
-  netCents: number,
-): number {
+export function computeServiceFee(feeType: FeeType, feeValue: number, netCents: number): number {
   if (netCents <= 0) return 0; // free enrolments carry no fee
   if (feeType === 'FIXED') return Math.max(0, Math.round(feeValue));
   return Math.round((netCents * feeValue) / 100);

@@ -8,8 +8,12 @@ import { requestIdMiddleware } from './request-context';
  */
 function capture(fn: () => void): string[] {
   const lines: string[] = [];
-  const out = jest.spyOn(process.stdout, 'write').mockImplementation((c: any) => (lines.push(String(c)), true));
-  const err = jest.spyOn(process.stderr, 'write').mockImplementation((c: any) => (lines.push(String(c)), true));
+  const out = jest
+    .spyOn(process.stdout, 'write')
+    .mockImplementation((c: any) => (lines.push(String(c)), true));
+  const err = jest
+    .spyOn(process.stderr, 'write')
+    .mockImplementation((c: any) => (lines.push(String(c)), true));
   try {
     fn();
   } finally {
@@ -20,7 +24,11 @@ function capture(fn: () => void): string[] {
 }
 
 const inRequest = (id: string, fn: () => void) =>
-  requestIdMiddleware({ headers: { 'x-request-id': id } } as any, { setHeader: () => undefined } as any, fn);
+  requestIdMiddleware(
+    { headers: { 'x-request-id': id } } as any,
+    { setHeader: () => undefined } as any,
+    fn,
+  );
 
 describe('AppLogger', () => {
   const original = process.env.NODE_ENV;
@@ -37,7 +45,9 @@ describe('AppLogger', () => {
     it('emits one JSON object per line, carrying the request id', () => {
       const logger = prodLogger();
 
-      const lines = capture(() => inRequest('trace-42', () => logger.log('saved the thing', 'CoursesService')));
+      const lines = capture(() =>
+        inRequest('trace-42', () => logger.log('saved the thing', 'CoursesService')),
+      );
 
       const entry = JSON.parse(lines.join('').trim());
       expect(entry).toMatchObject({

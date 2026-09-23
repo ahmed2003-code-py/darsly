@@ -30,8 +30,14 @@ export class AchievementsService {
    */
   async evaluate(studentId: string, agg: StudentGamification): Promise<UnlockedAchievement[]> {
     const [defs, held] = await Promise.all([
-      this.prisma.achievement.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
-      this.prisma.studentAchievement.findMany({ where: { studentId }, select: { achievementId: true } }),
+      this.prisma.achievement.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.studentAchievement.findMany({
+        where: { studentId },
+        select: { achievementId: true },
+      }),
     ]);
     const heldIds = new Set(held.map((h) => h.achievementId));
     const pending = defs.filter((d) => !heldIds.has(d.id));
@@ -44,7 +50,8 @@ export class AchievementsService {
       const value = metrics[def.metric];
       if (value == null) continue;
       // Rank is the one metric where smaller is better: "top 10" means rank ≤ 10.
-      const reached = def.metric === 'bestRank' ? value > 0 && value <= def.threshold : value >= def.threshold;
+      const reached =
+        def.metric === 'bestRank' ? value > 0 && value <= def.threshold : value >= def.threshold;
       if (!reached) continue;
 
       try {
@@ -134,15 +141,33 @@ export class AchievementsService {
   async board(studentId: string) {
     const agg = await this.prisma.studentGamification.findUnique({ where: { studentId } });
     const [defs, held] = await Promise.all([
-      this.prisma.achievement.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
+      this.prisma.achievement.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
       this.prisma.studentAchievement.findMany({ where: { studentId } }),
     ]);
     const heldAt = new Map(held.map((h) => [h.achievementId, h.unlockedAt]));
 
-    const blank = { lessonsCompleted: 0, quizzesPassed: 0, perfectQuizzes: 0, coursesCompleted: 0,
-      assignmentsDone: 0, liveAttended: 0, reviewsWritten: 0, missionsCompleted: 0, earlyBirdSessions: 0,
-      nightOwlSessions: 0, weekendSessions: 0, challengesCompleted: 0, challengesWon: 0, perfectChallenges: 0,
-      xp: 0, level: 1, bestRank: null } as unknown as StudentGamification;
+    const blank = {
+      lessonsCompleted: 0,
+      quizzesPassed: 0,
+      perfectQuizzes: 0,
+      coursesCompleted: 0,
+      assignmentsDone: 0,
+      liveAttended: 0,
+      reviewsWritten: 0,
+      missionsCompleted: 0,
+      earlyBirdSessions: 0,
+      nightOwlSessions: 0,
+      weekendSessions: 0,
+      challengesCompleted: 0,
+      challengesWon: 0,
+      perfectChallenges: 0,
+      xp: 0,
+      level: 1,
+      bestRank: null,
+    } as unknown as StudentGamification;
     const metrics = await this.metrics(studentId, agg ?? blank, new Set(defs.map((d) => d.metric)));
 
     return defs.map((d) => {
@@ -152,7 +177,9 @@ export class AchievementsService {
       // reached the position or you did not.
       const progress =
         d.metric === 'bestRank'
-          ? earned || (value > 0 && value <= d.threshold) ? d.threshold : 0
+          ? earned || (value > 0 && value <= d.threshold)
+            ? d.threshold
+            : 0
           : Math.min(value, d.threshold);
       return {
         key: d.key,

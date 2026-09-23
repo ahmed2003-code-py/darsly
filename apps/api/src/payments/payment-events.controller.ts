@@ -1,15 +1,18 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -48,7 +51,11 @@ class PaymentEventDto {
    * matcher reads it, the wire could not carry it, so this route matched on
    * `reference` alone while the device route matched on all of them.
    */
-  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(120, { each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
   identities?: string[];
 }
 
@@ -71,7 +78,10 @@ export class PaymentEventsController {
   @Public()
   @UseGuards(ListenerKeyGuard)
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: '[device, legacy] Ingest a transfer notification (X-Listener-Key auth); prefer POST /device/sms-events' })
+  @ApiOperation({
+    summary:
+      '[device, legacy] Ingest a transfer notification (X-Listener-Key auth); prefer POST /device/sms-events',
+  })
   ingest(@Body() dto: PaymentEventDto) {
     return this.matching.ingest(dto);
   }
@@ -90,7 +100,11 @@ export class PaymentEventsController {
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
   @ApiOperation({ summary: '[admin] Resolve an unmatched event → verify a payment' })
-  manualMatch(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('paymentId') paymentId: string) {
+  manualMatch(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+  ) {
     return this.matching.manualMatch(id, paymentId, u.sub);
   }
 }

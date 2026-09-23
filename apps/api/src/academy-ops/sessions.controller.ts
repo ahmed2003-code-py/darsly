@@ -13,13 +13,21 @@ export class SessionsController {
 
   @Post('groups/:groupId/sessions')
   @ApiOperation({ summary: '[academy] Schedule a session for a group' })
-  create(@CurrentAcademy() ctx: AcademyContext, @Param('groupId') groupId: string, @Body() dto: CreateSessionDto) {
+  create(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('groupId') groupId: string,
+    @Body() dto: CreateSessionDto,
+  ) {
     return this.sessions.create(ctx, groupId, dto);
   }
 
   @Patch('sessions/:sessionId')
   @ApiOperation({ summary: '[academy] Reschedule, change room/teacher, or cancel a session' })
-  update(@CurrentAcademy() ctx: AcademyContext, @Param('sessionId') sessionId: string, @Body() dto: UpdateSessionDto) {
+  update(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('sessionId') sessionId: string,
+    @Body() dto: UpdateSessionDto,
+  ) {
     return this.sessions.update(ctx, sessionId, dto);
   }
 }

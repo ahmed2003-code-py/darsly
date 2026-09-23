@@ -24,7 +24,10 @@ export class AcademySubjectsService {
    * has a row, so nothing here switches it back on.
    */
   private async ensureCore(academyId: string): Promise<void> {
-    const core = await this.prisma.subject.findMany({ where: { isCore: true, isActive: true }, select: { id: true } });
+    const core = await this.prisma.subject.findMany({
+      where: { isCore: true, isActive: true },
+      select: { id: true },
+    });
     if (!core.length) return;
     await this.prisma.academySubject.createMany({
       data: core.map((s) => ({ academyId, subjectId: s.id, isActive: true })),
@@ -33,21 +36,38 @@ export class AcademySubjectsService {
   }
 
   async list(academyId: string) {
-    const academy = await this.prisma.academy.findUniqueOrThrow({ where: { id: academyId }, select: { kind: true } });
+    const academy = await this.prisma.academy.findUniqueOrThrow({
+      where: { id: academyId },
+      select: { kind: true },
+    });
     if (academy.kind === 'CENTER') await this.ensureCore(academyId);
 
     const [subjects, rows] = await Promise.all([
       this.prisma.subject.findMany({
         where: { isActive: true },
         orderBy: [{ sortOrder: 'asc' }, { nameAr: 'asc' }],
-        select: { id: true, code: true, nameAr: true, nameEn: true, icon: true, track: true, isCore: true },
+        select: {
+          id: true,
+          code: true,
+          nameAr: true,
+          nameEn: true,
+          icon: true,
+          track: true,
+          isCore: true,
+        },
       }),
-      this.prisma.academySubject.findMany({ where: { academyId }, select: { subjectId: true, isActive: true } }),
+      this.prisma.academySubject.findMany({
+        where: { academyId },
+        select: { subjectId: true, isActive: true },
+      }),
     ]);
     const active = new Map(rows.map((r) => [r.subjectId, r.isActive]));
     return {
       gated: academy.kind === 'CENTER',
-      subjects: subjects.map((s) => ({ ...s, offered: academy.kind === 'CENTER' ? active.get(s.id) === true : true })),
+      subjects: subjects.map((s) => ({
+        ...s,
+        offered: academy.kind === 'CENTER' ? active.get(s.id) === true : true,
+      })),
     };
   }
 
@@ -55,10 +75,16 @@ export class AcademySubjectsService {
   async setOffered(academyId: string, subjectId: string, isActive: boolean) {
     const [academy, subject] = await Promise.all([
       this.prisma.academy.findUniqueOrThrow({ where: { id: academyId }, select: { kind: true } }),
-      this.prisma.subject.findFirst({ where: { id: subjectId, isActive: true }, select: { id: true } }),
+      this.prisma.subject.findFirst({
+        where: { id: subjectId, isActive: true },
+        select: { id: true },
+      }),
     ]);
     if (academy.kind !== 'CENTER') {
-      throw new BadRequestException({ message: 'Only a Center activates subjects', code: 'NOT_A_CENTER' });
+      throw new BadRequestException({
+        message: 'Only a Center activates subjects',
+        code: 'NOT_A_CENTER',
+      });
     }
     if (!subject) throw new NotFoundException('Subject not found');
     const row = await this.prisma.academySubject.upsert({
@@ -78,11 +104,20 @@ export class AcademySubjectsService {
    * list. One statement instead, and one audit line.
    */
   async setAllOffered(academyId: string, isActive: boolean) {
-    const academy = await this.prisma.academy.findUniqueOrThrow({ where: { id: academyId }, select: { kind: true } });
+    const academy = await this.prisma.academy.findUniqueOrThrow({
+      where: { id: academyId },
+      select: { kind: true },
+    });
     if (academy.kind !== 'CENTER') {
-      throw new BadRequestException({ message: 'Only a Center activates subjects', code: 'NOT_A_CENTER' });
+      throw new BadRequestException({
+        message: 'Only a Center activates subjects',
+        code: 'NOT_A_CENTER',
+      });
     }
-    const subjects = await this.prisma.subject.findMany({ where: { isActive: true }, select: { id: true } });
+    const subjects = await this.prisma.subject.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
     await this.prisma.$transaction([
       this.prisma.academySubject.createMany({
         data: subjects.map((s) => ({ academyId, subjectId: s.id, isActive })),

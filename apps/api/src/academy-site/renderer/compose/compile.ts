@@ -5,7 +5,13 @@ import { RenderContext } from '../types';
 import { baseCss } from './base';
 import { clientJs } from './client';
 import {
-  ACCENT_CSS, BACKDROP_CSS, DIVIDER_CSS, GRAIN_CSS, IMAGE_CSS, SCROLL_FX_CSS, backdropHtml,
+  ACCENT_CSS,
+  BACKDROP_CSS,
+  DIVIDER_CSS,
+  GRAIN_CSS,
+  IMAGE_CSS,
+  SCROLL_FX_CSS,
+  backdropHtml,
 } from './effects';
 import { i18n } from './helpers';
 import { getPattern } from './registry';
@@ -66,7 +72,9 @@ export function composeSite(plan: ComposePlan, ctx: RenderContext): string {
   if (design.motion.scrollFx.includes('marquee')) effects.add('marquee');
 
   const brand = escapeHtml(brandFor(lang, ctx.academyName, ctx.ownerName));
-  const title = escapeHtml(plan.seo?.title?.[lang]?.trim() || brandFor(lang, ctx.academyName, ctx.ownerName));
+  const title = escapeHtml(
+    plan.seo?.title?.[lang]?.trim() || brandFor(lang, ctx.academyName, ctx.ownerName),
+  );
   const description = plan.seo?.description?.[lang]?.trim();
 
   const css = [

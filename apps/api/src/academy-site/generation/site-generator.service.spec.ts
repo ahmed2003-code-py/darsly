@@ -40,9 +40,15 @@ const PLAN = {
   theme: { primary: '#123456', accent: '#ABCDEF' },
   archetype: 'math_science',
   design: {
-    background: '#0B1020', ink: '#F2F5FF', surface: '#141B33',
-    radius: 6, density: 'airy', headingScale: 'dramatic',
-    heroTreatment: 'mesh', bodyFont: 'serif', motion: 'calm',
+    background: '#0B1020',
+    ink: '#F2F5FF',
+    surface: '#141B33',
+    radius: 6,
+    density: 'airy',
+    headingScale: 'dramatic',
+    heroTreatment: 'mesh',
+    bodyFont: 'serif',
+    motion: 'calm',
   },
 };
 
@@ -81,7 +87,9 @@ function build(opts: Options = {}) {
     },
     academyMedia: { findMany: jest.fn().mockResolvedValue(media) },
     academySite: {
-      findUnique: jest.fn().mockResolvedValue({ id: 'site-1', publishedDoc: opts.publishedDoc ?? null }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ id: 'site-1', publishedDoc: opts.publishedDoc ?? null }),
     },
     academySiteSnapshot: {
       findMany: jest.fn().mockResolvedValue(opts.snapshots ?? []),
@@ -94,7 +102,12 @@ function build(opts: Options = {}) {
     completeStructured: jest.fn(async ({ schemaName }: { schemaName: string }) => {
       calls.push({ schemaName });
       const data = schemaName === AI_COPY_SCHEMA_NAME ? (opts.copy ?? COPY) : (opts.plan ?? PLAN);
-      return { data, inputTokens: 100, outputTokens: 200, costCents: schemaName === AI_COPY_SCHEMA_NAME ? 7 : 3 };
+      return {
+        data,
+        inputTokens: 100,
+        outputTokens: 200,
+        costCents: schemaName === AI_COPY_SCHEMA_NAME ? 7 : 3,
+      };
     }),
   } as unknown as AiClient;
 
@@ -133,7 +146,17 @@ describe('SiteGeneratorService.buildDraft — the assembled page', () => {
     const { generator } = build();
     const { doc } = await generator.buildDraft('acad-1');
     expect([...types(doc)].sort()).toEqual(
-      ['about', 'contact', 'courses', 'credentials', 'faq', 'gallery', 'hero', 'reviews', 'toolkit'].sort(),
+      [
+        'about',
+        'contact',
+        'courses',
+        'credentials',
+        'faq',
+        'gallery',
+        'hero',
+        'reviews',
+        'toolkit',
+      ].sort(),
     );
   });
 
@@ -249,7 +272,7 @@ describe('SiteGeneratorService.buildDraft — the design decision', () => {
 });
 
 describe('SiteGeneratorService.buildDraft — curation', () => {
-  it('prefers the model\'s curated lists', async () => {
+  it("prefers the model's curated lists", async () => {
     const { generator } = build();
     const { doc } = await generator.buildDraft('acad-1');
     const toolkit = doc.blocks.find((b) => b.type === 'toolkit')!;
@@ -305,7 +328,12 @@ describe('SiteGeneratorService.buildDraft — failure handling', () => {
 
   it('refuses terminally when there is nothing to write about', async () => {
     const { generator } = build({
-      facts: { ...FACTS, bio: null, rawIntake: null, subjects: [] } as unknown as AcademyProfileFacts,
+      facts: {
+        ...FACTS,
+        bio: null,
+        rawIntake: null,
+        subjects: [],
+      } as unknown as AcademyProfileFacts,
     });
     const err = await reason(generator.buildDraft('acad-1'));
     expect(err?.errorClass).toBe('TERMINAL');
@@ -328,7 +356,7 @@ describe('SiteGeneratorService.buildDraft — failure handling', () => {
 });
 
 describe('SiteGeneratorService.buildDraft — history', () => {
-  it('reads the academy\'s past generations before planning', async () => {
+  it("reads the academy's past generations before planning", async () => {
     const { generator, prisma } = build({
       snapshots: [{ doc: { theme: { dna: 'royal_night' } } }],
       publishedDoc: { theme: { dna: 'warm_mentor' } },

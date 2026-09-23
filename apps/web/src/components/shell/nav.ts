@@ -84,7 +84,13 @@ export const ADMIN_NAV: NavItem[] = [
  */
 export const BOTTOM_TABS: Record<string, string[]> = {
   [Role.STUDENT]: ['/', '/my-courses', '/learning', '/messages', '/wallet'],
-  [Role.TEACHER]: ['/teacher', '/teacher/courses', '/teacher/students', '/messages', '/teacher/wallet'],
+  [Role.TEACHER]: [
+    '/teacher',
+    '/teacher/courses',
+    '/teacher/students',
+    '/messages',
+    '/teacher/wallet',
+  ],
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
   [Role.STAFF]: ['/center', '/center/members', '/teacher/groups', '/teacher/schedule'],
 };

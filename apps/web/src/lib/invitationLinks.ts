@@ -8,7 +8,10 @@ export interface InvitationLink {
   expiresAt: string;
   createdAt: string;
 }
-export interface CreatedInvitationLink extends Pick<InvitationLink, 'id' | 'role' | 'expiresAt' | 'createdAt'> {
+export interface CreatedInvitationLink extends Pick<
+  InvitationLink,
+  'id' | 'role' | 'expiresAt' | 'createdAt'
+> {
   /** Only ever present in this one response — never fetched again. */
   token: string;
 }
@@ -32,15 +35,20 @@ export function useCreateInvitationLink(slug: string) {
   return useMutation({
     mutationFn: async (role: 'TEACHER' | 'ASSISTANT') =>
       (await api.post<CreatedInvitationLink>(`/academies/${slug}/invitation-links`, { role })).data,
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: key(slug) }); },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: key(slug) });
+    },
   });
 }
 
 export function useRevokeInvitationLink(slug: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/academies/${slug}/invitation-links/${id}`)).data,
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: key(slug) }); },
+    mutationFn: async (id: string) =>
+      (await api.delete(`/academies/${slug}/invitation-links/${id}`)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: key(slug) });
+    },
   });
 }
 
@@ -65,7 +73,8 @@ export function useAcceptInvitationLink() {
 
 export function useDeclineInvitationLink() {
   return useMutation({
-    mutationFn: async (token: string) => (await api.post(`/invitation-links/${token}/decline`)).data,
+    mutationFn: async (token: string) =>
+      (await api.post(`/invitation-links/${token}/decline`)).data,
   });
 }
 

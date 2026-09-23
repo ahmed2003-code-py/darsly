@@ -16,7 +16,11 @@ export default function ActivateAccountPage() {
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
 
-  const [preview, setPreview] = useState<{ fullName: string; email: string | null; academyName: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    fullName: string;
+    email: string | null;
+    academyName: string;
+  } | null>(null);
   const [invalid, setInvalid] = useState(false);
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
@@ -25,8 +29,12 @@ export default function ActivateAccountPage() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (!token) { setInvalid(true); return; }
-    api.get(`/auth/activation/${encodeURIComponent(token)}`)
+    if (!token) {
+      setInvalid(true);
+      return;
+    }
+    api
+      .get(`/auth/activation/${encodeURIComponent(token)}`)
       .then((r) => setPreview(r.data))
       .catch(() => setInvalid(true));
   }, [token]);
@@ -48,8 +56,17 @@ export default function ActivateAccountPage() {
 
   if (invalid) {
     return (
-      <AuthShell title={t('auth.activateTitle')} footer={<Link to="/login" className="font-bold text-primary hover:underline">{t('auth.loginTitle')}</Link>}>
-        <p className="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">{t('auth.err.activationInvalid')}</p>
+      <AuthShell
+        title={t('auth.activateTitle')}
+        footer={
+          <Link to="/login" className="font-bold text-primary hover:underline">
+            {t('auth.loginTitle')}
+          </Link>
+        }
+      >
+        <p className="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
+          {t('auth.err.activationInvalid')}
+        </p>
       </AuthShell>
     );
   }
@@ -57,8 +74,16 @@ export default function ActivateAccountPage() {
   return (
     <AuthShell
       title={t('auth.activateTitle')}
-      subtitle={preview ? t('auth.activateFor', { name: preview.fullName, center: preview.academyName }) : undefined}
-      footer={<Link to="/login" className="font-bold text-primary hover:underline">{t('auth.loginTitle')}</Link>}
+      subtitle={
+        preview
+          ? t('auth.activateFor', { name: preview.fullName, center: preview.academyName })
+          : undefined
+      }
+      footer={
+        <Link to="/login" className="font-bold text-primary hover:underline">
+          {t('auth.loginTitle')}
+        </Link>
+      }
     >
       {done ? (
         <div className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center">
@@ -70,12 +95,32 @@ export default function ActivateAccountPage() {
       ) : (
         <form onSubmit={submit}>
           {error && (
-            <p className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container" role="alert">{error}</p>
+            <p
+              className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container"
+              role="alert"
+            >
+              {error}
+            </p>
           )}
-          {preview.email && <p className="mb-4 text-sm text-on-surface-variant" dir="ltr">{preview.email}</p>}
-          <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.newPassword')}
-            placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
-            reveal revealed={show} onReveal={() => setShow((s) => !s)} autoFocus />
+          {preview.email && (
+            <p className="mb-4 text-sm text-on-surface-variant" dir="ltr">
+              {preview.email}
+            </p>
+          )}
+          <AuthField
+            icon="lock"
+            type={show ? 'text' : 'password'}
+            dir="ltr"
+            label={t('auth.newPassword')}
+            placeholder="••••••••"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            reveal
+            revealed={show}
+            onReveal={() => setShow((s) => !s)}
+            autoFocus
+          />
           <p className="mb-6 -mt-2 text-xs text-outline">{t('auth.passwordHint')}</p>
           <button className="btn-primary w-full py-3" disabled={busy}>
             {busy ? t('auth.saving') : t('auth.activateBtn')}

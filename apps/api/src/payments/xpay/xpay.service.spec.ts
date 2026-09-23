@@ -16,18 +16,26 @@ import { XPayService } from './xpay.service';
 
 const SECRET = 'whsec_test_secret';
 
-function build(over: {
-  payment?: Record<string, unknown> | null;
-  session?: Record<string, unknown>;
-  webhookSecret?: string;
-  createFails?: boolean;
-  createReturnsNoUrl?: boolean;
-} = {}) {
+function build(
+  over: {
+    payment?: Record<string, unknown> | null;
+    session?: Record<string, unknown>;
+    webhookSecret?: string;
+    createFails?: boolean;
+    createReturnsNoUrl?: boolean;
+  } = {},
+) {
   const prisma = {
     payment: {
       findUnique: jest.fn().mockResolvedValue(
         over.payment === undefined
-          ? { id: 'pay_1', gateway: 'xpay', status: 'PENDING', gatewayRef: 'cs_1', couponId: null }
+          ? {
+              id: 'pay_1',
+              gateway: 'xpay',
+              status: 'PENDING',
+              gatewayRef: 'cs_1',
+              couponId: null,
+            }
           : over.payment,
       ),
       update: jest.fn().mockResolvedValue({}),
@@ -36,13 +44,17 @@ function build(over: {
     coupon: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
   } as unknown as PrismaService;
   // The failure path writes inside a transaction; run it against the same mocks.
-  (prisma as unknown as { $transaction: unknown }).$transaction = jest.fn(async (fn: (t: unknown) => unknown) => fn(prisma));
+  (prisma as unknown as { $transaction: unknown }).$transaction = jest.fn(
+    async (fn: (t: unknown) => unknown) => fn(prisma),
+  );
 
   const client = {
     getCheckoutSession: jest.fn().mockResolvedValue(over.session ?? { id: 'cs_1', status: 'paid' }),
     createCheckoutSession: jest.fn(async () => {
       if (over.createFails) throw new Error('provider unreachable');
-      return over.createReturnsNoUrl ? { id: 'cs_1' } : { id: 'cs_1', url: 'https://pay.test/cs_1' };
+      return over.createReturnsNoUrl
+        ? { id: 'cs_1' }
+        : { id: 'cs_1', url: 'https://pay.test/cs_1' };
     }),
   } as unknown as XPayClient;
 
@@ -51,7 +63,9 @@ function build(over: {
     value: over.webhookSecret === undefined ? SECRET : over.webhookSecret,
   });
 
-  const payments = { systemVerify: jest.fn().mockResolvedValue({}) } as unknown as ManualPaymentsService;
+  const payments = {
+    systemVerify: jest.fn().mockResolvedValue({}),
+  } as unknown as ManualPaymentsService;
   return { service: new XPayService(prisma, client, config, payments), prisma, client, payments };
 }
 
@@ -105,7 +119,9 @@ describe('settling a payment', () => {
 
   it('settles through the same path a bank transfer uses', async () => {
     const { service, payments } = build();
-    await expect(service.handleEvent(event('checkout_session.completed'))).resolves.toMatchObject({ settled: true });
+    await expect(service.handleEvent(event('checkout_session.completed'))).resolves.toMatchObject({
+      settled: true,
+    });
     // Not its own ledger writes — the one method that activates the enrolment
     // and writes both sides of the entry in a single transaction.
     expect(payments.systemVerify).toHaveBeenCalledWith('pay_1');
@@ -154,7 +170,9 @@ describe('settling a payment', () => {
 
   it('ignores an event with no reference to anything', async () => {
     const { service } = build();
-    await expect(service.handleEvent({ type: 'checkout_session.completed', data: {} })).resolves.toMatchObject({
+    await expect(
+      service.handleEvent({ type: 'checkout_session.completed', data: {} }),
+    ).resolves.toMatchObject({
       reason: 'no-reference',
     });
   });
@@ -170,7 +188,9 @@ describe('settling a payment', () => {
 
   it('marks a failed payment rejected without touching the ledger', async () => {
     const { service, prisma, payments } = build();
-    await expect(service.handleEvent(event('payment.failed'))).resolves.toMatchObject({ failed: true });
+    await expect(service.handleEvent(event('payment.failed'))).resolves.toMatchObject({
+      failed: true,
+    });
     // Conditional on still being PENDING: a success that landed in between
     // must not be turned back into a failure.
     expect(prisma.payment.updateMany).toHaveBeenCalledWith(
@@ -185,13 +205,17 @@ describe('settling a payment', () => {
   it('does not fail a payment that was settled in the meantime', async () => {
     const { service, prisma } = build();
     (prisma.payment.updateMany as jest.Mock).mockResolvedValueOnce({ count: 0 });
-    await expect(service.handleEvent(event('payment.failed'))).resolves.toMatchObject({ failed: false });
+    await expect(service.handleEvent(event('payment.failed'))).resolves.toMatchObject({
+      failed: false,
+    });
     expect(prisma.coupon.updateMany).not.toHaveBeenCalled();
   });
 
   it('leaves an event type it does not understand alone', async () => {
     const { service, payments } = build();
-    await expect(service.handleEvent(event('customer.updated'))).resolves.toMatchObject({ handled: false });
+    await expect(service.handleEvent(event('customer.updated'))).resolves.toMatchObject({
+      handled: false,
+    });
     expect(payments.systemVerify).not.toHaveBeenCalled();
   });
 });
@@ -220,7 +244,6 @@ describe('configuration', () => {
   });
 });
 
-
 /**
  * A checkout that never reached a payment page.
  *
@@ -230,13 +253,21 @@ describe('configuration', () => {
  * page, and a teacher looking at an approval request for money nobody asked for.
  */
 describe('a failed checkout leaves nothing behind', () => {
-  function buildStart(over: { createFails?: boolean; createReturnsNoUrl?: boolean; existing?: unknown } = {}) {
+  function buildStart(
+    over: { createFails?: boolean; createReturnsNoUrl?: boolean; existing?: unknown } = {},
+  ) {
     const deleted: string[] = [];
     const tx = {
-      coupon: { update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      coupon: {
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       payment: {
         create: jest.fn().mockResolvedValue({
-          id: 'pay_1', amountCents: 12000, currency: 'EGP', enrollmentId: 'enr_1',
+          id: 'pay_1',
+          amountCents: 12000,
+          currency: 'EGP',
+          enrollmentId: 'enr_1',
         }),
         delete: jest.fn(async ({ where }: { where: { id: string } }) => {
           deleted.push(`payment:${where.id}`);
@@ -256,8 +287,20 @@ describe('a failed checkout leaves nothing behind', () => {
       },
     };
     const prisma = {
-      studentProfile: { findFirst: jest.fn().mockResolvedValue({ id: 'st_1', user: { fullName: 'A', email: 'a@b.c' } }) },
-      course: { findFirst: jest.fn().mockResolvedValue({ id: 'c_1', tenantId: 't_1', title: 'X', priceCents: 10000, currency: 'EGP' }) },
+      studentProfile: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'st_1', user: { fullName: 'A', email: 'a@b.c' } }),
+      },
+      course: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'c_1',
+          tenantId: 't_1',
+          title: 'X',
+          priceCents: 10000,
+          currency: 'EGP',
+        }),
+      },
       enrollment: { findUnique: jest.fn().mockResolvedValue(over.existing ?? null) },
       payment: { update: jest.fn().mockResolvedValue({}) },
       // Checkout asks whether the course's years are the student's before it
@@ -270,12 +313,16 @@ describe('a failed checkout leaves nothing behind', () => {
     const client = {
       createCheckoutSession: jest.fn(async () => {
         if (over.createFails) throw new Error('provider unreachable');
-        return over.createReturnsNoUrl ? { id: 'cs_1' } : { id: 'cs_1', url: 'https://pay.test/cs_1' };
+        return over.createReturnsNoUrl
+          ? { id: 'cs_1' }
+          : { id: 'cs_1', url: 'https://pay.test/cs_1' };
       }),
     } as unknown as XPayClient;
 
     const config = new XPayConfig();
-    const payments = { quote: jest.fn().mockResolvedValue({ netCents: 10000, feeCents: 2000, totalCents: 12000 }) } as unknown as ManualPaymentsService;
+    const payments = {
+      quote: jest.fn().mockResolvedValue({ netCents: 10000, feeCents: 2000, totalCents: 12000 }),
+    } as unknown as ManualPaymentsService;
     return { service: new XPayService(prisma, client, config, payments), deleted, prisma };
   }
 

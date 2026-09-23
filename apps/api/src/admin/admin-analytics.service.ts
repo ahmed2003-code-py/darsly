@@ -25,8 +25,12 @@ export class AdminAnalyticsService {
   ) {}
 
   /** New academies, new students, and new enrollments per day — zero-filled. */
-  async growthTrend(days: GrowthRange): Promise<{ date: string; academies: number; students: number; enrollments: number }[]> {
-    const rows = await this.prisma.$queryRaw<{ day: Date; academies: bigint; students: bigint; enrollments: bigint }[]>`
+  async growthTrend(
+    days: GrowthRange,
+  ): Promise<{ date: string; academies: number; students: number; enrollments: number }[]> {
+    const rows = await this.prisma.$queryRaw<
+      { day: Date; academies: bigint; students: bigint; enrollments: bigint }[]
+    >`
       WITH days AS (
         SELECT generate_series(
           date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day',
@@ -97,9 +101,16 @@ export class AdminAnalyticsService {
     const since = new Date(Date.now() - days * 86_400_000);
     const [totals, statusAgg] = await Promise.all([
       this.ledger.platformTotals(),
-      this.prisma.payment.groupBy({ by: ['status'], where: { createdAt: { gte: since } }, _count: { _all: true } }),
+      this.prisma.payment.groupBy({
+        by: ['status'],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
     ]);
-    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<string, number>;
+    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<
+      string,
+      number
+    >;
     const paid = byStatus.PAID ?? 0;
     const pending = byStatus.PENDING ?? 0;
     const rejected = byStatus.REJECTED ?? 0;
@@ -143,7 +154,10 @@ export class AdminAnalyticsService {
     const [totalActive, activeWithEnrollment] = await Promise.all([
       this.prisma.academy.count({ where: { status: 'ACTIVE' } }),
       this.prisma.academy.count({
-        where: { status: 'ACTIVE', id: { in: recentTenantIds.map((r) => r.academyId).filter((id): id is string => !!id) } },
+        where: {
+          status: 'ACTIVE',
+          id: { in: recentTenantIds.map((r) => r.academyId).filter((id): id is string => !!id) },
+        },
       }),
     ]);
     return {

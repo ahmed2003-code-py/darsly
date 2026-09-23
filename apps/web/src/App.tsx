@@ -88,7 +88,15 @@ const TeacherWalletPage = lazyPage(() => import('./pages/teacher/TeacherWalletPa
  * going — is unchanged, because a page without navigation is still a page
  * that has to be signed in for.
  */
-function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Role | Role[]; bare?: boolean }) {
+function RequireAuth({
+  children,
+  role,
+  bare,
+}: {
+  children: ReactNode;
+  role?: Role | Role[];
+  bare?: boolean;
+}) {
   const { accessToken, user } = useAuthStore();
   const location = useLocation();
   // Carry the destination to the login page. A visitor arriving from a generated
@@ -103,7 +111,12 @@ function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Rol
   // balance" and means the signed-in person's — and read it as if it were
   // theirs. An admin has their own console for every one of these (`/admin/…`);
   // being able to walk into the student's own pages was never the point.
-  const allowed = role === undefined ? true : Array.isArray(role) ? role.includes(user?.role as Role) : user?.role === role;
+  const allowed =
+    role === undefined
+      ? true
+      : Array.isArray(role)
+        ? role.includes(user?.role as Role)
+        : user?.role === role;
   if (!allowed) {
     return <Navigate to={homeFor(user?.role)} replace />;
   }
@@ -119,7 +132,13 @@ function RequireAuth({ children, role, bare }: { children: ReactNode; role?: Rol
  */
 function JoinRoute() {
   const signedIn = useAuthStore((s) => !!s.accessToken);
-  return signedIn ? <RequireAuth><JoinCenterPage /></RequireAuth> : <JoinCenterPage />;
+  return signedIn ? (
+    <RequireAuth>
+      <JoinCenterPage />
+    </RequireAuth>
+  ) : (
+    <JoinCenterPage />
+  );
 }
 
 /** Where a role belongs when it is somewhere it does not. */
@@ -165,96 +184,494 @@ function StudioReach() {
 export default function App() {
   return (
     <ErrorBoundary>
-    {/* Above the router on purpose: the academy's colours belong to the whole
+      {/* Above the router on purpose: the academy's colours belong to the whole
         app, not to one branch of it, and switching route must not repaint. */}
-    <BrandTheme />
-    {/* The one place a personal look does not go. */}
-    <StudioReach />
-    {/* The student's backdrop. One fixed element behind everything, drawn in
+      <BrandTheme />
+      {/* The one place a personal look does not go. */}
+      <StudioReach />
+      {/* The student's backdrop. One fixed element behind everything, drawn in
         CSS from a pattern name — so it costs nothing per route and there is no
         image to load. */}
-    <div className="studio-backdrop" aria-hidden />
-    <Suspense fallback={<div className="grid min-h-screen place-items-center"><Spinner /></div>}>
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      {/* Public academy storefront (academy-branded, standalone shell) */}
-      <Route path="/a/:slug" element={<AcademyStorefrontPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/activate" element={<ActivateAccountPage />} />
-      <Route path="/join/:token" element={<JoinRoute />} />
+      <div className="studio-backdrop" aria-hidden />
+      <Suspense
+        fallback={
+          <div className="grid min-h-screen place-items-center">
+            <Spinner />
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          {/* Public academy storefront (academy-branded, standalone shell) */}
+          <Route path="/a/:slug" element={<AcademyStorefrontPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/activate" element={<ActivateAccountPage />} />
+          <Route path="/join/:token" element={<JoinRoute />} />
 
-      {/* Student / public browsing */}
-      <Route path="/" element={<HomeRedirect />} />
-      <Route path="/discover" element={<RequireAuth><DiscoveryPage /></RequireAuth>} />
-      <Route path="/courses" element={<RequireAuth><BrowseCoursesPage /></RequireAuth>} />
-      <Route path="/t/:slug" element={<RequireAuth><TeacherProfilePage /></RequireAuth>} />
-      <Route path="/course/:id" element={<RequireAuth><CourseDetailPage /></RequireAuth>} />
-      <Route path="/learn/:courseId/:lessonId" element={<RequireAuth><LessonRouter /></RequireAuth>} />
-      <Route path="/my-courses" element={<RequireAuth role={Role.STUDENT}><MyCoursesPage /></RequireAuth>} />
-      <Route path="/my-certificates" element={<RequireAuth role={Role.STUDENT}><CertificatesPage /></RequireAuth>} />
-      <Route path="/live" element={<RequireAuth role={Role.STUDENT}><LiveSessionsPage /></RequireAuth>} />
-      {/* The classroom itself. No role here on purpose — the same page serves
+          {/* Student / public browsing */}
+          <Route path="/" element={<HomeRedirect />} />
+          <Route
+            path="/discover"
+            element={
+              <RequireAuth>
+                <DiscoveryPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/courses"
+            element={
+              <RequireAuth>
+                <BrowseCoursesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/t/:slug"
+            element={
+              <RequireAuth>
+                <TeacherProfilePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/course/:id"
+            element={
+              <RequireAuth>
+                <CourseDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/learn/:courseId/:lessonId"
+            element={
+              <RequireAuth>
+                <LessonRouter />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/my-courses"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <MyCoursesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/my-certificates"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <CertificatesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/live"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <LiveSessionsPage />
+              </RequireAuth>
+            }
+          />
+          {/* The classroom itself. No role here on purpose — the same page serves
           the teacher and the student, and which of them you are is decided by
           the API, not by the route you reached it through. */}
-      <Route path="/live/:id/meeting" element={<RequireAuth bare><MeetingPage /></RequireAuth>} />
-      <Route path="/saved" element={<RequireAuth role={Role.STUDENT}><SavedCoursesPage /></RequireAuth>} />
-      <Route path="/wallet" element={<RequireAuth role={Role.STUDENT}><WalletPage /></RequireAuth>} />
-      <Route path="/learning" element={<RequireAuth role={Role.STUDENT}><LearningCenterPage /></RequireAuth>} />
-      <Route path="/challenges" element={<RequireAuth role={Role.STUDENT}><ChallengesPage /></RequireAuth>} />
-      <Route path="/challenges/:id/play" element={<RequireAuth role={Role.STUDENT}><ChallengePlayPage /></RequireAuth>} />
-      <Route path="/studio" element={<RequireAuth role={Role.STUDENT}><StudioPage /></RequireAuth>} />
-      <Route path="/studio/preview/:key" element={<RequireAuth role={Role.STUDENT}><ThemePreviewPage /></RequireAuth>} />
-      <Route path="/certificate/:token" element={<RequireAuth><CertificateViewPage /></RequireAuth>} />
-      <Route path="/messages" element={<RequireAuth><MessagesPage /></RequireAuth>} />
-      <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
+          <Route
+            path="/live/:id/meeting"
+            element={
+              <RequireAuth bare>
+                <MeetingPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/saved"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <SavedCoursesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/wallet"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <WalletPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/learning"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <LearningCenterPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/challenges"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <ChallengesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/challenges/:id/play"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <ChallengePlayPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/studio"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <StudioPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/studio/preview/:key"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <ThemePreviewPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/certificate/:token"
+            element={
+              <RequireAuth>
+                <CertificateViewPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <RequireAuth>
+                <MessagesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <ProfilePage />
+              </RequireAuth>
+            }
+          />
 
-      {/* Teacher studio */}
-      <Route path="/teacher" element={<RequireAuth role={Role.TEACHER}><TeacherDashboardPage /></RequireAuth>} />
-      <Route path="/academy/settings" element={<Navigate to="/academy/studio" replace />} />
-      <Route path="/academy/studio" element={<RequireAuth role={Role.TEACHER}><AcademyStudioPage /></RequireAuth>} />
-      <Route path="/teacher/courses" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherCoursesPage /></RequireAuth>} />
-      <Route path="/teacher/courses/:id" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><CourseBuilderPage /></RequireAuth>} />
-      <Route path="/teacher/lessons/:lessonId/quiz" element={<RequireAuth role={Role.TEACHER}><QuizBuilderPage /></RequireAuth>} />
-      <Route path="/teacher/lessons/:lessonId/assignment" element={<RequireAuth role={Role.TEACHER}><AssignmentBuilderPage /></RequireAuth>} />
-      <Route path="/teacher/challenges" element={<RequireAuth role={Role.TEACHER}><TeacherChallengesPage /></RequireAuth>} />
-      <Route path="/teacher/challenges/:id" element={<RequireAuth role={Role.TEACHER}><ChallengeBuilderPage /></RequireAuth>} />
-      <Route path="/teacher/students" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherEnrollmentsPage /></RequireAuth>} />
-      <Route path="/teacher/groups" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherGroupsPage /></RequireAuth>} />
-      <Route path="/teacher/groups/:groupId" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherGroupDetailPage /></RequireAuth>} />
-      <Route path="/teacher/schedule" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherSchedulePage /></RequireAuth>} />
-      <Route path="/teacher/grading" element={<RequireAuth role={Role.TEACHER}><GradingPage /></RequireAuth>} />
-      <Route path="/teacher/live" element={<RequireAuth role={Role.TEACHER}><TeacherLivePage /></RequireAuth>} />
-      <Route path="/teacher/analytics" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherAnalyticsPage /></RequireAuth>} />
-      <Route path="/teacher/wallet" element={<RequireAuth role={[Role.TEACHER, Role.STAFF]}><TeacherWalletPage /></RequireAuth>} />
-      <Route path="/teacher/security" element={<RequireAuth role={Role.TEACHER}><TeacherSecurityPage /></RequireAuth>} />
-      <Route path="/teacher/coupons" element={<RequireAuth role={Role.TEACHER}><TeacherCouponsPage /></RequireAuth>} />
+          {/* Teacher studio */}
+          <Route
+            path="/teacher"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <TeacherDashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route path="/academy/settings" element={<Navigate to="/academy/studio" replace />} />
+          <Route
+            path="/academy/studio"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <AcademyStudioPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/courses"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeacherCoursesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/courses/:id"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <CourseBuilderPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/lessons/:lessonId/quiz"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <QuizBuilderPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/lessons/:lessonId/assignment"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <AssignmentBuilderPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/challenges"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <TeacherChallengesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/challenges/:id"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <ChallengeBuilderPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/students"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeacherEnrollmentsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/groups"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeacherGroupsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/groups/:groupId"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeacherGroupDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/schedule"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeacherSchedulePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/grading"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <GradingPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/live"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <TeacherLivePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/analytics"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeacherAnalyticsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/wallet"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeacherWalletPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/security"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <TeacherSecurityPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/coupons"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <TeacherCouponsPage />
+              </RequireAuth>
+            }
+          />
 
-      {/* Admin */}
-      <Route path="/admin" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminOverviewPage /></RequireAuth>} />
-      <Route path="/admin/academies" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademiesPage /></RequireAuth>} />
-      <Route path="/admin/academies/:id" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademyDetailPage /></RequireAuth>} />
-      <Route path="/admin/centers/new" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminCreateCenterPage /></RequireAuth>} />
-      <Route path="/center" element={<RequireAuth role={Role.STAFF}><CenterDashboardPage /></RequireAuth>} />
-      <Route path="/center/members" element={<RequireAuth role={Role.STAFF}><CenterMembersPage /></RequireAuth>} />
-      <Route path="/center/subjects" element={<RequireAuth role={Role.STAFF}><CenterSubjectsPage /></RequireAuth>} />
-      <Route path="/center/settings" element={<RequireAuth role={Role.STAFF}><CenterSettingsPage /></RequireAuth>} />
-      <Route path="/center/studio" element={<RequireAuth role={[Role.STAFF, Role.TEACHER]}><CenterStudioPage /></RequireAuth>} />
-      <Route path="/center/activity" element={<RequireAuth role={Role.STAFF}><CenterActivityPage /></RequireAuth>} />
-      <Route path="/admin/teachers" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminTeachersPage /></RequireAuth>} />
-      <Route path="/admin/payouts" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPayoutsPage /></RequireAuth>} />
-      <Route path="/admin/payments" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminPaymentsPage /></RequireAuth>} />
-      <Route path="/admin/wallet" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminWalletPage /></RequireAuth>} />
-      <Route path="/admin/devices" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminDevicesPage /></RequireAuth>} />
-      <Route path="/admin/gamification" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminGamificationPage /></RequireAuth>} />
-      <Route path="/admin/security" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminSecurityPage /></RequireAuth>} />
-      <Route path="/admin/academy-studio" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminAcademyStudioPage /></RequireAuth>} />
-      <Route path="/admin/studio" element={<RequireAuth role={Role.SUPER_ADMIN}><AdminStudioPage /></RequireAuth>} />
+          {/* Admin */}
+          <Route
+            path="/admin"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminOverviewPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/academies"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminAcademiesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/academies/:id"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminAcademyDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/centers/new"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminCreateCenterPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center"
+            element={
+              <RequireAuth role={Role.STAFF}>
+                <CenterDashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/members"
+            element={
+              <RequireAuth role={Role.STAFF}>
+                <CenterMembersPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/subjects"
+            element={
+              <RequireAuth role={Role.STAFF}>
+                <CenterSubjectsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/settings"
+            element={
+              <RequireAuth role={Role.STAFF}>
+                <CenterSettingsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/studio"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <CenterStudioPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/activity"
+            element={
+              <RequireAuth role={Role.STAFF}>
+                <CenterActivityPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/teachers"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminTeachersPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/payouts"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminPayoutsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/payments"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminPaymentsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/wallet"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminWalletPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/devices"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminDevicesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/gamification"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminGamificationPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/security"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminSecurityPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/academy-studio"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminAcademyStudioPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/studio"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminStudioPage />
+              </RequireAuth>
+            }
+          />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-    </Suspense>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </ErrorBoundary>
   );
 }

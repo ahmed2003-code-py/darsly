@@ -112,7 +112,11 @@ export class TokenService {
     // instead of persisting for the whole refresh-token lifetime.
     const dbUser = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { role: true, isActive: true, teacherProfile: { select: { id: true, status: true } } },
+      select: {
+        role: true,
+        isActive: true,
+        teacherProfile: { select: { id: true, status: true } },
+      },
     });
     if (!dbUser || !dbUser.isActive) {
       await this.revokeSession(session.id, 'ACCOUNT_DISABLED');
@@ -148,9 +152,13 @@ export class TokenService {
     });
   }
 
-  private async signPair(
-    input: { sub?: string; id?: string; role: Role; tenantId?: string; sessionId: string },
-  ): Promise<AuthTokens> {
+  private async signPair(input: {
+    sub?: string;
+    id?: string;
+    role: Role;
+    tenantId?: string;
+    sessionId: string;
+  }): Promise<AuthTokens> {
     const payload: JwtPayload = {
       sub: input.sub ?? input.id!,
       role: input.role,

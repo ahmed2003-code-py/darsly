@@ -35,7 +35,13 @@ function planWith(
   seo?: RenderPlan['seo'],
 ): RenderPlan {
   return {
-    theme: { primary: '#4A32C9', accent: '#E3B341', defaultLang: 'ar', preset: 'warm', ...theme } as SiteTheme,
+    theme: {
+      primary: '#4A32C9',
+      accent: '#E3B341',
+      defaultLang: 'ar',
+      preset: 'warm',
+      ...theme,
+    } as SiteTheme,
     seo: seo ?? { title: lt('عنوان'), description: lt('وصف') },
     blocks: blocks.map((block) => ({ block, variant: '' })),
     verdicts: [],
@@ -80,16 +86,32 @@ function urls(html: string): string[] {
 
 describe('compileSite — hostile copy cannot become markup', () => {
   const blocks: SiteBlock[] = [
-    { type: 'hero', id: 'h', headline: lt(hostile), subheadline: lt(hostile), ctaLabel: lt(hostile) },
+    {
+      type: 'hero',
+      id: 'h',
+      headline: lt(hostile),
+      subheadline: lt(hostile),
+      ctaLabel: lt(hostile),
+    },
     { type: 'about', id: 'a', heading: lt(hostile), body: lt(hostile) },
     { type: 'toolkit', id: 't', heading: lt(hostile), items: [lt(hostile), hostile] },
     { type: 'credentials', id: 'c', heading: lt(hostile), items: [lt(hostile), hostile] },
-    { type: 'stats', id: 's', heading: lt(hostile), items: [{ label: lt(hostile), value: hostile }] },
+    {
+      type: 'stats',
+      id: 's',
+      heading: lt(hostile),
+      items: [{ label: lt(hostile), value: hostile }],
+    },
     { type: 'faq', id: 'f', heading: lt(hostile), items: [{ q: lt(hostile), a: lt(hostile) }] },
     { type: 'cta', id: 'x', headline: lt(hostile), buttonLabel: lt(hostile) },
     { type: 'courses', id: 'co', heading: lt(hostile), mode: 'auto', limit: 6 },
     { type: 'reviews', id: 'r', heading: lt(hostile), mode: 'auto', limit: 6 },
-    { type: 'contact', id: 'ct', heading: lt(hostile), socials: [{ platform: hostile.slice(0, 30), url: 'https://example.com/x' }] },
+    {
+      type: 'contact',
+      id: 'ct',
+      heading: lt(hostile),
+      socials: [{ platform: hostile.slice(0, 30), url: 'https://example.com/x' }],
+    },
   ];
 
   const html = compileSite(
@@ -97,7 +119,7 @@ describe('compileSite — hostile copy cannot become markup', () => {
     fixtureContext(),
   );
 
-  it('emits exactly one script tag — the page\'s own', () => {
+  it("emits exactly one script tag — the page's own", () => {
     expect(pageScripts(html)).toHaveLength(1);
     expect(pageScripts(html)[0]).toBe('<script>');
   });
@@ -164,7 +186,14 @@ describe('compileSite — hostile URLs never become links', () => {
     const ctx = fixtureContext({ media: () => ({ url: 'javascript:alert(1)' }) });
     const html = compileSite(
       planWith([
-        { type: 'hero', id: 'h', headline: lt('x y z'), subheadline: lt('s'), ctaLabel: lt('c'), mediaId: 'm' },
+        {
+          type: 'hero',
+          id: 'h',
+          headline: lt('x y z'),
+          subheadline: lt('s'),
+          ctaLabel: lt('c'),
+          mediaId: 'm',
+        },
         { type: 'gallery', id: 'g', heading: lt('g'), mediaIds: ['m'] },
       ]),
       ctx,
@@ -193,13 +222,29 @@ describe('compileSite — hostile URLs never become links', () => {
 describe('compileSite — the design system cannot escape into CSS', () => {
   const inject = (over: Partial<NonNullable<SiteTheme['design']>>) =>
     compileSite(
-      planWith([{ type: 'hero', id: 'h', headline: lt('a b c'), subheadline: lt('s'), ctaLabel: lt('go') }], {
-        design: {
-          background: '#0B1020', ink: '#F2F5FF', surface: '#141B33',
-          radius: 6, density: 'airy', headingScale: 'dramatic', heroTreatment: 'mesh',
-          ...over,
-        } as NonNullable<SiteTheme['design']>,
-      }),
+      planWith(
+        [
+          {
+            type: 'hero',
+            id: 'h',
+            headline: lt('a b c'),
+            subheadline: lt('s'),
+            ctaLabel: lt('go'),
+          },
+        ],
+        {
+          design: {
+            background: '#0B1020',
+            ink: '#F2F5FF',
+            surface: '#141B33',
+            radius: 6,
+            density: 'airy',
+            headingScale: 'dramatic',
+            heroTreatment: 'mesh',
+            ...over,
+          } as NonNullable<SiteTheme['design']>,
+        },
+      ),
       fixtureContext(),
     );
 

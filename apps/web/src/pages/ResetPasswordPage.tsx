@@ -61,8 +61,17 @@ export default function ResetPasswordPage() {
   // no account for a code to belong to, so send them back rather than fail late.
   if (!email) {
     return (
-      <AuthShell title={t('auth.resetTitle')} footer={<Link to="/forgot-password" className="font-bold text-primary hover:underline">{t('auth.forgotTitle')}</Link>}>
-        <p className="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">{t('auth.err.invalidToken')}</p>
+      <AuthShell
+        title={t('auth.resetTitle')}
+        footer={
+          <Link to="/forgot-password" className="font-bold text-primary hover:underline">
+            {t('auth.forgotTitle')}
+          </Link>
+        }
+      >
+        <p className="rounded-xl bg-error-container px-4 py-3 text-sm text-on-error-container">
+          {t('auth.err.invalidToken')}
+        </p>
       </AuthShell>
     );
   }
@@ -71,7 +80,11 @@ export default function ResetPasswordPage() {
     <AuthShell
       title={t('auth.resetTitle')}
       subtitle={t('auth.codeSentTo', { email })}
-      footer={<Link to="/forgot-password" className="font-bold text-primary hover:underline">{t('auth.changeEmail')}</Link>}
+      footer={
+        <Link to="/forgot-password" className="font-bold text-primary hover:underline">
+          {t('auth.changeEmail')}
+        </Link>
+      }
     >
       {done ? (
         <div className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center">
@@ -82,24 +95,54 @@ export default function ResetPasswordPage() {
       ) : (
         <form onSubmit={submit}>
           {error && (
-            <p className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container" role="alert">{error}</p>
+            <p
+              className="mb-4 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container"
+              role="alert"
+            >
+              {error}
+            </p>
           )}
           {resent && (
-            <p className="mb-4 rounded-xl bg-secondary-container/40 px-4 py-2.5 text-sm text-on-secondary-container" role="status">{resent}</p>
+            <p
+              className="mb-4 rounded-xl bg-secondary-container/40 px-4 py-2.5 text-sm text-on-secondary-container"
+              role="status"
+            >
+              {resent}
+            </p>
           )}
           {/* Six boxes in a row is the dull way to ask for a code; this deals
               them as a hand and lands a card per digit. See OtpInput. */}
           <label className="mb-1.5 block text-sm font-bold">{t('auth.resetCode')}</label>
-          <OtpInput value={code} onChange={setCode} length={6} ariaLabel={t('auth.resetCode')} autoFocus />
-          <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.newPassword')}
-            placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
-            reveal revealed={show} onReveal={() => setShow((s) => !s)} />
+          <OtpInput
+            value={code}
+            onChange={setCode}
+            length={6}
+            ariaLabel={t('auth.resetCode')}
+            autoFocus
+          />
+          <AuthField
+            icon="lock"
+            type={show ? 'text' : 'password'}
+            dir="ltr"
+            label={t('auth.newPassword')}
+            placeholder="••••••••"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            reveal
+            revealed={show}
+            onReveal={() => setShow((s) => !s)}
+          />
           <p className="mb-6 -mt-2 text-xs text-outline">{t('auth.passwordHint')}</p>
           <button className="btn-primary w-full py-3" disabled={busy}>
             {busy ? t('auth.saving') : t('auth.resetBtn')}
           </button>
-          <button type="button" onClick={resend} disabled={busy}
-            className="mt-3 w-full py-2 text-sm font-semibold text-primary hover:underline disabled:opacity-50">
+          <button
+            type="button"
+            onClick={resend}
+            disabled={busy}
+            className="mt-3 w-full py-2 text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+          >
             {t('auth.resendCode')}
           </button>
         </form>

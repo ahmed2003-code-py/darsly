@@ -17,14 +17,19 @@ export class SiteGenerateHandler implements AiJobHandler {
   ) {}
 
   async handle(job: AiJob): Promise<AiJobResult> {
-    const input = job.input as
-      | { paletteKey?: string; lang?: 'ar' | 'en'; regenerateSectionId?: string }
-      | null;
+    const input = job.input as {
+      paletteKey?: string;
+      lang?: 'ar' | 'en';
+      regenerateSectionId?: string;
+    } | null;
 
     // Per-section regeneration: rewrite one section, keep the rest untouched.
     if (input?.regenerateSectionId) {
       await this.jobs.setStage(job.id, 'section');
-      const { doc, costCents } = await this.generator.regenerateSection(job.academyId, input.regenerateSectionId);
+      const { doc, costCents } = await this.generator.regenerateSection(
+        job.academyId,
+        input.regenerateSectionId,
+      );
       const { snapshot } = await this.site.saveDraft(job.academyId, doc, 'regen-section');
       return { costCents, resultSnapshotId: snapshot.id };
     }

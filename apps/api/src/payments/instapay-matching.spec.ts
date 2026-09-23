@@ -1,4 +1,9 @@
-import { isIncomingTransfer, parseAmountCents, parseIdentities, parsePayerName } from '../device/sms-parser';
+import {
+  isIncomingTransfer,
+  parseAmountCents,
+  parseIdentities,
+  parsePayerName,
+} from '../device/sms-parser';
 import { PaymentMatchingService } from './payment-matching.service';
 
 /**
@@ -92,7 +97,7 @@ describe('a bank SMS against a top-up the student filed as InstaPay', () => {
     expect(wallet.approveTopup).not.toHaveBeenCalled();
   });
 
-  it('falls back to the payer\'s name when the reference differs', async () => {
+  it("falls back to the payer's name when the reference differs", async () => {
     // The student mistyped the reference. One top-up of this size in the window
     // and the transfer is in their own name, so it is credited — the same rule
     // that already applies to a wallet transfer, now reachable for InstaPay.
@@ -144,7 +149,11 @@ function receiptCtx(topups: any[]) {
   };
   const wallet: any = { approveTopup: jest.fn().mockResolvedValue({}) };
   return {
-    svc: new PaymentMatchingService(prisma, { systemVerify: jest.fn(), settle: jest.fn() } as any, wallet),
+    svc: new PaymentMatchingService(
+      prisma,
+      { systemVerify: jest.fn(), settle: jest.fn() } as any,
+      wallet,
+    ),
     wallet,
   };
 }
@@ -256,7 +265,11 @@ describe('the transfer arrives before the form is finished', () => {
     };
     const wallet: any = { approveTopup: jest.fn().mockResolvedValue({}) };
     return {
-      svc: new PaymentMatchingService(prisma, { systemVerify: jest.fn(), settle: jest.fn() } as any, wallet),
+      svc: new PaymentMatchingService(
+        prisma,
+        { systemVerify: jest.fn(), settle: jest.fn() } as any,
+        wallet,
+      ),
       wallet,
       seen,
     };
@@ -289,7 +302,12 @@ describe('the transfer arrives before the form is finished', () => {
   });
 
   it('still reconciles a Vodafone top-up by its wallet number', async () => {
-    const vf = { ...topupRow, method: 'VODAFONE_CASH', reference: '01284120292', proofReading: null };
+    const vf = {
+      ...topupRow,
+      method: 'VODAFONE_CASH',
+      reference: '01284120292',
+      proofReading: null,
+    };
     const vfEvent = {
       ...eventRow,
       provider: 'VODAFONE_CASH',

@@ -81,7 +81,8 @@ export class GradingService {
             select: {
               lesson: {
                 select: {
-                  id: true, title: true,
+                  id: true,
+                  title: true,
                   unit: { select: { title: true, course: { select: { id: true, title: true } } } },
                 },
               },
@@ -92,7 +93,9 @@ export class GradingService {
       this.prisma.assignmentSubmission.findMany({
         where: {
           gradedAt: null,
-          assignment: { lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } } },
+          assignment: {
+            lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } },
+          },
         },
         orderBy: { createdAt: 'asc' },
         take: GradingService.MAX_ITEMS,
@@ -104,7 +107,8 @@ export class GradingService {
             select: {
               lesson: {
                 select: {
-                  id: true, title: true,
+                  id: true,
+                  title: true,
                   unit: { select: { title: true, course: { select: { id: true, title: true } } } },
                 },
               },
@@ -160,7 +164,9 @@ export class GradingService {
     return [...courses.values()]
       .map((c) => ({
         ...c,
-        items: c.items.sort((x, y) => (x.submittedAt?.getTime() ?? 0) - (y.submittedAt?.getTime() ?? 0)),
+        items: c.items.sort(
+          (x, y) => (x.submittedAt?.getTime() ?? 0) - (y.submittedAt?.getTime() ?? 0),
+        ),
         pending: c.items.length,
       }))
       .sort((a, b) => b.pending - a.pending);
@@ -197,7 +203,8 @@ export class GradingService {
             },
             lesson: {
               select: {
-                id: true, title: true,
+                id: true,
+                title: true,
                 unit: { select: { title: true, course: { select: { id: true, title: true } } } },
               },
             },
@@ -208,7 +215,10 @@ export class GradingService {
     if (!attempt) throw new NotFoundException('Attempt not found');
 
     const answers = (attempt.answers ?? {}) as Record<string, string>;
-    const feedback = (attempt.aiFeedback ?? {}) as Record<string, { similarityPct?: number; reason?: string }>;
+    const feedback = (attempt.aiFeedback ?? {}) as Record<
+      string,
+      { similarityPct?: number; reason?: string }
+    >;
     const lesson = attempt.quiz.lesson;
     return {
       id: attempt.id,
@@ -255,7 +265,8 @@ export class GradingService {
             maxScore: true,
             lesson: {
               select: {
-                id: true, title: true,
+                id: true,
+                title: true,
                 unit: { select: { title: true, course: { select: { id: true, title: true } } } },
               },
             },
@@ -349,7 +360,10 @@ export class GradingService {
       if (!q.attempts.length && !openReports) continue;
       const course = q.lesson.unit.course;
       const row = courses.get(course.id) ?? {
-        courseId: course.id, courseTitle: course.title, quizzes: [], assignments: [],
+        courseId: course.id,
+        courseTitle: course.title,
+        quizzes: [],
+        assignments: [],
       };
       row.quizzes.push({
         lessonId: q.lessonId,
@@ -370,7 +384,10 @@ export class GradingService {
       if (!a.submissions.length) continue;
       const course = a.lesson.unit.course;
       const row = courses.get(course.id) ?? {
-        courseId: course.id, courseTitle: course.title, quizzes: [], assignments: [],
+        courseId: course.id,
+        courseTitle: course.title,
+        quizzes: [],
+        assignments: [],
       };
       const marked = a.submissions.filter((s) => s.gradedAt && s.score != null);
       row.assignments.push({
@@ -412,12 +429,20 @@ export class GradingService {
         questions: {
           orderBy: { sortOrder: 'asc' },
           select: {
-            id: true, type: true, prompt: true, points: true, options: true,
-            correctOptionId: true, correctOptionIds: true,
+            id: true,
+            type: true,
+            prompt: true,
+            points: true,
+            options: true,
+            correctOptionId: true,
+            correctOptionIds: true,
             reports: {
               orderBy: { createdAt: 'desc' },
               select: {
-                id: true, note: true, status: true, createdAt: true,
+                id: true,
+                note: true,
+                status: true,
+                createdAt: true,
                 student: { select: { user: { select: { fullName: true } } } },
               },
             },
@@ -503,11 +528,17 @@ export class GradingService {
     const question = await this.prisma.quizQuestion.findFirst({
       where: { id: questionId, quiz: { lesson: { unit: { course: { tenantId } } } } },
       select: {
-        id: true, type: true, points: true, options: true,
-        correctOptionId: true, correctOptionIds: true,
+        id: true,
+        type: true,
+        points: true,
+        options: true,
+        correctOptionId: true,
+        correctOptionIds: true,
         quiz: {
           select: {
-            id: true, passingScore: true, lessonId: true,
+            id: true,
+            passingScore: true,
+            lessonId: true,
             lesson: { select: { title: true } },
             questions: { select: { points: true } },
           },
@@ -532,7 +563,11 @@ export class GradingService {
       });
     }
 
-    const before = { type: question.type, correctOptionId: question.correctOptionId, correctOptionIds: question.correctOptionIds };
+    const before = {
+      type: question.type,
+      correctOptionId: question.correctOptionId,
+      correctOptionIds: question.correctOptionIds,
+    };
     const after = { type: question.type, correctOptionId: key[0], correctOptionIds: key };
     const total = question.quiz.questions.reduce((n, q) => n + q.points, 0);
 
@@ -562,7 +597,10 @@ export class GradingService {
       if (was === now) continue;
       const delta = (now ? question.points : 0) - (was ? question.points : 0);
       if (delta <= 0 || !total) continue; // never downward — see above
-      const next = Math.max(0, Math.min(100, Math.round((a.scorePct ?? 0) + (delta / total) * 100)));
+      const next = Math.max(
+        0,
+        Math.min(100, Math.round((a.scorePct ?? 0) + (delta / total) * 100)),
+      );
       if (next <= (a.scorePct ?? 0)) continue;
       await this.prisma.quizAttempt.update({
         where: { id: a.id },
@@ -578,7 +616,13 @@ export class GradingService {
       data: { status: 'ACCEPTED', resolvedAt: new Date(), resolvedBy: userId },
     });
 
-    return { ok: true, correctOptionIds: key, regraded: attempts.length, raised, reportsAccepted: resolved.count };
+    return {
+      ok: true,
+      correctOptionIds: key,
+      regraded: attempts.length,
+      raised,
+      reportsAccepted: resolved.count,
+    };
   }
 
   /** The teacher looked and the question was right after all. */
@@ -614,7 +658,6 @@ export class GradingService {
     }
   }
 
-
   /**
    * Who sat this paper, and how it went for each of them.
    *
@@ -627,13 +670,19 @@ export class GradingService {
       where: { lessonId, lesson: { unit: { course: { tenantId } } } },
       select: {
         passingScore: true,
-        lesson: { select: { title: true, unit: { select: { course: { select: { title: true } } } } } },
+        lesson: {
+          select: { title: true, unit: { select: { course: { select: { title: true } } } } },
+        },
         attempts: {
           where: { voidedAt: null, submittedAt: { not: null } },
           orderBy: { submittedAt: 'desc' },
           select: {
-            id: true, scorePct: true, passed: true, needsManualGrading: true,
-            submittedAt: true, gradedAt: true,
+            id: true,
+            scorePct: true,
+            passed: true,
+            needsManualGrading: true,
+            submittedAt: true,
+            gradedAt: true,
             student: { select: { id: true, user: { select: { fullName: true } } } },
           },
         },
@@ -670,11 +719,16 @@ export class GradingService {
       where: { lessonId, lesson: { unit: { course: { tenantId } } } },
       select: {
         maxScore: true,
-        lesson: { select: { title: true, unit: { select: { course: { select: { title: true } } } } } },
+        lesson: {
+          select: { title: true, unit: { select: { course: { select: { title: true } } } } },
+        },
         submissions: {
           orderBy: { createdAt: 'desc' },
           select: {
-            id: true, score: true, gradedAt: true, createdAt: true,
+            id: true,
+            score: true,
+            gradedAt: true,
+            createdAt: true,
             student: { select: { id: true, user: { select: { fullName: true } } } },
           },
         },
@@ -715,18 +769,38 @@ export class GradingService {
     const attempt = await this.prisma.quizAttempt.findFirst({
       where: { id: attemptId, quiz: { lesson: { unit: { course: { tenantId } } } } },
       select: {
-        id: true, answers: true, aiFeedback: true, manualScores: true, scorePct: true,
-        passed: true, submittedAt: true, gradedAt: true, needsManualGrading: true,
+        id: true,
+        answers: true,
+        aiFeedback: true,
+        manualScores: true,
+        scorePct: true,
+        passed: true,
+        submittedAt: true,
+        gradedAt: true,
+        needsManualGrading: true,
         student: { select: { user: { select: { fullName: true } } } },
         quiz: {
           select: {
             passingScore: true,
-            lesson: { select: { id: true, title: true, unit: { select: { course: { select: { title: true } } } } } },
+            lesson: {
+              select: {
+                id: true,
+                title: true,
+                unit: { select: { course: { select: { title: true } } } },
+              },
+            },
             questions: {
               orderBy: { sortOrder: 'asc' },
               select: {
-                id: true, type: true, prompt: true, options: true, points: true,
-                correctOptionId: true, correctOptionIds: true, modelAnswer: true, explanation: true,
+                id: true,
+                type: true,
+                prompt: true,
+                options: true,
+                points: true,
+                correctOptionId: true,
+                correctOptionIds: true,
+                modelAnswer: true,
+                explanation: true,
               },
             },
           },
@@ -775,7 +849,8 @@ export class GradingService {
           // A written answer is not right or wrong here — a person decided what
           // it was worth, and saying "wrong" about it would be inventing that.
           correct: q.type === 'SHORT_ANSWER' ? null : isCorrectAnswer(q, given),
-          writtenAnswer: q.type === 'SHORT_ANSWER' ? (typeof given === 'string' ? given : '') : null,
+          writtenAnswer:
+            q.type === 'SHORT_ANSWER' ? (typeof given === 'string' ? given : '') : null,
           /**
            * What a written answer actually earned, and who decided.
            *
@@ -798,5 +873,4 @@ export class GradingService {
       }),
     };
   }
-
 }

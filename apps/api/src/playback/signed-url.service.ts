@@ -43,7 +43,9 @@ export class SignedUrlService {
     // string. validateConfig() guarantees at least one of these is strong in prod.
     const s = process.env.VIDEO_SIGNING_SECRET ?? process.env.JWT_ACCESS_SECRET;
     if (!s) {
-      throw new Error('VIDEO_SIGNING_SECRET (or JWT_ACCESS_SECRET) must be set to sign playback tokens');
+      throw new Error(
+        'VIDEO_SIGNING_SECRET (or JWT_ACCESS_SECRET) must be set to sign playback tokens',
+      );
     }
     return s;
   }

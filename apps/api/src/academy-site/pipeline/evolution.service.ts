@@ -39,7 +39,8 @@ function fingerprintOf(raw: unknown): DesignFingerprint | undefined {
 }
 
 const themeStr = (doc: unknown, key: 'dna' | 'archetype'): string | undefined => {
-  const theme = doc && typeof doc === 'object' ? (doc as { theme?: Record<string, unknown> }).theme : undefined;
+  const theme =
+    doc && typeof doc === 'object' ? (doc as { theme?: Record<string, unknown> }).theme : undefined;
   const v = theme?.[key];
   return typeof v === 'string' ? v : undefined;
 };

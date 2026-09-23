@@ -64,7 +64,10 @@ export default function SecureVideoPlayerPage() {
       const el = document.fullscreenElement;
       setIsFullscreen(!!el);
       if (el && el === videoRef.current && frameRef.current) {
-        document.exitFullscreen().then(() => frameRef.current?.requestFullscreen?.()).catch(() => {});
+        document
+          .exitFullscreen()
+          .then(() => frameRef.current?.requestFullscreen?.())
+          .catch(() => {});
       }
     };
     document.addEventListener('fullscreenchange', onChange);
@@ -115,7 +118,8 @@ export default function SecureVideoPlayerPage() {
   // only the named sections, and the unnamed one just isn't labelled.
   let sectionNumber = 0;
   const sidebarUnits: { unit: any; sectionN: number | null }[] =
-    course?.units.map((u: any) => ({ unit: u, sectionN: u.isDefault ? null : ++sectionNumber })) ?? [];
+    course?.units.map((u: any) => ({ unit: u, sectionN: u.isDefault ? null : ++sectionNumber })) ??
+    [];
 
   // ── Notes ────────────────────────────────────────────────────────────────
   const { data: notes } = useQuery({
@@ -222,7 +226,11 @@ export default function SecureVideoPlayerPage() {
    * right arrow moved the picture ten seconds on and said nothing, so the only
    * way to know it worked was to already know where you were.
    */
-  const [flash, setFlash] = useState<{ icon: string; label: string; side: 'start' | 'end' | 'center' } | null>(null);
+  const [flash, setFlash] = useState<{
+    icon: string;
+    label: string;
+    side: 'start' | 'end' | 'center';
+  } | null>(null);
   const flashTimer = useRef<number | null>(null);
   const say = (icon: string, label: string, side: 'start' | 'end' | 'center' = 'center') => {
     setFlash({ icon, label, side });
@@ -234,7 +242,8 @@ export default function SecureVideoPlayerPage() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable))
+        return;
       const v = videoRef.current;
       if (!v) return;
       const rates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -247,25 +256,35 @@ export default function SecureVideoPlayerPage() {
       switch (true) {
         case e.key === ' ' || code === 'Space' || code === 'KeyK':
           e.preventDefault();
-          if (v.paused) { v.play().catch(() => {}); say('play_arrow', t('player.kPlay')); }
-          else { v.pause(); say('pause', t('player.kPlay')); }
+          if (v.paused) {
+            v.play().catch(() => {});
+            say('play_arrow', t('player.kPlay'));
+          } else {
+            v.pause();
+            say('pause', t('player.kPlay'));
+          }
           break;
         case e.key === 'ArrowRight':
-          e.preventDefault(); userSeek.current = true;
+          e.preventDefault();
+          userSeek.current = true;
           v.currentTime = Math.min(v.duration || 1e9, v.currentTime + 10);
           say('forward_10', '+10', 'end');
           break;
         case e.key === 'ArrowLeft':
-          e.preventDefault(); userSeek.current = true;
+          e.preventDefault();
+          userSeek.current = true;
           v.currentTime = Math.max(0, v.currentTime - 10);
           say('replay_10', '−10', 'start');
           break;
         case e.key === 'ArrowUp':
-          e.preventDefault(); v.volume = Math.min(1, v.volume + 0.1); v.muted = false;
+          e.preventDefault();
+          v.volume = Math.min(1, v.volume + 0.1);
+          v.muted = false;
           say('volume_up', pct(v.volume));
           break;
         case e.key === 'ArrowDown':
-          e.preventDefault(); v.volume = Math.max(0, v.volume - 0.1);
+          e.preventDefault();
+          v.volume = Math.max(0, v.volume - 0.1);
           say(v.volume === 0 ? 'volume_off' : 'volume_down', pct(v.volume));
           break;
         case code === 'KeyM':
@@ -279,13 +298,15 @@ export default function SecureVideoPlayerPage() {
         case e.key === '>' || e.key === '.' || code === 'Period': {
           const i = rates.indexOf(v.playbackRate);
           const r = rates[Math.min(rates.length - 1, i + 1)] ?? v.playbackRate;
-          applyRate(r); say('speed', `${r}×`);
+          applyRate(r);
+          say('speed', `${r}×`);
           break;
         }
         case e.key === '<' || e.key === ',' || code === 'Comma': {
           const i = rates.indexOf(v.playbackRate);
           const r = rates[Math.max(0, i - 1)] ?? v.playbackRate;
-          applyRate(r); say('slow_motion_video', `${r}×`);
+          applyRate(r);
+          say('slow_motion_video', `${r}×`);
           break;
         }
       }
@@ -316,7 +337,9 @@ export default function SecureVideoPlayerPage() {
         // the size the manifest failed to.
         const ls = hls.levels
           .map((l, index) => {
-            const fromUrl = String((l as { uri?: string }).uri ?? l.url?.[0] ?? '').match(/\/(\d{3,4})p\//);
+            const fromUrl = String((l as { uri?: string }).uri ?? l.url?.[0] ?? '').match(
+              /\/(\d{3,4})p\//,
+            );
             const height = l.height || Number(fromUrl?.[1]) || 0;
             return {
               index,
@@ -411,13 +434,18 @@ export default function SecureVideoPlayerPage() {
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <Link to={`/course/${courseId}`} className="mb-1 flex items-center gap-1 text-sm text-primary hover:underline">
+          <Link
+            to={`/course/${courseId}`}
+            className="mb-1 flex items-center gap-1 text-sm text-primary hover:underline"
+          >
             <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>
             {course?.title}
           </Link>
           <h1 className="font-heading text-2xl font-extrabold">{current?.title}</h1>
           {current?.description && (
-            <Markdown className="mt-1 max-w-2xl text-sm text-on-surface-variant">{current.description}</Markdown>
+            <Markdown className="mt-1 max-w-2xl text-sm text-on-surface-variant">
+              {current.description}
+            </Markdown>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -472,7 +500,9 @@ export default function SecureVideoPlayerPage() {
                             </span>
                             <span className="min-w-0 flex-1 truncate">{l.title}</span>
                             {l.durationSec > 0 && (
-                              <span className="text-xs text-outline">{duration(l.durationSec)}</span>
+                              <span className="text-xs text-outline">
+                                {duration(l.durationSec)}
+                              </span>
                             )}
                           </button>
                         </li>
@@ -530,18 +560,30 @@ export default function SecureVideoPlayerPage() {
                       window.setTimeout(() => setResumedAt(0), 6000);
                     }
                   }}
-                  onPlay={() => { setIsPlaying(true); heartbeat('play'); }}
+                  onPlay={() => {
+                    setIsPlaying(true);
+                    heartbeat('play');
+                  }}
                   // The browser does not fire `pause` when playback ends on its
                   // own, so without this the final seconds of every lesson were
                   // never reported and the lesson never completed.
-                  onEnded={() => { setIsPlaying(false); heartbeat('ended'); }}
-                  onPause={() => { setIsPlaying(false); heartbeat('pause'); }}
+                  onEnded={() => {
+                    setIsPlaying(false);
+                    heartbeat('ended');
+                  }}
+                  onPause={() => {
+                    setIsPlaying(false);
+                    heartbeat('pause');
+                  }}
                   onSeeked={() => {
                     const asked = userSeek.current;
                     userSeek.current = false;
                     heartbeat(asked ? 'seek' : 'hb');
                   }}
-                  onTimeUpdate={(e) => { setCurrentTime(e.currentTarget.currentTime); heartbeat('hb'); }}
+                  onTimeUpdate={(e) => {
+                    setCurrentTime(e.currentTarget.currentTime);
+                    heartbeat('hb');
+                  }}
                 />
                 <RovingWatermark payload={ticket.watermark} />
 
@@ -550,13 +592,21 @@ export default function SecureVideoPlayerPage() {
                 {flash && (
                   <div
                     className={`pointer-events-none absolute inset-y-0 z-20 grid place-items-center ${
-                      flash.side === 'center' ? 'inset-x-0' : flash.side === 'end' ? 'end-0 w-1/3' : 'start-0 w-1/3'
+                      flash.side === 'center'
+                        ? 'inset-x-0'
+                        : flash.side === 'end'
+                          ? 'end-0 w-1/3'
+                          : 'start-0 w-1/3'
                     }`}
                     aria-hidden="true"
                   >
                     <span className="s-pop-in flex flex-col items-center gap-1 rounded-2xl bg-black/60 px-5 py-4 text-white backdrop-blur">
-                      <span className="material-symbols-outlined text-4xl leading-none">{flash.icon}</span>
-                      <span className="font-heading text-sm font-bold tabular-nums">{flash.label}</span>
+                      <span className="material-symbols-outlined text-4xl leading-none">
+                        {flash.icon}
+                      </span>
+                      <span className="font-heading text-sm font-bold tabular-nums">
+                        {flash.label}
+                      </span>
                     </span>
                   </div>
                 )}
@@ -598,7 +648,11 @@ export default function SecureVideoPlayerPage() {
                     step={0.1}
                     value={Math.min(currentTime, videoDuration || currentTime)}
                     onChange={(e) => scrub(Number(e.target.value))}
-                    style={{ '--seek-pct': `${videoDuration ? (currentTime / videoDuration) * 100 : 0}%` } as React.CSSProperties}
+                    style={
+                      {
+                        '--seek-pct': `${videoDuration ? (currentTime / videoDuration) * 100 : 0}%`,
+                      } as React.CSSProperties
+                    }
                     aria-label={t('player.kSeek')}
                   />
                   <div className="flex items-center gap-2">
@@ -606,16 +660,21 @@ export default function SecureVideoPlayerPage() {
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/90 transition hover:bg-white/10"
                       onClick={togglePlay}
                     >
-                      <span className="material-symbols-outlined text-2xl">{isPlaying ? 'pause' : 'play_arrow'}</span>
+                      <span className="material-symbols-outlined text-2xl">
+                        {isPlaying ? 'pause' : 'play_arrow'}
+                      </span>
                     </button>
                     <button
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/90 transition hover:bg-white/10"
                       onClick={toggleMute}
                     >
-                      <span className="material-symbols-outlined text-xl">{muted ? 'volume_off' : 'volume_up'}</span>
+                      <span className="material-symbols-outlined text-xl">
+                        {muted ? 'volume_off' : 'volume_up'}
+                      </span>
                     </button>
                     <span className="shrink-0 font-mono text-xs text-white/80">
-                      {formatClock(Math.floor(currentTime))} / {formatClock(Math.floor(videoDuration))}
+                      {formatClock(Math.floor(currentTime))} /{' '}
+                      {formatClock(Math.floor(videoDuration))}
                     </span>
                     <div className="flex-1" />
                     <PlayerMenu
@@ -623,17 +682,36 @@ export default function SecureVideoPlayerPage() {
                       label={`${rate}×`}
                       open={menu === 'speed'}
                       onToggle={() => setMenu(menu === 'speed' ? null : 'speed')}
-                      items={RATES.map((r) => ({ key: String(r), label: r === 1 ? t('player.normal') : `${r}×`, active: r === rate, onClick: () => applyRate(r) }))}
+                      items={RATES.map((r) => ({
+                        key: String(r),
+                        label: r === 1 ? t('player.normal') : `${r}×`,
+                        active: r === rate,
+                        onClick: () => applyRate(r),
+                      }))}
                     />
                     {levels.length > 1 && (
                       <PlayerMenu
                         icon="hd"
-                        label={quality === -1 ? t('player.auto') : (levels.find((l) => l.index === quality)?.label ?? '')}
+                        label={
+                          quality === -1
+                            ? t('player.auto')
+                            : (levels.find((l) => l.index === quality)?.label ?? '')
+                        }
                         open={menu === 'quality'}
                         onToggle={() => setMenu(menu === 'quality' ? null : 'quality')}
                         items={[
-                          { key: 'auto', label: t('player.auto'), active: quality === -1, onClick: () => applyQuality(-1) },
-                          ...levels.map((l) => ({ key: String(l.index), label: l.label, active: quality === l.index, onClick: () => applyQuality(l.index) })),
+                          {
+                            key: 'auto',
+                            label: t('player.auto'),
+                            active: quality === -1,
+                            onClick: () => applyQuality(-1),
+                          },
+                          ...levels.map((l) => ({
+                            key: String(l.index),
+                            label: l.label,
+                            active: quality === l.index,
+                            onClick: () => applyQuality(l.index),
+                          })),
                         ]}
                       />
                     )}
@@ -642,7 +720,9 @@ export default function SecureVideoPlayerPage() {
                       title={t('player.fullscreen')}
                       onClick={toggleFullscreen}
                     >
-                      <span className="material-symbols-outlined text-lg">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
+                      <span className="material-symbols-outlined text-lg">
+                        {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+                      </span>
                     </button>
                     <div className="relative shrink-0">
                       <button
@@ -666,7 +746,9 @@ export default function SecureVideoPlayerPage() {
                             ].map(([k, d]) => (
                               <li key={k} className="flex items-center justify-between gap-3">
                                 <span className="text-white/70">{d}</span>
-                                <kbd className="rounded bg-white/15 px-1.5 py-0.5 font-mono">{k}</kbd>
+                                <kbd className="rounded bg-white/15 px-1.5 py-0.5 font-mono">
+                                  {k}
+                                </kbd>
                               </li>
                             ))}
                           </ul>
@@ -678,7 +760,9 @@ export default function SecureVideoPlayerPage() {
                 {/* Pause + blur overlay on tab blur / devtools */}
                 {obscured && (
                   <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/90 backdrop-blur-xl">
-                    <span className="material-symbols-outlined text-5xl text-accent">visibility_off</span>
+                    <span className="material-symbols-outlined text-5xl text-accent">
+                      visibility_off
+                    </span>
                     <p className="px-8 text-center font-heading text-lg font-bold text-white">
                       {t('player.pausedObscured')}
                     </p>
@@ -700,7 +784,10 @@ export default function SecureVideoPlayerPage() {
           {/* Next lesson */}
           {nextLesson && (
             <div className="mt-4 flex justify-end">
-              <button className="btn-primary" onClick={() => navigate(`/learn/${courseId}/${nextLesson.id}`)}>
+              <button
+                className="btn-primary"
+                onClick={() => navigate(`/learn/${courseId}/${nextLesson.id}`)}
+              >
                 {t('player.nextLesson')} ←
               </button>
             </div>
@@ -713,11 +800,15 @@ export default function SecureVideoPlayerPage() {
                 <button
                   key={tb}
                   className={`-mb-px border-b-2 pb-3 font-heading font-bold transition ${
-                    tab === tb ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'
+                    tab === tb
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-on-surface-variant'
                   }`}
                   onClick={() => setTab(tb)}
                 >
-                  {tb === 'notes' ? t('player.notesTab') : t('player.attachmentsTab', { count: current?.attachments?.length ?? 0 })}
+                  {tb === 'notes'
+                    ? t('player.notesTab')
+                    : t('player.attachmentsTab', { count: current?.attachments?.length ?? 0 })}
                 </button>
               ))}
             </div>
@@ -756,12 +847,17 @@ export default function SecureVideoPlayerPage() {
                       {formatClock(n.timestampSec)}
                     </button>
                     <p className="min-w-0 flex-1 text-sm">{n.body}</p>
-                    <button className="text-outline hover:text-error" onClick={() => delNote.mutate(n.id)}>
+                    <button
+                      className="text-outline hover:text-error"
+                      onClick={() => delNote.mutate(n.id)}
+                    >
                       <span className="material-symbols-outlined text-base">delete</span>
                     </button>
                   </li>
                 ))}
-                {!notes?.length && <p className="py-4 text-center text-sm text-outline">{t('player.noNotes')}</p>}
+                {!notes?.length && (
+                  <p className="py-4 text-center text-sm text-outline">{t('player.noNotes')}</p>
+                )}
               </ul>
             </div>
           )}
@@ -806,7 +902,11 @@ function formatClock(sec: number): string {
 
 /** A compact overlay menu button (speed / quality) for the hardened player. */
 function PlayerMenu({
-  icon, label, open, onToggle, items,
+  icon,
+  label,
+  open,
+  onToggle,
+  items,
 }: {
   icon: string;
   label: string;

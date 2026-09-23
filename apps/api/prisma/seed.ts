@@ -11,4 +11,8 @@ const prisma = new PrismaClient();
 
 seedDatabase(prisma, (m) => console.log('✓ ' + m))
   .then(() => prisma.$disconnect())
-  .catch(async (e) => { console.error(e); await prisma.$disconnect(); process.exit(1); });
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });

@@ -46,7 +46,10 @@ describe('EvolutionService.context', () => {
 
   it('reads the published direction as the "keep this" signal', async () => {
     const evo = new EvolutionService(
-      fakePrisma({ site: { id: 's1', publishedDoc: themed('editorial_dark', 'university') }, snapshots: [] }),
+      fakePrisma({
+        site: { id: 's1', publishedDoc: themed('editorial_dark', 'university') },
+        snapshots: [],
+      }),
     );
     const ctx = await evo.context('a1');
     expect(ctx.publishedDna).toBe('editorial_dark');
@@ -57,7 +60,11 @@ describe('EvolutionService.context', () => {
     const evo = new EvolutionService(
       fakePrisma({
         site: { id: 's1', publishedDoc: null },
-        snapshots: [snap(themed('royal_night')), snap(themed('warm_mentor')), snap(themed('creative_serif'))],
+        snapshots: [
+          snap(themed('royal_night')),
+          snap(themed('warm_mentor')),
+          snap(themed('creative_serif')),
+        ],
       }),
     );
     const ctx = await evo.context('a1');
@@ -69,7 +76,12 @@ describe('EvolutionService.context', () => {
     const evo = new EvolutionService(
       fakePrisma({
         site: { id: 's1', publishedDoc: null },
-        snapshots: [snap(themed('royal_night')), snap({ theme: {} }), snap({}), snap(themed('warm_mentor'))],
+        snapshots: [
+          snap(themed('royal_night')),
+          snap({ theme: {} }),
+          snap({}),
+          snap(themed('warm_mentor')),
+        ],
       }),
     );
     expect((await evo.context('a1')).recentDnas).toEqual(['royal_night', 'warm_mentor']);
@@ -95,7 +107,10 @@ describe('EvolutionService.normalizeDna', () => {
 
 describe('EvolutionService.enforceVariety', () => {
   const evo = new EvolutionService(fakePrisma({}));
-  const ctx = (recentDnas: string[]): EvolutionContext => ({ recentDnas, regenCount: recentDnas.length });
+  const ctx = (recentDnas: string[]): EvolutionContext => ({
+    recentDnas,
+    regenCount: recentDnas.length,
+  });
 
   it('rotates away from the direction the teacher just regenerated out of', () => {
     const chosen = evo.enforceVariety('royal_night', ctx(['royal_night', 'warm_mentor']), false);
@@ -104,7 +119,9 @@ describe('EvolutionService.enforceVariety', () => {
   });
 
   it('leaves an unrelated choice alone', () => {
-    expect(evo.enforceVariety('creative_serif', ctx(['royal_night']), false)).toBe('creative_serif');
+    expect(evo.enforceVariety('creative_serif', ctx(['royal_night']), false)).toBe(
+      'creative_serif',
+    );
   });
 
   it('lets an explicit style brief win over the anti-repeat guard', () => {

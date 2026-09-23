@@ -10,7 +10,11 @@ import { localizedText } from '../schema/site-document';
  */
 export const fixedCopySchema = z.object({
   seo: z.object({ metaTitle: localizedText(70), metaDescription: localizedText(160) }),
-  hero: z.object({ headline: localizedText(160), subheadline: localizedText(400), ctaLabel: localizedText(60) }),
+  hero: z.object({
+    headline: localizedText(160),
+    subheadline: localizedText(400),
+    ctaLabel: localizedText(60),
+  }),
   about: z.object({ heading: localizedText(120), body: localizedText(2000) }),
   toolkitHeading: localizedText(120),
   highlights: z.array(localizedText(60)).max(12),
@@ -19,7 +23,10 @@ export const fixedCopySchema = z.object({
   // Exactly three in the fixed template; a couple extra is harmless, the
   // assembler slices.
   process: z.array(z.object({ title: localizedText(120), body: localizedText(400) })).max(5),
-  faq: z.array(z.object({ q: localizedText(200), a: localizedText(800) })).min(1).max(5),
+  faq: z
+    .array(z.object({ q: localizedText(200), a: localizedText(800) }))
+    .min(1)
+    .max(5),
   // One sentence in the teacher's own voice. Optional: omitted rather than
   // fabricated when the facts give the model nothing genuine to draw on.
   quote: z.object({ text: localizedText(400), attribution: localizedText(80) }).optional(),

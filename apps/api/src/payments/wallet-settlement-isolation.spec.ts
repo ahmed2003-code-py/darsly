@@ -27,28 +27,50 @@ import { ManualPaymentsService } from './manual-payments.service';
  * that is the database's contract, and verifying it end to end needs a real
  * database (see the audit's "not tested" section).
  */
-function ctx(over: { method?: string; walletCents?: number; status?: string; settledAt?: Date | null } = {}) {
+function ctx(
+  over: { method?: string; walletCents?: number; status?: string; settledAt?: Date | null } = {},
+) {
   const opened: { options: unknown }[] = [];
   const payment = {
-    id: 'pay1', status: over.status ?? 'PENDING', courseId: 'c1', enrollmentId: 'enr1',
-    studentId: 's1', couponId: null, tenantId: 't1',
-    method: over.method ?? 'INSTAPAY', walletCents: over.walletCents ?? 0,
-    amountCents: 10000, settledAt: over.settledAt ?? null,
+    id: 'pay1',
+    status: over.status ?? 'PENDING',
+    courseId: 'c1',
+    enrollmentId: 'enr1',
+    studentId: 's1',
+    couponId: null,
+    tenantId: 't1',
+    method: over.method ?? 'INSTAPAY',
+    walletCents: over.walletCents ?? 0,
+    amountCents: 10000,
+    settledAt: over.settledAt ?? null,
   };
   const tx: any = {
-    payment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue(payment) },
+    payment: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      update: jest.fn().mockResolvedValue(payment),
+    },
     enrollment: { update: jest.fn().mockResolvedValue({}) },
   };
   const prisma: any = {
-    payment: { findUnique: jest.fn().mockResolvedValue(payment), update: jest.fn().mockResolvedValue(payment) },
-    course: { findUnique: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1', pricingModel: 'ONE_TIME', title: 'X' }) },
+    payment: {
+      findUnique: jest.fn().mockResolvedValue(payment),
+      update: jest.fn().mockResolvedValue(payment),
+    },
+    course: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ id: 'c1', tenantId: 't1', pricingModel: 'ONE_TIME', title: 'X' }),
+    },
     studentProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1' }) },
     $transaction: jest.fn(async (work: any, options: unknown) => {
       opened.push({ options });
       return work(tx);
     }),
   };
-  const ledger: any = { recordPayment: jest.fn().mockResolvedValue(undefined), ensureInvoice: jest.fn().mockResolvedValue(undefined) };
+  const ledger: any = {
+    recordPayment: jest.fn().mockResolvedValue(undefined),
+    ensureInvoice: jest.fn().mockResolvedValue(undefined),
+  };
   const notifications: any = { create: jest.fn().mockResolvedValue({}) };
   // Proof storage and the proof reader are not reached on any path these cases
   // exercise — the subject here is which transaction gets opened, not receipts.
@@ -112,7 +134,8 @@ describe('losing the race', () => {
     // transactions: abort with 40001, which Prisma reports as P2034.
     prisma.$transaction.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('could not serialize access', {
-        code: 'P2034', clientVersion: 'test',
+        code: 'P2034',
+        clientVersion: 'test',
       }),
     );
     await expect(svc.systemVerify('pay1')).rejects.toBeInstanceOf(ConflictException);
@@ -143,10 +166,23 @@ describe('losing the race', () => {
 describe('losing the enrolment race', () => {
   function submitCtx() {
     const prisma: any = {
-      studentProfile: { findUnique: jest.fn().mockResolvedValue({ id: 's1', userId: 'u1', gradeId: null, track: null, user: { fullName: 'S' } }) },
+      studentProfile: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 's1',
+          userId: 'u1',
+          gradeId: null,
+          track: null,
+          user: { fullName: 'S' },
+        }),
+      },
       course: {
         findFirst: jest.fn().mockResolvedValue({
-          id: 'c1', tenantId: 't1', title: 'X', priceCents: 10000, currency: 'EGP', status: 'PUBLISHED',
+          id: 'c1',
+          tenantId: 't1',
+          title: 'X',
+          priceCents: 10000,
+          currency: 'EGP',
+          status: 'PUBLISHED',
         }),
         findUnique: jest.fn().mockResolvedValue({ id: 'c1', tenantId: 't1', priceCents: 10000 }),
       },
@@ -157,7 +193,9 @@ describe('losing the enrolment race', () => {
       // The loser of the unique-index race: Prisma reports P2002.
       $transaction: jest.fn(async () => {
         throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-          code: 'P2002', clientVersion: 'test', meta: { target: ['studentId', 'courseId'] },
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: ['studentId', 'courseId'] },
         });
       }),
     };
@@ -173,9 +211,7 @@ describe('losing the enrolment race', () => {
 
   it('is told it is already enrolled, not that the server broke', async () => {
     const { svc } = submitCtx();
-    const err = await svc
-      .submit('u1', { courseId: 'c1', method: 'WALLET' } as any)
-      .catch((e) => e);
+    const err = await svc.submit('u1', { courseId: 'c1', method: 'WALLET' } as any).catch((e) => e);
     expect(err).toBeInstanceOf(ConflictException);
     expect(err.getResponse()).toMatchObject({ code: 'ALREADY_ENROLLED' });
   });
@@ -183,6 +219,8 @@ describe('losing the enrolment race', () => {
   it('does not swallow an unrelated database failure as a conflict', async () => {
     const { svc, prisma } = submitCtx();
     prisma.$transaction.mockRejectedValue(new Error('connection reset'));
-    await expect(svc.submit('u1', { courseId: 'c1', method: 'WALLET' } as any)).rejects.toThrow('connection reset');
+    await expect(svc.submit('u1', { courseId: 'c1', method: 'WALLET' } as any)).rejects.toThrow(
+      'connection reset',
+    );
   });
 });

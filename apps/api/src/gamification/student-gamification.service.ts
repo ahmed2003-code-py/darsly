@@ -30,7 +30,10 @@ export class StudentGamificationService {
   ) {}
 
   async studentIdOf(userId: string): Promise<string> {
-    const s = await this.prisma.studentProfile.findUnique({ where: { userId }, select: { id: true } });
+    const s = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
     if (!s) throw new BadRequestException('No student profile for this account');
     return s.id;
   }
@@ -47,24 +50,25 @@ export class StudentGamificationService {
       this.progress.summary(userId),
     ]);
 
-    const [level, standing, missions, achievements, titles, accuracy, certificates] = await Promise.all([
-      this.config.levelProgress(agg.xp),
-      this.leaderboard.standing(studentId),
-      this.missions.current(studentId),
-      this.prisma.studentAchievement.findMany({
-        where: { studentId },
-        orderBy: { unlockedAt: 'desc' },
-        take: 5,
-        include: { achievement: true },
-      }),
-      this.prisma.studentTitle.findMany({ where: { studentId }, include: { title: true } }),
-      this.prisma.quizAttempt.aggregate({
-        where: { studentId, scorePct: { not: null } },
-        _avg: { scorePct: true },
-        _count: { _all: true },
-      }),
-      this.prisma.certificate.count({ where: { studentId } }),
-    ]);
+    const [level, standing, missions, achievements, titles, accuracy, certificates] =
+      await Promise.all([
+        this.config.levelProgress(agg.xp),
+        this.leaderboard.standing(studentId),
+        this.missions.current(studentId),
+        this.prisma.studentAchievement.findMany({
+          where: { studentId },
+          orderBy: { unlockedAt: 'desc' },
+          take: 5,
+          include: { achievement: true },
+        }),
+        this.prisma.studentTitle.findMany({ where: { studentId }, include: { title: true } }),
+        this.prisma.quizAttempt.aggregate({
+          where: { studentId, scorePct: { not: null } },
+          _avg: { scorePct: true },
+          _count: { _all: true },
+        }),
+        this.prisma.certificate.count({ where: { studentId } }),
+      ]);
 
     const earnedCount = await this.prisma.studentAchievement.count({ where: { studentId } });
     const totalAchievements = await this.prisma.achievement.count({ where: { isActive: true } });
@@ -87,7 +91,9 @@ export class StudentGamificationService {
         xpIntoLevel: level.xpIntoLevel,
         xpForNext: level.xpForNext,
         pct: level.pct,
-        nextLevel: level.next ? { level: level.next.level, nameAr: level.next.nameAr, nameEn: level.next.nameEn } : null,
+        nextLevel: level.next
+          ? { level: level.next.level, nameAr: level.next.nameAr, nameEn: level.next.nameEn }
+          : null,
       },
       streak: {
         current: profile?.currentStreak ?? 0,
@@ -119,7 +125,12 @@ export class StudentGamificationService {
         best: agg.bestRank,
       },
       activeTitle: agg.activeTitle,
-      titles: titles.map((t) => ({ key: t.titleKey, labelAr: t.title.labelAr, labelEn: t.title.labelEn, icon: t.title.icon })),
+      titles: titles.map((t) => ({
+        key: t.titleKey,
+        labelAr: t.title.labelAr,
+        labelEn: t.title.labelEn,
+        icon: t.title.icon,
+      })),
       achievements: {
         earned: earnedCount,
         total: totalAchievements,
@@ -240,14 +251,18 @@ export class StudentGamificationService {
     const studentId = await this.studentIdOf(userId);
     const reward = await this.prisma.reward.findUnique({ where: { key: rewardKey } });
     if (!reward || !reward.isActive) throw new NotFoundException('Reward not available');
-    if (reward.stock != null && reward.stock <= 0) throw new BadRequestException('This reward is sold out');
+    if (reward.stock != null && reward.stock <= 0)
+      throw new BadRequestException('This reward is sold out');
 
     const payload = (reward.payload ?? {}) as Record<string, unknown>;
 
     const redemption = await this.prisma.$transaction(async (tx) => {
       const debit = await tx.studentGamification.updateMany({
         where: { studentId, coins: { gte: reward.costCoins } },
-        data: { coins: { decrement: reward.costCoins }, coinsSpent: { increment: reward.costCoins } },
+        data: {
+          coins: { decrement: reward.costCoins },
+          coinsSpent: { increment: reward.costCoins },
+        },
       });
       if (!debit.count) throw new BadRequestException('Not enough coins');
 
@@ -269,7 +284,10 @@ export class StudentGamificationService {
           status: reward.kind === 'XP_BOOST' ? 'ACTIVE' : instant ? 'FULFILLED' : 'PENDING',
           meta:
             reward.kind === 'XP_BOOST'
-              ? ({ remaining: Number(payload.lessons ?? 3), multiplier: Number(payload.multiplier ?? 2) } as Prisma.InputJsonValue)
+              ? ({
+                  remaining: Number(payload.lessons ?? 3),
+                  multiplier: Number(payload.multiplier ?? 2),
+                } as Prisma.InputJsonValue)
               : ({} as Prisma.InputJsonValue),
         },
       });

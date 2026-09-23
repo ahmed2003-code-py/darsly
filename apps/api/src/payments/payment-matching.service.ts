@@ -1,7 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { isIncomingTransfer, namesAgree, parseIdentities, parsePayerName } from '../device/sms-parser';
+import {
+  isIncomingTransfer,
+  namesAgree,
+  parseIdentities,
+  parsePayerName,
+} from '../device/sms-parser';
 import { receiptMatchesTransfer } from './proof-check';
 import { ProofReading } from './proof-reader.service';
 import { ManualPaymentsService } from './manual-payments.service';
@@ -109,7 +114,11 @@ export class PaymentMatchingService {
     if (dedupeKey) {
       const prior = await this.prisma.paymentEvent.findUnique({ where: { dedupeKey } });
       if (prior) {
-        return { eventId: prior.id, status: 'DUPLICATE' as const, matchedPaymentId: prior.matchedPaymentId };
+        return {
+          eventId: prior.id,
+          status: 'DUPLICATE' as const,
+          matchedPaymentId: prior.matchedPaymentId,
+        };
       }
     }
 
@@ -133,8 +142,14 @@ export class PaymentMatchingService {
      * which is to be recorded and matched on its other evidence.
      */
     if (dto.rawMessage?.trim() && !isIncomingTransfer(dto.rawMessage)) {
-      const r = await this.record(dto, occurredAt, dedupeKey, 'UNMATCHED', null,
-        'the message describes money leaving the account, not arriving — never auto-verified');
+      const r = await this.record(
+        dto,
+        occurredAt,
+        dedupeKey,
+        'UNMATCHED',
+        null,
+        'the message describes money leaving the account, not arriving — never auto-verified',
+      );
       return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
     }
 
@@ -143,8 +158,14 @@ export class PaymentMatchingService {
     // identical transfers apart, and crediting the wrong enrollment is worse than
     // asking a human. Recorded (with whatever dedupe identity we have) for review.
     if (!ref) {
-      const r = await this.record(dto, occurredAt, dedupeKey, 'UNMATCHED', null,
-        'no sender reference — auto-verify disabled without a transfer identity; needs manual review');
+      const r = await this.record(
+        dto,
+        occurredAt,
+        dedupeKey,
+        'UNMATCHED',
+        null,
+        'no sender reference — auto-verify disabled without a transfer identity; needs manual review',
+      );
       return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
     }
 
@@ -159,12 +180,19 @@ export class PaymentMatchingService {
         where: {
           gateway: 'manual',
           method: { in: methodsFor(dto.provider) as any[] },
-          createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
+          createdAt: {
+            gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS),
+            lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS),
+          },
           OR: [{ status: 'PENDING' }, { status: 'PAID', settledAt: null }],
         },
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, reference: true, status: true, amountCents: true, walletCents: true,
+          id: true,
+          reference: true,
+          status: true,
+          amountCents: true,
+          walletCents: true,
           proofReading: true,
           // Who the platform thinks is paying, to weigh against who the provider
           // says actually sent the money.
@@ -183,11 +211,16 @@ export class PaymentMatchingService {
         status: 'PENDING',
         amountCents: dto.amountCents,
         method: { in: methodsFor(dto.provider) as any[] },
-        createdAt: { gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS), lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS) },
+        createdAt: {
+          gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS),
+          lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS),
+        },
       },
       orderBy: { createdAt: 'desc' },
       select: {
-        id: true, reference: true, proofReading: true,
+        id: true,
+        reference: true,
+        proofReading: true,
         student: { select: { user: { select: { fullName: true } } } },
       },
     });
@@ -204,12 +237,17 @@ export class PaymentMatchingService {
     };
     const candidates: Candidate[] = [
       ...payments.map((p) => ({
-        kind: 'payment' as const, id: p.id, reference: p.reference, status: p.status,
+        kind: 'payment' as const,
+        id: p.id,
+        reference: p.reference,
+        status: p.status,
         owner: p.student?.user?.fullName ?? '',
         reading: (p.proofReading as ProofReading | null) ?? null,
       })),
       ...topups.map((t) => ({
-        kind: 'topup' as const, id: t.id, reference: t.reference,
+        kind: 'topup' as const,
+        id: t.id,
+        reference: t.reference,
         owner: t.student?.user?.fullName ?? '',
         reading: (t.proofReading as ProofReading | null) ?? null,
       })),
@@ -230,7 +268,8 @@ export class PaymentMatchingService {
 
     if (candidates.length === 0) {
       status = 'UNMATCHED';
-      note = 'no pending/unsettled payment or wallet top-up with this amount/method in the time window';
+      note =
+        'no pending/unsettled payment or wallet top-up with this amount/method in the time window';
     } else {
       /**
        * The receipt as the identity, for the rails that share no reference.
@@ -317,7 +356,10 @@ export class PaymentMatchingService {
     }
 
     const r = await this.record(
-      dto, occurredAt, dedupeKey, status,
+      dto,
+      occurredAt,
+      dedupeKey,
+      status,
       chosen?.kind === 'payment' ? chosen.id : null,
       note,
       chosen?.kind === 'topup' ? chosen.id : null,
@@ -350,7 +392,15 @@ export class PaymentMatchingService {
   async reconcilePayment(paymentId: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      select: { id: true, status: true, method: true, amountCents: true, walletCents: true, reference: true, createdAt: true },
+      select: {
+        id: true,
+        status: true,
+        method: true,
+        amountCents: true,
+        walletCents: true,
+        reference: true,
+        createdAt: true,
+      },
     });
     if (!payment || payment.status !== 'PENDING') return { status: 'SKIPPED' as const };
 
@@ -378,7 +428,9 @@ export class PaymentMatchingService {
     });
 
     const hits = events.filter((event) => {
-      const derived = parseIdentities(event.rawMessage ?? '').map(normRef).filter(Boolean);
+      const derived = parseIdentities(event.rawMessage ?? '')
+        .map(normRef)
+        .filter(Boolean);
       const identities = derived.length ? derived : [normRef(event.reference)];
       return identities.some((identity) => refExact(identity, ref));
     });
@@ -413,8 +465,13 @@ export class PaymentMatchingService {
     const topup = await this.prisma.walletTopup.findUnique({
       where: { id: topupId },
       select: {
-        id: true, status: true, method: true, amountCents: true, reference: true,
-        createdAt: true, proofReading: true,
+        id: true,
+        status: true,
+        method: true,
+        amountCents: true,
+        reference: true,
+        createdAt: true,
+        proofReading: true,
       },
     });
     if (!topup || topup.status !== 'PENDING') return { status: 'SKIPPED' as const };
@@ -447,11 +504,18 @@ export class PaymentMatchingService {
 
     const hits = events.filter((event) => {
       // The receipt: the same amount (already filtered) sent in the same minute.
-      if (receiptMatchesTransfer(reading, { amountCents: topup.amountCents, occurredAt: event.occurredAt })) {
+      if (
+        receiptMatchesTransfer(reading, {
+          amountCents: topup.amountCents,
+          occurredAt: event.occurredAt,
+        })
+      ) {
         return true;
       }
       if (!ref) return false;
-      const derived = parseIdentities(event.rawMessage ?? '').map(normRef).filter(Boolean);
+      const derived = parseIdentities(event.rawMessage ?? '')
+        .map(normRef)
+        .filter(Boolean);
       const identities = derived.length ? derived : [normRef(event.reference)];
       return identities.some((identity) => refExact(identity, ref));
     });
@@ -473,9 +537,13 @@ export class PaymentMatchingService {
   }
 
   private async record(
-    dto: PaymentEventDto, occurredAt: Date, dedupeKey: string | null,
+    dto: PaymentEventDto,
+    occurredAt: Date,
+    dedupeKey: string | null,
     status: 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS' | 'DUPLICATE',
-    matchedPaymentId: string | null, note?: string, matchedTopupId?: string | null,
+    matchedPaymentId: string | null,
+    note?: string,
+    matchedTopupId?: string | null,
     payerName?: string | null,
   ) {
     try {
@@ -542,8 +610,13 @@ export class PaymentMatchingService {
     // one a teacher already self-verified is settled — that is the whole point
     // of a real transfer turning up for it.
     if (payment.status === 'PENDING') await this.manual.systemVerify(paymentId);
-    else if (payment.status === 'PAID' && !payment.settledAt) await this.manual.settle(paymentId, actorId);
-    else throw new BadRequestException({ message: 'Payment is neither pending nor awaiting settlement', code: 'NOT_MATCHABLE' });
+    else if (payment.status === 'PAID' && !payment.settledAt)
+      await this.manual.settle(paymentId, actorId);
+    else
+      throw new BadRequestException({
+        message: 'Payment is neither pending nor awaiting settlement',
+        code: 'NOT_MATCHABLE',
+      });
     await this.prisma.paymentEvent.update({
       where: { id: eventId },
       data: { status: 'MATCHED', matchedPaymentId: paymentId, note: `manual match by ${actorId}` },

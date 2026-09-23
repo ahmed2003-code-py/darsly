@@ -28,10 +28,17 @@ export interface ContentProfile extends ContentSignals {
 }
 
 export const EMPTY_PROFILE: ContentProfile = {
-  hasCover: false, hasLogo: false, galleryCount: 0, bioLength: 0,
-  subjectsCount: 0, achievementsCount: 0,
-  courseCount: 0, reviewCount: 0, avgRating: 0,
-  bioParagraphs: 0, avgAchievementLength: 0,
+  hasCover: false,
+  hasLogo: false,
+  galleryCount: 0,
+  bioLength: 0,
+  subjectsCount: 0,
+  achievementsCount: 0,
+  courseCount: 0,
+  reviewCount: 0,
+  avgRating: 0,
+  bioParagraphs: 0,
+  avgAchievementLength: 0,
 };
 
 /**

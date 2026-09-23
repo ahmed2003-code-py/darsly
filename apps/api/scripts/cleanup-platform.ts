@@ -41,11 +41,16 @@ async function main() {
     include: { teacherProfile: true },
   });
   if (!keep?.teacherProfile) {
-    throw new Error(`refusing to run: ${KEEP_TEACHER_EMAIL} has no teacher profile in this database`);
+    throw new Error(
+      `refusing to run: ${KEEP_TEACHER_EMAIL} has no teacher profile in this database`,
+    );
   }
   const keepUserId = keep.id;
   const keepTenantId = keep.teacherProfile.id; // Academy.id === TeacherProfile.id
-  const admins = await prisma.user.findMany({ where: { role: 'SUPER_ADMIN' }, select: { id: true, email: true } });
+  const admins = await prisma.user.findMany({
+    where: { role: 'SUPER_ADMIN' },
+    select: { id: true, email: true },
+  });
   const keptUserIds = [keepUserId, ...admins.map((a) => a.id)];
 
   console.log(`${EXECUTE ? 'EXECUTING' : 'DRY RUN'} against ${maskUrl()}`);
@@ -59,154 +64,270 @@ async function main() {
   // ── Content belonging to every other academy ────────────────────────────
   // Ordered parent-last so a partial run never leaves a live child under a
   // removed parent.
-  await step('lessons (other academies)',
+  await step(
+    'lessons (other academies)',
     () => prisma.lesson.count({ where: { ...live, unit: { course: otherTenant } } }),
-    () => prisma.lesson.updateMany({ where: { ...live, unit: { course: otherTenant } }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.lesson.updateMany({
+        where: { ...live, unit: { course: otherTenant } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
-  await step('course units (other academies)',
+  await step(
+    'course units (other academies)',
     () => prisma.courseUnit.count({ where: { ...live, course: otherTenant } }),
-    () => prisma.courseUnit.updateMany({ where: { ...live, course: otherTenant }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.courseUnit.updateMany({
+        where: { ...live, course: otherTenant },
+        data: { deletedAt: NOW },
+      }),
+  );
 
-  await step('courses (other academies)',
+  await step(
+    'courses (other academies)',
     () => prisma.course.count({ where: { ...live, ...otherTenant } }),
-    () => prisma.course.updateMany({ where: { ...live, ...otherTenant }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.course.updateMany({ where: { ...live, ...otherTenant }, data: { deletedAt: NOW } }),
+  );
 
-  await step('coupons (other academies)',
+  await step(
+    'coupons (other academies)',
     () => prisma.coupon.count({ where: { ...live, ...otherTenant } }),
-    () => prisma.coupon.updateMany({ where: { ...live, ...otherTenant }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.coupon.updateMany({ where: { ...live, ...otherTenant }, data: { deletedAt: NOW } }),
+  );
 
-  await step('live sessions (other academies)',
+  await step(
+    'live sessions (other academies)',
     () => prisma.liveSession.count({ where: { ...live, ...otherTenant } }),
-    () => prisma.liveSession.updateMany({ where: { ...live, ...otherTenant }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.liveSession.updateMany({
+        where: { ...live, ...otherTenant },
+        data: { deletedAt: NOW },
+      }),
+  );
 
   // A snapshot names its site, not its academy, so it is scoped through the
   // relation — and it goes before the site itself, like every other child here.
-  await step('site snapshots (other academies)',
-    () => prisma.academySiteSnapshot.count({ where: { ...live, site: { academyId: { not: keepTenantId } } } }),
-    () => prisma.academySiteSnapshot.updateMany({ where: { ...live, site: { academyId: { not: keepTenantId } } }, data: { deletedAt: NOW } }));
+  await step(
+    'site snapshots (other academies)',
+    () =>
+      prisma.academySiteSnapshot.count({
+        where: { ...live, site: { academyId: { not: keepTenantId } } },
+      }),
+    () =>
+      prisma.academySiteSnapshot.updateMany({
+        where: { ...live, site: { academyId: { not: keepTenantId } } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
-  await step('academy sites (other academies)',
+  await step(
+    'academy sites (other academies)',
     () => prisma.academySite.count({ where: { ...live, academyId: { not: keepTenantId } } }),
-    () => prisma.academySite.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.academySite.updateMany({
+        where: { ...live, academyId: { not: keepTenantId } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
-  await step('academy profile facts (other academies)',
-    () => prisma.academyProfileFacts.count({ where: { ...live, academyId: { not: keepTenantId } } }),
-    () => prisma.academyProfileFacts.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+  await step(
+    'academy profile facts (other academies)',
+    () =>
+      prisma.academyProfileFacts.count({ where: { ...live, academyId: { not: keepTenantId } } }),
+    () =>
+      prisma.academyProfileFacts.updateMany({
+        where: { ...live, academyId: { not: keepTenantId } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
   // The studio's admin overview counts every job on the platform with no
   // academy filter, so a removed academy's failures stayed in the totals.
-  await step('AI jobs (other academies)',
+  await step(
+    'AI jobs (other academies)',
     () => prisma.aiJob.count({ where: { ...live, academyId: { not: keepTenantId } } }),
-    () => prisma.aiJob.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.aiJob.updateMany({
+        where: { ...live, academyId: { not: keepTenantId } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
-  await step('academies (other)',
+  await step(
+    'academies (other)',
     () => prisma.academy.count({ where: { ...live, id: { not: keepTenantId } } }),
-    () => prisma.academy.updateMany({ where: { ...live, id: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.academy.updateMany({
+        where: { ...live, id: { not: keepTenantId } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
-  await step('academy media (other academies)',
+  await step(
+    'academy media (other academies)',
     () => prisma.academyMedia.count({ where: { ...live, academyId: { not: keepTenantId } } }),
-    () => prisma.academyMedia.updateMany({ where: { ...live, academyId: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.academyMedia.updateMany({
+        where: { ...live, academyId: { not: keepTenantId } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
   // Transfer notifications the Android listener forwarded. The admin lists
   // every one of these regardless of who it belongs to — which is why they
   // survived the first pass and kept filling the payments screen.
-  await step('payment events (all)',
+  await step(
+    'payment events (all)',
     () => prisma.paymentEvent.count({ where: live }),
-    () => prisma.paymentEvent.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.paymentEvent.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
   // Conversations and notices. Both are listed for a kept teacher and join to
   // the other person through a nested include the read filter never reaches,
   // so a removed student's chat stayed in the inbox and their notices stayed in
   // the bell. After a reset there is no history worth keeping here anyway.
-  await step('chat messages (all)',
+  await step(
+    'chat messages (all)',
     () => prisma.chatMessage.count({ where: live }),
-    () => prisma.chatMessage.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.chatMessage.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('chat threads (all)',
+  await step(
+    'chat threads (all)',
     () => prisma.chatThread.count({ where: live }),
-    () => prisma.chatThread.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.chatThread.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('notifications (all)',
+  await step(
+    'notifications (all)',
     () => prisma.notification.count({ where: live }),
-    () => prisma.notification.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.notification.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
   // ── Everything every student ever did ───────────────────────────────────
-  await step('certificates (all)',
+  await step(
+    'certificates (all)',
     () => prisma.certificate.count({ where: live }),
-    () => prisma.certificate.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.certificate.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('reviews (all)',
+  await step(
+    'reviews (all)',
     () => prisma.review.count({ where: live }),
-    () => prisma.review.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.review.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('enrolments (all)',
+  await step(
+    'enrolments (all)',
     () => prisma.enrollment.count({ where: live }),
-    () => prisma.enrollment.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.enrollment.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
   // ── Money ───────────────────────────────────────────────────────────────
   // Entries before transactions, and both before payments, so a balance is
   // never read mid-way through against a half-removed book.
-  await step('ledger entries (all)',
+  await step(
+    'ledger entries (all)',
     () => prisma.ledgerEntry.count({ where: live }),
-    () => prisma.ledgerEntry.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.ledgerEntry.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('ledger transactions (all)',
+  await step(
+    'ledger transactions (all)',
     () => prisma.ledgerTransaction.count({ where: live }),
-    () => prisma.ledgerTransaction.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.ledgerTransaction.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('invoices (all)',
+  await step(
+    'invoices (all)',
     () => prisma.invoice.count({ where: live }),
-    () => prisma.invoice.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.invoice.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('payments (all)',
+  await step(
+    'payments (all)',
     () => prisma.payment.count({ where: live }),
-    () => prisma.payment.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.payment.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('wallet transactions (all)',
+  await step(
+    'wallet transactions (all)',
     () => prisma.walletTransaction.count({ where: live }),
-    () => prisma.walletTransaction.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.walletTransaction.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('wallet top-ups (all)',
+  await step(
+    'wallet top-ups (all)',
     () => prisma.walletTopup.count({ where: live }),
-    () => prisma.walletTopup.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.walletTopup.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('payout requests (all)',
+  await step(
+    'payout requests (all)',
     () => prisma.payoutRequest.count({ where: live }),
-    () => prisma.payoutRequest.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.payoutRequest.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('saved payout methods (all)',
+  await step(
+    'saved payout methods (all)',
     () => prisma.payoutMethodSaved.count({ where: live }),
-    () => prisma.payoutMethodSaved.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.payoutMethodSaved.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
   // ── Profiles, then the accounts themselves ──────────────────────────────
-  await step('student profiles (all)',
+  await step(
+    'student profiles (all)',
     () => prisma.studentProfile.count({ where: live }),
-    () => prisma.studentProfile.updateMany({ where: live, data: { deletedAt: NOW } }));
+    () => prisma.studentProfile.updateMany({ where: live, data: { deletedAt: NOW } }),
+  );
 
-  await step('teacher profiles (other)',
+  await step(
+    'teacher profiles (other)',
     () => prisma.teacherProfile.count({ where: { ...live, id: { not: keepTenantId } } }),
-    () => prisma.teacherProfile.updateMany({ where: { ...live, id: { not: keepTenantId } }, data: { deletedAt: NOW } }));
+    () =>
+      prisma.teacherProfile.updateMany({
+        where: { ...live, id: { not: keepTenantId } },
+        data: { deletedAt: NOW },
+      }),
+  );
 
   // Memberships of removed academies, and of removed people in the kept one.
   // The kept academy's member list joins to User through a nested include,
   // which the soft-delete read filter does not reach — so without this a
   // removed student would still be listed as a member.
-  await step('academy memberships (removed academies or people)',
-    () => prisma.academyMembership.count({
-      where: { deletedAt: null, OR: [{ academyId: { not: keepTenantId } }, { userId: { notIn: keptUserIds } }] },
-    }),
-    () => prisma.academyMembership.updateMany({
-      where: { deletedAt: null, OR: [{ academyId: { not: keepTenantId } }, { userId: { notIn: keptUserIds } }] },
-      data: { deletedAt: NOW },
-    }));
+  await step(
+    'academy memberships (removed academies or people)',
+    () =>
+      prisma.academyMembership.count({
+        where: {
+          deletedAt: null,
+          OR: [{ academyId: { not: keepTenantId } }, { userId: { notIn: keptUserIds } }],
+        },
+      }),
+    () =>
+      prisma.academyMembership.updateMany({
+        where: {
+          deletedAt: null,
+          OR: [{ academyId: { not: keepTenantId } }, { userId: { notIn: keptUserIds } }],
+        },
+        data: { deletedAt: NOW },
+      }),
+  );
 
   // Sessions are revoked outright: a live refresh token is access, not history.
-  await step('device sessions (removed accounts)',
-    () => prisma.deviceSession.count({ where: { userId: { notIn: keptUserIds }, revokedAt: null } }),
-    () => prisma.deviceSession.updateMany({
-      where: { userId: { notIn: keptUserIds }, revokedAt: null },
-      data: { revokedAt: NOW, revokedReason: 'platform reset' },
-    }));
+  await step(
+    'device sessions (removed accounts)',
+    () =>
+      prisma.deviceSession.count({ where: { userId: { notIn: keptUserIds }, revokedAt: null } }),
+    () =>
+      prisma.deviceSession.updateMany({
+        where: { userId: { notIn: keptUserIds }, revokedAt: null },
+        data: { revokedAt: NOW, revokedReason: 'platform reset' },
+      }),
+  );
 
   const doomed = await prisma.user.findMany({
     where: { ...live, id: { notIn: keptUserIds } },
@@ -235,7 +356,11 @@ async function main() {
   for (const row of plan) console.log(`  ${String(row.count).padStart(6)}  ${row.what}`);
   const total = plan.reduce((a, b) => a + b.count, 0);
   console.log(`  ${String(total).padStart(6)}  rows in total`);
-  console.log(EXECUTE ? '\ndone — all reversible by clearing deletedAt.' : '\nnothing was written. re-run with --execute.');
+  console.log(
+    EXECUTE
+      ? '\ndone — all reversible by clearing deletedAt.'
+      : '\nnothing was written. re-run with --execute.',
+  );
 }
 
 function maskUrl(): string {
@@ -244,5 +369,8 @@ function maskUrl(): string {
 }
 
 main()
-  .catch((e) => { console.error('FAILED:', e.message); process.exitCode = 1; })
+  .catch((e) => {
+    console.error('FAILED:', e.message);
+    process.exitCode = 1;
+  })
   .finally(() => prisma.$disconnect());

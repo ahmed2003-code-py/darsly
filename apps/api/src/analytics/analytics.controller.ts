@@ -15,7 +15,10 @@ import { AuditService } from '../audit/audit.service';
  */
 function ownerOnly(ctx: AcademyContext) {
   if (ctx.role !== 'OWNER') {
-    throw new ForbiddenException({ message: 'Academy-wide analytics are for the academy owner', code: 'ANALYTICS_OWNER_ONLY' });
+    throw new ForbiddenException({
+      message: 'Academy-wide analytics are for the academy owner',
+      code: 'ANALYTICS_OWNER_ONLY',
+    });
   }
 }
 
@@ -29,7 +32,10 @@ function parseRange(raw?: string): AnalyticsRange {
 @AcademyStaff('analytics.read')
 @Controller('teacher/analytics')
 export class AnalyticsController {
-  constructor(private readonly analytics: AnalyticsService, private readonly auditService: AuditService) {}
+  constructor(
+    private readonly analytics: AnalyticsService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: '[academy] Teaching KPIs + revenue/enrollment trends' })
@@ -46,21 +52,27 @@ export class AnalyticsController {
   }
 
   @Get('growth')
-  @ApiOperation({ summary: '[academy] Day-by-day growth: new students, enrollments, activations, course activity' })
+  @ApiOperation({
+    summary: '[academy] Day-by-day growth: new students, enrollments, activations, course activity',
+  })
   growth(@CurrentAcademy() ctx: AcademyContext, @Query('range') range?: string) {
     ownerOnly(ctx);
     return this.analytics.growth(ctx.academyId, parseRange(range));
   }
 
   @Get('enrollments')
-  @ApiOperation({ summary: '[academy] Enrollment breakdown by status and by source (automatic/manual/demo)' })
+  @ApiOperation({
+    summary: '[academy] Enrollment breakdown by status and by source (automatic/manual/demo)',
+  })
   enrollments(@CurrentAcademy() ctx: AcademyContext) {
     ownerOnly(ctx);
     return this.analytics.enrollmentBreakdown(ctx.academyId);
   }
 
   @Get('attendance')
-  @ApiOperation({ summary: '[academy] Attendance rate, trend, by-group breakdown, at-risk students' })
+  @ApiOperation({
+    summary: '[academy] Attendance rate, trend, by-group breakdown, at-risk students',
+  })
   attendance(@CurrentAcademy() ctx: AcademyContext, @Query('range') range?: string) {
     ownerOnly(ctx);
     return this.analytics.attendanceStats(ctx, ctx.academyId, parseRange(range));
@@ -88,21 +100,28 @@ export class AnalyticsController {
   }
 
   @Get('teachers')
-  @ApiOperation({ summary: '[academy] Per-staff-member groups, sessions, attendance rate — no rankings' })
+  @ApiOperation({
+    summary: '[academy] Per-staff-member groups, sessions, attendance rate — no rankings',
+  })
   teachers(@CurrentAcademy() ctx: AcademyContext) {
     ownerOnly(ctx);
     return this.analytics.teachersOverview(ctx);
   }
 
   @Get('financial')
-  @ApiOperation({ summary: '[academy] Net revenue trend, payment counts, revenue by course — net only, never gross/commission' })
+  @ApiOperation({
+    summary:
+      '[academy] Net revenue trend, payment counts, revenue by course — net only, never gross/commission',
+  })
   financial(@CurrentAcademy() ctx: AcademyContext, @Query('range') range?: string) {
     ownerOnly(ctx);
     return this.analytics.financialOverview(ctx.academyId, parseRange(range));
   }
 
   @Get('center')
-  @ApiOperation({ summary: '[academy] Center dashboard — organisation-scoped operational counts (no finance)' })
+  @ApiOperation({
+    summary: '[academy] Center dashboard — organisation-scoped operational counts (no finance)',
+  })
   center(@CurrentAcademy() ctx: AcademyContext) {
     ownerOnly(ctx);
     return this.analytics.centerOverview(ctx);
@@ -110,14 +129,27 @@ export class AnalyticsController {
 
   @Get('me')
   @ApiOperation({ summary: '[academy] My own teaching numbers inside the active academy' })
-  me(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Query('range') range?: string) {
+  me(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Query('range') range?: string,
+  ) {
     return this.analytics.myTeaching(ctx, user.tenantId, parseRange(range));
   }
 
   @Get('activity')
-  @ApiOperation({ summary: "[academy] The Center's own audit trail — who did what, cursor-paginated (owner-only)" })
-  activity(@CurrentAcademy() ctx: AcademyContext, @Query('cursor') cursor?: string, @Query('take') take?: string) {
+  @ApiOperation({
+    summary: "[academy] The Center's own audit trail — who did what, cursor-paginated (owner-only)",
+  })
+  activity(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Query('cursor') cursor?: string,
+    @Query('take') take?: string,
+  ) {
     ownerOnly(ctx);
-    return this.auditService.listForAcademy(ctx.academyId, { cursor, take: take ? Number(take) : undefined });
+    return this.auditService.listForAcademy(ctx.academyId, {
+      cursor,
+      take: take ? Number(take) : undefined,
+    });
   }
 }

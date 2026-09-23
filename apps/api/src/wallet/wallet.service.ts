@@ -82,7 +82,9 @@ export class WalletService {
    */
   private async receivingHandles(): Promise<string[]> {
     try {
-      const accounts = await this.prisma.platformPaymentAccount.findMany({ select: { handle: true } });
+      const accounts = await this.prisma.platformPaymentAccount.findMany({
+        select: { handle: true },
+      });
       return accounts.map((a) => a.handle);
     } catch {
       return [];
@@ -110,7 +112,11 @@ export class WalletService {
      * no reading, exactly as every top-up did before.
      */
     const reading = await this.proofReader.read(dto.proofImageUrl);
-    const check = checkProofAgainstClaim(reading, { amountCents: amount }, await this.receivingHandles());
+    const check = checkProofAgainstClaim(
+      reading,
+      { amountCents: amount },
+      await this.receivingHandles(),
+    );
     if (check.verdict === 'DISAGREES') {
       throw new BadRequestException({
         message: check.problems.join(' '),
@@ -139,33 +145,45 @@ export class WalletService {
     });
     if (existing) {
       await this.proofs.discard(proofKey);
-      throw new BadRequestException({ message: 'A top-up is already under review', code: 'TOPUP_PENDING' });
+      throw new BadRequestException({
+        message: 'A top-up is already under review',
+        code: 'TOPUP_PENDING',
+      });
     }
 
-    const topup = await this.prisma.walletTopup.create({
-      data: {
-        studentId: student.id,
-        amountCents: amount,
-        method: dto.method as any,
-        proofImageUrl: proofKey,
-        // Same rule as a course payment: a top-up is the same transfer with no
-        // course attached, matched on the same single identifier.
-        reference: normalizePayerReference(dto.method, dto.reference, await this.receivingHandles()),
-        proofReading: (reading ?? undefined) as never,
-        status: 'PENDING',
-      },
-      select: { id: true, amountCents: true, status: true, createdAt: true },
-    }).catch(async (e) => {
-      await this.proofs.discard(proofKey);
-      // The race the read above cannot close: the other submit committed
-      // first. Answered with the same refusal it would have received a
-      // millisecond earlier, so the student sees one answer however the race
-      // resolves rather than a 500 for a double tap.
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new BadRequestException({ message: 'A top-up is already under review', code: 'TOPUP_PENDING' });
-      }
-      throw e;
-    });
+    const topup = await this.prisma.walletTopup
+      .create({
+        data: {
+          studentId: student.id,
+          amountCents: amount,
+          method: dto.method as any,
+          proofImageUrl: proofKey,
+          // Same rule as a course payment: a top-up is the same transfer with no
+          // course attached, matched on the same single identifier.
+          reference: normalizePayerReference(
+            dto.method,
+            dto.reference,
+            await this.receivingHandles(),
+          ),
+          proofReading: (reading ?? undefined) as never,
+          status: 'PENDING',
+        },
+        select: { id: true, amountCents: true, status: true, createdAt: true },
+      })
+      .catch(async (e) => {
+        await this.proofs.discard(proofKey);
+        // The race the read above cannot close: the other submit committed
+        // first. Answered with the same refusal it would have received a
+        // millisecond earlier, so the student sees one answer however the race
+        // resolves rather than a 500 for a double tap.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          throw new BadRequestException({
+            message: 'A top-up is already under review',
+            code: 'TOPUP_PENDING',
+          });
+        }
+        throw e;
+      });
 
     await this.notifyAdmins(
       'شحن محفظة بانتظار المراجعة 💳',
@@ -198,7 +216,8 @@ export class WalletService {
     // Straight from a query string — anything Prisma doesn't recognise as the
     // enum throws, so an unknown value falls back to the default tab rather
     // than 500ing the admin's page.
-    const wanted = (['PENDING', 'APPROVED', 'REJECTED'] as const).find((s) => s === status) ?? 'PENDING';
+    const wanted =
+      (['PENDING', 'APPROVED', 'REJECTED'] as const).find((s) => s === status) ?? 'PENDING';
     const rows = await this.prisma.walletTopup.findMany({
       where: { status: wanted },
       orderBy: { createdAt: 'desc' },
@@ -210,7 +229,9 @@ export class WalletService {
     // that nobody did and the bank's own SMS matched it. `reviewedById` carries
     // no relation, so the names are resolved in one extra query rather than by
     // reshaping the schema for a label.
-    const reviewerIds = [...new Set(rows.map((r) => r.reviewedById).filter((v): v is string => !!v))];
+    const reviewerIds = [
+      ...new Set(rows.map((r) => r.reviewedById).filter((v): v is string => !!v)),
+    ];
     const reviewers = new Map(
       reviewerIds.length
         ? (
@@ -374,7 +395,9 @@ export class WalletService {
       select: { id: true },
     });
     await Promise.all(
-      admins.map((a) => this.notifications.create({ userId: a.id, type: 'ANNOUNCEMENT', title, body, meta })),
+      admins.map((a) =>
+        this.notifications.create({ userId: a.id, type: 'ANNOUNCEMENT', title, body, meta }),
+      ),
     );
   }
 }

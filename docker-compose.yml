@@ -8,11 +8,11 @@ services:
       POSTGRES_PASSWORD: darsly_dev_password
       POSTGRES_DB: darsly
     ports:
-      - "5434:5432"
+      - '5434:5432'
     volumes:
       - darsly_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U darsly -d darsly"]
+      test: ['CMD-SHELL', 'pg_isready -U darsly -d darsly']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -28,12 +28,12 @@ services:
       MINIO_ROOT_USER: darsly
       MINIO_ROOT_PASSWORD: darsly_dev_password
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - '9000:9000'
+      - '9001:9001'
     volumes:
       - darsly_minio:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -48,11 +48,11 @@ services:
     container_name: darsly-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - darsly_redis:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 10

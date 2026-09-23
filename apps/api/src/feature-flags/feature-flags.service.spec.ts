@@ -1,7 +1,10 @@
 import { FeatureFlagsService } from './feature-flags.service';
 
 function makePrisma() {
-  const rows = new Map<string, { id: string; academyId: string; key: string; enabled: boolean; updatedBy: string | null }>();
+  const rows = new Map<
+    string,
+    { id: string; academyId: string; key: string; enabled: boolean; updatedBy: string | null }
+  >();
   let seq = 0;
   return {
     academyFeatureFlag: {
@@ -14,9 +17,7 @@ function makePrisma() {
       upsert: jest.fn(({ where: { academyId_key }, create, update }: any) => {
         const k = `${academyId_key.academyId}:${academyId_key.key}`;
         const existing = rows.get(k);
-        const row = existing
-          ? { ...existing, ...update }
-          : { id: `flag${++seq}`, ...create };
+        const row = existing ? { ...existing, ...update } : { id: `flag${++seq}`, ...create };
         rows.set(k, row);
         return Promise.resolve(row);
       }),

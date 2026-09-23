@@ -60,7 +60,10 @@ export class StudentPriceService {
       const academy = byId.get(academyIdOf(row) ?? '');
       const feeType = academy?.feeType ?? 'PERCENT';
       const feeValue = academy?.feeValue ?? 20;
-      return { ...row, priceCents: row.priceCents + computeServiceFee(feeType, feeValue, row.priceCents) };
+      return {
+        ...row,
+        priceCents: row.priceCents + computeServiceFee(feeType, feeValue, row.priceCents),
+      };
     });
   }
 }

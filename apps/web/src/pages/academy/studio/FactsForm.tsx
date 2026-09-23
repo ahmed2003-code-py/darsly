@@ -42,10 +42,12 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
     staleTime: 60_000,
   });
   const mine = profile?.stages?.length ? profile.stages : null;
-  const stageGroups = STAGES.filter((st) => !mine || mine.includes(st)).map((st) => ({
-    label: t(`stage.${st}`),
-    items: (grades ?? []).filter((g) => g.stage === st).map((g) => (ar ? g.nameAr : g.nameEn)),
-  })).filter((g) => g.items.length > 0);
+  const stageGroups = STAGES.filter((st) => !mine || mine.includes(st))
+    .map((st) => ({
+      label: t(`stage.${st}`),
+      items: (grades ?? []).filter((g) => g.stage === st).map((g) => (ar ? g.nameAr : g.nameEn)),
+    }))
+    .filter((g) => g.items.length > 0);
   useEffect(() => {
     if (data && !form) {
       setForm({
@@ -62,15 +64,17 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
 
   const save = useMutation({
     mutationFn: async (f: Facts) =>
-      (await api.put('/academy/facts', {
-        fullName: f.fullName || undefined,
-        bio: f.bio || undefined,
-        subjects: f.subjects,
-        stages: f.stages,
-        achievements: f.achievements,
-        socials: f.socials.filter((s) => s.platform && s.url),
-        rawIntake: f.rawIntake || undefined,
-      })).data,
+      (
+        await api.put('/academy/facts', {
+          fullName: f.fullName || undefined,
+          bio: f.bio || undefined,
+          subjects: f.subjects,
+          stages: f.stages,
+          achievements: f.achievements,
+          socials: f.socials.filter((s) => s.platform && s.url),
+          rawIntake: f.rawIntake || undefined,
+        })
+      ).data,
     onSuccess: () => {
       setSaved(true);
       qc.invalidateQueries({ queryKey: ['studio-facts'] });
@@ -83,21 +87,41 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
   if (isLoading || !form) return isError ? <ErrorNote error={error} /> : <Spinner />;
 
   const set = (patch: Partial<Facts>) => setForm({ ...form, ...patch });
-  const parseCsv = (s: string) => s.split(/[,،\n]/).map((x) => x.trim()).filter(Boolean);
+  const parseCsv = (s: string) =>
+    s
+      .split(/[,،\n]/)
+      .map((x) => x.trim())
+      .filter(Boolean);
 
   return (
-    <form className="card" onSubmit={(e) => { e.preventDefault(); save.mutate(form); }}>
+    <form
+      className="card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate(form);
+      }}
+    >
       <h2 className="mb-1 font-heading text-xl font-bold">{t('studio.facts.title')}</h2>
       <p className="mb-5 text-sm text-on-surface-variant">{t('studio.facts.hint')}</p>
 
       <Field label={t('studio.facts.fullName')}>
-        <input className="input" value={form.fullName ?? ''} maxLength={120}
-          onChange={(e) => set({ fullName: e.target.value })} placeholder={t('studio.facts.fullNamePh')} />
+        <input
+          className="input"
+          value={form.fullName ?? ''}
+          maxLength={120}
+          onChange={(e) => set({ fullName: e.target.value })}
+          placeholder={t('studio.facts.fullNamePh')}
+        />
       </Field>
 
       <Field label={t('studio.facts.bio')} hint={t('studio.facts.bioHint')}>
-        <textarea className="input min-h-[120px]" value={form.bio ?? ''} maxLength={2000}
-          onChange={(e) => set({ bio: e.target.value })} placeholder={t('studio.facts.bioPh')} />
+        <textarea
+          className="input min-h-[120px]"
+          value={form.bio ?? ''}
+          maxLength={2000}
+          onChange={(e) => set({ bio: e.target.value })}
+          placeholder={t('studio.facts.bioPh')}
+        />
       </Field>
 
       <Field label={t('studio.facts.subjects')} hint={t('studio.facts.pickHint')}>
@@ -124,15 +148,23 @@ export default function FactsForm({ onSaved }: { onSaved?: () => void }) {
       </Field>
 
       <Field label={t('studio.facts.achievements')} hint={t('studio.facts.achHint')}>
-        <textarea className="input" value={form.achievements.join('\n')}
-          onChange={(e) => set({ achievements: parseCsv(e.target.value) })} placeholder={t('studio.facts.achPh')} />
+        <textarea
+          className="input"
+          value={form.achievements.join('\n')}
+          onChange={(e) => set({ achievements: parseCsv(e.target.value) })}
+          placeholder={t('studio.facts.achPh')}
+        />
       </Field>
 
       <SocialsEditor value={form.socials} onChange={(socials) => set({ socials })} />
 
       <Field label={t('studio.facts.extra')} hint={t('studio.facts.extraHint')}>
-        <textarea className="input min-h-[100px]" value={form.rawIntake ?? ''} maxLength={20000}
-          onChange={(e) => set({ rawIntake: e.target.value })} />
+        <textarea
+          className="input min-h-[100px]"
+          value={form.rawIntake ?? ''}
+          maxLength={20000}
+          onChange={(e) => set({ rawIntake: e.target.value })}
+        />
       </Field>
 
       <ErrorNote error={save.error} />
@@ -160,20 +192,35 @@ function SocialsEditor({ value, onChange }: { value: Social[]; onChange: (v: Soc
       <div className="space-y-2">
         {value.map((s, i) => (
           <div key={i} className="flex gap-2">
-            <input className="input w-40" value={s.platform} maxLength={30}
-              onChange={(e) => update(i, { platform: e.target.value })} placeholder={t('studio.facts.platformPh')} />
-            <input className="input flex-1" value={s.url}
-              onChange={(e) => update(i, { url: e.target.value })} placeholder={t('studio.facts.urlPh')} />
-            <button type="button"
+            <input
+              className="input w-40"
+              value={s.platform}
+              maxLength={30}
+              onChange={(e) => update(i, { platform: e.target.value })}
+              placeholder={t('studio.facts.platformPh')}
+            />
+            <input
+              className="input flex-1"
+              value={s.url}
+              onChange={(e) => update(i, { url: e.target.value })}
+              placeholder={t('studio.facts.urlPh')}
+            />
+            <button
+              type="button"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-error transition hover:bg-error-container/40"
-              aria-label={t('studio.publish.delete')} onClick={() => onChange(value.filter((_, idx) => idx !== i))}>
+              aria-label={t('studio.publish.delete')}
+              onClick={() => onChange(value.filter((_, idx) => idx !== i))}
+            >
               <span className="material-symbols-outlined text-[20px]">delete</span>
             </button>
           </div>
         ))}
         {value.length < 10 && (
-          <button type="button" className="text-sm font-bold text-primary hover:underline"
-            onClick={() => onChange([...value, { platform: '', url: '' }])}>
+          <button
+            type="button"
+            className="text-sm font-bold text-primary hover:underline"
+            onClick={() => onChange([...value, { platform: '', url: '' }])}
+          >
             {t('studio.facts.addSocial')}
           </button>
         )}

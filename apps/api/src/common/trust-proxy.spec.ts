@@ -38,7 +38,9 @@ describe('trust proxy — the mechanism the rate limiter tracker depends on', ()
   it('with trust proxy enabled, the SAME client is resolved to the SAME address across repeated requests', async () => {
     const app = appWithTrustProxy(true);
     const ips = await Promise.all(
-      Array.from({ length: 5 }, () => request(app).get('/whoami').set('X-Forwarded-For', '198.51.100.42')),
+      Array.from({ length: 5 }, () =>
+        request(app).get('/whoami').set('X-Forwarded-For', '198.51.100.42'),
+      ),
     );
     const distinct = new Set(ips.map((r) => r.body.ip));
     // This is exactly the property that was missing in production: one real
@@ -50,7 +52,9 @@ describe('trust proxy — the mechanism the rate limiter tracker depends on', ()
 
   it('takes the leftmost (original client) address from a multi-hop X-Forwarded-For chain', async () => {
     const app = appWithTrustProxy(true);
-    const res = await request(app).get('/whoami').set('X-Forwarded-For', '203.0.113.7, 10.0.0.5, 10.0.0.6');
+    const res = await request(app)
+      .get('/whoami')
+      .set('X-Forwarded-For', '203.0.113.7, 10.0.0.5, 10.0.0.6');
     expect(res.body.ip).toBe('203.0.113.7');
   });
 });

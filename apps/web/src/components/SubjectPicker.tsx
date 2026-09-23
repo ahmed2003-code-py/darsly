@@ -33,9 +33,10 @@ export default function SubjectPicker({
   const byId = useMemo(() => new Map(subjects.map((s) => [s.id, s])), [subjects]);
   const groups = useMemo(() => {
     const hits = subjects.filter((s) => subjectMatches(s, q));
-    return TRACK_ORDER.map((track) => ({ track, items: hits.filter((s) => s.track === track) })).filter(
-      (g) => g.items.length,
-    );
+    return TRACK_ORDER.map((track) => ({
+      track,
+      items: hits.filter((s) => s.track === track),
+    })).filter((g) => g.items.length);
   }, [subjects, q]);
 
   const toggle = (id: string) => {

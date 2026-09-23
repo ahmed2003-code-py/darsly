@@ -69,7 +69,13 @@ export class EntryExamService {
     };
     // A visitor has nothing to have passed; the page shows the exam as the door.
     if (!studentId || !quiz) {
-      return { ...base, passed: false, attempted: false, bestScorePct: null, awaitingGrading: false };
+      return {
+        ...base,
+        passed: false,
+        attempted: false,
+        bestScorePct: null,
+        awaitingGrading: false,
+      };
     }
 
     const attempts = await this.prisma.quizAttempt.findMany({
@@ -88,7 +94,9 @@ export class EntryExamService {
       attempted: attempts.length > 0,
       bestScorePct: best,
       // Only genuinely waiting: a verdict that is already decided is not.
-      awaitingGrading: attempts.some((a) => a.passed == null && a.needsManualGrading && !a.gradedAt),
+      awaitingGrading: attempts.some(
+        (a) => a.passed == null && a.needsManualGrading && !a.gradedAt,
+      ),
     };
   }
 
@@ -111,7 +119,12 @@ export class EntryExamService {
    * The code is the point: the client uses it to send the student to the exam
    * rather than showing them a bare refusal they can do nothing about.
    */
-  async requirePassed(courseId: string, studentId: string, lessonId: string, isFreePreview: boolean) {
+  async requirePassed(
+    courseId: string,
+    studentId: string,
+    lessonId: string,
+    isFreePreview: boolean,
+  ) {
     const state = await this.stateFor(courseId, studentId);
     if (this.isAllowedWhileLocked(state, lessonId, isFreePreview)) return state;
     throw new ForbiddenException({

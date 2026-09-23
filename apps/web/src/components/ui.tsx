@@ -1,6 +1,12 @@
 import { m } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { type KeyboardEvent as ReactKeyboardEvent, ReactNode, useEffect, useId, useRef } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+  useEffect,
+  useId,
+  useRef,
+} from 'react';
 import { Reveal } from './motion';
 import i18n from '../i18n';
 import { errorMessage } from '../lib/errorMessage';
@@ -10,8 +16,7 @@ import { errorMessage } from '../lib/errorMessage';
 /** What Tab can reach inside a dialog. `[tabindex="-1"]` is excluded on
  *  purpose: it is programmatically focusable but not part of the tab order,
  *  and the panel itself carries it. */
-const FOCUSABLE =
-  'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 export function Badge({
   children,
@@ -29,7 +34,9 @@ export function Badge({
     neutral: 'bg-surface-container-high text-on-surface-variant',
   };
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}
+    >
       {children}
     </span>
   );
@@ -260,7 +267,9 @@ export function Modal({
         transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 id={titleId} className="font-heading text-xl font-bold tracking-tight">{title}</h3>
+          <h3 id={titleId} className="font-heading text-xl font-bold tracking-tight">
+            {title}
+          </h3>
           <button
             className="grid h-9 w-9 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
             onClick={onClose}
@@ -275,7 +284,15 @@ export function Modal({
   );
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+export function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+}) {
   return (
     <label className="mb-4 block">
       <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{label}</span>
@@ -329,7 +346,13 @@ export function ErrorNote({ error }: { error: unknown }) {
 }
 
 /** Dependency-free bar chart (keeps the bundle lean — no charting library). */
-export function BarChart({ data, format }: { data: { label: string; value: number }[]; format?: (v: number) => string }) {
+export function BarChart({
+  data,
+  format,
+}: {
+  data: { label: string; value: number }[];
+  format?: (v: number) => string;
+}) {
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
     <div className="flex h-44 items-end gap-3 pt-6">

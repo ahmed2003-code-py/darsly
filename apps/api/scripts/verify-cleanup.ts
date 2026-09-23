@@ -33,9 +33,15 @@ const KEEP = process.env.KEEP_TEACHER ?? 'amr927@gmail.com';
   });
 
   const survivors = await prisma.user.findMany({ select: { email: true, role: true } });
-  console.log('\nsurviving accounts:', survivors.map((u) => `${u.email} (${u.role})`));
+  console.log(
+    '\nsurviving accounts:',
+    survivors.map((u) => `${u.email} (${u.role})`),
+  );
 
-  const kept = await prisma.user.findFirst({ where: { email: KEEP }, include: { teacherProfile: true } });
+  const kept = await prisma.user.findFirst({
+    where: { email: KEEP },
+    include: { teacherProfile: true },
+  });
   console.log('\nkept teacher still intact:', !!kept?.teacherProfile);
   if (kept?.teacherProfile) {
     const tid = kept.teacherProfile.id;
@@ -50,9 +56,18 @@ const KEEP = process.env.KEEP_TEACHER ?? 'amr927@gmail.com';
   }
 
   // The money the admin console reports must now be zero.
-  const paid = await prisma.payment.aggregate({ where: { status: 'PAID' }, _sum: { amountCents: true } });
-  const credits = await prisma.ledgerEntry.aggregate({ where: { direction: 'CREDIT' }, _sum: { amountCents: true } });
-  console.log('\nvisible money:', { paidPiasters: paid._sum.amountCents ?? 0, ledgerCredits: credits._sum.amountCents ?? 0 });
+  const paid = await prisma.payment.aggregate({
+    where: { status: 'PAID' },
+    _sum: { amountCents: true },
+  });
+  const credits = await prisma.ledgerEntry.aggregate({
+    where: { direction: 'CREDIT' },
+    _sum: { amountCents: true },
+  });
+  console.log('\nvisible money:', {
+    paidPiasters: paid._sum.amountCents ?? 0,
+    ledgerCredits: credits._sum.amountCents ?? 0,
+  });
 
   // And nothing was actually destroyed.
   const raw: any[] = await prisma.$queryRaw`

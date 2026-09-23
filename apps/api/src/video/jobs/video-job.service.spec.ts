@@ -93,7 +93,10 @@ describe('VideoJobService', () => {
       prisma.videoJob.findUnique.mockResolvedValue({ id: 'job1', attempts: 1 });
       const before = Date.now();
 
-      const willRetry = await svc.fail('job1', { message: 'storage timeout', errorClass: 'RETRYABLE' });
+      const willRetry = await svc.fail('job1', {
+        message: 'storage timeout',
+        errorClass: 'RETRYABLE',
+      });
 
       expect(willRetry).toBe(true);
       const data = prisma.videoJob.update.mock.calls[0][0].data;
@@ -118,7 +121,10 @@ describe('VideoJobService', () => {
     it('stops retrying once the attempt cap is reached', async () => {
       prisma.videoJob.findUnique.mockResolvedValue({ id: 'job1', attempts: MAX_ATTEMPTS });
 
-      const willRetry = await svc.fail('job1', { message: 'still broken', errorClass: 'RETRYABLE' });
+      const willRetry = await svc.fail('job1', {
+        message: 'still broken',
+        errorClass: 'RETRYABLE',
+      });
 
       expect(willRetry).toBe(false);
       expect(prisma.videoJob.update.mock.calls[0][0].data.status).toBe('FAILED');
@@ -131,7 +137,10 @@ describe('VideoJobService', () => {
     it('never retries a TERMINAL failure, even on the first attempt', async () => {
       prisma.videoJob.findUnique.mockResolvedValue({ id: 'job1', attempts: 1 });
 
-      const willRetry = await svc.fail('job1', { message: 'corrupt source', errorClass: 'TERMINAL' });
+      const willRetry = await svc.fail('job1', {
+        message: 'corrupt source',
+        errorClass: 'TERMINAL',
+      });
 
       expect(willRetry).toBe(false);
       expect(prisma.videoJob.update.mock.calls[0][0].data.status).toBe('FAILED');

@@ -101,7 +101,15 @@ export interface StudioThemes {
 export const BUTTON_STYLES = ['classic', 'rounded', 'pill', 'sharp', 'soft', 'elevated'] as const;
 export const CARD_STYLES = ['minimal', 'soft', 'elevated', 'paper', 'glass', 'outlined'] as const;
 export const FRAME_STYLES = [
-  'none', 'bronze', 'silver', 'gold', 'diamond', 'fire', 'lightning', 'scholar', 'legendary',
+  'none',
+  'bronze',
+  'silver',
+  'gold',
+  'diamond',
+  'fire',
+  'lightning',
+  'scholar',
+  'legendary',
 ] as const;
 export const EFFECT_STYLES = ['none', 'glow'] as const;
 
@@ -117,7 +125,13 @@ export const NAV_TABLET = ['drawer', 'expanded', 'rail'] as const;
 export const NAV_MOBILE = ['bottom', 'drawer'] as const;
 export const NAV_ACTIVE = ['bar', 'pill', 'glow', 'underline'] as const;
 export const HEADER_VARIANTS = [
-  'standard', 'minimal', 'floating', 'glass', 'compact', 'centered', 'editorial',
+  'standard',
+  'minimal',
+  'floating',
+  'glass',
+  'compact',
+  'centered',
+  'editorial',
 ] as const;
 export const FOOTER_VARIANTS = ['none', 'minimal', 'stats', 'bottomBar'] as const;
 export const DENSITIES = ['comfortable', 'compact', 'spacious'] as const;
@@ -144,7 +158,15 @@ export const DEFAULT_LAYOUT: LayoutStyles = {
  * artwork.
  */
 export const PATTERNS = [
-  'none', 'web', 'halftone', 'pitch', 'speed', 'grid', 'glow', 'rays', 'stadium',
+  'none',
+  'web',
+  'halftone',
+  'pitch',
+  'speed',
+  'grid',
+  'glow',
+  'rays',
+  'stadium',
 ] as const;
 
 /**
@@ -228,7 +250,11 @@ export function deriveAccent(
   // Seated first: a colour that cannot be read on this ground is moved until it
   // can, rather than shipped and then apologised for.
   const accent = legible(hex, hardest(hex, [ground, floorOn]), 3);
-  const onAccent = legible(relLuminance(accent) > 0.5 ? '#12121a' : '#ffffff', accent, ON_FILL_FLOOR);
+  const onAccent = legible(
+    relLuminance(accent) > 0.5 ? '#12121a' : '#ffffff',
+    accent,
+    ON_FILL_FLOOR,
+  );
   const hover = mode === 'dark' ? mix(accent, '#ffffff', 0.16) : mix(accent, '#000000', 0.14);
   const soft = mix(ground, accent, mode === 'dark' ? 0.22 : 0.12);
   const border = mix(ground, accent, mode === 'dark' ? 0.4 : 0.32);
@@ -306,7 +332,11 @@ export function deriveGold(
  * weight against the platform ground so text contrast is untouched — the wash
  * is a tint, not a new background, and nothing has to be re-seated because of it.
  */
-export function deriveWash(hex: string, mode: StudioMode, on?: string | null): Record<string, string> {
+export function deriveWash(
+  hex: string,
+  mode: StudioMode,
+  on?: string | null,
+): Record<string, string> {
   const ground = on ?? GROUND[mode];
   const w = mode === 'dark' ? 0.14 : 0.07;
   return {
@@ -535,7 +565,11 @@ export function deriveBrand(
   const ground = on ?? GROUND[mode];
   const floorOn = seat ?? ground;
   const primary = legible(hex, hardest(hex, [ground, floorOn]), 3);
-  const onPrimary = legible(relLuminance(primary) > 0.5 ? '#12121a' : '#ffffff', primary, ON_FILL_FLOOR);
+  const onPrimary = legible(
+    relLuminance(primary) > 0.5 ? '#12121a' : '#ffffff',
+    primary,
+    ON_FILL_FLOOR,
+  );
   // Dark brightens on hover and light darkens: a darker hover on a dark page
   // disappears into it.
   const hover = mode === 'dark' ? mix(primary, '#ffffff', 0.16) : mix(primary, '#000000', 0.14);
@@ -716,7 +750,11 @@ export function deriveLayout(cfg: ThemeConfig['layout'] | undefined): LayoutStyl
  * chose icons chose icons — and drops the labels, since a rail has nowhere to
  * put them. Anything not overridden is the theme's, untouched.
  */
-export function withSlots(layout: LayoutStyles, nav?: string | null, header?: string | null): LayoutStyles {
+export function withSlots(
+  layout: LayoutStyles,
+  nav?: string | null,
+  header?: string | null,
+): LayoutStyles {
   const out: LayoutStyles = { ...layout, nav: { ...layout.nav }, header: { ...layout.header } };
   const navPick = pickOrNull(nav, NAV_DESKTOP);
   if (navPick) {
@@ -739,7 +777,11 @@ function oneGlass(l: LayoutStyles): LayoutStyles {
   return l;
 }
 
-function pick<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
+function pick<T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+  fallback: T[number],
+): T[number] {
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)
     ? (value as T[number])
     : fallback;

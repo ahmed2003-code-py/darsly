@@ -16,12 +16,45 @@ export class SenderRulesService implements OnModuleInit {
 
   // Egyptian financial senders. Sender ids rarely equal the brand exactly, so we
   // match on CONTAINS against a normalized (lowercased) sender id.
-  private static readonly DEFAULTS: Array<Omit<SenderRuleLike, 'enabled'> & { enabled: boolean }> = [
-    { brand: 'CIB', matchType: 'CONTAINS', pattern: 'cib', provider: PaymentMethod.BANK_TRANSFER, enabled: true, forwardToBackend: true, priority: 10 },
-    { brand: 'Vodafone Cash', matchType: 'CONTAINS', pattern: 'vodafone', provider: PaymentMethod.VODAFONE_CASH, enabled: true, forwardToBackend: true, priority: 20 },
-    { brand: 'Vodafone Cash', matchType: 'CONTAINS', pattern: 'vfcash', provider: PaymentMethod.VODAFONE_CASH, enabled: true, forwardToBackend: true, priority: 21 },
-    { brand: 'InstaPay', matchType: 'CONTAINS', pattern: 'instapay', provider: PaymentMethod.INSTAPAY, enabled: true, forwardToBackend: true, priority: 30 },
-  ];
+  private static readonly DEFAULTS: Array<Omit<SenderRuleLike, 'enabled'> & { enabled: boolean }> =
+    [
+      {
+        brand: 'CIB',
+        matchType: 'CONTAINS',
+        pattern: 'cib',
+        provider: PaymentMethod.BANK_TRANSFER,
+        enabled: true,
+        forwardToBackend: true,
+        priority: 10,
+      },
+      {
+        brand: 'Vodafone Cash',
+        matchType: 'CONTAINS',
+        pattern: 'vodafone',
+        provider: PaymentMethod.VODAFONE_CASH,
+        enabled: true,
+        forwardToBackend: true,
+        priority: 20,
+      },
+      {
+        brand: 'Vodafone Cash',
+        matchType: 'CONTAINS',
+        pattern: 'vfcash',
+        provider: PaymentMethod.VODAFONE_CASH,
+        enabled: true,
+        forwardToBackend: true,
+        priority: 21,
+      },
+      {
+        brand: 'InstaPay',
+        matchType: 'CONTAINS',
+        pattern: 'instapay',
+        provider: PaymentMethod.INSTAPAY,
+        enabled: true,
+        forwardToBackend: true,
+        priority: 30,
+      },
+    ];
 
   async onModuleInit(): Promise<void> {
     const count = await this.prisma.senderRule.count();

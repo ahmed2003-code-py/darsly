@@ -14,7 +14,16 @@ export class DeviceAuthService {
   async me(deviceId: string) {
     const device = await this.prisma.listenerDevice.findUnique({
       where: { id: deviceId },
-      select: { id: true, phone: true, platform: true, model: true, appVersion: true, revokedAt: true, lastSeenAt: true, createdAt: true },
+      select: {
+        id: true,
+        phone: true,
+        platform: true,
+        model: true,
+        appVersion: true,
+        revokedAt: true,
+        lastSeenAt: true,
+        createdAt: true,
+      },
     });
     return device;
   }

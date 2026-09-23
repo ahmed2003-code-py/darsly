@@ -2548,7 +2548,24 @@
     "eThemeUnknown": "That theme doesn't exist.",
     "validation": "Some details are missing or invalid ({{count}}). Check the fields and try again.",
     "eStudentsNotEnrolled": "{{count}} of the students you picked aren't enrolled with this center.",
-    "eNotGroupMembers": "{{count}} of those students aren't members of this group."
+    "eNotGroupMembers": "{{count}} of those students aren't members of this group.",
+    "eBadSpec": "That exam cannot be built as described. Check the numbers and try again.",
+    "eWrongKind": "That action does not apply to this kind of session.",
+    "eRegenerateFailed": "A better question could not be written from this material. Edit it by hand, or change the material.",
+    "ePaperNoPages": "Nothing readable was found in those files.",
+    "eImportNotEditable": "The pages are still being read. Wait for them to finish.",
+    "eNothingToRetry": "Every page was read successfully — there is nothing to read again.",
+    "eAlreadyConfirmed": "This has already been turned into an exam.",
+    "eUnsupportedQuestions": "Some questions are of a type this platform cannot store. Change them or delete them first.",
+    "eNoQuestions": "There are no questions to make an exam from.",
+    "eNoDraft": "There is nothing to confirm yet.",
+    "eCourseRequired": "Choose the course this exam belongs to.",
+    "eTooManyQuestions": "That is more questions than an exam can hold.",
+    "ePaperFileTooLarge": "One of those files is too large.",
+    "ePaperUnsupportedType": "Pages must be PNG, JPEG or WebP images, or PDFs.",
+    "ePaperContentMismatch": "That file is not the type it claims to be.",
+    "ePaperTooManyPages": "That is more pages than one session can hold.",
+    "eNoFiles": "Choose at least one file first."
   },
   "myStudio": {
     "title": "My Studio",
@@ -3260,6 +3277,11 @@
       "ESCALATED": "done",
       "FAILED": "needs another read",
       "SKIPPED": "nothing on it"
-    }
+    },
+    "shortfallTitle": "The material was shorter than the exam",
+    "shortfallBody": "What you uploaded supports {{got}} good questions, not {{wanted}}. We have set the exam to {{got}}: {{mcq}} multiple choice, {{trueFalse}} true/false, {{written}} written. Keep it as it is, or change the settings and upload more material.",
+    "shortfallKeep": "Keep {{got}} questions",
+    "draftSaved": "Draft saved.",
+    "examCreated": "The exam has been created — {{n}} questions."
   }
 }

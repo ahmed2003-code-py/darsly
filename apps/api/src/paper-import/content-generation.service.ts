@@ -3,7 +3,14 @@ import { PaperImport, PaperImportPage, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { DraftQuestion, DraftWarning, ExamDraft } from './extraction.schema';
-import { normalizeSpec, planQuestions, PlannedQuestion } from './exam-spec';
+import {
+  ExamSpec,
+  normalizeSpec,
+  planQuestions,
+  PlannedQuestion,
+  scaleSpec,
+  specFromQuestions,
+} from './exam-spec';
 import { gradeQuestions, findDuplicates, GradedQuestion } from './question-quality';
 import { QuestionGeneratorService, GeneratedQuestion } from './question-generator.service';
 import { SourceReaderService } from './source-reader.service';
@@ -13,6 +20,7 @@ import {
   normalizePageText,
   selectChunksForBatch,
   selectChunksForQuestion,
+  supportableQuestions,
   SourceChunk,
   SourcePage,
   stripRunningLines,
@@ -237,9 +245,23 @@ export class ContentGenerationService {
    * all, because they do not know which 7.
    */
   async generate(record: PaperImport): Promise<{ millicents: number }> {
-    const spec = normalizeSpec(record.spec as never);
-    const plan = planQuestions(spec);
+    const asked = normalizeSpec(record.spec as never);
     const chunks = await this.chunksOf(record.id);
+
+    if (!chunks.length) {
+      await this.fail(record.id, 'NO_SOURCE');
+      return { millicents: 0 };
+    }
+
+    // Work out what the material can carry BEFORE spending anything on it.
+    // Asking one page for twenty questions used to mean three batches over the
+    // same paragraph, each repeating the last, every repeat thrown away as a
+    // duplicate, the shortfall read as a model failure and all three batches
+    // escalated to the flagship. Six calls and ten minutes for thirteen
+    // questions one call could have written.
+    const ceiling = supportableQuestions(chunks);
+    const spec = scaleSpec(asked, ceiling);
+    const plan = planQuestions(spec);
 
     await this.prisma.paperImport.update({
       where: { id: record.id },
@@ -253,11 +275,6 @@ export class ContentGenerationService {
         escalatedChunks: 0,
       },
     });
-
-    if (!chunks.length) {
-      await this.fail(record.id, 'NO_SOURCE');
-      return { millicents: 0 };
-    }
 
     const batchCount = this.generator.batchCount(plan.length);
     const accepted: GradedQuestion[] = [];
@@ -278,6 +295,7 @@ export class ContentGenerationService {
       );
 
       let kept: GradedQuestion[] = [];
+      let exhausted = false;
       for (let attempt = 0; attempt < this.config.generationMaxAttempts; attempt++) {
         const stronger = attempt > 0;
         const result = await this.generator.generateBatch({
@@ -299,14 +317,32 @@ export class ContentGenerationService {
         }
 
         kept = this.acceptable(result.questions, batchPlan, material, accepted);
-        // Good enough: every question the batch asked for came back usable.
+
+        // Every question asked for came back usable. Done.
         if (kept.length >= batchPlan.length) break;
-        // The material itself is short. Asking a better model to read the same
-        // short paragraph again will not lengthen it.
-        if (result.insufficient) break;
+
+        // Short, but nothing that came back was *wrong*: the model wrote what
+        // the paragraph supports. A bigger model reading the same paragraph
+        // does not lengthen it, and this is the case that used to cost three
+        // flagship calls per import. Stop asking.
+        const rejected = result.questions.length - kept.length;
+        if (result.insufficient || rejected === 0) {
+          exhausted = true;
+          break;
+        }
+        // Something came back broken. That IS worth a better reader.
       }
 
       accepted.push(...kept);
+      // The material has given what it has. The remaining batches would be
+      // handed the same chunks and would repeat these questions.
+      if (exhausted && kept.length < batchPlan.length) {
+        await this.prisma.paperImport.update({
+          where: { id: record.id },
+          data: { progressDone: accepted.length, generationBatches: batches },
+        });
+        break;
+      }
       await this.prisma.paperImport.update({
         where: { id: record.id },
         data: { progressDone: accepted.length, generationBatches: batches },
@@ -322,15 +358,28 @@ export class ContentGenerationService {
     const numbered = accepted.map((q, i) => ({ ...q, number: i + 1 }));
     const findings = gradeQuestions(numbered, plan, { requireGrounding: true });
 
-    if (numbered.length < plan.length) {
+    // What the teacher asked for, reconciled with what the material gave.
+    //
+    // The spec is rewritten to match the exam that actually exists. It used to
+    // keep saying "20 questions, 10 multiple choice" over a draft of 13, so
+    // "change the settings" opened a form the teacher had to correct by hand
+    // before it would save — a number they never chose, asking them to fix it.
+    // Now the stored spec is the exam, and the warning explains the difference.
+    const finalSpec: ExamSpec =
+      numbered.length < asked.questionCount ? specFromQuestions(asked, numbered) : asked;
+
+    if (numbered.length < asked.questionCount) {
       warnings.push({
         code: 'NOT_ENOUGH_CONTENT',
         params: {
           got: numbered.length,
-          wanted: plan.length,
+          wanted: asked.questionCount,
           supportable: supportable ?? numbered.length,
+          mcq: finalSpec.types.MCQ,
+          trueFalse: finalSpec.types.TRUE_FALSE,
+          written: finalSpec.types.SHORT_ANSWER,
         },
-        detail: `The uploaded material supports ${numbered.length} of the ${plan.length} questions requested.`,
+        detail: `The uploaded material supports ${numbered.length} of the ${asked.questionCount} questions requested.`,
       });
     }
     for (const dup of findDuplicates(numbered)) {
@@ -349,8 +398,8 @@ export class ContentGenerationService {
     }
 
     const draft: ExamDraft = {
-      title: spec.title || '',
-      instructions: spec.instructions,
+      title: asked.title || '',
+      instructions: asked.instructions,
       sections: [{ title: '', questions: numbered.map(stripGrading) }],
     };
 
@@ -362,12 +411,15 @@ export class ContentGenerationService {
         error: numbered.length ? null : 'No questions could be written from this material',
         title: draft.title,
         draft: draft as unknown as Prisma.InputJsonValue,
+        // The spec now describes the exam that exists, so confirming works and
+        // "change the settings" opens the real numbers.
+        spec: finalSpec as unknown as Prisma.InputJsonValue,
         warnings: warnings as unknown as Prisma.InputJsonValue,
         generationBatches: batches,
         escalatedChunks,
         costCents: { increment: Math.ceil(millicents / 1000) },
         progressDone: numbered.length,
-        progressTotal: plan.length,
+        progressTotal: Math.max(numbered.length, plan.length),
       },
     });
 

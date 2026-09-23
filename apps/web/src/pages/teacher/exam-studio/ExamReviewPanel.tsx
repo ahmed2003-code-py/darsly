@@ -2,7 +2,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
-import { Badge, ErrorNote, Field, Spinner } from '../../../components/ui';
+import { Badge, Field, Spinner } from '../../../components/ui';
+import { toastError } from '../../../lib/toast';
 import {
   DraftQuestion,
   DraftType,
@@ -111,6 +112,7 @@ function QuestionCard({
   const regenerate = useMutation({
     mutationFn: () => regenerateQuestion(record.id, question.id),
     onSuccess: ({ question: next }) => onReplace({ ...next, id: question.id }),
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -236,8 +238,6 @@ function QuestionCard({
           )
         )}
       </div>
-
-      <ErrorNote error={regenerate.error} />
 
       {showSource && sourcePage && (
         <SourcePage

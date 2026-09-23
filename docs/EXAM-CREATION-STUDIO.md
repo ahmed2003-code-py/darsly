@@ -116,6 +116,31 @@ on content their class was never taught. So the schema has a place to say
 shortfall reaches the teacher as a warning with an offer — upload more, or ask
 for fewer — rather than as seven invented questions.
 
+**The material decides how big the exam can be, before anything is spent.**
+`supportableQuestions()` works the ceiling out from the chunks — roughly one
+question per 70 tokens, at most six per chunk — and the plan is cut to it.
+Without this, a request for twenty questions from a single page became three
+batches over the *same* paragraph, each repeating the last, every repeat thrown
+away as a duplicate, the shortfall read as a model failure and all three
+batches escalated to the flagship: six calls and ten minutes to produce
+thirteen questions that one call had already produced.
+
+**A short answer is not a failure.** A batch that comes back with fewer
+questions than asked, none of them broken, is a batch that wrote what the
+paragraph supports; a bigger model reading the same paragraph does not lengthen
+it. Escalation now needs something to have come back *wrong*, and a short batch
+ends the loop rather than starting another over the same chunks.
+
+**The specification reconciles itself.** When the material carries thirteen of
+the twenty asked for, the stored spec is rewritten to describe the exam that
+exists — 13, split 7/3/3 in the proportions the teacher chose. The review
+screen then asks, once, in a dialog: *"اللي رفعته يكفي لـ 13 سؤال كويس، مش 20…
+تمام كده، ولا تحب تغيّر المواصفات وترفع مادة أكتر؟"* Saying yes is genuinely
+nothing — the exam is ready to publish as it stands. Saying no opens the
+settings on the real numbers. Before this the spec kept insisting on twenty
+over a draft of thirteen, so "change the settings" opened a form the teacher
+had to correct by hand, with a number they never chose.
+
 **Rewriting one question is one question.** The review screen's «أعد الكتابة»
 sends that question's own chunk plus the nearest few, every *other* question so
 the rewrite is not one of them, and the teacher's reason if they gave one. It
@@ -271,6 +296,14 @@ its type, mark the right answer, reorder, delete, add a question the extraction
 missed, and open the original page beside the question it came from. Nothing
 about models, tokens or escalation is shown; what is shown is which questions
 to look at.
+
+**Every refusal in the studio is a pop-up**, not a red line under a control:
+half of them happen after the teacher has scrolled away from whatever caused
+them, and an inline note on a long review screen is a note nobody reads. Each
+code the studio can return has Arabic copy, so none of them degrades to a bare
+status sentence — and a label with a count in it is passed that count, because
+a `t()` call that forgets its parameters puts «خليه {{got}} سؤال» on a button:
+the interpolation variable's name, in front of the teacher.
 
 Warnings are sent as a `code` plus `params` and worded on the screen, not on
 the server. The first version composed the sentences server-side, and an

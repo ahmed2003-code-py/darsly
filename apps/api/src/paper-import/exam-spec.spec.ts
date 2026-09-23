@@ -1,4 +1,13 @@
-import { apportion, defaultSpec, normalizeSpec, planQuestions, specProblems } from './exam-spec';
+import {
+  apportion,
+  defaultSpec,
+  normalizeSpec,
+  planQuestions,
+  scaleSpec,
+  specFromQuestions,
+  specProblems,
+} from './exam-spec';
+import { MAX_QUESTIONS_PER_CHUNK, supportableQuestions } from './source-text';
 
 /**
  * Turning "20 questions, mixed difficulty, mostly multiple choice" into a list
@@ -151,5 +160,72 @@ describe('refusing a request that could not become an exam', () => {
     expect(spec.types).toBeDefined();
     expect(spec.mix.MEDIUM).toBeGreaterThan(0);
     expect(Array.isArray(spec.instructions)).toBe(true);
+  });
+});
+
+describe('cutting an exam to the material that exists', () => {
+  const base = {
+    ...defaultSpec(),
+    questionCount: 20,
+    types: { MCQ: 10, TRUE_FALSE: 5, SHORT_ANSWER: 5 },
+  };
+
+  it('keeps the mixture the teacher asked for when it has to shrink', () => {
+    // 10/5/5 becoming 10/3/0 would be a different exam. The teacher asked for
+    // a mixture and a shorter exam is still that mixture.
+    const scaled = scaleSpec(base, 13);
+    expect(scaled.questionCount).toBe(13);
+    const total = scaled.types.MCQ + scaled.types.TRUE_FALSE + scaled.types.SHORT_ANSWER;
+    expect(total).toBe(13);
+    expect(scaled.types.MCQ).toBeGreaterThan(scaled.types.TRUE_FALSE);
+    expect(scaled.types.SHORT_ANSWER).toBeGreaterThan(0);
+  });
+
+  it('leaves a spec alone when the material can carry it', () => {
+    expect(scaleSpec(base, 20)).toBe(base);
+    expect(scaleSpec(base, 40)).toBe(base);
+  });
+
+  it('produces a plan of exactly the scaled size', () => {
+    expect(planQuestions(scaleSpec(base, 13))).toHaveLength(13);
+  });
+
+  it('describes the exam that was actually written', () => {
+    const written = [
+      { type: 'MCQ' },
+      { type: 'MCQ' },
+      { type: 'TRUE_FALSE' },
+      { type: 'SHORT_ANSWER' },
+    ];
+    const out = specFromQuestions(base, written);
+    expect(out.questionCount).toBe(4);
+    expect(out.types).toEqual({ MCQ: 2, TRUE_FALSE: 1, SHORT_ANSWER: 1 });
+    // And it is a spec that would pass its own validation, so the settings
+    // form opens on numbers that save.
+    expect(specProblems(out)).toEqual([]);
+  });
+});
+
+describe('how much exam a pile of material can carry', () => {
+  const chunk = (tokens: number) => ({ tokensApprox: tokens });
+
+  it('says a single short page cannot carry twenty questions', () => {
+    // One page of ~420 tokens: six questions, not twenty.
+    expect(supportableQuestions([chunk(424)])).toBeLessThan(10);
+  });
+
+  it('grows with the material', () => {
+    const one = supportableQuestions([chunk(700)]);
+    const ten = supportableQuestions(Array.from({ length: 10 }, () => chunk(700)));
+    expect(ten).toBeGreaterThan(one * 5);
+  });
+
+  it('never lets one chunk carry an unlimited number of questions', () => {
+    expect(supportableQuestions([chunk(100_000)])).toBe(MAX_QUESTIONS_PER_CHUNK);
+  });
+
+  it('is zero for no material at all, and at least one otherwise', () => {
+    expect(supportableQuestions([])).toBe(0);
+    expect(supportableQuestions([chunk(10)])).toBe(1);
   });
 });

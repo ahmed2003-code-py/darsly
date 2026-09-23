@@ -318,3 +318,29 @@ export function foldArabic(text: string): string {
     .replace(/ة/g, 'ه')
     .replace(/ـ/g, '');
 }
+
+/**
+ * How many distinct questions this material could honestly carry.
+ *
+ * A page of a lecture is one page of a lecture however many questions are
+ * asked for. Without this the studio took a request for twenty questions from
+ * a single page, split it into three batches over the *same* chunk, watched
+ * each batch repeat the previous one, threw the repeats away as duplicates,
+ * called the shortfall a model failure and escalated all three batches to the
+ * flagship — six calls and ten minutes to produce thirteen questions that one
+ * call could have produced.
+ *
+ * So the ceiling is worked out first, deterministically, and the plan is cut
+ * to it before anything is generated. Roughly one question per 70 tokens of
+ * material with a hard ceiling per chunk: a paragraph supports a question or
+ * two, not six, and a model asked for six writes the same one repeatedly.
+ */
+export const MAX_QUESTIONS_PER_CHUNK = 6;
+const TOKENS_PER_QUESTION = 70;
+
+export function supportableQuestions(chunks: Pick<SourceChunk, 'tokensApprox'>[]): number {
+  if (!chunks.length) return 0;
+  const byTokens = Math.floor(chunks.reduce((n, c) => n + c.tokensApprox, 0) / TOKENS_PER_QUESTION);
+  const byChunks = chunks.length * MAX_QUESTIONS_PER_CHUNK;
+  return Math.max(1, Math.min(byTokens, byChunks));
+}

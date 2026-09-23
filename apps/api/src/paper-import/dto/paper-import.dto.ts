@@ -45,6 +45,19 @@ export class DraftQuestionDto {
   @IsString() @MaxLength(LIMITS.PROSE) modelAnswer: string;
   @IsOptional() @IsInt() @Min(0) @Max(1_000) marks?: number | null;
   @IsArray() @ArrayMaxSize(50) @IsInt({ each: true }) sourcePages: number[];
+  /**
+   * Where a generated question came from, carried back unchanged.
+   *
+   * These were missing here while the generator was writing them onto every
+   * question, and the global pipe runs `forbidNonWhitelisted` — so saving a
+   * reviewed draft of thirteen generated questions was refused with twenty-six
+   * validation errors (two unknown properties each) and the teacher could not
+   * create the exam at all. Declared rather than stripped: the review screen
+   * shows "biology.pdf — صفحة 8" from them, and rewriting one question needs
+   * `sourceChunk` to know which material to rewrite it from.
+   */
+  @IsOptional() @IsInt() @Min(0) @Max(100_000) sourceChunk?: number | null;
+  @IsOptional() @IsString() @MaxLength(LIMITS.NAME) sourceFile?: string;
   @IsString() @MaxLength(LIMITS.NAME) unsupportedKind: string;
   @IsBoolean() needsReview: boolean;
 }

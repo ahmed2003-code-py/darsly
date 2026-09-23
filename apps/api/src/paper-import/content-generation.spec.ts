@@ -264,6 +264,94 @@ describe('writing an exam from uploaded lecture material', () => {
     expect(final.costCents).toEqual({ increment: 2 });
   });
 
+  it('never escalates to the flagship because the material was simply short', async () => {
+    // The ten-minute bug: one page, twenty questions asked for, three batches
+    // over the same paragraph, every repeat dropped as a duplicate, the
+    // shortfall read as a model failure, all three batches escalated. Six
+    // flagship calls to produce what one call had already produced.
+    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
+
+    await service.generate(record());
+
+    // Nothing came back broken, so nothing is worth a better reader.
+    expect(generator.generateBatch.mock.calls.every((c) => !c[0].stronger)).toBe(true);
+  });
+
+  it('stops asking once the material has given what it has', async () => {
+    generator.generateBatch.mockResolvedValue(ok([generated()]));
+
+    await service.generate(
+      record({
+        spec: { ...spec, questionCount: 16, types: { MCQ: 16, TRUE_FALSE: 0, SHORT_ANSWER: 0 } },
+      } as never),
+    );
+
+    // One short batch ends it: the next batch would be handed the same chunks.
+    expect(generator.generateBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still escalates when a batch comes back broken rather than short', async () => {
+    const broken = generated({ text: '[unclear]', options: [] });
+    generator.generateBatch
+      .mockResolvedValueOnce(ok([generated(), generated(), generated(), broken]))
+      .mockResolvedValueOnce(ok([generated(), generated(), generated(), generated()]));
+
+    await service.generate(record());
+
+    expect(generator.generateBatch).toHaveBeenCalledTimes(2);
+    expect(generator.generateBatch.mock.calls[1][0].stronger).toBe(true);
+  });
+
+  it('cuts the plan to what the material can carry before spending anything', async () => {
+    // Two 200-token chunks cannot carry fifty questions, and finding that out
+    // by generating seven batches is the expensive way to learn it.
+    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
+
+    await service.generate(
+      record({
+        spec: { ...spec, questionCount: 50, types: { MCQ: 50, TRUE_FALSE: 0, SHORT_ANSWER: 0 } },
+      } as never),
+    );
+
+    const askedFor = generator.generateBatch.mock.calls[0][0].plan.length;
+    expect(askedFor).toBeLessThanOrEqual(8);
+    expect(generator.generateBatch.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it('rewrites the stored specification to match the exam that exists', async () => {
+    // Otherwise the settings form keeps asking for 20 over a draft of 13, and
+    // the teacher has to correct a number they never chose before it will save.
+    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
+
+    await service.generate(record());
+
+    const saved = prisma.paperImport.update.mock.calls
+      .map(
+        (c: [{ data: { spec?: { questionCount: number; types: Record<string, number> } } }]) =>
+          c[0].data.spec,
+      )
+      .filter(Boolean)
+      .pop();
+    expect(saved.questionCount).toBe(2);
+    expect(saved.types.MCQ).toBe(2);
+  });
+
+  it('tells the teacher the new breakdown, not just the shortfall', async () => {
+    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
+
+    await service.generate(record());
+
+    const warnings = prisma.paperImport.update.mock.calls
+      .map(
+        (c: [{ data: { warnings?: { code: string; params?: Record<string, number> }[] } }]) =>
+          c[0].data.warnings,
+      )
+      .filter(Boolean)
+      .pop();
+    const short = warnings.find((w: { code: string }) => w.code === 'NOT_ENOUGH_CONTENT');
+    expect(short.params).toMatchObject({ got: 2, wanted: 4, mcq: 2, trueFalse: 0, written: 0 });
+  });
+
   it('fails honestly when the material produced nothing', async () => {
     generator.generateBatch.mockResolvedValue(ok([]));
     await service.generate(record());

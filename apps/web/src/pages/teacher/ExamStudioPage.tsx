@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { ErrorNote, PageHeader, ProgressBar, Spinner } from '../../components/ui';
+import { askConfirm } from '../../lib/confirm';
+import { toastError, toastSuccess } from '../../lib/toast';
+import { PageHeader, ProgressBar, Spinner } from '../../components/ui';
 import { ExamReviewPanel } from './exam-studio/ExamReviewPanel';
 import { ExamSpecForm } from './exam-studio/ExamSpecForm';
 import { StudioProgress } from './exam-studio/StudioProgress';
@@ -156,6 +158,10 @@ function Upload({
     mutationFn: () => uploadPaper(files, kind, setPct),
     onSuccess: ({ id }) =>
       navigate(`/teacher/exam-studio/${id}${courseId ? `?course=${courseId}` : ''}`),
+    // Every refusal in the studio is a pop-up. A red line under a control is
+    // easy to miss on a long review screen, and half of these happen after a
+    // scroll away from whatever caused them.
+    onError: (e) => toastError(e),
   });
 
   const add = (picked: FileList | null) => {
@@ -256,7 +262,6 @@ function Upload({
           </div>
         )}
 
-        <ErrorNote error={upload.error} />
         <button
           className="btn-primary mt-6"
           disabled={!files.length || upload.isPending}
@@ -273,7 +278,11 @@ function Upload({
 
 function Working({ record, onChange }: { record: PaperImport; onChange: () => void }) {
   const { t } = useTranslation();
-  const cancel = useMutation({ mutationFn: () => cancelImport(record.id), onSuccess: onChange });
+  const cancel = useMutation({
+    mutationFn: () => cancelImport(record.id),
+    onSuccess: onChange,
+    onError: (e) => toastError(e),
+  });
   return (
     <div className="page">
       <PageHeader
@@ -286,7 +295,6 @@ function Working({ record, onChange }: { record: PaperImport; onChange: () => vo
         canceling={cancel.isPending}
         onCancel={() => cancel.mutate()}
       />
-      <ErrorNote error={cancel.error} />
     </div>
   );
 }
@@ -296,6 +304,7 @@ function Configure({ record, onChange }: { record: PaperImport; onChange: () => 
   const start = useMutation({
     mutationFn: (spec: ExamSpec) => setSpec(record.id, spec),
     onSuccess: onChange,
+    onError: (e) => toastError(e),
   });
   return (
     <div className="page">
@@ -308,7 +317,6 @@ function Configure({ record, onChange }: { record: PaperImport; onChange: () => 
         initial={record.spec}
         chunkHint={record.pages.length}
         submitting={start.isPending}
-        error={start.error}
         onSubmit={(spec) => start.mutate(spec)}
       />
     </div>
@@ -317,7 +325,11 @@ function Configure({ record, onChange }: { record: PaperImport; onChange: () => 
 
 function Failed({ record, onChange }: { record: PaperImport; onChange: () => void }) {
   const { t } = useTranslation();
-  const retry = useMutation({ mutationFn: () => retryImport(record.id), onSuccess: onChange });
+  const retry = useMutation({
+    mutationFn: () => retryImport(record.id),
+    onSuccess: onChange,
+    onError: (e) => toastError(e),
+  });
   const state = creationState(record);
   return (
     <div className="page">
@@ -331,7 +343,6 @@ function Failed({ record, onChange }: { record: PaperImport; onChange: () => voi
           {t('paper.startOver')}
         </Link>
       </div>
-      <ErrorNote error={retry.error} />
     </div>
   );
 }
@@ -390,6 +401,43 @@ function Review({
   // in a page must not be overwritten by a stale draft sitting in this tab.
   useEffect(() => setDraft(record.draft), [record.draft]);
 
+  /**
+   * "Your material only stretched to thirteen. Shall we go with that?"
+   *
+   * Asked once, as a question, the moment the teacher lands on a short exam —
+   * rather than leaving them to notice the count, hunt for the reason, and
+   * find a settings form still asking for the twenty they will never get. The
+   * numbers are already reconciled on the server, so saying yes is genuinely
+   * nothing: the exam is ready to publish as it stands.
+   */
+  const shortfall = record.warnings.find((w) => w.code === 'NOT_ENOUGH_CONTENT');
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!shortfall || asked.current) return;
+    asked.current = true;
+    void (async () => {
+      const keep = await askConfirm(
+        t('examStudio.shortfallBody', {
+          got: shortfall.params?.got ?? 0,
+          wanted: shortfall.params?.wanted ?? 0,
+          mcq: shortfall.params?.mcq ?? 0,
+          trueFalse: shortfall.params?.trueFalse ?? 0,
+          written: shortfall.params?.written ?? 0,
+        }),
+        {
+          title: t('examStudio.shortfallTitle'),
+          // With the count — a label whose placeholder is never filled puts
+          // "خليه {{got}} سؤال" on the button, which is the interpolation
+          // variable's name in front of the teacher.
+          confirmLabel: t('examStudio.shortfallKeep', { got: shortfall.params?.got ?? 0 }),
+        },
+      );
+      // "No" is not a refusal — it is "let me change something", and the
+      // settings are the only thing here they can change.
+      if (!keep) setSettingsOpen(true);
+    })();
+  }, [shortfall, t]);
+
   const { data: courses } = useQuery({
     queryKey: ['teacher-courses-brief'],
     queryFn: async () => (await api.get('/teacher/courses')).data,
@@ -400,14 +448,20 @@ function Review({
   const problems = draftProblems(draft);
   const unsupported = unsupportedCount(draft);
 
-  const save = useMutation({ mutationFn: () => saveDraft(record.id, draft) });
+  const save = useMutation({
+    mutationFn: () => saveDraft(record.id, draft),
+    onSuccess: () => toastSuccess(t('examStudio.draftSaved')),
+    onError: (e) => toastError(e),
+  });
   const regenerateAll = useMutation({
     mutationFn: (spec: ExamSpec) => setSpec(record.id, spec),
     onSuccess: onChange,
+    onError: (e) => toastError(e),
   });
   const reread = useMutation({
     mutationFn: () => retryImport(record.id, true),
     onSuccess: onChange,
+    onError: (e) => toastError(e),
   });
   const confirm = useMutation({
     mutationFn: async () => {
@@ -421,8 +475,10 @@ function Review({
     },
     onSuccess: (built) => {
       onChange();
+      toastSuccess(t('examStudio.examCreated', { n: built.questionCount }));
       navigate(`/teacher/lessons/${built.lessonId}/quiz?course=${built.courseId}`);
     },
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -467,7 +523,6 @@ function Review({
           >
             {reread.isPending ? t('paper.rereading') : t('paper.rereadStrong')}
           </button>
-          <ErrorNote error={reread.error} />
         </div>
       )}
 
@@ -516,7 +571,6 @@ function Review({
             initial={record.spec}
             chunkHint={record.pages.length}
             submitting={regenerateAll.isPending}
-            error={regenerateAll.error}
             onSubmit={(spec) => regenerateAll.mutate(spec)}
           />
         </div>
@@ -563,7 +617,6 @@ function Review({
             {t('paper.dropUnsupported', { n: unsupported })}
           </p>
         )}
-        <ErrorNote error={confirm.error || save.error} />
       </div>
     </div>
   );

@@ -210,3 +210,38 @@ export function normalizeSpec(raw: Partial<ExamSpec> | null | undefined): ExamSp
   spec.instructions = Array.isArray(spec.instructions) ? spec.instructions : [];
   return spec;
 }
+
+/**
+ * The same exam, cut to the number of questions the material can carry.
+ *
+ * Proportional, so a request for "10 multiple choice, 5 true/false, 5 written"
+ * that has to become thirteen becomes 7/3/3 rather than 10/3/0 — the teacher
+ * asked for a mixture and a shorter exam is still that mixture. Largest
+ * remainder again, so the parts add up to the whole exactly.
+ */
+export function scaleSpec(spec: ExamSpec, toCount: number): ExamSpec {
+  const target = Math.max(0, Math.min(toCount, spec.questionCount));
+  if (target === spec.questionCount) return spec;
+  const scaled = apportion(target, spec.types as unknown as Record<string, number>);
+  return {
+    ...spec,
+    questionCount: target,
+    types: {
+      MCQ: scaled.MCQ ?? 0,
+      TRUE_FALSE: scaled.TRUE_FALSE ?? 0,
+      SHORT_ANSWER: scaled.SHORT_ANSWER ?? 0,
+    },
+  };
+}
+
+/** What a spec actually asks for, counted from a produced question list. So
+ *  the stored spec can be made to match what was really written. */
+export function specFromQuestions(spec: ExamSpec, questions: { type: string }[]): ExamSpec {
+  const types: Record<SpecQuestionType, number> = { MCQ: 0, TRUE_FALSE: 0, SHORT_ANSWER: 0 };
+  for (const q of questions) {
+    if (q.type === 'TRUE_FALSE') types.TRUE_FALSE += 1;
+    else if (q.type === 'SHORT_ANSWER') types.SHORT_ANSWER += 1;
+    else types.MCQ += 1;
+  }
+  return { ...spec, questionCount: questions.length, types };
+}

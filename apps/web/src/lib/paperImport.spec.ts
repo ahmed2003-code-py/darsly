@@ -457,3 +457,40 @@ describe('the five steps of the pipeline', () => {
     expect(steps.READ).toBe('active');
   });
 });
+
+/**
+ * A label with a placeholder in it needs the value that fills it.
+ *
+ * The confirm dialog takes `confirmLabel` as a finished string, so a `t()`
+ * call that forgot its parameters put «خليه {{got}} سؤال» on the button — the
+ * interpolation variable's name, in front of the teacher. This pins the two
+ * strings that carry counts to the values they need.
+ */
+describe('the shortfall copy', () => {
+  const strings = {
+    keep: 'تمام، خليه {{got}} سؤال',
+    body: 'اللي رفعته يكفي لـ {{got}} سؤال كويس، مش {{wanted}}. ظبطنا الامتحان على {{got}}: {{mcq}} اختيار من متعدد، {{trueFalse}} صح/خطأ، {{written}} إجابة مكتوبة.',
+  };
+
+  const fill = (template: string, params: Record<string, number>) =>
+    template.replace(/\{\{(\w+)\}\}/g, (_, k: string) =>
+      params[k] == null ? `{{${k}}}` : String(params[k]),
+    );
+
+  it('leaves nothing unfilled on the button', () => {
+    expect(fill(strings.keep, { got: 13 })).not.toContain('{{');
+    expect(fill(strings.keep, { got: 13 })).toContain('13');
+  });
+
+  it('leaves nothing unfilled in the explanation', () => {
+    const out = fill(strings.body, { got: 13, wanted: 20, mcq: 7, trueFalse: 3, written: 3 });
+    expect(out).not.toContain('{{');
+    expect(out).toContain('13');
+    expect(out).toContain('20');
+  });
+
+  it('shows the variable name when a value is missing, which is the bug', () => {
+    // Kept as the failing shape, so the guard above is testing something real.
+    expect(fill(strings.keep, {})).toContain('{{got}}');
+  });
+});

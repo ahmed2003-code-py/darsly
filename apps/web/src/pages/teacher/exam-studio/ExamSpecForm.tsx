@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ErrorNote, Field } from '../../../components/ui';
+import { Field } from '../../../components/ui';
 import { ExamSpec, SpecQuestionType } from '../../../lib/paperImport';
 
 const TYPES: SpecQuestionType[] = ['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER'];
@@ -22,14 +22,12 @@ export function ExamSpecForm({
   chunkHint,
   onSubmit,
   submitting,
-  error,
 }: {
   initial: ExamSpec;
   /** How much material there is, so the count field can be judged against it. */
   chunkHint?: number;
   onSubmit: (spec: ExamSpec) => void;
   submitting?: boolean;
-  error?: unknown;
 }) {
   const { t } = useTranslation();
   const [spec, setSpec] = useState<ExamSpec>(initial);
@@ -232,7 +230,6 @@ export function ExamSpecForm({
         </p>
       </div>
 
-      <ErrorNote error={error} />
       <button
         className="btn-primary mt-6"
         disabled={!balanced || submitting}

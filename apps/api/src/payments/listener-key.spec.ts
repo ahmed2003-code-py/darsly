@@ -1,5 +1,5 @@
-import { UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
-import { PaymentEventsController } from './payment-events.controller';
+import { ExecutionContext, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { ListenerKeyGuard } from './listener-key.guard';
 
 /**
  * The listener key on the transfer-ingestion endpoint.
@@ -14,36 +14,45 @@ import { PaymentEventsController } from './payment-events.controller';
  * timingSafeEqual throw RangeError — HTTP 500 where the answer is 401. It
  * failed closed, so nothing was credited, but any anonymous caller could fill
  * the error monitoring of a payments endpoint on demand.
+ *
+ * The check now lives in a guard rather than in the handler. That is the
+ * behaviour these tests moved to assert: guards run before the global
+ * ValidationPipe, so an unauthenticated caller is refused *before* the server
+ * parses their body and describes its own schema back to them.
  */
 describe('the transfer-ingestion listener key', () => {
   const KEY = 'a-listener-key-of-known-length!!';
-  const matching: any = { ingest: jest.fn().mockResolvedValue({ status: 'UNMATCHED' }) };
-  const body: any = { provider: 'VODAFONE_CASH', amountCents: 1000 };
-  let controller: PaymentEventsController;
+  let guard: ListenerKeyGuard;
+
+  /** Just enough ExecutionContext for a guard that only reads one header. */
+  const ctx = (key?: string) =>
+    ({
+      switchToHttp: () => ({ getRequest: () => ({ headers: key === undefined ? {} : { 'x-listener-key': key } }) }),
+    }) as unknown as ExecutionContext;
 
   beforeEach(() => {
-    matching.ingest.mockClear();
     process.env.PAYMENT_LISTENER_KEY = KEY;
-    controller = new PaymentEventsController(matching);
+    guard = new ListenerKeyGuard();
+    jest.spyOn(guard['logger'], 'warn').mockImplementation(() => undefined);
   });
-  afterAll(() => { delete process.env.PAYMENT_LISTENER_KEY; });
+  afterAll(() => {
+    delete process.env.PAYMENT_LISTENER_KEY;
+  });
 
-  it('accepts the right key', async () => {
-    await controller.ingest(KEY, body);
-    expect(matching.ingest).toHaveBeenCalledWith(body);
+  it('accepts the right key', () => {
+    expect(guard.canActivate(ctx(KEY))).toBe(true);
   });
 
   it('refuses a wrong key of the same length', () => {
-    expect(() => controller.ingest('b-listener-key-of-known-length!!', body)).toThrow(UnauthorizedException);
-    expect(matching.ingest).not.toHaveBeenCalled();
+    expect(() => guard.canActivate(ctx('b-listener-key-of-known-length!!'))).toThrow(UnauthorizedException);
   });
 
   it('refuses a missing key', () => {
-    expect(() => controller.ingest(undefined, body)).toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(ctx())).toThrow(UnauthorizedException);
   });
 
   it('refuses a key of a different length', () => {
-    expect(() => controller.ingest('short', body)).toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(ctx('short'))).toThrow(UnauthorizedException);
   });
 
   /**
@@ -53,15 +62,38 @@ describe('the transfer-ingestion listener key', () => {
    */
   it('refuses a key whose bytes differ from its characters, without crashing', () => {
     const sameCharsMoreBytes = 'a-listener-key-of-known-length!' + 'é';
-    expect(sameCharsMoreBytes.length).toBe(KEY.length);      // same characters
+    expect(sameCharsMoreBytes.length).toBe(KEY.length); // same characters
     expect(Buffer.byteLength(sameCharsMoreBytes)).not.toBe(Buffer.byteLength(KEY)); // different bytes
-    expect(() => controller.ingest(sameCharsMoreBytes, body)).toThrow(UnauthorizedException);
-    expect(matching.ingest).not.toHaveBeenCalled();
+    expect(() => guard.canActivate(ctx(sameCharsMoreBytes))).toThrow(UnauthorizedException);
   });
 
+  /**
+   * Production does not set this variable, so the legacy route answers 503 to
+   * everyone. Unset must mean "closed", never "open".
+   */
   it('refuses everything when no key is configured, rather than letting it through', () => {
     delete process.env.PAYMENT_LISTENER_KEY;
-    expect(() => controller.ingest('anything', body)).toThrow(ServiceUnavailableException);
-    expect(matching.ingest).not.toHaveBeenCalled();
+    expect(() => guard.canActivate(ctx('anything'))).toThrow(ServiceUnavailableException);
+  });
+
+  it('refuses a repeated header rather than trusting the array form', () => {
+    const arrayHeader = {
+      switchToHttp: () => ({ getRequest: () => ({ headers: { 'x-listener-key': [KEY, 'other'] } }) }),
+    } as unknown as ExecutionContext;
+
+    expect(() => guard.canActivate(arrayHeader)).toThrow(UnauthorizedException);
+  });
+
+  /**
+   * The route is meant to be retired. Knowing it is safe to delete means
+   * seeing nothing arrive on it, which means every acceptance has to be
+   * recorded.
+   */
+  it('logs every acceptance, so the legacy path can be evidenced as unused', () => {
+    const warn = jest.spyOn(guard['logger'], 'warn');
+
+    guard.canActivate(ctx(KEY));
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('/device/sms-events'));
   });
 });

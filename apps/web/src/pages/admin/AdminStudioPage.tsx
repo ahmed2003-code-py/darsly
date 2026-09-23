@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { egp } from '../../lib/format';
+import { EntryMiniature } from '../../components/ThemeMiniature';
 import { applyAdminTheme, DEFAULT_ADMIN_THEME, type AdminThemeEntry } from '../../lib/adminTheme';
 import {
   useAdminThemeCatalog,
@@ -20,8 +21,8 @@ import {
 /**
  * The Admin Studio: every look the console can wear, in one shelf.
  *
- * Built the way the student Studio is built — a mini app per card, drawn from
- * the look's own colours, with Preview and Apply — but the shelf here is the
+ * Built the way the student Studio is built — the student's own card
+ * (`EntryMiniature`), drawn from the look's own colours, with Preview and Apply — but the shelf here is the
  * whole platform: the built-in presets, the brand of every Center and every
  * teacher, and every theme in the store. Each is resolved by the API into the
  * same tokens; this page never composes a colour, it only paints what it was
@@ -46,114 +47,6 @@ function shelfOf(e: AdminThemeEntry): Exclude<Shelf, 'ALL'> {
   return e.meta.academyKind === 'CENTER' ? 'CENTER' : 'TEACHER';
 }
 
-/**
- * The console in miniature, painted in the look's own tokens: sidebar, top
- * bar, a KPI card, a primary button, a chart. Drawn from the entry, never
- * from the live `--c-*` variables, so every card is right whichever look is
- * currently applied.
- */
-function LookPreview({ tokens, tall }: { tokens: AdminThemeEntry['tokens']; tall?: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`relative flex w-full overflow-hidden rounded-xl ${tall ? 'h-40' : 'h-28'}`}
-      style={{ backgroundColor: rgb(tokens.background), border: `1px solid ${rgb(tokens.border)}` }}
-    >
-      <span
-        className="flex w-1/5 flex-col gap-1.5 p-2"
-        style={{ backgroundColor: rgb(tokens.sidebar) }}
-      >
-        <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: rgb(tokens.primary) }} />
-        <span
-          className="h-1 w-full rounded-full"
-          style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.5 }}
-        />
-        <span
-          className="h-1 w-3/4 rounded-full"
-          style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.35 }}
-        />
-        <span
-          className="h-1 w-5/6 rounded-full"
-          style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.35 }}
-        />
-      </span>
-      <span className="flex flex-1 flex-col">
-        <span
-          className="flex h-4 items-center gap-1 px-2"
-          style={{ backgroundColor: rgb(tokens.topbar) }}
-        >
-          <span
-            className="h-1 w-8 rounded-full"
-            style={{ backgroundColor: rgb(tokens.text), opacity: 0.6 }}
-          />
-          <span
-            className="ms-auto h-2 w-2 rounded-full"
-            style={{ backgroundColor: rgb(tokens.accent) }}
-          />
-        </span>
-        <span className="flex flex-1 flex-col gap-1.5 p-2">
-          <span className="flex gap-1.5">
-            <span
-              className="flex flex-1 flex-col gap-1 rounded-md p-1.5"
-              style={{
-                backgroundColor: rgb(tokens.surface),
-                border: `1px solid ${rgb(tokens.border)}`,
-              }}
-            >
-              <span
-                className="h-1.5 w-1/2 rounded-full"
-                style={{ backgroundColor: rgb(tokens.text), opacity: 0.85 }}
-              />
-              <span
-                className="h-1 w-1/3 rounded-full"
-                style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.7 }}
-              />
-            </span>
-            <span
-              className="flex flex-1 flex-col gap-1 rounded-md p-1.5"
-              style={{
-                backgroundColor: rgb(tokens.surfaceElevated),
-                border: `1px solid ${rgb(tokens.border)}`,
-              }}
-            >
-              <span
-                className="h-1.5 w-2/3 rounded-full"
-                style={{ backgroundColor: rgb(tokens.text), opacity: 0.85 }}
-              />
-              <span
-                className="h-1 w-1/4 rounded-full"
-                style={{ backgroundColor: rgb(tokens.success) }}
-              />
-            </span>
-          </span>
-          <span className="mt-auto flex items-end gap-1">
-            <span className="h-3 w-6 rounded-md" style={{ backgroundColor: rgb(tokens.primary) }} />
-            <span
-              className="h-3 w-6 rounded-md"
-              style={{
-                backgroundColor: rgb(tokens.surfaceElevated),
-                border: `1px solid ${rgb(tokens.border)}`,
-              }}
-            />
-            <span className="ms-auto flex items-end gap-0.5">
-              {[5, 8, 4, 9, 6].map((h, i) => (
-                <span
-                  key={i}
-                  className="w-1 rounded-t-sm"
-                  style={{
-                    height: h * 1.5,
-                    backgroundColor: rgb([tokens.chart1, tokens.chart2, tokens.chart3][i % 3]),
-                  }}
-                />
-              ))}
-            </span>
-          </span>
-        </span>
-      </span>
-    </span>
-  );
-}
-
 function LookCard({
   entry,
   active,
@@ -176,11 +69,7 @@ function LookCard({
     <article
       className={`studio-card card flex flex-col p-4 transition ${active ? 'ring-2 ring-primary' : previewing ? 'ring-2 ring-outline' : ''}`}
     >
-      <span
-        className={entry.meta.rarity === 'LEGENDARY' ? 'studio-sheen block rounded-xl' : 'block'}
-      >
-        <LookPreview tokens={entry.tokens} />
-      </span>
+      <EntryMiniature entry={entry} />
       <div className="mt-3 flex items-start gap-2">
         {entry.meta.logoUrl ? (
           <img
@@ -461,7 +350,7 @@ export default function AdminStudioPage() {
       {/* What the console wears right now — and, while previewing, what it is trying on. */}
       <section className="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
         <div className="sm:w-64">
-          <LookPreview tokens={(previewing ?? saved).tokens} tall />
+          <EntryMiniature entry={previewing ?? saved} tall />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">

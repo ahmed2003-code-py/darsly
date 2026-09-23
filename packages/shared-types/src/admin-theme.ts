@@ -29,6 +29,30 @@ export interface AdminThemeTokens {
 
 export type AdminThemeMode = 'light' | 'dark';
 
+/**
+ * What a look's card draws — the one miniature every picker on the platform
+ * uses (the student's Studio, the Admin Studio, a Center's grant list and its
+ * own Studio).
+ *
+ * The same theme used to be drawn two ways: the student's card from the
+ * theme's own colours, the admin's from console tokens re-derived through the
+ * academy engine. The two disagreed about the ground, the panel and even the
+ * accent, so an admin granting "Editorial" was looking at a different theme
+ * from the one a student bought. A swatch is the theme's own input colours,
+ * already sanitised by the server, drawn by one component everywhere.
+ */
+export interface ThemeSwatch {
+  /** `#rrggbb` — the action colour. */
+  accent: string;
+  /** The accent for the theme's dark ground, when it names one. */
+  accentDark?: string | null;
+  /** What "earned" looks like — or the partner colour, when there is no gold. */
+  gold?: string | null;
+  /** A ground of its own. Absent for a tint, which sits on the page it is shown on. */
+  surfaces?: { background?: string; surface?: string; ink?: string } | null;
+  pattern?: string | null;
+}
+
 /** Where a look in the admin catalogue comes from. */
 export type AdminThemeSource = 'PRESET' | 'ACADEMY' | 'COSMETIC';
 
@@ -57,6 +81,8 @@ export interface AdminThemeEntry {
    * an academy's palette.
    */
   modes: Record<AdminThemeMode, AdminThemeTokens>;
+  /** The card. See ThemeSwatch. */
+  swatch: ThemeSwatch;
   meta: {
     academyId?: string;
     academyKind?: 'PERSONAL' | 'CENTER';
@@ -293,6 +319,34 @@ export function presetEntry(preset: AdminThemePreset): AdminThemeEntry {
     mode: preset.mode,
     tokens: preset.tokens,
     modes: { light: preset.tokens, dark: preset.tokens },
+    swatch: swatchFromTokens(preset.tokens),
     meta: {},
+  };
+}
+
+/** `"110 91 211"` → `"#6e5bd3"`. */
+export function hexFromTriple(triple: string): string {
+  const parts = triple
+    .trim()
+    .split(/\s+/)
+    .map((n) => Math.max(0, Math.min(255, Number(n) | 0)));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '#000000';
+  return `#${parts.map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * A look that exists only as tokens — a preset — drawn the way a skin is: its
+ * own ground, its own panel, its own ink. There is no student counterpart to
+ * agree with, so this is the only shape it can honestly take.
+ */
+export function swatchFromTokens(tokens: AdminThemeTokens): ThemeSwatch {
+  return {
+    accent: hexFromTriple(tokens.primary),
+    gold: hexFromTriple(tokens.accent),
+    surfaces: {
+      background: hexFromTriple(tokens.background),
+      surface: hexFromTriple(tokens.surface),
+      ink: hexFromTriple(tokens.text),
+    },
   };
 }

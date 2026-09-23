@@ -410,6 +410,10 @@
     @apply w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2.5 text-on-surface placeholder:text-outline transition-[border-color,box-shadow] duration-150 ease-premium
       hover:border-outline/60 focus:border-accent-500 focus:outline-none focus:ring-4 focus:ring-accent-500/10;
   }
+  /* A field the form refused — see `Field`'s `error`. */
+  .field-invalid .input {
+    @apply border-error hover:border-error focus:border-error focus:ring-error/15;
+  }
   .pill {
     @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
   }

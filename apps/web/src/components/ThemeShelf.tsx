@@ -1,14 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import type { AdminThemeEntry, AdminThemeTokens } from '@darsly/shared-types';
+import type { AdminThemeEntry } from '@darsly/shared-types';
+import { EntryMiniature } from './ThemeMiniature';
 import { Badge } from './ui';
 
 /**
- * The same miniature console the Admin Studio paints, reused wherever a look
- * has to be chosen rather than worn. Drawn from the entry's own tokens so a
- * card is right whichever palette the live page is currently wearing.
+ * The grids a look is chosen from rather than worn in. Each card is the same
+ * miniature the student's Studio draws (`EntryMiniature`), so a Center is
+ * granted — and applies — exactly the theme a student would see.
  */
-
-const rgb = (triple: string) => `rgb(${triple})`;
 
 type Shelf = 'PRESET' | 'CENTER' | 'TEACHER' | 'COSMETIC';
 
@@ -16,56 +15,6 @@ function shelfOf(e: AdminThemeEntry): Shelf {
   if (e.source === 'PRESET') return 'PRESET';
   if (e.source === 'COSMETIC') return 'COSMETIC';
   return e.meta.academyKind === 'CENTER' ? 'CENTER' : 'TEACHER';
-}
-
-export function LookPreview({ tokens, tall }: { tokens: AdminThemeTokens; tall?: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`relative flex w-full overflow-hidden rounded-xl ${tall ? 'h-40' : 'h-24'}`}
-      style={{ backgroundColor: rgb(tokens.background), border: `1px solid ${rgb(tokens.border)}` }}
-    >
-      <span
-        className="flex w-1/5 flex-col gap-1.5 p-2"
-        style={{ backgroundColor: rgb(tokens.sidebar) }}
-      >
-        <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: rgb(tokens.primary) }} />
-        <span
-          className="h-1 w-full rounded-full"
-          style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.5 }}
-        />
-        <span
-          className="h-1 w-3/4 rounded-full"
-          style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.35 }}
-        />
-      </span>
-      <span className="flex flex-1 flex-col">
-        <span
-          className="flex h-4 items-center gap-1 px-2"
-          style={{ backgroundColor: rgb(tokens.topbar) }}
-        >
-          <span
-            className="h-1 w-8 rounded-full"
-            style={{ backgroundColor: rgb(tokens.text), opacity: 0.6 }}
-          />
-          <span
-            className="ms-auto h-2 w-2 rounded-full"
-            style={{ backgroundColor: rgb(tokens.accent) }}
-          />
-        </span>
-        <span className="flex flex-1 items-end gap-1 p-2">
-          <span className="h-3 w-6 rounded-md" style={{ backgroundColor: rgb(tokens.primary) }} />
-          <span
-            className="h-3 w-6 rounded-md"
-            style={{
-              backgroundColor: rgb(tokens.surfaceElevated),
-              border: `1px solid ${rgb(tokens.border)}`,
-            }}
-          />
-        </span>
-      </span>
-    </span>
-  );
 }
 
 function Meta({ entry }: { entry: AdminThemeEntry }) {
@@ -104,7 +53,7 @@ export function ThemeGrantGrid({
             className={`card flex flex-col p-3 text-start transition ${checked ? 'ring-2 ring-primary' : ''}`}
             aria-pressed={checked}
           >
-            <LookPreview tokens={entry.tokens} />
+            <EntryMiniature entry={entry} />
             <div className="mt-2 flex items-start gap-2">
               <span
                 className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${
@@ -147,7 +96,7 @@ export function ThemeApplyGrid({
             key={entry.id}
             className={`card flex flex-col p-3 ${active ? 'ring-2 ring-primary' : ''}`}
           >
-            <LookPreview tokens={entry.tokens} />
+            <EntryMiniature entry={entry} />
             <div className="mt-2 flex items-start justify-between gap-2">
               <Meta entry={entry} />
               {active && <Badge tone="primary">{t('centerStudio.wearing')}</Badge>}

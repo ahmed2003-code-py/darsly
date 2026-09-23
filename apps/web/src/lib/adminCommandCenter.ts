@@ -194,6 +194,8 @@ export function useCreateCenter() {
   return useMutation({
     mutationFn: async (input: CreateCenterInput) =>
       (await api.post<CreateCenterResult>('/admin/centers', input)).data,
+    // The form marks each refused field itself; a toast on top would repeat it.
+    meta: { silentError: true },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-academies'] });
     },

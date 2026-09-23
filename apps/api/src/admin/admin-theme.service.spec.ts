@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { ADMIN_THEME_PRESETS } from '@darsly/shared-types';
-import { AdminThemeService, adminTokensFrom, paletteFromCosmetic } from './admin-theme.service';
-import { deriveAppTheme } from '../branding/app-theme';
+import { AdminThemeService, cosmeticModes, swatchFromCosmetic } from './admin-theme.service';
+import { deriveStudioThemes } from '../studio/studio-theme';
 
 const TRIPLE = /^\d{1,3} \d{1,3} \d{1,3}$/;
 
@@ -106,7 +106,30 @@ describe('AdminThemeService.catalog', () => {
     expect(s.mode).toBe('dark');
     expect(s.meta).toMatchObject({ rarity: 'LEGENDARY', pattern: 'grid' });
     expect(m.mode).toBe('light');
-    expect(m.tokens.primary).toBe('16 185 129');
+    // The student engine floors a fill at 3:1 on its ground, so the tint's
+    // primary is the student's primary — not the raw hex.
+    expect(m.tokens.primary).toBe(
+      deriveStudioThemes({ themeConfig: tint.config as any }).light.brand['--c-primary'],
+    );
+  });
+
+  it('every entry carries the card the student Studio would draw for it', async () => {
+    const cat = await new AdminThemeService(makePrisma()).catalog();
+    for (const e of [...cat.presets, ...cat.academies, ...cat.cosmetics]) {
+      expect(e.swatch.accent).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+    const [c] = cat.academies;
+    // The student's teacher-theme card: primary + accent, no ground.
+    expect(c.swatch).toEqual({ accent: '#0f766e', accentDark: '#f59e0b' });
+    const [s, m] = cat.cosmetics;
+    expect(s.swatch).toEqual({
+      accent: '#60a5fa',
+      accentDark: '#93c5fd',
+      gold: null,
+      surfaces: { background: '#0b1020', surface: '#121a2e', ink: '#e6ecff' },
+      pattern: 'grid',
+    });
+    expect(m.swatch).toMatchObject({ accent: '#10b981', gold: '#0ea5e9', surfaces: null });
   });
 });
 
@@ -190,27 +213,37 @@ describe('AdminThemeService.resolve / set / get', () => {
 });
 
 describe('token derivation', () => {
-  it('a cosmetic config never reaches the tokens unfiltered — bad hexes fall back, every slot is a triple', () => {
-    const palette = paletteFromCosmetic({
+  const dayNight = {
+    accent: '#dc2626',
+    accentDark: '#ef4444',
+    gold: '#a16207',
+    goldDark: '#ffb95f',
+    surfaces: { background: '#0a0e16', surface: '#121722', ink: '#dfe2ee' },
+    surfacesLight: { background: '#f6f2e9', surface: '#ffffff', ink: '#151b28' },
+  };
+
+  it('a cosmetic config never reaches the tokens or the card unfiltered', () => {
+    const cfg = {
       accent: 'javascript:alert(1)',
-      surfaces: { background: 'nope' },
-    } as any);
-    expect(palette.primary).toBeUndefined();
-    const tokens = adminTokensFrom(deriveAppTheme(palette));
-    for (const v of Object.values(tokens)) expect(v).toMatch(TRIPLE);
+      surfaces: { background: 'nope', ink: 'url(x)' },
+    } as any;
+    const { modes } = cosmeticModes(cfg);
+    for (const v of [...Object.values(modes.light), ...Object.values(modes.dark)])
+      expect(v).toMatch(TRIPLE);
+    const sw = swatchFromCosmetic(cfg);
+    expect(sw.accent).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(sw.surfaces).toEqual({ background: undefined, surface: undefined, ink: undefined });
   });
 
-  it('a skin prefers its dark-ground accent; a tint uses the plain one', () => {
-    expect(paletteFromCosmetic(skin.config as any)).toMatchObject({
-      primary: '#93c5fd',
-      accent: '#fbbf24',
-      background: '#0b1020',
-      ink: '#e6ecff',
-    });
-    expect(paletteFromCosmetic(tint.config as any)).toMatchObject({
-      primary: '#10b981',
-      accent: '#0ea5e9',
-      background: '#ecfdf5',
-    });
+  it('each end wears the ground the student wears at that end — a day skin is not re-invented', () => {
+    const { mode, modes } = cosmeticModes(dayNight as any);
+    const student = deriveStudioThemes({ themeConfig: dayNight as any });
+    expect(mode).toBe('dark');
+    expect(modes.dark.background).toBe(student.dark.brand['--c-background']);
+    expect(modes.light.background).toBe(student.light.brand['--c-background']);
+    expect(modes.light.background).toBe('246 242 233'); // #f6f2e9, the theme's own chalk
+    expect(modes.dark.primary).toBe(student.dark.brand['--c-primary']);
+    expect(modes.light.primary).toBe(student.light.brand['--c-primary']);
+    expect(modes.light.text).toBe(student.light.brand['--c-on-surface']);
   });
 });

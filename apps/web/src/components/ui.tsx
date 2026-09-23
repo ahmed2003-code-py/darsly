@@ -288,15 +288,28 @@ export function Field({
   label,
   children,
   hint,
+  error,
 }: {
   label: string;
   children: ReactNode;
-  hint?: string;
+  hint?: ReactNode;
+  /** Marks the field (red edge, via `.field-invalid` in index.css) and says why, under it. */
+  error?: ReactNode;
 }) {
   return (
-    <label className="mb-4 block">
-      <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{label}</span>
+    <label className={`mb-4 block ${error ? 'field-invalid' : ''}`}>
+      <span
+        className={`mb-1.5 block text-sm font-semibold ${error ? 'text-error' : 'text-on-surface-variant'}`}
+      >
+        {label}
+      </span>
       {children}
+      {error && (
+        <span role="alert" className="mt-1.5 flex items-start gap-1 text-sm text-error">
+          <span className="material-symbols-outlined mt-px text-[18px]">error</span>
+          <span className="min-w-0">{error}</span>
+        </span>
+      )}
       {hint && <span className="mt-1 block text-sm text-outline">{hint}</span>}
     </label>
   );

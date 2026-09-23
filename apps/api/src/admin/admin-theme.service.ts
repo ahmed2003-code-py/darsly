@@ -6,7 +6,9 @@ import {
   AdminThemeMode,
   AdminThemePreset,
   AdminThemeTokens,
+  hexFromTriple,
   presetEntry,
+  ThemeSwatch,
 } from '@darsly/shared-types';
 import {
   AppTheme,
@@ -16,7 +18,13 @@ import {
   paletteFromBrandTokens,
 } from '../branding/app-theme';
 import { PrismaService } from '../prisma/prisma.service';
-import { safeHex, ThemeConfig } from '../studio/studio-theme';
+import {
+  deriveStudioThemes,
+  groundMode,
+  safeHex,
+  surfaceGround,
+  ThemeConfig,
+} from '../studio/studio-theme';
 
 export interface AdminThemePreference {
   themeId: string | null;
@@ -202,16 +210,6 @@ function paletteFromAdminTokens(tokens: AdminThemeTokens): BrandPalette {
   };
 }
 
-/** `"110 91 211"` → `"#6E5BD3"`. The inverse of app-theme's `triple()`. */
-function hexFromTriple(triple: string): string {
-  const parts = triple
-    .trim()
-    .split(/\s+/)
-    .map((n) => Math.max(0, Math.min(255, Number(n) | 0)));
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '#000000';
-  return `#${parts.map((n) => n.toString(16).padStart(2, '0')).join('')}`;
-}
-
 function academyEntry(a: AcademyRow): AdminThemeEntry {
   const palette = paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent);
   return {
@@ -220,6 +218,9 @@ function academyEntry(a: AcademyRow): AdminThemeEntry {
     name: a.name,
     subtitle: a.owner?.fullName ?? null,
     ...bothModes(palette),
+    // Exactly the card a student sees for this academy in their Studio (the
+    // teachers' looks row): the brand's two colours, on no ground of its own.
+    swatch: { accent: palette?.primary ?? '#4a32c9', accentDark: palette?.accent ?? null },
     meta: {
       academyId: a.id,
       academyKind: a.kind,
@@ -237,7 +238,8 @@ function cosmeticEntry(c: CosmeticRow): AdminThemeEntry {
     source: 'COSMETIC',
     name: c.nameAr,
     subtitle: c.nameEn,
-    ...bothModes(paletteFromCosmetic(cfg)),
+    ...cosmeticModes(cfg),
+    swatch: swatchFromCosmetic(cfg),
     meta: {
       cosmeticKey: c.key,
       rarity: c.rarity,
@@ -247,26 +249,62 @@ function cosmeticEntry(c: CosmeticRow): AdminThemeEntry {
 }
 
 /**
- * A store theme's stored config, read as a brand palette. A skin brings its
- * own ground (`surfaces`) and reads dark; a tint has only an accent and sits
- * on the platform's paper. The accent named for the ground the theme owns is
- * the one used — never a client-supplied colour.
+ * A store theme, at both ends, in the colours a student wearing it sees.
+ *
+ * This used to read only the theme's dark ground as an academy palette and
+ * derive the light end from a generic paper — so a skin that ships its own
+ * day ground (`surfacesLight`: Editorial's cream, Egyptian King's chalk) came
+ * out as a different theme in the admin console from the one a student
+ * bought. It now runs through `deriveStudioThemes`, the only engine a
+ * student's theme is ever resolved by, and takes each end's ground, accent
+ * family, partner and gold from it. What a tint does not bring — a ground —
+ * is the platform's own page, which is also what a student wearing a tint
+ * sits on.
  */
-export function paletteFromCosmetic(cfg: ThemeConfig): BrandPalette {
+export function cosmeticModes(
+  cfg: ThemeConfig,
+): Pick<AdminThemeEntry, 'mode' | 'tokens' | 'modes'> {
+  const studio = deriveStudioThemes({ themeConfig: cfg });
+  const end = (want: AdminThemeMode): AdminThemeTokens => {
+    const groundCfg = want === 'dark' ? cfg.surfaces : (cfg.surfacesLight ?? cfg.surfaces);
+    // The seating follows the ground, not the switch — the student rule.
+    const mode = groundCfg ? groundMode(surfaceGround(groundCfg)) : want;
+    const side = studio[want];
+    const base = deriveAppThemeFor(null, mode);
+    const tokens = adminTokensFrom({ mode, tokens: { ...base.tokens, ...side.brand } });
+    const partner = side.tokens['--s-secondary'] ?? side.tokens['--s-gold'];
+    return {
+      ...tokens,
+      ...(side.tokens['--s-secondary'] ? { secondary: side.tokens['--s-secondary'] } : {}),
+      ...(partner ? { accent: partner, chart2: partner } : {}),
+      ...(side.tokens['--s-gold'] ? { chart3: side.tokens['--s-gold'] } : {}),
+    };
+  };
+  const modes = { light: end('light'), dark: end('dark') };
+  const native: AdminThemeMode = cfg.surfaces ? groundMode(surfaceGround(cfg.surfaces)) : 'light';
+  return { mode: native, tokens: modes[native], modes };
+}
+
+/**
+ * The student Studio's card for this theme, field for field (StudioPage's
+ * `Swatch`): the accent, the dark accent, gold-or-partner, the theme's own
+ * (night) ground and its pattern. Every colour through `safeHex`, so a stored
+ * config can put nothing on the page but a colour.
+ */
+export function swatchFromCosmetic(cfg: ThemeConfig): ThemeSwatch {
   const ground = cfg.surfaces ?? null;
-  const dark = !!ground;
-  const primary = (dark ? safeHex(cfg.accentDark) : null) ?? safeHex(cfg.accent) ?? undefined;
-  const accent =
-    (dark ? (safeHex(cfg.secondaryDark) ?? safeHex(cfg.goldDark)) : null) ??
-    safeHex(cfg.secondary) ??
-    safeHex(cfg.gold) ??
-    primary;
   return {
-    primary,
-    accent,
-    background: safeHex(ground?.background) ?? safeHex(cfg.wash) ?? undefined,
-    surface: safeHex(ground?.surface) ?? undefined,
-    ink: safeHex(ground?.ink) ?? undefined,
+    accent: safeHex(cfg.accent) ?? '#c8102e',
+    accentDark: safeHex(cfg.accentDark),
+    gold: safeHex(cfg.gold) ?? safeHex(cfg.secondary),
+    surfaces: ground
+      ? {
+          background: safeHex(ground.background) ?? undefined,
+          surface: safeHex(ground.surface) ?? undefined,
+          ink: safeHex(ground.ink) ?? undefined,
+        }
+      : null,
+    pattern: typeof cfg.pattern === 'string' ? cfg.pattern : null,
   };
 }
 

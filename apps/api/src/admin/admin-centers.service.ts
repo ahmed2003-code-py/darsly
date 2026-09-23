@@ -4,13 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
 import { createHash, randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
 import { centerAdminActivationEmail } from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
-import { slugCandidates, slugify, slugShapeError } from '../academy/slug';
+import { SLUG_MAX, SLUG_MIN, slugCandidates, slugify, slugShapeError } from '../academy/slug';
 import { normalizeEgyptianPhone } from '../auth/dto/auth.dto';
 import { CenterThemesService } from './center-themes.service';
 import { CreateCenterDto } from './dto/admin-centers.dto';
@@ -35,22 +36,84 @@ export class AdminCentersService {
   async createCenter(dto: CreateCenterDto, adminUserId: string) {
     const name = dto.name.trim();
     const adminEmail = dto.adminEmail.toLowerCase().trim();
-    const slug = dto.slug ? await this.exactSlug(dto.slug) : await this.resolveSlug(name);
+    const phone = dto.adminPhone ? normalizeEgyptianPhone(dto.adminPhone) : null;
 
-    const existing = await this.prisma.user.findUnique({
-      where: { email: adminEmail },
-      select: {
-        id: true,
-        role: true,
-        isActive: true,
-        fullName: true,
-        teacherProfile: { select: { status: true } },
-      },
-    });
+    // Every field is checked before anything is refused, and every problem is
+    // reported with the field it belongs to. Refusing on the first one made the
+    // form a guessing game: fix the address, submit, learn the email was the
+    // problem too — and the email's refusal had no copy at all, so it read as
+    // "the data is incomplete" under a form that was complete.
+    const [slugResult, existing] = await Promise.all([
+      (dto.slug?.trim() ? this.exactSlug(dto.slug) : this.resolveSlug(name)).then(
+        (slug) => ({ slug, problem: null }),
+        (problem: unknown) => {
+          if (isFieldProblem(problem)) return { slug: null, problem };
+          throw problem;
+        },
+      ),
+      this.prisma.user.findUnique({
+        where: { email: adminEmail },
+        select: {
+          id: true,
+          role: true,
+          isActive: true,
+          fullName: true,
+          passwordHash: true,
+          teacherProfile: { select: { status: true } },
+        },
+      }),
+    ]);
+    const problems: FieldProblem[] = [];
+    if (slugResult.problem) problems.push(slugResult.problem);
 
-    if (existing) {
-      this.assertDesignatable(existing);
+    // A STAFF account that never activated is not a person yet — it is what a
+    // Center admin is between "created" and "chose a password". Deleting that
+    // Center leaves it behind, and it used to make the same email unusable for
+    // good (refused as a disabled account). It is taken up again now, unless it
+    // is still waiting on a Center that exists — which is exactly what a retry
+    // looks like after a create whose response never arrived.
+    const pendingStaff =
+      !!existing && existing.role === Role.STAFF && !existing.isActive && !existing.passwordHash;
+    if (existing && pendingStaff) {
+      const waitingOn = await this.prisma.academy.findFirst({
+        where: { ownerUserId: existing.id, kind: 'CENTER' },
+        select: { id: true, name: true, slug: true },
+      });
+      if (waitingOn) {
+        problems.push({
+          status: 409,
+          field: 'adminEmail',
+          code: 'CENTER_ADMIN_PENDING_ELSEWHERE',
+          message: 'This email is already the pending admin of another center',
+          params: { center: waitingOn.name, centerId: waitingOn.id, slug: waitingOn.slug },
+        });
+      }
+    } else if (existing) {
+      const refusal = this.designationProblem(existing);
+      if (refusal) problems.push(refusal);
+    }
+
+    if ((!existing || pendingStaff) && phone) {
+      const phoneTaken = await this.prisma.user.findFirst({
+        where: { phone, ...(existing ? { NOT: { id: existing.id } } : {}) },
+        select: { id: true },
+      });
+      if (phoneTaken) {
+        problems.push({
+          status: 409,
+          field: 'adminPhone',
+          code: 'PHONE_TAKEN',
+          message: 'Phone already registered',
+        });
+      }
+    }
+
+    if (problems.length || !slugResult.slug) throw fieldError(problems);
+    const slug = slugResult.slug;
+
+    if (existing && !pendingStaff) {
       const academy = await this.prisma.$transaction(async (tx) => {
+        await this.releaseDeletedSlug(tx, slug);
         const a = await tx.academy.create({
           data: { slug, name, kind: 'CENTER', status: 'ACTIVE', ownerUserId: existing.id },
           select: { id: true, slug: true, name: true, status: true, kind: true },
@@ -89,31 +152,35 @@ export class AdminCentersService {
       };
     }
 
-    const phone = dto.adminPhone ? normalizeEgyptianPhone(dto.adminPhone) : null;
-    if (phone) {
-      const phoneTaken = await this.prisma.user.findUnique({
-        where: { phone },
-        select: { id: true },
-      });
-      if (phoneTaken)
-        throw new ConflictException({ message: 'Phone already registered', code: 'PHONE_TAKEN' });
-    }
-
     const rawToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + ACTIVATION_TTL_DAYS * 86_400_000);
     const created = await this.prisma.$transaction(async (tx) => {
       // No password, not active: the account cannot sign in until the admin
       // activates it and chooses their own password. No profile of any kind.
-      const user = await tx.user.create({
-        data: {
-          role: Role.STAFF,
-          email: adminEmail,
-          phone,
-          fullName: dto.adminName.trim(),
-          isActive: false,
-        },
-        select: { id: true, fullName: true },
-      });
+      const user = existing
+        ? await tx.user.update({
+            where: { id: existing.id },
+            data: { fullName: dto.adminName.trim(), ...(phone ? { phone } : {}) },
+            select: { id: true, fullName: true },
+          })
+        : await tx.user.create({
+            data: {
+              role: Role.STAFF,
+              email: adminEmail,
+              phone,
+              fullName: dto.adminName.trim(),
+              isActive: false,
+            },
+            select: { id: true, fullName: true },
+          });
+      if (existing) {
+        // Links minted for the Center that was deleted must not open this one.
+        await tx.academyActivationToken.updateMany({
+          where: { userId: user.id, usedAt: null, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+      await this.releaseDeletedSlug(tx, slug);
       const a = await tx.academy.create({
         data: { slug, name, kind: 'CENTER', status: 'PENDING', ownerUserId: user.id },
         select: { id: true, slug: true, name: true, status: true, kind: true },
@@ -397,7 +464,16 @@ export class AdminCentersService {
       // ARCHIVED as well as stamped: `status` is what every list and
       // `buildContext` already branch on, so the Center stops resolving even
       // for a caller that reaches it without the soft-delete read filter.
-      await tx.academy.update({ where: { id: academyId }, data: { status: 'ARCHIVED' } });
+      //
+      // And the address really goes back to the pool. `slug` is unique in the
+      // database and a soft-deleted row keeps its value, so "released" used to
+      // be true of the read path only — the next Center to ask for it was told
+      // it was taken, by a Center nobody could see. The original address stays
+      // in the audit entry below.
+      await tx.academy.update({
+        where: { id: academyId },
+        data: { status: 'ARCHIVED', slug: tombstoneSlug(academy.slug) },
+      });
       await tx.academy.delete({ where: { id: academyId } });
     });
 
@@ -524,11 +600,19 @@ export class AdminCentersService {
     return { ok: true as const, userId, ownerTransferredTo: successorId };
   }
 
-  private assertDesignatable(user: {
-    role: string;
-    isActive: boolean;
-    teacherProfile: { status: string } | null;
-  }) {
+  /** The same rules as `assertDesignatable`, as a field problem rather than a throw. */
+  private designationProblem(user: DesignationCandidate): FieldProblem | null {
+    try {
+      this.assertDesignatable(user);
+      return null;
+    } catch (e) {
+      if (!(e instanceof BadRequestException)) throw e;
+      const body = e.getResponse() as { code: string; message: string };
+      return { status: 400, field: 'adminEmail', code: body.code, message: body.message };
+    }
+  }
+
+  private assertDesignatable(user: DesignationCandidate) {
     if (!user.isActive)
       throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
     if (user.role === Role.STAFF) return;
@@ -549,35 +633,150 @@ export class AdminCentersService {
     return createHash('sha256').update(raw).digest('hex');
   }
 
-  /** An address the admin typed is taken literally: it is theirs or it is a 409, never silently swapped. */
+  /**
+   * An address the admin typed is taken literally: it is theirs or it is
+   * refused, never silently swapped. Refusals name the address and carry free
+   * alternatives, because "that link is taken" under a field labelled
+   * "address (slug)" told the admin neither what was wrong nor what to do.
+   */
   private async exactSlug(raw: string): Promise<string> {
     const slug = slugify(raw);
     const shape = slugShapeError(slug);
-    if (shape)
-      throw new BadRequestException({ message: 'Invalid center address', code: `SLUG_${shape}` });
-    if (await this.slugTaken(slug))
-      throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
+    if (shape) {
+      throw {
+        status: 400,
+        field: 'slug',
+        code: `CENTER_SLUG_${shape}`,
+        message: 'Invalid center address',
+        params: { slug: slug || raw.trim(), min: SLUG_MIN, max: SLUG_MAX },
+      } satisfies FieldProblem;
+    }
+    if (await this.slugTaken(slug)) {
+      throw {
+        status: 409,
+        field: 'slug',
+        code: 'CENTER_SLUG_TAKEN',
+        message: 'This center address is already in use',
+        params: { slug, suggestions: await this.freeSlugs(slugCandidates(slug)) },
+      } satisfies FieldProblem;
+    }
     return slug;
   }
 
-  /** /a/<slug> and /t/<slug> share one namespace: a Center may never take a teacher's address. */
+  /**
+   * /a/<slug> and /t/<slug> share one namespace: a Center may never take a
+   * teacher's address. Live academies only — a deleted Center's address is
+   * free, and `releaseDeletedSlug` makes the unique index agree at create time.
+   * (This was a `findUnique` by slug, which the soft-delete filter deliberately
+   * does not touch, so a deleted Center held its address for good.)
+   */
   private async slugTaken(slug: string): Promise<boolean> {
     const [a, t] = await Promise.all([
-      this.prisma.academy.findUnique({ where: { slug }, select: { id: true } }),
+      this.prisma.academy.findFirst({ where: { slug }, select: { id: true } }),
       this.prisma.teacherProfile.findUnique({ where: { slug }, select: { id: true } }),
     ]);
     return !!a || !!t;
   }
 
-  /** Derived from the name: the first free candidate in the shared namespace. */
+  /** The first few candidates nobody holds — two queries, not one per candidate. */
+  private async freeSlugs(candidates: string[], want = 3): Promise<string[]> {
+    const [academies, teachers] = await Promise.all([
+      this.prisma.academy.findMany({ where: { slug: { in: candidates } }, select: { slug: true } }),
+      this.prisma.teacherProfile.findMany({
+        where: { slug: { in: candidates } },
+        select: { slug: true },
+      }),
+    ]);
+    const held = new Set<string>([...academies, ...teachers].map((r) => r.slug ?? ''));
+    return candidates.filter((c) => !held.has(c)).slice(0, want);
+  }
+
+  /**
+   * A Center deleted before deletes freed their address still holds it in the
+   * unique index. Moved aside in the same transaction as the create, so the
+   * address the read path calls free really is.
+   */
+  private async releaseDeletedSlug(tx: Prisma.TransactionClient, slug: string) {
+    const held = await tx.academy.findMany({
+      where: { slug, deletedAt: { not: null } },
+      select: { id: true },
+    });
+    for (const row of held) {
+      await tx.academy.update({ where: { id: row.id }, data: { slug: tombstoneSlug(slug) } });
+    }
+  }
+
+  /** Derived from the name: the name itself if it is free, else the first free candidate. */
   private async resolveSlug(raw: string): Promise<string> {
     const base = slugify(raw);
-    const shape = slugShapeError(base);
-    if (shape)
-      throw new BadRequestException({ message: 'Invalid center address', code: `SLUG_${shape}` });
-    for (const candidate of slugCandidates(base)) {
+    if (slugShapeError(base)) {
+      // Nothing usable in the name — an Arabic name has no ASCII to keep, and
+      // "3m" is too short. The admin is asked for the address itself, on the
+      // address field, rather than being told their name is wrong.
+      throw {
+        status: 400,
+        field: 'slug',
+        code: 'CENTER_NAME_NO_SLUG',
+        message: 'An address cannot be made from this name; type one',
+        params: { min: SLUG_MIN },
+      } satisfies FieldProblem;
+    }
+    for (const candidate of [base, ...slugCandidates(base)]) {
       if (!(await this.slugTaken(candidate))) return candidate;
     }
-    throw new ConflictException({ message: 'الرابط مستخدم بالفعل', code: 'SLUG_TAKEN' });
+    throw {
+      status: 409,
+      field: 'slug',
+      code: 'CENTER_SLUG_TAKEN',
+      message: 'This center address is already in use',
+      params: { slug: base, suggestions: [] },
+    } satisfies FieldProblem;
   }
+}
+
+type DesignationCandidate = {
+  role: string;
+  isActive: boolean;
+  teacherProfile: { status: string } | null;
+};
+
+/** One refused field of the create form: which field, why, and what the copy needs. */
+export interface FieldProblem {
+  status: 400 | 409;
+  field: 'name' | 'slug' | 'adminName' | 'adminEmail' | 'adminPhone';
+  code: string;
+  message: string;
+  params?: Record<string, unknown>;
+}
+
+function isFieldProblem(v: unknown): v is FieldProblem {
+  return !!v && typeof v === 'object' && 'field' in v && 'code' in v && 'status' in v;
+}
+
+/**
+ * Every problem at once, the first on top. The top-level `code`/`params` are
+ * what every error surface in the web already reads; `fields` is what lets the
+ * form mark each field that needs attention.
+ */
+function fieldError(problems: FieldProblem[]) {
+  const [first] = problems;
+  const body = {
+    message: first.message,
+    code: first.code,
+    field: first.field,
+    ...(first.params ? { params: first.params } : {}),
+    fields: problems.map(({ field, code, params }) => ({
+      field,
+      code,
+      ...(params ? { params } : {}),
+    })),
+  };
+  return problems.some((p) => p.status === 409)
+    ? new ConflictException(body)
+    : new BadRequestException(body);
+}
+
+/** A deleted Center's address, moved out of the way of the unique index. */
+function tombstoneSlug(slug: string): string {
+  return `${slug}~deleted~${randomBytes(4).toString('hex')}`;
 }

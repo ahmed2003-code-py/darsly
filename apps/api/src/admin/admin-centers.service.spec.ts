@@ -3,8 +3,15 @@ import { AdminCentersService } from './admin-centers.service';
 
 function makePrisma() {
   const tx = {
-    user: { create: jest.fn().mockResolvedValue({ id: 'newU', fullName: 'Admin' }) },
+    user: {
+      create: jest.fn().mockResolvedValue({ id: 'newU', fullName: 'Admin' }),
+      update: jest
+        .fn()
+        .mockImplementation(({ where }) => Promise.resolve({ id: where.id, fullName: 'Admin' })),
+    },
     academy: {
+      findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({}),
       create: jest.fn().mockImplementation(({ data }) =>
         Promise.resolve({
           id: 'c1',
@@ -16,16 +23,26 @@ function makePrisma() {
       ),
     },
     academyMembership: { create: jest.fn().mockResolvedValue({}) },
-    academyActivationToken: { create: jest.fn().mockResolvedValue({}) },
+    academyActivationToken: {
+      create: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
   };
   const prisma: any = {
-    user: { findUnique: jest.fn().mockResolvedValue(null) },
+    user: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     academy: {
       findUnique: jest.fn().mockResolvedValue(null),
-      findFirst: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
     },
-    teacherProfile: { findUnique: jest.fn().mockResolvedValue(null) },
+    teacherProfile: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     academyActivationToken: {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       create: jest.fn().mockResolvedValue({}),
@@ -187,23 +204,142 @@ describe('AdminCentersService.createCenter — new admin', () => {
 
   it('derives a slug that collides with neither an academy nor a teacher', async () => {
     const prisma = makePrisma();
-    prisma.academy.findUnique.mockResolvedValueOnce({ id: 'x' }); // "el-shehab" taken by an academy
-    prisma.teacherProfile.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 't' }); // "el-shehab-2" taken by a teacher
+    prisma.academy.findFirst.mockResolvedValueOnce({ id: 'x' }); // "el-shehab" taken by an academy
+    prisma.teacherProfile.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 't' }); // the next candidate taken by a teacher
     const { s } = svc(prisma);
     const res = await s.createCenter(dto, 'sa');
     expect(res.slug).not.toBe('el-shehab');
-    expect(res.slug).not.toBe('el-shehab-2');
+    expect(res.slug).not.toBe('el-shehab-academy');
     expect(res.slug.startsWith('el-shehab')).toBe(true);
   });
 
-  it('refuses a slug held by a teacher (/t/:slug) even when no academy has it', async () => {
+  it('a name that is free is its own address — not a numbered or suffixed variant of it', async () => {
+    const { s } = svc(makePrisma());
+    expect((await s.createCenter(dto, 'sa')).slug).toBe('el-shehab');
+  });
+
+  it('refuses a slug held by a teacher (/t/:slug) even when no academy has it — naming the address, on the slug field, with free alternatives', async () => {
     const prisma = makePrisma();
-    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 't' }); // every candidate belongs to a teacher
+    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 't' });
+    prisma.teacherProfile.findMany.mockResolvedValue([{ slug: 'ahmed-academy' }]);
     const { s } = svc(prisma);
-    await expect(s.createCenter({ ...dto, slug: 'ahmed' }, 'sa')).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    const err = await s.createCenter({ ...dto, slug: 'Ahmed' }, 'sa').catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err.getResponse()).toMatchObject({
+      code: 'CENTER_SLUG_TAKEN',
+      field: 'slug',
+      params: { slug: 'ahmed', suggestions: ['ahmed-online', 'ahmed-eg', 'ahmed2'] },
+    });
     expect(prisma._tx.academy.create).not.toHaveBeenCalled();
+  });
+
+  it('a deleted Center does not hold its address: the read path ignores it and the create moves it aside', async () => {
+    const prisma = makePrisma();
+    prisma._tx.academy.findMany.mockResolvedValue([{ id: 'gone' }]);
+    const { s } = svc(prisma);
+    const res = await s.createCenter({ ...dto, slug: '3mCenter' }, 'sa');
+    expect(res.slug).toBe('3mcenter');
+    // live rows only (findFirst is soft-delete filtered; findUnique by slug is not)
+    expect(prisma.academy.findUnique).not.toHaveBeenCalled();
+    expect(prisma._tx.academy.findMany.mock.calls[0][0].where).toEqual({
+      slug: '3mcenter',
+      deletedAt: { not: null },
+    });
+    const moved = prisma._tx.academy.update.mock.calls[0][0];
+    expect(moved.where).toEqual({ id: 'gone' });
+    expect(moved.data.slug).toMatch(/^3mcenter~deleted~[0-9a-f]{8}$/);
+    expect(prisma._tx.academy.update.mock.invocationCallOrder[0]).toBeLessThan(
+      prisma._tx.academy.create.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('a name with nothing to make an address from asks for the address, on the slug field', async () => {
+    const { s } = svc(makePrisma());
+    const err = await s.createCenter({ ...dto, name: 'سنتر النور' }, 'sa').catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.getResponse()).toMatchObject({ code: 'CENTER_NAME_NO_SLUG', field: 'slug' });
+  });
+
+  it('reports every problem at once, each on its own field', async () => {
+    const prisma = makePrisma();
+    prisma.academy.findFirst.mockResolvedValue({ id: 'x' }); // the address is taken
+    prisma.user.findUnique.mockResolvedValue({
+      id: 's1',
+      role: 'STUDENT',
+      isActive: true,
+      passwordHash: 'h',
+      teacherProfile: null,
+    });
+    const { s } = svc(prisma);
+    const err = await s.createCenter({ ...dto, slug: 'taken' }, 'sa').catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err.getResponse().fields).toEqual([
+      expect.objectContaining({ field: 'slug', code: 'CENTER_SLUG_TAKEN' }),
+      { field: 'adminEmail', code: 'IDENTITY_NOT_ELIGIBLE' },
+    ]);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('a phone already in use is reported on the phone field', async () => {
+    const prisma = makePrisma();
+    prisma.user.findFirst.mockResolvedValue({ id: 'other' });
+    const { s } = svc(prisma);
+    const err = await s.createCenter({ ...dto, adminPhone: '01012345678' }, 'sa').catch((e) => e);
+    expect(err.getResponse()).toMatchObject({ code: 'PHONE_TAKEN', field: 'adminPhone' });
+  });
+});
+
+describe('AdminCentersService.createCenter — an admin who never activated', () => {
+  const pending = () => {
+    const prisma = makePrisma();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'p1',
+      role: 'STAFF',
+      isActive: false,
+      passwordHash: null,
+      fullName: 'Old',
+      teacherProfile: null,
+    });
+    return prisma;
+  };
+
+  it('left behind by a deleted Center: the same email is taken up again — no second user, old links revoked, a fresh token', async () => {
+    const prisma = pending();
+    const { s } = svc(prisma);
+    const res = await s.createCenter({ ...dto, adminPhone: '01012345678' }, 'sa');
+    expect(prisma._tx.user.create).not.toHaveBeenCalled();
+    expect(prisma._tx.user.update.mock.calls[0][0]).toMatchObject({
+      where: { id: 'p1' },
+      data: { fullName: 'Ahmed', phone: '+201012345678' },
+    });
+    // their own phone is not "taken" by themselves
+    expect(prisma.user.findFirst.mock.calls[0][0].where).toMatchObject({ NOT: { id: 'p1' } });
+    expect(prisma._tx.academyActivationToken.updateMany.mock.calls[0][0]).toMatchObject({
+      where: { userId: 'p1', usedAt: null, revokedAt: null },
+    });
+    expect(prisma._tx.academyActivationToken.create).toHaveBeenCalledTimes(1);
+    expect(prisma._tx.academy.create.mock.calls[0][0].data).toMatchObject({
+      status: 'PENDING',
+      ownerUserId: 'p1',
+    });
+    expect(res.admin).toMatchObject({ id: 'p1', role: 'STAFF' });
+    expect((res as any).activationUrl).toContain('/activate?token=');
+  });
+
+  it('still waiting on a live Center (a retry after a lost response): refused, naming that Center', async () => {
+    const prisma = pending();
+    prisma.academy.findFirst.mockImplementation(({ where }: any) =>
+      Promise.resolve(where.ownerUserId ? { id: 'c7', name: '3m', slug: '3mcenter' } : null),
+    );
+    const { s } = svc(prisma);
+    const err = await s.createCenter({ ...dto, slug: 'another' }, 'sa').catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err.getResponse()).toMatchObject({
+      code: 'CENTER_ADMIN_PENDING_ELSEWHERE',
+      field: 'adminEmail',
+      params: { center: '3m', centerId: 'c7', slug: '3mcenter' },
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -266,13 +402,37 @@ describe('AdminCentersService.createCenter — existing user designation', () =>
       { role: 'TEACHER', teacherProfile: { status: 'REJECTED' } },
       'TEACHER_NOT_APPROVED',
     ],
-    ['disabled account', { role: 'STAFF', isActive: false }, 'USER_INACTIVE'],
+    // Activated once (has a password), then disabled — not a pending admin.
+    ['disabled account', { role: 'STAFF', isActive: false, passwordHash: 'h' }, 'USER_INACTIVE'],
     ['SUPER_ADMIN', { role: 'SUPER_ADMIN' }, 'IDENTITY_NOT_ELIGIBLE'],
   ])('rejects %s', async (_l, u, code) => {
     const prisma = existing(u);
     const { s } = svc(prisma);
-    await expect(s.createCenter(dto, 'sa')).rejects.toMatchObject({ response: { code } });
+    await expect(s.createCenter(dto, 'sa')).rejects.toMatchObject({
+      response: { code, field: 'adminEmail' },
+    });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminCentersService.deleteCenter', () => {
+  it('moves the address aside, so it is free for the next Center, and audits the original', async () => {
+    const prisma = makePrisma();
+    prisma.academy.findFirst.mockResolvedValue({
+      id: 'c1',
+      slug: '3mcenter',
+      name: '3m',
+      kind: 'CENTER',
+      status: 'PENDING',
+    });
+    prisma._tx.academyMembership.deleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    prisma._tx.academy.delete = jest.fn().mockResolvedValue({});
+    const { s, d } = svc(prisma);
+    await s.deleteCenter('c1', '3mcenter', 'sa');
+    const archived = prisma._tx.academy.update.mock.calls[0][0].data;
+    expect(archived.status).toBe('ARCHIVED');
+    expect(archived.slug).toMatch(/^3mcenter~deleted~[0-9a-f]{8}$/);
+    expect(d.audit.log.mock.calls[0][0].meta).toMatchObject({ slug: '3mcenter' });
   });
 });
 

@@ -860,7 +860,7 @@
     "centerSection": "Center",
     "centerName": "Center name",
     "centerSlug": "Address (slug)",
-    "centerSlugHint": "Optional. Left empty, it is derived from the name. Shared with teacher addresses — must be unique.",
+    "centerSlugHint": "Optional — left empty, it's made from the center name. It appears in the center's page link and must not be used by another center or teacher.",
     "centerAdminSection": "Center Admin",
     "centerAdminHint": "An existing approved teacher or staff account is designated directly. A new email creates a staff account (no teacher profile) that activates by email.",
     "adminName": "Admin name",
@@ -903,6 +903,18 @@
       "pick": "Pick a staff member",
       "noCandidates": "There's no other active member of this center who could take over. Add a teacher or assistant first, or delete the center.",
       "confirm": "Revoke access and transfer ownership"
+    },
+    "centerSlugPreview": "Will be saved as:",
+    "slugSuggestions": "Available addresses:",
+    "openPendingCenter": "Open that center",
+    "fixFields": "Some fields need fixing — they are marked in red above.",
+    "networkMaybeCreated": "No response came back. The center may have been created anyway — check the centers list before trying again.",
+    "openCenters": "Centers list",
+    "v": {
+      "name": "Enter the center name (at least 2 characters).",
+      "adminName": "Enter the admin's name (at least 2 characters).",
+      "email": "Enter a valid email, like name@example.com.",
+      "phone": "Enter a valid Egyptian mobile number, like 01012345678 — or leave it empty."
     }
   },
   "security": {
@@ -2589,7 +2601,16 @@
     "ePaperContentMismatch": "“{{name}}” is not really the kind of file its name says it is, so we did not open it.",
     "ePaperTooManyPages": "That comes to {{got}} pages, and one exam can take {{limit}}. Split it and import the rest as a second exam.",
     "eNoFiles": "Choose at least one file first.",
-    "eEmptyExam": "This course's exam has no questions yet. Add them before you publish, or students will be locked out of the course."
+    "eEmptyExam": "This course's exam has no questions yet. Add them before you publish, or students will be locked out of the course.",
+    "fieldInvalid": "That value isn't valid. Check it.",
+    "eCenterSlugTaken": "The address “{{slug}}” is already used by another center or teacher. Type a different one in the “Address (slug)” field.",
+    "eCenterSlugInvalid": "The address “{{slug}}” isn't valid: it must be {{min}}–{{max}} characters of lowercase English letters, digits and hyphens (-). For example: elnour-center",
+    "eCenterSlugReserved": "“{{slug}}” is reserved by the platform and can't be a center address. Pick another one.",
+    "eCenterNameNoSlug": "An address can't be made from this name alone (it needs at least {{min}} English letters or digits). Type one in the “Address (slug)” field, e.g. elnour-center",
+    "eCenterAdminPendingElsewhere": "This email is already the admin of the center “{{center}}”, which has not been activated yet — that center was probably created by an earlier attempt. Open it, or use another email.",
+    "eUserInactive": "This account is disabled, so it can’t be assigned. Re-enable it first, or use another account.",
+    "eTeacherNotApproved": "This account belongs to a teacher who is not approved yet. Approve them under “Teacher approval” first, or use another account.",
+    "eIdentityNotEligible": "This account (a student account, for example) can’t be assigned here. Use another email."
   },
   "myStudio": {
     "title": "My Studio",

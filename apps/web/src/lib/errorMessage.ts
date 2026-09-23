@@ -172,6 +172,51 @@ export function resolveError(error: unknown): ResolvedError {
   return { message: translate('err.unknown', 0) ?? '', code, status, generic: true };
 }
 
+export interface FieldError {
+  message: string;
+  code: string | null;
+  params: Record<string, unknown>;
+}
+
+/**
+ * The refusals that belong to one field each, keyed by the field's name.
+ *
+ * A form that knows which field was wrong can mark it; a sentence at the
+ * bottom of the page cannot, and "the data is incomplete" under a form whose
+ * every field is filled in is worse than no message. Two shapes are read:
+ *
+ *  - `fields: [{ field, code, params }]` — an endpoint that checked every
+ *    field and says which one each refusal is about;
+ *  - class-validator's list, whose entries start with the property name
+ *    ("adminEmail must be an email"). Its wording is internal, so only the
+ *    field is taken from it and the sentence is ours.
+ */
+export function fieldErrors(error: unknown): Record<string, FieldError> {
+  const data = (error as { response?: { data?: ApiErrorBody & { fields?: unknown } } } | null)
+    ?.response?.data;
+  const out: Record<string, FieldError> = {};
+  if (Array.isArray(data?.fields)) {
+    for (const f of data.fields as { field?: unknown; code?: unknown; params?: unknown }[]) {
+      if (!f || typeof f.field !== 'string' || typeof f.code !== 'string') continue;
+      const params =
+        f.params && typeof f.params === 'object' ? (f.params as Record<string, unknown>) : {};
+      const message =
+        translate(EXPLICIT[f.code] ?? keyForCode(f.code), 0, params) ??
+        translate('err.fieldInvalid', 0) ??
+        '';
+      out[f.field] ??= { message, code: f.code, params };
+    }
+  } else if (Array.isArray(data?.message)) {
+    for (const m of data.message) {
+      if (typeof m !== 'string') continue;
+      const field = m.split(/\s/)[0];
+      if (field)
+        out[field] ??= { message: translate('err.fieldInvalid', 0) ?? '', code: null, params: {} };
+    }
+  }
+  return out;
+}
+
 /** The sentence only — for the many call sites that just need a string. */
 export function errorMessage(error: unknown): string {
   return resolveError(error).message;

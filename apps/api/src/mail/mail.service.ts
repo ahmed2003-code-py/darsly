@@ -40,6 +40,17 @@ export type SendResult =
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 /**
+ * How long a send may hold its caller. Creating a Center awaits its activation
+ * email, and `fetch` has no timeout of its own: a provider that stalled held
+ * the admin's request open after the Center was already committed, until
+ * something between the browser and here gave up — which the admin saw as
+ * "cannot reach the service", and their retry then met the Center they had
+ * just made. A slow send is reported as undelivered, like any other failure;
+ * the activation link is in the response either way.
+ */
+const SEND_TIMEOUT_MS = 10_000;
+
+/**
  * Where the capture transport writes outbound mail. Test/dev only — see
  * `captureDir` below; it is never honoured when NODE_ENV=production.
  */
@@ -166,6 +177,7 @@ export class MailService {
     try {
       const response = await fetch(RESEND_ENDPOINT, {
         method: 'POST',
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         headers: {
           Authorization: `Bearer ${key}`,
           'Content-Type': 'application/json',

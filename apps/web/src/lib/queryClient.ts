@@ -1,4 +1,4 @@
-import { MutationCache, QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { resolveError } from './errorMessage';
 import { useToastStore } from './toast';
 
@@ -32,6 +32,42 @@ export const queryClient = new QueryClient({
       // already tried to refresh and, having failed, signed them out. The
       // sign-in screen they land on is the message.
       if (!message || status === 401) return;
+      useToastStore.getState().push({ tone: 'error', message });
+    },
+  }),
+  /**
+   * Reads that fail say so too — but only the ones the reader is waiting for.
+   *
+   * Writes have announced their failures for a while; reads had no equivalent,
+   * so a screen that forgot an `ErrorNote` simply stayed empty. An empty list
+   * and a list that failed to load look identical, and the second one is the
+   * reader waiting for something that is never coming.
+   *
+   * Three deliberate exclusions, because a toast for every failed read would
+   * be worse than none:
+   *
+   *  - A query with data already on screen. React Query keeps serving the last
+   *    good value; a background refetch that fails has changed nothing the
+   *    reader can see, and interrupting them about it is noise.
+   *  - Anything opting out with `meta: { silentError: true }`, matching the
+   *    mutation convention.
+   *  - **Every 4xx.** This is the important one. A refusal is a state screens
+   *    already render: "no academy yet", "this certificate link is invalid",
+   *    "that site has not been published". Several queries are written to
+   *    expect a 404 and show something sensible (`retry: false` marks most of
+   *    them), and toasting over the top of a page that is already explaining
+   *    itself would be worse than the silence this replaces. That leaves 5xx
+   *    and network failures — the ones no screen can render, where the reader
+   *    is waiting for something that is never coming.
+   */
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      if (query.meta?.silentError) return;
+      if (query.state.data !== undefined) return; // a stale value is still on screen
+      const { message, status } = resolveError(error);
+      if (!message) return;
+      const unrenderable = status === null || status >= 500;
+      if (!unrenderable) return;
       useToastStore.getState().push({ tone: 'error', message });
     },
   }),

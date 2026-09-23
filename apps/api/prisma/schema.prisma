@@ -1875,8 +1875,9 @@ model QuizAttempt {
   /// what it judged and why: {questionId: {similarityPct, reason}}.
   aiFeedback         Json?
 
-  @@index([quizId, studentId])
-  /// Created by 20260914120000_exam_mode_timing_ai_grading and present in production. The two-column index above is kept deliberately — removing it is an optimisation, not a drift fix.
+  /// Covers (quizId) and (quizId, studentId) from its leading columns too, so
+  /// the two-column index that used to sit beside it answered nothing and only
+  /// cost a write per attempt. Dropped by 20260925130000.
   @@index([quizId, studentId, voidedAt])
 }
 

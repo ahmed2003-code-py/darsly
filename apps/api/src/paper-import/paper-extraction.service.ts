@@ -273,6 +273,8 @@ export class PaperExtractionService {
     const price = this.config.primaryPrice;
     try {
       const res = await this.ai.completeStructured<PageExtraction>({
+        timeoutMs: this.config.ocrCallTimeoutMs,
+        maxRetries: this.config.ocrCallRetries,
         model: this.config.primaryModel,
         price,
         reasoningEffort: this.config.primaryEffort,
@@ -315,6 +317,8 @@ export class PaperExtractionService {
 
     try {
       const res = await this.ai.completeStructured<PageExtraction>({
+        timeoutMs: this.config.ocrCallTimeoutMs,
+        maxRetries: this.config.ocrCallRetries,
         model,
         price,
         reasoningEffort: effort,

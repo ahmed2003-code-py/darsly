@@ -1,7 +1,7 @@
 import { AiClient } from '../../academy-site/ai/ai.client';
 import { PaperImportConfig } from '../paper-import.config';
 import { ImageVariantsService } from './image-variants.service';
-import { TranscriberService } from './transcriber.service';
+import { TranscriberService, mapLimit } from './transcriber.service';
 import { PageTranscript } from './transcript.schema';
 import { FIXTURES, renderFixture } from './eval/fixtures';
 
@@ -353,5 +353,33 @@ describe('reading a page in as many looks as it needs', () => {
     });
 
     expect(completeStructured).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('reading regions side by side', () => {
+  it('runs at most the limit at once, and returns results in the order asked', async () => {
+    let running = 0;
+    let peak = 0;
+    const out = await mapLimit([50, 10, 30, 5, 20, 1, 15], 3, async (ms) => {
+      running += 1;
+      peak = Math.max(peak, running);
+      await new Promise((r) => setTimeout(r, ms));
+      running -= 1;
+      return ms * 2;
+    });
+    expect(peak).toBe(3);
+    expect(out).toEqual([100, 20, 60, 10, 40, 2, 30]);
+  });
+
+  it('a limit of one is the old one-after-another behaviour', async () => {
+    let running = 0;
+    let peak = 0;
+    await mapLimit([1, 2, 3], 1, async () => {
+      running += 1;
+      peak = Math.max(peak, running);
+      await Promise.resolve();
+      running -= 1;
+    });
+    expect(peak).toBe(1);
   });
 });

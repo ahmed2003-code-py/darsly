@@ -3418,6 +3418,7 @@
     "studioName": {
       "PAPER": "Imported paper exam",
       "CONTENT": "Exam from material"
-    }
+    },
+    "startedAgo": "started {{ago}}"
   }
 }

@@ -41,6 +41,9 @@ export interface DraftSummary {
   status?: string;
   stage?: string;
   progress?: { done: number; total: number };
+  /** Studio sessions only: when the work began. `updatedAt` moves with every
+   *  page, so a session running for a quarter of an hour read "a minute ago". */
+  startedAt?: Date;
 }
 
 /** Longer than any editing session, short enough that the list stays a list.
@@ -185,6 +188,7 @@ export class DraftsService {
           progressDone: true,
           progressTotal: true,
           updatedAt: true,
+          createdAt: true,
         },
       }),
     ]);
@@ -200,6 +204,7 @@ export class DraftsService {
       status: s.status,
       stage: s.stage,
       progress: { done: s.progressDone, total: s.progressTotal },
+      startedAt: s.createdAt,
     }));
 
     return [...drafts.map((d) => this.summary(d)), ...fromSessions].sort(

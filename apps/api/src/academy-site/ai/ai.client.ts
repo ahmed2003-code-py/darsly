@@ -80,6 +80,15 @@ interface AiCallOverrides {
    *  only being looked at, not read; `original` is for reading text off one.
    *  Defaults to `high`, which is what every existing caller was getting. */
   imageDetail?: AiImageDetail;
+  /**
+   * How long one call may take, and how many times the SDK may retry it.
+   * Left unset, the SDK's own defaults apply — ten minutes and two retries —
+   * which is right for a site generation nobody is watching and wrong for a
+   * page a teacher is waiting on: one stalled call could hold a page for half
+   * an hour. Callers on a waiting person's path set both.
+   */
+  timeoutMs?: number;
+  maxRetries?: number;
 }
 
 /**
@@ -170,6 +179,8 @@ export class AiClient {
       model: opts.model,
       reasoningEffort: opts.reasoningEffort,
       imageDetail: opts.imageDetail,
+      timeoutMs: opts.timeoutMs,
+      maxRetries: opts.maxRetries,
       format: { name: opts.schemaName, schema: opts.schema },
     });
 
@@ -286,7 +297,11 @@ export class AiClient {
     }
 
     try {
-      return await this.getClient().responses.create(params as any);
+      const requestOptions = {
+        ...(opts.timeoutMs ? { timeout: opts.timeoutMs } : {}),
+        ...(opts.maxRetries != null ? { maxRetries: opts.maxRetries } : {}),
+      };
+      return await this.getClient().responses.create(params as any, requestOptions);
     } catch (e: any) {
       const status = e?.status ?? e?.response?.status;
       const terminal =

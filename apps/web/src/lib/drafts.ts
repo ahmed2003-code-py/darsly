@@ -24,6 +24,8 @@ export interface DraftSummary {
   status?: string;
   stage?: string;
   progress?: { done: number; total: number };
+  /** Studio sessions only: when the work began. */
+  startedAt?: string;
 }
 
 export interface StoredDraft<T> extends DraftSummary {

@@ -15,7 +15,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "storage:migrate": "ts-node --transpile-only scripts/migrate-storage-to-s3.ts",
     "proof:read": "ts-node -r tsconfig-paths/register scripts/read-proof.ts",
-    "ocr:evaluate": "ts-node --transpile-only scripts/evaluate-ocr.ts"
+    "ocr:evaluate": "ts-node --transpile-only scripts/evaluate-ocr.ts",
+    "page:read": "ts-node --transpile-only scripts/read-page.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

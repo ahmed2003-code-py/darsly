@@ -81,6 +81,17 @@ export interface TranscriptionResult {
 }
 
 /**
+ * What the reader is doing to a page right now, for the screen a teacher
+ * watches. Each one is said when the work starts, never on a timer.
+ */
+export type PagePhase =
+  | { phase: 'PREPARING' }
+  | { phase: 'READING' }
+  | { phase: 'LOCATING' }
+  | { phase: 'REREADING'; done: number; total: number }
+  | { phase: 'CHECKING_NUMBERS' };
+
+/**
  * Reading a page, as several looks rather than one.
  *
  * The pipeline this replaces sent the whole page to one model once and asked
@@ -103,17 +114,6 @@ export interface TranscriptionResult {
  * A clean page costs exactly one call, same as before. A hard page costs a few
  * small ones instead of one large one on the flagship.
  */
-/**
- * What the reader is doing to a page right now, for the screen a teacher
- * watches. Each one is said when the work starts, never on a timer.
- */
-export type PagePhase =
-  | { phase: 'PREPARING' }
-  | { phase: 'READING' }
-  | { phase: 'LOCATING' }
-  | { phase: 'REREADING'; done: number; total: number }
-  | { phase: 'CHECKING_NUMBERS' };
-
 @Injectable()
 export class TranscriberService {
   private readonly logger = new Logger(TranscriberService.name);
@@ -186,6 +186,46 @@ export class TranscriberService {
     const failures = new Map<string, number>();
     const broken = (tier: string) => (failures.get(tier) ?? 0) >= 2;
     const noteFailure = (tier: string) => failures.set(tier, (failures.get(tier) ?? 0) + 1);
+    /**
+     * With regions read side by side, "two strikes" needs one more rule: a
+     * tier that has not yet answered on this page is asked one call at a
+     * time. Otherwise five crops go to a broken provider at once, before the
+     * first failure is known, and the breaker trips after ten calls instead of
+     * two. Once a tier has answered, it is trusted with the whole pool — so a
+     * healthy page pays one extra round, and a broken one still stops at two.
+     */
+    const proven = new Set<string>();
+    const queues = new Map<string, Promise<void>>();
+    const through = async <T>(
+      tier: string,
+      call: () => Promise<T>,
+      answered: (result: T) => boolean,
+    ): Promise<T | null> => {
+      if (proven.has(tier)) return call();
+      const before = queues.get(tier) ?? Promise.resolve();
+      let release!: () => void;
+      const mine = new Promise<void>((resolve) => (release = resolve));
+      queues.set(
+        tier,
+        before.then(() => mine),
+      );
+      await before;
+      if (broken(tier)) {
+        release();
+        return null;
+      }
+      if (proven.has(tier)) {
+        release();
+        return call();
+      }
+      try {
+        const result = await call();
+        if (answered(result)) proven.add(tier);
+        return result;
+      } finally {
+        release();
+      }
+    };
     trace(
       `IMAGE_ANALYSIS ${prepared.quality.width}x${prepared.quality.height} ` +
         `sharp=${prepared.quality.sharpness.toFixed(2)} sep=${prepared.quality.contrast.toFixed(2)} ` +
@@ -264,29 +304,34 @@ export class TranscriberService {
       const crops = ranked
         .slice(0, this.config.ocrMaxRegionCrops)
         .filter(({ index }) => boxes[index]);
-      let cropped = 0;
-      for (const { region, index } of crops) {
-        const box = boxes[index];
-        if (!box) continue;
-        say({ phase: 'REREADING', done: cropped++, total: crops.length });
-        trace(
-          `CROP_CREATED id=q${index + 1} bbox=${box.left},${box.top},${box.width}x${box.height}`,
-        );
-        const resolved = await this.rereadRegion(
-          original,
-          box,
-          region,
-          cost,
-          strong,
-          trace,
-          index,
-          {
+      // Side by side, not one after another. Each region is its own crop of
+      // the original and its own reading; none needs another's answer. In a
+      // row, a page where every question was doubtful took a quarter of an
+      // hour. The results are merged back into their own slots afterwards,
+      // so the order they finish in changes nothing.
+      let finished = 0;
+      say({ phase: 'REREADING', done: 0, total: crops.length });
+      const resolved = await mapLimit(
+        crops,
+        this.config.ocrConcurrency,
+        async ({ region, index }) => {
+          const box = boxes[index];
+          trace(
+            `CROP_CREATED id=q${index + 1} bbox=${box.left},${box.top},${box.width}x${box.height}`,
+          );
+          const read = await this.rereadRegion(original, box, region, cost, strong, trace, index, {
             broken,
             noteFailure,
-          },
-        );
-        transcript = mergeRegion(transcript, index, resolved);
-      }
+            through,
+          });
+          finished += 1;
+          if (finished < crops.length) {
+            say({ phase: 'REREADING', done: finished, total: crops.length });
+          }
+          return { index, read };
+        },
+      );
+      for (const { index, read } of resolved) transcript = mergeRegion(transcript, index, read);
     } else if (ranked.length && !strong && !broken('fallback')) {
       // Nothing to aim a crop at, and the reading is known to be poor: one
       // more look at the whole page is all that is left.
@@ -302,23 +347,35 @@ export class TranscriberService {
     // ── pass C: the numbers ───────────────────────────────────────────────
     // Done after the regions, so a region that was re-read whole does not also
     // get its fragments cropped for nothing.
-    for (let i = 0; i < transcript.regions.length; i++) {
-      const region = transcript.regions[i];
-      const box = boxes[i];
-      if (!box) continue;
-      const fragments = region.uncertain
-        .filter((u) => u.numeric || looksNumeric(u.text))
-        .slice(0, this.config.ocrMaxFragmentCrops);
-      if (!fragments.length) continue;
-
+    // Regions in parallel, like the crops above; the numbers inside one region
+    // stay in order, because each correction is applied to the text the
+    // previous one left.
+    const withNumbers = transcript.regions
+      .map((region, i) => ({
+        region,
+        i,
+        box: boxes[i],
+        fragments: region.uncertain
+          .filter((u) => u.numeric || looksNumeric(u.text))
+          .slice(0, this.config.ocrMaxFragmentCrops),
+      }))
+      .filter((r) => r.box && r.fragments.length);
+    if (withNumbers.length) {
       say({ phase: 'CHECKING_NUMBERS' });
-      let updated = region;
-      for (const fragment of fragments) {
-        const resolution = await this.rereadFragment(original, box, fragment.text, cost);
-        if (!resolution) continue;
-        updated = applyFragment(updated, fragment, resolution);
-      }
-      transcript = mergeRegion(transcript, i, updated);
+      const checked = await mapLimit(
+        withNumbers,
+        this.config.ocrConcurrency,
+        async ({ region, i, box, fragments }) => {
+          let updated = region;
+          for (const fragment of fragments) {
+            const resolution = await this.rereadFragment(original, box, fragment.text, cost);
+            if (!resolution) continue;
+            updated = applyFragment(updated, fragment, resolution);
+          }
+          return { i, updated };
+        },
+      );
+      for (const { i, updated } of checked) transcript = mergeRegion(transcript, i, updated);
     }
 
     return this.finish(transcript, cost, visual, boxes.length ? 1 : 0, trace);
@@ -383,7 +440,15 @@ export class TranscriberService {
     strong: boolean,
     trace: (line: string) => void = () => undefined,
     index = 0,
-    circuit: { broken: (t: string) => boolean; noteFailure: (t: string) => void } = {
+    circuit: {
+      broken: (t: string) => boolean;
+      noteFailure: (t: string) => void;
+      through?: <T>(
+        tier: string,
+        call: () => Promise<T>,
+        answered: (result: T) => boolean,
+      ) => Promise<T | null>;
+    } = {
       broken: () => false,
       noteFailure: () => undefined,
     },
@@ -407,17 +472,30 @@ export class TranscriberService {
         break;
       }
       const crop = await this.images.crop(original, box, { upscale: true });
-      const call = await this.read(
-        [crop],
-        tier,
-        [
-          region.label
-            ? `This is question ${region.label} of an exam page.`
-            : 'A region of a page.',
-          'It is a close-up crop of one region, so read it carefully and completely.',
-          'Return it as a single region.',
-        ].join(' '),
-      );
+      const ask = async () => {
+        const result = await this.read(
+          [crop],
+          tier,
+          [
+            region.label
+              ? `This is question ${region.label} of an exam page.`
+              : 'A region of a page.',
+            'It is a close-up crop of one region, so read it carefully and completely.',
+            'Return it as a single region.',
+          ].join(' '),
+        );
+        // Counted here, inside the gate, so the next call waiting on this
+        // tier already knows about it.
+        if (!result.data?.regions?.length && result.error) circuit.noteFailure(tier);
+        return result;
+      };
+      const call = circuit.through
+        ? await circuit.through(tier, ask, (r) => !!r.data?.regions?.length)
+        : await ask();
+      if (!call) {
+        trace(`SKIP region=q${index + 1} pass=${pass} tier=${tier} (tier failing on this page)`);
+        break;
+      }
       this.add(cost, call);
       cost.cropCalls += 1;
       if (pass > 0) cost.escalated = true;
@@ -426,10 +504,7 @@ export class TranscriberService {
           `ok=${!!call.data} confidence=${call.data?.regions?.[0]?.confidence ?? 'n/a'}` +
           (call.error ? ` error="${call.error.slice(0, 80)}"` : ''),
       );
-      if (!call.data?.regions?.length) {
-        if (call.error) circuit.noteFailure(tier);
-        continue;
-      }
+      if (!call.data?.regions?.length) continue;
 
       const read = normaliseRegion(call.data.regions[0], region.label);
       candidates.push({
@@ -568,6 +643,8 @@ export class TranscriberService {
     const { model, price, effort } = this.tier(tier);
     try {
       const res = await this.ai.completeStructured<PageTranscript>({
+        timeoutMs: this.config.ocrCallTimeoutMs,
+        maxRetries: this.config.ocrCallRetries,
         model,
         price,
         reasoningEffort: effort,
@@ -683,4 +760,28 @@ function normaliseRegion(r: TranscriptRegion, fallbackLabel = ''): TranscriptReg
 function clamp(v: unknown): number {
   const n = typeof v === 'number' && Number.isFinite(v) ? v : 0;
   return Math.max(0, Math.min(1, n));
+}
+
+/**
+ * Run `fn` over `items`, at most `limit` at a time, results in input order.
+ *
+ * A pool rather than `Promise.all`: ten crops at once is ten simultaneous
+ * image requests from one page, and a few pages of that is how a provider's
+ * rate limit is found the hard way.
+ */
+export async function mapLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const at = next++;
+      out[at] = await fn(items[at]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker));
+  return out;
 }

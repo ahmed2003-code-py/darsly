@@ -292,4 +292,34 @@ export class PaperImportConfig {
   /** Turn the whole multi-pass pipeline off and read pages in one call, as
    *  the studio did before it existed. A way back, not a default. */
   readonly ocrMultiPass = (process.env.PAPER_IMPORT_OCR_MULTIPASS ?? 'true') !== 'false';
+
+  /**
+   * How many regions of one page are re-read at the same time.
+   *
+   * They are independent — a crop of question 3 does not need the answer for
+   * question 2 — and they used to go one after another, so a handwritten page
+   * where every region was doubtful was ten crops times two passes in a row:
+   * a quarter of an hour on one sheet. Five at once turns that into a couple
+   * of rounds. Set to 1 to get the old behaviour back.
+   */
+  readonly ocrConcurrency = Math.max(
+    1,
+    Math.min(10, num(process.env.PAPER_IMPORT_OCR_CONCURRENCY, 5)),
+  );
+
+  /**
+   * The longest one reading call may take before it is given up on, and how
+   * many times it may be retried. Unset, the SDK waits ten minutes and retries
+   * twice — thirty minutes for one stalled call on a page somebody is
+   * watching. A read that does not come back in two minutes is not coming
+   * back; the page's other passes carry on without it.
+   */
+  readonly ocrCallTimeoutMs = Math.max(
+    15_000,
+    num(process.env.PAPER_IMPORT_OCR_CALL_TIMEOUT_MS, 120_000),
+  );
+  readonly ocrCallRetries = Math.max(
+    0,
+    Math.min(3, num(process.env.PAPER_IMPORT_OCR_CALL_RETRIES, 1)),
+  );
 }

@@ -151,7 +151,13 @@ export function DraftsBar({
               <p className="truncate font-semibold text-on-surface">{nameOf(draft, t)}</p>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-on-surface-variant">
                 <StatusChip draft={draft} />
-                <span className="text-outline">{agoLabel(draft.updatedAt, i18n.language)}</span>
+                <span className="text-outline">
+                  {draft.kind === 'EXAM_STUDIO' && draft.status === 'PROCESSING' && draft.startedAt
+                    ? // While it runs, how long it has been running. The last
+                      // change is always "a minute ago" on something working.
+                      t('drafts.startedAgo', { ago: agoLabel(draft.startedAt, i18n.language) })
+                    : agoLabel(draft.updatedAt, i18n.language)}
+                </span>
                 {draft.kind === 'EXAM_STUDIO' && !!draft.progress?.total && (
                   <span className="text-outline">
                     · {t('drafts.pages', { count: draft.progress.total })}

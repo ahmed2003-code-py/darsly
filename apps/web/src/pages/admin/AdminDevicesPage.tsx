@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import { dateShort } from '../../lib/format';
 import { EmptyState, ErrorNote, PageHeader, Skeleton } from '../../components/ui';
 
@@ -187,7 +188,7 @@ export default function AdminDevicesPage() {
                 <button
                   className="btn-ghost text-error"
                   disabled={revoke.isPending}
-                  onClick={() => window.confirm(t('adminDevices.revokeConfirm')) && revoke.mutate(d.id)}
+                  onClick={async () => (await askConfirm(t('adminDevices.revokeConfirm'))) && revoke.mutate(d.id)}
                 >
                   {t('adminDevices.revoke')}
                 </button>

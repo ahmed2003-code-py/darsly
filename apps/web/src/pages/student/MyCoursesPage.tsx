@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import { dateShort, egp } from '../../lib/format';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, PageHeader, ProgressBar } from '../../components/ui';
 
@@ -63,10 +64,10 @@ export default function MyCoursesPage() {
                     aria-label={t('myCourses.remove')}
                     disabled={hide.isPending}
                     className="absolute end-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-surface-container-lowest/90 text-outline shadow-card backdrop-blur transition hover:bg-error-container hover:text-on-error-container disabled:opacity-50"
-                    onClick={(ev) => {
+                    onClick={async (ev) => {
                       ev.preventDefault();
                       ev.stopPropagation();
-                      if (window.confirm(t('myCourses.removeConfirm'))) hide.mutate(e.id);
+                      if (await askConfirm(t('myCourses.removeConfirm'))) hide.mutate(e.id);
                     }}
                   >
                     <span className="material-symbols-outlined text-[20px]">close</span>

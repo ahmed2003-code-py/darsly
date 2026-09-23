@@ -635,6 +635,8 @@
     "language": "English",
     "save": "حفظ",
     "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "confirmTitle": "تأكيد",
     "delete": "حذف",
     "error": "حدث خطأ، حاول مرة أخرى",
     "search": "بحث",

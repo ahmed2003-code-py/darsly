@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Role } from '@darsly/shared-types';
 import { useOwnedAcademy } from '../../lib/academy';
+import { askConfirm } from '../../lib/confirm';
 import {
   useAcademySubjects,
   useCreateSubject,
@@ -108,7 +109,7 @@ export default function CenterSubjectsPage() {
               <button
                 className="rounded-xl border border-error/30 px-4 py-2 text-sm font-bold text-error transition hover:bg-error-container/40"
                 disabled={busy}
-                onClick={() => { if (window.confirm(t('center.subjectDisableAllConfirm'))) setAll.mutate(false); }}
+                onClick={async () => { if (await askConfirm(t('center.subjectDisableAllConfirm'))) setAll.mutate(false); }}
               >
                 {t('center.subjectDisableAll')}
               </button>

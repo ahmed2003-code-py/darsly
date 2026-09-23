@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import { Markdown } from '../../lib/markdown';
 import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
 import SessionSummary from '../live/SessionSummary';
@@ -115,7 +116,7 @@ export default function TeacherLivePage() {
                     <span className="material-symbols-outlined text-base">group</span>
                     {t('live.bookedCount', { count: s.bookedCount })}{s.capacity != null ? ` / ${s.capacity}` : ''}
                   </button>
-                  <button className="text-error/70 hover:text-error" onClick={() => window.confirm(t('live.cancelConfirm')) && remove.mutate(s.id)}>
+                  <button className="text-error/70 hover:text-error" onClick={async () => (await askConfirm(t('live.cancelConfirm'))) && remove.mutate(s.id)}>
                     <span className="material-symbols-outlined text-base">delete</span>
                   </button>
                 </div>

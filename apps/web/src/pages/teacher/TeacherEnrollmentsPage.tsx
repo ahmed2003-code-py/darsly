@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import { dateShort, egp } from '../../lib/format';
 import { useOwnedAcademy } from '../../lib/academy';
 import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Spinner } from '../../components/ui';
@@ -635,8 +636,8 @@ export default function TeacherEnrollmentsPage() {
                             <button
                               className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error transition hover:bg-error-container/40"
                               disabled={act.isPending}
-                              onClick={() => {
-                                if (confirm(t('teacher.students.revokeConfirm'))) {
+                              onClick={async () => {
+                                if (await askConfirm(t('teacher.students.revokeConfirm'))) {
                                   act.mutate({ id: e.id });
                                 }
                               }}

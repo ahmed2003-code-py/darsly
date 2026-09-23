@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import { useDailyMeeting, type Participant } from '../../lib/useDailyMeeting';
 import { useLiveChat } from '../../lib/useLiveChat';
 import { useAuthStore } from '../../stores/auth';
@@ -455,7 +456,7 @@ export default function MeetingPage() {
         {amOwner && (
           <button
             className="h-12 rounded-full bg-error-container px-4 text-xs font-extrabold text-on-error-container transition active:scale-95"
-            onClick={() => window.confirm(t('meeting.endConfirm')) && end.mutate()}
+            onClick={async () => (await askConfirm(t('meeting.endConfirm'))) && end.mutate()}
           >
             {t('meeting.endForAll')}
           </button>
@@ -593,7 +594,7 @@ export default function MeetingPage() {
                         <button
                           className="rounded-full p-1.5 text-error/70 hover:text-error"
                           aria-label={t('meeting.removeOne')}
-                          onClick={() => window.confirm(t('meeting.removeConfirm', { name: p.name })) && meeting.removeParticipant(p.sessionId)}
+                          onClick={async () => (await askConfirm(t('meeting.removeConfirm', { name: p.name }))) && meeting.removeParticipant(p.sessionId)}
                         >
                           <span className="material-symbols-outlined text-[18px]">person_remove</span>
                         </button>

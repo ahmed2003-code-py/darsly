@@ -635,6 +635,8 @@
     "language": "العربية",
     "save": "Save",
     "cancel": "Cancel",
+    "confirm": "Confirm",
+    "confirmTitle": "Please confirm",
     "delete": "Delete",
     "error": "Something went wrong, please try again",
     "search": "Search",

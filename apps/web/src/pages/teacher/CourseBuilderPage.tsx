@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { PlaybackTicket } from '@darsly/shared-types';
 import { api, apiOrigin } from '../../lib/api';
+import { askConfirm } from '../../lib/confirm';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
 import { Badge, ErrorNote, Modal, Spinner } from '../../components/ui';
@@ -737,7 +738,7 @@ export default function CourseBuilderPage() {
                 </p>
                 <VideoActions
                   onReplace={() => videoInput.current?.click()}
-                  onDelete={() => window.confirm(t('teacher.builder.videoDeleteConfirm')) && removeVideo.mutate()}
+                  onDelete={async () => (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) && removeVideo.mutate()}
                   busy={removeVideo.isPending}
                   t={t}
                 />
@@ -749,7 +750,7 @@ export default function CourseBuilderPage() {
                     an honest sweep — see UploadPanel. */}
                 <UploadPanel phase="working" note={t('teacher.builder.videoProcessing')} />
                 <VideoActions
-                  onDelete={() => window.confirm(t('teacher.builder.videoDeleteConfirm')) && removeVideo.mutate()}
+                  onDelete={async () => (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) && removeVideo.mutate()}
                   busy={removeVideo.isPending}
                   t={t}
                 />
@@ -777,7 +778,7 @@ export default function CourseBuilderPage() {
                 </p>
                 <VideoActions
                   onReplace={() => videoInput.current?.click()}
-                  onDelete={() => window.confirm(t('teacher.builder.videoDeleteConfirm')) && removeVideo.mutate()}
+                  onDelete={async () => (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) && removeVideo.mutate()}
                   busy={removeVideo.isPending}
                   t={t}
                 />
@@ -1147,7 +1148,7 @@ export default function CourseBuilderPage() {
             <button
               className="flex items-center gap-1.5 text-sm font-bold text-error hover:underline disabled:opacity-50"
               disabled={removeIntro.isPending || introPct !== null}
-              onClick={() => window.confirm(t('teacher.builder.removeIntroConfirm')) && removeIntro.mutate()}
+              onClick={async () => (await askConfirm(t('teacher.builder.removeIntroConfirm'))) && removeIntro.mutate()}
             >
               <span className="material-symbols-outlined text-base">delete</span>
               {t('common.delete')}
@@ -1238,7 +1239,7 @@ export default function CourseBuilderPage() {
                 li={li}
                 open={selectedLessonId === l.id}
                 onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
-                onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
+                onDelete={async () => (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) && removeLesson.mutate(l.id)}
                 panel={lessonPanel}
                 t={t}
               />
@@ -1309,7 +1310,7 @@ export default function CourseBuilderPage() {
                         li={li}
                         open={selectedLessonId === l.id}
                         onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
-                        onDelete={() => window.confirm(t('teacher.builder.deleteLessonConfirm')) && removeLesson.mutate(l.id)}
+                        onDelete={async () => (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) && removeLesson.mutate(l.id)}
                         panel={lessonPanel}
                         t={t}
                       />

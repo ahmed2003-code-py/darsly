@@ -13,6 +13,7 @@ import {
   useUpdateGroup,
 } from '../../lib/academyOps';
 import { Badge, EmptyState, ErrorNote, Modal, Skeleton } from '../../components/ui';
+import { askConfirm } from '../../lib/confirm';
 
 const TABS = ['students', 'staff', 'attendance'] as const;
 type Tab = (typeof TABS)[number];
@@ -226,9 +227,9 @@ function AttendanceTab({ groupId }: { groupId: string }) {
   // nobody has recorded yet, which is exactly the thing to write down.
   const canSave = !!data?.students.length && (dirty || !taken);
 
-  const goToDate = (next: string) => {
+  const goToDate = async (next: string) => {
     if (!next) return;
-    if (dirty && !window.confirm(t('groups.attendance.unsavedWarning'))) return;
+    if (dirty && !(await askConfirm(t('groups.attendance.unsavedWarning')))) return;
     setDate(next);
   };
 

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { ChatMessageDto, ChatThreadDto, RealtimeEvents } from '@darsly/shared-types';
 import { api } from '../lib/api';
+import { askConfirm } from '../lib/confirm';
 import { getSocket } from '../lib/socket';
 import { EmptyState, PageHeader, Spinner } from '../components/ui';
 
@@ -158,7 +159,7 @@ export default function MessagesPage() {
 
   /** Take this conversation off my list. The other side keeps theirs. */
   async function clearThread(id: string) {
-    if (!window.confirm(t('messages.clearConfirm'))) return;
+    if (!(await askConfirm(t('messages.clearConfirm')))) return;
     await api.delete(`/chat/threads/${id}`);
     if (id === activeId) {
       // Emptied on screen at the same moment it is emptied on the server, so

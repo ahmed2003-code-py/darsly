@@ -6,6 +6,7 @@ import { Role } from '@darsly/shared-types';
 import { setLanguage } from '../i18n';
 import ColorModeToggle from './ColorModeToggle';
 import { api } from '../lib/api';
+import { askConfirm } from '../lib/confirm';
 import { notificationLook, timeAgo } from '../lib/notificationLook';
 import { notificationRoute } from '../lib/notificationRoute';
 import { useNotificationPermission } from '../lib/useWebNotifications';
@@ -91,7 +92,7 @@ export default function TopBar({
 
   // Read is not the same as done with. Without these the bell only ever grew.
   async function clearAll() {
-    if (!window.confirm(t('topbar.clearAllConfirm'))) return;
+    if (!(await askConfirm(t('topbar.clearAllConfirm')))) return;
     await api.delete('/notifications/all');
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
   }

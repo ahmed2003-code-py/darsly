@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { paymentMethodLabel } from '../../lib/paymentMethods';
+import { askConfirm } from '../../lib/confirm';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { Badge, ErrorNote, Field, Modal, PageHeader, Skeleton } from '../../components/ui';
@@ -152,7 +153,7 @@ export default function AdminPaymentsPage() {
                 <p className="mt-1 font-mono text-sm text-outline" dir="ltr">{a.handle}</p>
                 <div className="mt-2 flex gap-3 text-xs">
                   <button className="text-primary hover:underline" onClick={() => toggleAccount.mutate(a)}>{a.isActive ? t('apay.disable') : t('apay.enable')}</button>
-                  <button className="text-error hover:underline" onClick={() => window.confirm(t('apay.delConfirm')) && delAccount.mutate(a.id)}>{t('common.delete')}</button>
+                  <button className="text-error hover:underline" onClick={async () => (await askConfirm(t('apay.delConfirm'))) && delAccount.mutate(a.id)}>{t('common.delete')}</button>
                 </div>
               </div>
             ))}

@@ -84,6 +84,21 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
+  /**
+   * Let Nest see the shutdown.
+   *
+   * Railway sends SIGTERM on every redeploy. Without this, Node exits on the
+   * signal and no `onModuleDestroy` ever runs — which means the drain in
+   * VideoJobWorker, and the one AiJobWorker already had, are dead code. Every
+   * in-flight job is abandoned mid-side-effect and only recovered when its
+   * lease expires minutes later.
+   *
+   * Also the prerequisite for ARCHITECTURE_REVIEW.md §11 #6 (the AI worker's
+   * drain); it is enabled here because the video queue cannot drain without
+   * it, and it costs nothing to the rest of the app.
+   */
+  app.enableShutdownHooks();
+
   // PORT is injected by PaaS hosts (Railway/Heroku); API_PORT is the local dev var.
   const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
   await app.listen(port);

@@ -943,11 +943,15 @@ export class CoursesService {
       const sourceKey = `source/${assetId}.mp4`;
       const stat = await fs.promises.stat(tmp);
       await this.storage.put(sourceKey, fs.createReadStream(tmp), { contentType: 'video/mp4' });
-      await this.prisma.videoAsset.update({
-        where: { id: assetId },
-        data: { originalKey: sourceKey, sizeBytes: BigInt(stat.size) },
+      // Source key and packaging promise, committed together — see the same
+      // pairing in uploads.controller.ts.
+      await this.prisma.$transaction(async (tx) => {
+        const asset = await tx.videoAsset.update({
+          where: { id: assetId },
+          data: { originalKey: sourceKey, sizeBytes: BigInt(stat.size) },
+        });
+        await this.videoProcessing.enqueue(assetId, asset.tenantId, tx);
       });
-      this.videoProcessing.enqueue(assetId);
     } catch (err) {
       await this.prisma.videoAsset
         .update({ where: { id: assetId }, data: { status: 'FAILED' } })

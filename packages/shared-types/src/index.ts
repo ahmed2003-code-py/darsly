@@ -76,6 +76,19 @@ export enum CourseStatus {
  * it is passed the course is shut except for the exam, its remedial lesson and
  * the free previews.
  */
+/**
+ * What a course is for, which decides what its builder looks like.
+ *
+ * Nothing student-facing reads this: enrolment, pricing, publishing and the
+ * exam engine behave identically either way. It exists so a course whose whole
+ * content is one exam is not edited through a screen asking for sections,
+ * lessons and an intro clip.
+ */
+export enum CourseKind {
+  STANDARD = 'STANDARD',
+  EXAM = 'EXAM',
+}
+
 export enum CourseExamMode {
   GATE = 'GATE',
   FINAL = 'FINAL',

@@ -556,7 +556,11 @@ export class CoursesService {
     return { subjectId, gradeIds: asked };
   }
 
-  async create(scope: CourseScope, dto: CreateCourseDto) {
+  async create(
+    scope: CourseScope,
+    dto: CreateCourseDto,
+    opts: { kind?: 'STANDARD' | 'EXAM' } = {},
+  ) {
     const tenantId = this.author(scope);
     if (dto.thumbnailUrl) validateThumbnailUrl(dto.thumbnailUrl, THUMBNAIL_MAX_BYTES);
     const kind = await this.academyKind(scope.academyId);
@@ -567,6 +571,9 @@ export class CoursesService {
     return this.prisma.course.create({
       data: {
         ...rest,
+        // Only the studio passes this; a teacher making a course by hand gets
+        // the standard one, which is what they asked for.
+        ...(opts.kind ? { kind: opts.kind } : {}),
         subjectId,
         tenantId,
         academyId: scope.academyId,
@@ -674,6 +681,32 @@ export class CoursesService {
           message: 'Cannot publish a course with no lessons',
           code: 'NO_LESSONS',
         });
+      }
+      /**
+       * An exam with no questions in it is a door with no handle.
+       *
+       * Naming a lesson as the course's exam gates the course on passing it,
+       * and a GATE exam with nothing to answer locks every student out
+       * permanently — they cannot pass a paper with no questions, so they
+       * never reach the course they paid for. It was always possible to reach
+       * this state; it became easy the day the builder let a teacher create an
+       * exam lesson in one keystroke, which is why it is checked now.
+       *
+       * Only the *named* exam: an ordinary quiz lesson somebody has not
+       * finished writing yet blocks nothing and is nobody's business but
+       * theirs.
+       */
+      const examLessonId = dto.examLessonId ?? existing.examLessonId;
+      if (examLessonId) {
+        const questions = await this.prisma.quizQuestion.count({
+          where: { quiz: { lessonId: examLessonId } },
+        });
+        if (questions === 0) {
+          throw new BadRequestException({
+            message: 'Cannot publish a course whose exam has no questions',
+            code: 'EMPTY_EXAM',
+          });
+        }
       }
     }
 

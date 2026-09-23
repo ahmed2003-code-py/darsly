@@ -66,6 +66,9 @@ describe('turning a confirmed draft into an ordinary exam', () => {
     expect(courses.create).toHaveBeenCalledWith(
       scope,
       expect.objectContaining({ title: 'Biology — Final' }),
+      // Marked as an exam course, so its builder shows the exam rather than
+      // "add a section, name a lesson, upload a video".
+      { kind: 'EXAM' },
     );
     expect(courses.addLessonDirect).toHaveBeenCalledWith(
       scope,
@@ -78,6 +81,15 @@ describe('turning a confirmed draft into an ordinary exam', () => {
       expect.objectContaining({ examLessonId: 'lesson1', examMode: 'FINAL' }),
     );
     expect(built).toMatchObject({ courseId: 'course1', lessonId: 'lesson1', questionCount: 1 });
+  });
+
+  it('does not touch the kind of a course the teacher already had', async () => {
+    // Adding an exam to a twelve-lesson course does not make it an exam course.
+    await builder.build(scope, draft([draftQuestion()]), {
+      target: 'EXISTING_COURSE',
+      courseId: 'existing9',
+    });
+    expect(courses.create).not.toHaveBeenCalled();
   });
 
   it('attaches the exam to a course that already exists without renaming its exam', async () => {

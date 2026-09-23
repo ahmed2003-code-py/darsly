@@ -546,7 +546,30 @@
       "introFormatErr": "The video must be an MP4.",
       "introSizeErr": "That video is too large — {{mb}}MB is the limit. Trim or compress it first.",
       "readOnly": "View only",
-      "readOnlyHint": "You can watch every lesson in full, but editing belongs to the teacher who wrote this course. You can still unpublish it from the courses list."
+      "readOnlyHint": "You can watch every lesson in full, but editing belongs to the teacher who wrote this course. You can still unpublish it from the courses list.",
+      "examContent": "The exam",
+      "examContentHint": "This lesson is an exam. Its questions live in the question editor.",
+      "editQuestions": "Edit the questions",
+      "assignmentContent": "The assignment",
+      "assignmentContentHint": "This lesson is an assignment. Its brief and its marking live in the assignment editor.",
+      "editAssignment2": "Edit the assignment",
+      "examCourseFinal": "This course is the exam. A student who passes it completes the course.",
+      "examCourseGate": "This course is the exam, and it is a placement test — the course stays shut until it is passed.",
+      "examCourseExpand": "Add lessons to this course",
+      "examCourseExpandHint": "Turn it into a full course. The exam and everyone enrolled stay exactly as they are.",
+      "addKind": {
+        "VIDEO": "Lesson",
+        "QUIZ": "Exam",
+        "ASSIGNMENT": "Assignment"
+      },
+      "addKindPh": {
+        "QUIZ": "Name the exam and press Enter",
+        "ASSIGNMENT": "Name the assignment and press Enter"
+      },
+      "subtitleExam": "This course is one exam. Edit its questions, print it, or set its price.",
+      "examCourseSummary": "One exam",
+      "publishExamTitle": "Ready to publish?",
+      "publishExamHint": "Check the questions, then publish so students can sit it."
     },
     "students": {
       "title": "My students",
@@ -2565,7 +2588,8 @@
     "ePaperUnsupportedType": "“{{name}}” is not a kind of file we can read. Use a PNG, JPEG or WebP image, or a PDF.",
     "ePaperContentMismatch": "“{{name}}” is not really the kind of file its name says it is, so we did not open it.",
     "ePaperTooManyPages": "That comes to {{got}} pages, and one exam can take {{limit}}. Split it and import the rest as a second exam.",
-    "eNoFiles": "Choose at least one file first."
+    "eNoFiles": "Choose at least one file first.",
+    "eEmptyExam": "This course's exam has no questions yet. Add them before you publish, or students will be locked out of the course."
   },
   "myStudio": {
     "title": "My Studio",

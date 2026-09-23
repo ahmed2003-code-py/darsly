@@ -866,6 +866,25 @@ model StudentInterest {
 
 // ─────────────────────────── Courses & Content ─────────────────────────────
 
+/// What a course is *for*, which decides what its builder looks like.
+///
+/// A course whose whole content is one exam was being edited through the same
+/// screen as a twelve-lesson course: "add a cover, add an intro clip, add a
+/// section, name a lesson" — none of which it has or wants. The exam engine,
+/// the enrolments, the pricing and the publishing are identical either way;
+/// this only changes what the teacher is shown.
+///
+/// Derived would have been tempting — "one lesson and it is the exam" — but a
+/// teacher who hand-builds a course with a single quiz in it is not asking for
+/// a different screen, and would get one. So it is recorded when the studio
+/// creates it, and a teacher can change their mind in either direction.
+enum CourseKind {
+  /// Lessons, sections, video — everything a course has always had.
+  STANDARD
+  /// The exam is the content. Made by the Exam Creation Studio.
+  EXAM
+}
+
 enum CourseStatus {
   DRAFT
   PUBLISHED
@@ -941,6 +960,9 @@ model Course {
   /// is not the same as for nobody.
   grades             CourseGrade[]
 
+  /// See CourseKind. Every course that existed before this is STANDARD, which
+  /// is what they were.
+  kind         CourseKind         @default(STANDARD)
   status       CourseStatus       @default(DRAFT)
   pricingModel CoursePricingModel @default(ONE_TIME)
   // piasters; for MONTHLY_SUBSCRIPTION this is the monthly price

@@ -1,5 +1,11 @@
 import { PartialType } from '@nestjs/swagger';
-import { CoursePricingModel, CourseStatus, LessonType, CourseExamMode } from '@darsly/shared-types';
+import {
+  CoursePricingModel,
+  CourseStatus,
+  LessonType,
+  CourseExamMode,
+  CourseKind,
+} from '@darsly/shared-types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -54,6 +60,17 @@ export class CreateCourseDto {
 
 export class UpdateCourseDto extends PartialType(CreateCourseDto) {
   @IsOptional() @IsEnum(CourseStatus) status?: CourseStatus;
+  /**
+   * Turn an exam-only course into a full one, or back.
+   *
+   * The escape hatch, and the reason this is a stored flag rather than
+   * something clever derived from the lesson count: a teacher who imported an
+   * exam and then decided to build a course around it must be able to say so,
+   * and a teacher who wants the simpler screen back must be able to have it.
+   * Nothing is migrated either way — the lessons, the exam and the enrolments
+   * are untouched; only the editing screen changes.
+   */
+  @IsOptional() @IsEnum(CourseKind) kind?: CourseKind;
   /**
    * Which lesson is the course's exam, and which is its assignment.
    *

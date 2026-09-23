@@ -8,6 +8,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { PlaybackTicket } from '@darsly/shared-types';
 import { api, apiOrigin } from '../../lib/api';
 import { askConfirm } from '../../lib/confirm';
+import { toastError } from '../../lib/toast';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
 import { Badge, ErrorNote, Modal, Spinner } from '../../components/ui';
@@ -188,6 +189,18 @@ export default function CourseBuilderPage() {
   /** What is left to do across the whole course, which is the teacher's question. */
   const missingVideo = lessons.filter((l: any) => !l.videoAsset && l.type === 'VIDEO').length;
 
+  /**
+   * A course whose whole content is one exam, edited as one.
+   *
+   * Recorded on the course rather than guessed from the lesson count — a
+   * teacher who hand-builds a course with a single quiz in it is not asking
+   * for a different screen. The guard on `examLesson` is for the state that
+   * should not happen but would be ugly if it did: an exam course whose exam
+   * was deleted falls back to the ordinary builder rather than to a blank.
+   */
+  const examLesson = lessons.find((l: any) => l.id === course?.examLessonId) ?? null;
+  const isExamCourse = course?.kind === 'EXAM' && !!examLesson;
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['teacher-course', id] });
     queryClient.invalidateQueries({ queryKey: ['teacher-courses'] });
@@ -268,11 +281,20 @@ export default function CourseBuilderPage() {
     mutationFn: async (unitId: string) => (await api.delete(`/teacher/units/${unitId}`)).data,
     onSuccess: invalidate,
   });
+  /** The escape hatch: keep the exam, get the full builder back. Nothing is
+   *  migrated — the lessons, the exam and the enrolments are untouched, and a
+   *  teacher who changes their mind again can change it back. */
+  const toStandard = useMutation({
+    mutationFn: async () => (await api.patch(`/teacher/courses/${id}`, { kind: 'STANDARD' })).data,
+    onSuccess: invalidate,
+    onError: (e) => toastError(e),
+  });
+
   // The name is typed before the lesson exists now, so there is nothing left to
   // rename afterwards — it opens straight into its own details instead.
   const addLesson = useMutation({
-    mutationFn: async ({ unitId, title }: { unitId: string; title: string }) =>
-      (await api.post(`/teacher/units/${unitId}/lessons`, { title })).data,
+    mutationFn: async ({ unitId, title, type }: { unitId: string; title: string; type: string }) =>
+      (await api.post(`/teacher/units/${unitId}/lessons`, { title, type })).data,
     onSuccess: (lesson) => {
       insertLesson(lesson);
       selectLesson(lesson);
@@ -282,8 +304,8 @@ export default function CourseBuilderPage() {
   // No section chosen — lands in the hidden default unit the API creates on
   // first use. The same "type a name, press Enter" flow, one step shorter.
   const addLessonDirect = useMutation({
-    mutationFn: async (title: string) =>
-      (await api.post(`/teacher/courses/${id}/lessons`, { title })).data,
+    mutationFn: async ({ title, type }: { title: string; type: string }) =>
+      (await api.post(`/teacher/courses/${id}/lessons`, { title, type })).data,
     onSuccess: (lesson) => {
       insertLesson(lesson, true);
       selectLesson(lesson);
@@ -713,105 +735,117 @@ export default function CourseBuilderPage() {
             />
           </div>
 
-          <div>
-            <p className="mb-2 flex items-center gap-1 text-sm font-bold">
-              <span className="material-symbols-outlined text-base">smart_display</span>
-              {t('teacher.builder.video')}
-            </p>
-            <input
-              ref={videoInput}
-              type="file"
-              accept="video/mp4,video/webm,video/quicktime,video/x-matroska"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && uploadVideo(e.target.files[0])}
-            />
+          {/*
+            The video, for a lesson that has one.
 
-            {videoError != null && <ErrorNote error={videoError} />}
-
-            {videoPct != null && uploadingLessonId === selectedLessonId ? (
-              <UploadPanel
-                phase="uploading"
-                pct={videoPct}
-                fileName={videoUp?.name}
-                fileSize={videoUp?.size}
-                onCancel={() => videoAbort.current?.abort()}
+            A quiz lesson has no video and never did; showing it an uploader,
+            a "processing" state and a delete button was offering three
+            actions that do nothing. What it gets instead is the thing it
+            actually has — its questions — one click away.
+          */}
+          {selected!.type === 'VIDEO' ? (
+            <div>
+              <p className="mb-2 flex items-center gap-1 text-sm font-bold">
+                <span className="material-symbols-outlined text-base">smart_display</span>
+                {t('teacher.builder.video')}
+              </p>
+              <input
+                ref={videoInput}
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/x-matroska"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && uploadVideo(e.target.files[0])}
               />
-            ) : !selectedVideo ? (
-              <button
-                className="flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-outline-variant py-8 text-sm text-on-surface-variant transition hover:border-primary hover:text-primary"
-                onClick={() => videoInput.current?.click()}
-              >
-                <span className="material-symbols-outlined text-3xl">upload</span>
-                {t('teacher.builder.uploadVideo')}
-              </button>
-            ) : selectedVideo.status === 'FAILED' ? (
-              <div className="rounded-xl border border-error/30 bg-error-container/40 p-3">
-                <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-on-error-container">
-                  <span className="material-symbols-outlined text-base">error</span>
-                  {t('teacher.builder.videoFailed')}
-                </p>
-                <VideoActions
-                  onReplace={() => videoInput.current?.click()}
-                  onDelete={async () =>
-                    (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
-                    removeVideo.mutate()
-                  }
-                  busy={removeVideo.isPending}
-                  t={t}
+
+              {videoError != null && <ErrorNote error={videoError} />}
+
+              {videoPct != null && uploadingLessonId === selectedLessonId ? (
+                <UploadPanel
+                  phase="uploading"
+                  pct={videoPct}
+                  fileName={videoUp?.name}
+                  fileSize={videoUp?.size}
+                  onCancel={() => videoAbort.current?.abort()}
                 />
-              </div>
-            ) : selectedVideo.status !== 'READY' ? (
-              <div className="space-y-3">
-                {/* Indeterminate on purpose: the transcoder reports no
+              ) : !selectedVideo ? (
+                <button
+                  className="flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-outline-variant py-8 text-sm text-on-surface-variant transition hover:border-primary hover:text-primary"
+                  onClick={() => videoInput.current?.click()}
+                >
+                  <span className="material-symbols-outlined text-3xl">upload</span>
+                  {t('teacher.builder.uploadVideo')}
+                </button>
+              ) : selectedVideo.status === 'FAILED' ? (
+                <div className="rounded-xl border border-error/30 bg-error-container/40 p-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-on-error-container">
+                    <span className="material-symbols-outlined text-base">error</span>
+                    {t('teacher.builder.videoFailed')}
+                  </p>
+                  <VideoActions
+                    onReplace={() => videoInput.current?.click()}
+                    onDelete={async () =>
+                      (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
+                      removeVideo.mutate()
+                    }
+                    busy={removeVideo.isPending}
+                    t={t}
+                  />
+                </div>
+              ) : selectedVideo.status !== 'READY' ? (
+                <div className="space-y-3">
+                  {/* Indeterminate on purpose: the transcoder reports no
                     percentage, and a fake one that stalls at 90% is worse than
                     an honest sweep — see UploadPanel. */}
-                <UploadPanel phase="working" note={t('teacher.builder.videoProcessing')} />
-                <VideoActions
-                  onDelete={async () =>
-                    (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
-                    removeVideo.mutate()
-                  }
-                  busy={removeVideo.isPending}
-                  t={t}
-                />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {previewError ? (
-                  <ErrorNote error={{ message: previewError }} />
-                ) : (
-                  <video
-                    ref={previewVideoRef}
-                    controls
-                    controlsList="nodownload"
-                    className="aspect-video w-full rounded-xl bg-black"
+                  <UploadPanel phase="working" note={t('teacher.builder.videoProcessing')} />
+                  <VideoActions
+                    onDelete={async () =>
+                      (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
+                      removeVideo.mutate()
+                    }
+                    busy={removeVideo.isPending}
+                    t={t}
                   />
-                )}
-                <p className="flex items-center gap-1.5 text-xs font-bold text-secondary">
-                  <span className="material-symbols-outlined text-sm">check_circle</span>
-                  {t('teacher.builder.videoReady')}
-                  {selected!.durationSec > 0 && (
-                    <span className="font-normal text-outline">
-                      ·{' '}
-                      {t('teacher.builder.videoDuration', {
-                        time: duration(selected!.durationSec),
-                      })}
-                    </span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {previewError ? (
+                    <ErrorNote error={{ message: previewError }} />
+                  ) : (
+                    <video
+                      ref={previewVideoRef}
+                      controls
+                      controlsList="nodownload"
+                      className="aspect-video w-full rounded-xl bg-black"
+                    />
                   )}
-                </p>
-                <VideoActions
-                  onReplace={() => videoInput.current?.click()}
-                  onDelete={async () =>
-                    (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
-                    removeVideo.mutate()
-                  }
-                  busy={removeVideo.isPending}
-                  t={t}
-                />
-              </div>
-            )}
-            <ErrorNote error={removeVideo.error} />
-          </div>
+                  <p className="flex items-center gap-1.5 text-xs font-bold text-secondary">
+                    <span className="material-symbols-outlined text-sm">check_circle</span>
+                    {t('teacher.builder.videoReady')}
+                    {selected!.durationSec > 0 && (
+                      <span className="font-normal text-outline">
+                        ·{' '}
+                        {t('teacher.builder.videoDuration', {
+                          time: duration(selected!.durationSec),
+                        })}
+                      </span>
+                    )}
+                  </p>
+                  <VideoActions
+                    onReplace={() => videoInput.current?.click()}
+                    onDelete={async () =>
+                      (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
+                      removeVideo.mutate()
+                    }
+                    busy={removeVideo.isPending}
+                    t={t}
+                  />
+                </div>
+              )}
+              <ErrorNote error={removeVideo.error} />
+            </div>
+          ) : (
+            <AssessmentCard lesson={selected!} courseId={id!} t={t} />
+          )}
         </div>
 
         {/* Right: when it opens, who sees it, and what comes with it */}
@@ -1024,42 +1058,41 @@ export default function CourseBuilderPage() {
             </div>
             <ErrorNote error={setRole.error} />
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {/* `?course=` so the back link there returns to this lesson. */}
-              <Link
-                to={`/teacher/lessons/${selected!.id}/quiz?course=${id}`}
-                className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
-              >
-                <span className="material-symbols-outlined text-base">quiz</span>
-                {t('assess.builder.editQuiz')}
-              </Link>
-              <Link
-                to={`/teacher/lessons/${selected!.id}/assignment?course=${id}`}
-                className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
-              >
-                <span className="material-symbols-outlined text-base">assignment</span>
-                {t('assess.builder.editAssignment')}
-              </Link>
-            </div>
+            {/*
+              The other ways to author, minus whatever this lesson already
+              offers above.
 
-            {/* The other way to author an exam: the teacher already has it on
-                paper. Lands back in this course when it is confirmed. */}
-            <div className="mt-2 grid grid-cols-2 gap-2">
+              A quiz lesson used to show "edit the quiz" and "print" twice —
+              once in its own card and once here — and an "edit the
+              assignment" link that would have turned it into an assignment.
+              What is left is the one thing that is genuinely a different
+              action: the studio, which writes an exam rather than editing one.
+            */}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {selected!.type !== 'QUIZ' && (
+                <Link
+                  to={`/teacher/lessons/${selected!.id}/quiz?course=${id}`}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+                >
+                  <span className="material-symbols-outlined text-base">quiz</span>
+                  {t('assess.builder.editQuiz')}
+                </Link>
+              )}
+              {selected!.type !== 'ASSIGNMENT' && (
+                <Link
+                  to={`/teacher/lessons/${selected!.id}/assignment?course=${id}`}
+                  className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+                >
+                  <span className="material-symbols-outlined text-base">assignment</span>
+                  {t('assess.builder.editAssignment')}
+                </Link>
+              )}
               <Link
                 to={`/teacher/exam-studio?course=${id}`}
                 className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
               >
                 <span className="material-symbols-outlined text-base">auto_awesome</span>
                 {t('examStudio.entry')}
-              </Link>
-              <Link
-                to={`/teacher/lessons/${selected!.id}/exam/print?course=${id}`}
-                className={`flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary ${
-                  selected!.type === 'QUIZ' ? '' : 'pointer-events-none opacity-50'
-                }`}
-              >
-                <span className="material-symbols-outlined text-base">print</span>
-                {t('paper.exportPdf')}
               </Link>
             </div>
           </div>
@@ -1159,7 +1192,12 @@ export default function CourseBuilderPage() {
             <span>{course.title}</span>
           </p>
           <h1 className="font-heading text-4xl font-extrabold">{t('teacher.builder.title')}</h1>
-          <p className="mt-2 text-on-surface-variant">{t('teacher.builder.subtitle')}</p>
+          {/* An exam course has no lessons to add and no video to upload, so
+              the line that tells a teacher to do both is a line about
+              somewhere else. */}
+          <p className="mt-2 text-on-surface-variant">
+            {t(isExamCourse ? 'teacher.builder.subtitleExam' : 'teacher.builder.subtitle')}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Badge tone={isPublished ? 'teal' : 'warn'}>
@@ -1253,89 +1291,106 @@ export default function CourseBuilderPage() {
       <ErrorNote error={thumbUpload.error} />
 
       {/*
+        The intro clip, for a course that has lessons to sell.
+
+        An exam-only course is one exam; a recorded pitch for it is a thing to
+        make, upload and maintain for a page that says "this is the exam".
+        Hidden rather than removed — it comes back the moment the course does.
+      */}
+      {!isExamCourse && (
+        <>
+          {/*
         Course intro clip.
 
         The teacher's own pitch for the course, and the one piece of it a
         visitor can watch before paying — so it is stored and served as a plain
         public MP4, not through the protected lesson pipeline.
       */}
-      <input
-        ref={introInput}
-        type="file"
-        accept="video/mp4"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = '';
-          if (f) uploadIntro(f);
-        }}
-      />
-      {course.introVideoUrl ? (
-        <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
-          <video
-            src={apiOrigin() + course.introVideoUrl}
-            controls
-            playsInline
-            className="h-44 w-full bg-black object-contain sm:h-56"
+          <input
+            ref={introInput}
+            type="file"
+            accept="video/mp4"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) uploadIntro(f);
+            }}
           />
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface-container-lowest px-4 py-3">
-            <p className="me-auto font-heading font-bold">{t('teacher.builder.introVideo')}</p>
+          {course.introVideoUrl ? (
+            <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
+              <video
+                src={apiOrigin() + course.introVideoUrl}
+                controls
+                playsInline
+                className="h-44 w-full bg-black object-contain sm:h-56"
+              />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-surface-container-lowest px-4 py-3">
+                <p className="me-auto font-heading font-bold">{t('teacher.builder.introVideo')}</p>
+                <button
+                  className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline disabled:opacity-50"
+                  disabled={introPct !== null}
+                  onClick={() => introInput.current?.click()}
+                >
+                  <span className="material-symbols-outlined text-base">autorenew</span>
+                  {introPct !== null
+                    ? t('teacher.builder.uploading', { pct: introPct })
+                    : t('teacher.builder.replaceIntro')}
+                </button>
+                <button
+                  className="flex items-center gap-1.5 text-sm font-bold text-error hover:underline disabled:opacity-50"
+                  disabled={removeIntro.isPending || introPct !== null}
+                  onClick={async () =>
+                    (await askConfirm(t('teacher.builder.removeIntroConfirm'))) &&
+                    removeIntro.mutate()
+                  }
+                >
+                  <span className="material-symbols-outlined text-base">delete</span>
+                  {t('common.delete')}
+                </button>
+              </div>
+            </div>
+          ) : (
             <button
-              className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline disabled:opacity-50"
+              className="group mb-5 flex w-full items-center gap-4 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low/40 p-4 text-start transition hover:border-primary hover:bg-primary-fixed/20 disabled:opacity-70"
               disabled={introPct !== null}
               onClick={() => introInput.current?.click()}
             >
-              <span className="material-symbols-outlined text-base">autorenew</span>
-              {introPct !== null
-                ? t('teacher.builder.uploading', { pct: introPct })
-                : t('teacher.builder.replaceIntro')}
+              <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-on-primary-fixed">
+                <span className="material-symbols-outlined text-[26px]">
+                  {introPct !== null ? 'hourglass' : 'movie'}
+                </span>
+              </span>
+              <span className="min-w-0">
+                <span className="block font-heading font-bold">
+                  {introPct !== null
+                    ? t('teacher.builder.uploading', { pct: introPct })
+                    : t('teacher.builder.addIntro')}
+                </span>
+                <span className="mt-0.5 block text-sm text-on-surface-variant">
+                  {t('teacher.builder.addIntroHint')}
+                </span>
+              </span>
             </button>
-            <button
-              className="flex items-center gap-1.5 text-sm font-bold text-error hover:underline disabled:opacity-50"
-              disabled={removeIntro.isPending || introPct !== null}
-              onClick={async () =>
-                (await askConfirm(t('teacher.builder.removeIntroConfirm'))) && removeIntro.mutate()
-              }
-            >
-              <span className="material-symbols-outlined text-base">delete</span>
-              {t('common.delete')}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          className="group mb-5 flex w-full items-center gap-4 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low/40 p-4 text-start transition hover:border-primary hover:bg-primary-fixed/20 disabled:opacity-70"
-          disabled={introPct !== null}
-          onClick={() => introInput.current?.click()}
-        >
-          <span className="grid h-14 w-20 shrink-0 place-items-center rounded-xl bg-surface-container-high text-outline transition group-hover:bg-primary-fixed group-hover:text-on-primary-fixed">
-            <span className="material-symbols-outlined text-[26px]">
-              {introPct !== null ? 'hourglass' : 'movie'}
-            </span>
-          </span>
-          <span className="min-w-0">
-            <span className="block font-heading font-bold">
-              {introPct !== null
-                ? t('teacher.builder.uploading', { pct: introPct })
-                : t('teacher.builder.addIntro')}
-            </span>
-            <span className="mt-0.5 block text-sm text-on-surface-variant">
-              {t('teacher.builder.addIntroHint')}
-            </span>
-          </span>
-        </button>
+          )}
+          {introPct !== null && (
+            <div className="-mt-3 mb-5 h-1.5 overflow-hidden rounded-full bg-surface-container-high">
+              <div className="h-full bg-primary transition-all" style={{ width: `${introPct}%` }} />
+            </div>
+          )}
+          <ErrorNote error={introError ?? removeIntro.error} />
+        </>
       )}
-      {introPct !== null && (
-        <div className="-mt-3 mb-5 h-1.5 overflow-hidden rounded-full bg-surface-container-high">
-          <div className="h-full bg-primary transition-all" style={{ width: `${introPct}%` }} />
-        </div>
-      )}
-      <ErrorNote error={introError ?? removeIntro.error} />
 
       {/* Summary strip — what used to be the pricing card in the side column. */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/60 bg-surface-container-lowest px-4 py-3">
         <p className="text-sm text-on-surface-variant">
-          {t('teacher.builder.countSummary', { lessons: lessons.length, time: duration(totalSec) })}
+          {isExamCourse
+            ? t('teacher.builder.examCourseSummary')
+            : t('teacher.builder.countSummary', {
+                lessons: lessons.length,
+                time: duration(totalSec),
+              })}
         </p>
         <p className="flex items-baseline gap-2 text-sm text-on-surface-variant">
           <span>
@@ -1364,165 +1419,195 @@ export default function CourseBuilderPage() {
         hairline between them. The chrome that was repeated per section — the
         add box, the import link — is a single quiet control where it belongs.
       */}
-      <div className="card mb-5 overflow-hidden p-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 sm:px-5">
-          <p className="font-heading text-lg font-bold">{t('teacher.builder.curriculum')}</p>
-          <span className="text-sm text-on-surface-variant">
-            {missingVideo > 0
-              ? t('teacher.builder.lessonsMetaMissing', {
-                  count: lessons.length,
-                  missing: missingVideo,
-                })
-              : t('teacher.builder.lessonsMeta', { count: lessons.length })}
-          </span>
-          <button
-            className="ms-auto flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
-            onClick={() => openImport(undefined)}
-          >
-            <span className="material-symbols-outlined text-base">smart_display</span>
-            {t('teacher.builder.importYoutubeBtn')}
-          </button>
-        </div>
+      {/*
+        An exam-only course is not a curriculum.
 
-        {/* Lessons with no section of their own sit first, unlabelled — there
+        The studio makes these: the whole content is one exam. Editing it
+        through the list below meant "add a section", "name a lesson", "import
+        from YouTube" — a page asking for eleven things it does not have, to
+        change the one thing it does. The list is still exactly one click away
+        for a teacher who decides to build a course around the exam after all.
+      */}
+      {isExamCourse ? (
+        <ExamCourseCard
+          course={course}
+          examLesson={examLesson}
+          courseId={id!}
+          onExpand={() => toStandard.mutate()}
+          expanding={toStandard.isPending}
+          t={t}
+        />
+      ) : (
+        <div className="card mb-5 overflow-hidden p-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 sm:px-5">
+            <p className="font-heading text-lg font-bold">{t('teacher.builder.curriculum')}</p>
+            <span className="text-sm text-on-surface-variant">
+              {missingVideo > 0
+                ? t('teacher.builder.lessonsMetaMissing', {
+                    count: lessons.length,
+                    missing: missingVideo,
+                  })
+                : t('teacher.builder.lessonsMeta', { count: lessons.length })}
+            </span>
+            <button
+              className="ms-auto flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+              onClick={() => openImport(undefined)}
+            >
+              <span className="material-symbols-outlined text-base">smart_display</span>
+              {t('teacher.builder.importYoutubeBtn')}
+            </button>
+          </div>
+
+          {/* Lessons with no section of their own sit first, unlabelled — there
             is nothing to call them that is not just "the course". */}
-        {defaultUnit?.lessons.length > 0 && (
-          <ul className="border-t border-outline-variant/40">
-            {defaultUnit.lessons.map((l: any, li: number) => (
-              <LessonRow
-                key={l.id}
-                l={l}
-                li={li}
-                open={selectedLessonId === l.id}
-                onToggle={() =>
-                  selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l)
-                }
-                onDelete={async () =>
-                  (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) &&
-                  removeLesson.mutate(l.id)
-                }
-                panel={lessonPanel}
-                t={t}
-              />
-            ))}
-          </ul>
-        )}
-        <div className="border-t border-outline-variant/40 px-4 py-2 sm:px-5">
-          <AddLessonRow
-            busy={addLessonDirect.isPending}
-            placeholder={t('teacher.builder.lessonNamePh')}
-            label={t('teacher.builder.addLessonCta')}
-            onAdd={(title) => addLessonDirect.mutate(title)}
-          />
-        </div>
-
-        {sections.map((u: any, ui: number) => {
-          const gap = u.lessons.filter((x: any) => !x.videoAsset && x.type === 'VIDEO').length;
-          const shut = folded.has(u.id);
-          return (
-            <div key={u.id} className="border-t-4 border-outline-variant/25">
-              <div className="group/unit flex min-h-[3.5rem] items-center gap-2 bg-surface-container-high/60 px-2 py-2 sm:px-3">
-                <button
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-on-surface-variant transition hover:bg-surface-container-high"
-                  aria-expanded={!shut}
-                  title={t(shut ? 'teacher.builder.unfold' : 'teacher.builder.fold')}
-                  onClick={() => toggleFold(u.id)}
-                >
-                  <span
-                    className={`material-symbols-outlined text-[20px] transition-transform ${shut ? '-rotate-90' : ''}`}
-                  >
-                    expand_more
-                  </span>
-                </button>
-                <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
-                <InlineName
-                  value={u.title}
-                  editing={renaming === `unit:${u.id}`}
-                  onEdit={() => setRenaming(`unit:${u.id}`)}
-                  onDone={(title) => {
-                    setRenaming(null);
-                    if (title && title !== u.title) renameUnit.mutate({ unitId: u.id, title });
-                  }}
-                  className="min-w-0 flex-1 font-heading text-lg font-bold"
+          {defaultUnit?.lessons.length > 0 && (
+            <ul className="border-t border-outline-variant/40">
+              {defaultUnit.lessons.map((l: any, li: number) => (
+                <LessonRow
+                  key={l.id}
+                  l={l}
+                  li={li}
+                  open={selectedLessonId === l.id}
+                  onToggle={() =>
+                    selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l)
+                  }
+                  onDelete={async () =>
+                    (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) &&
+                    removeLesson.mutate(l.id)
+                  }
+                  panel={lessonPanel}
+                  t={t}
                 />
-                {/* The name is what a teacher navigates by, so it keeps the
+              ))}
+            </ul>
+          )}
+          <div className="border-t border-outline-variant/40 px-4 py-2 sm:px-5">
+            <AddLessonRow
+              busy={addLessonDirect.isPending}
+              placeholder={t('teacher.builder.lessonNamePh')}
+              label={t('teacher.builder.addLessonCta')}
+              onAdd={(title, type) => addLessonDirect.mutate({ title, type })}
+              t={t}
+            />
+          </div>
+
+          {sections.map((u: any, ui: number) => {
+            const gap = u.lessons.filter((x: any) => !x.videoAsset && x.type === 'VIDEO').length;
+            const shut = folded.has(u.id);
+            return (
+              <div key={u.id} className="border-t-4 border-outline-variant/25">
+                <div className="group/unit flex min-h-[3.5rem] items-center gap-2 bg-surface-container-high/60 px-2 py-2 sm:px-3">
+                  <button
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-on-surface-variant transition hover:bg-surface-container-high"
+                    aria-expanded={!shut}
+                    title={t(shut ? 'teacher.builder.unfold' : 'teacher.builder.fold')}
+                    onClick={() => toggleFold(u.id)}
+                  >
+                    <span
+                      className={`material-symbols-outlined text-[20px] transition-transform ${shut ? '-rotate-90' : ''}`}
+                    >
+                      expand_more
+                    </span>
+                  </button>
+                  <Badge>{t('teacher.builder.unitBadge', { n: ui + 1 })}</Badge>
+                  <InlineName
+                    value={u.title}
+                    editing={renaming === `unit:${u.id}`}
+                    onEdit={() => setRenaming(`unit:${u.id}`)}
+                    onDone={(title) => {
+                      setRenaming(null);
+                      if (title && title !== u.title) renameUnit.mutate({ unitId: u.id, title });
+                    }}
+                    className="min-w-0 flex-1 font-heading text-lg font-bold"
+                  />
+                  {/* The name is what a teacher navigates by, so it keeps the
                     width. The count is detail, and on a phone it was crowding
                     "الفصل الأول: الطفولة" down to "الفصل…" — while the same
                     figure for the whole course sits at the top of this list. */}
-                <span className="ms-auto hidden shrink-0 text-sm text-on-surface-variant sm:inline">
-                  {gap
-                    ? t('teacher.builder.lessonsMetaMissing', {
-                        count: u.lessons.length,
-                        missing: gap,
-                      })
-                    : t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
-                </span>
-                {/* Arms on the first press instead of stopping the page with a
+                  <span className="ms-auto hidden shrink-0 text-sm text-on-surface-variant sm:inline">
+                    {gap
+                      ? t('teacher.builder.lessonsMetaMissing', {
+                          count: u.lessons.length,
+                          missing: gap,
+                        })
+                      : t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
+                  </span>
+                  {/* Arms on the first press instead of stopping the page with a
                     dialog nobody reads — see DeleteButton. */}
-                <DeleteButton
-                  compact
-                  className="shrink-0 border-0 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/unit:opacity-100"
-                  onConfirm={() => removeUnit.mutateAsync(u.id)}
-                />
-              </div>
+                  <DeleteButton
+                    compact
+                    className="shrink-0 border-0 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/unit:opacity-100"
+                    onConfirm={() => removeUnit.mutateAsync(u.id)}
+                  />
+                </div>
 
-              {!shut && (
-                <>
-                  <ul>
-                    {u.lessons.map((l: any, li: number) => (
-                      <LessonRow
-                        key={l.id}
-                        l={l}
-                        li={li}
-                        open={selectedLessonId === l.id}
-                        onToggle={() =>
-                          selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l)
-                        }
-                        onDelete={async () =>
-                          (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) &&
-                          removeLesson.mutate(l.id)
-                        }
-                        panel={lessonPanel}
+                {!shut && (
+                  <>
+                    <ul>
+                      {u.lessons.map((l: any, li: number) => (
+                        <LessonRow
+                          key={l.id}
+                          l={l}
+                          li={li}
+                          open={selectedLessonId === l.id}
+                          onToggle={() =>
+                            selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l)
+                          }
+                          onDelete={async () =>
+                            (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) &&
+                            removeLesson.mutate(l.id)
+                          }
+                          panel={lessonPanel}
+                          t={t}
+                        />
+                      ))}
+                    </ul>
+                    <div className="border-t border-outline-variant/40 px-4 py-2 sm:px-5">
+                      <AddLessonRow
+                        busy={addLesson.isPending}
+                        placeholder={t('teacher.builder.lessonNamePh')}
+                        label={t('teacher.builder.addLessonCta')}
+                        onAdd={(title, type) => addLesson.mutate({ unitId: u.id, title, type })}
                         t={t}
                       />
-                    ))}
-                  </ul>
-                  <div className="border-t border-outline-variant/40 px-4 py-2 sm:px-5">
-                    <AddLessonRow
-                      busy={addLesson.isPending}
-                      placeholder={t('teacher.builder.lessonNamePh')}
-                      label={t('teacher.builder.addLessonCta')}
-                      onAdd={(title) => addLesson.mutate({ unitId: u.id, title })}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
 
-        <button
-          className="flex w-full items-center justify-center gap-1.5 border-t border-outline-variant/40 py-4 font-bold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary"
-          disabled={addUnit.isPending}
-          onClick={() =>
-            addSection(() =>
-              addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })),
-            )
-          }
-        >
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          {t('teacher.builder.addUnit')}
-        </button>
-      </div>
+          <button
+            className="flex w-full items-center justify-center gap-1.5 border-t border-outline-variant/40 py-4 font-bold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary"
+            disabled={addUnit.isPending}
+            onClick={() =>
+              addSection(() =>
+                addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })),
+              )
+            }
+          >
+            <span className="material-symbols-outlined text-[20px]">add</span>
+            {t('teacher.builder.addUnit')}
+          </button>
+        </div>
+      )}
 
       {/* Publishing, always reachable — no reason to leave the page for it. */}
       <div className="card mt-6 flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="font-heading text-lg font-bold">
-            {isPublished ? t('teacher.builder.publishedTitle') : t('teacher.builder.publishTitle')}
+            {isPublished
+              ? t('teacher.builder.publishedTitle')
+              : t(
+                  isExamCourse
+                    ? 'teacher.builder.publishExamTitle'
+                    : 'teacher.builder.publishTitle',
+                )}
           </p>
           <p className="mt-1 text-sm text-on-surface-variant">
-            {isPublished ? t('teacher.builder.publishedHint') : t('teacher.builder.publishHint')}
+            {isPublished
+              ? t('teacher.builder.publishedHint')
+              : t(isExamCourse ? 'teacher.builder.publishExamHint' : 'teacher.builder.publishHint')}
           </p>
         </div>
         {isPublished ? (
@@ -1731,6 +1816,126 @@ export default function CourseBuilderPage() {
 
 /** A publish failure the teacher can actually read — "no lessons yet" gets
  *  its own line; anything else falls back to whatever the server said. */
+/**
+ * An exam-only course, shown as the exam it is.
+ *
+ * Everything a curriculum needs — sections, lesson names, a YouTube import, a
+ * count of missing videos — is absent here because none of it applies. What is
+ * left is the exam: what it contains, what it is for, and the two things a
+ * teacher actually wants to do with it.
+ *
+ * The last line is the important one. A teacher who decides to build a course
+ * around this exam after all is one click from the full builder, and nothing
+ * is converted or lost when they take it — only this screen changes.
+ */
+function ExamCourseCard({
+  course,
+  examLesson,
+  courseId,
+  onExpand,
+  expanding,
+  t,
+}: {
+  course: { examMode?: string };
+  examLesson: { id: string; title: string };
+  courseId: string;
+  onExpand: () => void;
+  expanding: boolean;
+  t: (k: string, o?: Record<string, unknown>) => string;
+}) {
+  const gate = course.examMode === 'GATE';
+  return (
+    <div className="card mb-5">
+      <div className="mb-4 flex flex-wrap items-start gap-3">
+        <span className="material-symbols-outlined mt-0.5 text-2xl text-primary">quiz</span>
+        <div className="min-w-0 flex-1">
+          <p className="font-heading text-lg font-bold text-on-surface">{examLesson.title}</p>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            {t(gate ? 'teacher.builder.examCourseGate' : 'teacher.builder.examCourseFinal')}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Link
+          className="btn-primary"
+          to={`/teacher/lessons/${examLesson.id}/quiz?course=${courseId}`}
+        >
+          <span className="material-symbols-outlined text-base">edit_note</span>
+          {t('teacher.builder.editQuestions')}
+        </Link>
+        <Link
+          className="btn-secondary"
+          to={`/teacher/lessons/${examLesson.id}/exam/print?course=${courseId}`}
+        >
+          <span className="material-symbols-outlined text-base">print</span>
+          {t('paper.exportPdf')}
+        </Link>
+      </div>
+
+      <div className="mt-5 border-t border-outline-variant/50 pt-4">
+        <p className="mb-2 text-sm text-on-surface-variant">
+          {t('teacher.builder.examCourseExpandHint')}
+        </p>
+        <button className="btn-ghost px-0" disabled={expanding} onClick={onExpand}>
+          <span className="material-symbols-outlined text-base">playlist_add</span>
+          {t('teacher.builder.examCourseExpand')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What an exam or an assignment has, where a lesson would have its video.
+ *
+ * The panel used to offer every lesson the same things: upload a video,
+ * replace it, delete it. On a quiz that is three buttons that do nothing and
+ * no route at all to the questions — the one thing the teacher opened it for.
+ */
+function AssessmentCard({
+  lesson,
+  courseId,
+  t,
+}: {
+  lesson: { id: string; type: string };
+  courseId: string;
+  t: (k: string, o?: Record<string, unknown>) => string;
+}) {
+  const exam = lesson.type === 'QUIZ';
+  const to = exam
+    ? `/teacher/lessons/${lesson.id}/quiz?course=${courseId}`
+    : `/teacher/lessons/${lesson.id}/assignment?course=${courseId}`;
+  return (
+    <div>
+      <p className="mb-2 flex items-center gap-1 text-sm font-bold">
+        <span className="material-symbols-outlined text-base">{exam ? 'quiz' : 'assignment'}</span>
+        {t(exam ? 'teacher.builder.examContent' : 'teacher.builder.assignmentContent')}
+      </p>
+      <div className="rounded-xl border border-outline-variant/50 bg-surface-container-lowest p-4">
+        <p className="mb-3 text-sm text-on-surface-variant">
+          {t(exam ? 'teacher.builder.examContentHint' : 'teacher.builder.assignmentContentHint')}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link className="btn-primary" to={to}>
+            <span className="material-symbols-outlined text-base">edit_note</span>
+            {t(exam ? 'teacher.builder.editQuestions' : 'teacher.builder.editAssignment2')}
+          </Link>
+          {exam && (
+            <Link
+              className="btn-secondary"
+              to={`/teacher/lessons/${lesson.id}/exam/print?course=${courseId}`}
+            >
+              <span className="material-symbols-outlined text-base">print</span>
+              {t('paper.exportPdf')}
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PublishError({ error, t }: { error: unknown; t: (k: string) => string }) {
   const data = (error as any)?.response?.data;
   const text =
@@ -1909,18 +2114,35 @@ function useOnce(busy: boolean) {
   };
 }
 
+/**
+ * Add a lesson — or an exam, or an assignment.
+ *
+ * It only ever made lessons, so a teacher who wanted an exam made a lesson,
+ * opened it, found the exam checkbox and ticked it. Three steps to say a thing
+ * they knew before they started typing. The kind is picked here, and the panel
+ * that opens afterwards shows that kind's options and no others.
+ *
+ * The picker is quiet and defaults to a lesson, because a lesson is what this
+ * row is for nine times in ten.
+ */
+const ADD_KINDS = ['VIDEO', 'QUIZ', 'ASSIGNMENT'] as const;
+type AddKind = (typeof ADD_KINDS)[number];
+
 function AddLessonRow({
   onAdd,
   busy,
   placeholder,
   label,
+  t,
 }: {
-  onAdd: (title: string) => void;
+  onAdd: (title: string, kind: AddKind) => void;
   busy: boolean;
   placeholder: string;
   label: string;
+  t: (k: string, o?: Record<string, unknown>) => string;
 }) {
   const [value, setValue] = useState('');
+  const [kind, setKind] = useState<AddKind>('VIDEO');
   const ref = useRef<HTMLInputElement>(null);
   const once = useOnce(busy);
 
@@ -1928,8 +2150,9 @@ function AddLessonRow({
     const title = value.trim();
     if (!title) return;
     once(() => {
-      onAdd(title);
+      onAdd(title, kind);
       setValue('');
+      setKind('VIDEO');
       ref.current?.focus();
     });
   };
@@ -1939,11 +2162,13 @@ function AddLessonRow({
   // action the teacher already knows is there.
   return (
     <div className="flex min-h-[3rem] items-center gap-3 transition">
-      <span className="material-symbols-outlined text-[22px] text-on-surface-variant">add</span>
+      <span className="material-symbols-outlined text-[22px] text-on-surface-variant">
+        {kind === 'QUIZ' ? 'quiz' : kind === 'ASSIGNMENT' ? 'assignment' : 'add'}
+      </span>
       <input
         ref={ref}
         className="min-w-0 flex-1 rounded-lg bg-transparent px-2 py-2.5 outline-none transition placeholder:text-on-surface-variant/70 focus:bg-surface-container-low"
-        placeholder={placeholder}
+        placeholder={kind === 'VIDEO' ? placeholder : t(`teacher.builder.addKindPh.${kind}`)}
         maxLength={200}
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -1956,14 +2181,29 @@ function AddLessonRow({
       />
       {/* Only once there is something to add: an always-visible button here is
           a permanent call to action on a row that is already an invitation. */}
+      {/* The choice appears once there is something to name, so the row stays
+          a quiet invitation until the teacher has started. */}
       {value.trim() && (
-        <button
-          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-on-primary-fixed transition hover:bg-primary-fixed disabled:opacity-40"
-          disabled={busy}
-          onClick={submit}
-        >
-          {label}
-        </button>
+        <>
+          <select
+            className="shrink-0 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-2 py-1.5 text-sm font-bold text-on-surface-variant"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as AddKind)}
+          >
+            {ADD_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {t(`teacher.builder.addKind.${k}`)}
+              </option>
+            ))}
+          </select>
+          <button
+            className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-on-primary-fixed transition hover:bg-primary-fixed disabled:opacity-40"
+            disabled={busy}
+            onClick={submit}
+          >
+            {label}
+          </button>
+        </>
       )}
     </div>
   );

@@ -198,3 +198,109 @@ describe('CoursesService scope — who sees what', () => {
     });
   });
 });
+
+/**
+ * Publishing a course whose exam has nothing in it.
+ *
+ * Naming a lesson as the course's exam gates the course on passing it, and a
+ * GATE exam with no questions locks every student out permanently — they
+ * cannot pass a paper with no questions, so they never reach the course they
+ * paid for. It was always possible to reach this state; it became easy the day
+ * the builder let a teacher create an exam lesson in one keystroke.
+ */
+describe('publishing a course that is gated behind an empty exam', () => {
+  const build = (overrides: Record<string, unknown> = {}) => {
+    const prisma = {
+      course: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'c1',
+          tenantId: 't1',
+          academyId: 'a1',
+          priceCents: 0,
+          examLessonId: 'lesson1',
+          deletedAt: null,
+        }),
+        findUnique: jest.fn().mockResolvedValue({ examLessonId: 'lesson1' }),
+        update: jest.fn().mockResolvedValue({ id: 'c1' }),
+      },
+      lesson: {
+        count: jest.fn().mockResolvedValue(1),
+        findFirst: jest.fn().mockResolvedValue({ id: 'lesson1' }),
+      },
+      quizQuestion: { count: jest.fn().mockResolvedValue(0) },
+      academy: { findUnique: jest.fn().mockResolvedValue({ kind: 'PERSONAL' }) },
+      ...overrides,
+    };
+    // Only the pieces `update` touches; everything else stays untouched.
+    const service = Object.create(CoursesService.prototype) as CoursesService;
+    Object.assign(service, {
+      prisma,
+      assertCourse: jest.fn().mockResolvedValue(prisma.course.findFirst()),
+      assertAuthored: jest.fn(),
+      academyKind: jest.fn().mockResolvedValue('PERSONAL'),
+      assertCenterPricing: jest.fn(),
+      canEdit: jest.fn().mockReturnValue(true),
+    });
+    return { service, prisma };
+  };
+
+  const scope = { academyId: 'a1', authorTenantId: 't1', manageAll: false };
+
+  it('refuses, and says why in a code the screen can word', async () => {
+    const { service } = build();
+    await expect(
+      service.update(scope, 'c1', { status: 'PUBLISHED' } as never),
+    ).rejects.toMatchObject({ response: { code: 'EMPTY_EXAM' } });
+  });
+
+  it('allows it the moment the exam has a question in it', async () => {
+    const { service, prisma } = build({ quizQuestion: { count: jest.fn().mockResolvedValue(3) } });
+    await expect(
+      service.update(scope, 'c1', { status: 'PUBLISHED' } as never),
+    ).resolves.toBeDefined();
+    expect(prisma.course.update).toHaveBeenCalled();
+  });
+
+  it('says nothing about a course that names no exam at all', async () => {
+    const { service } = build({
+      course: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'c1',
+          tenantId: 't1',
+          academyId: 'a1',
+          priceCents: 0,
+          examLessonId: null,
+          deletedAt: null,
+        }),
+        findUnique: jest.fn().mockResolvedValue({ examLessonId: null }),
+        update: jest.fn().mockResolvedValue({ id: 'c1' }),
+      },
+    });
+    await expect(
+      service.update(scope, 'c1', { status: 'PUBLISHED' } as never),
+    ).resolves.toBeDefined();
+  });
+
+  it('leaves an unfinished quiz that is not the course exam alone', async () => {
+    // Somebody's half-written practice quiz blocks nothing and is nobody's
+    // business but theirs.
+    const { service } = build({
+      course: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'c1',
+          tenantId: 't1',
+          academyId: 'a1',
+          priceCents: 0,
+          examLessonId: null,
+          deletedAt: null,
+        }),
+        findUnique: jest.fn().mockResolvedValue({ examLessonId: null }),
+        update: jest.fn().mockResolvedValue({ id: 'c1' }),
+      },
+      quizQuestion: { count: jest.fn().mockResolvedValue(0) },
+    });
+    await expect(
+      service.update(scope, 'c1', { status: 'PUBLISHED' } as never),
+    ).resolves.toBeDefined();
+  });
+});

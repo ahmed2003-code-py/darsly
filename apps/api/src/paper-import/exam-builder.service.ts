@@ -114,10 +114,13 @@ export class ExamBuilderService {
       // check that can drift from the first.
       courseId = opts.courseId;
     } else {
-      const course = await this.courses.create(scope, {
-        title,
-        description: draft.instructions.join('\n').slice(0, 5_000),
-      });
+      const course = await this.courses.create(
+        scope,
+        { title, description: draft.instructions.join('\n').slice(0, 5_000) },
+        // Recorded, not derived: the builder shows an exam course the exam
+        // rather than "add a section, name a lesson, upload a video".
+        { kind: 'EXAM' },
+      );
       courseId = course.id;
     }
 

@@ -64,15 +64,18 @@ jobs:
       - name: Typecheck web
         run: npx tsc -p apps/web/tsconfig.json --noEmit
 
-      # Warn-only for now: see eslint.config.mjs. This step reports the count
-      # and is not allowed to fail the build until the rules are promoted to
-      # `error` one at a time.
-      - name: Lint (warn-only)
-        continue-on-error: true
+      # Blocking. Every preset rule is still `warn` rather than `error` (see
+      # eslint.config.mjs), so this passes on 614 warnings and fails only on an
+      # error — which today means a syntax error, an unknown rule named in a
+      # disable comment, or a rule somebody has deliberately promoted. That is
+      # a real gate: it cannot be green while the repo does not parse.
+      - name: Lint
         run: npm run lint
 
+      # Blocking. The 530 unformatted files this used to report were formatted
+      # in one pass, so from here a pull request that arrives unformatted is a
+      # failure rather than a warning nobody reads.
       - name: Format check
-        continue-on-error: true
         run: npm run format:check
 
       # No Postgres service container on purpose: the integration specs skip
@@ -109,9 +112,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      # 15 high-severity advisories exist today (see ARCHITECTURE_REVIEW.md
-      # §11 #7). Reporting them now and blocking once they are cleared —
-      # a pipeline that is red on arrival teaches people to ignore it.
+      # The last step still allowed to fail, and the only one. 11 high-severity
+      # advisories remain, all inside multer and path-to-regexp, reachable only
+      # by upgrading NestJS 10 to 12 — 11.x still pins multer 2.0.2. That is a
+      # framework upgrade with an Express 4 to 5 migration inside it, decided
+      # against for now (ARCHITECTURE_REVIEW.md §11 #7), not an oversight.
+      # It becomes blocking the day that upgrade lands.
       - name: Audit
         continue-on-error: true
         run: npm audit --audit-level=high

@@ -29,7 +29,22 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_lin
 RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
   && chmod a+rx /usr/local/bin/deno
 
+# ── Drop privileges, before the app arrives ──────────────────────────────────
+#
+# The process runs as `node`, a non-root user the base image already provides.
+# /data/storage has to be owned by it — a Railway volume mounts as root, so the
+# directory is created and handed over here and the app writes into it as
+# `node`.
+#
+# This used to be a `chown -R node:node /app` at the very end. That walked every
+# file in node_modules, and on an overlay filesystem changing a file's owner
+# copies the whole file into a new layer: 2m43s per build, a second copy of
+# node_modules in the image (721 MB pushed), and a slower export and push.
+# Switching user first and copying with --chown gives the same ownership for
+# free.
+RUN mkdir -p /data/storage /app && chown node:node /data/storage /app
 WORKDIR /app
+USER node
 
 # redis-memory-server (apps/api devDependency — used only by the standalone
 # scripts/audit-multi-replica.mjs a developer runs by hand locally, never by
@@ -52,14 +67,14 @@ ENV REDISMS_DISABLE_POSTINSTALL=1
 # packages/shared-types comes along because its `prepare` script compiles it
 # during install, so its source has to be present for `npm ci` to succeed.
 # It is ~600 lines and changes rarely, which is what makes that affordable.
-COPY package.json package-lock.json ./
-COPY packages/shared-types ./packages/shared-types
-COPY apps/api/package.json ./apps/api/package.json
-COPY apps/web/package.json ./apps/web/package.json
+COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node packages/shared-types ./packages/shared-types
+COPY --chown=node:node apps/api/package.json ./apps/api/package.json
+COPY --chown=node:node apps/web/package.json ./apps/web/package.json
 RUN npm ci
 
 # ── Application ──────────────────────────────────────────────────────────────
-COPY . .
+COPY --chown=node:node . .
 
 # Builds the API and apps/web/dist (shared-types is already built, above).
 RUN npm run build --workspace=@darsly/api
@@ -74,15 +89,6 @@ ENV STORAGE_LOCAL_PATH=/data/storage
 # Pruning them would shrink the image and break the migration step, and the
 # migration step is the one that must never break: a failed `migrate deploy`
 # is how this project has already had an outage (P3009).
-
-# ── Drop privileges ──────────────────────────────────────────────────────────
-#
-# The process ran as root purely because nothing said otherwise. `node` is a
-# non-root user the base image already provides. /data/storage has to be owned
-# by it before the switch — a Railway volume mounts as root, so the directory
-# is created and chowned here and the app writes into it as `node`.
-RUN mkdir -p /data/storage && chown -R node:node /data/storage /app
-USER node
 
 # start = prisma migrate deploy && node dist/main.js (honors $PORT)
 CMD ["npm", "run", "start", "--workspace=@darsly/api"]

@@ -1,14 +1,4 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  NotFoundException,
-  Param,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import {
@@ -26,7 +16,7 @@ import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IsOptionalId } from '../common/validation';
-import { PrismaService } from '../prisma/prisma.service';
+import { CouponsService } from './coupons.service';
 
 class CreateCouponDto {
   @IsString() @Matches(/^[A-Za-z0-9_-]{3,24}$/) code: string;
@@ -50,104 +40,39 @@ class UpdateCouponDto {
 @Controller('teacher/coupons')
 export class CouponsController {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly coupons: CouponsService,
     private readonly audit: AuditService,
   ) {}
 
   @Get()
   @ApiOperation({ summary: '[teacher] List my coupons with usage' })
-  list(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext) {
-    return this.prisma.coupon.findMany({
-      where: { tenantId: ctx.academyId },
-      include: { course: { select: { id: true, title: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+  list(@CurrentAcademy() ctx: AcademyContext) {
+    return this.coupons.list(ctx.academyId);
   }
 
   @Post()
   @ApiOperation({ summary: '[teacher] Create coupon (percent or fixed amount off)' })
   async create(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateCouponDto) {
-    if (!dto.percentOff && !dto.amountOffCents) {
-      throw new BadRequestException('Provide percentOff or amountOffCents');
-    }
-    if (dto.percentOff && dto.amountOffCents) {
-      throw new BadRequestException('Provide either percentOff or amountOffCents, not both');
-    }
-    if (dto.courseId) {
-      const course = await this.prisma.course.findFirst({
-        where: { id: dto.courseId, tenantId: ctx.academyId },
-      });
-      if (!course) throw new NotFoundException('Course not found');
-    }
-    const code = dto.code.trim().toUpperCase();
-    // findUnique deliberately bypasses the soft-delete filter, so it also finds
-    // a soft-deleted coupon. The (tenantId, code) unique constraint still
-    // reserves the code for the dead row, so we must resurrect it rather than
-    // create (which would hit P2002); a still-live coupon is a real conflict.
-    const existing = await this.prisma.coupon.findUnique({
-      where: { tenantId_code: { tenantId: ctx.academyId, code } },
-    });
-    if (existing && !existing.deletedAt) {
-      throw new BadRequestException('Coupon code already exists');
-    }
-    const fields = {
-      percentOff: dto.percentOff ?? null,
-      amountOffCents: dto.amountOffCents ?? null,
-      courseId: dto.courseId ?? null,
-      maxUses: dto.maxUses ?? null,
-      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
-    };
-
-    const coupon = existing
-      ? await this.prisma.coupon.update({
-          where: { id: existing.id },
-          data: { ...fields, isActive: true, usedCount: 0, deletedAt: null },
-        })
-      : await this.prisma.coupon.create({
-          data: { tenantId: ctx.academyId, code, ...fields },
-        });
+    const coupon = await this.coupons.create(ctx.academyId, dto);
     await this.audit.log({
       actorUserId: user.sub,
       action: 'coupon.create',
       entity: 'Coupon',
       entityId: coupon.id,
-      meta: { code },
+      meta: { code: coupon.code },
     });
     return coupon;
   }
 
   @Patch(':id')
   @ApiOperation({ summary: '[teacher] Update coupon (limits, expiry, active)' })
-  async update(
-    @CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext,
-    @Param('id') id: string,
-    @Body() dto: UpdateCouponDto,
-  ) {
-    const coupon = await this.prisma.coupon.findFirst({
-      where: { id, tenantId: ctx.academyId },
-    });
-    if (!coupon) throw new NotFoundException('Coupon not found');
-    return this.prisma.coupon.update({
-      where: { id },
-      data: {
-        ...dto,
-        ...(dto.expiresAt ? { expiresAt: new Date(dto.expiresAt) } : {}),
-      },
-    });
+  update(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: UpdateCouponDto) {
+    return this.coupons.update(ctx.academyId, id, dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: '[teacher] Delete coupon (deactivates if it was ever used)' })
-  async remove(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    const coupon = await this.prisma.coupon.findFirst({
-      where: { id, tenantId: ctx.academyId },
-    });
-    if (!coupon) throw new NotFoundException('Coupon not found');
-    if (coupon.usedCount > 0) {
-      await this.prisma.coupon.update({ where: { id }, data: { isActive: false } });
-      return { id, deactivated: true, deleted: false };
-    }
-    await this.prisma.coupon.delete({ where: { id } });
-    return { id, deactivated: false, deleted: true };
+  remove(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.coupons.remove(ctx.academyId, id);
   }
 }

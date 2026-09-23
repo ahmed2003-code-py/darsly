@@ -85,9 +85,7 @@ export class ChallengeScoringService {
   }
 
   /** Roll up a finished attempt's per-answer results into its final stats. */
-  summarize(
-    answers: { isCorrect: boolean; xpAwarded: number; usedFraction: number | null }[],
-  ): {
+  summarize(answers: { isCorrect: boolean; xpAwarded: number; usedFraction: number | null }[]): {
     score: number;
     correctCount: number;
     wrongCount: number;
@@ -99,7 +97,9 @@ export class ChallengeScoringService {
     const score = answers.reduce((sum, a) => sum + a.xpAwarded, 0);
     const accuracyPct = answers.length ? Math.round((correctCount / answers.length) * 100) : 0;
 
-    const timed = answers.filter((a): a is typeof a & { usedFraction: number } => a.usedFraction != null);
+    const timed = answers.filter(
+      (a): a is typeof a & { usedFraction: number } => a.usedFraction != null,
+    );
     const speedPct = timed.length
       ? Math.round((1 - timed.reduce((sum, a) => sum + a.usedFraction, 0) / timed.length) * 100)
       : null;

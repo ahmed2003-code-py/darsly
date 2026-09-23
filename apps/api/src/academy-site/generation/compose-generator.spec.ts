@@ -23,18 +23,30 @@ import { SiteGeneratorService } from './site-generator.service';
 const lt = (s: string) => ({ ar: s, en: `${s} en` });
 
 const FACTS = {
-  id: 'f1', academyId: 'acad-1', fullName: 'خالد منصور',
+  id: 'f1',
+  academyId: 'acad-1',
+  fullName: 'خالد منصور',
   bio: 'مدرس برمجة لأكثر من ثماني سنوات. أشرح بالكود لا بالسلايدات.\n\nكل أسبوع مشروع صغير ومراجعة سطر بسطر.',
   subjects: ['بايثون', 'قواعد البيانات', 'الويب'],
   stages: ['الجامعة'],
   achievements: ['ثماني سنوات في هندسة البرمجيات', 'درّبت ٤٠٠ طالب'],
   socials: [{ platform: 'whatsapp', url: 'https://wa.me/201000000000' }],
-  rawIntake: '', createdAt: new Date(0), updatedAt: new Date(0),
+  rawIntake: '',
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
 } as unknown as AcademyProfileFacts;
 
 const section = (type: string, pattern: string, over: Record<string, unknown> = {}) => ({
-  type, pattern, emphasis: 'normal', width: 'standard', surface: 'page',
-  align: 'start', columns: 3, accents: [], imageTreatment: 'rounded', ...over,
+  type,
+  pattern,
+  emphasis: 'normal',
+  width: 'standard',
+  surface: 'page',
+  align: 'start',
+  columns: 3,
+  accents: [],
+  imageTreatment: 'rounded',
+  ...over,
 });
 
 const COMPOSITION = {
@@ -59,7 +71,11 @@ const COMPOSITION = {
 
 const COPY = {
   seo: { metaTitle: lt('أكاديمية خالد'), metaDescription: lt('برمجة عملية') },
-  hero: { headline: lt('اتعلم البرمجة بمشاريع حقيقية'), subheadline: lt('من الصفر لمشروع كامل'), ctaLabel: lt('ابدأ') },
+  hero: {
+    headline: lt('اتعلم البرمجة بمشاريع حقيقية'),
+    subheadline: lt('من الصفر لمشروع كامل'),
+    ctaLabel: lt('ابدأ'),
+  },
   about: { heading: lt('طريقتي'), body: lt('فقرة أولى\nفقرة ثانية') },
   toolkitHeading: lt('ما ستتعلمه'),
   highlights: [lt('بايثون'), lt('قواعد البيانات'), lt('الويب'), lt('Git')],
@@ -74,7 +90,11 @@ const COPY = {
     { label: lt('تقييم'), value: '4.9/5' },
   ],
   timelineHeading: lt('المسيرة'),
-  timeline: [1, 2, 3].map((n) => ({ marker: lt(`201${n}`), title: lt(`خطوة ${n}`), body: lt(`تفاصيل ${n}`) })),
+  timeline: [1, 2, 3].map((n) => ({
+    marker: lt(`201${n}`),
+    title: lt(`خطوة ${n}`),
+    body: lt(`تفاصيل ${n}`),
+  })),
   processHeading: lt('الطريقة'),
   process: [1, 2, 3].map((n) => ({ title: lt(`مرحلة ${n}`), body: lt(`شرح ${n}`) })),
   quote: { text: lt('الكود يُشرح وهو يُكتب.'), attribution: lt('خالد منصور') },
@@ -92,7 +112,8 @@ interface Options {
 
 function build(opts: Options = {}) {
   const media = opts.media ?? [
-    { id: 'm-logo', kind: 'LOGO' }, { id: 'm-cover', kind: 'COVER' },
+    { id: 'm-logo', kind: 'LOGO' },
+    { id: 'm-cover', kind: 'COVER' },
     ...Array.from({ length: 6 }, (_, i) => ({ id: `m-g${i}`, kind: 'GALLERY' })),
   ];
   const prisma = {
@@ -115,18 +136,30 @@ function build(opts: Options = {}) {
 
   const prompts: Record<string, string> = {};
   const ai = {
-    completeStructured: jest.fn(async ({ schemaName, messages }: { schemaName: string; messages: { content: string }[] }) => {
-      prompts[schemaName] = messages[0].content;
-      const data = schemaName === COMPOSITION_SCHEMA_NAME
-        ? (opts.composition ?? COMPOSITION)
-        : (opts.copy ?? COPY);
-      return { data, inputTokens: 500, outputTokens: 900, costCents: schemaName === COMPOSITION_SCHEMA_NAME ? 9 : 6 };
-    }),
+    completeStructured: jest.fn(
+      async ({ schemaName, messages }: { schemaName: string; messages: { content: string }[] }) => {
+        prompts[schemaName] = messages[0].content;
+        const data =
+          schemaName === COMPOSITION_SCHEMA_NAME
+            ? (opts.composition ?? COMPOSITION)
+            : (opts.copy ?? COPY);
+        return {
+          data,
+          inputTokens: 500,
+          outputTokens: 900,
+          costCents: schemaName === COMPOSITION_SCHEMA_NAME ? 9 : 6,
+        };
+      },
+    ),
   } as unknown as AiClient;
 
   const rules = new DesignRulesService();
   const generator = new SiteGeneratorService(
-    prisma, ai, rules, new SiteBrainService(rules), new EvolutionService(prisma),
+    prisma,
+    ai,
+    rules,
+    new SiteBrainService(rules),
+    new EvolutionService(prisma),
   );
   return { generator, prisma, ai, prompts };
 }
@@ -147,8 +180,19 @@ describe('buildComposedDraft — the page the model designed', () => {
     // forgot. `about` lands under the hero where a visitor asks who this is;
     // the gallery joins the end of the middle band.
     expect(types(doc)).toEqual([
-      'hero', 'about', 'toolkit', 'courses', 'process', 'timeline', 'stats',
-      'credentials', 'reviews', 'quote', 'faq', 'gallery', 'contact',
+      'hero',
+      'about',
+      'toolkit',
+      'courses',
+      'process',
+      'timeline',
+      'stats',
+      'credentials',
+      'reviews',
+      'quote',
+      'faq',
+      'gallery',
+      'contact',
     ]);
   });
 
@@ -159,9 +203,12 @@ describe('buildComposedDraft — the page the model designed', () => {
     const sparse = {
       ...COMPOSITION,
       sections: [
-        section('hero', 'hero.centered'), section('toolkit', 'toolkit.tags'),
-        section('process', 'process.rail'), section('timeline', 'timeline.rail'),
-        section('quote', 'quote.statement'), section('stats', 'stats.band'),
+        section('hero', 'hero.centered'),
+        section('toolkit', 'toolkit.tags'),
+        section('process', 'process.rail'),
+        section('timeline', 'timeline.rail'),
+        section('quote', 'quote.statement'),
+        section('stats', 'stats.band'),
       ],
     };
     const { doc } = await build({ composition: sparse }).generator.buildComposedDraft('acad-1');
@@ -191,7 +238,7 @@ describe('buildComposedDraft — the page the model designed', () => {
     expect(types(doc)).toContain('quote');
   });
 
-  it('carries each section\'s layout onto its block', async () => {
+  it("carries each section's layout onto its block", async () => {
     const { doc } = await build().generator.buildComposedDraft('acad-1');
     const hero = doc.blocks.find((b) => b.type === 'hero')!;
     expect(hero.section?.pattern).toBe('hero.bento');
@@ -248,7 +295,10 @@ describe('buildComposedDraft — what the model is told', () => {
   });
 
   it('withholds the layouts this teacher cannot fill', async () => {
-    const { generator, prompts } = build({ courseCount: 0, media: [{ id: 'm-logo', kind: 'LOGO' }] });
+    const { generator, prompts } = build({
+      courseCount: 0,
+      media: [{ id: 'm-logo', kind: 'LOGO' }],
+    });
     await generator.buildComposedDraft('acad-1');
     const brief = prompts[COMPOSITION_SCHEMA_NAME];
     // No cover, no gallery, no courses — so none of the patterns that need them
@@ -273,11 +323,20 @@ describe('buildComposedDraft — what the model is told', () => {
     const noExtras = {
       ...COMPOSITION,
       sections: [
-        section('hero', 'hero.centered'), section('about', 'about.statement'),
-        section('toolkit', 'toolkit.tags'), section('credentials', 'credentials.record'),
-        section('courses', 'courses.grid'), section('contact', 'contact.pills'),
+        section('hero', 'hero.centered'),
+        section('about', 'about.statement'),
+        section('toolkit', 'toolkit.tags'),
+        section('credentials', 'credentials.record'),
+        section('courses', 'courses.grid'),
+        section('contact', 'contact.pills'),
       ],
-      content: { statCount: 0, timelineCount: 0, processCount: 0, faqCount: 3, includeQuote: false },
+      content: {
+        statCount: 0,
+        timelineCount: 0,
+        processCount: 0,
+        faqCount: 3,
+        includeQuote: false,
+      },
     };
     const { generator, prompts } = build({ composition: noExtras });
     await generator.buildComposedDraft('acad-1');
@@ -317,7 +376,13 @@ describe('buildComposedDraft — imperfect answers still produce a page', () => 
           section('stats', 'stats.band'),
           section('gallery', 'gallery.mosaic'),
         ],
-        content: { statCount: 0, timelineCount: 0, processCount: 0, faqCount: 4, includeQuote: false },
+        content: {
+          statCount: 0,
+          timelineCount: 0,
+          processCount: 0,
+          faqCount: 4,
+          includeQuote: false,
+        },
       },
       copy: { ...COPY, timeline: [], process: [], stats: [] },
     });
@@ -342,8 +407,12 @@ describe('buildComposedDraft — imperfect answers still produce a page', () => 
 
   it('asks for a retry only when the composition itself is malformed', async () => {
     const { generator } = build({ composition: { archetype: 'programming' } });
-    await expect(generator.buildComposedDraft('acad-1')).rejects.toThrow('AI composition failed validation');
-    await expect(generator.buildComposedDraft('acad-1')).rejects.toMatchObject({ errorClass: 'RETRYABLE' });
+    await expect(generator.buildComposedDraft('acad-1')).rejects.toThrow(
+      'AI composition failed validation',
+    );
+    await expect(generator.buildComposedDraft('acad-1')).rejects.toMatchObject({
+      errorClass: 'RETRYABLE',
+    });
   });
 
   it('never calls the writer when the design failed', async () => {
@@ -358,8 +427,21 @@ describe('buildComposedDraft — regenerating gives something genuinely differen
   const previous = (): { doc: unknown } => {
     const doc = {
       version: 1,
-      theme: { primary: WARM_DESIGN.palette.primary, accent: WARM_DESIGN.palette.accent, designSpec: WARM_DESIGN },
-      blocks: [{ type: 'hero', id: 'h', section: { pattern: 'hero.bento' }, headline: lt('x'), subheadline: lt('y'), ctaLabel: lt('z') }],
+      theme: {
+        primary: WARM_DESIGN.palette.primary,
+        accent: WARM_DESIGN.palette.accent,
+        designSpec: WARM_DESIGN,
+      },
+      blocks: [
+        {
+          type: 'hero',
+          id: 'h',
+          section: { pattern: 'hero.bento' },
+          headline: lt('x'),
+          subheadline: lt('y'),
+          ctaLabel: lt('z'),
+        },
+      ],
     };
     return { doc };
   };
@@ -388,16 +470,25 @@ describe('buildComposedDraft — regenerating gives something genuinely differen
 
 describe('buildComposedDraft — the platform keeps its guarantees', () => {
   it('refuses terminally when there is nothing to write about', async () => {
-    const thin = { ...FACTS, bio: null, rawIntake: null, subjects: [] } as unknown as AcademyProfileFacts;
-    const err: AiJobError = await build({ facts: thin }).generator
-      .buildComposedDraft('acad-1').catch((e) => e);
+    const thin = {
+      ...FACTS,
+      bio: null,
+      rawIntake: null,
+      subjects: [],
+    } as unknown as AcademyProfileFacts;
+    const err: AiJobError = await build({ facts: thin })
+      .generator.buildComposedDraft('acad-1')
+      .catch((e) => e);
     expect(err.errorClass).toBe('TERMINAL');
   });
 
   it('keeps only social links that are real URLs', async () => {
     const facts = {
       ...FACTS,
-      socials: [{ platform: 'ok', url: 'https://wa.me/2' }, { platform: 'bad', url: 'not-a-url' }],
+      socials: [
+        { platform: 'ok', url: 'https://wa.me/2' },
+        { platform: 'bad', url: 'not-a-url' },
+      ],
     } as unknown as AcademyProfileFacts;
     const { doc } = await build({ facts }).generator.buildComposedDraft('acad-1');
     const contact = doc.blocks.find((b) => b.type === 'contact')!;

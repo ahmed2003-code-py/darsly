@@ -43,14 +43,16 @@ describe('AuthConfig', () => {
      * — it is a token the library may treat as already expired or never
      * expiring. Falling back is the only safe reading of a nonsense value.
      */
-    it.each([['a word', 'fifteen'], ['empty', ''], ['zero', '0'], ['negative', '-5']])(
-      'falls back rather than trusting %s',
-      (_label, value) => {
-        process.env.JWT_ACCESS_TTL = value;
+    it.each([
+      ['a word', 'fifteen'],
+      ['empty', ''],
+      ['zero', '0'],
+      ['negative', '-5'],
+    ])('falls back rather than trusting %s', (_label, value) => {
+      process.env.JWT_ACCESS_TTL = value;
 
-        expect(new AuthConfig().accessTtlSeconds).toBe(900);
-      },
-    );
+      expect(new AuthConfig().accessTtlSeconds).toBe(900);
+    });
   });
 
   describe('device lifetimes', () => {

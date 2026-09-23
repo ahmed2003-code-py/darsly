@@ -43,16 +43,17 @@ export default function RovingWatermark({ payload }: { payload: WatermarkPayload
         }}
         dir="ltr"
       >
-        <div className="font-bold">{payload.studentName} · ****{phoneTail}</div>
+        <div className="font-bold">
+          {payload.studentName} · ****{phoneTail}
+        </div>
         <div>{payload.watermarkId}</div>
-        <div>{now.toLocaleTimeString('en-GB')} · {now.toLocaleDateString('en-GB')}</div>
+        <div>
+          {now.toLocaleTimeString('en-GB')} · {now.toLocaleDateString('en-GB')}
+        </div>
       </div>
 
       {/* Faint corner brand mark, static — a second anchor if the roving one is cropped. */}
-      <div
-        className="absolute bottom-2 end-3 font-mono text-[10px] text-white/25"
-        dir="ltr"
-      >
+      <div className="absolute bottom-2 end-3 font-mono text-[10px] text-white/25" dir="ltr">
         {payload.watermarkId}
       </div>
     </div>

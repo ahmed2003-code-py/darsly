@@ -20,7 +20,11 @@ export default function ChallengesPage() {
     <div className="page">
       <PageHeader title={t('challenges.title')} subtitle={t('challenges.subtitle')} />
 
-      {g && <div className="mb-6"><LevelCard g={g} compact /></div>}
+      {g && (
+        <div className="mb-6">
+          <LevelCard g={g} compact />
+        </div>
+      )}
 
       <div className="mb-6 inline-flex gap-1 rounded-full bg-surface-container-high p-1">
         {TABS.map((tb) => (
@@ -28,7 +32,9 @@ export default function ChallengesPage() {
             key={tb}
             onClick={() => setTab(tb)}
             className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition ${
-              tab === tb ? 'bg-surface-container-lowest text-primary shadow-hairline' : 'text-on-surface-variant'
+              tab === tb
+                ? 'bg-surface-container-lowest text-primary shadow-hairline'
+                : 'text-on-surface-variant'
             }`}
           >
             {t(`challenges.tabs.${tb}`)}
@@ -46,7 +52,9 @@ export default function ChallengesPage() {
             <div key={c.id} className="card-hover card flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed">
-                  <span className="material-symbols-outlined text-[22px]">{c.coverIcon || 'bolt'}</span>
+                  <span className="material-symbols-outlined text-[22px]">
+                    {c.coverIcon || 'bolt'}
+                  </span>
                 </span>
                 <Badge tone={c.type === 'RANKED' ? 'primary' : 'neutral'}>
                   {t(c.type === 'RANKED' ? 'challenges.card.ranked' : 'challenges.card.practice')}
@@ -55,11 +63,15 @@ export default function ChallengesPage() {
               <div className="min-w-0 flex-1">
                 <h3 className="truncate font-heading text-lg font-extrabold">{c.title}</h3>
                 <p className="mt-1 text-sm text-on-surface-variant">{c.teacherName}</p>
-                <p className="mt-1 text-xs text-outline">{t('challenges.card.questions', { count: c.questionCount })}</p>
+                <p className="mt-1 text-xs text-outline">
+                  {t('challenges.card.questions', { count: c.questionCount })}
+                </p>
               </div>
 
               {c.bestScore != null && (
-                <p className="text-sm font-bold text-student-gold-ink">{t('challenges.card.bestScore', { score: c.bestScore })}</p>
+                <p className="text-sm font-bold text-student-gold-ink">
+                  {t('challenges.card.bestScore', { score: c.bestScore })}
+                </p>
               )}
               <p className="text-xs text-outline">
                 {c.attemptsRemaining == null
@@ -74,7 +86,11 @@ export default function ChallengesPage() {
                 disabled={!c.canPlay && !c.inProgress}
                 onClick={() => navigate(`/challenges/${c.id}/play`)}
               >
-                {c.inProgress ? t('challenges.card.resume') : c.canPlay ? t('challenges.card.play') : t('challenges.card.review')}
+                {c.inProgress
+                  ? t('challenges.card.resume')
+                  : c.canPlay
+                    ? t('challenges.card.play')
+                    : t('challenges.card.review')}
               </button>
             </div>
           ))}

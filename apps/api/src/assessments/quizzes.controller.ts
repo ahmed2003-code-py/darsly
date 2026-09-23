@@ -23,14 +23,22 @@ export class QuizzesController {
   @Put('teacher/lessons/:lessonId/quiz')
   @Roles(Role.TEACHER)
   @ApiOperation({ summary: '[teacher] Create/update the quiz on a lesson' })
-  upsert(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string, @Body() dto: UpsertQuizDto) {
+  upsert(
+    @CurrentUser() u: JwtPayload,
+    @Param('lessonId') lessonId: string,
+    @Body() dto: UpsertQuizDto,
+  ) {
     return this.quizzes.upsertForTeacher(u.tenantId!, lessonId, dto);
   }
 
   @Put('teacher/lessons/:lessonId/quiz/questions')
   @Roles(Role.TEACHER)
   @ApiOperation({ summary: '[teacher] Replace the quiz question set' })
-  setQuestions(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string, @Body() dto: SetQuizQuestionsDto) {
+  setQuestions(
+    @CurrentUser() u: JwtPayload,
+    @Param('lessonId') lessonId: string,
+    @Body() dto: SetQuizQuestionsDto,
+  ) {
     return this.quizzes.setQuestions(u.tenantId!, lessonId, dto);
   }
 
@@ -44,7 +52,11 @@ export class QuizzesController {
   @Post('teacher/quiz-attempts/:attemptId/grade')
   @Roles(Role.TEACHER)
   @ApiOperation({ summary: '[teacher] Grade short-answer questions & finalize score' })
-  grade(@CurrentUser() u: JwtPayload, @Param('attemptId') attemptId: string, @Body() dto: GradeAttemptDto) {
+  grade(
+    @CurrentUser() u: JwtPayload,
+    @Param('attemptId') attemptId: string,
+    @Body() dto: GradeAttemptDto,
+  ) {
     return this.quizzes.gradeAttempt(u.tenantId!, u.sub, attemptId, dto);
   }
 
@@ -77,7 +89,11 @@ export class QuizzesController {
   @Post('lessons/:lessonId/quiz/attempts')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] Submit answers — auto-graded, short-answer pends' })
-  submit(@CurrentUser() u: JwtPayload, @Param('lessonId') lessonId: string, @Body() dto: SubmitAttemptDto) {
+  submit(
+    @CurrentUser() u: JwtPayload,
+    @Param('lessonId') lessonId: string,
+    @Body() dto: SubmitAttemptDto,
+  ) {
     return this.quizzes.submit(u.sub, lessonId, dto);
   }
 

@@ -58,7 +58,9 @@ export interface PatternDefinition {
 }
 
 /** A section spec with every optional filled in by the Site Brain. */
-export interface ResolvedSection extends Required<Omit<SectionSpec, 'columns' | 'accents' | 'imageTreatment'>> {
+export interface ResolvedSection extends Required<
+  Omit<SectionSpec, 'columns' | 'accents' | 'imageTreatment'>
+> {
   columns: number;
   accents: NonNullable<SectionSpec['accents']>;
   imageTreatment: NonNullable<SectionSpec['imageTreatment']>;

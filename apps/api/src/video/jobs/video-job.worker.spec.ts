@@ -9,12 +9,13 @@ import { VideoJobWorker } from './video-job.worker';
  * that waits for the encode it is holding, and a failure that is not shown to
  * the teacher until it is actually final.
  */
-const job = (over: Record<string, unknown> = {}) => ({
-  id: 'job1',
-  videoAssetId: 'asset1',
-  attempts: 1,
-  ...over,
-}) as any;
+const job = (over: Record<string, unknown> = {}) =>
+  ({
+    id: 'job1',
+    videoAssetId: 'asset1',
+    attempts: 1,
+    ...over,
+  }) as any;
 
 function makeWorker(over: { concurrency?: number } = {}) {
   const jobs = {
@@ -27,7 +28,10 @@ function makeWorker(over: { concurrency?: number } = {}) {
     process: jest.fn().mockResolvedValue(undefined),
     markFailed: jest.fn().mockResolvedValue(undefined),
   } as any;
-  const config = { workerEnabled: true, workerConcurrency: over.concurrency ?? 1 } as VideoJobConfig;
+  const config = {
+    workerEnabled: true,
+    workerConcurrency: over.concurrency ?? 1,
+  } as VideoJobConfig;
   const worker = new VideoJobWorker(config, jobs, processing);
   jest.spyOn(worker['logger'], 'log').mockImplementation(() => undefined);
   jest.spyOn(worker['logger'], 'warn').mockImplementation(() => undefined);

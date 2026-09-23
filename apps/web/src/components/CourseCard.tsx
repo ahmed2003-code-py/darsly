@@ -50,7 +50,10 @@ export default function CourseCard({
   const hours = Math.floor(c.totalDurationSec / 3600);
   const mins = Math.round((c.totalDurationSec % 3600) / 60);
   return (
-    <Link to={`/course/${c.id}`} className="course-card card card-hover flex h-full flex-col gap-3 overflow-hidden p-0">
+    <Link
+      to={`/course/${c.id}`}
+      className="course-card card card-hover flex h-full flex-col gap-3 overflow-hidden p-0"
+    >
       <div className="course-media relative aspect-[16/10] w-full bg-surface-container">
         {c.thumbnailUrl ? (
           <img src={c.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -80,11 +83,15 @@ export default function CourseCard({
           ))}
         </div>
 
-        <h3 className="course-title line-clamp-2 font-heading text-base font-bold leading-snug">{c.title}</h3>
+        <h3 className="course-title line-clamp-2 font-heading text-base font-bold leading-snug">
+          {c.title}
+        </h3>
 
         <p className="course-teacher flex items-center gap-1.5 text-sm text-on-surface-variant">
           {c.teacher.fullName}
-          {c.teacher.verified && <span className="material-symbols-outlined text-[14px] text-primary">verified</span>}
+          {c.teacher.verified && (
+            <span className="material-symbols-outlined text-[14px] text-primary">verified</span>
+          )}
         </p>
 
         {c.avgRating != null ? (
@@ -120,7 +127,9 @@ export default function CourseCard({
             <span className="block text-[11px] text-on-surface-variant">
               {c.pricingModel === 'MONTHLY_SUBSCRIPTION' ? t('browse.perMonth') : t('browse.price')}
             </span>
-            <span className="font-heading text-lg font-bold">{c.priceCents === 0 ? t('browse.free') : egp(c.priceCents)}</span>
+            <span className="font-heading text-lg font-bold">
+              {c.priceCents === 0 ? t('browse.free') : egp(c.priceCents)}
+            </span>
           </span>
           <span className="btn-secondary px-4 py-2 text-xs">{t('browse.view')}</span>
         </div>

@@ -49,7 +49,9 @@ export default function NotificationToasts() {
 
   const push = useCallback(
     (toast: Toast) => {
-      setToasts((prev) => (prev.some((x) => x.id === toast.id) ? prev : [toast, ...prev].slice(0, 4)));
+      setToasts((prev) =>
+        prev.some((x) => x.id === toast.id) ? prev : [toast, ...prev].slice(0, 4),
+      );
       timers.current[toast.id] = window.setTimeout(() => dismiss(toast.id), VISIBLE_MS);
     },
     [dismiss],
@@ -62,7 +64,13 @@ export default function NotificationToasts() {
     const onNotification = (n: any) => {
       if (document.visibilityState !== 'visible') return; // the OS notification has it
       if (!n?.title) return;
-      push({ id: `n-${n.id}`, notifId: n.id, title: n.title, body: n.body ?? '', to: notificationRoute(n, role) });
+      push({
+        id: `n-${n.id}`,
+        notifId: n.id,
+        title: n.title,
+        body: n.body ?? '',
+        to: notificationRoute(n, role),
+      });
     };
     socket.on(RealtimeEvents.NOTIFICATION, onNotification);
     return () => {
@@ -91,13 +99,20 @@ export default function NotificationToasts() {
           key={toast.id}
           className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest p-3 shadow-modal"
         >
-          <button className="flex min-w-0 flex-1 items-start gap-3 text-start" onClick={() => void open(toast)}>
+          <button
+            className="flex min-w-0 flex-1 items-start gap-3 text-start"
+            onClick={() => void open(toast)}
+          >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed">
               <span className="material-symbols-outlined text-[20px]">notifications</span>
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-bold">{toast.title}</span>
-              {toast.body && <span className="line-clamp-2 block text-xs text-on-surface-variant">{toast.body}</span>}
+              {toast.body && (
+                <span className="line-clamp-2 block text-xs text-on-surface-variant">
+                  {toast.body}
+                </span>
+              )}
             </span>
           </button>
           <button

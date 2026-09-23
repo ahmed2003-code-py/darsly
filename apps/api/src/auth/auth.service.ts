@@ -1,11 +1,26 @@
-import { BadRequestException, ConflictException, ForbiddenException, GoneException, Injectable, Logger, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  GoneException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Role, TeacherStatus } from '@darsly/shared-types';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import { InvitationLinksService } from '../academy/invitation-links.service';
 import { provisionTeacherAcademy } from '../academy/provision';
 import { MailService } from '../mail/mail.service';
-import { otpEmail, teacherAppliedAdminEmail, teacherPendingEmail, welcomeStudentEmail } from '../mail/templates';
+import {
+  otpEmail,
+  teacherAppliedAdminEmail,
+  teacherPendingEmail,
+  welcomeStudentEmail,
+} from '../mail/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeviceContext, TokenService } from './token.service';
 import {
@@ -183,8 +198,16 @@ export class AuthService {
     const subjectIds = dto.subjectIds ?? [];
     const stages = dto.stages ?? [];
     if (invite.role === 'TEACHER') {
-      if (!subjectIds.length) throw new BadRequestException({ message: 'Pick at least one subject you teach', code: 'SUBJECT_REQUIRED' });
-      if (!stages.length) throw new BadRequestException({ message: 'Pick at least one stage you teach', code: 'STAGES_REQUIRED' });
+      if (!subjectIds.length)
+        throw new BadRequestException({
+          message: 'Pick at least one subject you teach',
+          code: 'SUBJECT_REQUIRED',
+        });
+      if (!stages.length)
+        throw new BadRequestException({
+          message: 'Pick at least one stage you teach',
+          code: 'STAGES_REQUIRED',
+        });
     }
     if (subjectIds.length) await this.assertSubjectsExist(subjectIds);
     const slug = await this.uniqueSlug(email, fullName);
@@ -427,14 +450,19 @@ export class AuthService {
     const row = await this.prisma.academyActivationToken.findUnique({
       where: { tokenHash: this.hashActivationToken(token) },
       select: {
-        expiresAt: true, usedAt: true, revokedAt: true,
+        expiresAt: true,
+        usedAt: true,
+        revokedAt: true,
         user: { select: { fullName: true, email: true } },
         academy: { select: { name: true } },
       },
     });
     if (!row) throw new NotFoundException('Activation link not found');
     if (row.usedAt || row.revokedAt || row.expiresAt <= new Date()) {
-      throw new GoneException({ message: 'This activation link is no longer valid', code: 'ACTIVATION_LINK_INVALID' });
+      throw new GoneException({
+        message: 'This activation link is no longer valid',
+        code: 'ACTIVATION_LINK_INVALID',
+      });
     }
     return { fullName: row.user.fullName, email: row.user.email, academyName: row.academy.name };
   }
@@ -454,7 +482,10 @@ export class AuthService {
       data: { usedAt: now },
     });
     if (claimed.count !== 1) {
-      throw new GoneException({ message: 'This activation link is no longer valid', code: 'ACTIVATION_LINK_INVALID' });
+      throw new GoneException({
+        message: 'This activation link is no longer valid',
+        code: 'ACTIVATION_LINK_INVALID',
+      });
     }
     const row = await this.prisma.academyActivationToken.findUniqueOrThrow({
       where: { tokenHash },
@@ -516,12 +547,19 @@ export class AuthService {
     if (!row?.passwordHash) throw new UnauthorizedException('Invalid credentials');
     const ok = await argon2.verify(row.passwordHash, dto.currentPassword);
     if (!ok) {
-      throw new BadRequestException({ message: 'Current password is incorrect', code: 'WRONG_PASSWORD' });
+      throw new BadRequestException({
+        message: 'Current password is incorrect',
+        code: 'WRONG_PASSWORD',
+      });
     }
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: user.sub },
-        data: { passwordHash: await argon2.hash(dto.newPassword), failedLogins: 0, lockedUntil: null },
+        data: {
+          passwordHash: await argon2.hash(dto.newPassword),
+          failedLogins: 0,
+          lockedUntil: null,
+        },
       }),
       this.prisma.deviceSession.updateMany({
         where: { userId: user.sub, revokedAt: null, id: { not: user.sessionId } },
@@ -547,7 +585,10 @@ export class AuthService {
       where: { id: userId },
       include: {
         teacherProfile: {
-          include: { subjects: { include: { subject: true } }, grades: { include: { grade: true } } },
+          include: {
+            subjects: { include: { subject: true } },
+            grades: { include: { grade: true } },
+          },
         },
         studentProfile: { include: { grade: true, interests: { include: { subject: true } } } },
       },
@@ -607,8 +648,11 @@ export class AuthService {
    * signing up nothing and tells us it was their fault.
    */
   private async assertGradeExists(gradeId: string) {
-    const grade = await this.prisma.gradeLevel.findFirst({ where: { id: gradeId, isActive: true } });
-    if (!grade) throw new BadRequestException({ message: 'Pick the year you are in', code: 'UNKNOWN_GRADE' });
+    const grade = await this.prisma.gradeLevel.findFirst({
+      where: { id: gradeId, isActive: true },
+    });
+    if (!grade)
+      throw new BadRequestException({ message: 'Pick the year you are in', code: 'UNKNOWN_GRADE' });
   }
 
   /** Every id has to be a live subject — one unknown id fails the whole set,
@@ -619,23 +663,29 @@ export class AuthService {
       where: { id: { in: subjectIds }, isActive: true },
     });
     if (found !== subjectIds.length) {
-      throw new BadRequestException({ message: 'Pick the subjects you teach', code: 'UNKNOWN_SUBJECT' });
+      throw new BadRequestException({
+        message: 'Pick the subjects you teach',
+        code: 'UNKNOWN_SUBJECT',
+      });
     }
   }
 
   private async assertEmailFree(email: string) {
     const exists = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
-    if (exists) throw new ConflictException({ message: 'Email already registered', code: 'EMAIL_TAKEN' });
+    if (exists)
+      throw new ConflictException({ message: 'Email already registered', code: 'EMAIL_TAKEN' });
   }
 
   private async assertPhoneFree(phone: string) {
     const exists = await this.prisma.user.findUnique({ where: { phone }, select: { id: true } });
-    if (exists) throw new ConflictException({ message: 'Phone already registered', code: 'PHONE_TAKEN' });
+    if (exists)
+      throw new ConflictException({ message: 'Phone already registered', code: 'PHONE_TAKEN' });
   }
 
   private async assertUsernameFree(username: string) {
     const exists = await this.prisma.user.findUnique({ where: { username }, select: { id: true } });
-    if (exists) throw new ConflictException({ message: 'Username already taken', code: 'USERNAME_TAKEN' });
+    if (exists)
+      throw new ConflictException({ message: 'Username already taken', code: 'USERNAME_TAKEN' });
   }
 
   /**
@@ -661,7 +711,10 @@ export class AuthService {
     if (base.length < 3) base = `${base}_${randomInt(100, 999)}`;
     for (let i = 0; i < 25; i++) {
       const candidate = i === 0 ? base : `${base}_${i}`;
-      const taken = await this.prisma.user.findUnique({ where: { username: candidate }, select: { id: true } });
+      const taken = await this.prisma.user.findUnique({
+        where: { username: candidate },
+        select: { id: true },
+      });
       if (!taken) return candidate;
     }
     return `${base.slice(0, 22)}_${randomBytes(3).toString('hex')}`;
@@ -675,18 +728,28 @@ export class AuthService {
    * stored it; anything else is a username. Usernames must start with a letter
    * and contain no "@", so the three can never be confused for one another.
    */
-  private resolveIdentifier(raw: string): { email: string } | { phone: string } | { username: string } {
+  private resolveIdentifier(
+    raw: string,
+  ): { email: string } | { phone: string } | { username: string } {
     const v = raw.trim();
     if (v.includes('@')) return { email: v.toLowerCase() };
     const digits = v.replace(/[\s-]/g, '');
-    if (/^(?:\+20|0020|20|0)?1[0125][0-9]{8}$/.test(digits)) return { phone: normalizeEgyptianPhone(digits) };
+    if (/^(?:\+20|0020|20|0)?1[0125][0-9]{8}$/.test(digits))
+      return { phone: normalizeEgyptianPhone(digits) };
     return { username: v.toLowerCase() };
   }
 
   private async uniqueSlug(email: string, fullName: string): Promise<string> {
     const base =
-      email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') ||
-      fullName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') ||
+      email
+        .split('@')[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') ||
+      fullName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') ||
       'teacher';
     for (let i = 0; i < 5; i++) {
       const candidate = i === 0 ? base : `${base}-${randomBytes(2).toString('hex')}`;

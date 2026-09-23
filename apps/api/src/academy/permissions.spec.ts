@@ -14,7 +14,12 @@ describe('permissionsFor — OWNER_ONLY ceiling', () => {
   });
 
   it('a STUDENT membership with a full override still gets nothing sensitive', () => {
-    const set = permissionsFor('STUDENT', ['academy.manage', 'member.manage', 'wallet.withdraw', 'course.write']);
+    const set = permissionsFor('STUDENT', [
+      'academy.manage',
+      'member.manage',
+      'wallet.withdraw',
+      'course.write',
+    ]);
     expect(set.has('academy.manage')).toBe(false);
     expect(set.has('member.manage')).toBe(false);
     expect(set.has('wallet.withdraw')).toBe(false);
@@ -27,7 +32,11 @@ describe('permissionsFor — OWNER_ONLY ceiling', () => {
   });
 
   it('ignores garbage overrides', () => {
-    expect(permissionsFor('ASSISTANT', ['nope', 42, null] as unknown).size).toBe(ROLE_PERMISSIONS.ASSISTANT.length);
-    expect(permissionsFor('ASSISTANT', 'not-an-array').size).toBe(ROLE_PERMISSIONS.ASSISTANT.length);
+    expect(permissionsFor('ASSISTANT', ['nope', 42, null] as unknown).size).toBe(
+      ROLE_PERMISSIONS.ASSISTANT.length,
+    );
+    expect(permissionsFor('ASSISTANT', 'not-an-array').size).toBe(
+      ROLE_PERMISSIONS.ASSISTANT.length,
+    );
   });
 });

@@ -21,7 +21,9 @@ export class AttendanceService {
     const [members, session] = await Promise.all([
       this.prisma.groupMembership.findMany({
         where: { groupId, deletedAt: null },
-        select: { student: { select: { id: true, user: { select: { fullName: true, avatarUrl: true } } } } },
+        select: {
+          student: { select: { id: true, user: { select: { fullName: true, avatarUrl: true } } } },
+        },
       }),
       this.prisma.attendanceSession.findUnique({
         where: { groupId_date: { groupId, date: new Date(date) } },
@@ -50,8 +52,12 @@ export class AttendanceService {
     // Every record must be a genuine member of THIS group — never a bare
     // studentId that happens to belong to someone else's roster.
     const memberIds = new Set(
-      (await this.prisma.groupMembership.findMany({ where: { groupId, deletedAt: null }, select: { studentId: true } }))
-        .map((m) => m.studentId),
+      (
+        await this.prisma.groupMembership.findMany({
+          where: { groupId, deletedAt: null },
+          select: { studentId: true },
+        })
+      ).map((m) => m.studentId),
     );
     const invalid = dto.records.filter((r) => !memberIds.has(r.studentId));
     if (invalid.length) {
@@ -73,14 +79,24 @@ export class AttendanceService {
       dto.records.map((r) =>
         this.prisma.attendanceRecord.upsert({
           where: { sessionId_studentId: { sessionId: session.id, studentId: r.studentId } },
-          create: { sessionId: session.id, studentId: r.studentId, status: r.status, academyId: ctx.academyId, markedBy: ctx.userId },
+          create: {
+            sessionId: session.id,
+            studentId: r.studentId,
+            status: r.status,
+            academyId: ctx.academyId,
+            markedBy: ctx.userId,
+          },
           update: { status: r.status, markedBy: ctx.userId },
         }),
       ),
     );
 
     await this.audit.log({
-      actorUserId: ctx.userId, action: 'attendance.mark', entity: 'AttendanceSession', entityId: session.id, academyId: ctx.academyId,
+      actorUserId: ctx.userId,
+      action: 'attendance.mark',
+      entity: 'AttendanceSession',
+      entityId: session.id,
+      academyId: ctx.academyId,
       meta: { groupId, date: dto.date, count: dto.records.length },
     });
 
@@ -95,7 +111,12 @@ export class AttendanceService {
     const assignedGroupIds =
       ctx.role === 'OWNER'
         ? null
-        : (await this.prisma.groupAssignment.findMany({ where: { userId: ctx.userId }, select: { groupId: true } })).map((a) => a.groupId);
+        : (
+            await this.prisma.groupAssignment.findMany({
+              where: { userId: ctx.userId },
+              select: { groupId: true },
+            })
+          ).map((a) => a.groupId);
 
     const records = await this.prisma.attendanceRecord.findMany({
       where: {
@@ -105,8 +126,17 @@ export class AttendanceService {
       },
       orderBy: { session: { date: 'desc' } },
       take: 200,
-      select: { status: true, markedAt: true, session: { select: { date: true, group: { select: { id: true, name: true } } } } },
+      select: {
+        status: true,
+        markedAt: true,
+        session: { select: { date: true, group: { select: { id: true, name: true } } } },
+      },
     });
-    return records.map((r) => ({ date: r.session.date, group: r.session.group, status: r.status, markedAt: r.markedAt }));
+    return records.map((r) => ({
+      date: r.session.date,
+      group: r.session.group,
+      status: r.status,
+      markedAt: r.markedAt,
+    }));
   }
 }

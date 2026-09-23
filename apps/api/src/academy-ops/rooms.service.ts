@@ -32,16 +32,29 @@ export class RoomsService {
   }
 
   private async assertRoom(ctx: AcademyContext, roomId: string) {
-    const room = await this.prisma.room.findFirst({ where: { id: roomId, academyId: ctx.academyId } });
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, academyId: ctx.academyId },
+    });
     if (!room) throw new NotFoundException('Room not found');
     return room;
   }
 
   async create(ctx: AcademyContext, dto: CreateRoomInput) {
     const room = await this.prisma.room.create({
-      data: { academyId: ctx.academyId, name: dto.name, location: dto.location, capacity: dto.capacity },
+      data: {
+        academyId: ctx.academyId,
+        name: dto.name,
+        location: dto.location,
+        capacity: dto.capacity,
+      },
     });
-    await this.audit.log({ actorUserId: ctx.userId, action: 'room.create', entity: 'Room', entityId: room.id, academyId: ctx.academyId });
+    await this.audit.log({
+      actorUserId: ctx.userId,
+      action: 'room.create',
+      entity: 'Room',
+      entityId: room.id,
+      academyId: ctx.academyId,
+    });
     return room;
   }
 
@@ -57,7 +70,12 @@ export class RoomsService {
       },
     });
     await this.audit.log({
-      actorUserId: ctx.userId, action: 'room.update', entity: 'Room', entityId: roomId, academyId: ctx.academyId, meta: { ...dto },
+      actorUserId: ctx.userId,
+      action: 'room.update',
+      entity: 'Room',
+      entityId: roomId,
+      academyId: ctx.academyId,
+      meta: { ...dto },
     });
     return room;
   }

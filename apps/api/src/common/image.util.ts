@@ -20,15 +20,20 @@ function looksLike(mime: string, bytes: Buffer): boolean {
   switch (mime) {
     case 'image/png':
       // The 8-byte PNG signature.
-      return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+      return (
+        bytes.length >= 8 &&
+        bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      );
     case 'image/jpeg':
       // SOI marker; every JPEG variant begins with it.
       return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
     case 'image/webp':
       // "RIFF" .... "WEBP" — the size field between them is not ours to check.
-      return bytes.length >= 12 &&
+      return (
+        bytes.length >= 12 &&
         bytes.subarray(0, 4).toString('latin1') === 'RIFF' &&
-        bytes.subarray(8, 12).toString('latin1') === 'WEBP';
+        bytes.subarray(8, 12).toString('latin1') === 'WEBP'
+      );
     default:
       return false;
   }
@@ -55,14 +60,19 @@ export function assertMagicMatchesMime(mime: string, bytes: Buffer): void {
  * mime on success; throws a 400 otherwise. Kept small so avatars/thumbnails
  * survive the host's ephemeral filesystem by living in the DB.
  */
-export function validateImageDataUrl(dataUrl: string, maxBytes: number): { mime: string; bytes: number } {
+export function validateImageDataUrl(
+  dataUrl: string,
+  maxBytes: number,
+): { mime: string; bytes: number } {
   if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
     throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
   }
   const commaIdx = dataUrl.indexOf(',');
-  if (commaIdx < 0) throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
+  if (commaIdx < 0)
+    throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
   const header = dataUrl.slice(5, commaIdx);
-  if (!header.includes(';base64')) throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
+  if (!header.includes(';base64'))
+    throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
   const mime = header.split(';')[0].trim().toLowerCase();
   if (!ALLOWED_MIMES.has(mime)) {
     throw new BadRequestException({ message: 'Unsupported image type', code: 'IMAGE_TYPE' });
@@ -74,8 +84,10 @@ export function validateImageDataUrl(dataUrl: string, maxBytes: number): { mime:
     throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
   }
   const bytes = buf.length;
-  if (bytes === 0) throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
-  if (bytes > maxBytes) throw new BadRequestException({ message: 'Image too large', code: 'IMAGE_TOO_LARGE' });
+  if (bytes === 0)
+    throw new BadRequestException({ message: 'Invalid image', code: 'IMAGE_INVALID' });
+  if (bytes > maxBytes)
+    throw new BadRequestException({ message: 'Image too large', code: 'IMAGE_TOO_LARGE' });
   // Size is checked before the signature so an oversized file is rejected
   // without inspecting it, and the declared type is checked against the actual
   // bytes last — see assertMagicMatchesMime.

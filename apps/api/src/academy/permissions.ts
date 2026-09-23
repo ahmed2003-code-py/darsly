@@ -107,13 +107,20 @@ export function assertStaffEligible(
   user: { role: string; isActive: boolean; teacherProfile: { status: string } | null },
   role: AcademyRole,
 ) {
-  if (!user.isActive) throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
+  if (!user.isActive)
+    throw new BadRequestException({ message: 'This account is disabled', code: 'USER_INACTIVE' });
   if (user.role === Role.STUDENT) {
-    throw new BadRequestException({ message: 'A student account cannot hold a staff role', code: 'STUDENT_NOT_STAFF' });
+    throw new BadRequestException({
+      message: 'A student account cannot hold a staff role',
+      code: 'STUDENT_NOT_STAFF',
+    });
   }
   if (role === 'TEACHER' || role === 'ASSISTANT') {
     if (user.role !== Role.TEACHER || user.teacherProfile?.status !== 'APPROVED') {
-      throw new BadRequestException({ message: 'Only an approved teacher can hold this role', code: 'TEACHER_NOT_APPROVED' });
+      throw new BadRequestException({
+        message: 'Only an approved teacher can hold this role',
+        code: 'TEACHER_NOT_APPROVED',
+      });
     }
   }
 }

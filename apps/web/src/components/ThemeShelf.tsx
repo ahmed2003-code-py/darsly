@@ -25,19 +25,43 @@ export function LookPreview({ tokens, tall }: { tokens: AdminThemeTokens; tall?:
       className={`relative flex w-full overflow-hidden rounded-xl ${tall ? 'h-40' : 'h-24'}`}
       style={{ backgroundColor: rgb(tokens.background), border: `1px solid ${rgb(tokens.border)}` }}
     >
-      <span className="flex w-1/5 flex-col gap-1.5 p-2" style={{ backgroundColor: rgb(tokens.sidebar) }}>
+      <span
+        className="flex w-1/5 flex-col gap-1.5 p-2"
+        style={{ backgroundColor: rgb(tokens.sidebar) }}
+      >
         <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: rgb(tokens.primary) }} />
-        <span className="h-1 w-full rounded-full" style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.5 }} />
-        <span className="h-1 w-3/4 rounded-full" style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.35 }} />
+        <span
+          className="h-1 w-full rounded-full"
+          style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.5 }}
+        />
+        <span
+          className="h-1 w-3/4 rounded-full"
+          style={{ backgroundColor: rgb(tokens.textMuted), opacity: 0.35 }}
+        />
       </span>
       <span className="flex flex-1 flex-col">
-        <span className="flex h-4 items-center gap-1 px-2" style={{ backgroundColor: rgb(tokens.topbar) }}>
-          <span className="h-1 w-8 rounded-full" style={{ backgroundColor: rgb(tokens.text), opacity: 0.6 }} />
-          <span className="ms-auto h-2 w-2 rounded-full" style={{ backgroundColor: rgb(tokens.accent) }} />
+        <span
+          className="flex h-4 items-center gap-1 px-2"
+          style={{ backgroundColor: rgb(tokens.topbar) }}
+        >
+          <span
+            className="h-1 w-8 rounded-full"
+            style={{ backgroundColor: rgb(tokens.text), opacity: 0.6 }}
+          />
+          <span
+            className="ms-auto h-2 w-2 rounded-full"
+            style={{ backgroundColor: rgb(tokens.accent) }}
+          />
         </span>
         <span className="flex flex-1 items-end gap-1 p-2">
           <span className="h-3 w-6 rounded-md" style={{ backgroundColor: rgb(tokens.primary) }} />
-          <span className="h-3 w-6 rounded-md" style={{ backgroundColor: rgb(tokens.surfaceElevated), border: `1px solid ${rgb(tokens.border)}` }} />
+          <span
+            className="h-3 w-6 rounded-md"
+            style={{
+              backgroundColor: rgb(tokens.surfaceElevated),
+              border: `1px solid ${rgb(tokens.border)}`,
+            }}
+          />
         </span>
       </span>
     </span>
@@ -119,7 +143,10 @@ export function ThemeApplyGrid({
       {themes.map((entry) => {
         const active = appliedId === entry.id;
         return (
-          <article key={entry.id} className={`card flex flex-col p-3 ${active ? 'ring-2 ring-primary' : ''}`}>
+          <article
+            key={entry.id}
+            className={`card flex flex-col p-3 ${active ? 'ring-2 ring-primary' : ''}`}
+          >
             <LookPreview tokens={entry.tokens} />
             <div className="mt-2 flex items-start justify-between gap-2">
               <Meta entry={entry} />

@@ -35,18 +35,94 @@ interface Template {
 
 const TEMPLATES: Template[] = [
   // ── Daily ──
-  { id: 'DAILY_ONE_LESSON', kind: 'DAILY', target: 1, xp: 50, coins: 25, advancesOn: ['LESSON_COMPLETED'] },
-  { id: 'DAILY_TWO_LESSONS', kind: 'DAILY', target: 2, xp: 80, coins: 40, advancesOn: ['LESSON_COMPLETED'] },
-  { id: 'DAILY_PASS_QUIZ', kind: 'DAILY', target: 1, xp: 60, coins: 30, advancesOn: ['QUIZ_PASSED'], needs: 'quiz' },
-  { id: 'DAILY_STRONG_QUIZ', kind: 'DAILY', target: 1, xp: 80, coins: 40, advancesOn: ['QUIZ_PERFECT'], needs: 'quiz' },
-  { id: 'DAILY_ASSIGNMENT', kind: 'DAILY', target: 1, xp: 60, coins: 30, advancesOn: ['ASSIGNMENT_SUBMITTED'], needs: 'assignment' },
-  { id: 'DAILY_LIVE', kind: 'DAILY', target: 1, xp: 80, coins: 40, advancesOn: ['LIVE_ATTENDED'], needs: 'live' },
+  {
+    id: 'DAILY_ONE_LESSON',
+    kind: 'DAILY',
+    target: 1,
+    xp: 50,
+    coins: 25,
+    advancesOn: ['LESSON_COMPLETED'],
+  },
+  {
+    id: 'DAILY_TWO_LESSONS',
+    kind: 'DAILY',
+    target: 2,
+    xp: 80,
+    coins: 40,
+    advancesOn: ['LESSON_COMPLETED'],
+  },
+  {
+    id: 'DAILY_PASS_QUIZ',
+    kind: 'DAILY',
+    target: 1,
+    xp: 60,
+    coins: 30,
+    advancesOn: ['QUIZ_PASSED'],
+    needs: 'quiz',
+  },
+  {
+    id: 'DAILY_STRONG_QUIZ',
+    kind: 'DAILY',
+    target: 1,
+    xp: 80,
+    coins: 40,
+    advancesOn: ['QUIZ_PERFECT'],
+    needs: 'quiz',
+  },
+  {
+    id: 'DAILY_ASSIGNMENT',
+    kind: 'DAILY',
+    target: 1,
+    xp: 60,
+    coins: 30,
+    advancesOn: ['ASSIGNMENT_SUBMITTED'],
+    needs: 'assignment',
+  },
+  {
+    id: 'DAILY_LIVE',
+    kind: 'DAILY',
+    target: 1,
+    xp: 80,
+    coins: 40,
+    advancesOn: ['LIVE_ATTENDED'],
+    needs: 'live',
+  },
 
   // ── Weekly quests ──
-  { id: 'WEEKLY_FIVE_LESSONS', kind: 'WEEKLY', target: 5, xp: 250, coins: 100, advancesOn: ['LESSON_COMPLETED'] },
-  { id: 'WEEKLY_THREE_QUIZZES', kind: 'WEEKLY', target: 3, xp: 250, coins: 100, advancesOn: ['QUIZ_PASSED'], needs: 'quiz' },
-  { id: 'WEEKLY_FINISH_UNIT', kind: 'WEEKLY', target: 1, xp: 300, coins: 150, advancesOn: ['UNIT_COMPLETED'] },
-  { id: 'WEEKLY_PERFECT_QUIZ', kind: 'WEEKLY', target: 1, xp: 300, coins: 150, advancesOn: ['QUIZ_PERFECT'], needs: 'quiz' },
+  {
+    id: 'WEEKLY_FIVE_LESSONS',
+    kind: 'WEEKLY',
+    target: 5,
+    xp: 250,
+    coins: 100,
+    advancesOn: ['LESSON_COMPLETED'],
+  },
+  {
+    id: 'WEEKLY_THREE_QUIZZES',
+    kind: 'WEEKLY',
+    target: 3,
+    xp: 250,
+    coins: 100,
+    advancesOn: ['QUIZ_PASSED'],
+    needs: 'quiz',
+  },
+  {
+    id: 'WEEKLY_FINISH_UNIT',
+    kind: 'WEEKLY',
+    target: 1,
+    xp: 300,
+    coins: 150,
+    advancesOn: ['UNIT_COMPLETED'],
+  },
+  {
+    id: 'WEEKLY_PERFECT_QUIZ',
+    kind: 'WEEKLY',
+    target: 1,
+    xp: 300,
+    coins: 150,
+    advancesOn: ['QUIZ_PERFECT'],
+    needs: 'quiz',
+  },
 ];
 
 const BY_ID = new Map(TEMPLATES.map((t) => [t.id, t]));
@@ -91,16 +167,24 @@ export class MissionsService {
       // Never both "one lesson" and "two lessons" on the same day — the first
       // is then just a weaker copy of the second.
       const trimmed = pool.filter((t) => t.id !== 'DAILY_ONE_LESSON' || pool.length < 3);
-      created.push(...(await this.createMany(studentId, seededPick(trimmed, 3, studentId + today), today)));
+      created.push(
+        ...(await this.createMany(studentId, seededPick(trimmed, 3, studentId + today), today)),
+      );
     }
     if (!haveWeekly) {
       const pool = available.filter((t) => t.kind === 'WEEKLY');
-      created.push(...(await this.createMany(studentId, seededPick(pool, 2, studentId + week), week)));
+      created.push(
+        ...(await this.createMany(studentId, seededPick(pool, 2, studentId + week), week)),
+      );
     }
     return [...existing, ...created];
   }
 
-  private async createMany(studentId: string, templates: Template[], periodKey: string): Promise<StudentMission[]> {
+  private async createMany(
+    studentId: string,
+    templates: Template[],
+    periodKey: string,
+  ): Promise<StudentMission[]> {
     const out: StudentMission[] = [];
     for (const t of templates) {
       // Backfill progress already made in this period, so a student who did
@@ -199,7 +283,13 @@ export class MissionsService {
         data: { progress, ...(done ? { completedAt: new Date() } : {}) },
       });
       if (res.count && done) {
-        completed.push({ id: m.id, template: m.template, kind: m.kind, xpReward: m.xpReward, coinReward: m.coinReward });
+        completed.push({
+          id: m.id,
+          template: m.template,
+          kind: m.kind,
+          xpReward: m.xpReward,
+          coinReward: m.coinReward,
+        });
       }
     }
     return completed;

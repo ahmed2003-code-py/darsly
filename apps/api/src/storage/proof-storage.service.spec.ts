@@ -12,7 +12,12 @@ import { StorageProvider } from './storage.provider';
 describe('proof screenshots as objects', () => {
   const put = jest.fn(async () => undefined);
   const del = jest.fn(async () => undefined);
-  const getStream = jest.fn(async () => ({ stream: {} as any, contentType: 'image/png', contentLength: 3, totalSize: 3 }));
+  const getStream = jest.fn(async () => ({
+    stream: {} as any,
+    contentType: 'image/png',
+    contentLength: 3,
+    totalSize: 3,
+  }));
   const storage = { put, delete: del, getStream } as unknown as StorageProvider;
   const svc = new ProofStorageService(storage);
   // The complete 8-byte PNG signature. It used to be the first four, which is
@@ -30,7 +35,11 @@ describe('proof screenshots as objects', () => {
   it('stores a data URL as an object under payment-proofs and hands back the key', async () => {
     const key = await svc.store('topups', png, 1_000_000);
     expect(key).toMatch(/^payment-proofs\/topups\/[0-9a-f-]{36}\.png$/);
-    expect(put).toHaveBeenCalledWith(key, expect.any(Buffer), expect.objectContaining({ contentType: 'image/png' }));
+    expect(put).toHaveBeenCalledWith(
+      key,
+      expect.any(Buffer),
+      expect.objectContaining({ contentType: 'image/png' }),
+    );
     // The body is the decoded bytes, not the data URL text.
     expect((put.mock.calls[0] as any)[1]).toEqual(Buffer.from(PNG_MAGIC));
   });
@@ -52,16 +61,24 @@ describe('proof screenshots as objects', () => {
 
   it('opens the object for a link it signed, and only that link', async () => {
     const url = new URL(svc.urlFor('payment-proofs/payments/abc.jpg')!);
-    const k = url.searchParams.get('k')!, e = Number(url.searchParams.get('e')), t = url.searchParams.get('t')!;
+    const k = url.searchParams.get('k')!,
+      e = Number(url.searchParams.get('e')),
+      t = url.searchParams.get('t')!;
     await expect(svc.open(k, e, t)).resolves.toMatchObject({ contentType: 'image/png' });
     expect(getStream).toHaveBeenCalledWith('payment-proofs/payments/abc.jpg');
 
     // A different key with the same signature, a longer life, a bent signature.
-    await expect(svc.open('payment-proofs/payments/other.jpg', e, t)).rejects.toThrow(UnauthorizedException);
+    await expect(svc.open('payment-proofs/payments/other.jpg', e, t)).rejects.toThrow(
+      UnauthorizedException,
+    );
     await expect(svc.open(k, e + 3600, t)).rejects.toThrow(UnauthorizedException);
-    await expect(svc.open(k, e, t.slice(0, -1) + (t.endsWith('A') ? 'B' : 'A'))).rejects.toThrow(UnauthorizedException);
+    await expect(svc.open(k, e, t.slice(0, -1) + (t.endsWith('A') ? 'B' : 'A'))).rejects.toThrow(
+      UnauthorizedException,
+    );
     // And one that has simply run out.
-    await expect(svc.open(k, Math.floor(Date.now() / 1000) - 1, t)).rejects.toThrow(UnauthorizedException);
+    await expect(svc.open(k, Math.floor(Date.now() / 1000) - 1, t)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('never serves a key outside its own prefix, however it is signed', async () => {
@@ -89,14 +106,26 @@ describe('proof screenshots as objects', () => {
  * LocalStorageProvider.resolve() refuses anything escaping its root.
  */
 describe('payment-proof link — threat model regressions', () => {
-  const getStream = jest.fn(async () => ({ stream: {} as any, contentType: 'image/jpeg', contentLength: 1, totalSize: 1 }));
+  const getStream = jest.fn(async () => ({
+    stream: {} as any,
+    contentType: 'image/jpeg',
+    contentLength: 1,
+    totalSize: 1,
+  }));
   const storage = { put: jest.fn(), delete: jest.fn(), getStream } as unknown as StorageProvider;
   const svc = new ProofStorageService(storage);
-  beforeAll(() => { process.env.VIDEO_SIGNING_SECRET = 'test-secret'; process.env.API_URL = 'https://api.example.test'; });
+  beforeAll(() => {
+    process.env.VIDEO_SIGNING_SECRET = 'test-secret';
+    process.env.API_URL = 'https://api.example.test';
+  });
   beforeEach(() => jest.clearAllMocks());
   const parts = (key: string) => {
     const u = new URL(svc.urlFor(key)!);
-    return { k: u.searchParams.get('k')!, e: Number(u.searchParams.get('e')), t: u.searchParams.get('t')! };
+    return {
+      k: u.searchParams.get('k')!,
+      e: Number(u.searchParams.get('e')),
+      t: u.searchParams.get('t')!,
+    };
   };
 
   it('1. the intended link opens the intended object', async () => {
@@ -115,20 +144,39 @@ describe('payment-proof link — threat model regressions', () => {
   });
   it('4/5/6. the same signature cannot be re-pointed at another payment, tenant or Center proof', async () => {
     const { e, t } = parts('payment-proofs/payments/teacherA-student1.jpg');
-    for (const other of ['payment-proofs/payments/teacherA-student2.jpg', 'payment-proofs/payments/teacherB-x.jpg', 'payment-proofs/payments/centerZ-y.jpg', 'payment-proofs/topups/t.jpg']) {
+    for (const other of [
+      'payment-proofs/payments/teacherA-student2.jpg',
+      'payment-proofs/payments/teacherB-x.jpg',
+      'payment-proofs/payments/centerZ-y.jpg',
+      'payment-proofs/topups/t.jpg',
+    ]) {
       await expect(svc.open(other, e, t)).rejects.toThrow(UnauthorizedException);
     }
     expect(getStream).not.toHaveBeenCalled();
   });
   it('7. without any signature at all nothing is served (the route is public but not open)', async () => {
-    await expect(svc.open('payment-proofs/payments/mine.jpg', 9999999999, '')).rejects.toThrow(UnauthorizedException);
+    await expect(svc.open('payment-proofs/payments/mine.jpg', 9999999999, '')).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(getStream).not.toHaveBeenCalled();
   });
   it('8. path traversal and foreign prefixes never reach storage, even correctly signed for that string', async () => {
-    for (const evil of ['../.env', 'payment-proofs/../../.env', 'payment-proofs/payments/../../../etc/passwd', 'hls/x.m3u8', '/payment-proofs/x.jpg', '']) {
+    for (const evil of [
+      '../.env',
+      'payment-proofs/../../.env',
+      'payment-proofs/payments/../../../etc/passwd',
+      'hls/x.m3u8',
+      '/payment-proofs/x.jpg',
+      '',
+    ]) {
       // Sign the hostile string exactly as the service would — the prefix check must still win.
-      let e = 9999999999, t = 'x';
-      try { ({ e, t } = parts(evil)); } catch { /* urlFor refuses non-keys: fine */ }
+      let e = 9999999999,
+        t = 'x';
+      try {
+        ({ e, t } = parts(evil));
+      } catch {
+        /* urlFor refuses non-keys: fine */
+      }
       await expect(svc.open(evil, e, t)).rejects.toThrow();
     }
     expect(getStream).not.toHaveBeenCalled();
@@ -137,7 +185,9 @@ describe('payment-proof link — threat model regressions', () => {
     // isKey passes ("payment-proofs/…"); LocalStorageProvider.resolve() must refuse it.
     const { LocalStorageProvider } = await import('./local-storage.provider');
     const local = new LocalStorageProvider();
-    await expect(local.getBuffer('payment-proofs/../../secret.txt')).rejects.toThrow(/Illegal storage key/);
+    await expect(local.getBuffer('payment-proofs/../../secret.txt')).rejects.toThrow(
+      /Illegal storage key/,
+    );
   });
   it('9. malformed identifiers are refused, not coerced', async () => {
     const { k, t } = parts('payment-proofs/payments/mine.jpg');

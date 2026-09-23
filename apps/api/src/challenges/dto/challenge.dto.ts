@@ -42,9 +42,11 @@ export class UpsertChallengeDto {
   @IsOptional() @IsString() @MaxLength(LIMITS.NAME) topic?: string | null;
 
   /** Whole-challenge time budget in seconds. `null` removes the limit. */
-  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) durationSec?: number | null;
+  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) durationSec?:
+    number | null;
   /** Default per-question time budget in seconds. `null` removes the limit. */
-  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) questionTimeSec?: number | null;
+  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) questionTimeSec?:
+    number | null;
   @IsOptional() @IsEnum(ChallengeScoring) scoring?: ChallengeScoring;
   /** How many times a student may play it. `0` is unlimited. */
   @IsOptional() @IsInt() @Min(0) @Max(50) maxAttempts?: number;
@@ -62,24 +64,33 @@ export class ChallengeQuestionDto {
   @IsOptional() @IsEnum(QuestionType) type?: QuestionType;
   @IsString() @MaxLength(LIMITS.PROSE) prompt: string;
   @IsOptional() @IsString() @MaxLength(LIMITS.URL) imageUrl?: string | null;
-  @IsOptional() @IsArray() @ArrayMaxSize(MAX_OPTIONS)
-  @ValidateNested({ each: true }) @Type(() => ChallengeOptionDto)
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_OPTIONS)
+  @ValidateNested({ each: true })
+  @Type(() => ChallengeOptionDto)
   options?: ChallengeOptionDto[];
-  @IsOptional() @IsArray() @ArrayMaxSize(MAX_OPTIONS) @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_OPTIONS)
+  @IsString({ each: true })
   correctOptionIds?: string[];
   @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) explanation?: string;
   /** Base XP for a correct answer — the scoring engine's speed multiplier
    *  applies on top of this, it is never a raw "point" like a quiz. */
   @IsOptional() @IsInt() @Min(1) @Max(1_000) points?: number;
   /** Overrides the challenge's default question timer. `null` clears it. */
-  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) timeLimitSec?: number | null;
+  @IsOptional() @IsInt() @Min(MIN_TIME_LIMIT_SEC) @Max(MAX_TIME_LIMIT_SEC) timeLimitSec?:
+    number | null;
   @IsOptional() @IsString() @MaxLength(LIMITS.NAME) topic?: string;
   @IsOptional() @IsInt() @Min(1) @Max(5) difficulty?: number;
 }
 
 export class SetChallengeQuestionsDto {
-  @IsArray() @ArrayMaxSize(MAX_QUESTIONS)
-  @ValidateNested({ each: true }) @Type(() => ChallengeQuestionDto)
+  @IsArray()
+  @ArrayMaxSize(MAX_QUESTIONS)
+  @ValidateNested({ each: true })
+  @Type(() => ChallengeQuestionDto)
   questions: ChallengeQuestionDto[];
 }
 
@@ -87,6 +98,8 @@ export class SetChallengeQuestionsDto {
  *  ChallengesService.answer — this is advisory only and never trusted for scoring. */
 export class SubmitChallengeAnswerDto {
   @IsString() @MaxLength(LIMITS.ID) questionId: string;
-  @IsArray() @ArrayMaxSize(MAX_OPTIONS) @IsString({ each: true })
+  @IsArray()
+  @ArrayMaxSize(MAX_OPTIONS)
+  @IsString({ each: true })
   selectedOptionIds: string[];
 }

@@ -33,7 +33,9 @@ export default function AdminGamificationPage() {
               type="button"
               onClick={() => setTab(k)}
               className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition ${
-                tab === k ? 'bg-surface-container-lowest text-primary shadow-hairline' : 'text-on-surface-variant'
+                tab === k
+                  ? 'bg-surface-container-lowest text-primary shadow-hairline'
+                  : 'text-on-surface-variant'
               }`}
             >
               {t(`engagement.tabs.${k}`)}
@@ -82,7 +84,13 @@ function ConfigTab({ tab }: { tab: Exclude<Tab, 'analytics' | 'redemptions'> }) 
     );
 
   const rows =
-    tab === 'rules' ? data!.rules : tab === 'levels' ? data!.levels : tab === 'achievements' ? data!.achievements : data!.rewards;
+    tab === 'rules'
+      ? data!.rules
+      : tab === 'levels'
+        ? data!.levels
+        : tab === 'achievements'
+          ? data!.achievements
+          : data!.rewards;
 
   return (
     <div className="space-y-3">
@@ -108,31 +116,85 @@ function ConfigTab({ tab }: { tab: Exclude<Tab, 'analytics' | 'redemptions'> }) 
 
             {tab === 'rules' && (
               <>
-                <Num label={t('engagement.xpCol')} value={field(id, 'xp', r.xp)} onChange={(v) => set(id, 'xp', v)} />
-                <Num label={t('engagement.coinsCol')} value={field(id, 'coins', r.coins)} onChange={(v) => set(id, 'coins', v)} />
-                <Num label={t('engagement.dailyCap')} hint={t('engagement.capHint')} value={field(id, 'dailyCap', r.dailyCap)} onChange={(v) => set(id, 'dailyCap', v)} />
-                <Num label={t('engagement.perEntity')} hint={t('engagement.capHint')} value={field(id, 'perEntityLimit', r.perEntityLimit)} onChange={(v) => set(id, 'perEntityLimit', v)} />
-                <Toggle label={t('engagement.active')} value={field(id, 'isActive', r.isActive)} onChange={(v) => set(id, 'isActive', v)} />
+                <Num
+                  label={t('engagement.xpCol')}
+                  value={field(id, 'xp', r.xp)}
+                  onChange={(v) => set(id, 'xp', v)}
+                />
+                <Num
+                  label={t('engagement.coinsCol')}
+                  value={field(id, 'coins', r.coins)}
+                  onChange={(v) => set(id, 'coins', v)}
+                />
+                <Num
+                  label={t('engagement.dailyCap')}
+                  hint={t('engagement.capHint')}
+                  value={field(id, 'dailyCap', r.dailyCap)}
+                  onChange={(v) => set(id, 'dailyCap', v)}
+                />
+                <Num
+                  label={t('engagement.perEntity')}
+                  hint={t('engagement.capHint')}
+                  value={field(id, 'perEntityLimit', r.perEntityLimit)}
+                  onChange={(v) => set(id, 'perEntityLimit', v)}
+                />
+                <Toggle
+                  label={t('engagement.active')}
+                  value={field(id, 'isActive', r.isActive)}
+                  onChange={(v) => set(id, 'isActive', v)}
+                />
               </>
             )}
             {tab === 'levels' && (
               <>
-                <Num label={t('engagement.minXp')} value={field(id, 'minXp', r.minXp)} onChange={(v) => set(id, 'minXp', v)} />
-                <Num label={t('engagement.coinsCol')} value={field(id, 'coinReward', r.coinReward)} onChange={(v) => set(id, 'coinReward', v)} />
+                <Num
+                  label={t('engagement.minXp')}
+                  value={field(id, 'minXp', r.minXp)}
+                  onChange={(v) => set(id, 'minXp', v)}
+                />
+                <Num
+                  label={t('engagement.coinsCol')}
+                  value={field(id, 'coinReward', r.coinReward)}
+                  onChange={(v) => set(id, 'coinReward', v)}
+                />
               </>
             )}
             {tab === 'achievements' && (
               <>
-                <Num label={t('engagement.threshold')} value={field(id, 'threshold', r.threshold)} onChange={(v) => set(id, 'threshold', v)} />
-                <Num label={t('engagement.xpCol')} value={field(id, 'xpReward', r.xpReward)} onChange={(v) => set(id, 'xpReward', v)} />
-                <Num label={t('engagement.coinsCol')} value={field(id, 'coinReward', r.coinReward)} onChange={(v) => set(id, 'coinReward', v)} />
-                <Toggle label={t('engagement.active')} value={field(id, 'isActive', r.isActive)} onChange={(v) => set(id, 'isActive', v)} />
+                <Num
+                  label={t('engagement.threshold')}
+                  value={field(id, 'threshold', r.threshold)}
+                  onChange={(v) => set(id, 'threshold', v)}
+                />
+                <Num
+                  label={t('engagement.xpCol')}
+                  value={field(id, 'xpReward', r.xpReward)}
+                  onChange={(v) => set(id, 'xpReward', v)}
+                />
+                <Num
+                  label={t('engagement.coinsCol')}
+                  value={field(id, 'coinReward', r.coinReward)}
+                  onChange={(v) => set(id, 'coinReward', v)}
+                />
+                <Toggle
+                  label={t('engagement.active')}
+                  value={field(id, 'isActive', r.isActive)}
+                  onChange={(v) => set(id, 'isActive', v)}
+                />
               </>
             )}
             {tab === 'rewards' && (
               <>
-                <Num label={t('engagement.cost')} value={field(id, 'costCoins', r.costCoins)} onChange={(v) => set(id, 'costCoins', v)} />
-                <Toggle label={t('engagement.active')} value={field(id, 'isActive', r.isActive)} onChange={(v) => set(id, 'isActive', v)} />
+                <Num
+                  label={t('engagement.cost')}
+                  value={field(id, 'costCoins', r.costCoins)}
+                  onChange={(v) => set(id, 'costCoins', v)}
+                />
+                <Toggle
+                  label={t('engagement.active')}
+                  value={field(id, 'isActive', r.isActive)}
+                  onChange={(v) => set(id, 'isActive', v)}
+                />
               </>
             )}
 
@@ -142,7 +204,9 @@ function ConfigTab({ tab }: { tab: Exclude<Tab, 'analytics' | 'redemptions'> }) 
               disabled={!changed || save.isPending}
               onClick={() => {
                 save.mutate({ path, body: changesFor(id) });
-                setDirty((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith(`${id}.`))));
+                setDirty((d) =>
+                  Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith(`${id}.`))),
+                );
               }}
             >
               {t('engagement.save')}
@@ -154,7 +218,17 @@ function ConfigTab({ tab }: { tab: Exclude<Tab, 'analytics' | 'redemptions'> }) 
   );
 }
 
-function Num({ label, value, onChange, hint }: { label: string; value: number; onChange: (v: number) => void; hint?: string }) {
+function Num({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  hint?: string;
+}) {
   return (
     <label className="w-24">
       <span className="mb-1 block text-xs font-semibold text-on-surface-variant">{label}</span>
@@ -170,10 +244,23 @@ function Num({ label, value, onChange, hint }: { label: string; value: number; o
   );
 }
 
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <label className="flex cursor-pointer items-center gap-2 pb-2">
-      <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-primary" />
+      <input
+        type="checkbox"
+        checked={!!value}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 accent-primary"
+      />
       <span className="text-sm font-semibold text-on-surface-variant">{label}</span>
     </label>
   );
@@ -188,13 +275,18 @@ function RedemptionsTab() {
     queryFn: async () => (await api.get('/admin/gamification/redemptions')).data,
   });
   const fulfil = useMutation({
-    mutationFn: async (id: string) => (await api.post(`/admin/gamification/redemptions/${id}/fulfil`)).data,
+    mutationFn: async (id: string) =>
+      (await api.post(`/admin/gamification/redemptions/${id}/fulfil`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['gamification-redemptions'] }),
   });
 
   if (isLoading) return <Skeleton className="h-40 rounded-3xl" />;
   if (!data?.length) {
-    return <p className="card py-10 text-center text-sm text-on-surface-variant">{t('engagement.noPending')}</p>;
+    return (
+      <p className="card py-10 text-center text-sm text-on-surface-variant">
+        {t('engagement.noPending')}
+      </p>
+    );
   }
 
   return (
@@ -202,11 +294,17 @@ function RedemptionsTab() {
       {data.map((r) => (
         <div key={r.id} className="card flex flex-wrap items-center gap-3">
           <div className="min-w-[12rem] flex-1">
-            <p className="font-heading font-bold">{L({ ar: r.reward.titleAr, en: r.reward.titleEn })}</p>
+            <p className="font-heading font-bold">
+              {L({ ar: r.reward.titleAr, en: r.reward.titleEn })}
+            </p>
             <p className="text-sm text-on-surface-variant">{r.student.user.fullName}</p>
           </div>
           <span className="font-heading font-extrabold text-amber-600">{r.costCoins}</span>
-          <button className="btn-primary px-4 py-1.5 text-sm" onClick={() => fulfil.mutate(r.id)} disabled={fulfil.isPending}>
+          <button
+            className="btn-primary px-4 py-1.5 text-sm"
+            onClick={() => fulfil.mutate(r.id)}
+            disabled={fulfil.isPending}
+          >
             {t('engagement.fulfil')}
           </button>
         </div>

@@ -127,7 +127,10 @@ export class AiGraderService {
       }>({
         system: AiGraderService.SYSTEM,
         messages: [
-          { role: 'user', content: `Mark these ${markable.length} answer(s).\n\n${items.join('\n\n')}` },
+          {
+            role: 'user',
+            content: `Mark these ${markable.length} answer(s).\n\n${items.join('\n\n')}`,
+          },
         ],
         schemaName: 'essay_verdicts',
         schema: AiGraderService.SCHEMA,

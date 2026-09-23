@@ -69,7 +69,9 @@ export class ListenerKeyGuard implements CanActivate {
     // Every acceptance is recorded. This route is meant to be retired, and the
     // only honest way to know it is safe to delete is to see nothing arriving
     // on it.
-    this.logger.warn('legacy shared-key ingest accepted on /payment-events — device should migrate to POST /device/sms-events');
+    this.logger.warn(
+      'legacy shared-key ingest accepted on /payment-events — device should migrate to POST /device/sms-events',
+    );
     return true;
   }
 }

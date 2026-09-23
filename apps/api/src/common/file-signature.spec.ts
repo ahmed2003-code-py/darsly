@@ -24,16 +24,29 @@ async function write(name: string, bytes: number[] | Buffer): Promise<string> {
 /** A plausible body after the signature, so nothing passes on length alone. */
 const pad = (head: number[], n = 64) => Buffer.concat([Buffer.from(head), Buffer.alloc(n, 0x41)]);
 
-const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from('ftypisom'), Buffer.alloc(48, 0)]);
+const MP4 = Buffer.concat([
+  Buffer.from([0, 0, 0, 0x20]),
+  Buffer.from('ftypisom'),
+  Buffer.alloc(48, 0),
+]);
 const PNG = pad([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JPEG = pad([0xff, 0xd8, 0xff, 0xe0]);
 const PDF = pad([0x25, 0x50, 0x44, 0x46, 0x2d]);
 const ZIP = pad([0x50, 0x4b, 0x03, 0x04]);
 const WEBM = pad([0x1a, 0x45, 0xdf, 0xa3]);
-const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4, 1), Buffer.from('WEBP'), Buffer.alloc(32, 0)]);
+const WEBP = Buffer.concat([
+  Buffer.from('RIFF'),
+  Buffer.alloc(4, 1),
+  Buffer.from('WEBP'),
+  Buffer.alloc(32, 0),
+]);
 
-beforeAll(async () => { await fs.mkdir(dir, { recursive: true }); });
-afterAll(async () => { await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined); });
+beforeAll(async () => {
+  await fs.mkdir(dir, { recursive: true });
+});
+afterAll(async () => {
+  await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
+});
 
 describe('assertFileMatchesMime', () => {
   describe('accepts a file that is what it says', () => {
@@ -55,7 +68,10 @@ describe('assertFileMatchesMime', () => {
     it('every OpenXML office type, which are all ZIPs', async () => {
       const p = await write('doc.docx', ZIP);
       await expect(
-        assertFileMatchesMime(p, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        assertFileMatchesMime(
+          p,
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ),
       ).resolves.toBeUndefined();
     });
 
@@ -68,7 +84,9 @@ describe('assertFileMatchesMime', () => {
   describe('refuses a file that is something else', () => {
     it('a ZIP declared as an mp4 — the video path', async () => {
       const p = await write('trojan.mp4', ZIP);
-      await expect(assertFileMatchesMime(p, 'video/mp4')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(assertFileMatchesMime(p, 'video/mp4')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('an executable-ish blob declared as a PDF', async () => {
@@ -82,24 +100,36 @@ describe('assertFileMatchesMime', () => {
      * The case image.util.ts documents: PNG declared, other bytes delivered.
      */
     it('HEIF bytes declared as image/png', async () => {
-      const heif = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypheic'), Buffer.alloc(32, 0)]);
+      const heif = Buffer.concat([
+        Buffer.from([0, 0, 0, 0x18]),
+        Buffer.from('ftypheic'),
+        Buffer.alloc(32, 0),
+      ]);
       const p = await write('photo.png', heif);
-      await expect(assertFileMatchesMime(p, 'image/png')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(assertFileMatchesMime(p, 'image/png')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('a ZIP renamed to .txt — binary cannot pass as plain text', async () => {
       const p = await write('readme.txt', ZIP);
-      await expect(assertFileMatchesMime(p, 'text/plain')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(assertFileMatchesMime(p, 'text/plain')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('anything with a NUL byte declared as plain text', async () => {
       const p = await write('binary.txt', Buffer.from([0x41, 0x00, 0x42]));
-      await expect(assertFileMatchesMime(p, 'text/plain')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(assertFileMatchesMime(p, 'text/plain')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('an empty file', async () => {
       const p = await write('empty.pdf', Buffer.alloc(0));
-      await expect(assertFileMatchesMime(p, 'application/pdf')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(assertFileMatchesMime(p, 'application/pdf')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('a path that cannot be read', async () => {

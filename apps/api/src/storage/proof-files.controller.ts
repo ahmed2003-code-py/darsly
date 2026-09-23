@@ -21,7 +21,12 @@ export class ProofFilesController {
   @Public()
   @Get('payment-proofs')
   @ApiOperation({ summary: 'A payment proof, by signed link' })
-  async proof(@Query('k') k: string, @Query('e') e: string, @Query('t') t: string, @Res() res: Response) {
+  async proof(
+    @Query('k') k: string,
+    @Query('e') e: string,
+    @Query('t') t: string,
+    @Res() res: Response,
+  ) {
     const obj = await this.proofs.open(String(k ?? ''), Number(e), String(t ?? ''));
     res.setHeader('Content-Type', obj.contentType ?? 'image/jpeg');
     if (obj.contentLength) res.setHeader('Content-Length', String(obj.contentLength));

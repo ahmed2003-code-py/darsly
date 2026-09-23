@@ -152,7 +152,10 @@ export class VideoJobService {
    * in thirty seconds has not failed yet, and saying so on screen would be a
    * lie the next attempt has to undo.
    */
-  async fail(jobId: string, err: { message: string; errorClass: VideoErrorClass }): Promise<boolean> {
+  async fail(
+    jobId: string,
+    err: { message: string; errorClass: VideoErrorClass },
+  ): Promise<boolean> {
     const job = await this.prisma.videoJob.findUnique({ where: { id: jobId } });
     if (!job) return false;
 
@@ -171,7 +174,9 @@ export class VideoJobService {
           errorClass: err.errorClass,
         },
       });
-      this.logger.warn(`job ${jobId} retry ${job.attempts}/${MAX_ATTEMPTS} in ${delay}ms: ${err.message}`);
+      this.logger.warn(
+        `job ${jobId} retry ${job.attempts}/${MAX_ATTEMPTS} in ${delay}ms: ${err.message}`,
+      );
       return true;
     }
 

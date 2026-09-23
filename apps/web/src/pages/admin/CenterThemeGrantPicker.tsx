@@ -63,7 +63,9 @@ export function CenterThemeGrantPicker({
       <div className="mb-3">
         <h3 className="font-heading font-bold">{t('centerStudio.grantTitle')}</h3>
         <p className="text-sm text-on-surface-variant">{t('centerStudio.grantHint')}</p>
-        <p className="mt-1 text-xs text-outline">{t('centerStudio.grantCount', { count: selected.length })}</p>
+        <p className="mt-1 text-xs text-outline">
+          {t('centerStudio.grantCount', { count: selected.length })}
+        </p>
       </div>
       <div className="mb-3 flex flex-wrap gap-2">
         {(['ALL', 'PRESET', 'CENTER', 'TEACHER', 'COSMETIC'] as Shelf[]).map((s) => (
@@ -72,7 +74,9 @@ export function CenterThemeGrantPicker({
             type="button"
             onClick={() => setShelf(s)}
             className={`rounded-xl border px-3 py-1.5 text-xs font-bold ${
-              shelf === s ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant text-on-surface-variant'
+              shelf === s
+                ? 'border-primary bg-primary text-on-primary'
+                : 'border-outline-variant text-on-surface-variant'
             }`}
           >
             {t(`adminControlStudio.shelf.${s}`)}
@@ -81,10 +85,14 @@ export function CenterThemeGrantPicker({
       </div>
       {loading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-2xl" />
+          ))}
         </div>
       ) : !shown.length ? (
-        <p className="rounded-xl bg-surface-container-low p-4 text-sm text-on-surface-variant">{t('centerStudio.noLooks')}</p>
+        <p className="rounded-xl bg-surface-container-low p-4 text-sm text-on-surface-variant">
+          {t('centerStudio.noLooks')}
+        </p>
       ) : (
         <ThemeGrantGrid themes={shown} selected={set} onToggle={toggle} />
       )}
@@ -114,7 +122,11 @@ export function CenterThemeGrantEditor({ academyId }: { academyId: string }) {
           disabled={save.isPending || catalog.isLoading}
           onClick={() => save.mutate(selected)}
         >
-          {save.isPending ? t('common.saving') : save.isSuccess ? t('common.saved') : t('centerStudio.saveGrants')}
+          {save.isPending
+            ? t('common.saving')
+            : save.isSuccess
+              ? t('common.saved')
+              : t('centerStudio.saveGrants')}
         </button>
       </div>
       <ErrorNote error={save.error} />

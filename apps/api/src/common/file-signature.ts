@@ -27,8 +27,10 @@ const SNIFF_BYTES = 64;
 
 type Test = (b: Buffer) => boolean;
 
-const startsWith = (...bytes: number[]): Test =>
-  (b) => bytes.every((v, i) => b[i] === v);
+const startsWith =
+  (...bytes: number[]): Test =>
+  (b) =>
+    bytes.every((v, i) => b[i] === v);
 
 /** ISO-BMFF ("ftyp" at offset 4) — mp4, m4v, mov all share it. */
 const isoBmff: Test = (b) => b.length > 11 && b.toString('latin1', 4, 8) === 'ftyp';
@@ -101,7 +103,10 @@ export async function assertFileMatchesMime(filePath: string, mime: string): Pro
       await fh.close();
     }
   } catch {
-    throw new BadRequestException({ message: 'Could not read the uploaded file', code: 'UPLOAD_UNREADABLE' });
+    throw new BadRequestException({
+      message: 'Could not read the uploaded file',
+      code: 'UPLOAD_UNREADABLE',
+    });
   }
 
   if (!head.length || !test(head)) {

@@ -31,7 +31,9 @@ export async function databaseReady(
   try {
     await prisma.$connect();
     for (const model of models) {
-      const delegate = (prisma as unknown as Record<string, { findFirst?: () => Promise<unknown> }>)[model];
+      const delegate = (
+        prisma as unknown as Record<string, { findFirst?: () => Promise<unknown> }>
+      )[model];
       if (!delegate?.findFirst) throw new Error(`unknown model "${model}"`);
       await delegate.findFirst();
     }

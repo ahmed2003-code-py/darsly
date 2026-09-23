@@ -11,7 +11,13 @@ interface Overview {
   missions: { total: number; completed: number; pct: number };
   retention: { day: number; eligible: number; retained: number; pct: number }[];
   streaks: { average: number; longest: number; onAStreak: number };
-  topLearners: { rank: number; name: string; avatarUrl: string | null; level: number; xp: number }[];
+  topLearners: {
+    rank: number;
+    name: string;
+    avatarUrl: string | null;
+    level: number;
+    xp: number;
+  }[];
 }
 
 /**
@@ -46,7 +52,9 @@ export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
     <div className="space-y-6">
       <section>
         <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.activeTitle')}</h2>
-        <div className={`grid grid-cols-2 gap-3 ${platformWide ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+        <div
+          className={`grid grid-cols-2 gap-3 ${platformWide ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}
+        >
           <Metric value={data.activeLearners.today} label={t('engagement.today')} />
           <Metric value={data.activeLearners.week} label={t('engagement.week')} />
           <Metric value={data.activeLearners.month} label={t('engagement.month')} />
@@ -54,7 +62,10 @@ export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
             <Metric
               value={data.returning.lastWeek ? `${data.returning.pct}%` : '—'}
               label={t('engagement.returning')}
-              hint={t('engagement.returningHint', { n: data.returning.returned, of: data.returning.lastWeek })}
+              hint={t('engagement.returningHint', {
+                n: data.returning.returned,
+                of: data.returning.lastWeek,
+              })}
             />
           )}
         </div>
@@ -62,14 +73,20 @@ export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
 
       {platformWide && (
         <section>
-          <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.retentionTitle')}</h2>
+          <h2 className="mb-3 font-heading text-lg font-extrabold">
+            {t('engagement.retentionTitle')}
+          </h2>
           <div className="grid grid-cols-3 gap-3">
             {data.retention.map((r) => (
               <Metric
                 key={r.day}
                 value={r.eligible ? `${r.pct}%` : '—'}
                 label={t('engagement.dayN', { n: r.day })}
-                hint={r.eligible ? t('engagement.ofCohort', { n: r.eligible }) : t('engagement.tooEarly')}
+                hint={
+                  r.eligible
+                    ? t('engagement.ofCohort', { n: r.eligible })
+                    : t('engagement.tooEarly')
+                }
               />
             ))}
           </div>
@@ -77,7 +94,9 @@ export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
       )}
 
       <section>
-        <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.learningTitle')}</h2>
+        <h2 className="mb-3 font-heading text-lg font-extrabold">
+          {t('engagement.learningTitle')}
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Metric value={d.lessonsCompleted ?? 0} label={t('engagement.lessons')} />
           <Metric value={d.quizzesPassed ?? 0} label={t('engagement.quizzes')} />
@@ -89,26 +108,44 @@ export function EngagementPanel({ scope }: { scope: 'teacher' | 'admin' }) {
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="card">
           <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.habitTitle')}</h2>
-          <Row label={t('engagement.missionCompletion')} value={data.missions.total ? `${data.missions.pct}%` : '—'} />
+          <Row
+            label={t('engagement.missionCompletion')}
+            value={data.missions.total ? `${data.missions.pct}%` : '—'}
+          />
           <Row label={t('engagement.onAStreak')} value={data.streaks.onAStreak} />
           <Row label={t('engagement.avgStreak')} value={data.streaks.average} />
           <Row label={t('engagement.longestStreak')} value={data.streaks.longest} />
         </section>
 
         <section className="card">
-          <h2 className="mb-3 font-heading text-lg font-extrabold">{t('engagement.topLearners')}</h2>
+          <h2 className="mb-3 font-heading text-lg font-extrabold">
+            {t('engagement.topLearners')}
+          </h2>
           {!data.topLearners.length ? (
-            <p className="py-6 text-center text-sm text-on-surface-variant">{t('engagement.noneYet')}</p>
+            <p className="py-6 text-center text-sm text-on-surface-variant">
+              {t('engagement.noneYet')}
+            </p>
           ) : (
             <div className="space-y-1.5">
               {data.topLearners.slice(0, 5).map((l) => (
-                <div key={l.rank} className="flex items-center gap-3 rounded-xl bg-surface-container-low px-3 py-2">
-                  <span className="w-6 text-center font-heading font-extrabold text-outline">{l.rank}</span>
+                <div
+                  key={l.rank}
+                  className="flex items-center gap-3 rounded-xl bg-surface-container-low px-3 py-2"
+                >
+                  <span className="w-6 text-center font-heading font-extrabold text-outline">
+                    {l.rank}
+                  </span>
                   <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-container-high text-xs font-bold">
-                    {l.avatarUrl ? <img src={l.avatarUrl} alt="" className="h-full w-full object-cover" /> : l.name.trim().charAt(0)}
+                    {l.avatarUrl ? (
+                      <img src={l.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      l.name.trim().charAt(0)
+                    )}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm font-bold">{l.name}</span>
-                  <span className="shrink-0 text-sm font-extrabold text-student-gold-ink">{compactNum(l.xp)}</span>
+                  <span className="shrink-0 text-sm font-extrabold text-student-gold-ink">
+                    {compactNum(l.xp)}
+                  </span>
                 </div>
               ))}
             </div>

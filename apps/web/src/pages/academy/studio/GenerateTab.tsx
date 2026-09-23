@@ -58,10 +58,12 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
 
   const generate = useMutation({
     mutationFn: async () =>
-      (await api.post('/academy/site/generate', {
-        paletteKey,
-        lang: i18n.language === 'en' ? 'en' : 'ar',
-      })).data as Job,
+      (
+        await api.post('/academy/site/generate', {
+          paletteKey,
+          lang: i18n.language === 'en' ? 'en' : 'ar',
+        })
+      ).data as Job,
     onSuccess: (j) => setJobId(j.id),
     onError: (e: AxiosError) => {
       if (e.response?.status === 409) qc.invalidateQueries({ queryKey: ['studio-overview'] });
@@ -74,7 +76,11 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
 
   const active = job.data && (job.data.status === 'QUEUED' || job.data.status === 'RUNNING');
   const stageLabel =
-    job.data?.stage === 'copy' ? t('studio.generate.stageCopy') : job.data?.stage === 'assemble' ? t('studio.generate.stageAssemble') : t('studio.generate.working');
+    job.data?.stage === 'copy'
+      ? t('studio.generate.stageCopy')
+      : job.data?.stage === 'assemble'
+        ? t('studio.generate.stageAssemble')
+        : t('studio.generate.working');
 
   if (active) {
     return (
@@ -87,7 +93,11 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
           </p>
         </div>
         {job.data?.status === 'QUEUED' && (
-          <button className="btn-secondary" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+          <button
+            className="btn-secondary"
+            onClick={() => cancel.mutate()}
+            disabled={cancel.isPending}
+          >
             {t('studio.generate.cancel')}
           </button>
         )}
@@ -104,8 +114,14 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
           <p className="mt-1 text-sm text-on-surface-variant">{t('studio.generate.successHint')}</p>
         </div>
         <div className="flex gap-2">
-          {onDone && <button className="btn-primary" onClick={onDone}>{t('studio.generate.previewBtn')}</button>}
-          <button className="btn-secondary" onClick={() => setJobId(null)}>{t('studio.generate.again')}</button>
+          {onDone && (
+            <button className="btn-primary" onClick={onDone}>
+              {t('studio.generate.previewBtn')}
+            </button>
+          )}
+          <button className="btn-secondary" onClick={() => setJobId(null)}>
+            {t('studio.generate.again')}
+          </button>
         </div>
       </div>
     );
@@ -118,7 +134,9 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
       <h2 className="mb-1 font-heading text-xl font-bold">{t('studio.generate.title')}</h2>
       <p className="mb-5 text-sm text-on-surface-variant">{t('studio.generate.hint')}</p>
 
-      <span className="mb-2 block text-sm font-semibold text-on-surface-variant">{t('studio.generate.paletteLabel')}</span>
+      <span className="mb-2 block text-sm font-semibold text-on-surface-variant">
+        {t('studio.generate.paletteLabel')}
+      </span>
       <div className="mb-6 grid grid-cols-4 gap-3 sm:grid-cols-8">
         {PALETTES.map((p) => {
           const on = paletteKey === p.key;
@@ -131,14 +149,20 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
               aria-label={t(`studio.generate.palettes.${p.key}`)}
               title={t(`studio.generate.palettes.${p.key}`)}
               className={`group flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
-                on ? 'border-primary shadow-glow' : 'border-outline-variant hover:-translate-y-0.5 hover:border-accent-300'
+                on
+                  ? 'border-primary shadow-glow'
+                  : 'border-outline-variant hover:-translate-y-0.5 hover:border-accent-300'
               }`}
             >
               <span
                 className="h-10 w-full rounded-lg"
                 style={{ background: `linear-gradient(135deg, ${p.primary}, ${p.accent})` }}
               />
-              {on && <span className="material-symbols-outlined text-[16px] text-primary">check_circle</span>}
+              {on && (
+                <span className="material-symbols-outlined text-[16px] text-primary">
+                  check_circle
+                </span>
+              )}
             </button>
           );
         })}
@@ -153,9 +177,17 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
       <ErrorNote error={generate.error && !is409 ? generate.error : null} />
       {is409 && <p className="mb-3 text-sm text-amber-600">{t('studio.generate.oneActive')}</p>}
 
-      <button className="btn-primary" onClick={() => generate.mutate()} disabled={generate.isPending}>
+      <button
+        className="btn-primary"
+        onClick={() => generate.mutate()}
+        disabled={generate.isPending}
+      >
         <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-        {generate.isPending ? t('studio.generate.starting') : failed ? t('studio.generate.retryBtn') : t('studio.generate.generateBtn')}
+        {generate.isPending
+          ? t('studio.generate.starting')
+          : failed
+            ? t('studio.generate.retryBtn')
+            : t('studio.generate.generateBtn')}
       </button>
     </div>
   );

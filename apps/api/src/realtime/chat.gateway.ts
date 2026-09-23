@@ -121,7 +121,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
     // Gate on thread access — otherwise anyone who guesses a thread id could
     // spray typing echoes into (and leak their identity to) that room.
     if (!user || !(await this.chat.canAccessThread(user, threadId))) return;
-    client.to(`thread:${threadId}`).emit(RealtimeEvents.TYPING_ECHO, { threadId, userId: user.sub });
+    client
+      .to(`thread:${threadId}`)
+      .emit(RealtimeEvents.TYPING_ECHO, { threadId, userId: user.sub });
   }
 
   /**

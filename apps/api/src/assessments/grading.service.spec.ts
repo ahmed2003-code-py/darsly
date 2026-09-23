@@ -6,16 +6,19 @@ import { GradingService } from './grading.service';
  * the one a teacher sees first.
  */
 const lessonOf = (courseId: string, courseTitle: string, lessonTitle: string) => ({
-  id: 'l-' + lessonTitle, title: lessonTitle,
+  id: 'l-' + lessonTitle,
+  title: lessonTitle,
   unit: { title: 'الوحدة الأولى', course: { id: courseId, title: courseTitle } },
 });
 const attempt = (id: string, at: string, courseId = 'c1', course = 'الجبر') => ({
-  id, submittedAt: new Date(at),
+  id,
+  submittedAt: new Date(at),
   student: { user: { fullName: 'طالب ' + id } },
   quiz: { lesson: lessonOf(courseId, course, 'درس ' + id) },
 });
 const submission = (id: string, at: string, courseId = 'c1', course = 'الجبر') => ({
-  id, createdAt: new Date(at),
+  id,
+  createdAt: new Date(at),
   student: { user: { fullName: 'طالب ' + id } },
   assignment: { lesson: lessonOf(courseId, course, 'درس ' + id) },
 });
@@ -23,14 +26,24 @@ const submission = (id: string, at: string, courseId = 'c1', course = 'الجب�
 function svc(attempts: any[], submissions: any[]) {
   const seen: any = {};
   const prisma: any = {
-    quizAttempt: { findMany: jest.fn(async (a: any) => { seen.attemptWhere = a.where; return attempts; }) },
-    assignmentSubmission: { findMany: jest.fn(async (a: any) => { seen.subWhere = a.where; return submissions; }) },
+    quizAttempt: {
+      findMany: jest.fn(async (a: any) => {
+        seen.attemptWhere = a.where;
+        return attempts;
+      }),
+    },
+    assignmentSubmission: {
+      findMany: jest.fn(async (a: any) => {
+        seen.subWhere = a.where;
+        return submissions;
+      }),
+    },
   };
   return { s: new GradingService(prisma, { create: jest.fn() } as any), seen };
 }
 
 describe('the marking queue', () => {
-  it('only ever looks inside this teacher\'s own courses', async () => {
+  it("only ever looks inside this teacher's own courses", async () => {
     const { s, seen } = svc([], []);
     await s.queue('t1');
     expect(seen.attemptWhere.quiz.lesson.unit.course.tenantId).toBe('t1');
@@ -43,8 +56,8 @@ describe('the marking queue', () => {
     expect(seen.attemptWhere).toMatchObject({
       needsManualGrading: true,
       gradedAt: null,
-      voidedAt: null,              // an attempt handed back is not waiting
-      submittedAt: { not: null },  // nor is one still being written
+      voidedAt: null, // an attempt handed back is not waiting
+      submittedAt: { not: null }, // nor is one still being written
     });
     expect(seen.subWhere.gradedAt).toBeNull();
   });
@@ -68,11 +81,18 @@ describe('the marking queue', () => {
 
   it('puts the course with the most waiting at the top', async () => {
     const { s } = svc(
-      [attempt('a1', '2026-09-01', 'c1', 'الجبر'), attempt('a2', '2026-09-02', 'c2', 'الهندسة'), attempt('a3', '2026-09-03', 'c2', 'الهندسة')],
+      [
+        attempt('a1', '2026-09-01', 'c1', 'الجبر'),
+        attempt('a2', '2026-09-02', 'c2', 'الهندسة'),
+        attempt('a3', '2026-09-03', 'c2', 'الهندسة'),
+      ],
       [],
     );
     const out = await s.queue('t1');
-    expect(out.map((c: any) => [c.courseId, c.pending])).toEqual([['c2', 2], ['c1', 1]]);
+    expect(out.map((c: any) => [c.courseId, c.pending])).toEqual([
+      ['c2', 2],
+      ['c1', 1],
+    ]);
   });
 
   it('is an empty list, not a failure, when there is nothing to mark', async () => {

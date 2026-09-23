@@ -23,7 +23,15 @@ import { Spinner } from '../../components/ui';
  */
 
 /** Paints one participant's video track onto a real <video> element. */
-function Video({ track, muted, mirror }: { track: MediaStreamTrack | null; muted?: boolean; mirror?: boolean }) {
+function Video({
+  track,
+  muted,
+  mirror,
+}: {
+  track: MediaStreamTrack | null;
+  muted?: boolean;
+  mirror?: boolean;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -58,15 +66,7 @@ function Initial({ name }: { name: string }) {
   );
 }
 
-function Tile({
-  p,
-  teacherId,
-  big,
-}: {
-  p: Participant;
-  teacherId: string | null;
-  big?: boolean;
-}) {
+function Tile({ p, teacherId, big }: { p: Participant; teacherId: string | null; big?: boolean }) {
   const { t } = useTranslation();
   const isTeacher = p.owner || (!!teacherId && p.userId === teacherId);
   return (
@@ -75,10 +75,16 @@ function Tile({
         big ? 'aspect-video w-full' : 'aspect-[4/3]'
       }`}
     >
-      {p.video && p.track ? <Video track={p.track} muted={p.local} mirror={p.local} /> : <Initial name={p.name} />}
+      {p.video && p.track ? (
+        <Video track={p.track} muted={p.local} mirror={p.local} />
+      ) : (
+        <Initial name={p.name} />
+      )}
 
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-2.5 py-2">
-        {!p.audio && <span className="material-symbols-outlined text-[16px] text-error">mic_off</span>}
+        {!p.audio && (
+          <span className="material-symbols-outlined text-[16px] text-error">mic_off</span>
+        )}
         <span className="truncate text-xs font-bold text-white">
           {p.local ? t('meeting.you') : p.name}
         </span>
@@ -176,7 +182,9 @@ export default function MeetingPage() {
     mutationFn: async (startIt: boolean) => {
       if (startIt) {
         const id2 = await meeting.startRecording();
-        return (await api.post(`/teacher/live/${id}/recording/start`, { recordingId: id2 ?? undefined })).data;
+        return (
+          await api.post(`/teacher/live/${id}/recording/start`, { recordingId: id2 ?? undefined })
+        ).data;
       }
       await meeting.stopRecording();
       return (await api.post(`/teacher/live/${id}/recording/stop`)).data;
@@ -219,7 +227,9 @@ export default function MeetingPage() {
       if (p?.sessionId === id) meeting.setEnded(true);
     };
     sock.on('live:ended', onEnded);
-    return () => { sock.off('live:ended', onEnded); };
+    return () => {
+      sock.off('live:ended', onEnded);
+    };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const leaveAndGo = async () => {
@@ -256,7 +266,15 @@ export default function MeetingPage() {
   if (entry.isError) {
     const code = (entry.error as any)?.response?.data?.code;
     const msg =
-      code && ['NOT_OPEN_YET', 'ENDED', 'NOT_STARTED', 'LIVE_NOT_CONFIGURED', 'LIVE_PROVIDER_UNREACHABLE', 'LIVE_PROVIDER_ERROR'].includes(code)
+      code &&
+      [
+        'NOT_OPEN_YET',
+        'ENDED',
+        'NOT_STARTED',
+        'LIVE_NOT_CONFIGURED',
+        'LIVE_PROVIDER_UNREACHABLE',
+        'LIVE_PROVIDER_ERROR',
+      ].includes(code)
         ? t(`meeting.err.${code}`)
         : t('meeting.err.GENERIC');
     return (
@@ -264,7 +282,10 @@ export default function MeetingPage() {
         <div className="w-full max-w-sm text-center">
           <span className="material-symbols-outlined mb-2 text-5xl text-outline">videocam_off</span>
           <p className="mb-6 font-heading text-lg font-bold">{msg}</p>
-          <button className="btn-primary w-full" onClick={() => navigate(isTeacher ? '/teacher/live' : '/live')}>
+          <button
+            className="btn-primary w-full"
+            onClick={() => navigate(isTeacher ? '/teacher/live' : '/live')}
+          >
             {t('meeting.back')}
           </button>
         </div>
@@ -296,14 +317,26 @@ export default function MeetingPage() {
               <Video track={me.track} muted mirror />
             ) : (
               <div className="grid h-full w-full place-items-center">
-                <span className="material-symbols-outlined text-4xl text-outline">videocam_off</span>
+                <span className="material-symbols-outlined text-4xl text-outline">
+                  videocam_off
+                </span>
               </div>
             )}
           </div>
 
           <div className="mb-5 flex justify-center gap-3">
-            <Ctl icon={wantMic ? 'mic' : 'mic_off'} off={!wantMic} label={t('meeting.mic')} onClick={() => setWantMic((v) => !v)} />
-            <Ctl icon={wantCam ? 'videocam' : 'videocam_off'} off={!wantCam} label={t('meeting.cam')} onClick={() => setWantCam((v) => !v)} />
+            <Ctl
+              icon={wantMic ? 'mic' : 'mic_off'}
+              off={!wantMic}
+              label={t('meeting.mic')}
+              onClick={() => setWantMic((v) => !v)}
+            />
+            <Ctl
+              icon={wantCam ? 'videocam' : 'videocam_off'}
+              off={!wantCam}
+              label={t('meeting.cam')}
+              onClick={() => setWantCam((v) => !v)}
+            />
           </div>
 
           <button
@@ -322,7 +355,10 @@ export default function MeetingPage() {
             <span className="material-symbols-outlined">login</span>
             {t('meeting.enter')}
           </button>
-          <button className="mt-2 w-full py-2 text-sm text-outline hover:text-on-surface" onClick={leaveAndGo}>
+          <button
+            className="mt-2 w-full py-2 text-sm text-outline hover:text-on-surface"
+            onClick={leaveAndGo}
+          >
             {t('meeting.back')}
           </button>
         </m.div>
@@ -390,7 +426,11 @@ export default function MeetingPage() {
           )}
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
             <span className="text-xs font-bold text-white">
-              {screener ? t('meeting.sharingScreen', { name: screener.name }) : (stage?.local ? t('meeting.you') : stage?.name ?? '')}
+              {screener
+                ? t('meeting.sharingScreen', { name: screener.name })
+                : stage?.local
+                  ? t('meeting.you')
+                  : (stage?.name ?? '')}
             </span>
           </div>
         </div>
@@ -424,8 +464,18 @@ export default function MeetingPage() {
 
       {/* Controls sit above the home indicator, always reachable with a thumb. */}
       <footer className="flex flex-wrap items-center justify-center gap-2.5 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1">
-        <Ctl icon={meeting.micOn ? 'mic' : 'mic_off'} off={!meeting.micOn} label={t('meeting.mic')} onClick={meeting.toggleMic} />
-        <Ctl icon={meeting.camOn ? 'videocam' : 'videocam_off'} off={!meeting.camOn} label={t('meeting.cam')} onClick={meeting.toggleCam} />
+        <Ctl
+          icon={meeting.micOn ? 'mic' : 'mic_off'}
+          off={!meeting.micOn}
+          label={t('meeting.mic')}
+          onClick={meeting.toggleMic}
+        />
+        <Ctl
+          icon={meeting.camOn ? 'videocam' : 'videocam_off'}
+          off={!meeting.camOn}
+          label={t('meeting.cam')}
+          onClick={meeting.toggleCam}
+        />
         {/* Dimmed rather than hidden on a phone: a teacher who expects to share
             should be told their device cannot, not left hunting for a button. */}
         <Ctl
@@ -494,7 +544,10 @@ export default function MeetingPage() {
                   chat.messages.map((msg) => {
                     const mine = msg.senderId === user?.id;
                     return (
-                      <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        key={msg.id}
+                        className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
+                      >
                         <div
                           className={`max-w-[80%] rounded-2xl px-3 py-2 ${
                             mine ? 'bg-primary text-on-primary' : 'bg-surface-container'
@@ -506,9 +559,16 @@ export default function MeetingPage() {
                               {msg.senderRole === 'TEACHER' && ` · ${t('meeting.teacherBadge')}`}
                             </p>
                           )}
-                          <p className="whitespace-pre-wrap break-words text-sm" dir="auto">{msg.body}</p>
-                          <p className={`mt-0.5 text-[10px] ${mine ? 'text-on-primary/70' : 'text-outline'}`}>
-                            {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                          <p className="whitespace-pre-wrap break-words text-sm" dir="auto">
+                            {msg.body}
+                          </p>
+                          <p
+                            className={`mt-0.5 text-[10px] ${mine ? 'text-on-primary/70' : 'text-outline'}`}
+                          >
+                            {new Date(msg.createdAt).toLocaleTimeString('ar-EG', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                           </p>
                         </div>
                       </div>
@@ -540,7 +600,9 @@ export default function MeetingPage() {
                   disabled={!draft.trim() || chat.sending}
                   className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary disabled:opacity-40"
                 >
-                  <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">send</span>
+                  <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">
+                    send
+                  </span>
                 </button>
               </form>
             </m.aside>
@@ -579,7 +641,11 @@ export default function MeetingPage() {
                     <span className="min-w-0 flex-1 truncate text-sm font-bold">
                       {p.local ? t('meeting.you') : p.name}
                     </span>
-                    {!p.audio && <span className="material-symbols-outlined text-[18px] text-outline">mic_off</span>}
+                    {!p.audio && (
+                      <span className="material-symbols-outlined text-[18px] text-outline">
+                        mic_off
+                      </span>
+                    )}
                     {/* Moderation is the owner's, and only the server can make
                         someone one. */}
                     {amOwner && !p.local && (
@@ -594,9 +660,14 @@ export default function MeetingPage() {
                         <button
                           className="rounded-full p-1.5 text-error/70 hover:text-error"
                           aria-label={t('meeting.removeOne')}
-                          onClick={async () => (await askConfirm(t('meeting.removeConfirm', { name: p.name }))) && meeting.removeParticipant(p.sessionId)}
+                          onClick={async () =>
+                            (await askConfirm(t('meeting.removeConfirm', { name: p.name }))) &&
+                            meeting.removeParticipant(p.sessionId)
+                          }
                         >
-                          <span className="material-symbols-outlined text-[18px]">person_remove</span>
+                          <span className="material-symbols-outlined text-[18px]">
+                            person_remove
+                          </span>
                         </button>
                       </>
                     )}

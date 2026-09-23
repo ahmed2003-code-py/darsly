@@ -38,7 +38,10 @@ export function useLiveChat(sessionId: string, open: boolean) {
       .catch(() => undefined);
 
     const s = getSocket();
-    if (!s) return () => { cancelled = true; };
+    if (!s)
+      return () => {
+        cancelled = true;
+      };
     s.emit('live:join', sessionId);
     const onMessage = (m: LiveMessage) => {
       setMessages((cur) => (cur.some((x) => x.id === m.id) ? cur : [...cur, m]));

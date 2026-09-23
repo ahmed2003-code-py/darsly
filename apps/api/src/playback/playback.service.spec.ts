@@ -45,9 +45,21 @@ const drm: IDrmProvider = {
 
 const studentUser: JwtPayload = { sub: 'u1', role: Role.STUDENT, sessionId: 'dev1' };
 const progressMock: any = { touchActivity: jest.fn().mockResolvedValue(undefined) };
-const notifMock: any = { create: jest.fn().mockResolvedValue({}), pushUnread: jest.fn().mockResolvedValue(0) };
+const notifMock: any = {
+  create: jest.fn().mockResolvedValue({}),
+  pushUnread: jest.fn().mockResolvedValue(0),
+};
 const gamificationMock: any = {
-  record: jest.fn().mockResolvedValue({ awarded: false, xp: 0, coins: 0, totalXp: 0, level: 1, leveledUp: false, achievements: [], missions: [] }),
+  record: jest.fn().mockResolvedValue({
+    awarded: false,
+    xp: 0,
+    coins: 0,
+    totalXp: 0,
+    level: 1,
+    leveledUp: false,
+    achievements: [],
+    missions: [],
+  }),
   checkUnitCompletion: jest.fn().mockResolvedValue({ awarded: false }),
   noteStudySession: jest.fn().mockResolvedValue(undefined),
   checkStreakMilestone: jest.fn().mockResolvedValue({ awarded: false }),
@@ -81,7 +93,15 @@ describe('PlaybackService', () => {
       });
       prisma.lessonProgress.upsert.mockResolvedValue({});
       prisma.playbackSession.create.mockResolvedValue({ id: 'ps1', watermarkId: 'x' });
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
       const ticket = await svc.startSession(studentUser, 'l1', { ip: '1.1.1.1' });
       expect(ticket.watermark.watermarkId).toMatch(/^DRS-\d{5}-[0-9A-F]{4}$/);
       expect(ticket.watermark.studentName).toBe('أحمد');
@@ -94,11 +114,21 @@ describe('PlaybackService', () => {
       const prisma = makePrisma();
       prisma.lesson.findUnique.mockResolvedValue(readyLesson({ isFreePreview: true }));
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 's1', userId: 'u1', user: { fullName: 'A', phone: '' },
+        id: 's1',
+        userId: 'u1',
+        user: { fullName: 'A', phone: '' },
       });
       prisma.lessonProgress.upsert.mockResolvedValue({});
       prisma.playbackSession.create.mockResolvedValue({ id: 'ps1' });
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
       await expect(svc.startSession(studentUser, 'l1', {})).resolves.toHaveProperty('masterUrl');
     });
 
@@ -106,23 +136,47 @@ describe('PlaybackService', () => {
       const prisma = makePrisma();
       prisma.lesson.findUnique.mockResolvedValue(readyLesson());
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 's1', userId: 'u1', user: { fullName: 'A', phone: '' },
+        id: 's1',
+        userId: 'u1',
+        user: { fullName: 'A', phone: '' },
       });
       prisma.enrollment.findUnique.mockResolvedValue(null);
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
-      await expect(svc.startSession(studentUser, 'l1', {})).rejects.toBeInstanceOf(ForbiddenException);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
+      await expect(svc.startSession(studentUser, 'l1', {})).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
     });
 
     it('blocks a drip-locked lesson (N days after enroll)', async () => {
       const prisma = makePrisma();
       prisma.lesson.findUnique.mockResolvedValue(readyLesson({ dripAfterEnrollDays: 7 }));
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 's1', userId: 'u1', user: { fullName: 'A', phone: '' },
+        id: 's1',
+        userId: 'u1',
+        user: { fullName: 'A', phone: '' },
       });
       prisma.enrollment.findUnique.mockResolvedValue({
-        status: 'ACTIVE', expiresAt: null, approvedAt: new Date(), // enrolled today
+        status: 'ACTIVE',
+        expiresAt: null,
+        approvedAt: new Date(), // enrolled today
       });
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
       await expect(svc.startSession(studentUser, 'l1', {})).rejects.toThrow(/not unlocked/i);
     });
 
@@ -130,11 +184,23 @@ describe('PlaybackService', () => {
       const prisma = makePrisma();
       prisma.lesson.findUnique.mockResolvedValue(readyLesson({ isFreePreview: true, viewsCap: 2 }));
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 's1', userId: 'u1', user: { fullName: 'A', phone: '' },
+        id: 's1',
+        userId: 'u1',
+        user: { fullName: 'A', phone: '' },
       });
       prisma.lessonProgress.findUnique.mockResolvedValue({ viewCount: 2 });
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
-      await expect(svc.startSession(studentUser, 'l1', {})).rejects.toThrow(/maximum number of views/i);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
+      await expect(svc.startSession(studentUser, 'l1', {})).rejects.toThrow(
+        /maximum number of views/i,
+      );
       expect(prisma.securityEvent.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: 'VIEW_CAP_EXCEEDED' }) }),
       );
@@ -146,10 +212,22 @@ describe('PlaybackService', () => {
         readyLesson({ isFreePreview: true, videoAsset: { id: 'a', status: 'PROCESSING' } }),
       );
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 's1', userId: 'u1', user: { fullName: 'A', phone: '' },
+        id: 's1',
+        userId: 'u1',
+        user: { fullName: 'A', phone: '' },
       });
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
-      await expect(svc.startSession(studentUser, 'l1', {})).rejects.toBeInstanceOf(BadRequestException);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
+      await expect(svc.startSession(studentUser, 'l1', {})).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
   });
 
@@ -158,16 +236,28 @@ describe('PlaybackService', () => {
       const prisma = makePrisma();
       prisma.lesson.findUnique.mockResolvedValue(readyLesson({ isFreePreview: true }));
       prisma.studentProfile.findUnique.mockResolvedValue({
-        id: 's1', userId: 'u1', user: { fullName: 'A', phone: '' },
+        id: 's1',
+        userId: 'u1',
+        user: { fullName: 'A', phone: '' },
       });
       prisma.lessonProgress.upsert.mockResolvedValue({});
       prisma.playbackSession.create.mockResolvedValue({ id: 'ps2' });
       prisma.playbackSession.findMany.mockResolvedValue([{ ip: '9.9.9.9' }]); // other open session
       prisma.teacherProfile.findUnique.mockResolvedValue({ userId: 'teacherUser' });
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
       await svc.startSession(studentUser, 'l1', { ip: '1.1.1.1' });
       expect(prisma.securityEvent.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ type: 'MULTI_IP_PLAYBACK', severity: 'CRITICAL' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'MULTI_IP_PLAYBACK', severity: 'CRITICAL' }),
+        }),
       );
     });
   });
@@ -181,12 +271,25 @@ describe('PlaybackService', () => {
         ...extra,
       ];
       prisma.playbackSession.findUnique.mockResolvedValue({
-        id: 'ps1', studentId: 's1', tenantId: 't1', lessonId: 'l1', ip: '1.1.1.1', events,
+        id: 'ps1',
+        studentId: 's1',
+        tenantId: 't1',
+        lessonId: 'l1',
+        ip: '1.1.1.1',
+        events,
       });
       prisma.studentProfile.findUnique.mockResolvedValue({ id: 's1' });
       prisma.playbackSession.update.mockResolvedValue({});
       prisma.lessonProgress.updateMany.mockResolvedValue({});
-      return new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
+      return new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
     }
     const rapidSeek = expect.objectContaining({
       data: expect.objectContaining({ type: 'RAPID_SEEK_ANOMALY' }),
@@ -228,7 +331,12 @@ describe('PlaybackService', () => {
     function watching(over: Partial<any> = {}) {
       const prisma = makePrisma();
       prisma.playbackSession.findUnique.mockResolvedValue({
-        id: 'ps1', studentId: 's1', tenantId: 't1', lessonId: 'l1', ip: '1.1.1.1', events: [],
+        id: 'ps1',
+        studentId: 's1',
+        tenantId: 't1',
+        lessonId: 'l1',
+        ip: '1.1.1.1',
+        events: [],
         startedAt: new Date(Date.now() - 20_000),
         lastBeatAt: new Date(Date.now() - 10_000),
         lastPosSec: 100,
@@ -238,12 +346,23 @@ describe('PlaybackService', () => {
       prisma.playbackSession.update.mockResolvedValue({});
       prisma.lessonProgress.updateMany.mockResolvedValue({ count: 1 });
       prisma.lesson.findUnique.mockResolvedValue({
-        durationSec: 200, unit: { courseId: 'c1' }, videoAsset: { durationSec: 200 },
+        durationSec: 200,
+        unit: { courseId: 'c1' },
+        videoAsset: { durationSec: 200 },
       });
-      const svc = new PlaybackService(prisma, drm, progressMock, gamificationMock, notifMock, certMock, entryExamMock);
+      const svc = new PlaybackService(
+        prisma,
+        drm,
+        progressMock,
+        gamificationMock,
+        notifMock,
+        certMock,
+        entryExamMock,
+      );
       return { svc, prisma };
     }
-    const progressWrite = (prisma: any) => prisma.lessonProgress.updateMany.mock.calls.at(-1)[0].data;
+    const progressWrite = (prisma: any) =>
+      prisma.lessonProgress.updateMany.mock.calls.at(-1)[0].data;
 
     it('credits the content watched since the previous beat', async () => {
       const { svc, prisma } = watching();
@@ -258,7 +377,12 @@ describe('PlaybackService', () => {
       const { svc, prisma } = watching();
       prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 20 });
       // Playhead jumps 100 seconds, but only 10 seconds of real time passed.
-      await svc.heartbeat(studentUser, 'ps1', { positionSec: 200, type: 'seek', watchedPct: 100 }, {});
+      await svc.heartbeat(
+        studentUser,
+        'ps1',
+        { positionSec: 200, type: 'seek', watchedPct: 100 },
+        {},
+      );
       const data = progressWrite(prisma);
       // 10s real time × 2.5 max rate = 25s creditable, not the 100s claimed.
       expect(data.watchedSec).toBe(45);
@@ -268,7 +392,12 @@ describe('PlaybackService', () => {
     it('ignores a forged watchedPct entirely', async () => {
       const { svc, prisma } = watching();
       prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 0 });
-      await svc.heartbeat(studentUser, 'ps1', { positionSec: 101, type: 'hb', watchedPct: 100 }, {});
+      await svc.heartbeat(
+        studentUser,
+        'ps1',
+        { positionSec: 101, type: 'hb', watchedPct: 100 },
+        {},
+      );
       // One second of content advanced is one second credited, whatever the
       // client claims about the percentage.
       expect(progressWrite(prisma).watchedSec).toBe(1);
@@ -278,7 +407,11 @@ describe('PlaybackService', () => {
     it('accumulates across sessions, so a resumed lesson can finish', async () => {
       // A fresh session — the ceiling that used to reset and make completion
       // unreachable — carrying 170 of 200 seconds already earned earlier.
-      const { svc, prisma } = watching({ startedAt: new Date(), lastBeatAt: new Date(Date.now() - 8_000), lastPosSec: 170 });
+      const { svc, prisma } = watching({
+        startedAt: new Date(),
+        lastBeatAt: new Date(Date.now() - 8_000),
+        lastPosSec: 170,
+      });
       prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 170 });
       await svc.heartbeat(studentUser, 'ps1', { positionSec: 180, type: 'hb', watchedPct: 90 }, {});
       const data = progressWrite(prisma);
@@ -290,26 +423,44 @@ describe('PlaybackService', () => {
     });
 
     it('completes on a genuine end-of-video at the kinder bar', async () => {
-      const { svc, prisma } = watching({ lastBeatAt: new Date(Date.now() - 5_000), lastPosSec: 145 });
+      const { svc, prisma } = watching({
+        lastBeatAt: new Date(Date.now() - 5_000),
+        lastPosSec: 145,
+      });
       prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 145 });
       // 150/200 = 75%: short of the 90% rule, past the 70% end-of-video bar.
-      await svc.heartbeat(studentUser, 'ps1', { positionSec: 150, type: 'ended', watchedPct: 100 }, {});
+      await svc.heartbeat(
+        studentUser,
+        'ps1',
+        { positionSec: 150, type: 'ended', watchedPct: 100 },
+        {},
+      );
       expect(progressWrite(prisma).completedAt).toBeInstanceOf(Date);
     });
 
     it('still refuses an `ended` that was never watched', async () => {
       const { svc, prisma } = watching({ lastBeatAt: new Date(Date.now() - 2_000), lastPosSec: 0 });
       prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 0 });
-      await svc.heartbeat(studentUser, 'ps1', { positionSec: 200, type: 'ended', watchedPct: 100 }, {});
+      await svc.heartbeat(
+        studentUser,
+        'ps1',
+        { positionSec: 200, type: 'ended', watchedPct: 100 },
+        {},
+      );
       const data = progressWrite(prisma);
       expect(data.watchedSec).toBe(5); // 2s of real time, nothing more
       expect(data.completedAt).toBeUndefined();
     });
 
     it('falls back to the video asset when the lesson has no duration', async () => {
-      const { svc, prisma } = watching({ lastBeatAt: new Date(Date.now() - 10_000), lastPosSec: 170 });
+      const { svc, prisma } = watching({
+        lastBeatAt: new Date(Date.now() - 10_000),
+        lastPosSec: 170,
+      });
       prisma.lesson.findUnique.mockResolvedValue({
-        durationSec: 0, unit: { courseId: 'c1' }, videoAsset: { durationSec: 200 },
+        durationSec: 0,
+        unit: { courseId: 'c1' },
+        videoAsset: { durationSec: 200 },
       });
       prisma.lessonProgress.findUnique.mockResolvedValue({ watchedSec: 175 });
       await svc.heartbeat(studentUser, 'ps1', { positionSec: 180, type: 'hb', watchedPct: 90 }, {});

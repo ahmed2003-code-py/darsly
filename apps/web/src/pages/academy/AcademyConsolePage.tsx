@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { imageToDataUrl } from '../../lib/image';
-import { invitationJoinUrl, useCreateInvitationLink, useInvitationLinks, useRevokeInvitationLink } from '../../lib/invitationLinks';
+import {
+  invitationJoinUrl,
+  useCreateInvitationLink,
+  useInvitationLinks,
+  useRevokeInvitationLink,
+} from '../../lib/invitationLinks';
 import { Badge, ErrorNote, Field, Spinner } from '../../components/ui';
 
 export function BrandingTab({ slug }: { slug: string }) {
@@ -16,20 +21,29 @@ export function BrandingTab({ slug }: { slug: string }) {
     queryFn: async () => (await api.get(`/academies/${slug}/settings`)).data,
   });
   const [form, setForm] = useState<any>(null);
-  useEffect(() => { if (data && !form) setForm(data); }, [data]); // eslint-disable-line
+  useEffect(() => {
+    if (data && !form) setForm(data);
+  }, [data]); // eslint-disable-line
 
   const save = useMutation({
-    mutationFn: async () => (await api.patch(`/academies/${slug}/settings`, {
-      name: form.name, tagline: form.tagline, logoUrl: form.logoUrl, coverUrl: form.coverUrl,
-      // Only sent when it actually changed: the server rejects a slug that
-      // another academy holds, and re-sending the current one is a no-op that
-      // would still cost the uniqueness queries.
-      ...(form.slug && form.slug !== slug ? { slug: form.slug } : {}),
-      colorPrimary: form.colorPrimary, colorAccent: form.colorPrimary,
-      language: form.language,
-      maxConcurrentSessions: Number(form.maxConcurrentSessions),
-      enrollmentMode: form.enrollmentMode,
-    })).data,
+    mutationFn: async () =>
+      (
+        await api.patch(`/academies/${slug}/settings`, {
+          name: form.name,
+          tagline: form.tagline,
+          logoUrl: form.logoUrl,
+          coverUrl: form.coverUrl,
+          // Only sent when it actually changed: the server rejects a slug that
+          // another academy holds, and re-sending the current one is a no-op that
+          // would still cost the uniqueness queries.
+          ...(form.slug && form.slug !== slug ? { slug: form.slug } : {}),
+          colorPrimary: form.colorPrimary,
+          colorAccent: form.colorPrimary,
+          language: form.language,
+          maxConcurrentSessions: Number(form.maxConcurrentSessions),
+          enrollmentMode: form.enrollmentMode,
+        })
+      ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['academy-settings', slug] });
       qc.invalidateQueries({ queryKey: ['academy', slug] });
@@ -46,19 +60,52 @@ export function BrandingTab({ slug }: { slug: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
       <div className="card">
-        <Field label={t('academy.name')}><input className="input" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} maxLength={80} /></Field>
-        <AcademyAddressField slug={slug} value={form.slug ?? slug} onChange={(v) => set('slug', v)} />
-        <Field label={t('academy.tagline')}><input className="input" value={form.tagline ?? ''} onChange={(e) => set('tagline', e.target.value)} maxLength={160} placeholder={t('academy.taglineHint')} /></Field>
+        <Field label={t('academy.name')}>
+          <input
+            className="input"
+            value={form.name ?? ''}
+            onChange={(e) => set('name', e.target.value)}
+            maxLength={80}
+          />
+        </Field>
+        <AcademyAddressField
+          slug={slug}
+          value={form.slug ?? slug}
+          onChange={(v) => set('slug', v)}
+        />
+        <Field label={t('academy.tagline')}>
+          <input
+            className="input"
+            value={form.tagline ?? ''}
+            onChange={(e) => set('tagline', e.target.value)}
+            maxLength={160}
+            placeholder={t('academy.taglineHint')}
+          />
+        </Field>
 
         <div className="mb-4 grid grid-cols-2 gap-4">
           <Field label={t('academy.primaryColor')}>
             <div className="flex items-center gap-2">
-              <input type="color" className="h-10 w-12 cursor-pointer rounded-lg border border-outline-variant bg-transparent" value={form.colorPrimary} onChange={(e) => set('colorPrimary', e.target.value)} />
-              <input className="input" dir="ltr" value={form.colorPrimary} onChange={(e) => set('colorPrimary', e.target.value)} />
+              <input
+                type="color"
+                className="h-10 w-12 cursor-pointer rounded-lg border border-outline-variant bg-transparent"
+                value={form.colorPrimary}
+                onChange={(e) => set('colorPrimary', e.target.value)}
+              />
+              <input
+                className="input"
+                dir="ltr"
+                value={form.colorPrimary}
+                onChange={(e) => set('colorPrimary', e.target.value)}
+              />
             </div>
           </Field>
           <Field label={t('academy.language')}>
-            <select className="input" value={form.language} onChange={(e) => set('language', e.target.value)}>
+            <select
+              className="input"
+              value={form.language}
+              onChange={(e) => set('language', e.target.value)}
+            >
               <option value="ar">{t('academy.langArabic')}</option>
               <option value="en">English</option>
             </select>
@@ -67,27 +114,71 @@ export function BrandingTab({ slug }: { slug: string }) {
 
         <div className="mb-4 grid grid-cols-2 gap-4">
           <div>
-            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('academy.logo')}</span>
-            <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && pick('logoUrl', e.target.files[0], { maxW: 256, maxH: 256, square: true })} />
-            <button type="button" onClick={() => logoRef.current?.click()} className="btn-secondary w-full">
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+              {t('academy.logo')}
+            </span>
+            <input
+              ref={logoRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) =>
+                e.target.files?.[0] &&
+                pick('logoUrl', e.target.files[0], { maxW: 256, maxH: 256, square: true })
+              }
+            />
+            <button
+              type="button"
+              onClick={() => logoRef.current?.click()}
+              className="btn-secondary w-full"
+            >
               {form.logoUrl ? t('academy.logoChange') : t('academy.logoUpload')}
             </button>
           </div>
           <div>
-            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">{t('academy.cover')}</span>
-            <input ref={coverRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => e.target.files?.[0] && pick('coverUrl', e.target.files[0], { maxW: 1600, maxH: 600, quality: 0.72 })} />
-            <button type="button" onClick={() => coverRef.current?.click()} className="btn-secondary w-full">
+            <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+              {t('academy.cover')}
+            </span>
+            <input
+              ref={coverRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) =>
+                e.target.files?.[0] &&
+                pick('coverUrl', e.target.files[0], { maxW: 1600, maxH: 600, quality: 0.72 })
+              }
+            />
+            <button
+              type="button"
+              onClick={() => coverRef.current?.click()}
+              className="btn-secondary w-full"
+            >
               {form.coverUrl ? t('academy.coverChange') : t('academy.coverUpload')}
             </button>
           </div>
         </div>
 
         <Field label={t('academy.maxDevices')}>
-          <input type="number" min={1} max={10} className="input w-28" value={form.maxConcurrentSessions} onChange={(e) => set('maxConcurrentSessions', e.target.value)} />
+          <input
+            type="number"
+            min={1}
+            max={10}
+            className="input w-28"
+            value={form.maxConcurrentSessions}
+            onChange={(e) => set('maxConcurrentSessions', e.target.value)}
+          />
         </Field>
 
-        <Field label={t('academy.enrollmentMode.label')} hint={t(`academy.enrollmentMode.hint.${form.enrollmentMode ?? 'AUTOMATIC'}`)}>
-          <select className="input" value={form.enrollmentMode ?? 'AUTOMATIC'} onChange={(e) => set('enrollmentMode', e.target.value)}>
+        <Field
+          label={t('academy.enrollmentMode.label')}
+          hint={t(`academy.enrollmentMode.hint.${form.enrollmentMode ?? 'AUTOMATIC'}`)}
+        >
+          <select
+            className="input"
+            value={form.enrollmentMode ?? 'AUTOMATIC'}
+            onChange={(e) => set('enrollmentMode', e.target.value)}
+          >
             <option value="AUTOMATIC">{t('academy.enrollmentMode.AUTOMATIC')}</option>
             <option value="MANUAL">{t('academy.enrollmentMode.MANUAL')}</option>
             <option value="DEMO">{t('academy.enrollmentMode.DEMO')}</option>
@@ -105,16 +196,30 @@ export function BrandingTab({ slug }: { slug: string }) {
 
       {/* Live preview */}
       <div className="card h-fit p-0" style={{ ['--academy-primary' as any]: form.colorPrimary }}>
-        <div className="relative h-24 overflow-hidden rounded-t-xl" style={{ background: form.colorPrimary }}>
-          {form.coverUrl && <img src={form.coverUrl} alt="" className="h-full w-full object-cover opacity-80" />}
+        <div
+          className="relative h-24 overflow-hidden rounded-t-xl"
+          style={{ background: form.colorPrimary }}
+        >
+          {form.coverUrl && (
+            <img src={form.coverUrl} alt="" className="h-full w-full object-cover opacity-80" />
+          )}
         </div>
         <div className="-mt-8 px-5 pb-5">
-          <span className="grid h-16 w-16 place-items-center overflow-hidden rounded-xl border-4 border-surface-container-lowest font-heading text-2xl font-bold text-white" style={{ background: form.colorPrimary }}>
-            {form.logoUrl ? <img src={form.logoUrl} alt="" className="h-full w-full object-cover" /> : (form.name?.charAt(0) ?? '?')}
+          <span
+            className="grid h-16 w-16 place-items-center overflow-hidden rounded-xl border-4 border-surface-container-lowest font-heading text-2xl font-bold text-white"
+            style={{ background: form.colorPrimary }}
+          >
+            {form.logoUrl ? (
+              <img src={form.logoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (form.name?.charAt(0) ?? '?')
+            )}
           </span>
           <h3 className="mt-2 font-heading text-lg font-bold tracking-tight">{form.name}</h3>
           {form.tagline && <p className="text-sm text-on-surface-variant">{form.tagline}</p>}
-          <p className="mt-2 text-xs text-outline" dir="ltr">/a/{slug}</p>
+          <p className="mt-2 text-xs text-outline" dir="ltr">
+            /a/{slug}
+          </p>
         </div>
       </div>
     </div>
@@ -195,9 +300,11 @@ function AcademyAddressField({
     if (!check) return null;
     if (check.available) return { tone: 'text-primary', text: t('academy.linkAvailable') };
     const key =
-      check.reason === 'RESERVED' ? 'academy.linkReserved'
-      : check.reason === 'INVALID' ? 'academy.linkInvalid'
-      : 'academy.linkTaken';
+      check.reason === 'RESERVED'
+        ? 'academy.linkReserved'
+        : check.reason === 'INVALID'
+          ? 'academy.linkInvalid'
+          : 'academy.linkTaken';
     return { tone: 'text-error', text: t(key) };
   })();
 
@@ -206,7 +313,10 @@ function AcademyAddressField({
       <div className="flex items-stretch overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
         {/* The prefix is part of the address, so it is shown, not implied — and
             it is LTR even in Arabic, because a URL always is. */}
-        <span className="grid shrink-0 place-items-center bg-surface-container-low px-3 font-mono text-xs text-outline" dir="ltr">
+        <span
+          className="grid shrink-0 place-items-center bg-surface-container-low px-3 font-mono text-xs text-outline"
+          dir="ltr"
+        >
           /a/
         </span>
         <input
@@ -254,10 +364,19 @@ function AcademyAddressField({
 
 // ── Members ─────────────────────────────────────────────────────────────────
 /** Resolved per render, not at module scope: the label must follow the active language. */
-const ROLE_KEY: Record<string, string> = { OWNER: 'academy.roleOwner', TEACHER: 'academy.roleTeacher', ASSISTANT: 'academy.roleAssistant', STUDENT: 'academy.roleStudent' };
+const ROLE_KEY: Record<string, string> = {
+  OWNER: 'academy.roleOwner',
+  TEACHER: 'academy.roleTeacher',
+  ASSISTANT: 'academy.roleAssistant',
+  STUDENT: 'academy.roleStudent',
+};
 
 const LINK_STATUS_TONE: Record<string, 'teal' | 'neutral' | 'warn' | 'error'> = {
-  PENDING: 'teal', USED: 'neutral', REVOKED: 'error', DECLINED: 'error', EXPIRED: 'warn',
+  PENDING: 'teal',
+  USED: 'neutral',
+  REVOKED: 'error',
+  DECLINED: 'error',
+  EXPIRED: 'warn',
 };
 
 /** A shareable, single-use link — the alternative to inviting by email. */
@@ -293,30 +412,49 @@ function InvitationLinksSection({ slug }: { slug: string }) {
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-40">
           <Field label={t('academy.inviteRole')}>
-            <select className="input" value={role} onChange={(e) => setRole(e.target.value as 'TEACHER' | 'ASSISTANT')}>
+            <select
+              className="input"
+              value={role}
+              onChange={(e) => setRole(e.target.value as 'TEACHER' | 'ASSISTANT')}
+            >
               <option value="TEACHER">{t('academy.roleTeacher')}</option>
               <option value="ASSISTANT">{t('academy.roleAssistant')}</option>
             </select>
           </Field>
         </div>
-        <button className="btn-primary mb-4" disabled={create.isPending} onClick={generate}>{t('academy.inviteLinkGenerate')}</button>
+        <button className="btn-primary mb-4" disabled={create.isPending} onClick={generate}>
+          {t('academy.inviteLinkGenerate')}
+        </button>
       </div>
       <ErrorNote error={create.error} />
       {justCreated && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-secondary-container/30 px-4 py-3">
-          <code className="min-w-0 flex-1 truncate text-sm" dir="ltr">{justCreated.url}</code>
-          <button className="btn-secondary px-3 py-1.5 text-xs" onClick={copy}>{copied ? t('common.saved') : t('academy.inviteLinkCopy')}</button>
+          <code className="min-w-0 flex-1 truncate text-sm" dir="ltr">
+            {justCreated.url}
+          </code>
+          <button className="btn-secondary px-3 py-1.5 text-xs" onClick={copy}>
+            {copied ? t('common.saved') : t('academy.inviteLinkCopy')}
+          </button>
         </div>
       )}
       {!isLoading && pending.length > 0 && (
         <ul className="divide-y divide-outline-variant">
           {pending.map((l) => (
             <li key={l.id} className="flex flex-wrap items-center gap-3 py-3">
-              <Badge tone={LINK_STATUS_TONE[l.status]}>{t(`academy.inviteLinkStatus.${l.status}`)}</Badge>
+              <Badge tone={LINK_STATUS_TONE[l.status]}>
+                {t(`academy.inviteLinkStatus.${l.status}`)}
+              </Badge>
               <span className="text-sm">{t(ROLE_KEY[l.role])}</span>
-              <span className="text-xs text-outline">{t('academy.inviteLinkExpires', { date: new Date(l.expiresAt).toLocaleDateString() })}</span>
-              <button className="ms-auto rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
-                disabled={revoke.isPending} onClick={() => revoke.mutate(l.id)}>
+              <span className="text-xs text-outline">
+                {t('academy.inviteLinkExpires', {
+                  date: new Date(l.expiresAt).toLocaleDateString(),
+                })}
+              </span>
+              <button
+                className="ms-auto rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
+                disabled={revoke.isPending}
+                onClick={() => revoke.mutate(l.id)}
+              >
                 {t('academy.inviteLinkRevoke')}
               </button>
             </li>
@@ -339,11 +477,16 @@ export function MembersTab({ slug, isCenter = false }: { slug: string; isCenter?
   const invalidate = () => qc.invalidateQueries({ queryKey: ['academy-members', slug] });
 
   const add = useMutation({
-    mutationFn: async () => (await api.post(`/academies/${slug}/members`, { email: email.trim(), role })).data,
-    onSuccess: () => { setEmail(''); invalidate(); },
+    mutationFn: async () =>
+      (await api.post(`/academies/${slug}/members`, { email: email.trim(), role })).data,
+    onSuccess: () => {
+      setEmail('');
+      invalidate();
+    },
   });
   const change = useMutation({
-    mutationFn: async ({ id, body }: { id: string; body: any }) => (await api.patch(`/academies/${slug}/members/${id}`, body)).data,
+    mutationFn: async ({ id, body }: { id: string; body: any }) =>
+      (await api.patch(`/academies/${slug}/members/${id}`, body)).data,
     onSuccess: invalidate,
   });
   const remove = useMutation({
@@ -359,7 +502,16 @@ export function MembersTab({ slug, isCenter = false }: { slug: string; isCenter?
         <h3 className="mb-3 font-heading font-bold">{t('academy.inviteTitle')}</h3>
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[16rem] flex-1">
-            <Field label={t('academy.inviteEmail')}><input className="input" dir="ltr" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teacher@example.com" /></Field>
+            <Field label={t('academy.inviteEmail')}>
+              <input
+                className="input"
+                dir="ltr"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="teacher@example.com"
+              />
+            </Field>
           </div>
           <div className="w-40">
             <Field label={t('academy.inviteRole')}>
@@ -369,7 +521,13 @@ export function MembersTab({ slug, isCenter = false }: { slug: string; isCenter?
               </select>
             </Field>
           </div>
-          <button className="btn-primary mb-4" disabled={add.isPending || !email.trim()} onClick={() => add.mutate()}>{t('academy.inviteAdd')}</button>
+          <button
+            className="btn-primary mb-4"
+            disabled={add.isPending || !email.trim()}
+            onClick={() => add.mutate()}
+          >
+            {t('academy.inviteAdd')}
+          </button>
         </div>
         <ErrorNote error={add.error} />
       </div>
@@ -377,25 +535,46 @@ export function MembersTab({ slug, isCenter = false }: { slug: string; isCenter?
       <InvitationLinksSection slug={slug} />
 
       <div className="card p-0">
-        {isLoading ? <Spinner /> : (
+        {isLoading ? (
+          <Spinner />
+        ) : (
           <ul className="divide-y divide-outline-variant">
             {staff.map((m: any) => (
               <li key={m.id} className="flex flex-wrap items-center gap-3 p-4">
                 <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
-                  {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" /> : (m.fullName?.charAt(0) ?? '?')}
+                  {m.avatarUrl ? (
+                    <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    (m.fullName?.charAt(0) ?? '?')
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold">{m.fullName}</p>
-                  <p className="truncate text-xs text-outline" dir="ltr">{m.email}</p>
+                  <p className="truncate text-xs text-outline" dir="ltr">
+                    {m.email}
+                  </p>
                 </div>
-                <Badge tone={m.role === 'OWNER' ? 'primary' : m.role === 'STUDENT' ? 'neutral' : 'teal'}>{t(ROLE_KEY[m.role] ?? 'academy.roleStudent')}</Badge>
+                <Badge
+                  tone={m.role === 'OWNER' ? 'primary' : m.role === 'STUDENT' ? 'neutral' : 'teal'}
+                >
+                  {t(ROLE_KEY[m.role] ?? 'academy.roleStudent')}
+                </Badge>
                 {m.role !== 'OWNER' && m.role !== 'STUDENT' && (
                   <div className="flex flex-wrap items-center gap-2">
-                    <select className="input w-28 py-1.5 text-sm" value={m.role} onChange={(e) => change.mutate({ id: m.id, body: { role: e.target.value } })}>
+                    <select
+                      className="input w-28 py-1.5 text-sm"
+                      value={m.role}
+                      onChange={(e) => change.mutate({ id: m.id, body: { role: e.target.value } })}
+                    >
                       <option value="TEACHER">{t('academy.roleTeacher')}</option>
                       <option value="ASSISTANT">{t('academy.roleAssistant')}</option>
                     </select>
-                    <button className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40" onClick={() => remove.mutate(m.id)}>{t('common.remove')}</button>
+                    <button
+                      className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
+                      onClick={() => remove.mutate(m.id)}
+                    >
+                      {t('common.remove')}
+                    </button>
                   </div>
                 )}
                 {isCenter && m.role === 'TEACHER' && (
@@ -421,8 +600,16 @@ export function MembersTab({ slug, isCenter = false }: { slug: string; isCenter?
  * and whether they hold the organisation's cash-collector permission.
  */
 function MemberRevenueShare({
-  memberId, value, canCollectCash, onSave,
-}: { memberId: string; value: number | null; canCollectCash: boolean; onSave: (body: Record<string, unknown>) => void }) {
+  memberId,
+  value,
+  canCollectCash,
+  onSave,
+}: {
+  memberId: string;
+  value: number | null;
+  canCollectCash: boolean;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
   const { t } = useTranslation();
   const [pct, setPct] = useState(value == null ? '' : String(value));
   useEffect(() => setPct(value == null ? '' : String(value)), [value, memberId]);
@@ -431,15 +618,26 @@ function MemberRevenueShare({
       <label className="flex items-center gap-1.5">
         <span className="text-on-surface-variant">{t('academy.revenueShareOverride')}</span>
         <input
-          className="input w-16 py-1 text-xs" inputMode="numeric" placeholder="—"
-          value={pct} onChange={(e) => setPct(e.target.value.replace(/[^\d]/g, ''))}
-          onBlur={() => onSave({ revenueSharePercent: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))) })}
+          className="input w-16 py-1 text-xs"
+          inputMode="numeric"
+          placeholder="—"
+          value={pct}
+          onChange={(e) => setPct(e.target.value.replace(/[^\d]/g, ''))}
+          onBlur={() =>
+            onSave({
+              revenueSharePercent: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))),
+            })
+          }
         />
         <span className="text-on-surface-variant">%</span>
       </label>
       <label className="flex cursor-pointer items-center gap-1.5">
-        <input type="checkbox" className="accent-primary" checked={canCollectCash}
-          onChange={(e) => onSave({ canCollectCash: e.target.checked })} />
+        <input
+          type="checkbox"
+          className="accent-primary"
+          checked={canCollectCash}
+          onChange={(e) => onSave({ canCollectCash: e.target.checked })}
+        />
         <span className="text-on-surface-variant">{t('academy.canCollectCash')}</span>
       </label>
     </div>

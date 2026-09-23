@@ -19,8 +19,12 @@ describe('AdminAcademiesService', () => {
     it('batches per-academy counts in fixed-size queries regardless of page size — never one query per academy', async () => {
       const { prisma, ledger, flags } = makeDeps();
       const academies = Array.from({ length: 20 }, (_, i) => ({
-        id: `a${i}`, slug: `academy-${i}`, name: `Academy ${i}`, status: 'ACTIVE',
-        createdAt: new Date(), owner: { fullName: `Owner ${i}`, email: `o${i}@x.com` },
+        id: `a${i}`,
+        slug: `academy-${i}`,
+        name: `Academy ${i}`,
+        status: 'ACTIVE',
+        createdAt: new Date(),
+        owner: { fullName: `Owner ${i}`, email: `o${i}@x.com` },
       }));
       prisma.academy.count.mockResolvedValue(20);
       prisma.academy.findMany.mockResolvedValue(academies);
@@ -44,19 +48,34 @@ describe('AdminAcademiesService', () => {
       const { prisma, ledger, flags } = makeDeps();
       prisma.academy.count.mockResolvedValue(1);
       prisma.academy.findMany.mockResolvedValue([
-        { id: 'empty1', slug: 'empty', name: 'Empty Academy', status: 'PENDING', createdAt: new Date(), owner: { fullName: 'X', email: 'x@x.com' } },
+        {
+          id: 'empty1',
+          slug: 'empty',
+          name: 'Empty Academy',
+          status: 'PENDING',
+          createdAt: new Date(),
+          owner: { fullName: 'X', email: 'x@x.com' },
+        },
       ]);
       prisma.course.groupBy.mockResolvedValue([]);
       prisma.enrollment.groupBy.mockResolvedValue([]);
       prisma.academyMembership.groupBy.mockResolvedValue([]);
-      ledger.academyRevenueBatch.mockResolvedValue(new Map([['empty1', { netCents: 0, feeCents: 0 }]]));
+      ledger.academyRevenueBatch.mockResolvedValue(
+        new Map([['empty1', { netCents: 0, feeCents: 0 }]]),
+      );
 
       const svc = new AdminAcademiesService(prisma, ledger, flags);
       const result = await svc.listAcademies({});
       expect(result.academies[0]).toMatchObject({
-        teachersCount: 0, assistantsCount: 0, studentsCount: 0,
-        coursesCount: 0, publishedCoursesCount: 0, enrollmentsCount: 0,
-        netRevenueCents: 0, platformFeeCents: 0, lastActivityAt: null,
+        teachersCount: 0,
+        assistantsCount: 0,
+        studentsCount: 0,
+        coursesCount: 0,
+        publishedCoursesCount: 0,
+        enrollmentsCount: 0,
+        netRevenueCents: 0,
+        platformFeeCents: 0,
+        lastActivityAt: null,
       });
     });
 
@@ -64,7 +83,14 @@ describe('AdminAcademiesService', () => {
       const { prisma, ledger, flags } = makeDeps();
       prisma.academy.count.mockResolvedValue(1);
       prisma.academy.findMany.mockResolvedValue([
-        { id: 'a1', slug: 'a1', name: 'A1', status: 'ACTIVE', createdAt: new Date(), owner: { fullName: 'O', email: 'o@x.com' } },
+        {
+          id: 'a1',
+          slug: 'a1',
+          name: 'A1',
+          status: 'ACTIVE',
+          createdAt: new Date(),
+          owner: { fullName: 'O', email: 'o@x.com' },
+        },
       ]);
       prisma.course.groupBy.mockResolvedValue([]);
       prisma.enrollment.groupBy.mockResolvedValue([]);
@@ -90,9 +116,7 @@ describe('AdminAcademiesService', () => {
 
       const svc = new AdminAcademiesService(prisma, ledger, flags);
       await svc.listAcademies({ pageSize: 999999 });
-      expect(prisma.academy.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 100 }),
-      );
+      expect(prisma.academy.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100 }));
     });
 
     it('searches by name, slug, and owner name/email', async () => {
@@ -126,13 +150,26 @@ describe('AdminAcademiesService', () => {
     it('filters staff to non-student roles and includes feature flags', async () => {
       const { prisma, ledger, flags } = makeDeps();
       prisma.academy.findFirst.mockResolvedValue({
-        id: 'a1', slug: 'a1', name: 'A1', status: 'ACTIVE', createdAt: new Date(),
-        language: 'ar', currency: 'EGP', feeType: 'PERCENT', feeValue: 20,
+        id: 'a1',
+        slug: 'a1',
+        name: 'A1',
+        status: 'ACTIVE',
+        createdAt: new Date(),
+        language: 'ar',
+        currency: 'EGP',
+        feeType: 'PERCENT',
+        feeValue: 20,
         owner: { id: 'u1', fullName: 'Owner', email: 'o@x.com', phone: null },
         domains: [],
       });
       prisma.academyMembership.findMany.mockResolvedValue([
-        { id: 'm1', userId: 'u1', role: 'OWNER', status: 'ACTIVE', user: { fullName: 'Owner', email: 'o@x.com', avatarUrl: null } },
+        {
+          id: 'm1',
+          userId: 'u1',
+          role: 'OWNER',
+          status: 'ACTIVE',
+          user: { fullName: 'Owner', email: 'o@x.com', avatarUrl: null },
+        },
       ]);
       prisma.course.count.mockResolvedValue(5);
       prisma.enrollment.count.mockResolvedValue(10);
@@ -141,7 +178,9 @@ describe('AdminAcademiesService', () => {
       const svc = new AdminAcademiesService(prisma, ledger, flags);
       const detail = await svc.academyDetail('a1');
 
-      expect(prisma.academyMembership.findMany.mock.calls[0][0].where.role).toEqual({ not: 'STUDENT' });
+      expect(prisma.academyMembership.findMany.mock.calls[0][0].where.role).toEqual({
+        not: 'STUDENT',
+      });
       expect(detail.staff).toHaveLength(1);
       expect(detail.featureFlags).toEqual([{ key: 'attendance', enabled: true }]);
     });

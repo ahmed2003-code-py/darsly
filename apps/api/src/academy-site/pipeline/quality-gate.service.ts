@@ -26,7 +26,11 @@ export interface QualityIssue {
 
 const hasText = (lt: unknown): boolean => {
   const o = lt as { ar?: unknown; en?: unknown } | null;
-  return !!o && ((typeof o.ar === 'string' && o.ar.trim() !== '') || (typeof o.en === 'string' && o.en.trim() !== ''));
+  return (
+    !!o &&
+    ((typeof o.ar === 'string' && o.ar.trim() !== '') ||
+      (typeof o.en === 'string' && o.en.trim() !== ''))
+  );
 };
 
 /** WCAG AA for large text — the floor for a headline, not the target. */
@@ -47,8 +51,10 @@ export class QualityGateService {
 
     // ── Structure ─────────────────────────────────────────────────────────────
     if (!has('hero')) push('no-hero', 'error', 'the page has no hero section');
-    if (blocks.length < 2) push('too-few-sections', 'error', 'the page has fewer than two sections');
-    if (blocks.length > 14) push('too-many-sections', 'warn', 'the page has more sections than a visitor will scroll');
+    if (blocks.length < 2)
+      push('too-few-sections', 'error', 'the page has fewer than two sections');
+    if (blocks.length > 14)
+      push('too-many-sections', 'warn', 'the page has more sections than a visitor will scroll');
 
     // A section that renders to an empty string still occupies a slot in the
     // numbering and still contributes its padding, so the page grows a silent
@@ -102,11 +108,19 @@ export class QualityGateService {
     const p = design.palette;
     const body = contrastRatio(p.ink, p.background);
     if (body < MIN_BODY_CONTRAST) {
-      push('body-contrast', 'error', `body text contrast is ${body.toFixed(1)}:1 against the background`);
+      push(
+        'body-contrast',
+        'error',
+        `body text contrast is ${body.toFixed(1)}:1 against the background`,
+      );
     }
     const onSurface = contrastRatio(p.ink, p.surface);
     if (onSurface < MIN_BODY_CONTRAST) {
-      push('surface-contrast', 'error', `text on cards has only ${onSurface.toFixed(1)}:1 contrast`);
+      push(
+        'surface-contrast',
+        'error',
+        `text on cards has only ${onSurface.toFixed(1)}:1 contrast`,
+      );
     }
     const heading = contrastRatio(p.ink, p.background);
     if (heading < MIN_HEADING_CONTRAST) {
@@ -119,14 +133,22 @@ export class QualityGateService {
       if (!id) continue;
       const pattern = getPattern(id);
       if (!pattern) {
-        push('unknown-pattern', 'warn', `"${id}" is not a layout this platform has; a default will be used`);
+        push(
+          'unknown-pattern',
+          'warn',
+          `"${id}" is not a layout this platform has; a default will be used`,
+        );
       } else if (pattern.section !== block.type) {
         push('mismatched-pattern', 'warn', `"${id}" does not lay out a ${block.type} section`);
       }
     }
     const surfaces = blocks.map((b) => b.section?.surface ?? 'page');
     for (let i = 2; i < surfaces.length; i++) {
-      if (surfaces[i] !== 'page' && surfaces[i] === surfaces[i - 1] && surfaces[i] === surfaces[i - 2]) {
+      if (
+        surfaces[i] !== 'page' &&
+        surfaces[i] === surfaces[i - 1] &&
+        surfaces[i] === surfaces[i - 2]
+      ) {
         push('surface-monotony', 'warn', 'three sections in a row sit on the same band');
         break;
       }

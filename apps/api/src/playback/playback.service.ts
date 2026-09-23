@@ -170,7 +170,11 @@ export class PlaybackService {
    * and return signed credentials + the watermark payload for the overlay.
    */
   async startSession(user: JwtPayload, lessonId: string, device: DeviceCtx) {
-    const { lesson, course, student, viewsCap } = await this.resolveAccess(user.sub, user.role, lessonId);
+    const { lesson, course, student, viewsCap } = await this.resolveAccess(
+      user.sub,
+      user.role,
+      lessonId,
+    );
     const watermarkId = this.newWatermarkId();
 
     // Teacher/admin preview: no PlaybackSession row (studentId is required and
@@ -224,7 +228,9 @@ export class PlaybackService {
         data: { viewCount: { increment: 1 } },
       });
       if (took.count === 0) {
-        throw new ForbiddenException('You have reached the maximum number of views for this lesson');
+        throw new ForbiddenException(
+          'You have reached the maximum number of views for this lesson',
+        );
       }
     } else {
       await this.prisma.lessonProgress.upsert({
@@ -306,9 +312,11 @@ export class PlaybackService {
         studentId,
         meta: { ips: [...distinctIps], sessionId: currentSessionId },
       });
-      await this.notifyStudentUserOf(studentId,
+      await this.notifyStudentUserOf(
+        studentId,
         'تنبيه أمني: تشغيل من أكثر من موقع',
-        'رُصد تشغيل حسابك من أكثر من عنوان IP في نفس الوقت. إن لم يكن هذا أنت، غيّر كلمة المرور فوراً.');
+        'رُصد تشغيل حسابك من أكثر من عنوان IP في نفس الوقت. إن لم يكن هذا أنت، غيّر كلمة المرور فوراً.',
+      );
     }
   }
 
@@ -461,7 +469,8 @@ export class PlaybackService {
 
     // Learning activity rolls the daily streak (same-day is a no-op).
     const streak = await this.progress.touchActivity(session.studentId);
-    if (streak?.rolled) await this.gamification.checkStreakMilestone(session.studentId, streak.currentStreak);
+    if (streak?.rolled)
+      await this.gamification.checkStreakMilestone(session.studentId, streak.currentStreak);
     // Only present on the heartbeat that actually earned something, so the
     // player can celebrate in the same round trip instead of polling for it.
     return gamification?.awarded ? { ok: true, gamification } : { ok: true };

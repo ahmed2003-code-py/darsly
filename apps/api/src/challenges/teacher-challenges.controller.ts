@@ -39,7 +39,11 @@ export class TeacherChallengesController {
 
   @Put(':id/questions')
   @ApiOperation({ summary: '[teacher] Replace the question set (draft only)' })
-  setQuestions(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: SetChallengeQuestionsDto) {
+  setQuestions(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: SetChallengeQuestionsDto,
+  ) {
     return this.challenges.setQuestions(u.tenantId!, id, dto);
   }
 

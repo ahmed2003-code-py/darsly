@@ -47,7 +47,9 @@ export function AchievementGrid({ rows, limit }: { rows: AchievementRow[]; limit
                 </span>
               </span>
 
-              <span className={`text-sm font-semibold ${a.earned ? '' : 'text-on-surface-variant'}`}>
+              <span
+                className={`text-sm font-semibold ${a.earned ? '' : 'text-on-surface-variant'}`}
+              >
                 {L({ ar: a.titleAr, en: a.titleEn })}
               </span>
 
@@ -63,7 +65,10 @@ export function AchievementGrid({ rows, limit }: { rows: AchievementRow[]; limit
                         {a.progress}/{a.threshold}
                       </span>
                       <span className="block h-1 w-full overflow-hidden rounded-full bg-surface-container-high">
-                        <span className="block h-full rounded-full bg-outline-variant" style={{ width: `${pct}%` }} />
+                        <span
+                          className="block h-full rounded-full bg-outline-variant"
+                          style={{ width: `${pct}%` }}
+                        />
                       </span>
                     </>
                   )}

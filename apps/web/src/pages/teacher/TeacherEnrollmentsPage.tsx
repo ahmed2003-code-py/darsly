@@ -187,7 +187,8 @@ function DemoEnrollModal({ open, onClose }: { open: boolean; onClose: () => void
   });
 
   const demoEnroll = useMutation({
-    mutationFn: async () => (await api.post('/teacher/enrollments/demo', { studentEmail, courseId })).data,
+    mutationFn: async () =>
+      (await api.post('/teacher/enrollments/demo', { studentEmail, courseId })).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['teacher-enrollments'] });
       setStudentEmail('');
@@ -219,10 +220,17 @@ function DemoEnrollModal({ open, onClose }: { open: boolean; onClose: () => void
         </label>
         <label className="grid gap-1.5">
           <span className="text-sm font-bold">{t('teacher.students.demoCourse')}</span>
-          <select value={courseId} onChange={(e) => setCourseId(e.target.value)} className="input" required>
+          <select
+            value={courseId}
+            onChange={(e) => setCourseId(e.target.value)}
+            className="input"
+            required
+          >
             <option value="">{t('teacher.students.demoSelectCourse')}</option>
             {(courses ?? []).map((c: { id: string; title: string }) => (
-              <option key={c.id} value={c.id}>{c.title}</option>
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
             ))}
           </select>
         </label>
@@ -278,11 +286,13 @@ export default function TeacherEnrollmentsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-enrollments'] }),
   });
   const approve = useMutation({
-    mutationFn: async (id: string) => (await api.patch(`/teacher/enrollments/${id}/approve`, {})).data,
+    mutationFn: async (id: string) =>
+      (await api.patch(`/teacher/enrollments/${id}/approve`, {})).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-enrollments'] }),
   });
   const reject = useMutation({
-    mutationFn: async (id: string) => (await api.patch(`/teacher/enrollments/${id}/reject`, {})).data,
+    mutationFn: async (id: string) =>
+      (await api.patch(`/teacher/enrollments/${id}/reject`, {})).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['teacher-enrollments'] }),
   });
   const { academy } = useOwnedAcademy();
@@ -295,8 +305,7 @@ export default function TeacherEnrollmentsPage() {
     const q = search.trim().toLowerCase();
     const filtered = q
       ? grouped.filter(
-          (g) =>
-            g.name.toLowerCase().includes(q) || (g.phone ?? '').replace(/\s/g, '').includes(q),
+          (g) => g.name.toLowerCase().includes(q) || (g.phone ?? '').replace(/\s/g, '').includes(q),
         )
       : grouped;
     const sorted = [...filtered];
@@ -336,7 +345,8 @@ export default function TeacherEnrollmentsPage() {
           {TABS.map((value) => {
             const selected = tab === value;
             const count = counts[value];
-            const waiting = (value === 'PENDING_PAYMENT' || value === 'PENDING_APPROVAL') && count > 0;
+            const waiting =
+              (value === 'PENDING_PAYMENT' || value === 'PENDING_APPROVAL') && count > 0;
             return (
               <button
                 key={value}
@@ -483,9 +493,13 @@ export default function TeacherEnrollmentsPage() {
                       >
                         <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-lg font-bold text-on-primary-fixed">
                           {group.avatarUrl ? (
-                            <img src={group.avatarUrl} alt="" className="h-full w-full object-cover" />
+                            <img
+                              src={group.avatarUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
                           ) : (
-                            (group.name.trim().charAt(0) || '?')
+                            group.name.trim().charAt(0) || '?'
                           )}
                         </span>
 
@@ -497,7 +511,10 @@ export default function TeacherEnrollmentsPage() {
                               it to the "no phone" fallback made an absence look
                               like a malformed number. */}
                           {group.phone ? (
-                            <span className="mt-0.5 block truncate font-mono text-xs text-on-surface-variant" dir="ltr">
+                            <span
+                              className="mt-0.5 block truncate font-mono text-xs text-on-surface-variant"
+                              dir="ltr"
+                            >
                               {group.phone}
                             </span>
                           ) : (
@@ -510,7 +527,8 @@ export default function TeacherEnrollmentsPage() {
                         {/* The date only earns its place where there is room. */}
                         <span className="hidden shrink-0 text-end text-xs text-on-surface-variant lg:block">
                           {/* `lastEnrolledAt` is epoch ms, kept that way for the sort. */}
-                          {t('teacher.students.lastEnrolled')}: {dateShort(new Date(group.lastEnrolledAt))}
+                          {t('teacher.students.lastEnrolled')}:{' '}
+                          {dateShort(new Date(group.lastEnrolledAt))}
                         </span>
                       </button>
 
@@ -519,7 +537,9 @@ export default function TeacherEnrollmentsPage() {
                       <button
                         onClick={() => setOpen((o) => ({ ...o, [group.studentId]: !expanded }))}
                         aria-expanded={expanded}
-                        aria-label={t(expanded ? 'teacher.students.collapse' : 'teacher.students.expand')}
+                        aria-label={t(
+                          expanded ? 'teacher.students.collapse' : 'teacher.students.expand',
+                        )}
                         className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-outline transition hover:bg-surface-container-high hover:text-on-surface"
                       >
                         <span
@@ -534,7 +554,9 @@ export default function TeacherEnrollmentsPage() {
                     {/* What they are worth, and how to reach them. Wraps rather
                         than shrinks, so nothing ever lands on top of anything. */}
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-outline-variant/50 pt-3">
-                      <span className="font-heading font-extrabold">{egp(group.earnedCentsTotal)}</span>
+                      <span className="font-heading font-extrabold">
+                        {egp(group.earnedCentsTotal)}
+                      </span>
                       <span className="text-sm text-on-surface-variant">
                         {t('teacher.students.courseCount', { count: group.enrollments.length })}
                       </span>

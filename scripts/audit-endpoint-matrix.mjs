@@ -50,7 +50,9 @@ function walk(dir) {
 function routesOf(file) {
   const text = readFileSync(file, 'utf8');
   const prefix = (text.match(/@Controller\(\s*['"]([^'"]*)['"]\s*\)/) ?? [])[1] ?? '';
-  const classPublic = /@Controller\([^)]*\)[\s\S]{0,400}?class/.test(text) && /^@Public\(\)/m.test(text.split('@Controller')[0] ?? '');
+  const classPublic =
+    /@Controller\([^)]*\)[\s\S]{0,400}?class/.test(text) &&
+    /^@Public\(\)/m.test(text.split('@Controller')[0] ?? '');
   const lines = text.split('\n');
   const found = [];
   let current = null;
@@ -76,14 +78,19 @@ function routesOf(file) {
 }
 
 const routes = walk(SRC).flatMap(routesOf);
-console.log(`discovered ${routes.length} routes across ${new Set(routes.map((r) => r.file)).size} controllers\n`);
+console.log(
+  `discovered ${routes.length} routes across ${new Set(routes.map((r) => r.file)).size} controllers\n`,
+);
 
 // ── callers ────────────────────────────────────────────────────────────────
 async function api(p, { token, method = 'GET' } = {}) {
   try {
     const r = await fetch(`${API}${p}`, {
       method,
-      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json' },
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        'content-type': 'application/json',
+      },
       ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }),
     });
     return r.status;
@@ -93,7 +100,8 @@ async function api(p, { token, method = 'GET' } = {}) {
 }
 const login = async (email) => {
   const r = await fetch(`${API}/auth/login`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email, password: PASSWORD }),
   });
   if (!r.ok) throw new Error(`login ${email}: ${r.status}`);
@@ -102,8 +110,14 @@ const login = async (email) => {
 
 const { PrismaClient } = await import('@prisma/client');
 const prisma = new PrismaClient();
-const student = await prisma.studentProfile.findFirst({ where: { user: { isActive: true } }, include: { user: true } });
-const teacher = await prisma.teacherProfile.findFirst({ where: { status: 'APPROVED' }, include: { user: true } });
+const student = await prisma.studentProfile.findFirst({
+  where: { user: { isActive: true } },
+  include: { user: true },
+});
+const teacher = await prisma.teacherProfile.findFirst({
+  where: { status: 'APPROVED' },
+  include: { user: true },
+});
 const admin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN', isActive: true } });
 await prisma.$disconnect();
 
@@ -113,22 +127,35 @@ const aTok = admin ? await login(admin.email).catch(() => null) : null;
 
 /** Fill path parameters with a value that is syntactically valid and not ours. */
 const FOREIGN_ID = 'cxxxxxxxxxxxxxxxxxxxxxxxx';
-const concrete = (p) => p.replace(/:([a-zA-Z]+)/g, (_, name) =>
-  /slug/i.test(name) ? 'not-a-real-slug' : /token/i.test(name) ? 'not.a.token' : FOREIGN_ID);
+const concrete = (p) =>
+  p.replace(/:([a-zA-Z]+)/g, (_, name) =>
+    /slug/i.test(name) ? 'not-a-real-slug' : /token/i.test(name) ? 'not.a.token' : FOREIGN_ID,
+  );
 
 const WRITE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const results = [];
-let anon2xx = 0, studentReachedAdmin = 0, teacherReachedAdmin = 0, serverErrors = 0, skipped = 0;
+let anon2xx = 0,
+  studentReachedAdmin = 0,
+  teacherReachedAdmin = 0,
+  serverErrors = 0,
+  skipped = 0;
 
 for (const r of routes) {
   const p = concrete(r.path);
   // Skip the routes whose whole purpose is to be called anonymously with a
   // real payload (login, register), and destructive verbs unless asked for.
-  if (/auth\/(login|register|refresh)/.test(p)) { skipped++; continue; }
-  if (WRITE.has(r.method) && !INCLUDE_WRITES) { skipped++; continue; }
+  if (/auth\/(login|register|refresh)/.test(p)) {
+    skipped++;
+    continue;
+  }
+  if (WRITE.has(r.method) && !INCLUDE_WRITES) {
+    skipped++;
+    continue;
+  }
 
   const isAdminRoute = /(^|\/)admin\//.test(r.path) || /SUPER_ADMIN/.test(r.roles);
-  const isTeacherRoute = /(^|\/)teacher\//.test(r.path) || /Role\.TEACHER/.test(r.roles) || r.academyStaff;
+  const isTeacherRoute =
+    /(^|\/)teacher\//.test(r.path) || /Role\.TEACHER/.test(r.roles) || r.academyStaff;
 
   const anon = await api(p, { method: r.method });
   const asStudent = await api(p, { method: r.method, token: sTok });
@@ -137,15 +164,29 @@ for (const r of routes) {
   const row = { ...r, concrete: p, anon, asStudent, asTeacher, isAdminRoute, isTeacherRoute };
   results.push(row);
 
-  if (anon >= 200 && anon < 300 && !r.isPublic) { anon2xx++; row.flag = 'ANON-2XX'; }
-  if (isAdminRoute && asStudent >= 200 && asStudent < 300) { studentReachedAdmin++; row.flag = 'STUDENT-REACHED-ADMIN'; }
-  if (isAdminRoute && asTeacher >= 200 && asTeacher < 300) { teacherReachedAdmin++; row.flag = 'TEACHER-REACHED-ADMIN'; }
-  if ([anon, asStudent, asTeacher].some((s) => s >= 500)) { serverErrors++; row.flag = (row.flag ? row.flag + ' + ' : '') + 'SERVER-ERROR'; }
+  if (anon >= 200 && anon < 300 && !r.isPublic) {
+    anon2xx++;
+    row.flag = 'ANON-2XX';
+  }
+  if (isAdminRoute && asStudent >= 200 && asStudent < 300) {
+    studentReachedAdmin++;
+    row.flag = 'STUDENT-REACHED-ADMIN';
+  }
+  if (isAdminRoute && asTeacher >= 200 && asTeacher < 300) {
+    teacherReachedAdmin++;
+    row.flag = 'TEACHER-REACHED-ADMIN';
+  }
+  if ([anon, asStudent, asTeacher].some((s) => s >= 500)) {
+    serverErrors++;
+    row.flag = (row.flag ? row.flag + ' + ' : '') + 'SERVER-ERROR';
+  }
 }
 
 // ── report ─────────────────────────────────────────────────────────────────
 const tested = results.length;
-console.log(`tested ${tested} routes  (skipped ${skipped}: auth entry points${INCLUDE_WRITES ? '' : ' and write verbs'})\n`);
+console.log(
+  `tested ${tested} routes  (skipped ${skipped}: auth entry points${INCLUDE_WRITES ? '' : ' and write verbs'})\n`,
+);
 
 const flagged = results.filter((r) => r.flag);
 if (flagged.length) {
@@ -155,7 +196,9 @@ if (flagged.length) {
     console.log(`      anon=${r.anon} student=${r.asStudent} teacher=${r.asTeacher}   ${r.file}`);
   }
 } else {
-  console.log('no route returned 2xx to a caller that should have been refused, and none returned 5xx.');
+  console.log(
+    'no route returned 2xx to a caller that should have been refused, and none returned 5xx.',
+  );
 }
 
 // A quick shape of what the surface looks like, so the numbers are readable.
@@ -173,5 +216,7 @@ summary
   any 5xx                               ${serverErrors}`);
 
 const failures = anon2xx + studentReachedAdmin + teacherReachedAdmin + serverErrors;
-console.log(`\n${failures === 0 ? 'ENDPOINT MATRIX PASS' : `ENDPOINT MATRIX — ${failures} FLAGGED`}`);
+console.log(
+  `\n${failures === 0 ? 'ENDPOINT MATRIX PASS' : `ENDPOINT MATRIX — ${failures} FLAGGED`}`,
+);
 process.exit(failures === 0 ? 0 : 1);

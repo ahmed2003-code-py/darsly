@@ -15,11 +15,16 @@ const prisma = new PrismaClient();
 
 function mapStatus(s: TeacherStatus): AcademyStatus {
   switch (s) {
-    case 'APPROVED': return 'ACTIVE';
-    case 'PENDING': return 'PENDING';
-    case 'SUSPENDED': return 'SUSPENDED';
-    case 'REJECTED': return 'ARCHIVED';
-    default: return 'PENDING';
+    case 'APPROVED':
+      return 'ACTIVE';
+    case 'PENDING':
+      return 'PENDING';
+    case 'SUSPENDED':
+      return 'SUSPENDED';
+    case 'REJECTED':
+      return 'ARCHIVED';
+    default:
+      return 'PENDING';
   }
 }
 
@@ -53,7 +58,13 @@ async function main() {
     await prisma.academyMembership.upsert({
       where: { userId_academyId: { userId: tp.userId, academyId: tp.id } },
       update: { role: 'OWNER', status: 'ACTIVE' },
-      create: { userId: tp.userId, academyId: tp.id, role: 'OWNER', status: 'ACTIVE', joinedAt: new Date() },
+      create: {
+        userId: tp.userId,
+        academyId: tp.id,
+        role: 'OWNER',
+        status: 'ACTIVE',
+        joinedAt: new Date(),
+      },
     });
   }
 
@@ -99,7 +110,9 @@ async function main() {
     prisma.academyMembership.count({ where: { role: 'STUDENT' } }),
     prisma.academyMembership.count({ where: { isHome: true } }),
   ]);
-  console.log(`✓ academies=${academies} owners=${owners} students=${students} (new=${studentMemberships}) homes=${homes} (set=${homesSet})`);
+  console.log(
+    `✓ academies=${academies} owners=${owners} students=${students} (new=${studentMemberships}) homes=${homes} (set=${homesSet})`,
+  );
 }
 
 main()

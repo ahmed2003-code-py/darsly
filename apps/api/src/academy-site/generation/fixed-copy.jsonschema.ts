@@ -17,8 +17,16 @@ export const fixedCopyJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'seo', 'hero', 'about', 'toolkitHeading', 'highlights',
-    'credentialsHeading', 'credentials', 'process', 'faq', 'quote',
+    'seo',
+    'hero',
+    'about',
+    'toolkitHeading',
+    'highlights',
+    'credentialsHeading',
+    'credentials',
+    'process',
+    'faq',
+    'quote',
   ],
   properties: {
     seo: {
@@ -53,7 +61,8 @@ export const fixedCopyJsonSchema: Record<string, unknown> = {
     },
     process: {
       type: 'array',
-      description: 'EXACTLY 3 steps describing what happens when a student enrols — placement, lesson rhythm, follow-up.',
+      description:
+        'EXACTLY 3 steps describing what happens when a student enrols — placement, lesson rhythm, follow-up.',
       items: {
         type: 'object',
         additionalProperties: false,
@@ -77,7 +86,7 @@ export const fixedCopyJsonSchema: Record<string, unknown> = {
       required: ['text', 'attribution'],
       properties: { text: localizedText, attribution: localizedText },
       description:
-        'One sentence, under 20 words, in the teacher\'s own voice about how they teach. Empty strings if nothing genuine comes to mind — never a generic filler.',
+        "One sentence, under 20 words, in the teacher's own voice about how they teach. Empty strings if nothing genuine comes to mind — never a generic filler.",
     },
   },
 };

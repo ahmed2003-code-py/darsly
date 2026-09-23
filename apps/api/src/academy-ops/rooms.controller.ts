@@ -25,7 +25,11 @@ export class RoomsController {
 
   @Patch(':roomId')
   @ApiOperation({ summary: '[academy owner] Edit or archive/reactivate a room' })
-  update(@CurrentAcademy() ctx: AcademyContext, @Param('roomId') roomId: string, @Body() dto: UpdateRoomDto) {
+  update(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('roomId') roomId: string,
+    @Body() dto: UpdateRoomDto,
+  ) {
     return this.rooms.update(ctx, roomId, dto);
   }
 }

@@ -209,7 +209,9 @@ export class UploadsController {
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
     const storageKey = attachmentKey(file.originalname);
     try {
-      await this.storage.put(storageKey, fs.createReadStream(file.path), { contentType: file.mimetype });
+      await this.storage.put(storageKey, fs.createReadStream(file.path), {
+        contentType: file.mimetype,
+      });
     } finally {
       fs.unlink(file.path, () => undefined);
     }
@@ -244,7 +246,9 @@ export class UploadsController {
 
   @Get('files/attachments/:id')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Download an attachment (owner teacher, enrolled student, or free preview)' })
+  @ApiOperation({
+    summary: 'Download an attachment (owner teacher, enrolled student, or free preview)',
+  })
   async downloadAttachment(
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,

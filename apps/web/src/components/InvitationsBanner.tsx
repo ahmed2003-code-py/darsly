@@ -18,13 +18,23 @@ export default function InvitationsBanner() {
   return (
     <div className="mx-4 mt-4 space-y-2 sm:mx-6">
       {data.map((inv) => (
-        <div key={inv.id} className="card flex flex-wrap items-center justify-between gap-3 border-s-4 border-s-primary p-4">
+        <div
+          key={inv.id}
+          className="card flex flex-wrap items-center justify-between gap-3 border-s-4 border-s-primary p-4"
+        >
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
-              {inv.academy.logoUrl ? <img src={inv.academy.logoUrl} alt="" className="h-full w-full object-cover" /> : inv.academy.name.trim().charAt(0)}
+              {inv.academy.logoUrl ? (
+                <img src={inv.academy.logoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                inv.academy.name.trim().charAt(0)
+              )}
             </span>
             <p className="text-sm">
-              {t('invitations.text', { academy: inv.academy.name, role: t(`admin.staffRole.${inv.role}`) })}
+              {t('invitations.text', {
+                academy: inv.academy.name,
+                role: t(`admin.staffRole.${inv.role}`),
+              })}
             </p>
           </div>
           <div className="flex gap-2">

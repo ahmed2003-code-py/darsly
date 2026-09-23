@@ -47,7 +47,8 @@ describe('working out which academy a page load is about', () => {
 });
 
 describe('writing the theme into the document', () => {
-  const shell = '<!doctype html><html dir="rtl" lang="ar"><head><title>Darsly</title></head><body></body></html>';
+  const shell =
+    '<!doctype html><html dir="rtl" lang="ar"><head><title>Darsly</title></head><body></body></html>';
   const theme = deriveAppTheme({ background: '#14110C', ink: '#F0EADC', primary: '#C9A227' });
 
   it('puts the tokens in the head, so the first paint is already right', () => {
@@ -82,7 +83,7 @@ describe('writing the theme into the document', () => {
       tokens: {
         '--c-primary': '74 50 201',
         '--c-evil': '0 0 0}</style><script>alert(1)</script><style>',
-        'background': 'red',
+        background: 'red',
         '--c-also-evil': 'url(https://evil.example)',
       },
     });

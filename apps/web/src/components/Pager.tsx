@@ -36,7 +36,10 @@ export default function Pager({
   );
 
   return (
-    <nav className="mt-10 flex flex-wrap items-center justify-center gap-1.5" aria-label={t('pager.label')}>
+    <nav
+      className="mt-10 flex flex-wrap items-center justify-center gap-1.5"
+      aria-label={t('pager.label')}
+    >
       {arrow('prev')}
       {shown.map((p, i) => (
         <span key={p} className="flex items-center gap-1.5">

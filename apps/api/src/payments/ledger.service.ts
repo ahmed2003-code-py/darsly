@@ -48,7 +48,9 @@ export class LedgerService {
 
   /** The organisation's own balance account — a Center has its own; a PERSONAL workspace is the teacher's. */
   orgAccount(academy: { id: string; kind: 'PERSONAL' | 'CENTER' }) {
-    return academy.kind === 'CENTER' ? `academy:${academy.id}:balance` : this.teacherAccount(academy.id);
+    return academy.kind === 'CENTER'
+      ? `academy:${academy.id}:balance`
+      : this.teacherAccount(academy.id);
   }
 
   /**
@@ -67,8 +69,14 @@ export class LedgerService {
    * persists exactly as booked — it does not shrink just because the
    * receiver later makes an unrelated online sale.
    */
-  private cashLiabilityAccount(receiver: 'TEACHER' | 'CENTER', tenantId: string, academyId: string) {
-    return receiver === 'CENTER' ? `academy:${academyId}:cash-liability` : `teacher:${tenantId}:cash-liability`;
+  private cashLiabilityAccount(
+    receiver: 'TEACHER' | 'CENTER',
+    tenantId: string,
+    academyId: string,
+  ) {
+    return receiver === 'CENTER'
+      ? `academy:${academyId}:cash-liability`
+      : `teacher:${tenantId}:cash-liability`;
   }
 
   /** How much of the cash a receiver collected is still unremitted (platform fee + any other party's share). Always ≥ 0. */
@@ -87,14 +95,23 @@ export class LedgerService {
 
   private async balanceOf(account: string, db: Db): Promise<number> {
     const [credits, debits] = await Promise.all([
-      db.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
-      db.ledgerEntry.aggregate({ where: { account, direction: 'DEBIT' }, _sum: { amountCents: true } }),
+      db.ledgerEntry.aggregate({
+        where: { account, direction: 'CREDIT' },
+        _sum: { amountCents: true },
+      }),
+      db.ledgerEntry.aggregate({
+        where: { account, direction: 'DEBIT' },
+        _sum: { amountCents: true },
+      }),
     ]);
     return (credits._sum.amountCents ?? 0) - (debits._sum.amountCents ?? 0);
   }
 
   /** Withdrawable balance of an organisation (credits − debits on its own account). */
-  orgBalance(academy: { id: string; kind: 'PERSONAL' | 'CENTER' }, db: Db = this.prisma): Promise<number> {
+  orgBalance(
+    academy: { id: string; kind: 'PERSONAL' | 'CENTER' },
+    db: Db = this.prisma,
+  ): Promise<number> {
     return this.balanceOf(this.orgAccount(academy), db);
   }
 
@@ -131,8 +148,14 @@ export class LedgerService {
   async walletBalance(studentId: string, db: Db = this.prisma): Promise<number> {
     const account = this.walletAccount(studentId);
     const [credits, debits] = await Promise.all([
-      db.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
-      db.ledgerEntry.aggregate({ where: { account, direction: 'DEBIT' }, _sum: { amountCents: true } }),
+      db.ledgerEntry.aggregate({
+        where: { account, direction: 'CREDIT' },
+        _sum: { amountCents: true },
+      }),
+      db.ledgerEntry.aggregate({
+        where: { account, direction: 'DEBIT' },
+        _sum: { amountCents: true },
+      }),
     ]);
     return (credits._sum.amountCents ?? 0) - (debits._sum.amountCents ?? 0);
   }
@@ -311,7 +334,11 @@ export class LedgerService {
 
     const debitEntries: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
     if (paidFully) {
-      debitEntries.push({ account: this.walletAccount(payment.studentId), direction: 'DEBIT', amountCents: payment.amountCents });
+      debitEntries.push({
+        account: this.walletAccount(payment.studentId),
+        direction: 'DEBIT',
+        amountCents: payment.amountCents,
+      });
     } else if (isCash) {
       // Physical cash never reaches the platform: whoever received it holds the
       // whole amount. Debiting platform:cash would invent money the platform
@@ -328,18 +355,39 @@ export class LedgerService {
       //  2. the remainder is debited from the receiver's OWN cash-liability
       //     account (see cashLiabilityAccount) — an auditable, standing "still
       //     owe this" figure that never gets smaller on its own.
-      const receiverOwnShare = payment.cashReceiver === 'CENTER' ? split.academyCents : split.teacherCents;
+      const receiverOwnShare =
+        payment.cashReceiver === 'CENTER' ? split.academyCents : split.teacherCents;
       const owedPortion = payment.amountCents - receiverOwnShare;
       if (receiverOwnShare > 0) {
-        debitEntries.push({ account: 'platform:cash-in-kind', direction: 'DEBIT', amountCents: receiverOwnShare, tenantId: payment.tenantId, academyId });
+        debitEntries.push({
+          account: 'platform:cash-in-kind',
+          direction: 'DEBIT',
+          amountCents: receiverOwnShare,
+          tenantId: payment.tenantId,
+          academyId,
+        });
       }
       if (owedPortion > 0) {
-        const receiver = this.cashLiabilityAccount(payment.cashReceiver ?? 'TEACHER', payment.tenantId, academyId);
-        debitEntries.push({ account: receiver, direction: 'DEBIT', amountCents: owedPortion, tenantId: payment.tenantId, academyId });
+        const receiver = this.cashLiabilityAccount(
+          payment.cashReceiver ?? 'TEACHER',
+          payment.tenantId,
+          academyId,
+        );
+        debitEntries.push({
+          account: receiver,
+          direction: 'DEBIT',
+          amountCents: owedPortion,
+          tenantId: payment.tenantId,
+          academyId,
+        });
       }
     } else {
       if (mixedWallet) {
-        debitEntries.push({ account: this.paymentEscrowAccount(paymentId), direction: 'DEBIT', amountCents: walletCents });
+        debitEntries.push({
+          account: this.paymentEscrowAccount(paymentId),
+          direction: 'DEBIT',
+          amountCents: walletCents,
+        });
       }
       if (cashCents > 0) {
         debitEntries.push({ account: 'platform:cash', direction: 'DEBIT', amountCents: cashCents });
@@ -354,14 +402,36 @@ export class LedgerService {
           create: [
             ...debitEntries,
             // platform earnings (the service fee) — account name kept for continuity.
-            { account: 'platform:commission', direction: 'CREDIT', amountCents: fee, tenantId: payment.tenantId, academyId },
+            {
+              account: 'platform:commission',
+              direction: 'CREDIT',
+              amountCents: fee,
+              tenantId: payment.tenantId,
+              academyId,
+            },
             // the Center's share of the net (CENTER only).
             ...(split.academyCents > 0
-              ? [{ account: `academy:${academyId}:balance`, direction: 'CREDIT' as const, amountCents: split.academyCents, tenantId: payment.tenantId, academyId }]
+              ? [
+                  {
+                    account: `academy:${academyId}:balance`,
+                    direction: 'CREDIT' as const,
+                    amountCents: split.academyCents,
+                    tenantId: payment.tenantId,
+                    academyId,
+                  },
+                ]
               : []),
             // the teacher's withdrawable earning (all of the net for PERSONAL).
             ...(split.teacherCents > 0 || split.kind === 'PERSONAL'
-              ? [{ account: this.teacherAccount(payment.tenantId), direction: 'CREDIT' as const, amountCents: split.teacherCents, tenantId: payment.tenantId, academyId }]
+              ? [
+                  {
+                    account: this.teacherAccount(payment.tenantId),
+                    direction: 'CREDIT' as const,
+                    amountCents: split.teacherCents,
+                    tenantId: payment.tenantId,
+                    academyId,
+                  },
+                ]
               : []),
           ],
         },
@@ -399,8 +469,15 @@ export class LedgerService {
     // or the teacher's for a PERSONAL workspace). academyId was backfilled from
     // tenantId, so a legacy row resolves to the same account it always did.
     const academyId = payout.academyId ?? payout.tenantId;
-    if (!academyId) throw new BadRequestException({ message: 'Payout has no organisation', code: 'PAYOUT_UNSCOPED' });
-    const academy = await db.academy.findUnique({ where: { id: academyId }, select: { id: true, kind: true } });
+    if (!academyId)
+      throw new BadRequestException({
+        message: 'Payout has no organisation',
+        code: 'PAYOUT_UNSCOPED',
+      });
+    const academy = await db.academy.findUnique({
+      where: { id: academyId },
+      select: { id: true, kind: true },
+    });
     const account = academy ? this.orgAccount(academy) : this.teacherAccount(academyId);
 
     await db.ledgerTransaction.create({
@@ -409,7 +486,13 @@ export class LedgerService {
         payoutId,
         entries: {
           create: [
-            { account, direction: 'DEBIT', amountCents: payout.amountCents, tenantId: payout.tenantId, academyId },
+            {
+              account,
+              direction: 'DEBIT',
+              amountCents: payout.amountCents,
+              tenantId: payout.tenantId,
+              academyId,
+            },
             { account: 'platform:cash', direction: 'CREDIT', amountCents: payout.amountCents },
           ],
         },
@@ -421,8 +504,14 @@ export class LedgerService {
   async teacherBalance(tenantId: string, db: Db = this.prisma): Promise<number> {
     const account = this.teacherAccount(tenantId);
     const [credits, debits] = await Promise.all([
-      db.ledgerEntry.aggregate({ where: { account, direction: 'CREDIT' }, _sum: { amountCents: true } }),
-      db.ledgerEntry.aggregate({ where: { account, direction: 'DEBIT' }, _sum: { amountCents: true } }),
+      db.ledgerEntry.aggregate({
+        where: { account, direction: 'CREDIT' },
+        _sum: { amountCents: true },
+      }),
+      db.ledgerEntry.aggregate({
+        where: { account, direction: 'DEBIT' },
+        _sum: { amountCents: true },
+      }),
     ]);
     return (credits._sum.amountCents ?? 0) - (debits._sum.amountCents ?? 0);
   }
@@ -448,8 +537,14 @@ export class LedgerService {
   /** Platform-wide totals for the admin financials view. */
   async platformTotals() {
     const [cashIn, commission] = await Promise.all([
-      this.prisma.ledgerEntry.aggregate({ where: { account: 'platform:cash', direction: 'DEBIT' }, _sum: { amountCents: true } }),
-      this.prisma.ledgerEntry.aggregate({ where: { account: 'platform:commission', direction: 'CREDIT' }, _sum: { amountCents: true } }),
+      this.prisma.ledgerEntry.aggregate({
+        where: { account: 'platform:cash', direction: 'DEBIT' },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.ledgerEntry.aggregate({
+        where: { account: 'platform:commission', direction: 'CREDIT' },
+        _sum: { amountCents: true },
+      }),
     ]);
     return {
       grossCents: cashIn._sum.amountCents ?? 0,
@@ -463,7 +558,9 @@ export class LedgerService {
    * CREDIT on `teacher:<id>:balance` is net revenue, CREDIT on
    * `platform:commission` (scoped by tenantId) is the fee taken from it.
    */
-  async academyRevenueBatch(academyIds: string[]): Promise<Map<string, { netCents: number; feeCents: number }>> {
+  async academyRevenueBatch(
+    academyIds: string[],
+  ): Promise<Map<string, { netCents: number; feeCents: number }>> {
     const map = new Map<string, { netCents: number; feeCents: number }>();
     for (const id of academyIds) map.set(id, { netCents: 0, feeCents: 0 });
     if (academyIds.length === 0) return map;
@@ -477,18 +574,26 @@ export class LedgerService {
         where: {
           academyId: { in: academyIds },
           direction: 'CREDIT',
-          account: { in: academyIds.flatMap((id) => [`teacher:${id}:balance`, `academy:${id}:balance`]) },
+          account: {
+            in: academyIds.flatMap((id) => [`teacher:${id}:balance`, `academy:${id}:balance`]),
+          },
         },
         _sum: { amountCents: true },
       }),
       this.prisma.ledgerEntry.groupBy({
         by: ['academyId'],
-        where: { academyId: { in: academyIds }, direction: 'CREDIT', account: 'platform:commission' },
+        where: {
+          academyId: { in: academyIds },
+          direction: 'CREDIT',
+          account: 'platform:commission',
+        },
         _sum: { amountCents: true },
       }),
     ]);
-    for (const r of netRows) if (r.academyId) map.get(r.academyId)!.netCents = r._sum.amountCents ?? 0;
-    for (const r of feeRows) if (r.academyId) map.get(r.academyId)!.feeCents = r._sum.amountCents ?? 0;
+    for (const r of netRows)
+      if (r.academyId) map.get(r.academyId)!.netCents = r._sum.amountCents ?? 0;
+    for (const r of feeRows)
+      if (r.academyId) map.get(r.academyId)!.feeCents = r._sum.amountCents ?? 0;
     return map;
   }
 
@@ -496,7 +601,9 @@ export class LedgerService {
    * Daily platform gross + fee for the last N days, zero-filled so a quiet day
    * still draws a point instead of leaving a gap in the trend line.
    */
-  async revenueTrend(days: number): Promise<{ date: string; grossCents: number; feeCents: number }[]> {
+  async revenueTrend(
+    days: number,
+  ): Promise<{ date: string; grossCents: number; feeCents: number }[]> {
     const rows = await this.prisma.$queryRaw<{ day: Date; gross: bigint; fee: bigint }[]>`
       WITH days AS (
         SELECT generate_series(
@@ -533,7 +640,10 @@ export class LedgerService {
    * academy sees only what it earns, never gross or the platform's
    * commission — see teacherEarnings() above for why.
    */
-  async academyRevenueTrend(academy: { id: string; kind: 'PERSONAL' | 'CENTER' }, days: number): Promise<{ date: string; netCents: number }[]> {
+  async academyRevenueTrend(
+    academy: { id: string; kind: 'PERSONAL' | 'CENTER' },
+    days: number,
+  ): Promise<{ date: string; netCents: number }[]> {
     const account = this.orgAccount(academy);
     const rows = await this.prisma.$queryRaw<{ day: Date; net: bigint }[]>`
       WITH days AS (
@@ -573,7 +683,11 @@ export class LedgerService {
       try {
         return await this.prisma.invoice.create({ data: { paymentId, serial } });
       } catch (e) {
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt < 5) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2002' &&
+          attempt < 5
+        ) {
           continue; // serial or paymentId collided — recompute and retry
         }
         this.logger.error(`ensureInvoice failed for ${paymentId}: ${String(e)}`);

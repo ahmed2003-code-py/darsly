@@ -87,17 +87,23 @@ export function blockTextLength(block: SiteBlock): number {
  * now falls back to the language it has, and this is what tells the teacher the
  * other half is missing.
  */
-export function localizedFields(block: SiteBlock): { label: string; value: { ar?: string; en?: string } }[] {
-  const at = (label: string, value: unknown) =>
-    ({ label, value: (value ?? {}) as { ar?: string; en?: string } });
+export function localizedFields(
+  block: SiteBlock,
+): { label: string; value: { ar?: string; en?: string } }[] {
+  const at = (label: string, value: unknown) => ({
+    label,
+    value: (value ?? {}) as { ar?: string; en?: string },
+  });
   const items = (label: string, list: unknown[]) =>
-    list.flatMap((it, i) =>
-      it && typeof it === 'object' ? [at(`${label} ${i + 1}`, it)] : [],
-    );
+    list.flatMap((it, i) => (it && typeof it === 'object' ? [at(`${label} ${i + 1}`, it)] : []));
 
   switch (block.type) {
     case 'hero':
-      return [at('hero headline', block.headline), at('hero subheadline', block.subheadline), at('hero button', block.ctaLabel)];
+      return [
+        at('hero headline', block.headline),
+        at('hero subheadline', block.subheadline),
+        at('hero button', block.ctaLabel),
+      ];
     case 'about':
       return [at('about heading', block.heading), at('about text', block.body)];
     case 'quote':
@@ -108,21 +114,33 @@ export function localizedFields(block: SiteBlock): { label: string; value: { ar?
     case 'credentials':
       return [at(`${block.type} heading`, block.heading), ...items(block.type, block.items)];
     case 'stats':
-      return [at('stats heading', block.heading), ...block.items.map((s, i) => at(`stat ${i + 1}`, s.label))];
+      return [
+        at('stats heading', block.heading),
+        ...block.items.map((s, i) => at(`stat ${i + 1}`, s.label)),
+      ];
     case 'faq':
       return [
         at('faq heading', block.heading),
-        ...block.items.flatMap((f, i) => [at(`question ${i + 1}`, f.q), at(`answer ${i + 1}`, f.a)]),
+        ...block.items.flatMap((f, i) => [
+          at(`question ${i + 1}`, f.q),
+          at(`answer ${i + 1}`, f.a),
+        ]),
       ];
     case 'timeline':
       return [
         at('timeline heading', block.heading),
-        ...block.items.flatMap((it, i) => [at(`timeline ${i + 1} title`, it.title), at(`timeline ${i + 1} text`, it.body)]),
+        ...block.items.flatMap((it, i) => [
+          at(`timeline ${i + 1} title`, it.title),
+          at(`timeline ${i + 1} text`, it.body),
+        ]),
       ];
     case 'process':
       return [
         at('method heading', block.heading),
-        ...block.steps.flatMap((s, i) => [at(`step ${i + 1} title`, s.title), at(`step ${i + 1} text`, s.body)]),
+        ...block.steps.flatMap((s, i) => [
+          at(`step ${i + 1} title`, s.title),
+          at(`step ${i + 1} text`, s.body),
+        ]),
       ];
     default:
       return 'heading' in block ? [at(`${block.type} heading`, block.heading)] : [];

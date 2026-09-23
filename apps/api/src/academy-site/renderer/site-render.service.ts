@@ -43,9 +43,16 @@ export class SiteRenderService {
       select: { id: true, url: true, blurhash: true, width: true, height: true, mimeType: true },
     });
     const map = new Map<string, RenderMedia>(
-      media.map((m) => [m.id, {
-        url: m.url ?? '', blurhash: m.blurhash, width: m.width, height: m.height, mimeType: m.mimeType,
-      }]),
+      media.map((m) => [
+        m.id,
+        {
+          url: m.url ?? '',
+          blurhash: m.blurhash,
+          width: m.width,
+          height: m.height,
+          mimeType: m.mimeType,
+        },
+      ]),
     );
     const renderCtx = { ...ctx, media: (id: string) => map.get(id) };
 

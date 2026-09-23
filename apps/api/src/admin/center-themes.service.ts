@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AdminThemeEntry } from '@darsly/shared-types';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,7 +38,10 @@ export class CenterThemesService {
    *  admin's granting screen. */
   async catalogFor(academyId: string) {
     const academy = await this.requireCenter(academyId);
-    const [catalog, granted] = await Promise.all([this.themes.catalog(), this.grantedIds(academyId)]);
+    const [catalog, granted] = await Promise.all([
+      this.themes.catalog(),
+      this.grantedIds(academyId),
+    ]);
     // A Center is never offered its own brand — it already wears it, and the
     // entry would be a look that changes every time the Center changes.
     const entries = [...catalog.presets, ...catalog.academies, ...catalog.cosmetics].filter(
@@ -71,15 +79,24 @@ export class CenterThemesService {
     const resolved = await Promise.all(unique.map((id) => this.themes.resolve(id)));
     const unknown = unique.filter((_, i) => !resolved[i]);
     if (unknown.length) {
-      throw new BadRequestException({ message: 'Some of those themes do not exist', code: 'THEME_UNKNOWN', unknown });
+      throw new BadRequestException({
+        message: 'Some of those themes do not exist',
+        code: 'THEME_UNKNOWN',
+        unknown,
+      });
     }
     if (unique.includes(`academy:${academyId}`)) {
-      throw new BadRequestException({ message: 'A center cannot be granted its own brand', code: 'THEME_SELF_GRANT' });
+      throw new BadRequestException({
+        message: 'A center cannot be granted its own brand',
+        code: 'THEME_SELF_GRANT',
+      });
     }
 
     const before = await this.grantedIds(academyId);
     await this.prisma.$transaction([
-      this.prisma.academyThemeGrant.deleteMany({ where: { academyId, themeId: { notIn: unique.length ? unique : ['\u0000'] } } }),
+      this.prisma.academyThemeGrant.deleteMany({
+        where: { academyId, themeId: { notIn: unique.length ? unique : ['\u0000'] } },
+      }),
       ...unique.map((themeId) =>
         this.prisma.academyThemeGrant.upsert({
           where: { academyId_themeId: { academyId, themeId } },
@@ -90,7 +107,11 @@ export class CenterThemesService {
     ]);
 
     await this.audit.log({
-      actorUserId: adminUserId, action: 'center.themes.grant', entity: 'Academy', entityId: academyId, academyId,
+      actorUserId: adminUserId,
+      action: 'center.themes.grant',
+      entity: 'Academy',
+      entityId: academyId,
+      academyId,
       meta: {
         added: unique.filter((id) => !before.has(id)),
         removed: [...before].filter((id) => !unique.includes(id)),
@@ -146,10 +167,17 @@ export class CenterThemesService {
     await this.requireCenter(academyId);
     const granted = await this.grantedIds(academyId);
     if (!granted.has(themeId)) {
-      throw new ForbiddenException({ message: 'That theme has not been granted to this center', code: 'THEME_NOT_ALLOWED' });
+      throw new ForbiddenException({
+        message: 'That theme has not been granted to this center',
+        code: 'THEME_NOT_ALLOWED',
+      });
     }
     const entry = await this.themes.resolve(themeId);
-    if (!entry) throw new NotFoundException({ message: 'That theme no longer exists', code: 'THEME_UNKNOWN' });
+    if (!entry)
+      throw new NotFoundException({
+        message: 'That theme no longer exists',
+        code: 'THEME_UNKNOWN',
+      });
 
     const palette = paletteFromAdminEntry(entry);
     const updated = await this.prisma.academy.update({
@@ -171,14 +199,21 @@ export class CenterThemesService {
     });
 
     await this.audit.log({
-      actorUserId: userId, action: 'center.themes.apply', entity: 'Academy', entityId: academyId, academyId,
+      actorUserId: userId,
+      action: 'center.themes.apply',
+      entity: 'Academy',
+      entityId: academyId,
+      academyId,
       meta: { themeId, source: entry.source, name: entry.name },
     });
     return { academyId, appliedThemeId: themeId, theme: entry, brand: updated };
   }
 
   private async grantedIds(academyId: string): Promise<Set<string>> {
-    const rows = await this.prisma.academyThemeGrant.findMany({ where: { academyId }, select: { themeId: true } });
+    const rows = await this.prisma.academyThemeGrant.findMany({
+      where: { academyId },
+      select: { themeId: true },
+    });
     return new Set(rows.map((r) => r.themeId));
   }
 
@@ -193,9 +228,13 @@ export class CenterThemesService {
       where: { id: academyId, deletedAt: null },
       select: { id: true, slug: true, name: true, kind: true, brandTokens: true },
     });
-    if (!academy) throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
+    if (!academy)
+      throw new NotFoundException({ message: 'Center not found', code: 'CENTER_NOT_FOUND' });
     if (academy.kind !== 'CENTER') {
-      throw new BadRequestException({ message: 'Theme grants apply to Centers only', code: 'NOT_A_CENTER' });
+      throw new BadRequestException({
+        message: 'Theme grants apply to Centers only',
+        code: 'NOT_A_CENTER',
+      });
     }
     return academy;
   }
@@ -223,7 +262,10 @@ function paletteFromAdminEntry(entry: AdminThemeEntry) {
 
 /** `"110 91 211"` → `"#6e5bd3"`. */
 function hexFromTriple(triple: string): string {
-  const parts = triple.trim().split(/\s+/).map((n) => Math.max(0, Math.min(255, Number(n) | 0)));
+  const parts = triple
+    .trim()
+    .split(/\s+/)
+    .map((n) => Math.max(0, Math.min(255, Number(n) | 0)));
   if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return '#000000';
   return `#${parts.map((n) => n.toString(16).padStart(2, '0')).join('')}`;
 }

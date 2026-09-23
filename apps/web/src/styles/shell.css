@@ -38,7 +38,9 @@
   --s-section-gap: 3rem;
   --s-card-gap: 1.5rem;
 }
-:root[data-s-width='narrow'] { --s-content-max: 880px; }
+:root[data-s-width='narrow'] {
+  --s-content-max: 880px;
+}
 
 /* The page wrapper. At the defaults this is exactly
    `mx-auto max-w-container px-6 py-8 sm:px-8`, which is what 44 pages wrote
@@ -50,10 +52,16 @@
   padding: var(--s-page-y) var(--s-page-x);
 }
 @media (min-width: 640px) {
-  .page { padding-inline: var(--s-page-x-lg); }
+  .page {
+    padding-inline: var(--s-page-x-lg);
+  }
 }
-:root[data-s-width='wide'] { --s-content-max: 1440px; }
-:root[data-s-width='full'] { --s-content-max: 100%; }
+:root[data-s-width='wide'] {
+  --s-content-max: 1440px;
+}
+:root[data-s-width='full'] {
+  --s-content-max: 100%;
+}
 
 /* ── Sidebar variants ──────────────────────────────────────────────────────
    The base `.shell-aside` is the old sidebar exactly: 16rem, hairline edge,
@@ -65,11 +73,24 @@
   --s-sidebar-w: 4.75rem;
   width: var(--s-sidebar-w);
 }
-:root[data-s-nav-desktop='rail'] .shell-brand { justify-content: center; padding-inline: 0; }
-:root[data-s-nav-desktop='rail'] .shell-nav { padding-inline: 0.75rem; }
-:root[data-s-nav-desktop='rail'] .shell-nav-item { justify-content: center; padding-inline: 0; }
-:root[data-s-nav-desktop='rail'] .shell-account { padding: 0.75rem; }
-:root[data-s-nav-desktop='rail'] .shell-account a { justify-content: center; padding: 0.5rem; }
+:root[data-s-nav-desktop='rail'] .shell-brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+:root[data-s-nav-desktop='rail'] .shell-nav {
+  padding-inline: 0.75rem;
+}
+:root[data-s-nav-desktop='rail'] .shell-nav-item {
+  justify-content: center;
+  padding-inline: 0;
+}
+:root[data-s-nav-desktop='rail'] .shell-account {
+  padding: 0.75rem;
+}
+:root[data-s-nav-desktop='rail'] .shell-account a {
+  justify-content: center;
+  padding: 0.5rem;
+}
 .shell-nav-tooltip {
   position: absolute;
   inset-inline-start: calc(100% + 0.5rem);
@@ -88,7 +109,9 @@
   z-index: 50;
 }
 .shell-nav-item:hover .shell-nav-tooltip,
-.shell-nav-item:focus-visible .shell-nav-tooltip { opacity: 1; }
+.shell-nav-item:focus-visible .shell-nav-tooltip {
+  opacity: 1;
+}
 
 /* Floating: detached from the edge, rounded, lifted. */
 :root[data-s-nav-desktop='floating'] .shell-aside {
@@ -108,10 +131,23 @@
   border-inline-end: 0;
   backdrop-filter: none;
 }
-:root[data-s-nav-desktop='minimal'] .shell-brand { border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.25); margin-inline: 1.25rem; padding-inline: 0; }
-:root[data-s-nav-desktop='minimal'] .shell-account { border-top: 1px solid rgb(var(--c-outline-variant) / 0.25); margin-inline: 1.25rem; padding-inline: 0; }
-:root[data-s-nav-desktop='minimal'] .shell-account a { background: transparent; padding-inline: 0; }
-:root[data-s-nav-desktop='minimal'] .shell-nav-item:not(.shell-nav-active):hover { background: transparent; }
+:root[data-s-nav-desktop='minimal'] .shell-brand {
+  border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.25);
+  margin-inline: 1.25rem;
+  padding-inline: 0;
+}
+:root[data-s-nav-desktop='minimal'] .shell-account {
+  border-top: 1px solid rgb(var(--c-outline-variant) / 0.25);
+  margin-inline: 1.25rem;
+  padding-inline: 0;
+}
+:root[data-s-nav-desktop='minimal'] .shell-account a {
+  background: transparent;
+  padding-inline: 0;
+}
+:root[data-s-nav-desktop='minimal'] .shell-nav-item:not(.shell-nav-active):hover {
+  background: transparent;
+}
 
 /* Glass: translucent over the wash, heavier blur, a light inner edge. */
 :root[data-s-nav-desktop='glass'] .shell-aside {
@@ -131,16 +167,23 @@
   border-radius: 999px;
   background: rgb(var(--s-accent, var(--c-primary)));
 }
-:root[data-s-nav-active='pill'] .shell-nav-indicator { display: none; }
+:root[data-s-nav-active='pill'] .shell-nav-indicator {
+  display: none;
+}
 :root[data-s-nav-active='pill'] .shell-nav-item.shell-nav-active {
   border-radius: 999px;
   background: rgb(var(--s-accent, var(--c-primary)));
   color: rgb(var(--s-on-accent, var(--c-on-primary)));
 }
-:root[data-s-nav-active='pill'] .shell-nav-item.shell-nav-active .shell-nav-icon { color: inherit; }
-:root[data-s-nav-active='glow'] .shell-nav-indicator { display: none; }
+:root[data-s-nav-active='pill'] .shell-nav-item.shell-nav-active .shell-nav-icon {
+  color: inherit;
+}
+:root[data-s-nav-active='glow'] .shell-nav-indicator {
+  display: none;
+}
 :root[data-s-nav-active='glow'] .shell-nav-item.shell-nav-active {
-  box-shadow: 0 0 0 1px rgb(var(--s-accent, var(--c-primary)) / 0.35),
+  box-shadow:
+    0 0 0 1px rgb(var(--s-accent, var(--c-primary)) / 0.35),
     0 0 20px -4px rgb(var(--s-accent, var(--c-primary)) / 0.6);
 }
 :root[data-s-nav-active='underline'] .shell-nav-indicator {
@@ -149,20 +192,29 @@
   width: auto;
   height: 2px;
 }
-:root[data-s-nav-active='underline'] .shell-nav-item.shell-nav-active { background: transparent; }
+:root[data-s-nav-active='underline'] .shell-nav-item.shell-nav-active {
+  background: transparent;
+}
 
 /* ── Header variants ───────────────────────────────────────────────────────
    `standard` keeps `.glass` from the base stylesheet; nothing to add. */
-.shell-header-minimal { background: transparent; border-bottom: 0; }
+.shell-header-minimal {
+  background: transparent;
+  border-bottom: 0;
+}
 .shell-header-compact {
   --s-header-h: 3rem;
   border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.4);
   background: rgb(var(--c-surface) / 0.9);
   backdrop-filter: blur(12px);
 }
-.shell-header-compact .shell-header-row { height: var(--s-header-h); }
+.shell-header-compact .shell-header-row {
+  height: var(--s-header-h);
+}
 .shell-header-compact .shell-header-controls button,
-.shell-header-compact .shell-header-controls .studio-frame { transform: scale(0.9); }
+.shell-header-compact .shell-header-controls .studio-frame {
+  transform: scale(0.9);
+}
 .shell-header-glass {
   background: rgb(var(--c-surface) / 0.55);
   backdrop-filter: blur(18px) saturate(1.2);
@@ -178,52 +230,104 @@
   backdrop-filter: blur(14px);
   box-shadow: 0 12px 32px -18px rgb(var(--c-shadow) / 0.35);
 }
-.shell-header-floating .shell-header-row { height: 3.5rem; padding-inline: 1rem; }
-.shell-header-centered { border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.4); background: rgb(var(--c-surface) / 0.85); backdrop-filter: blur(12px); }
+.shell-header-floating .shell-header-row {
+  height: 3.5rem;
+  padding-inline: 1rem;
+}
+.shell-header-centered {
+  border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.4);
+  background: rgb(var(--c-surface) / 0.85);
+  backdrop-filter: blur(12px);
+}
 .shell-header-editorial {
   --s-header-h: 5.5rem;
   background: rgb(var(--c-surface));
   border-bottom: 1px solid rgb(var(--c-outline-variant) / 0.4);
 }
-.shell-header-editorial .shell-header-row { height: var(--s-header-h); }
+.shell-header-editorial .shell-header-row {
+  height: var(--s-header-h);
+}
 
 /* ── Footer bar and floating bottom nav ────────────────────────────────── */
-.shell-footer { font-family: var(--font-body, inherit); }
+.shell-footer {
+  font-family: var(--font-body, inherit);
+}
 
 /* ── Tablet ────────────────────────────────────────────────────────────────
    Between `md` and `lg` the base rule hides the sidebar and the drawer takes
    over. A theme may instead keep it as a rail (or expanded) at that width. */
 @media (min-width: 768px) and (max-width: 1023.98px) {
   .shell[data-shell-tablet='rail'] .shell-aside,
-  .shell[data-shell-tablet='expanded'] .shell-aside { display: block; }
-  .shell[data-shell-tablet='rail'] .shell-aside { width: 4.75rem; }
-  .shell[data-shell-tablet='rail'] .shell-brand { justify-content: center; padding-inline: 0; }
-  .shell[data-shell-tablet='rail'] .shell-nav-item { justify-content: center; padding-inline: 0; }
+  .shell[data-shell-tablet='expanded'] .shell-aside {
+    display: block;
+  }
+  .shell[data-shell-tablet='rail'] .shell-aside {
+    width: 4.75rem;
+  }
+  .shell[data-shell-tablet='rail'] .shell-brand {
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .shell[data-shell-tablet='rail'] .shell-nav-item {
+    justify-content: center;
+    padding-inline: 0;
+  }
   .shell[data-shell-tablet='rail'] .shell-nav-label,
   .shell[data-shell-tablet='rail'] .shell-brand > div,
-  .shell[data-shell-tablet='rail'] .shell-account > a > *:not(.studio-frame) { display: none; }
+  .shell[data-shell-tablet='rail'] .shell-account > a > *:not(.studio-frame) {
+    display: none;
+  }
   .shell[data-shell-tablet='rail'] .shell-menu-btn,
-  .shell[data-shell-tablet='expanded'] .shell-menu-btn { display: none; }
+  .shell[data-shell-tablet='expanded'] .shell-menu-btn {
+    display: none;
+  }
   .shell[data-shell-tablet='rail'] .shell-bottom,
-  .shell[data-shell-tablet='expanded'] .shell-bottom { display: none; }
+  .shell[data-shell-tablet='expanded'] .shell-bottom {
+    display: none;
+  }
 }
 
 /* ── Type scale ──────────────────────────────────────────────────────────── */
-:root[data-s-type='editorial'] h1 { font-size: 2.25rem; line-height: 1.15; letter-spacing: -0.02em; }
-:root[data-s-type='editorial'] h2 { font-size: 1.5rem; letter-spacing: -0.01em; }
-:root[data-s-type='compact'] h1 { font-size: 1.5rem; }
-:root[data-s-type='compact'] h2 { font-size: 1.125rem; }
+:root[data-s-type='editorial'] h1 {
+  font-size: 2.25rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+:root[data-s-type='editorial'] h2 {
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+}
+:root[data-s-type='compact'] h1 {
+  font-size: 1.5rem;
+}
+:root[data-s-type='compact'] h2 {
+  font-size: 1.125rem;
+}
 
 /* ── Motion ──────────────────────────────────────────────────────────────── */
-:root { --s-motion-scale: 1; --s-motion-dur: 260ms; }
-:root[data-s-motion='still'] { --s-motion-scale: 0; --s-motion-dur: 0ms; }
-:root[data-s-motion='expressive'] { --s-motion-scale: 1.35; --s-motion-dur: 360ms; }
+:root {
+  --s-motion-scale: 1;
+  --s-motion-dur: 260ms;
+}
+:root[data-s-motion='still'] {
+  --s-motion-scale: 0;
+  --s-motion-dur: 0ms;
+}
+:root[data-s-motion='expressive'] {
+  --s-motion-scale: 1.35;
+  --s-motion-dur: 360ms;
+}
 :root[data-s-motion='still'] .studio-backdrop,
 :root[data-s-motion='still'] .studio-backdrop::before,
 :root[data-s-motion='still'] .studio-backdrop::after,
-:root[data-s-motion='still'] .studio-sheen::after { animation: none !important; }
+:root[data-s-motion='still'] .studio-sheen::after {
+  animation: none !important;
+}
 @media (prefers-reduced-motion: reduce) {
-  :root { --s-motion-scale: 0; --s-motion-dur: 0ms; }
+  :root {
+    --s-motion-scale: 0;
+    --s-motion-dur: 0ms;
+  }
 }
 
 /* ── Course card layouts ───────────────────────────────────────────────────
@@ -242,8 +346,14 @@
   grid-template-rows: auto auto auto auto auto 1fr;
   gap: 0.4rem;
 }
-:root[data-s-card-layout='imageFirst'] .course-body { display: contents; }
-:root[data-s-card-layout='imageFirst'] .course-media { grid-row: 1; grid-column: 1; aspect-ratio: 4 / 3; }
+:root[data-s-card-layout='imageFirst'] .course-body {
+  display: contents;
+}
+:root[data-s-card-layout='imageFirst'] .course-media {
+  grid-row: 1;
+  grid-column: 1;
+  aspect-ratio: 4 / 3;
+}
 :root[data-s-card-layout='imageFirst'] .course-media::after {
   content: '';
   position: absolute;
@@ -262,10 +372,22 @@
   font-size: 1.05rem;
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
 }
-:root[data-s-card-layout='imageFirst'] .course-teacher { grid-row: 2; padding-inline: 1rem; }
-:root[data-s-card-layout='imageFirst'] .course-chips { grid-row: 3; padding-inline: 1rem; }
-:root[data-s-card-layout='imageFirst'] .course-rating { grid-row: 4; padding-inline: 1rem; }
-:root[data-s-card-layout='imageFirst'] .course-meta { grid-row: 5; padding-inline: 1rem; }
+:root[data-s-card-layout='imageFirst'] .course-teacher {
+  grid-row: 2;
+  padding-inline: 1rem;
+}
+:root[data-s-card-layout='imageFirst'] .course-chips {
+  grid-row: 3;
+  padding-inline: 1rem;
+}
+:root[data-s-card-layout='imageFirst'] .course-rating {
+  grid-row: 4;
+  padding-inline: 1rem;
+}
+:root[data-s-card-layout='imageFirst'] .course-meta {
+  grid-row: 5;
+  padding-inline: 1rem;
+}
 :root[data-s-card-layout='imageFirst'] .course-price {
   grid-row: 6;
   align-self: end;
@@ -282,7 +404,11 @@
   grid-template-columns: 38% 1fr;
   gap: 0;
 }
-:root[data-s-card-layout='editorial'] .course-media { aspect-ratio: auto; height: 100%; min-height: 15rem; }
+:root[data-s-card-layout='editorial'] .course-media {
+  aspect-ratio: auto;
+  height: 100%;
+  min-height: 15rem;
+}
 /* Padding on the text side only; the picture runs to the card's edge. Logical
    properties, so it is the same card in either direction. */
 :root[data-s-card-layout='editorial'] .course-body {
@@ -290,17 +416,38 @@
   padding-inline: 1.5rem 0;
   gap: 0.75rem;
 }
-:root[data-s-card-layout='editorial'] .course-title { font-size: 1.3rem; line-height: 1.3; -webkit-line-clamp: 3; }
-:root[data-s-card-layout='editorial'] .course-teacher { font-size: 0.95rem; }
-:root[data-s-card-layout='editorial'] .course-price { padding-top: 1rem; margin-top: auto; }
-:root[data-s-card-layout='editorial'] .course-grid { gap: calc(var(--s-card-gap, 1rem) * 1.5); }
+:root[data-s-card-layout='editorial'] .course-title {
+  font-size: 1.3rem;
+  line-height: 1.3;
+  -webkit-line-clamp: 3;
+}
+:root[data-s-card-layout='editorial'] .course-teacher {
+  font-size: 0.95rem;
+}
+:root[data-s-card-layout='editorial'] .course-price {
+  padding-top: 1rem;
+  margin-top: auto;
+}
+:root[data-s-card-layout='editorial'] .course-grid {
+  gap: calc(var(--s-card-gap, 1rem) * 1.5);
+}
 
 /* ── Radius reaches the controls ───────────────────────────────────────────
    `data-s-radius` shaped cards only; a round theme still had square inputs
    and a square modal. Buttons keep their own `data-s-button` shape. */
 :root[data-s-radius='sharp'] .input,
-:root[data-s-radius='sharp'] .modal-panel { border-radius: 6px; }
-:root[data-s-radius='soft'] .input { border-radius: 14px; }
-:root[data-s-radius='soft'] .modal-panel { border-radius: 20px; }
-:root[data-s-radius='round'] .input { border-radius: 999px; }
-:root[data-s-radius='round'] .modal-panel { border-radius: 26px; }
+:root[data-s-radius='sharp'] .modal-panel {
+  border-radius: 6px;
+}
+:root[data-s-radius='soft'] .input {
+  border-radius: 14px;
+}
+:root[data-s-radius='soft'] .modal-panel {
+  border-radius: 20px;
+}
+:root[data-s-radius='round'] .input {
+  border-radius: 999px;
+}
+:root[data-s-radius='round'] .modal-panel {
+  border-radius: 26px;
+}

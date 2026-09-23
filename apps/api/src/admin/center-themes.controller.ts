@@ -64,7 +64,9 @@ export class CenterStudioController {
   @Get('academies/:slug/studio/themes')
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('academy.manage')
-  @ApiOperation({ summary: '[center] The looks this Center was granted, resolved, and which one is worn' })
+  @ApiOperation({
+    summary: '[center] The looks this Center was granted, resolved, and which one is worn',
+  })
   mine(@CurrentAcademy() ctx: AcademyContext) {
     return this.themes.grantedFor(ctx.academyId);
   }
@@ -74,7 +76,11 @@ export class CenterStudioController {
   @UseGuards(AcademyMembershipGuard, PermissionGuard)
   @RequirePermission('academy.manage')
   @ApiOperation({ summary: "[center] Wear one of the granted looks — becomes the Center's brand" })
-  apply(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: ApplyCenterThemeDto) {
+  apply(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: ApplyCenterThemeDto,
+  ) {
     return this.themes.apply(ctx.academyId, dto.themeId, user.sub);
   }
 }

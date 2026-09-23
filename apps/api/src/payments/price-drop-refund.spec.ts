@@ -20,21 +20,41 @@ function ctx(over: {
 }) {
   const paid = over.paidCents ?? 600;
   const payment = {
-    id: 'pay1', status: 'PENDING', courseId: 'c1', enrollmentId: 'e1', studentId: 's1',
-    couponId: over.couponId ?? null, amountCents: paid, walletCents: over.walletCents ?? 0,
+    id: 'pay1',
+    status: 'PENDING',
+    courseId: 'c1',
+    enrollmentId: 'e1',
+    studentId: 's1',
+    couponId: over.couponId ?? null,
+    amountCents: paid,
+    walletCents: over.walletCents ?? 0,
     tenantId: 't1',
   };
   const writes: any = { paymentData: null, walletCredits: [], walletTxns: [] };
   const tx = {
-    payment: { updateMany: jest.fn(async (a: any) => { writes.paymentData = a.data; return { count: 1 }; }) },
+    payment: {
+      updateMany: jest.fn(async (a: any) => {
+        writes.paymentData = a.data;
+        return { count: 1 };
+      }),
+    },
     enrollment: { update: jest.fn() },
-    walletTransaction: { create: jest.fn(async (a: any) => { writes.walletTxns.push(a.data); return a.data; }) },
+    walletTransaction: {
+      create: jest.fn(async (a: any) => {
+        writes.walletTxns.push(a.data);
+        return a.data;
+      }),
+    },
   };
   const prisma: any = {
     payment: { findUnique: jest.fn().mockResolvedValue(payment) },
     course: {
       findUnique: jest.fn().mockResolvedValue({
-        id: 'c1', tenantId: 't1', pricingModel: 'ONE_TIME', title: 'دورة', priceCents: over.priceNowCents,
+        id: 'c1',
+        tenantId: 't1',
+        pricingModel: 'ONE_TIME',
+        title: 'دورة',
+        priceCents: over.priceNowCents,
       }),
     },
     coupon: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -52,7 +72,11 @@ function ctx(over: {
     ensureInvoice: jest.fn(),
   };
   const svc = new ManualPaymentsService(
-    prisma, ledger as any, { create: jest.fn() } as any, {} as any, {} as any,
+    prisma,
+    ledger as any,
+    { create: jest.fn() } as any,
+    {} as any,
+    {} as any,
   );
   return { svc, writes, ledger, prisma };
 }

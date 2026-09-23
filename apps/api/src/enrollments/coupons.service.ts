@@ -110,7 +110,10 @@ export class CouponsService {
    * that already claimed it keep something to point at. The caller is told
    * which of the two happened rather than being left to guess.
    */
-  async remove(academyId: string, id: string): Promise<{ id: string; deactivated: boolean; deleted: boolean }> {
+  async remove(
+    academyId: string,
+    id: string,
+  ): Promise<{ id: string; deactivated: boolean; deleted: boolean }> {
     const coupon = await this.assertOwned(academyId, id);
     if (coupon.usedCount > 0) {
       await this.prisma.coupon.update({ where: { id }, data: { isActive: false } });

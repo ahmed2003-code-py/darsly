@@ -7,7 +7,10 @@ import { Badge, EmptyState, PageHeader, Spinner } from '../../components/ui';
 
 const TABS = ['PENDING', 'APPROVED', 'ALL'] as const;
 const TONE: Record<string, 'teal' | 'warn' | 'error' | 'neutral'> = {
-  APPROVED: 'teal', PENDING: 'warn', REJECTED: 'error', SUSPENDED: 'neutral',
+  APPROVED: 'teal',
+  PENDING: 'warn',
+  REJECTED: 'error',
+  SUSPENDED: 'neutral',
 };
 
 export default function AdminTeachersPage() {
@@ -41,7 +44,9 @@ export default function AdminTeachersPage() {
           <button
             key={tb}
             className={`rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
-              tab === tb ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+              tab === tb
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
             }`}
             onClick={() => setParams(tb === 'ALL' ? {} : { status: tb })}
           >
@@ -68,7 +73,9 @@ export default function AdminTeachersPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-heading font-bold">{tp.user.fullName}</p>
-                  <p className="truncate text-xs text-outline" dir="ltr">{tp.user.email ?? tp.user.phone}</p>
+                  <p className="truncate text-xs text-outline" dir="ltr">
+                    {tp.user.email ?? tp.user.phone}
+                  </p>
                 </div>
                 <Badge tone={TONE[tp.status]}>{t(`admin.status.${tp.status}`)}</Badge>
               </div>
@@ -77,7 +84,9 @@ export default function AdminTeachersPage() {
                   admitting it has nothing to say while still charging a row for
                   saying it. */}
               {tp.bio ? (
-                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{stripMarkdown(tp.bio)}</p>
+                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">
+                  {stripMarkdown(tp.bio)}
+                </p>
               ) : (
                 <div className="flex-1" />
               )}
@@ -87,20 +96,29 @@ export default function AdminTeachersPage() {
               </p>
               <div className="flex flex-wrap gap-2 border-t border-outline-variant/50 pt-4">
                 {tp.status !== 'APPROVED' && (
-                  <button className="btn-secondary flex-1 py-2 text-sm" disabled={setStatus.isPending}
-                    onClick={() => setStatus.mutate({ id: tp.id, status: 'APPROVED' })}>
+                  <button
+                    className="btn-secondary flex-1 py-2 text-sm"
+                    disabled={setStatus.isPending}
+                    onClick={() => setStatus.mutate({ id: tp.id, status: 'APPROVED' })}
+                  >
                     {t('admin.approve')}
                   </button>
                 )}
                 {tp.status === 'PENDING' && (
-                  <button className="rounded-lg border border-error/40 px-4 py-2 text-sm font-bold text-error hover:bg-error-container/40"
-                    disabled={setStatus.isPending} onClick={() => setStatus.mutate({ id: tp.id, status: 'REJECTED' })}>
+                  <button
+                    className="rounded-lg border border-error/40 px-4 py-2 text-sm font-bold text-error hover:bg-error-container/40"
+                    disabled={setStatus.isPending}
+                    onClick={() => setStatus.mutate({ id: tp.id, status: 'REJECTED' })}
+                  >
                     {t('admin.reject')}
                   </button>
                 )}
                 {tp.status === 'APPROVED' && (
-                  <button className="rounded-lg border border-outline px-4 py-2 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low"
-                    disabled={setStatus.isPending} onClick={() => setStatus.mutate({ id: tp.id, status: 'SUSPENDED' })}>
+                  <button
+                    className="rounded-lg border border-outline px-4 py-2 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low"
+                    disabled={setStatus.isPending}
+                    onClick={() => setStatus.mutate({ id: tp.id, status: 'SUSPENDED' })}
+                  >
                     {t('admin.suspend')}
                   </button>
                 )}

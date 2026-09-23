@@ -99,7 +99,11 @@ const DEFAULT_BRAND = 'درسلي';
 
 // ── Templates ────────────────────────────────────────────────────────────────
 
-export function welcomeStudentEmail(input: { name: string; loginUrl: string; brandName?: string }): EmailContent {
+export function welcomeStudentEmail(input: {
+  name: string;
+  loginUrl: string;
+  brandName?: string;
+}): EmailContent {
   const brandName = input.brandName ?? DEFAULT_BRAND;
   return {
     subject: `أهلاً بك في ${brandName} 🎓`,
@@ -164,7 +168,11 @@ export function teacherAppliedAdminEmail(input: {
   };
 }
 
-export function teacherApprovedEmail(input: { name: string; loginUrl: string; brandName?: string }): EmailContent {
+export function teacherApprovedEmail(input: {
+  name: string;
+  loginUrl: string;
+  brandName?: string;
+}): EmailContent {
   const brandName = input.brandName ?? DEFAULT_BRAND;
   return {
     subject: 'تم اعتماد حسابك كمعلّم 🎉',
@@ -209,8 +217,14 @@ export function teacherStatusChangedEmail(input: {
   const brandName = input.brandName ?? DEFAULT_BRAND;
   const copy =
     input.status === 'REJECTED'
-      ? { subject: 'بخصوص طلب انضمامك كمعلّم', line: 'للأسف لم يتم اعتماد حسابك كمعلّم في الوقت الحالي.' }
-      : { subject: 'تم إيقاف حسابك مؤقتاً', line: 'تم إيقاف حسابك مؤقتاً. لو تعتقد إن فيه خطأ، تواصل مع الدعم.' };
+      ? {
+          subject: 'بخصوص طلب انضمامك كمعلّم',
+          line: 'للأسف لم يتم اعتماد حسابك كمعلّم في الوقت الحالي.',
+        }
+      : {
+          subject: 'تم إيقاف حسابك مؤقتاً',
+          line: 'تم إيقاف حسابك مؤقتاً. لو تعتقد إن فيه خطأ، تواصل مع الدعم.',
+        };
   return {
     subject: copy.subject,
     text: `${input.name}: ${copy.line}`,

@@ -9,7 +9,14 @@ import {
   useChallengeSubmissions,
   useTeacherChallenges,
 } from '../../lib/challenges';
-import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Modal, PageHeader } from '../../components/ui';
+import {
+  Badge,
+  CardGridSkeleton,
+  EmptyState,
+  ErrorNote,
+  Modal,
+  PageHeader,
+} from '../../components/ui';
 
 const STATUS_TONE: Record<string, 'teal' | 'warn' | 'neutral' | 'error'> = {
   DRAFT: 'warn',
@@ -32,7 +39,8 @@ export default function TeacherChallengesPage() {
   const rows = (all ?? []).filter((c) => tab === 'ALL' || c.status === tab);
 
   const create = useMutation({
-    mutationFn: async () => (await api.post('/teacher/challenges', { title: t('challenges.teacher.create') })).data,
+    mutationFn: async () =>
+      (await api.post('/teacher/challenges', { title: t('challenges.teacher.create') })).data,
     onSuccess: (row) => navigate(`/teacher/challenges/${row.id}`),
   });
 
@@ -52,7 +60,11 @@ export default function TeacherChallengesPage() {
         title={t('challenges.teacher.title')}
         subtitle={t('challenges.teacher.subtitle')}
         action={
-          <button className="btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>
+          <button
+            className="btn-primary"
+            disabled={create.isPending}
+            onClick={() => create.mutate()}
+          >
             <span className="material-symbols-outlined text-[20px] align-[-4px]">add</span>{' '}
             {t('challenges.teacher.create')}
           </button>
@@ -65,7 +77,9 @@ export default function TeacherChallengesPage() {
           <button
             key={s}
             className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition ${
-              tab === s ? 'bg-surface-container-lowest text-primary shadow-hairline' : 'text-on-surface-variant'
+              tab === s
+                ? 'bg-surface-container-lowest text-primary shadow-hairline'
+                : 'text-on-surface-variant'
             }`}
             onClick={() => setTab(s)}
           >
@@ -86,7 +100,9 @@ export default function TeacherChallengesPage() {
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed">
                   <span className="material-symbols-outlined">{c.coverIcon || 'bolt'}</span>
                 </span>
-                <Badge tone={STATUS_TONE[c.status]}>{t(`challenges.teacher.status.${c.status}`)}</Badge>
+                <Badge tone={STATUS_TONE[c.status]}>
+                  {t(`challenges.teacher.status.${c.status}`)}
+                </Badge>
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="truncate font-heading text-lg font-extrabold">{c.title}</h3>
@@ -99,7 +115,10 @@ export default function TeacherChallengesPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2 border-t border-outline-variant/50 pt-3">
-                <button className="btn-ghost text-sm" onClick={() => navigate(`/teacher/challenges/${c.id}`)}>
+                <button
+                  className="btn-ghost text-sm"
+                  onClick={() => navigate(`/teacher/challenges/${c.id}`)}
+                >
                   {t('challenges.teacher.edit')}
                 </button>
                 <button className="btn-ghost text-sm" onClick={() => setResultsFor(c.id)}>
@@ -112,7 +131,9 @@ export default function TeacherChallengesPage() {
                   className="btn-ghost text-sm text-error/80 hover:text-error"
                   onClick={() => remove.mutate(c.id)}
                 >
-                  {c.attemptCount > 0 ? t('challenges.teacher.archive') : t('challenges.teacher.delete')}
+                  {c.attemptCount > 0
+                    ? t('challenges.teacher.archive')
+                    : t('challenges.teacher.delete')}
                 </button>
               </div>
             </div>
@@ -137,9 +158,15 @@ function ResultsModal({ id, onClose }: { id: string | null; onClose: () => void 
       ) : stats ? (
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label={t('challenges.teacher.analytics.participants')} value={stats.participants} />
-          <Stat label={t('challenges.teacher.analytics.completionRate')} value={`${stats.completionRatePct}%`} />
+          <Stat
+            label={t('challenges.teacher.analytics.completionRate')}
+            value={`${stats.completionRatePct}%`}
+          />
           <Stat label={t('challenges.teacher.analytics.avgScore')} value={stats.avgScore} />
-          <Stat label={t('challenges.teacher.analytics.avgAccuracy')} value={`${stats.avgAccuracyPct}%`} />
+          <Stat
+            label={t('challenges.teacher.analytics.avgAccuracy')}
+            value={`${stats.avgAccuracyPct}%`}
+          />
         </div>
       ) : null}
 
@@ -150,17 +177,27 @@ function ResultsModal({ id, onClose }: { id: string | null; onClose: () => void 
           ))}
         </div>
       ) : !submissions?.length ? (
-        <p className="py-8 text-center text-sm text-on-surface-variant">{t('challenges.teacher.submissions.empty')}</p>
+        <p className="py-8 text-center text-sm text-on-surface-variant">
+          {t('challenges.teacher.submissions.empty')}
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-start text-xs font-bold uppercase text-outline">
-                <th className="py-2 pe-3 text-start">{t('challenges.teacher.submissions.student')}</th>
-                <th className="py-2 pe-3 text-start">{t('challenges.teacher.submissions.score')}</th>
-                <th className="py-2 pe-3 text-start">{t('challenges.teacher.submissions.accuracy')}</th>
+                <th className="py-2 pe-3 text-start">
+                  {t('challenges.teacher.submissions.student')}
+                </th>
+                <th className="py-2 pe-3 text-start">
+                  {t('challenges.teacher.submissions.score')}
+                </th>
+                <th className="py-2 pe-3 text-start">
+                  {t('challenges.teacher.submissions.accuracy')}
+                </th>
                 <th className="py-2 pe-3 text-start">{t('challenges.teacher.submissions.xp')}</th>
-                <th className="py-2 text-start">{t('challenges.teacher.submissions.completedAt')}</th>
+                <th className="py-2 text-start">
+                  {t('challenges.teacher.submissions.completedAt')}
+                </th>
               </tr>
             </thead>
             <tbody>

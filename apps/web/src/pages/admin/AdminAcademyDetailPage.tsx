@@ -43,31 +43,63 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function AddMemberModal({ open, onClose, slug }: { open: boolean; onClose: () => void; slug: string }) {
+function AddMemberModal({
+  open,
+  onClose,
+  slug,
+}: {
+  open: boolean;
+  onClose: () => void;
+  slug: string;
+}) {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'TEACHER' | 'ASSISTANT'>('TEACHER');
   const add = useAddAcademyMember(slug);
 
   const submit = () => {
-    add.mutate({ email: email.trim(), role }, { onSuccess: () => { setEmail(''); onClose(); } });
+    add.mutate(
+      { email: email.trim(), role },
+      {
+        onSuccess: () => {
+          setEmail('');
+          onClose();
+        },
+      },
+    );
   };
 
   return (
     <Modal open={open} title={t('adminControlStudio.staff.addTitle')} onClose={onClose}>
       <Field label={t('adminControlStudio.staff.email')}>
-        <input className="input w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" />
+        <input
+          className="input w-full"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          dir="ltr"
+        />
       </Field>
       <Field label={t('adminControlStudio.staff.role')}>
-        <select className="input w-full" value={role} onChange={(e) => setRole(e.target.value as 'TEACHER' | 'ASSISTANT')}>
+        <select
+          className="input w-full"
+          value={role}
+          onChange={(e) => setRole(e.target.value as 'TEACHER' | 'ASSISTANT')}
+        >
           <option value="TEACHER">{t('admin.staffRole.TEACHER')}</option>
           <option value="ASSISTANT">{t('admin.staffRole.ASSISTANT')}</option>
         </select>
       </Field>
       <ErrorNote error={add.error} />
       <div className="flex justify-end gap-2">
-        <button className="btn-secondary px-4 py-2 text-sm" onClick={onClose}>{t('common.cancel')}</button>
-        <button className="btn-primary px-4 py-2 text-sm" disabled={!email.trim() || add.isPending} onClick={submit}>
+        <button className="btn-secondary px-4 py-2 text-sm" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button
+          className="btn-primary px-4 py-2 text-sm"
+          disabled={!email.trim() || add.isPending}
+          onClick={submit}
+        >
           {t('adminControlStudio.staff.add')}
         </button>
       </div>
@@ -86,8 +118,18 @@ function AddMemberModal({ open, onClose, slug }: { open: boolean; onClose: () =>
  * confirmation is satisfied by a mis-click on the wrong row.
  */
 function DangerZone({
-  academyId, slug, name, status, kind,
-}: { academyId: string; slug: string; name: string; status: AcademyStatus; kind: AcademyKind }) {
+  academyId,
+  slug,
+  name,
+  status,
+  kind,
+}: {
+  academyId: string;
+  slug: string;
+  name: string;
+  status: AcademyStatus;
+  kind: AcademyKind;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -129,16 +171,25 @@ function DangerZone({
             </div>
             <button
               className="rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error"
-              onClick={() => { setTyped(''); setOpen(true); }}
+              onClick={() => {
+                setTyped('');
+                setOpen(true);
+              }}
             >
               {t('admin.danger.delete')}
             </button>
           </div>
         )}
-        {!isCenter && <p className="text-sm text-on-surface-variant">{t('admin.danger.personalOnly')}</p>}
+        {!isCenter && (
+          <p className="text-sm text-on-surface-variant">{t('admin.danger.personalOnly')}</p>
+        )}
       </div>
 
-      <Modal open={open} title={t('admin.danger.deleteTitle', { name })} onClose={() => setOpen(false)}>
+      <Modal
+        open={open}
+        title={t('admin.danger.deleteTitle', { name })}
+        onClose={() => setOpen(false)}
+      >
         <p className="mb-3 text-sm text-on-surface-variant">{t('admin.danger.deleteBody')}</p>
         {impact.isLoading ? (
           <Skeleton className="mb-4 h-20 rounded-xl" />
@@ -149,20 +200,32 @@ function DangerZone({
             <li>{t('admin.danger.impactCourses', { count: impact.data.courseCount })}</li>
             <li>{t('admin.danger.impactGroups', { count: impact.data.groupCount })}</li>
             {impact.data.activeEnrollments > 0 && (
-              <li className="font-bold text-error">{t('admin.danger.impactActive', { count: impact.data.activeEnrollments })}</li>
+              <li className="font-bold text-error">
+                {t('admin.danger.impactActive', { count: impact.data.activeEnrollments })}
+              </li>
             )}
           </ul>
         ) : null}
         <Field label={t('admin.danger.confirmLabel', { slug })}>
-          <input className="input w-full" dir="ltr" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={slug} />
+          <input
+            className="input w-full"
+            dir="ltr"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={slug}
+          />
         </Field>
         <ErrorNote error={remove.error} />
         <div className="flex justify-end gap-2">
-          <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setOpen(false)}>{t('common.cancel')}</button>
+          <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setOpen(false)}>
+            {t('common.cancel')}
+          </button>
           <button
             className="rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error disabled:opacity-40"
             disabled={!matches || remove.isPending}
-            onClick={() => remove.mutate(typed.trim(), { onSuccess: () => navigate('/admin/academies') })}
+            onClick={() =>
+              remove.mutate(typed.trim(), { onSuccess: () => navigate('/admin/academies') })
+            }
           >
             {remove.isPending ? t('common.saving') : t('admin.danger.deleteConfirm')}
           </button>
@@ -181,7 +244,11 @@ function DangerZone({
  * happen together or not at all.
  */
 function RevokeOwnerModal({
-  open, onClose, academyId, owner, staff,
+  open,
+  onClose,
+  academyId,
+  owner,
+  staff,
 }: {
   open: boolean;
   onClose: () => void;
@@ -199,28 +266,43 @@ function RevokeOwnerModal({
 
   return (
     <Modal open={open} title={t('admin.revokeOwner.title')} onClose={onClose}>
-      <p className="mb-3 text-sm text-on-surface-variant">{t('admin.revokeOwner.body', { name: owner.fullName })}</p>
+      <p className="mb-3 text-sm text-on-surface-variant">
+        {t('admin.revokeOwner.body', { name: owner.fullName })}
+      </p>
       {candidates.length === 0 ? (
         <p className="mb-4 rounded-xl bg-error-container px-4 py-2 text-sm text-on-error-container">
           {t('admin.revokeOwner.noCandidates')}
         </p>
       ) : (
         <Field label={t('admin.revokeOwner.successor')}>
-          <select className="input w-full" value={successor} onChange={(e) => setSuccessor(e.target.value)}>
+          <select
+            className="input w-full"
+            value={successor}
+            onChange={(e) => setSuccessor(e.target.value)}
+          >
             <option value="">{t('admin.revokeOwner.pick')}</option>
             {candidates.map((c) => (
-              <option key={c.userId} value={c.userId}>{c.fullName}</option>
+              <option key={c.userId} value={c.userId}>
+                {c.fullName}
+              </option>
             ))}
           </select>
         </Field>
       )}
       <ErrorNote error={revoke.error} />
       <div className="flex justify-end gap-2">
-        <button className="btn-secondary px-4 py-2 text-sm" onClick={onClose}>{t('common.cancel')}</button>
+        <button className="btn-secondary px-4 py-2 text-sm" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
         <button
           className="rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error disabled:opacity-40"
           disabled={!successor || revoke.isPending}
-          onClick={() => revoke.mutate({ userId: owner.id, transferOwnershipTo: successor }, { onSuccess: onClose })}
+          onClick={() =>
+            revoke.mutate(
+              { userId: owner.id, transferOwnershipTo: successor },
+              { onSuccess: onClose },
+            )
+          }
         >
           {t('admin.revokeOwner.confirm')}
         </button>
@@ -249,7 +331,9 @@ export default function AdminAcademyDetailPage() {
   // Shown once, right after creation — carried in the URL, not persisted or
   // re-fetchable. A resend mints a fresh one (in resendActivation.data), so
   // losing this copy is never a dead end: hit "resend activation" again.
-  const [activationLink, setActivationLink] = useState<string | null>(searchParams.get('activationLink'));
+  const [activationLink, setActivationLink] = useState<string | null>(
+    searchParams.get('activationLink'),
+  );
   const [linkCopied, setLinkCopied] = useState(false);
   const copyActivationLink = (url: string) => {
     void navigator.clipboard.writeText(url).then(() => {
@@ -264,7 +348,9 @@ export default function AdminAcademyDetailPage() {
       <div className="page">
         <Skeleton className="mb-6 h-24 rounded-2xl" />
         <div className="grid gap-4 sm:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
         </div>
       </div>
     );
@@ -295,7 +381,10 @@ export default function AdminAcademyDetailPage() {
 
   return (
     <div className="page">
-      <Link to="/admin/academies" className="mb-3 inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface">
+      <Link
+        to="/admin/academies"
+        className="mb-3 inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface"
+      >
         <span className="material-symbols-outlined text-lg">arrow_forward</span>
         {t('admin.backToAcademies')}
       </Link>
@@ -306,7 +395,9 @@ export default function AdminAcademyDetailPage() {
             <h1 className="font-heading text-2xl font-extrabold">{data.name}</h1>
             <Badge tone={TONE[data.status]}>{t(`admin.academyStatus.${data.status}`)}</Badge>
           </div>
-          <p className="text-sm text-outline" dir="ltr">{data.slug}</p>
+          <p className="text-sm text-outline" dir="ltr">
+            {data.slug}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <p className="text-sm text-on-surface-variant">
@@ -317,7 +408,9 @@ export default function AdminAcademyDetailPage() {
               className={`rounded-lg px-4 py-2 text-sm font-bold ${isActive ? 'border border-error/40 text-error hover:bg-error-container/40' : 'btn-primary'}`}
               onClick={() => setConfirmStatus(true)}
             >
-              {isActive ? t('adminControlStudio.actions.suspendAcademy') : t('adminControlStudio.actions.reactivateAcademy')}
+              {isActive
+                ? t('adminControlStudio.actions.suspendAcademy')
+                : t('adminControlStudio.actions.reactivateAcademy')}
             </button>
           )}
         </div>
@@ -326,7 +419,10 @@ export default function AdminAcademyDetailPage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label={t('admin.students')} value={data.studentsCount} />
         <Stat label={t('admin.staff')} value={data.staff.length} />
-        <Stat label={t('admin.courses')} value={`${data.publishedCoursesCount} / ${data.coursesCount}`} />
+        <Stat
+          label={t('admin.courses')}
+          value={`${data.publishedCoursesCount} / ${data.coursesCount}`}
+        />
         <Stat label={t('admin.totalEnrollments')} value={data.enrollmentsCount} />
       </div>
 
@@ -336,7 +432,9 @@ export default function AdminAcademyDetailPage() {
             <span className="material-symbols-outlined text-2xl">payments</span>
           </span>
           <div>
-            <p className="font-heading text-2xl font-extrabold tabular-nums">{egp(data.netRevenueCents)}</p>
+            <p className="font-heading text-2xl font-extrabold tabular-nums">
+              {egp(data.netRevenueCents)}
+            </p>
             <p className="text-sm text-on-surface-variant">{t('admin.netRevenue')}</p>
           </div>
         </div>
@@ -345,7 +443,9 @@ export default function AdminAcademyDetailPage() {
             <span className="material-symbols-outlined text-2xl">account_balance</span>
           </span>
           <div>
-            <p className="font-heading text-2xl font-extrabold tabular-nums">{egp(data.platformFeeCents)}</p>
+            <p className="font-heading text-2xl font-extrabold tabular-nums">
+              {egp(data.platformFeeCents)}
+            </p>
             <p className="text-sm text-on-surface-variant">{t('admin.platformFee')}</p>
           </div>
         </div>
@@ -356,7 +456,9 @@ export default function AdminAcademyDetailPage() {
           <button
             key={tb}
             className={`rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
-              tab === tb ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+              tab === tb
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
             }`}
             onClick={() => setTab(tb)}
           >
@@ -369,9 +471,13 @@ export default function AdminAcademyDetailPage() {
         <div className="card p-5">
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-outline">{data.kind === AcademyKind.CENTER ? t('admin.centerAdmin') : t('admin.owner')}</dt>
+              <dt className="text-xs text-outline">
+                {data.kind === AcademyKind.CENTER ? t('admin.centerAdmin') : t('admin.owner')}
+              </dt>
               <dd className="font-bold">{data.owner.fullName}</dd>
-              <dd className="text-sm text-on-surface-variant" dir="ltr">{data.owner.email ?? data.owner.phone ?? '—'}</dd>
+              <dd className="text-sm text-on-surface-variant" dir="ltr">
+                {data.owner.email ?? data.owner.phone ?? '—'}
+              </dd>
               <dd className="mt-1 flex flex-wrap items-center gap-2">
                 <Badge tone="neutral">{t(`admin.identity.${data.owner.role}`)}</Badge>
                 {data.kind === AcademyKind.CENTER && !data.owner.isActive && (
@@ -386,10 +492,17 @@ export default function AdminAcademyDetailPage() {
                         })
                       }
                     >
-                      {resendActivation.isSuccess && resendActivation.data.delivery.delivered !== false ? t('admin.activationResent') : t('admin.resendActivation')}
+                      {resendActivation.isSuccess &&
+                      resendActivation.data.delivery.delivered !== false
+                        ? t('admin.activationResent')
+                        : t('admin.resendActivation')}
                     </button>
-                    {((resendActivation.isSuccess && resendActivation.data.delivery.delivered === false) || emailFailedOnCreate) && (
-                      <span className="text-xs font-bold text-error">{t('admin.activationEmailFailed')}</span>
+                    {((resendActivation.isSuccess &&
+                      resendActivation.data.delivery.delivered === false) ||
+                      emailFailedOnCreate) && (
+                      <span className="text-xs font-bold text-error">
+                        {t('admin.activationEmailFailed')}
+                      </span>
                     )}
                   </>
                 )}
@@ -399,10 +512,16 @@ export default function AdminAcademyDetailPage() {
                   <span className="material-symbols-outlined text-lg text-primary">link</span>
                   <input
                     className="input flex-1 truncate border-0 bg-transparent px-1 py-1 text-xs"
-                    dir="ltr" readOnly value={activationLink}
+                    dir="ltr"
+                    readOnly
+                    value={activationLink}
                     onFocus={(e) => e.currentTarget.select()}
                   />
-                  <button type="button" className="btn-secondary shrink-0 px-3 py-1.5 text-xs" onClick={() => copyActivationLink(activationLink)}>
+                  <button
+                    type="button"
+                    className="btn-secondary shrink-0 px-3 py-1.5 text-xs"
+                    onClick={() => copyActivationLink(activationLink)}
+                  >
                     {linkCopied ? t('common.copied') : t('common.copyLink')}
                   </button>
                 </dd>
@@ -410,7 +529,9 @@ export default function AdminAcademyDetailPage() {
             </div>
             <div>
               <dt className="text-xs text-outline">{t('admin.lastActivity')}</dt>
-              <dd className="font-bold">{data.lastActivityAt ? dateShort(data.lastActivityAt) : t('admin.noActivityYet')}</dd>
+              <dd className="font-bold">
+                {data.lastActivityAt ? dateShort(data.lastActivityAt) : t('admin.noActivityYet')}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-outline">{t('admin.feePlan')}</dt>
@@ -446,7 +567,10 @@ export default function AdminAcademyDetailPage() {
       {tab === 'staff' && (
         <div>
           <div className="mb-4 flex justify-end">
-            <button className="btn-primary px-4 py-2 text-sm" onClick={() => setShowAddMember(true)}>
+            <button
+              className="btn-primary px-4 py-2 text-sm"
+              onClick={() => setShowAddMember(true)}
+            >
               {t('adminControlStudio.staff.add')}
             </button>
           </div>
@@ -457,14 +581,22 @@ export default function AdminAcademyDetailPage() {
               return (
                 <div key={s.id} className="card flex items-center gap-4 p-4">
                   <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
-                    {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="h-full w-full object-cover" /> : s.fullName?.trim()?.charAt(0)}
+                    {s.avatarUrl ? (
+                      <img src={s.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      s.fullName?.trim()?.charAt(0)
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-heading font-bold">{s.fullName}</p>
-                    <p className="truncate text-xs text-outline" dir="ltr">{s.email}</p>
+                    <p className="truncate text-xs text-outline" dir="ltr">
+                      {s.email}
+                    </p>
                   </div>
                   {isInvited && <Badge tone="warn">{t('adminControlStudio.staff.invited')}</Badge>}
-                  <Badge tone={isOwner ? 'primary' : s.status === 'SUSPENDED' ? 'error' : 'neutral'}>
+                  <Badge
+                    tone={isOwner ? 'primary' : s.status === 'SUSPENDED' ? 'error' : 'neutral'}
+                  >
                     {t(`admin.staffRole.${s.role}`)}
                   </Badge>
                   {/* The owner's access is revocable only by a platform admin,
@@ -484,9 +616,16 @@ export default function AdminAcademyDetailPage() {
                         <button
                           className="rounded-lg px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:bg-surface-container-low"
                           disabled={updateMember.isPending}
-                          onClick={() => updateMember.mutate({ membershipId: s.id, status: s.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' })}
+                          onClick={() =>
+                            updateMember.mutate({
+                              membershipId: s.id,
+                              status: s.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED',
+                            })
+                          }
                         >
-                          {s.status === 'SUSPENDED' ? t('adminControlStudio.staff.reactivate') : t('adminControlStudio.staff.suspend')}
+                          {s.status === 'SUSPENDED'
+                            ? t('adminControlStudio.staff.reactivate')
+                            : t('adminControlStudio.staff.suspend')}
                         </button>
                       )}
                       <button
@@ -503,13 +642,23 @@ export default function AdminAcademyDetailPage() {
             })}
           </div>
           <ErrorNote error={updateMember.error ?? removeMember.error} />
-          {data.slug && <AddMemberModal open={showAddMember} onClose={() => setShowAddMember(false)} slug={data.slug} />}
+          {data.slug && (
+            <AddMemberModal
+              open={showAddMember}
+              onClose={() => setShowAddMember(false)}
+              slug={data.slug}
+            />
+          )}
           <RevokeOwnerModal
             open={revokeOwner}
             onClose={() => setRevokeOwner(false)}
             academyId={data.id}
             owner={{ id: data.owner.id, fullName: data.owner.fullName }}
-            staff={(members.data ?? []).map((m) => ({ userId: m.userId, fullName: m.fullName, status: m.status }))}
+            staff={(members.data ?? []).map((m) => ({
+              userId: m.userId,
+              fullName: m.fullName,
+              status: m.status,
+            }))}
           />
         </div>
       )}
@@ -520,7 +669,9 @@ export default function AdminAcademyDetailPage() {
             <div key={f.key} className="flex items-center justify-between gap-4 p-4">
               <div>
                 <p className="font-heading font-bold">{t(`admin.featureFlag.${f.key}.label`)}</p>
-                <p className="text-sm text-on-surface-variant">{t(`admin.featureFlag.${f.key}.hint`)}</p>
+                <p className="text-sm text-on-surface-variant">
+                  {t(`admin.featureFlag.${f.key}.hint`)}
+                </p>
               </div>
               <button
                 role="switch"
@@ -542,14 +693,20 @@ export default function AdminAcademyDetailPage() {
       {tab === 'activity' && (
         <div className="card divide-y divide-outline-variant/50 p-0">
           {activity.isLoading ? (
-            <div className="p-4"><Skeleton className="h-32 rounded-xl" /></div>
+            <div className="p-4">
+              <Skeleton className="h-32 rounded-xl" />
+            </div>
           ) : !activity.data?.length ? (
-            <p className="p-8 text-center text-sm text-outline">{t('adminControlStudio.activity.empty')}</p>
+            <p className="p-8 text-center text-sm text-outline">
+              {t('adminControlStudio.activity.empty')}
+            </p>
           ) : (
             activity.data.map((row) => (
               <div key={row.id} className="p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-heading text-sm font-bold" dir="ltr">{row.action}</p>
+                  <p className="font-heading text-sm font-bold" dir="ltr">
+                    {row.action}
+                  </p>
                   <p className="text-xs text-outline">{dateShort(row.createdAt)}</p>
                 </div>
                 <p className="text-xs text-on-surface-variant">
@@ -561,23 +718,48 @@ export default function AdminAcademyDetailPage() {
         </div>
       )}
 
-      <Modal open={confirmStatus} title={isActive ? t('adminControlStudio.actions.suspendAcademy') : t('adminControlStudio.actions.reactivateAcademy')} onClose={() => setConfirmStatus(false)}>
+      <Modal
+        open={confirmStatus}
+        title={
+          isActive
+            ? t('adminControlStudio.actions.suspendAcademy')
+            : t('adminControlStudio.actions.reactivateAcademy')
+        }
+        onClose={() => setConfirmStatus(false)}
+      >
         <p className="mb-4 text-sm text-on-surface-variant">
-          {isActive ? t('adminControlStudio.actions.suspendConfirm', { name: data.name }) : t('adminControlStudio.actions.reactivateConfirm', { name: data.name })}
+          {isActive
+            ? t('adminControlStudio.actions.suspendConfirm', { name: data.name })
+            : t('adminControlStudio.actions.reactivateConfirm', { name: data.name })}
         </p>
-        <ErrorNote error={data.kind === AcademyKind.CENTER ? setCenterStatus.error : setActive.error} />
+        <ErrorNote
+          error={data.kind === AcademyKind.CENTER ? setCenterStatus.error : setActive.error}
+        />
         <div className="flex justify-end gap-2">
-          <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setConfirmStatus(false)}>{t('common.cancel')}</button>
           <button
-            className={isActive ? 'rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error' : 'btn-primary px-4 py-2 text-sm'}
+            className="btn-secondary px-4 py-2 text-sm"
+            onClick={() => setConfirmStatus(false)}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            className={
+              isActive
+                ? 'rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error'
+                : 'btn-primary px-4 py-2 text-sm'
+            }
             disabled={setActive.isPending || setCenterStatus.isPending}
             onClick={() =>
               data.kind === AcademyKind.CENTER
-                ? setCenterStatus.mutate(isActive ? 'SUSPENDED' : 'ACTIVE', { onSuccess: () => setConfirmStatus(false) })
+                ? setCenterStatus.mutate(isActive ? 'SUSPENDED' : 'ACTIVE', {
+                    onSuccess: () => setConfirmStatus(false),
+                  })
                 : setActive.mutate(!isActive, { onSuccess: () => setConfirmStatus(false) })
             }
           >
-            {isActive ? t('adminControlStudio.actions.suspendAcademy') : t('adminControlStudio.actions.reactivateAcademy')}
+            {isActive
+              ? t('adminControlStudio.actions.suspendAcademy')
+              : t('adminControlStudio.actions.reactivateAcademy')}
           </button>
         </div>
       </Modal>

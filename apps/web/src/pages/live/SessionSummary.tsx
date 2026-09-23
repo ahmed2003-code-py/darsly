@@ -104,9 +104,7 @@ function RecordingBlock({
         </button>
       )}
       {open.isError && <p className="mt-1 text-xs text-error">{t('summary.recFailed')}</p>}
-      {url && (
-        <video src={url} controls playsInline className="mt-2 w-full rounded-lg bg-black" />
-      )}
+      {url && <video src={url} controls playsInline className="mt-2 w-full rounded-lg bg-black" />}
     </div>
   );
 }
@@ -133,7 +131,12 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live-detail', sessionId] }),
   });
 
-  if (detail.isLoading) return <div className="py-6 text-center"><Spinner /></div>;
+  if (detail.isLoading)
+    return (
+      <div className="py-6 text-center">
+        <Spinner />
+      </div>
+    );
   if (detail.isError) return null;
 
   const d = detail.data;
@@ -181,13 +184,18 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
           <div className="py-2">
             <p className="text-sm text-outline">{t('summary.noTranscript')}</p>
           </div>
-        ) : d.summary.error === 'TRANSCRIPT_PENDING' || d.summary.error === 'PROVIDER_UNREACHABLE' ? (
+        ) : d.summary.error === 'TRANSCRIPT_PENDING' ||
+          d.summary.error === 'PROVIDER_UNREACHABLE' ? (
           // The words exist, or may well: the provider had not finished with
           // them, or could not be asked. Trying again is exactly right here.
           <div className="py-2">
             <p className="mb-2 text-sm text-outline">{t('summary.transcriptPending')}</p>
             {isTeacher && (
-              <button className="btn-ghost text-sm" disabled={generate.isPending} onClick={() => generate.mutate()}>
+              <button
+                className="btn-ghost text-sm"
+                disabled={generate.isPending}
+                onClick={() => generate.mutate()}
+              >
                 {t('summary.retry')}
               </button>
             )}
@@ -196,7 +204,11 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
           <div className="py-2">
             <p className="mb-2 text-sm text-outline">{t('summary.failed')}</p>
             {isTeacher && (
-              <button className="btn-ghost text-sm" disabled={generate.isPending} onClick={() => generate.mutate()}>
+              <button
+                className="btn-ghost text-sm"
+                disabled={generate.isPending}
+                onClick={() => generate.mutate()}
+              >
                 {t('summary.retry')}
               </button>
             )}
@@ -207,7 +219,11 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
         (isTeacher ? (
           <div className="py-2">
             <p className="mb-2 text-sm text-outline">{t('summary.notYetHint')}</p>
-            <button className="btn-primary text-sm" disabled={generate.isPending} onClick={() => generate.mutate()}>
+            <button
+              className="btn-primary text-sm"
+              disabled={generate.isPending}
+              onClick={() => generate.mutate()}
+            >
               <span className="material-symbols-outlined text-base">auto_awesome</span>
               {generate.isPending ? t('common.saving') : t('summary.generate')}
             </button>
@@ -225,7 +241,10 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
             <div className="flex flex-wrap gap-1.5">
               {data.topics.length ? (
                 data.topics.map((tp, i) => (
-                  <span key={i} className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed">
+                  <span
+                    key={i}
+                    className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed"
+                  >
                     {tp}
                   </span>
                 ))

@@ -21,11 +21,19 @@ import { readFileSync } from 'fs';
 
 const API = process.env.API_URL ?? 'http://127.0.0.1:3077/api/v1';
 const LOG = process.env.SQL_LOG;
-if (!LOG) { console.error('SQL_LOG is not set — point it at the API stdout file.'); process.exit(2); }
+if (!LOG) {
+  console.error('SQL_LOG is not set — point it at the API stdout file.');
+  process.exit(2);
+}
 
 const lines = () => {
-  try { return readFileSync(LOG, 'utf8').split('\n').filter((l) => l.startsWith('[sql')).length; }
-  catch { return 0; }
+  try {
+    return readFileSync(LOG, 'utf8')
+      .split('\n')
+      .filter((l) => l.startsWith('[sql')).length;
+  } catch {
+    return 0;
+  }
 };
 
 /** Let the statements from a request finish landing in the log before counting. */
@@ -33,7 +41,8 @@ const settle = () => new Promise((r) => setTimeout(r, 900));
 
 async function login(email, password = 'Darsly@123') {
   const r = await fetch(`${API}/auth/login`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
   if (!r.ok) throw new Error(`login ${email}: ${r.status}`);
@@ -44,25 +53,32 @@ async function measure(label, path, token) {
   await settle();
   const before = lines();
   const t0 = performance.now();
-  const r = await fetch(`${API}${path}`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+  const r = await fetch(`${API}${path}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
   const ms = performance.now() - t0;
   const body = await r.json().catch(() => null);
   await settle();
   const queries = lines() - before;
-  const rows = Array.isArray(body) ? body.length
-    : Array.isArray(body?.items) ? body.items.length
-    : Array.isArray(body?.data) ? body.data.length
-    : null;
+  const rows = Array.isArray(body)
+    ? body.length
+    : Array.isArray(body?.items)
+      ? body.items.length
+      : Array.isArray(body?.data)
+        ? body.data.length
+        : null;
   return { label, status: r.status, ms, queries, rows };
 }
 
 const { PrismaClient } = await import('@prisma/client');
 const prisma = new PrismaClient();
 const student = await prisma.studentProfile.findFirst({
-  where: { user: { isActive: true } }, include: { user: { select: { email: true } } },
+  where: { user: { isActive: true } },
+  include: { user: { select: { email: true } } },
 });
 const teacher = await prisma.teacherProfile.findFirst({
-  where: { status: 'APPROVED' }, include: { user: { select: { email: true } } },
+  where: { status: 'APPROVED' },
+  include: { user: { select: { email: true } } },
 });
 const admin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN', isActive: true } });
 await prisma.$disconnect();
@@ -101,13 +117,21 @@ for (const [label, path, token] of plan) {
 }
 
 console.log('\nN+1 check — does the statement count follow the row count?');
-for (const [small, large] of [['course discovery (10)', 'course discovery (50)'], ['teacher discovery (10)', 'teacher discovery (50)']]) {
+for (const [small, large] of [
+  ['course discovery (10)', 'course discovery (50)'],
+  ['teacher discovery (10)', 'teacher discovery (50)'],
+]) {
   const a = results.find((r) => r.label === small);
   const b = results.find((r) => r.label === large);
   if (!a || !b) continue;
   const grew = b.queries - a.queries;
-  const verdict = grew <= 1 ? 'FLAT — no N+1'
-    : grew >= (b.rows ?? 0) - (a.rows ?? 0) ? 'N+1 — one statement per row'
-    : `grows by ${grew} for ${(b.rows ?? 0) - (a.rows ?? 0)} more rows — partial`;
-  console.log(`  ${small.replace(' (10)', '').padEnd(26)} ${a.queries} -> ${b.queries} queries for ${a.rows} -> ${b.rows} rows   ${verdict}`);
+  const verdict =
+    grew <= 1
+      ? 'FLAT — no N+1'
+      : grew >= (b.rows ?? 0) - (a.rows ?? 0)
+        ? 'N+1 — one statement per row'
+        : `grows by ${grew} for ${(b.rows ?? 0) - (a.rows ?? 0)} more rows — partial`;
+  console.log(
+    `  ${small.replace(' (10)', '').padEnd(26)} ${a.queries} -> ${b.queries} queries for ${a.rows} -> ${b.rows} rows   ${verdict}`,
+  );
 }

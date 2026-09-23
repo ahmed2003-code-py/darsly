@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AcademyRole } from '@darsly/shared-types';
 import { api } from './api';
-import { applyAdminTheme, DEFAULT_ADMIN_THEME, stripAdminThemeFromDom, type AdminThemeEntry } from './adminTheme';
+import {
+  applyAdminTheme,
+  DEFAULT_ADMIN_THEME,
+  stripAdminThemeFromDom,
+  type AdminThemeEntry,
+} from './adminTheme';
 
 // ── Theme ────────────────────────────────────────────────────────────────
 
@@ -39,7 +44,8 @@ export function useAdminThemeCatalog() {
 export function useSetAdminTheme() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (themeId: string | null) => (await api.patch<AdminThemePreference>('/admin/theme', { themeId })).data,
+    mutationFn: async (themeId: string | null) =>
+      (await api.patch<AdminThemePreference>('/admin/theme', { themeId })).data,
     onSuccess: (data) => qc.setQueryData(['admin-theme'], data),
   });
 }
@@ -104,8 +110,14 @@ export function useAddAcademyMember(slug: string | undefined) {
 export function useUpdateAcademyMember(slug: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ membershipId, ...body }: { membershipId: string; role?: 'TEACHER' | 'ASSISTANT'; status?: 'ACTIVE' | 'SUSPENDED' }) =>
-      (await api.patch(`/academies/${slug}/members/${membershipId}`, body)).data,
+    mutationFn: async ({
+      membershipId,
+      ...body
+    }: {
+      membershipId: string;
+      role?: 'TEACHER' | 'ASSISTANT';
+      status?: 'ACTIVE' | 'SUSPENDED';
+    }) => (await api.patch(`/academies/${slug}/members/${membershipId}`, body)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-academy-members', slug] }),
   });
 }
@@ -113,7 +125,8 @@ export function useUpdateAcademyMember(slug: string | undefined) {
 export function useRemoveAcademyMember(slug: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (membershipId: string) => (await api.delete(`/academies/${slug}/members/${membershipId}`)).data,
+    mutationFn: async (membershipId: string) =>
+      (await api.delete(`/academies/${slug}/members/${membershipId}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-academy-members', slug] }),
   });
 }
@@ -126,7 +139,11 @@ export function useSetAcademyActive(academyId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (active: boolean) =>
-      (await api.patch(`/admin/teachers/${academyId}/status`, { status: active ? 'APPROVED' : 'SUSPENDED' })).data,
+      (
+        await api.patch(`/admin/teachers/${academyId}/status`, {
+          status: active ? 'APPROVED' : 'SUSPENDED',
+        })
+      ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-academy-detail', academyId] });
       qc.invalidateQueries({ queryKey: ['admin-academies'] });

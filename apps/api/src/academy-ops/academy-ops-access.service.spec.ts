@@ -8,7 +8,15 @@ function makePrisma() {
   } as any;
 }
 function ctx(overrides: Partial<{ academyId: string; userId: string; role: string }> = {}) {
-  return { academyId: 'a1', userId: 'u1', role: 'TEACHER', status: 'ACTIVE', isPlatformAdmin: false, can: () => true, ...overrides } as any;
+  return {
+    academyId: 'a1',
+    userId: 'u1',
+    role: 'TEACHER',
+    status: 'ACTIVE',
+    isPlatformAdmin: false,
+    can: () => true,
+    ...overrides,
+  } as any;
 }
 
 describe('AcademyOpsAccessService.assertGroupAccess', () => {
@@ -24,7 +32,10 @@ describe('AcademyOpsAccessService.assertGroupAccess', () => {
     const prisma = makePrisma();
     prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' });
     const svc = new AcademyOpsAccessService(prisma);
-    await expect(svc.assertGroupAccess(ctx({ role: 'OWNER' }), 'g1')).resolves.toEqual({ id: 'g1', academyId: 'a1' });
+    await expect(svc.assertGroupAccess(ctx({ role: 'OWNER' }), 'g1')).resolves.toEqual({
+      id: 'g1',
+      academyId: 'a1',
+    });
     expect(prisma.groupAssignment.findFirst).not.toHaveBeenCalled();
   });
 
@@ -45,7 +56,9 @@ describe('AcademyOpsAccessService.assertGroupAccess', () => {
     prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' }); // same academy — passes tenant check
     prisma.groupAssignment.findFirst.mockResolvedValue(null); // but not assigned to THIS group
     const svc = new AcademyOpsAccessService(prisma);
-    await expect(svc.assertGroupAccess(ctx({ userId: 'teacherB' }), 'g1')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.assertGroupAccess(ctx({ userId: 'teacherB' }), 'g1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('ASSISTANT not assigned is refused the same way', async () => {
@@ -53,6 +66,8 @@ describe('AcademyOpsAccessService.assertGroupAccess', () => {
     prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' });
     prisma.groupAssignment.findFirst.mockResolvedValue(null);
     const svc = new AcademyOpsAccessService(prisma);
-    await expect(svc.assertGroupAccess(ctx({ role: 'ASSISTANT' }), 'g1')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.assertGroupAccess(ctx({ role: 'ASSISTANT' }), 'g1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 });

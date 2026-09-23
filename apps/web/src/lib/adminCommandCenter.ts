@@ -65,7 +65,14 @@ export interface AdminAcademyDetail {
   currency: string;
   feeType: 'PERCENT' | 'FIXED';
   feeValue: number;
-  owner: { id: string; fullName: string; email: string | null; phone: string | null; role: string; isActive: boolean };
+  owner: {
+    id: string;
+    fullName: string;
+    email: string | null;
+    phone: string | null;
+    role: string;
+    isActive: boolean;
+  };
   domains: { hostname: string; isPrimary: boolean; verifiedAt: string | null }[];
   staff: AdminAcademyStaff[];
   coursesCount: number;
@@ -100,19 +107,27 @@ export function useAdminOverview() {
   });
 }
 
-export function useAdminAcademies(params: { search?: string; status?: AcademyStatus | ''; kind?: AcademyKind; page?: number; pageSize?: number }) {
+export function useAdminAcademies(params: {
+  search?: string;
+  status?: AcademyStatus | '';
+  kind?: AcademyKind;
+  page?: number;
+  pageSize?: number;
+}) {
   return useQuery<AdminAcademyList>({
     queryKey: ['admin-academies', params],
     queryFn: async () =>
-      (await api.get('/admin/academies', {
-        params: {
-          ...(params.search ? { search: params.search } : {}),
-          ...(params.status ? { status: params.status } : {}),
-          ...(params.kind ? { kind: params.kind } : {}),
-          page: params.page ?? 1,
-          pageSize: params.pageSize ?? 20,
-        },
-      })).data,
+      (
+        await api.get('/admin/academies', {
+          params: {
+            ...(params.search ? { search: params.search } : {}),
+            ...(params.status ? { status: params.status } : {}),
+            ...(params.kind ? { kind: params.kind } : {}),
+            page: params.page ?? 1,
+            pageSize: params.pageSize ?? 20,
+          },
+        })
+      ).data,
     placeholderData: (prev) => prev,
   });
 }
@@ -162,7 +177,11 @@ export interface CreateCenterInput {
   themeIds?: string[];
 }
 export interface CreateCenterResult {
-  id: string; slug: string; name: string; status: AcademyStatus; kind: AcademyKind;
+  id: string;
+  slug: string;
+  name: string;
+  status: AcademyStatus;
+  kind: AcademyKind;
   admin: { id: string; role: string; activation: 'EMAIL_SENT' | 'EMAIL_FAILED' | 'NOT_REQUIRED' };
   /** Present for a new (email-activated) admin: whether the activation email was actually accepted for delivery. */
   delivery?: { delivered: true } | { delivered: false; reason: 'no-provider' | 'provider-error' };
@@ -173,8 +192,11 @@ export interface CreateCenterResult {
 export function useCreateCenter() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateCenterInput) => (await api.post<CreateCenterResult>('/admin/centers', input)).data,
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['admin-academies'] }); },
+    mutationFn: async (input: CreateCenterInput) =>
+      (await api.post<CreateCenterResult>('/admin/centers', input)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-academies'] });
+    },
   });
 }
 
@@ -199,7 +221,9 @@ export interface ResendActivationResult {
 
 export function useResendCenterActivation(academyId: string) {
   return useMutation({
-    mutationFn: async () => (await api.post<ResendActivationResult>(`/admin/centers/${academyId}/activation/resend`)).data,
+    mutationFn: async () =>
+      (await api.post<ResendActivationResult>(`/admin/centers/${academyId}/activation/resend`))
+        .data,
   });
 }
 

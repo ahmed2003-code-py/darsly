@@ -85,7 +85,12 @@ export class DeviceTokenService {
   }
 
   private async signPair(device: { id: string; phone: string }): Promise<DeviceTokens> {
-    const payload: DeviceJwtPayload = { sub: device.id, typ: 'device', phone: device.phone, jti: randomUUID() };
+    const payload: DeviceJwtPayload = {
+      sub: device.id,
+      typ: 'device',
+      phone: device.phone,
+      jti: randomUUID(),
+    };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(payload, {
         secret: process.env.JWT_ACCESS_SECRET,

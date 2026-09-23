@@ -101,8 +101,11 @@ export class UpdateLessonDto extends PartialType(CreateLessonDto) {
 export class ImportYoutubeDto {
   // Small on purpose: each URL costs a real yt-dlp process (metadata now, a
   // full download in the background right after) — this is not a bulk-id list.
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10)
-  @IsString({ each: true }) @MaxLength(500, { each: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
   urls: string[];
 
   /** Target section; omitted lands the lessons with no section, like a single direct add. */
@@ -115,14 +118,20 @@ export class ImportYoutubeDto {
 
 export class ReorderDto {
   /** ids in their new order */
-  @IsArray() @ArrayMaxSize(LIMITS.ARRAY) @ArrayUnique()
-  @IsString({ each: true }) @MaxLength(LIMITS.ID, { each: true })
+  @IsArray()
+  @ArrayMaxSize(LIMITS.ARRAY)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(LIMITS.ID, { each: true })
   ids: string[];
 }
 
 export class SetBundleItemsDto {
-  @IsArray() @ArrayMaxSize(LIMITS.ARRAY) @ArrayUnique()
-  @IsString({ each: true }) @MaxLength(LIMITS.ID, { each: true })
+  @IsArray()
+  @ArrayMaxSize(LIMITS.ARRAY)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(LIMITS.ID, { each: true })
   courseIds: string[];
 }
 

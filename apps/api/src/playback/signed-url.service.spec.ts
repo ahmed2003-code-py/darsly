@@ -3,7 +3,13 @@ import { SignedUrlService } from './signed-url.service';
 
 describe('SignedUrlService', () => {
   let svc: SignedUrlService;
-  const baseClaims = { sid: 'sess1', uid: 'user1', aid: 'asset1', lid: 'lesson1', wm: 'DRS-12345-ABCD' };
+  const baseClaims = {
+    sid: 'sess1',
+    uid: 'user1',
+    aid: 'asset1',
+    lid: 'lesson1',
+    wm: 'DRS-12345-ABCD',
+  };
 
   beforeEach(() => {
     process.env.VIDEO_SIGNING_SECRET = 'test-secret';

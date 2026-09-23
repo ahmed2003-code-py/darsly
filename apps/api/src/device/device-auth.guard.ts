@@ -53,5 +53,6 @@ export interface CurrentDeviceCtx {
 
 /** Injects the authenticated ListenerDevice: { id, phone }. */
 export const CurrentDevice = createParamDecorator(
-  (_data: unknown, ctx: ExecutionContext): CurrentDeviceCtx => ctx.switchToHttp().getRequest().device,
+  (_data: unknown, ctx: ExecutionContext): CurrentDeviceCtx =>
+    ctx.switchToHttp().getRequest().device,
 );

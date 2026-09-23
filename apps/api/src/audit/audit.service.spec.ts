@@ -21,10 +21,16 @@ function makePrisma(rows: any[]) {
   } as any;
 }
 
-const row = (id: string, academyId: string) => ({ id, academyId, action: 'x', createdAt: new Date(), actor: { fullName: 'A', role: 'TEACHER' } });
+const row = (id: string, academyId: string) => ({
+  id,
+  academyId,
+  action: 'x',
+  createdAt: new Date(),
+  actor: { fullName: 'A', role: 'TEACHER' },
+});
 
 describe('AuditService.listForAcademy', () => {
-  it('scopes strictly to the given academyId — never mixes in another Center\'s rows', async () => {
+  it("scopes strictly to the given academyId — never mixes in another Center's rows", async () => {
     const prisma = makePrisma([row('l1', 'centerA'), row('l2', 'centerB'), row('l3', 'centerA')]);
     const svc = new AuditService(prisma);
     const out = await svc.listForAcademy('centerA');

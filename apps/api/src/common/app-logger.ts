@@ -30,7 +30,12 @@ export class AppLogger extends ConsoleLogger {
       // reproduction can be followed too. Absent outside a request (a worker
       // tick, boot) rather than faked.
       const id = currentRequestId();
-      super.printMessages(id ? messages.map((m) => `${String(m)} [req:${id}]`) : messages, context, logLevel, writeStreamType);
+      super.printMessages(
+        id ? messages.map((m) => `${String(m)} [req:${id}]`) : messages,
+        context,
+        logLevel,
+        writeStreamType,
+      );
       return;
     }
 
@@ -42,7 +47,9 @@ export class AppLogger extends ConsoleLogger {
         requestId: currentRequestId() ?? undefined,
         message: typeof message === 'string' ? message : safeSerialize(message),
       });
-      process[logLevel === 'error' || logLevel === 'fatal' ? 'stderr' : 'stdout'].write(`${line}\n`);
+      process[logLevel === 'error' || logLevel === 'fatal' ? 'stderr' : 'stdout'].write(
+        `${line}\n`,
+      );
     }
   }
 }

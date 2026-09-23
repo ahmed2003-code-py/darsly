@@ -20,7 +20,11 @@ const created: string[] = [];
 
 async function makeAsset(status: 'UPLOADING' | 'PROCESSING' | 'READY' = 'PROCESSING') {
   const asset = await prisma.videoAsset.create({
-    data: { tenantId: `t-${randomUUID().slice(0, 8)}`, originalKey: `source/${randomUUID()}.mp4`, status },
+    data: {
+      tenantId: `t-${randomUUID().slice(0, 8)}`,
+      originalKey: `source/${randomUUID()}.mp4`,
+      status,
+    },
   });
   created.push(asset.id);
   return asset;
@@ -223,7 +227,10 @@ describe('VideoJob against a real database', () => {
     // Not yet — the backoff is still running.
     expect((await svc.claimNext(60_000))?.id).not.toBe(job.id);
 
-    await prisma.videoJob.update({ where: { id: job.id }, data: { nextRunAt: new Date(Date.now() - 1) } });
+    await prisma.videoJob.update({
+      where: { id: job.id },
+      data: { nextRunAt: new Date(Date.now() - 1) },
+    });
     expect((await svc.claimNext(60_000))?.id).toBe(job.id);
   });
 

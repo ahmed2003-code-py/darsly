@@ -26,7 +26,11 @@ export class AiJobService {
 
   /** Enqueue a job. Rejects if the feature is off, a job is already active for
    *  this academy, or the monthly AI budget is exhausted. */
-  async enqueue(academyId: string, type: AiJobType, input: Prisma.InputJsonValue = {}): Promise<AiJob> {
+  async enqueue(
+    academyId: string,
+    type: AiJobType,
+    input: Prisma.InputJsonValue = {},
+  ): Promise<AiJob> {
     if (!this.config.enabled) {
       throw new ServiceUnavailableException('AI features are currently disabled');
     }
@@ -104,7 +108,10 @@ export class AiJobService {
     return this.prisma.aiJob.update({ where: { id: jobId }, data: { stage } });
   }
 
-  async succeed(jobId: string, result: { costCents?: number; resultSnapshotId?: string }): Promise<void> {
+  async succeed(
+    jobId: string,
+    result: { costCents?: number; resultSnapshotId?: string },
+  ): Promise<void> {
     await this.prisma.aiJob.update({
       where: { id: jobId },
       data: {

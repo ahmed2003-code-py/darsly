@@ -22,7 +22,10 @@ interface WalletData {
 }
 
 const KIND_ICON: Record<string, string> = {
-  TOPUP: 'add_card', PURCHASE: 'shopping_cart', REFUND: 'undo', ADJUST: 'tune',
+  TOPUP: 'add_card',
+  PURCHASE: 'shopping_cart',
+  REFUND: 'undo',
+  ADJUST: 'tune',
 };
 
 export default function WalletPage() {
@@ -34,7 +37,12 @@ export default function WalletPage() {
     queryFn: async () => (await api.get('/wallet')).data,
   });
 
-  if (isLoading) return <div className="page"><Spinner /></div>;
+  if (isLoading)
+    return (
+      <div className="page">
+        <Spinner />
+      </div>
+    );
 
   const pending = data?.pendingTopups?.[0];
 
@@ -58,10 +66,21 @@ export default function WalletPage() {
           {/* Balance hero */}
           <Reveal>
             <div className="relative overflow-hidden rounded-3xl bg-primary p-6 text-on-primary shadow-card">
-              <div className="absolute -end-6 -top-8 h-40 w-40 rounded-full bg-on-primary/10" aria-hidden />
-              <div className="absolute -bottom-10 -start-4 h-32 w-32 rounded-full bg-on-primary/10" aria-hidden />
-              <p className="relative text-sm font-semibold opacity-90">{t('walletStudent.balance')}</p>
-              <p className="relative mt-1 font-heading text-5xl font-extrabold tracking-tight tabular-nums" dir="ltr">
+              <div
+                className="absolute -end-6 -top-8 h-40 w-40 rounded-full bg-on-primary/10"
+                aria-hidden
+              />
+              <div
+                className="absolute -bottom-10 -start-4 h-32 w-32 rounded-full bg-on-primary/10"
+                aria-hidden
+              />
+              <p className="relative text-sm font-semibold opacity-90">
+                {t('walletStudent.balance')}
+              </p>
+              <p
+                className="relative mt-1 font-heading text-5xl font-extrabold tracking-tight tabular-nums"
+                dir="ltr"
+              >
                 {egp(data?.balanceCents ?? 0)}
               </p>
               {pending && (
@@ -75,7 +94,9 @@ export default function WalletPage() {
 
           {/* History */}
           <section>
-            <h2 className="mb-3 font-heading text-xl font-extrabold">{t('walletStudent.history')}</h2>
+            <h2 className="mb-3 font-heading text-xl font-extrabold">
+              {t('walletStudent.history')}
+            </h2>
             {!data?.transactions?.length ? (
               <EmptyState icon="account_balance_wallet" title={t('walletStudent.noHistory')} />
             ) : (
@@ -85,8 +106,12 @@ export default function WalletPage() {
                   return (
                     <StaggerItem key={tx.id}>
                       <div className="card flex items-center gap-4 py-3">
-                        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${positive ? 'bg-secondary-container/50 text-secondary' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                          <span className="material-symbols-outlined text-[22px]">{KIND_ICON[tx.kind] ?? 'payments'}</span>
+                        <span
+                          className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${positive ? 'bg-secondary-container/50 text-secondary' : 'bg-surface-container-high text-on-surface-variant'}`}
+                        >
+                          <span className="material-symbols-outlined text-[22px]">
+                            {KIND_ICON[tx.kind] ?? 'payments'}
+                          </span>
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-bold">{tx.description}</p>
@@ -94,8 +119,12 @@ export default function WalletPage() {
                             {t(`walletStudent.kind.${tx.kind}`)} · {dateShort(tx.createdAt)}
                           </p>
                         </div>
-                        <span className={`shrink-0 font-heading font-bold tabular-nums ${positive ? 'text-secondary' : 'text-on-surface'}`} dir="ltr">
-                          {positive ? '+' : '−'}{egp(Math.abs(tx.amountCents))}
+                        <span
+                          className={`shrink-0 font-heading font-bold tabular-nums ${positive ? 'text-secondary' : 'text-on-surface'}`}
+                          dir="ltr"
+                        >
+                          {positive ? '+' : '−'}
+                          {egp(Math.abs(tx.amountCents))}
                         </span>
                       </div>
                     </StaggerItem>
@@ -109,7 +138,9 @@ export default function WalletPage() {
         {/* How to top up */}
         <aside>
           <div className="card">
-            <h2 className="mb-4 font-heading text-lg font-extrabold">{t('walletStudent.howTitle')}</h2>
+            <h2 className="mb-4 font-heading text-lg font-extrabold">
+              {t('walletStudent.howTitle')}
+            </h2>
             <ol className="space-y-4">
               {['how1', 'how2', 'how3'].map((k, i) => (
                 <li key={k} className="flex gap-3">

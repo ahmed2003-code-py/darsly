@@ -81,7 +81,9 @@ describe('WalletTopup — one pending per student', () => {
     ]);
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(await prisma.walletTopup.count({ where: { studentId: student.id, status: 'PENDING' } })).toBe(1);
+    expect(
+      await prisma.walletTopup.count({ where: { studentId: student.id, status: 'PENDING' } }),
+    ).toBe(1);
   });
 
   it('allows a new top-up once the previous one is decided', async () => {

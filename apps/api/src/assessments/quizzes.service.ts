@@ -39,7 +39,7 @@ export function isCorrectAnswer(
   return chosen.size === key.length && key.every((k) => chosen.has(k));
 }
 
-  @Injectable()
+@Injectable()
 export class QuizzesService {
   /** Slack allowed for the trip to the server on a paper sent at the buzzer. */
   private static readonly GRACE_MS = 30_000;
@@ -103,7 +103,9 @@ export class QuizzesService {
         ...(dto.timeLimitSec !== undefined ? { timeLimitSec: dto.timeLimitSec } : {}),
         ...(dto.shuffleQuestions != null ? { shuffleQuestions: dto.shuffleQuestions } : {}),
         ...(dto.maxAttempts !== undefined ? { maxAttempts: dto.maxAttempts } : {}),
-        ...(dto.remedialLessonId !== undefined ? { remedialLessonId: dto.remedialLessonId || null } : {}),
+        ...(dto.remedialLessonId !== undefined
+          ? { remedialLessonId: dto.remedialLessonId || null }
+          : {}),
         ...(dto.aiGrading != null ? { aiGrading: dto.aiGrading } : {}),
         ...(dto.aiThresholdPct != null ? { aiThresholdPct: dto.aiThresholdPct } : {}),
         ...(dto.showAnswers != null ? { showAnswers: dto.showAnswers } : {}),
@@ -147,7 +149,10 @@ export class QuizzesService {
             // single id keeps any not-yet-deployed code correct.
             correctOptionIds: q.correctOptionIds ?? (q.correctOptionId ? [q.correctOptionId] : []),
             correctOptionId: q.correctOptionIds?.[0] ?? q.correctOptionId ?? null,
-            maxSelections: Math.max(1, Math.min(q.maxSelections ?? 1, (q.options ?? []).length || 1)),
+            maxSelections: Math.max(
+              1,
+              Math.min(q.maxSelections ?? 1, (q.options ?? []).length || 1),
+            ),
             modelAnswer: q.modelAnswer ?? '',
             explanation: q.explanation ?? '',
             points: q.points ?? 1,
@@ -178,11 +183,20 @@ export class QuizzesService {
   }
 
   /** Teacher awards points for short-answer questions and finalizes the score. */
-  async gradeAttempt(tenantId: string, gradedByUserId: string, attemptId: string, dto: GradeAttemptDto) {
+  async gradeAttempt(
+    tenantId: string,
+    gradedByUserId: string,
+    attemptId: string,
+    dto: GradeAttemptDto,
+  ) {
     const attempt = await this.prisma.quizAttempt.findFirst({
       // A voided attempt is one this teacher already handed back. Marking it
       // would put a score and a pass back on a sitting that no longer counts.
-      where: { id: attemptId, voidedAt: null, quiz: { lesson: { unit: { course: { tenantId } } } } },
+      where: {
+        id: attemptId,
+        voidedAt: null,
+        quiz: { lesson: { unit: { course: { tenantId } } } },
+      },
       include: { quiz: { include: { questions: true, lesson: true } } },
     });
     if (!attempt) throw new NotFoundException('Attempt not found');
@@ -346,7 +360,8 @@ export class QuizzesService {
     const attemptsUsed = sat.length;
     const lastAttempt = sat[0] ?? null;
     const bestScorePct = sat.reduce<number | null>(
-      (best, a) => (a.scorePct == null ? best : best == null ? a.scorePct : Math.max(best, a.scorePct)),
+      (best, a) =>
+        a.scorePct == null ? best : best == null ? a.scorePct : Math.max(best, a.scorePct),
       null,
     );
     const canSitAgain = this.canSitAgain(quiz, attemptsUsed, bestScorePct);
@@ -384,7 +399,8 @@ export class QuizzesService {
       serverNow: new Date(),
       maxAttempts: quiz.maxAttempts,
       attemptsUsed,
-      attemptsRemaining: quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptsUsed) : null,
+      attemptsRemaining:
+        quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptsUsed) : null,
       /** Whether to offer them another go — see canSitAgain for what decides it. */
       canSitAgain,
       /** Their best result so far, which is the one that counts. */
@@ -462,10 +478,16 @@ export class QuizzesService {
      * having no attempts left.
      */
     if (passedBefore?.scorePct != null && passedBefore.scorePct >= 100) {
-      throw new BadRequestException({ message: 'You already have full marks on this quiz', code: 'ALREADY_FULL_MARKS' });
+      throw new BadRequestException({
+        message: 'You already have full marks on this quiz',
+        code: 'ALREADY_FULL_MARKS',
+      });
     }
     if (quiz.maxAttempts != null && priorCount >= quiz.maxAttempts) {
-      throw new BadRequestException({ message: 'No attempts remaining for this quiz', code: 'NO_ATTEMPTS_LEFT' });
+      throw new BadRequestException({
+        message: 'No attempts remaining for this quiz',
+        code: 'NO_ATTEMPTS_LEFT',
+      });
     }
 
     /**
@@ -480,7 +502,13 @@ export class QuizzesService {
     if (sitting && this.isOverdue(sitting.startedAt, quiz.timeLimitSec)) {
       await this.prisma.quizAttempt.update({
         where: { id: sitting.id },
-        data: { submittedAt: new Date(), scorePct: 0, passed: false, needsManualGrading: false, gradedAt: new Date() },
+        data: {
+          submittedAt: new Date(),
+          scorePct: 0,
+          passed: false,
+          needsManualGrading: false,
+          gradedAt: new Date(),
+        },
       });
       throw new BadRequestException({
         message: 'Time is up for this attempt',
@@ -515,7 +543,8 @@ export class QuizzesService {
     let total = 0;
     let pending = 0; // points on questions only a person can mark
     let needsManual = false;
-    const aiFeedback: Record<string, { similarityPct: number; reason: string; awarded: boolean }> = {};
+    const aiFeedback: Record<string, { similarityPct: number; reason: string; awarded: boolean }> =
+      {};
     for (const q of quiz.questions) {
       total += q.points;
       if (q.type === 'SHORT_ANSWER') {
@@ -587,7 +616,14 @@ export class QuizzesService {
     const gamification =
       passed == null
         ? undefined
-        : await this.awardQuiz({ studentId, lessonId, quizId: quiz.id, attemptId: attempt.id, scorePct: autoPct, passed });
+        : await this.awardQuiz({
+            studentId,
+            lessonId,
+            quizId: quiz.id,
+            attemptId: attempt.id,
+            scorePct: autoPct,
+            passed,
+          });
 
     /**
      * Whether the key goes out with this result, and whether another go is
@@ -601,7 +637,8 @@ export class QuizzesService {
     const bestSoFar = Math.max(scorePct ?? 0, passedBefore?.scorePct ?? 0);
     const canSitAgain = this.canSitAgain(quiz, attemptNumber, bestSoFar);
     const reveal = quiz.showAnswers && !canSitAgain;
-    const attemptsRemaining = quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptNumber) : null;
+    const attemptsRemaining =
+      quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptNumber) : null;
 
     return {
       attemptId: attempt.id,
@@ -629,7 +666,7 @@ export class QuizzesService {
     };
   }
 
-// ── helpers ────────────────────────────────────────────────────────────────
+  // ── helpers ────────────────────────────────────────────────────────────────
 
   /**
    * The answer key beside what the student wrote.
@@ -640,8 +677,13 @@ export class QuizzesService {
    */
   private reviewOf(
     questions: {
-      id: string; prompt: string; type: string; correctOptionId: string | null;
-      correctOptionIds: string[]; modelAnswer: string; explanation: string;
+      id: string;
+      prompt: string;
+      type: string;
+      correctOptionId: string | null;
+      correctOptionIds: string[];
+      modelAnswer: string;
+      explanation: string;
     }[],
     answers: Record<string, string | string[]>,
   ) {
@@ -799,7 +841,12 @@ export class QuizzesService {
     });
   }
 
-  private async notifyGraded(studentId: string, lessonTitle: string, scorePct: number, passed: boolean) {
+  private async notifyGraded(
+    studentId: string,
+    lessonTitle: string,
+    scorePct: number,
+    passed: boolean,
+  ) {
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
       select: { userId: true },
@@ -840,7 +887,9 @@ export class QuizzesService {
       where: { id: lessonId },
       select: { unit: { select: { courseId: true, course: { select: { tenantId: true } } } } },
     });
-    return lesson ? { tenantId: lesson.unit.course.tenantId, courseId: lesson.unit.courseId } : null;
+    return lesson
+      ? { tenantId: lesson.unit.course.tenantId, courseId: lesson.unit.courseId }
+      : null;
   }
 
   /**

@@ -26,7 +26,11 @@ export interface SendMailInput extends EmailContent {
 
 /** Escapes a value before it lands inside the temporary test-routing HTML notice. */
 function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export type SendResult =
@@ -103,23 +107,46 @@ export class MailService {
     // is read but never written anywhere.
     const redirectTo = input.centerOwnerTestRedirect ? this.tempCenterOwnerRedirectTo : undefined;
     const to = redirectTo ?? input.to;
-    const subject = redirectTo ? `[TEST ROUTED — real recipient: ${input.to}] ${input.subject}` : input.subject;
+    const subject = redirectTo
+      ? `[TEST ROUTED — real recipient: ${input.to}] ${input.subject}`
+      : input.subject;
     const noticeHtml = redirectTo
       ? `<p style="margin:0 0 16px;padding:12px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;font-size:13px;color:#92400E;"><strong>TEMPORARY TEST ROUTING</strong> — this message was really meant for <strong>${escapeHtml(input.to)}</strong>. It was redirected here only for testing; nothing about the real recipient changed.</p>`
       : '';
     const html = redirectTo ? `${noticeHtml}${input.html}` : input.html;
-    const text = redirectTo ? `[TEMPORARY TEST ROUTING — real recipient: ${input.to}]\n\n${input.text}` : input.text;
+    const text = redirectTo
+      ? `[TEMPORARY TEST ROUTING — real recipient: ${input.to}]\n\n${input.text}`
+      : input.text;
 
     const captureDir = this.captureDir;
     if (captureDir) {
       try {
         mkdirSync(captureDir, { recursive: true });
-        const file = join(captureDir, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
-        writeFileSync(file, JSON.stringify({ capturedAt: new Date().toISOString(), to, realRecipient: input.to, subject, text, html }, null, 2));
+        const file = join(
+          captureDir,
+          `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`,
+        );
+        writeFileSync(
+          file,
+          JSON.stringify(
+            {
+              capturedAt: new Date().toISOString(),
+              to,
+              realRecipient: input.to,
+              subject,
+              text,
+              html,
+            },
+            null,
+            2,
+          ),
+        );
         this.logger.log(`[MAIL:CAPTURED] to=${to} subject="${subject}" → ${file}`);
         return { delivered: true, id: file, transport: 'capture' };
       } catch (error) {
-        this.logger.error(`Mail capture failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.error(
+          `Mail capture failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
         return { delivered: false, reason: 'provider-error' };
       }
     }
@@ -130,7 +157,9 @@ export class MailService {
       // (which carries the activation/reset link) is logged OUTSIDE production
       // only — a production log must never contain a live token.
       const body = process.env.NODE_ENV === 'production' ? '' : `\n${text}`;
-      this.logger.warn(`[MAIL:NOT-SENT] to=${to} subject="${subject}" — RESEND_API_KEY is unset${body}`);
+      this.logger.warn(
+        `[MAIL:NOT-SENT] to=${to} subject="${subject}" — RESEND_API_KEY is unset${body}`,
+      );
       return { delivered: false, reason: 'no-provider' };
     }
 
@@ -147,7 +176,7 @@ export class MailService {
           subject,
           html,
           text,
-          ...(input.replyTo ?? this.replyTo ? { reply_to: input.replyTo ?? this.replyTo } : {}),
+          ...((input.replyTo ?? this.replyTo) ? { reply_to: input.replyTo ?? this.replyTo } : {}),
         }),
       });
 
@@ -160,7 +189,9 @@ export class MailService {
       }
 
       const payload = (await response.json().catch(() => ({}))) as { id?: string };
-      this.logger.log(`Sent "${subject}" to ${to} (id=${payload.id ?? 'n/a'})${redirectTo ? ` [TEST ROUTED, real recipient ${input.to}]` : ''}`);
+      this.logger.log(
+        `Sent "${subject}" to ${to} (id=${payload.id ?? 'n/a'})${redirectTo ? ` [TEST ROUTED, real recipient ${input.to}]` : ''}`,
+      );
       return { delivered: true, id: payload.id ?? '', transport: 'resend' };
     } catch (error) {
       this.logger.error(

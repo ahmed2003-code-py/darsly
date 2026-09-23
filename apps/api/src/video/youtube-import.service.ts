@@ -17,11 +17,20 @@ const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const MAX_FILESIZE = '2G';
 const YT_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const YT_HOSTS = new Set([
-  'www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be', 'music.youtube.com',
-  'www.youtube-nocookie.com', 'youtube-nocookie.com',
+  'www.youtube.com',
+  'youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+  'music.youtube.com',
+  'www.youtube-nocookie.com',
+  'youtube-nocookie.com',
 ]);
 const FB_HOSTS = new Set([
-  'www.facebook.com', 'facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch',
+  'www.facebook.com',
+  'facebook.com',
+  'm.facebook.com',
+  'web.facebook.com',
+  'fb.watch',
 ]);
 const FB_VIDEO_ID = /^\d{5,25}$/;
 
@@ -110,7 +119,9 @@ export class YoutubeImportService {
     if (now - this.cookiesCheckedAt > COOKIES_CACHE_MS) {
       this.cookiesCheckedAt = now;
       try {
-        const row = await this.prisma.platformSetting.findUnique({ where: { key: COOKIES_SETTING_KEY } });
+        const row = await this.prisma.platformSetting.findUnique({
+          where: { key: COOKIES_SETTING_KEY },
+        });
         const text = typeof row?.value === 'string' ? row.value : null;
         if (text) {
           const p = path.join(os.tmpdir(), 'darsly-yt-cookies.txt');
@@ -211,7 +222,9 @@ export class YoutubeImportService {
     } catch (err: any) {
       const cookies = await this.cookiesArgs();
       if (!cookies.length) throw err;
-      this.logger.warn(`yt-dlp failed without cookies, retrying signed in: ${err.message.slice(-200)}`);
+      this.logger.warn(
+        `yt-dlp failed without cookies, retrying signed in: ${err.message.slice(-200)}`,
+      );
       return await this.run(buildArgs(cookies), timeoutMs);
     }
   }
@@ -231,14 +244,20 @@ export class YoutubeImportService {
         // existing FAILED-status "replace video" flow instead of blocking
         // the whole import.
         '--ignore-no-formats-error',
-        '--dump-json', '--skip-download', '--no-warnings', '--no-playlist',
+        '--dump-json',
+        '--skip-download',
+        '--no-warnings',
+        '--no-playlist',
         source.url,
       ],
       METADATA_TIMEOUT_MS,
     );
     const json = JSON.parse(out);
     return {
-      title: String(json.title ?? '').trim().slice(0, 200) || 'فيديو مستورد من يوتيوب',
+      title:
+        String(json.title ?? '')
+          .trim()
+          .slice(0, 200) || 'فيديو مستورد من يوتيوب',
       description: cleanYoutubeDescription(String(json.description ?? '')),
     };
   }
@@ -266,13 +285,16 @@ export class YoutubeImportService {
         // up. The pre-merged tiers below it are what a SABR-gated client is
         // left with (typically itag 18, 360p) — a floor, not a preference.
         `bestvideo[ext=mp4][filesize<${MAX_FILESIZE}]+bestaudio[ext=m4a]/best[ext=mp4][filesize<${MAX_FILESIZE}]/best[filesize<${MAX_FILESIZE}]/best`,
-        '--merge-output-format', 'mp4',
-        '--max-filesize', MAX_FILESIZE,
+        '--merge-output-format',
+        'mp4',
+        '--max-filesize',
+        MAX_FILESIZE,
         '--no-playlist',
         // The retry re-downloads rather than tripping over what the failed
         // attempt left behind.
         '--force-overwrites',
-        '-o', destPath,
+        '-o',
+        destPath,
         source.url,
       ],
       DOWNLOAD_TIMEOUT_MS,
@@ -283,8 +305,6 @@ export class YoutubeImportService {
   tempPath(assetId: string): string {
     return path.join(os.tmpdir(), `darsly-yt-${assetId}.mp4`);
   }
-
-
 
   private run(args: string[], timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {

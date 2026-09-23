@@ -9,7 +9,15 @@ import { stripMarkdown } from '../../lib/markdown';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
 import { STAGES, type Grade } from '../../lib/stages';
 import { type Subject } from '../../lib/subjects';
-import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Field, Modal, PageHeader } from '../../components/ui';
+import {
+  Badge,
+  CardGridSkeleton,
+  EmptyState,
+  ErrorNote,
+  Field,
+  Modal,
+  PageHeader,
+} from '../../components/ui';
 import { useAuthStore } from '../../stores/auth';
 import { Role } from '@darsly/shared-types';
 
@@ -44,7 +52,9 @@ const STATUS_TONE: Record<string, 'teal' | 'warn' | 'neutral'> = {
 /** Small caps heading that separates one group of decisions from the next. */
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <h4 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-primary">{children}</h4>
+    <h4 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-primary">
+      {children}
+    </h4>
   );
 }
 
@@ -95,8 +105,7 @@ export default function TeacherCoursesPage() {
     const q = search.trim().toLowerCase();
     const found = q
       ? byTab.filter(
-          (c) =>
-            c.title?.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q),
+          (c) => c.title?.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q),
         )
       : byTab;
     const sorted = [...found];
@@ -122,14 +131,18 @@ export default function TeacherCoursesPage() {
   });
   // Everything this teacher signed up to teach — the only subjects a course of
   // theirs may be filed under, which the API checks again on the way in.
-  const mySubjects: Subject[] = (profile?.subjects ?? []).map((s: { subject: Subject }) => s.subject);
+  const mySubjects: Subject[] = (profile?.subjects ?? []).map(
+    (s: { subject: Subject }) => s.subject,
+  );
   const myStages: string[] = profile?.stages ?? [];
   // The years inside those stages — the exact set a course may be aimed at.
   const { data: grades } = useQuery({
     queryKey: ['grades'],
     queryFn: async () => (await api.get('/catalog/grades')).data,
   });
-  const myYears: Grade[] = (grades ?? []).filter((g: Grade) => g.stage && myStages.includes(g.stage));
+  const myYears: Grade[] = (grades ?? []).filter(
+    (g: Grade) => g.stage && myStages.includes(g.stage),
+  );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['teacher-courses'] });
 
@@ -284,7 +297,9 @@ export default function TeacherCoursesPage() {
       ) : !courses?.length ? (
         <EmptyState
           icon="menu_book"
-          title={search || tab !== 'ALL' ? t('teacher.courses.noMatch') : t('teacher.courses.empty')}
+          title={
+            search || tab !== 'ALL' ? t('teacher.courses.noMatch') : t('teacher.courses.empty')
+          }
         />
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -294,7 +309,9 @@ export default function TeacherCoursesPage() {
               className="card flex flex-col p-5 transition hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="mb-2 flex items-center justify-between">
-                <Badge tone={STATUS_TONE[c.status]}>{t(`teacher.courses.status.${c.status}`)}</Badge>
+                <Badge tone={STATUS_TONE[c.status]}>
+                  {t(`teacher.courses.status.${c.status}`)}
+                </Badge>
                 <span className="text-xs text-outline">
                   {c.subject ? (ar ? c.subject.nameAr : c.subject.nameEn) : ''}
                   {(c.grades ?? []).length
@@ -303,7 +320,9 @@ export default function TeacherCoursesPage() {
                 </span>
               </div>
               <h3 className="mb-1 font-heading text-lg font-bold">{c.title}</h3>
-              <p className="mb-4 line-clamp-2 flex-1 text-sm text-on-surface-variant">{stripMarkdown(c.description)}</p>
+              <p className="mb-4 line-clamp-2 flex-1 text-sm text-on-surface-variant">
+                {stripMarkdown(c.description)}
+              </p>
               <div className="mb-4 flex items-center gap-4 text-sm text-on-surface-variant">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-base">smart_display</span>
@@ -316,13 +335,20 @@ export default function TeacherCoursesPage() {
                 <span className="ms-auto font-heading font-extrabold text-on-surface">
                   {egp(c.priceCents)}
                   {c.pricingModel === 'MONTHLY_SUBSCRIPTION' && (
-                    <span className="text-xs font-normal text-outline">/{t('course.perMonth')}</span>
+                    <span className="text-xs font-normal text-outline">
+                      /{t('course.perMonth')}
+                    </span>
                   )}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2 border-t border-outline-variant/50 pt-4">
-                <Link to={`/teacher/courses/${c.id}`} className="btn-primary flex-1 py-2 text-center text-sm">
-                  {c.canEdit === false ? t('teacher.courses.viewContent') : t('teacher.courses.builder')}
+                <Link
+                  to={`/teacher/courses/${c.id}`}
+                  className="btn-primary flex-1 py-2 text-center text-sm"
+                >
+                  {c.canEdit === false
+                    ? t('teacher.courses.viewContent')
+                    : t('teacher.courses.builder')}
                 </Link>
                 {c.canEdit !== false && (
                   <button
@@ -346,12 +372,21 @@ export default function TeacherCoursesPage() {
                 )}
                 <button
                   className="btn-ghost px-3 py-2 text-sm"
-                  title={c.status === 'PUBLISHED' ? t('teacher.courses.unpublish') : t('teacher.courses.publish')}
+                  title={
+                    c.status === 'PUBLISHED'
+                      ? t('teacher.courses.unpublish')
+                      : t('teacher.courses.publish')
+                  }
                   aria-label={
-                    c.status === 'PUBLISHED' ? t('teacher.courses.unpublish') : t('teacher.courses.publish')
+                    c.status === 'PUBLISHED'
+                      ? t('teacher.courses.unpublish')
+                      : t('teacher.courses.publish')
                   }
                   onClick={() =>
-                    setStatus.mutate({ id: c.id, status: c.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' })
+                    setStatus.mutate({
+                      id: c.id,
+                      status: c.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED',
+                    })
                   }
                 >
                   <span className="material-symbols-outlined text-base">
@@ -359,23 +394,23 @@ export default function TeacherCoursesPage() {
                   </span>
                 </button>
                 {c.canEdit !== false && (
-                <button
-                  className="rounded-lg border border-error/30 px-3 py-2 text-error transition hover:bg-error-container/40"
-                  title={t('teacher.courses.delete')}
-                  aria-label={t('teacher.courses.delete')}
-                  onClick={async () => {
-                    // The count is the whole point of asking: removing a course
-                    // nobody joined costs nothing, and removing one with a class
-                    // in it takes their access with it.
-                    const enrolled = c._count?.enrollments ?? 0;
-                    const ask = enrolled
-                      ? t('teacher.courses.deleteConfirmWithStudents', { count: enrolled })
-                      : t('teacher.courses.deleteConfirm');
-                    if (await askConfirm(ask)) remove.mutate(c.id);
-                  }}
-                >
-                  <span className="material-symbols-outlined text-base">delete</span>
-                </button>
+                  <button
+                    className="rounded-lg border border-error/30 px-3 py-2 text-error transition hover:bg-error-container/40"
+                    title={t('teacher.courses.delete')}
+                    aria-label={t('teacher.courses.delete')}
+                    onClick={async () => {
+                      // The count is the whole point of asking: removing a course
+                      // nobody joined costs nothing, and removing one with a class
+                      // in it takes their access with it.
+                      const enrolled = c._count?.enrollments ?? 0;
+                      const ask = enrolled
+                        ? t('teacher.courses.deleteConfirmWithStudents', { count: enrolled })
+                        : t('teacher.courses.deleteConfirm');
+                      if (await askConfirm(ask)) remove.mutate(c.id);
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-base">delete</span>
+                  </button>
                 )}
               </div>
               <ErrorNote error={setStatus.variables?.id === c.id ? setStatus.error : null} />
@@ -442,13 +477,17 @@ export default function TeacherCoursesPage() {
                   >
                     <option value="">{t('auth.subjectPh')}</option>
                     {mySubjects.map((sub) => (
-                      <option key={sub.id} value={sub.id}>{ar ? sub.nameAr : sub.nameEn}</option>
+                      <option key={sub.id} value={sub.id}>
+                        {ar ? sub.nameAr : sub.nameEn}
+                      </option>
                     ))}
                   </select>
                 ) : (
                   <p className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2.5 text-sm font-semibold">
                     {mySubjects[0]
-                      ? ar ? mySubjects[0].nameAr : mySubjects[0].nameEn
+                      ? ar
+                        ? mySubjects[0].nameAr
+                        : mySubjects[0].nameEn
                       : t('teacher.courses.form.noSubject')}
                   </p>
                 )}
@@ -470,29 +509,37 @@ export default function TeacherCoursesPage() {
                   <div className="space-y-3">
                     {STAGES.filter((st) => myYears.some((g) => g.stage === st)).map((st) => (
                       <div key={st}>
-                        <span className="mb-1.5 block text-xs font-semibold text-outline">{t(`stage.${st}`)}</span>
+                        <span className="mb-1.5 block text-xs font-semibold text-outline">
+                          {t(`stage.${st}`)}
+                        </span>
                         <div className="flex flex-wrap gap-2">
-                          {myYears.filter((g) => g.stage === st).map((g) => {
-                            const on = form.gradeIds.includes(g.id);
-                            return (
-                              <button key={g.id} type="button" aria-pressed={on}
-                                onClick={() =>
-                                  setForm({
-                                    ...form,
-                                    gradeIds: on
-                                      ? form.gradeIds.filter((x) => x !== g.id)
-                                      : [...form.gradeIds, g.id],
-                                  })
-                                }
-                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                                  on
-                                    ? 'border-primary bg-primary text-on-primary'
-                                    : 'border-outline-variant text-on-surface-variant hover:border-outline'
-                                }`}>
-                                {ar ? g.nameAr : g.nameEn}
-                              </button>
-                            );
-                          })}
+                          {myYears
+                            .filter((g) => g.stage === st)
+                            .map((g) => {
+                              const on = form.gradeIds.includes(g.id);
+                              return (
+                                <button
+                                  key={g.id}
+                                  type="button"
+                                  aria-pressed={on}
+                                  onClick={() =>
+                                    setForm({
+                                      ...form,
+                                      gradeIds: on
+                                        ? form.gradeIds.filter((x) => x !== g.id)
+                                        : [...form.gradeIds, g.id],
+                                    })
+                                  }
+                                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                    on
+                                      ? 'border-primary bg-primary text-on-primary'
+                                      : 'border-outline-variant text-on-surface-variant hover:border-outline'
+                                  }`}
+                                >
+                                  {ar ? g.nameAr : g.nameEn}
+                                </button>
+                              );
+                            })}
                         </div>
                       </div>
                     ))}
@@ -512,7 +559,9 @@ export default function TeacherCoursesPage() {
                     onChange={(e) => setForm({ ...form, pricingModel: e.target.value })}
                   >
                     <option value="ONE_TIME">{t('teacher.courses.form.oneTime')}</option>
-                    <option value="MONTHLY_SUBSCRIPTION">{t('teacher.courses.form.monthly')}</option>
+                    <option value="MONTHLY_SUBSCRIPTION">
+                      {t('teacher.courses.form.monthly')}
+                    </option>
                     <option value="BUNDLE">{t('teacher.courses.form.bundle')}</option>
                   </select>
                 </Field>
@@ -554,7 +603,10 @@ export default function TeacherCoursesPage() {
               <button type="button" className="btn-ghost flex-1" onClick={() => setForm(null)}>
                 {t('teacher.courses.form.cancel')}
               </button>
-              <button className="btn-primary flex-[2]" disabled={save.isPending || !form.title.trim()}>
+              <button
+                className="btn-primary flex-[2]"
+                disabled={save.isPending || !form.title.trim()}
+              >
                 {form.id ? t('teacher.courses.form.save') : t('teacher.courses.form.create')}
               </button>
             </div>

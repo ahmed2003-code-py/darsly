@@ -20,15 +20,21 @@ export class AcademyOpsAccessService {
    *  403s) a cross-academy id, same "don't reveal existence" convention as
    *  AcademyMembershipGuard. */
   async assertGroupAccess(ctx: AcademyContext, groupId: string): Promise<Group> {
-    const group = await this.prisma.group.findFirst({ where: { id: groupId, academyId: ctx.academyId } });
-    if (!group) throw new NotFoundException({ message: 'Group not found', code: 'GROUP_NOT_FOUND' });
+    const group = await this.prisma.group.findFirst({
+      where: { id: groupId, academyId: ctx.academyId },
+    });
+    if (!group)
+      throw new NotFoundException({ message: 'Group not found', code: 'GROUP_NOT_FOUND' });
     if (ctx.role !== 'OWNER') {
       const assigned = await this.prisma.groupAssignment.findFirst({
         where: { groupId, userId: ctx.userId },
         select: { id: true },
       });
       if (!assigned) {
-        throw new ForbiddenException({ message: 'You are not assigned to this group', code: 'GROUP_NOT_ASSIGNED' });
+        throw new ForbiddenException({
+          message: 'You are not assigned to this group',
+          code: 'GROUP_NOT_ASSIGNED',
+        });
       }
     }
     return group;

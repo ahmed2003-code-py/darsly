@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PayoutMethod, PayoutStatus } from '@darsly/shared-types';
 import { LedgerService } from '../payments/ledger.service';
@@ -21,13 +26,18 @@ export class PayoutsService {
    * so the caller cannot name a scope they are not the owner of.
    */
   private async orgOf(academyId: string) {
-    const academy = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { id: true, kind: true, ownerUserId: true } });
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { id: true, kind: true, ownerUserId: true },
+    });
     if (!academy) throw new NotFoundException('Academy not found');
     return academy;
   }
 
   private async minimumCents(): Promise<number> {
-    const s = await this.prisma.platformSetting.findUnique({ where: { key: 'payout.minimumCents' } });
+    const s = await this.prisma.platformSetting.findUnique({
+      where: { key: 'payout.minimumCents' },
+    });
     return Number((s?.value as number) ?? 50000);
   }
 
@@ -40,15 +50,29 @@ export class PayoutsService {
     });
   }
 
-  async addMethod(academyId: string, method: PayoutMethod, details: Record<string, unknown>, isDefault: boolean) {
+  async addMethod(
+    academyId: string,
+    method: PayoutMethod,
+    details: Record<string, unknown>,
+    isDefault: boolean,
+  ) {
     const academy = await this.orgOf(academyId);
     if (isDefault) {
-      await this.prisma.payoutMethodSaved.updateMany({ where: { academyId }, data: { isDefault: false } });
+      await this.prisma.payoutMethodSaved.updateMany({
+        where: { academyId },
+        data: { isDefault: false },
+      });
     }
     const count = await this.prisma.payoutMethodSaved.count({ where: { academyId } });
     return this.prisma.payoutMethodSaved.create({
       // tenantId kept for a PERSONAL workspace (legacy readers); a Center's method has none.
-      data: { academyId, tenantId: academy.kind === 'PERSONAL' ? academyId : null, method, details: details as any, isDefault: isDefault || count === 0 },
+      data: {
+        academyId,
+        tenantId: academy.kind === 'PERSONAL' ? academyId : null,
+        method,
+        details: details as any,
+        isDefault: isDefault || count === 0,
+      },
     });
   }
 
@@ -63,7 +87,9 @@ export class PayoutsService {
 
   async request(academyId: string, amountCents: number, methodId: string) {
     const academy = await this.orgOf(academyId);
-    const method = await this.prisma.payoutMethodSaved.findFirst({ where: { id: methodId, academyId } });
+    const method = await this.prisma.payoutMethodSaved.findFirst({
+      where: { id: methodId, academyId },
+    });
     if (!method) throw new NotFoundException('Payout method not found');
 
     const min = await this.minimumCents();
@@ -80,14 +106,20 @@ export class PayoutsService {
         async (tx) => {
           const balance = await this.ledger.orgBalance(academy, tx);
           if (amountCents > balance) {
-            throw new BadRequestException({ message: 'Amount exceeds your withdrawable balance', code: 'PAYOUT_EXCEEDS_BALANCE' });
+            throw new BadRequestException({
+              message: 'Amount exceeds your withdrawable balance',
+              code: 'PAYOUT_EXCEEDS_BALANCE',
+            });
           }
           const pending = await tx.payoutRequest.aggregate({
             where: { academyId, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } },
             _sum: { amountCents: true },
           });
           if ((pending._sum.amountCents ?? 0) + amountCents > balance) {
-            throw new BadRequestException({ message: 'You already have pending payouts covering this balance', code: 'PAYOUT_EXCEEDS_BALANCE' });
+            throw new BadRequestException({
+              message: 'You already have pending payouts covering this balance',
+              code: 'PAYOUT_EXCEEDS_BALANCE',
+            });
           }
           return tx.payoutRequest.create({
             data: {
@@ -104,14 +136,19 @@ export class PayoutsService {
       );
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
-        throw new ConflictException('A concurrent payout request was in progress — please try again');
+        throw new ConflictException(
+          'A concurrent payout request was in progress — please try again',
+        );
       }
       throw e;
     }
   }
 
   teacherList(academyId: string) {
-    return this.prisma.payoutRequest.findMany({ where: { academyId }, orderBy: { createdAt: 'desc' } });
+    return this.prisma.payoutRequest.findMany({
+      where: { academyId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   // ── Admin: process payouts ────────────────────────────────────────────────
@@ -135,12 +172,27 @@ export class PayoutsService {
   async process(id: string, status: PayoutStatus, adminUserId: string, note?: string) {
     const payout = await this.prisma.payoutRequest.findUnique({
       where: { id },
-      include: { teacher: { select: { userId: true } }, academy: { select: { id: true, kind: true, ownerUserId: true } } },
+      include: {
+        teacher: { select: { userId: true } },
+        academy: { select: { id: true, kind: true, ownerUserId: true } },
+      },
     });
     if (!payout) throw new NotFoundException('Payout not found');
     // Whose balance this draws on (a legacy row has academyId backfilled == tenantId).
-    const org = payout.academy ?? (payout.tenantId ? { id: payout.tenantId, kind: 'PERSONAL' as const, ownerUserId: payout.teacher?.userId ?? '' } : null);
-    if (!org) throw new BadRequestException({ message: 'Payout has no organisation', code: 'PAYOUT_UNSCOPED' });
+    const org =
+      payout.academy ??
+      (payout.tenantId
+        ? {
+            id: payout.tenantId,
+            kind: 'PERSONAL' as const,
+            ownerUserId: payout.teacher?.userId ?? '',
+          }
+        : null);
+    if (!org)
+      throw new BadRequestException({
+        message: 'Payout has no organisation',
+        code: 'PAYOUT_UNSCOPED',
+      });
     const notifyUserId = payout.teacher?.userId ?? org.ownerUserId;
     if (['COMPLETED', 'REJECTED'].includes(payout.status)) {
       throw new BadRequestException('Payout is already finalized');
@@ -160,7 +212,10 @@ export class PayoutsService {
         async (tx) => {
           const balance = await this.ledger.orgBalance(org, tx);
           if (payout.amountCents > balance) {
-            throw new BadRequestException({ message: 'Balance no longer covers this payout', code: 'PAYOUT_EXCEEDS_BALANCE' });
+            throw new BadRequestException({
+              message: 'Balance no longer covers this payout',
+              code: 'PAYOUT_EXCEEDS_BALANCE',
+            });
           }
           const flip = await tx.payoutRequest.updateMany({ where: open, data });
           if (flip.count === 0) throw new BadRequestException('Payout is already finalized');

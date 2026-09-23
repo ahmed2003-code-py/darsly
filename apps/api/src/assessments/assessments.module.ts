@@ -23,8 +23,20 @@ import { QuizzesService } from './quizzes.service';
 @Global()
 @Module({
   imports: [AcademySiteModule],
-  controllers: [QuizzesController, AssignmentsController, CertificatesController, GradingController],
-  providers: [LessonAccessService, QuizzesService, AssignmentsService, CertificatesService, AiGraderService, GradingService],
+  controllers: [
+    QuizzesController,
+    AssignmentsController,
+    CertificatesController,
+    GradingController,
+  ],
+  providers: [
+    LessonAccessService,
+    QuizzesService,
+    AssignmentsService,
+    CertificatesService,
+    AiGraderService,
+    GradingService,
+  ],
   exports: [CertificatesService],
 })
 export class AssessmentsModule {}

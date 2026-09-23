@@ -36,7 +36,9 @@ const DEFAULT_HEADINGS: Record<string, { ar: string; en: string }> = {
 };
 
 const headingFor = (type: string, given?: { ar: string; en: string }) =>
-  filled(given) ? given! : bilingual(DEFAULT_HEADINGS[type]?.ar ?? '', DEFAULT_HEADINGS[type]?.en ?? '');
+  filled(given)
+    ? given!
+    : bilingual(DEFAULT_HEADINGS[type]?.ar ?? '', DEFAULT_HEADINGS[type]?.en ?? '');
 
 export interface AssembleInput {
   composition: SiteComposition;
@@ -178,7 +180,9 @@ function buildBlock(section: ComposedSection, input: AssembleInput): SiteBlock |
   switch (section.type) {
     case 'hero':
       return {
-        type: 'hero', id, section: spec,
+        type: 'hero',
+        id,
+        section: spec,
         headline: copy.hero.headline,
         subheadline: copy.hero.subheadline,
         ctaLabel: copy.hero.ctaLabel,
@@ -192,60 +196,115 @@ function buildBlock(section: ComposedSection, input: AssembleInput): SiteBlock |
 
     case 'toolkit':
       return lists.toolkit.length
-        ? { type: 'toolkit', id, section: spec, heading: headingFor('toolkit', copy.toolkitHeading), items: lists.toolkit }
+        ? {
+            type: 'toolkit',
+            id,
+            section: spec,
+            heading: headingFor('toolkit', copy.toolkitHeading),
+            items: lists.toolkit,
+          }
         : null;
 
     case 'credentials':
       return lists.credentials.length
-        ? { type: 'credentials', id, section: spec, heading: headingFor('credentials', copy.credentialsHeading), items: lists.credentials }
+        ? {
+            type: 'credentials',
+            id,
+            section: spec,
+            heading: headingFor('credentials', copy.credentialsHeading),
+            items: lists.credentials,
+          }
         : null;
 
     case 'stats': {
       const items = (copy.stats ?? []).slice(0, Math.min(6, plan.statCount || 6));
       return items.length
-        ? { type: 'stats', id, section: spec, heading: headingFor('stats', copy.statsHeading), items }
+        ? {
+            type: 'stats',
+            id,
+            section: spec,
+            heading: headingFor('stats', copy.statsHeading),
+            items,
+          }
         : null;
     }
 
     case 'timeline': {
       const items = (copy.timeline ?? []).slice(0, Math.min(8, plan.timelineCount || 8));
       return items.length >= 2
-        ? { type: 'timeline', id, section: spec, heading: headingFor('timeline', copy.timelineHeading), items }
+        ? {
+            type: 'timeline',
+            id,
+            section: spec,
+            heading: headingFor('timeline', copy.timelineHeading),
+            items,
+          }
         : null;
     }
 
     case 'process': {
       const steps = (copy.process ?? []).slice(0, Math.min(6, plan.processCount || 6));
       return steps.length >= 2
-        ? { type: 'process', id, section: spec, heading: headingFor('process', copy.processHeading), steps }
+        ? {
+            type: 'process',
+            id,
+            section: spec,
+            heading: headingFor('process', copy.processHeading),
+            steps,
+          }
         : null;
     }
 
     case 'quote':
       return plan.includeQuote && filled(copy.quote?.text)
-        ? { type: 'quote', id, section: spec, text: copy.quote!.text, attribution: copy.quote!.attribution }
+        ? {
+            type: 'quote',
+            id,
+            section: spec,
+            text: copy.quote!.text,
+            attribution: copy.quote!.attribution,
+          }
         : null;
 
     case 'courses':
       return {
-        type: 'courses', id, section: spec,
-        heading: headingFor('courses'), mode: 'auto', limit: 6,
+        type: 'courses',
+        id,
+        section: spec,
+        heading: headingFor('courses'),
+        mode: 'auto',
+        limit: 6,
       };
 
     case 'gallery':
       return media.galleryIds.length
-        ? { type: 'gallery', id, section: spec, heading: headingFor('gallery'), mediaIds: media.galleryIds.slice(0, 12) }
+        ? {
+            type: 'gallery',
+            id,
+            section: spec,
+            heading: headingFor('gallery'),
+            mediaIds: media.galleryIds.slice(0, 12),
+          }
         : null;
 
     case 'reviews':
-      return { type: 'reviews', id, section: spec, heading: headingFor('reviews'), mode: 'auto', limit: 6 };
+      return {
+        type: 'reviews',
+        id,
+        section: spec,
+        heading: headingFor('reviews'),
+        mode: 'auto',
+        limit: 6,
+      };
 
     case 'faq': {
       // Four, not eight. An FAQ is the least persuasive thing on a teacher's
       // page and the easiest for a model to pad, and a wall of accordions at the
       // bottom is what makes a site read as a support article.
       const items = copy.faq.slice(0, Math.max(1, Math.min(5, plan.faqCount || 4)));
-      return items.length ? { type: 'faq', id, section: spec, heading: headingFor('faq'), items } : null;
+      return items.length
+        ? { type: 'faq', id, section: spec, heading: headingFor('faq'), items }
+        : null;
     }
 
     case 'contact':
@@ -253,7 +312,13 @@ function buildBlock(section: ComposedSection, input: AssembleInput): SiteBlock |
 
     case 'cta':
       return filled(copy.cta.headline)
-        ? { type: 'cta', id, section: spec, headline: copy.cta.headline, buttonLabel: copy.cta.buttonLabel }
+        ? {
+            type: 'cta',
+            id,
+            section: spec,
+            headline: copy.cta.headline,
+            buttonLabel: copy.cta.buttonLabel,
+          }
         : null;
 
     default:
@@ -266,10 +331,20 @@ function buildBlock(section: ComposedSection, input: AssembleInput): SiteBlock |
  * usable: a complete, ordered, competent site with no model input at all.
  */
 export function fallbackSections(): ComposedSection[] {
-  const at = (type: ComposedSection['type'], pattern: string, over: Partial<ComposedSection> = {}): ComposedSection => ({
-    type, pattern,
-    emphasis: 'normal', width: 'standard', surface: 'page', align: 'start',
-    columns: 3, accents: [], imageTreatment: 'rounded',
+  const at = (
+    type: ComposedSection['type'],
+    pattern: string,
+    over: Partial<ComposedSection> = {},
+  ): ComposedSection => ({
+    type,
+    pattern,
+    emphasis: 'normal',
+    width: 'standard',
+    surface: 'page',
+    align: 'start',
+    columns: 3,
+    accents: [],
+    imageTreatment: 'rounded',
     ...over,
   });
   return [

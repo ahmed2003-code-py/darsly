@@ -16,7 +16,10 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
     <div className="card">
       <div className="flex items-center gap-4">
         <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-student-gold-soft">
-          <span className="material-symbols-outlined text-[30px] text-student-gold-ink" style={{ fontVariationSettings: "'FILL' 1" }}>
+          <span
+            className="material-symbols-outlined text-[30px] text-student-gold-ink"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
             {g.level.icon}
           </span>
           <span className="absolute -bottom-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-surface-container-lowest bg-primary px-1 font-heading text-xs font-extrabold text-on-primary">
@@ -54,8 +57,18 @@ export function LevelCard({ g, compact }: { g: GamificationSnapshot; compact?: b
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 border-t border-outline-variant/50 pt-4 text-center">
-        <Stat icon="local_fire_department" value={g.streak.current} label={t('gamification.streak')} tone="streak" />
-        <Stat icon="leaderboard" value={`#${g.rank.weekly}`} label={t('gamification.rank')} tone="gold" />
+        <Stat
+          icon="local_fire_department"
+          value={g.streak.current}
+          label={t('gamification.streak')}
+          tone="streak"
+        />
+        <Stat
+          icon="leaderboard"
+          value={`#${g.rank.weekly}`}
+          label={t('gamification.rank')}
+          tone="gold"
+        />
         <Stat icon="toll" value={compactNum(g.coins)} label={t('gamification.coins')} tone="gold" />
       </div>
     </div>
@@ -114,7 +127,10 @@ export function StreakAtRisk({ g }: { g: GamificationSnapshot }) {
   if (!g.streak.atRisk) return null;
   return (
     <div className="flex items-center gap-3 rounded-xl border border-student-secondary/25 bg-student-secondary-soft px-4 py-3 text-sm text-student-secondary-ink">
-      <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+      <span
+        className="material-symbols-outlined text-[22px]"
+        style={{ fontVariationSettings: "'FILL' 1" }}
+      >
         local_fire_department
       </span>
       <span className="flex-1 font-semibold">{t('gamification.streakAtRisk')}</span>

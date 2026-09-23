@@ -46,30 +46,48 @@ function hostileDoc(): SiteDocument {
   for (const b of doc.blocks as SiteBlock[]) {
     switch (b.type) {
       case 'hero':
-        b.headline = lt(hostile); b.subheadline = lt(hostile); b.ctaLabel = lt(hostile); break;
+        b.headline = lt(hostile);
+        b.subheadline = lt(hostile);
+        b.ctaLabel = lt(hostile);
+        break;
       case 'about':
-        b.heading = lt(hostile); b.body = lt(hostile); break;
+        b.heading = lt(hostile);
+        b.body = lt(hostile);
+        break;
       case 'toolkit':
       case 'credentials':
-        b.heading = lt(hostile); b.items = [lt(hostile), hostile]; break;
+        b.heading = lt(hostile);
+        b.items = [lt(hostile), hostile];
+        break;
       case 'stats':
-        b.heading = lt(hostile); b.items = [{ label: lt(hostile), value: hostile }]; break;
+        b.heading = lt(hostile);
+        b.items = [{ label: lt(hostile), value: hostile }];
+        break;
       case 'timeline':
         b.heading = lt(hostile);
-        b.items = [{ marker: lt(hostile), title: lt(hostile), body: lt(hostile) }]; break;
+        b.items = [{ marker: lt(hostile), title: lt(hostile), body: lt(hostile) }];
+        break;
       case 'process':
-        b.heading = lt(hostile); b.steps = [{ title: lt(hostile), body: lt(hostile) }]; break;
+        b.heading = lt(hostile);
+        b.steps = [{ title: lt(hostile), body: lt(hostile) }];
+        break;
       case 'quote':
-        b.text = lt(hostile); b.attribution = lt(hostile); break;
+        b.text = lt(hostile);
+        b.attribution = lt(hostile);
+        break;
       case 'faq':
-        b.heading = lt(hostile); b.items = [{ q: lt(hostile), a: lt(hostile) }]; break;
+        b.heading = lt(hostile);
+        b.items = [{ q: lt(hostile), a: lt(hostile) }];
+        break;
       case 'contact':
         b.heading = lt(hostile);
-        b.socials = [{ platform: hostile.slice(0, 30), url: 'https://example.com/ok' }]; break;
+        b.socials = [{ platform: hostile.slice(0, 30), url: 'https://example.com/ok' }];
+        break;
       case 'courses':
       case 'reviews':
       case 'gallery':
-        b.heading = lt(hostile); break;
+        b.heading = lt(hostile);
+        break;
     }
   }
   doc.seo = { title: lt(hostile), description: lt(hostile) };
@@ -80,7 +98,7 @@ function hostileDoc(): SiteDocument {
 describe('hostile copy cannot become markup in a composed page', () => {
   const html = render(hostileDoc());
 
-  it('emits exactly one script — the page\'s own', () => {
+  it("emits exactly one script — the page's own", () => {
     expect(html.match(/<script\b[^>]*>/gi)).toEqual(['<script>']);
   });
 
@@ -166,7 +184,9 @@ describe('a composition cannot escape into the stylesheet', () => {
   });
 
   it('closes no rule from a geometry value', () => {
-    const html = styled((d) => { d.theme.designSpec!.geometry.radius = 1e9; });
+    const html = styled((d) => {
+      d.theme.designSpec!.geometry.radius = 1e9;
+    });
     expect(html).not.toContain('--rad:1000000000px');
   });
 
@@ -180,10 +200,12 @@ describe('a composition cannot escape into the stylesheet', () => {
   });
 
   it('emits no stylesheet for a pattern the page never rendered', () => {
-    const html = render(buildComposition({
-      design: WARM_DESIGN,
-      sections: { hero: { pattern: 'hero.centered' } },
-    }));
+    const html = render(
+      buildComposition({
+        design: WARM_DESIGN,
+        sections: { hero: { pattern: 'hero.centered' } },
+      }),
+    );
     const css = html.match(/<style>([\s\S]*?)<\/style>/)![1];
     expect(css).not.toContain('.hero-bento');
   });

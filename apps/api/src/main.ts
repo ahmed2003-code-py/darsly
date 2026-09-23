@@ -19,7 +19,9 @@ async function bootstrap() {
   const isProd = process.env.NODE_ENV === 'production';
   // Attaches the request id to every line, and in production emits JSON so the
   // logs can be queried rather than grepped. See common/app-logger.ts.
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: new AppLogger() });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: new AppLogger(),
+  });
 
   /**
    * First middleware, before anything can log.

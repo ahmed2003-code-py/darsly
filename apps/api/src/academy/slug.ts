@@ -10,10 +10,36 @@
 
 /** Addresses the platform needs for itself, or that would read as a promise. */
 export const RESERVED_SLUGS = new Set([
-  'admin', 'api', 'app', 'auth', 'login', 'register', 'course', 'courses',
-  'teacher', 'teachers', 'student', 'students', 'discover', 'profile',
-  'settings', 'security', 'wallet', 'payments', 'live', 'messages', 'a', 't',
-  'darsly', 'support', 'help', 'about', 'terms', 'privacy', 'static', 'assets',
+  'admin',
+  'api',
+  'app',
+  'auth',
+  'login',
+  'register',
+  'course',
+  'courses',
+  'teacher',
+  'teachers',
+  'student',
+  'students',
+  'discover',
+  'profile',
+  'settings',
+  'security',
+  'wallet',
+  'payments',
+  'live',
+  'messages',
+  'a',
+  't',
+  'darsly',
+  'support',
+  'help',
+  'about',
+  'terms',
+  'privacy',
+  'static',
+  'assets',
 ]);
 
 export const SLUG_MIN = 3;
@@ -31,16 +57,18 @@ export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * result as "suggest something else" rather than as a valid slug.
  */
 export function slugify(raw: string): string {
-  return raw
-    .normalize('NFKD')
-    // Strip combining marks left behind by the decomposition (é → e).
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, SLUG_MAX)
-    // A trailing hyphen can reappear after the length cut.
-    .replace(/-+$/g, '');
+  return (
+    raw
+      .normalize('NFKD')
+      // Strip combining marks left behind by the decomposition (é → e).
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, SLUG_MAX)
+      // A trailing hyphen can reappear after the length cut.
+      .replace(/-+$/g, '')
+  );
 }
 
 export type SlugRejection = 'INVALID' | 'RESERVED' | 'TAKEN';

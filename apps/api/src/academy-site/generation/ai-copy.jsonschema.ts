@@ -25,9 +25,22 @@ export const aiCopyJsonSchema: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'seo', 'hero', 'about', 'toolkitHeading', 'highlights', 'credentialsHeading', 'credentials',
-    'faq', 'cta', 'stats', 'statsHeading', 'timeline', 'timelineHeading', 'process',
-    'processHeading', 'quote',
+    'seo',
+    'hero',
+    'about',
+    'toolkitHeading',
+    'highlights',
+    'credentialsHeading',
+    'credentials',
+    'faq',
+    'cta',
+    'stats',
+    'statsHeading',
+    'timeline',
+    'timelineHeading',
+    'process',
+    'processHeading',
+    'quote',
   ],
   properties: {
     seo: {
@@ -70,18 +83,22 @@ export const aiCopyJsonSchema: Record<string, unknown> = {
     statsHeading: localizedText,
     stats: {
       type: 'array',
-      description: 'Figures grounded in the FACTS. Never invent one. Empty array if there are none.',
+      description:
+        'Figures grounded in the FACTS. Never invent one. Empty array if there are none.',
       items: {
         type: 'object',
         additionalProperties: false,
         required: ['label', 'value'],
-        properties: { label: localizedText, value: { type: 'string', description: 'e.g. "12", "400+", "4.9/5"' } },
+        properties: {
+          label: localizedText,
+          value: { type: 'string', description: 'e.g. "12", "400+", "4.9/5"' },
+        },
       },
     },
     timelineHeading: localizedText,
     timeline: {
       type: 'array',
-      description: 'The teacher\'s journey, oldest first. marker is a year or a stage.',
+      description: "The teacher's journey, oldest first. marker is a year or a stage.",
       items: {
         type: 'object',
         additionalProperties: false,
@@ -105,7 +122,7 @@ export const aiCopyJsonSchema: Record<string, unknown> = {
       additionalProperties: false,
       required: ['text', 'attribution'],
       properties: { text: localizedText, attribution: localizedText },
-      description: 'One sentence in the teacher\'s own voice about how they teach.',
+      description: "One sentence in the teacher's own voice about how they teach.",
     },
   },
 };

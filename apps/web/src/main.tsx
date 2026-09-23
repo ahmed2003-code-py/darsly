@@ -39,25 +39,25 @@ bootAdminTheme(useAuthStore.getState().user?.role === Role.SUPER_ADMIN);
  * than the few milliseconds spent here, and a very visible one in Arabic.
  */
 void initI18n().then(() => {
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      {/* Lean Framer Motion: only the DOM-animation feature set is bundled (strict
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        {/* Lean Framer Motion: only the DOM-animation feature set is bundled (strict
           forbids the heavy `motion.*` API — we use `m.*` everywhere). */}
-      <LazyMotion features={domAnimation} strict>
-        <BrowserRouter>
-          <App />
-          {/* At the root, not inside the app shell: a sign-in, an activation or
+        <LazyMotion features={domAnimation} strict>
+          <BrowserRouter>
+            <App />
+            {/* At the root, not inside the app shell: a sign-in, an activation or
               a public academy page can fail too, and those render no shell. */}
-          <AppToasts />
-          {/* Beside the toasts for the same reason: a destructive action can be
+            <AppToasts />
+            {/* Beside the toasts for the same reason: a destructive action can be
               taken from a page that renders no app shell. */}
-          <ConfirmDialog />
-        </BrowserRouter>
-      </LazyMotion>
-    </QueryClientProvider>
-  </StrictMode>,
-);
+            <ConfirmDialog />
+          </BrowserRouter>
+        </LazyMotion>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
 });
 
 // If the app has been running stably, clear the one-shot chunk-reload guard so a

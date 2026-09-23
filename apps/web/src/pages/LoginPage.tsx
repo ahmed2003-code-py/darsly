@@ -50,13 +50,20 @@ export default function LoginPage() {
   return (
     <AuthShell
       title={academy ? t('auth.welcomeAcademy', { name: academy.name }) : t('auth.welcomeBack')}
-      subtitle={academy ? t('auth.loginAcademySubtitle', { name: academy.name }) : t('auth.loginSubtitle')}
+      subtitle={
+        academy ? t('auth.loginAcademySubtitle', { name: academy.name }) : t('auth.loginSubtitle')
+      }
       brandName={academy?.name}
       brandTagline={academy?.tagline}
       footer={
         <>
           {t('auth.noAccount')}{' '}
-          <Link to={withRedirect('/register', destination)} className="font-bold text-primary hover:underline">{t('auth.signupLink')}</Link>
+          <Link
+            to={withRedirect('/register', destination)}
+            className="font-bold text-primary hover:underline"
+          >
+            {t('auth.signupLink')}
+          </Link>
         </>
       }
     >
@@ -71,15 +78,39 @@ export default function LoginPage() {
             {error}
           </m.p>
         )}
-        <AuthField icon="person" dir="ltr" inputMode="email" autoComplete="username"
-          label={t('auth.identifier')} placeholder={t('auth.identifierPh')}
-          value={identifier} onChange={setIdentifier} maxLength={160} autoFocus />
-        <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" autoComplete="current-password"
-          label={t('auth.password')} placeholder="••••••••" value={password} onChange={setPassword}
-          reveal revealed={show} onReveal={() => setShow((s) => !s)} />
+        <AuthField
+          icon="person"
+          dir="ltr"
+          inputMode="email"
+          autoComplete="username"
+          label={t('auth.identifier')}
+          placeholder={t('auth.identifierPh')}
+          value={identifier}
+          onChange={setIdentifier}
+          maxLength={160}
+          autoFocus
+        />
+        <AuthField
+          icon="lock"
+          type={show ? 'text' : 'password'}
+          dir="ltr"
+          autoComplete="current-password"
+          label={t('auth.password')}
+          placeholder="••••••••"
+          value={password}
+          onChange={setPassword}
+          reveal
+          revealed={show}
+          onReveal={() => setShow((s) => !s)}
+        />
 
         <m.div variants={rise} className="mb-6 text-end">
-          <Link to={withRedirect('/forgot-password', destination)} className="text-sm text-primary hover:underline">{t('auth.forgot')}</Link>
+          <Link
+            to={withRedirect('/forgot-password', destination)}
+            className="text-sm text-primary hover:underline"
+          >
+            {t('auth.forgot')}
+          </Link>
         </m.div>
 
         <AuthSubmit busy={busy}>{busy ? t('auth.signingIn') : t('auth.loginBtn')}</AuthSubmit>

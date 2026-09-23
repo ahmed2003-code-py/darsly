@@ -42,7 +42,12 @@ interface Entry {
 const REGISTRY = new Map<string, Map<string, Entry>>();
 const DEFAULTS = new Map<string, string>();
 
-export function registerVariant(type: string, id: string, render: VariantRenderer, meta: VariantMeta = {}): void {
+export function registerVariant(
+  type: string,
+  id: string,
+  render: VariantRenderer,
+  meta: VariantMeta = {},
+): void {
   let byId = REGISTRY.get(type);
   if (!byId) {
     byId = new Map();

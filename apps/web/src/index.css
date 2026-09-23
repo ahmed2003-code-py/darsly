@@ -220,13 +220,24 @@
     position: relative;
     z-index: 1;
   }
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-heading;
     letter-spacing: -0.02em;
     line-height: 1.15;
     text-wrap: balance;
   }
-  p, li, span, input, textarea, button, a {
+  p,
+  li,
+  span,
+  input,
+  textarea,
+  button,
+  a {
     line-height: 1.6;
   }
   ::selection {
@@ -242,9 +253,17 @@
     scrollbar-width: thin;
     scrollbar-color: rgb(var(--c-line) / 0.18) transparent;
   }
-  *::-webkit-scrollbar { width: 8px; height: 8px; }
-  *::-webkit-scrollbar-thumb { background: rgb(var(--c-line) / 0.16); border-radius: 999px; }
-  *::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-line) / 0.28); }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-line) / 0.16);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--c-line) / 0.28);
+  }
 
   /*
    * Nothing widens the page.
@@ -266,7 +285,16 @@
 
   /* The same rule for text: a long unbroken word — a URL, an Arabic title with
      no spaces near the break — must wrap rather than decide the page width. */
-  h1, h2, h3, h4, p, li, dd, dt, figcaption, blockquote {
+  h1,
+  h2,
+  h3,
+  h4,
+  p,
+  li,
+  dd,
+  dt,
+  figcaption,
+  blockquote {
     overflow-wrap: break-word;
   }
 
@@ -291,12 +319,22 @@
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 14px,
+      #000 calc(100% - 14px),
+      transparent 100%
+    );
   }
-  .scroll-x::-webkit-scrollbar { display: none; }
+  .scroll-x::-webkit-scrollbar {
+    display: none;
+  }
   /* At a width where nothing is hidden, the fade would be a lie. */
   @media (min-width: 40rem) {
-    .scroll-x { mask-image: none; }
+    .scroll-x {
+      mask-image: none;
+    }
   }
 }
 
@@ -397,7 +435,9 @@
 }
 
 @keyframes darsly-shimmer {
-  100% { transform: translateX(100%); }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 /* ── Uploading ──────────────────────────────────────────────────────────────
@@ -443,31 +483,56 @@
 }
 
 @keyframes darsly-up-work {
-  0% { background-position: 140% 0; }
-  100% { background-position: -40% 0; }
+  0% {
+    background-position: 140% 0;
+  }
+  100% {
+    background-position: -40% 0;
+  }
 }
 
 /* The moment it lands: one small overshoot and done. */
-.up-pop { animation: darsly-up-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+.up-pop {
+  animation: darsly-up-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
 
 @keyframes darsly-up-pop {
-  0% { transform: scale(0.72); opacity: 0; }
-  60% { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.72);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* A card of an OTP settling into place — the same overshoot, so the two read
    as one family rather than two people's work. */
-.otp-land { animation: darsly-otp-land 380ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.otp-land {
+  animation: darsly-otp-land 380ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
 
 @keyframes darsly-otp-land {
-  0% { transform: translateY(6px) scale(0.9); }
-  55% { transform: translateY(-9px) scale(1.06); }
-  100% { transform: translateY(-6px) scale(1); }
+  0% {
+    transform: translateY(6px) scale(0.9);
+  }
+  55% {
+    transform: translateY(-9px) scale(1.06);
+  }
+  100% {
+    transform: translateY(-6px) scale(1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
@@ -535,7 +600,11 @@
   appearance: none;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, #fff var(--seek-pct, 0%), rgb(255 255 255 / 0.25) var(--seek-pct, 0%));
+  background: linear-gradient(
+    to right,
+    #fff var(--seek-pct, 0%),
+    rgb(255 255 255 / 0.25) var(--seek-pct, 0%)
+  );
   cursor: pointer;
 }
 .video-seek::-webkit-slider-thumb {
@@ -589,15 +658,21 @@
    call sites, and no page anywhere asking which theme is active. */
 :root[data-s-button='rounded'] .studio-btn,
 :root[data-s-button='rounded'] .btn-primary,
-:root[data-s-button='rounded'] .btn-ghost { border-radius: 16px; }
+:root[data-s-button='rounded'] .btn-ghost {
+  border-radius: 16px;
+}
 
 :root[data-s-button='pill'] .studio-btn,
 :root[data-s-button='pill'] .btn-primary,
-:root[data-s-button='pill'] .btn-ghost { border-radius: 999px; }
+:root[data-s-button='pill'] .btn-ghost {
+  border-radius: 999px;
+}
 
 :root[data-s-button='sharp'] .studio-btn,
 :root[data-s-button='sharp'] .btn-primary,
-:root[data-s-button='sharp'] .btn-ghost { border-radius: 4px; }
+:root[data-s-button='sharp'] .btn-ghost {
+  border-radius: 4px;
+}
 
 :root[data-s-button='soft'] .studio-btn,
 :root[data-s-button='soft'] .btn-primary,
@@ -658,7 +733,8 @@
 
 /* ── Effects ─────────────────────────────────────────────────────────────── */
 :root[data-s-effect='glow'] .studio-active {
-  box-shadow: 0 0 0 1px rgb(var(--s-accent, var(--c-primary)) / 0.35),
+  box-shadow:
+    0 0 0 1px rgb(var(--s-accent, var(--c-primary)) / 0.35),
     0 0 18px -4px rgb(var(--s-accent, var(--c-primary)) / 0.55);
 }
 
@@ -671,31 +747,57 @@
    was invisible on every screen. A box-shadow is painted outside the border box
    and is not subject to the element's own overflow, so one property does what
    an extra element would otherwise be needed for. */
-.studio-frame { position: relative; }
-:root[data-s-frame='bronze'] .studio-frame { box-shadow: 0 0 0 2px #b06b2c; }
-:root[data-s-frame='silver'] .studio-frame { box-shadow: 0 0 0 2px #9ca3af; }
-:root[data-s-frame='gold'] .studio-frame { box-shadow: 0 0 0 2px #d4a017; }
+.studio-frame {
+  position: relative;
+}
+:root[data-s-frame='bronze'] .studio-frame {
+  box-shadow: 0 0 0 2px #b06b2c;
+}
+:root[data-s-frame='silver'] .studio-frame {
+  box-shadow: 0 0 0 2px #9ca3af;
+}
+:root[data-s-frame='gold'] .studio-frame {
+  box-shadow: 0 0 0 2px #d4a017;
+}
 :root[data-s-frame='diamond'] .studio-frame {
-  box-shadow: 0 0 0 2px #67e8f9, 0 0 12px -2px #67e8f9;
+  box-shadow:
+    0 0 0 2px #67e8f9,
+    0 0 12px -2px #67e8f9;
 }
 :root[data-s-frame='fire'] .studio-frame {
-  box-shadow: 0 0 0 2px #f97316, 0 0 12px -2px #f97316;
+  box-shadow:
+    0 0 0 2px #f97316,
+    0 0 12px -2px #f97316;
 }
-:root[data-s-frame='lightning'] .studio-frame { box-shadow: 0 0 0 2px #facc15; }
-:root[data-s-frame='scholar'] .studio-frame { box-shadow: 0 0 0 2px #92400e; }
+:root[data-s-frame='lightning'] .studio-frame {
+  box-shadow: 0 0 0 2px #facc15;
+}
+:root[data-s-frame='scholar'] .studio-frame {
+  box-shadow: 0 0 0 2px #92400e;
+}
 :root[data-s-frame='legendary'] .studio-frame {
-  box-shadow: 0 0 0 2px #a855f7, 0 0 14px -2px #a855f7;
+  box-shadow:
+    0 0 0 2px #a855f7,
+    0 0 14px -2px #a855f7;
 }
 
 /* Somebody who asked for less movement gets less movement — the glow and the
    frame shadows are decoration, and decoration is the first thing to go. */
 @media (prefers-reduced-motion: reduce) {
-  :root[data-s-effect='glow'] .studio-active { box-shadow: none; }
+  :root[data-s-effect='glow'] .studio-active {
+    box-shadow: none;
+  }
   /* The ring stays — it is the frame. Only the halo around the showy ones is
      decoration, and decoration is the first thing to go. */
-  :root[data-s-frame='diamond'] .studio-frame { box-shadow: 0 0 0 2px #67e8f9; }
-  :root[data-s-frame='fire'] .studio-frame { box-shadow: 0 0 0 2px #f97316; }
-  :root[data-s-frame='legendary'] .studio-frame { box-shadow: 0 0 0 2px #a855f7; }
+  :root[data-s-frame='diamond'] .studio-frame {
+    box-shadow: 0 0 0 2px #67e8f9;
+  }
+  :root[data-s-frame='fire'] .studio-frame {
+    box-shadow: 0 0 0 2px #f97316;
+  }
+  :root[data-s-frame='legendary'] .studio-frame {
+    box-shadow: 0 0 0 2px #a855f7;
+  }
 }
 
 /*
@@ -716,30 +818,54 @@ body {
 /* Equipping something should feel like something happened. Cheap transforms
    and opacity only — nothing that forces a layout. */
 @keyframes studio-pop {
-  0% { transform: scale(0.94); opacity: 0; }
-  60% { transform: scale(1.02); }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 @keyframes studio-sheen {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(220%); }
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
 }
 
-.studio-pop { animation: studio-pop 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.studio-pop {
+  animation: studio-pop 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
 
 /* A slow sweep across a swatch, so the shop reads as alive rather than as a
    grid of rectangles. Legendary only: everywhere would be noise. */
-.studio-sheen { position: relative; overflow: hidden; }
+.studio-sheen {
+  position: relative;
+  overflow: hidden;
+}
 .studio-sheen::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / 0.35) 50%, transparent 65%);
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgb(255 255 255 / 0.35) 50%,
+    transparent 65%
+  );
   animation: studio-sheen 2.6s ease-in-out infinite;
 }
 
 /* The accent moving with the page rather than snapping to it. */
-:root { transition: none; }
+:root {
+  transition: none;
+}
 .studio-card,
 .studio-btn,
 .studio-nav-item {
@@ -754,10 +880,21 @@ body {
 
 /* Somebody who asked for less movement gets a still page, not a slower one. */
 @media (prefers-reduced-motion: reduce) {
-  body { transition: none; }
-  .studio-pop { animation: none; }
-  .studio-sheen::after { animation: none; opacity: 0; }
-  .studio-card, .studio-btn, .studio-nav-item { transition: none; }
+  body {
+    transition: none;
+  }
+  .studio-pop {
+    animation: none;
+  }
+  .studio-sheen::after {
+    animation: none;
+    opacity: 0;
+  }
+  .studio-card,
+  .studio-btn,
+  .studio-nav-item {
+    transition: none;
+  }
 }
 
 /*
@@ -787,7 +924,9 @@ body {
   pointer-events: none;
   opacity: 0.55;
 }
-:root[data-s-pattern] .studio-backdrop { --p: rgb(var(--s-accent, var(--c-primary)) / 0.14); }
+:root[data-s-pattern] .studio-backdrop {
+  --p: rgb(var(--s-accent, var(--c-primary)) / 0.14);
+}
 
 /* Crosshatch — two sets of thin diagonals crossing. */
 :root[data-s-pattern='web'] .studio-backdrop {
@@ -832,18 +971,49 @@ body {
 :root[data-s-pattern='stadium'] .studio-backdrop {
   background-image:
     /* centre circle */
-    radial-gradient(circle at 50% 50%, transparent calc(11vmin - 1px), var(--p) 11vmin, transparent calc(11vmin + 1px)),
-    /* centre spot */
-    radial-gradient(circle at 50% 50%, var(--p) 0 0.5vmin, transparent 0.5vmin),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent calc(11vmin - 1px),
+      var(--p) 11vmin,
+      transparent calc(11vmin + 1px)
+    ),
+    /* centre spot */ radial-gradient(circle at 50% 50%, var(--p) 0 0.5vmin, transparent 0.5vmin),
     /* halfway line */
-    linear-gradient(to bottom, transparent calc(50% - 1px), var(--p) 50%, transparent calc(50% + 1px)),
+    linear-gradient(
+        to bottom,
+        transparent calc(50% - 1px),
+        var(--p) 50%,
+        transparent calc(50% + 1px)
+      ),
     /* penalty areas, top and bottom */
-    linear-gradient(to right, transparent 22%, var(--p) 22% calc(22% + 1px), transparent calc(22% + 1px) 78%, var(--p) 78% calc(78% + 1px), transparent calc(78% + 1px)),
+    linear-gradient(
+        to right,
+        transparent 22%,
+        var(--p) 22% calc(22% + 1px),
+        transparent calc(22% + 1px) 78%,
+        var(--p) 78% calc(78% + 1px),
+        transparent calc(78% + 1px)
+      ),
     /* touchlines */
-    linear-gradient(to right, var(--p) 0 1px, transparent 1px calc(100% - 1px), var(--p) calc(100% - 1px));
+    linear-gradient(
+        to right,
+        var(--p) 0 1px,
+        transparent 1px calc(100% - 1px),
+        var(--p) calc(100% - 1px)
+      );
   background-repeat: no-repeat;
-  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 34%, 100% 100%;
-  background-position: center, center, center, center top, center;
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 34%,
+    100% 100%;
+  background-position:
+    center,
+    center,
+    center,
+    center top,
+    center;
 }
 
 /* A single soft light, drifting. */
@@ -854,26 +1024,44 @@ body {
 
 /* Beams from a corner, turning very slowly. */
 :root[data-s-pattern='rays'] .studio-backdrop {
-  background-image: conic-gradient(from 200deg at 85% -10%, var(--p) 0 12deg, transparent 12deg 40deg);
+  background-image: conic-gradient(
+    from 200deg at 85% -10%,
+    var(--p) 0 12deg,
+    transparent 12deg 40deg
+  );
   animation: studio-turn 60s linear infinite;
 }
 
 @keyframes studio-drift {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-4%, 3%, 0); }
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-4%, 3%, 0);
+  }
 }
 @keyframes studio-turn {
-  from { transform: rotate(0deg) scale(1.6); }
-  to { transform: rotate(360deg) scale(1.6); }
+  from {
+    transform: rotate(0deg) scale(1.6);
+  }
+  to {
+    transform: rotate(360deg) scale(1.6);
+  }
 }
 
 /* The stacking context the backdrop is placed behind. Without it, a negative
    z-index would escape to the root and hide under the body's own background. */
-#root { position: relative; z-index: 0; isolation: isolate; }
+#root {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-s-pattern='glow'] .studio-backdrop,
-  :root[data-s-pattern='rays'] .studio-backdrop { animation: none; }
+  :root[data-s-pattern='rays'] .studio-backdrop {
+    animation: none;
+  }
 }
 
 /*
@@ -916,11 +1104,17 @@ body {
    than to every element — a pill button inside a sharp card is a decision, not
    an inconsistency. */
 :root[data-s-radius='sharp'] .studio-card,
-:root[data-s-radius='sharp'] .card { border-radius: 6px; }
+:root[data-s-radius='sharp'] .card {
+  border-radius: 6px;
+}
 :root[data-s-radius='soft'] .studio-card,
-:root[data-s-radius='soft'] .card { border-radius: 18px; }
+:root[data-s-radius='soft'] .card {
+  border-radius: 18px;
+}
 :root[data-s-radius='round'] .studio-card,
-:root[data-s-radius='round'] .card { border-radius: 26px; }
+:root[data-s-radius='round'] .card {
+  border-radius: 26px;
+}
 
 /*
  * Ambient light.
@@ -942,7 +1136,11 @@ body {
 :root[data-s-glow] .studio-backdrop::before {
   top: -22vmax;
   inset-inline-start: -18vmax;
-  background: radial-gradient(circle, rgb(var(--s-accent, var(--c-primary)) / 0.20), transparent 62%);
+  background: radial-gradient(
+    circle,
+    rgb(var(--s-accent, var(--c-primary)) / 0.2),
+    transparent 62%
+  );
   animation: studio-float-a 24s ease-in-out infinite alternate;
 }
 :root[data-s-glow] .studio-backdrop::after {
@@ -956,16 +1154,26 @@ body {
   animation: studio-float-b 30s ease-in-out infinite alternate;
 }
 @keyframes studio-float-a {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(6vmax, 4vmax, 0); }
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(6vmax, 4vmax, 0);
+  }
 }
 @keyframes studio-float-b {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-5vmax, -6vmax, 0); }
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-5vmax, -6vmax, 0);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   :root[data-s-glow] .studio-backdrop::before,
-  :root[data-s-glow] .studio-backdrop::after { animation: none; }
+  :root[data-s-glow] .studio-backdrop::after {
+    animation: none;
+  }
 }
 
 /*
@@ -990,7 +1198,11 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(70% 42% at 22% -8%, rgb(var(--s-accent, var(--c-primary)) / 0.16), transparent 70%),
+    radial-gradient(
+      70% 42% at 22% -8%,
+      rgb(var(--s-accent, var(--c-primary)) / 0.16),
+      transparent 70%
+    ),
     radial-gradient(64% 38% at 82% -6%, rgb(var(--s-gold, var(--c-gold)) / 0.13), transparent 70%),
     radial-gradient(120% 80% at 50% 120%, rgb(var(--c-background)) 35%, transparent 75%);
   animation: none;
@@ -1005,7 +1217,10 @@ body {
     linear-gradient(rgb(var(--s-accent, var(--c-primary)) / 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgb(var(--s-accent, var(--c-primary)) / 0.05) 1px, transparent 1px),
     radial-gradient(120% 90% at 50% 50%, transparent 45%, rgb(var(--c-background) / 0.65) 100%);
-  background-size: 56px 56px, 56px 56px, 100% 100%;
+  background-size:
+    56px 56px,
+    56px 56px,
+    100% 100%;
   animation: none;
   width: auto;
   height: auto;
@@ -1020,45 +1235,96 @@ body {
  * forces a layout, which is what keeps a celebration from costing a frame.
  */
 @keyframes s-rise {
-  0% { transform: translateY(6px) scale(0.94); opacity: 0; }
-  25% { opacity: 1; }
-  100% { transform: translateY(-30px) scale(1); opacity: 0; }
+  0% {
+    transform: translateY(6px) scale(0.94);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-30px) scale(1);
+    opacity: 0;
+  }
 }
 @keyframes s-shine {
-  0% { transform: translateX(-130%) skewX(-18deg); }
-  100% { transform: translateX(260%) skewX(-18deg); }
+  0% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
 }
 @keyframes s-pop-in {
-  0% { transform: scale(0.5) rotate(-8deg); opacity: 0; }
-  55% { transform: scale(1.12) rotate(3deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0); opacity: 1; }
+  0% {
+    transform: scale(0.5) rotate(-8deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.12) rotate(3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
 }
 @keyframes s-sweep {
-  0% { transform: translateX(-60%) skewX(-14deg); opacity: 0; }
-  35% { opacity: 1; }
-  100% { transform: translateX(160%) skewX(-14deg); opacity: 0; }
+  0% {
+    transform: translateX(-60%) skewX(-14deg);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(160%) skewX(-14deg);
+    opacity: 0;
+  }
 }
 @keyframes s-arc {
-  0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
-  15% { opacity: 1; }
-  100% { transform: translate(var(--s-arc-x, 60px), var(--s-arc-y, -70px)) scale(1); opacity: 0; }
+  0% {
+    transform: translate(0, 0) scale(0.7);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--s-arc-x, 60px), var(--s-arc-y, -70px)) scale(1);
+    opacity: 0;
+  }
 }
 
 /** A number floating up as it is earned. */
-.s-rise { animation: s-rise 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.s-rise {
+  animation: s-rise 1100ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
 /** Metal catching the light — for a balance that just changed. */
-.s-shine { position: relative; overflow: hidden; }
+.s-shine {
+  position: relative;
+  overflow: hidden;
+}
 .s-shine::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, transparent 40%, rgb(255 255 255 / 0.45) 50%, transparent 60%);
+  background: linear-gradient(
+    100deg,
+    transparent 40%,
+    rgb(255 255 255 / 0.45) 50%,
+    transparent 60%
+  );
   animation: s-shine 900ms ease-out 1;
 }
 /** A trophy arriving. */
-.s-pop-in { animation: s-pop-in 480ms cubic-bezier(0.2, 1.3, 0.4, 1) both; }
+.s-pop-in {
+  animation: s-pop-in 480ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
 /** A ball leaving the boot. */
-.s-arc { animation: s-arc 900ms cubic-bezier(0.25, 0.9, 0.35, 1) both; }
+.s-arc {
+  animation: s-arc 900ms cubic-bezier(0.25, 0.9, 0.35, 1) both;
+}
 
 /**
  * The moment a skin is put on.
@@ -1089,9 +1355,20 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .s-rise, .s-pop-in, .s-arc { animation: none; opacity: 1; transform: none; }
-  .s-shine::after { animation: none; opacity: 0; }
-  .s-activation { display: none; }
+  .s-rise,
+  .s-pop-in,
+  .s-arc {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .s-shine::after {
+    animation: none;
+    opacity: 0;
+  }
+  .s-activation {
+    display: none;
+  }
 }
 
 /*

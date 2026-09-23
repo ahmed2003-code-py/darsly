@@ -9,7 +9,8 @@ import { RedisService } from './redis.service';
  */
 describe('CacheService', () => {
   const svc = (client: unknown) => new CacheService({ client } as unknown as RedisService);
-  const quiet = (s: CacheService) => jest.spyOn(s['logger'], 'warn').mockImplementation(() => undefined);
+  const quiet = (s: CacheService) =>
+    jest.spyOn(s['logger'], 'warn').mockImplementation(() => undefined);
 
   describe('with no Redis at all', () => {
     it('loads directly rather than failing', async () => {
@@ -63,26 +64,33 @@ describe('CacheService', () => {
   describe('when Redis misbehaves', () => {
     it('falls through to the loader when the read throws', async () => {
       const client = { get: jest.fn().mockRejectedValue(new Error('down')), set: jest.fn() };
-      const s = svc(client); quiet(s);
+      const s = svc(client);
+      quiet(s);
       await expect(s.wrap('k', 60, async () => 'fresh')).resolves.toBe('fresh');
     });
 
     /** A value written by an older shape of the code is a miss, not a 500. */
     it('treats unreadable stored JSON as a miss', async () => {
       const client = { get: jest.fn().mockResolvedValue('{not json'), set: jest.fn() };
-      const s = svc(client); quiet(s);
+      const s = svc(client);
+      quiet(s);
       await expect(s.wrap('k', 60, async () => 'fresh')).resolves.toBe('fresh');
     });
 
     it('still answers when the write throws', async () => {
-      const client = { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockRejectedValue(new Error('oom')) };
-      const s = svc(client); quiet(s);
+      const client = {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockRejectedValue(new Error('oom')),
+      };
+      const s = svc(client);
+      quiet(s);
       await expect(s.wrap('k', 60, async () => 'fresh')).resolves.toBe('fresh');
     });
 
     it('swallows a failed invalidation rather than failing the write that triggered it', async () => {
       const client = { scan: jest.fn().mockRejectedValue(new Error('down')) };
-      const s = svc(client); quiet(s);
+      const s = svc(client);
+      quiet(s);
       await expect(s.invalidate('catalog:')).resolves.toBeUndefined();
     });
   });

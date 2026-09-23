@@ -32,7 +32,8 @@ class CreateLiveDto {
   @IsOptional() @IsInt() @Min(1) @Max(MAX_CAPACITY) capacity?: number | null;
   @IsOptionalId() courseId?: string | null;
   // Rendered as a link students click — anything but a real URL is a trap.
-  @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?: string | null;
+  @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?:
+    string | null;
   @IsOptionalId() teacherUserId?: string | null;
   @IsOptionalId() groupId?: string | null;
 }
@@ -57,13 +58,19 @@ class UpdateLiveDto {
   @IsOptional() @IsInt() @Min(5) @Max(MAX_DURATION_MIN) durationMin?: number;
   @IsOptional() @IsInt() @Min(1) @Max(MAX_CAPACITY) capacity?: number | null;
   @IsOptionalId() courseId?: string | null;
-  @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?: string | null;
+  @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?:
+    string | null;
   @IsOptionalId() teacherUserId?: string | null;
   @IsOptionalId() groupId?: string | null;
 }
 
 /** Organisation + authorship scope from the validated context; the body never decides either. */
-const scopeOf = (ctx: AcademyContext): LiveScope => ({ academyId: ctx.academyId, userId: ctx.userId, manageAll: ctx.role === 'OWNER', role: ctx.role });
+const scopeOf = (ctx: AcademyContext): LiveScope => ({
+  academyId: ctx.academyId,
+  userId: ctx.userId,
+  manageAll: ctx.role === 'OWNER',
+  role: ctx.role,
+});
 
 @ApiTags('live')
 @ApiBearerAuth()
@@ -90,7 +97,11 @@ export class LiveController {
   @Patch('teacher/live/:id')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Update a live session' })
-  update(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: UpdateLiveDto) {
+  update(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: UpdateLiveDto,
+  ) {
     return this.live.update(scopeOf(ctx), id, dto);
   }
 
@@ -125,7 +136,11 @@ export class LiveController {
   @Post('teacher/live/:id/start')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Start the meeting and get an owner token' })
-  start(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @CurrentUser() u: JwtPayload) {
+  start(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @CurrentUser() u: JwtPayload,
+  ) {
     return this.live.start(scopeOf(ctx), id, u.sub);
   }
 
@@ -133,7 +148,11 @@ export class LiveController {
   @Get('teacher/live/:id/join')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Re-enter a running meeting' })
-  teacherJoin(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @CurrentUser() u: JwtPayload) {
+  teacherJoin(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @CurrentUser() u: JwtPayload,
+  ) {
     return this.live.teacherJoin(scopeOf(ctx), id, u.sub);
   }
 

@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   ChatMessageDto,
   ChatThreadDto,
@@ -166,7 +171,8 @@ export class ChatService {
    * when someone writes, carrying nothing that was cleared.
    */
   async clearThread(user: JwtPayload, threadId: string) {
-    if (!(await this.canAccessThread(user, threadId))) throw new ForbiddenException('Not your thread');
+    if (!(await this.canAccessThread(user, threadId)))
+      throw new ForbiddenException('Not your thread');
     const side =
       user.role === Role.STUDENT
         ? { clearedForStudentAt: new Date() }
@@ -176,7 +182,8 @@ export class ChatService {
   }
 
   async getMessages(user: JwtPayload, threadId: string): Promise<ChatMessageDto[]> {
-    if (!(await this.canAccessThread(user, threadId))) throw new ForbiddenException('Not your thread');
+    if (!(await this.canAccessThread(user, threadId)))
+      throw new ForbiddenException('Not your thread');
     const thread = await this.prisma.chatThread.findUniqueOrThrow({
       where: { id: threadId },
       select: { clearedForTeacherAt: true, clearedForStudentAt: true },
@@ -211,9 +218,7 @@ export class ChatService {
             isVoice: !!m.replyTo.audioKey,
           }
         : null,
-      audio: m.audioKey
-        ? { durationSec: m.audioDurationSec ?? 0, bytes: m.audioBytes ?? 0 }
-        : null,
+      audio: m.audioKey ? { durationSec: m.audioDurationSec ?? 0, bytes: m.audioBytes ?? 0 } : null,
       lesson: m.lesson
         ? {
             id: m.lesson.id,
@@ -255,7 +260,8 @@ export class ChatService {
       const enrolled = await this.prisma.enrollment.findFirst({
         where: { studentId: sid, tenantId: payload.tenantId, status: 'ACTIVE' },
       });
-      if (!enrolled) throw new ForbiddenException('You can only message teachers you are enrolled with');
+      if (!enrolled)
+        throw new ForbiddenException('You can only message teachers you are enrolled with');
       if (!(await this.messagingOpen(payload.tenantId))) {
         throw new ForbiddenException({
           message: 'This teacher is not accepting messages',
@@ -340,7 +346,8 @@ export class ChatService {
     durationSec: number,
     replyToId?: string,
   ) {
-    if (!(await this.canAccessThread(user, threadId))) throw new ForbiddenException('Not your thread');
+    if (!(await this.canAccessThread(user, threadId)))
+      throw new ForbiddenException('Not your thread');
     if (!VOICE_MIME.test(file.mimetype)) {
       throw new BadRequestException({ message: 'Unsupported audio format', code: 'VOICE_FORMAT' });
     }
@@ -444,10 +451,20 @@ export class ChatService {
       data: { updatedAt: new Date() },
     });
     const recipientUserId = await this.recipientUserId(thread, senderUserId);
-    this.realtime.emitToUser(senderUserId, RealtimeEvents.MESSAGE, this.toMessageDto(message, senderUserId));
+    this.realtime.emitToUser(
+      senderUserId,
+      RealtimeEvents.MESSAGE,
+      this.toMessageDto(message, senderUserId),
+    );
     if (!recipientUserId) return;
-    this.realtime.emitToUser(recipientUserId, RealtimeEvents.MESSAGE, this.toMessageDto(message, recipientUserId));
-    this.realtime.emitToUser(recipientUserId, RealtimeEvents.THREAD_UPDATED, { threadId: thread.id });
+    this.realtime.emitToUser(
+      recipientUserId,
+      RealtimeEvents.MESSAGE,
+      this.toMessageDto(message, recipientUserId),
+    );
+    this.realtime.emitToUser(recipientUserId, RealtimeEvents.THREAD_UPDATED, {
+      threadId: thread.id,
+    });
     await this.notifications.create({
       userId: recipientUserId,
       type: 'CHAT_MESSAGE',
@@ -457,10 +474,19 @@ export class ChatService {
     });
   }
 
-  private async recipientUserId(thread: { tenantId: string; studentId: string }, senderUserId: string) {
+  private async recipientUserId(
+    thread: { tenantId: string; studentId: string },
+    senderUserId: string,
+  ) {
     const [teacher, student] = await Promise.all([
-      this.prisma.teacherProfile.findUnique({ where: { id: thread.tenantId }, select: { userId: true } }),
-      this.prisma.studentProfile.findUnique({ where: { id: thread.studentId }, select: { userId: true } }),
+      this.prisma.teacherProfile.findUnique({
+        where: { id: thread.tenantId },
+        select: { userId: true },
+      }),
+      this.prisma.studentProfile.findUnique({
+        where: { id: thread.studentId },
+        select: { userId: true },
+      }),
     ]);
     const participants = [teacher?.userId, student?.userId].filter(Boolean) as string[];
     return participants.find((id) => id !== senderUserId) ?? null;

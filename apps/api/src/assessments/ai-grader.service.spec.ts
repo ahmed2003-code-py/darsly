@@ -28,7 +28,9 @@ const essay = (over: Record<string, string> = {}) => ({
 
 describe('marking a written answer against its model answer', () => {
   it('returns the verdict for a question it was asked about', async () => {
-    const { svc } = ctx({ reply: { verdicts: [{ questionId: 'e1', similarityPct: 80, reason: 'ok' }] } });
+    const { svc } = ctx({
+      reply: { verdicts: [{ questionId: 'e1', similarityPct: 80, reason: 'ok' }] },
+    });
     const out = await svc.mark([essay()]);
     expect(out.get('e1')).toEqual({ similarityPct: 80, reason: 'ok' });
   });
@@ -82,9 +84,13 @@ describe('marking a written answer against its model answer', () => {
   });
 
   it('keeps a returned score inside 0-100', async () => {
-    const { svc } = ctx({ reply: { verdicts: [{ questionId: 'e1', similarityPct: 480, reason: 'x' }] } });
+    const { svc } = ctx({
+      reply: { verdicts: [{ questionId: 'e1', similarityPct: 480, reason: 'x' }] },
+    });
     expect(out(await svc.mark([essay()]))).toBe(100);
-    const low = ctx({ reply: { verdicts: [{ questionId: 'e1', similarityPct: -20, reason: 'x' }] } });
+    const low = ctx({
+      reply: { verdicts: [{ questionId: 'e1', similarityPct: -20, reason: 'x' }] },
+    });
     expect(out(await low.svc.mark([essay()]))).toBe(0);
   });
 

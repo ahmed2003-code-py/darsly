@@ -45,7 +45,8 @@ import { StudentPriceService } from '../payments/student-price.service';
     PublicSiteController,
     AdminAcademyStudioController,
   ],
-  providers: [StudentPriceService, 
+  providers: [
+    StudentPriceService,
     AcademySiteConfig,
     AiFeatureEnabledGuard,
     AiClient,

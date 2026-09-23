@@ -5,11 +5,24 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { getSocket } from '../../lib/socket';
 import { Markdown } from '../../lib/markdown';
-import { Badge, CardGridSkeleton, EmptyState, ErrorNote, Modal, PageHeader } from '../../components/ui';
+import {
+  Badge,
+  CardGridSkeleton,
+  EmptyState,
+  ErrorNote,
+  Modal,
+  PageHeader,
+} from '../../components/ui';
 import SessionSummary from '../live/SessionSummary';
 
 function when(iso: string) {
-  return new Date(iso).toLocaleString('ar-EG', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('ar-EG', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 function startsInLabel(iso: string, t: any): string {
   const diff = new Date(iso).getTime() - Date.now();
@@ -85,12 +98,22 @@ export default function LiveSessionsPage() {
                       <span className="flex h-2.5 w-2.5 items-center justify-center">
                         <span
                           className={`h-2.5 w-2.5 rounded-full ${
-                            live ? 'animate-pulse bg-error' : over ? 'bg-outline-variant' : 'bg-secondary'
+                            live
+                              ? 'animate-pulse bg-error'
+                              : over
+                                ? 'bg-outline-variant'
+                                : 'bg-secondary'
                           }`}
                         />
                       </span>
-                      <span className={`text-xs font-extrabold ${live ? 'text-error' : 'text-outline'}`}>
-                        {live ? t('live.liveNow') : over ? t('live.ended') : startsInLabel(s.startsAt, t)}
+                      <span
+                        className={`text-xs font-extrabold ${live ? 'text-error' : 'text-outline'}`}
+                      >
+                        {live
+                          ? t('live.liveNow')
+                          : over
+                            ? t('live.ended')
+                            : startsInLabel(s.startsAt, t)}
                       </span>
                     </div>
                     <h3 className="font-heading text-lg font-bold">{s.title}</h3>
@@ -99,13 +122,24 @@ export default function LiveSessionsPage() {
                   {s.booked && <Badge tone="teal">{t('live.booked')}</Badge>}
                 </div>
 
-                {s.description && <Markdown className="text-sm text-on-surface-variant">{s.description}</Markdown>}
+                {s.description && (
+                  <Markdown className="text-sm text-on-surface-variant">{s.description}</Markdown>
+                )}
 
                 <div className="flex flex-wrap items-center gap-4 text-xs text-outline">
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">event</span>{when(s.startsAt)}</span>
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">schedule</span>{t('live.minutes', { count: s.durationMin })}</span>
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">event</span>
+                    {when(s.startsAt)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">schedule</span>
+                    {t('live.minutes', { count: s.durationMin })}
+                  </span>
                   {s.capacity != null && (
-                    <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">group</span>{t('live.seatsLeft', { count: s.seatsLeft })}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">group</span>
+                      {t('live.seatsLeft', { count: s.seatsLeft })}
+                    </span>
                   )}
                 </div>
 
@@ -113,7 +147,10 @@ export default function LiveSessionsPage() {
                     the teacher shared them. */}
                 <div className="mt-auto flex gap-2">
                   {over ? (
-                    <button className="btn-ghost flex-1 py-2.5 text-sm" onClick={() => setRecordFor(s.id)}>
+                    <button
+                      className="btn-ghost flex-1 py-2.5 text-sm"
+                      onClick={() => setRecordFor(s.id)}
+                    >
                       <span className="material-symbols-outlined text-base">description</span>
                       {t('live.viewSession')}
                     </button>
@@ -128,14 +165,26 @@ export default function LiveSessionsPage() {
                         {/* Why it is unavailable, rather than a dead button: the
                             two reasons are different and a student can act on
                             only one of them. */}
-                        {s.canJoin ? t('live.join') : soon ? t('live.waitingTeacher') : t('live.joinOpensSoon')}
+                        {s.canJoin
+                          ? t('live.join')
+                          : soon
+                            ? t('live.waitingTeacher')
+                            : t('live.joinOpensSoon')}
                       </button>
-                      <button className="btn-ghost px-4 py-2.5 text-sm" disabled={cancel.isPending} onClick={() => cancel.mutate(s.id)}>
+                      <button
+                        className="btn-ghost px-4 py-2.5 text-sm"
+                        disabled={cancel.isPending}
+                        onClick={() => cancel.mutate(s.id)}
+                      >
                         {t('live.cancel')}
                       </button>
                     </>
                   ) : (
-                    <button className="btn-primary flex-1 py-2.5 text-sm" disabled={full || book.isPending} onClick={() => book.mutate(s.id)}>
+                    <button
+                      className="btn-primary flex-1 py-2.5 text-sm"
+                      disabled={full || book.isPending}
+                      onClick={() => book.mutate(s.id)}
+                    >
                       <span className="material-symbols-outlined text-base">event_available</span>
                       {full ? t('live.full') : t('live.book')}
                     </button>

@@ -35,7 +35,13 @@ export const ARCHETYPE_PROFILES: Record<Archetype, ArchetypeProfile> = {
     backdrops: ['grid-lines', 'dot-matrix', 'blueprint'],
     typefaces: ['mono body', 'condensed headings', 'sharp radius (0–6)'],
     leadWith: ['courses', 'toolkit', 'process'],
-    favours: ['hero.bento', 'toolkit.skill-matrix', 'courses.bento', 'process.rail', 'faq.two-column'],
+    favours: [
+      'hero.bento',
+      'toolkit.skill-matrix',
+      'courses.bento',
+      'process.rail',
+      'faq.two-column',
+    ],
     discouraged: ['gallery.immersive'],
   },
   math_science: {
@@ -51,7 +57,14 @@ export const ARCHETYPE_PROFILES: Record<Archetype, ArchetypeProfile> = {
     backdrops: ['aurora', 'gradient-wash', 'orbits'],
     typefaces: ['serif or display headings', 'wide tracking', 'round radius (18–30)'],
     leadWith: ['about', 'reviews', 'gallery'],
-    favours: ['hero.offset-collage', 'about.statement', 'reviews.wall', 'gallery.masonry', 'courses.rail', 'toolkit.marquee'],
+    favours: [
+      'hero.offset-collage',
+      'about.statement',
+      'reviews.wall',
+      'gallery.masonry',
+      'courses.rail',
+      'toolkit.marquee',
+    ],
     discouraged: ['toolkit.skill-matrix'],
   },
   exam_prep: {
@@ -59,7 +72,13 @@ export const ARCHETYPE_PROFILES: Record<Archetype, ArchetypeProfile> = {
     backdrops: ['mesh', 'spotlight', 'aurora'],
     typefaces: ['display or condensed headings', 'heavy weight', 'dramatic or monumental scale'],
     leadWith: ['stats', 'credentials', 'reviews'],
-    favours: ['hero.image-full', 'stats.big-numbers', 'timeline.columns', 'credentials.wall', 'contact.split-cta'],
+    favours: [
+      'hero.image-full',
+      'stats.big-numbers',
+      'timeline.columns',
+      'credentials.wall',
+      'contact.split-cta',
+    ],
     discouraged: ['about.two-column'],
   },
   university: {
@@ -67,7 +86,14 @@ export const ARCHETYPE_PROFILES: Record<Archetype, ArchetypeProfile> = {
     backdrops: ['none', 'topography'],
     typefaces: ['serif headings and body', 'restrained scale', 'radius 0–4', 'strong borders'],
     leadWith: ['credentials', 'about', 'timeline'],
-    favours: ['hero.centered', 'hero.editorial', 'credentials.record', 'timeline.rail', 'courses.list', 'faq.two-column'],
+    favours: [
+      'hero.centered',
+      'hero.editorial',
+      'credentials.record',
+      'timeline.rail',
+      'courses.list',
+      'faq.two-column',
+    ],
     discouraged: ['stats.big-numbers', 'toolkit.marquee'],
   },
   general: {
@@ -97,17 +123,37 @@ export function archetypeBrief(archetype: string): string {
     `  patterns worth considering first: ${p.favours.join(', ')}`,
     p.discouraged.length ? `  available but rarely right here: ${p.discouraged.join(', ')}` : '',
     '  None of this is a rule. A teacher whose brief points elsewhere goes elsewhere.',
-  ].filter(Boolean).join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /** A guess at the archetype from the raw facts, used before the model answers. */
 export function guessArchetype(subjects: string[], stages: string[], bio: string): Archetype {
   const hay = [...subjects, ...stages, bio].join(' ').toLowerCase();
   const has = (...needles: string[]) => needles.some((n) => hay.includes(n));
-  if (has('برمج', 'programming', 'python', 'javascript', 'code', 'كمبيوتر', 'software', 'حاسوب')) return 'programming';
-  if (has('لغة', 'انجليزي', 'إنجليزي', 'french', 'english', 'فرنسي', 'ألماني', 'ielts', 'toefl', 'محادثة')) return 'languages';
+  if (has('برمج', 'programming', 'python', 'javascript', 'code', 'كمبيوتر', 'software', 'حاسوب'))
+    return 'programming';
+  if (
+    has(
+      'لغة',
+      'انجليزي',
+      'إنجليزي',
+      'french',
+      'english',
+      'فرنسي',
+      'ألماني',
+      'ielts',
+      'toefl',
+      'محادثة',
+    )
+  )
+    return 'languages';
   if (has('ثانوية عامة', 'امتحان', 'exam', 'revision', 'مراجعة', 'تنسيق')) return 'exam_prep';
   if (has('جامع', 'university', 'دكتور', 'phd', 'بحث', 'research')) return 'university';
-  if (has('رياضيات', 'math', 'فيزياء', 'physics', 'كيمياء', 'chemistry', 'علوم', 'science', 'أحياء')) return 'math_science';
+  if (
+    has('رياضيات', 'math', 'فيزياء', 'physics', 'كيمياء', 'chemistry', 'علوم', 'science', 'أحياء')
+  )
+    return 'math_science';
   return 'general';
 }

@@ -47,7 +47,11 @@ export function classifySender(sender: string, rules: SenderRuleLike[]): Classif
   const ordered = [...rules].filter((r) => r.enabled).sort((a, b) => a.priority - b.priority);
   for (const rule of ordered) {
     if (senderMatches(norm, rule)) {
-      return { brand: rule.brand, provider: rule.provider, forwardToBackend: rule.forwardToBackend };
+      return {
+        brand: rule.brand,
+        provider: rule.provider,
+        forwardToBackend: rule.forwardToBackend,
+      };
     }
   }
   return null;
@@ -125,7 +129,8 @@ export function parseAmountCents(body: string): number | null {
  */
 export function isIncomingTransfer(body: string): boolean {
   if (!body) return false;
-  const outgoing = /(?:من\s*حساب[كك]|من\s*محفظت[كك]|تم\s*خصم|خصم\s*مبلغ|debited|sent\s*to|withdrawn)/i;
+  const outgoing =
+    /(?:من\s*حساب[كك]|من\s*محفظت[كك]|تم\s*خصم|خصم\s*مبلغ|debited|sent\s*to|withdrawn)/i;
   if (outgoing.test(body)) return false;
   const incoming =
     /(?:تم\s*استلام|استلمت|تم\s*إضافة|تم\s*اضافة|أضيف|اضيف|received|credited|deposit)/i;
@@ -242,22 +247,24 @@ export function messageHash(
  *  - honorifics, which one side prints and the other does not
  */
 export function normalizeArabicName(value: string): string {
-  return (value ?? '')
-    .normalize('NFKC')
-    // Harakat, tatweel, and the zero-width marks that ride along with RTL text.
-    .replace(/[\u0610-\u061A\u064B-\u0652\u0640\u200B-\u200F\u0670\u06D6-\u06ED]/g, '')
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/[ىئي]/g, 'ي')
-    .replace(/[ؤ]/g, 'و')
-    .replace(/ة/g, 'ه')
-    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-    // Anchored on whitespace, not \b: that is an ASCII word boundary and never
-    // matches beside an Arabic letter, so this whole list used to do nothing.
-    .replace(/(?:^|\s)(?:الاستاذه|الاستاذ|السيده|السيد|الست|دكتور|مهندس|مستر)(?=\s|$)/g, ' ')
-    .replace(/\b(?:mr|mrs|ms|dr|eng)\b\.?/gi, '')
-    .toLowerCase()
-    // Everything that is not a letter or a digit, spaces included.
-    .replace(/[^\p{L}\p{N}]/gu, '');
+  return (
+    (value ?? '')
+      .normalize('NFKC')
+      // Harakat, tatweel, and the zero-width marks that ride along with RTL text.
+      .replace(/[\u0610-\u061A\u064B-\u0652\u0640\u200B-\u200F\u0670\u06D6-\u06ED]/g, '')
+      .replace(/[أإآٱ]/g, 'ا')
+      .replace(/[ىئي]/g, 'ي')
+      .replace(/[ؤ]/g, 'و')
+      .replace(/ة/g, 'ه')
+      .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+      // Anchored on whitespace, not \b: that is an ASCII word boundary and never
+      // matches beside an Arabic letter, so this whole list used to do nothing.
+      .replace(/(?:^|\s)(?:الاستاذه|الاستاذ|السيده|السيد|الست|دكتور|مهندس|مستر)(?=\s|$)/g, ' ')
+      .replace(/\b(?:mr|mrs|ms|dr|eng)\b\.?/gi, '')
+      .toLowerCase()
+      // Everything that is not a letter or a digit, spaces included.
+      .replace(/[^\p{L}\p{N}]/gu, '')
+  );
 }
 
 /** The same name split into its parts, folded, for token-by-token comparison. */
@@ -328,7 +335,19 @@ export function namesAgree(a: string, b: string): boolean {
  * four-part person who does not exist. Trailing particles are dropped, one at a
  * time; nothing in the middle is touched, because «عبد» belongs there.
  */
-const NAME_TAIL_WORDS = new Set(['على', 'علي', 'عل', 'عن', 'من', 'في', 'لدى', 'الى', 'إلى', 'ب', 'بـ']);
+const NAME_TAIL_WORDS = new Set([
+  'على',
+  'علي',
+  'عل',
+  'عن',
+  'من',
+  'في',
+  'لدى',
+  'الى',
+  'إلى',
+  'ب',
+  'بـ',
+]);
 
 function trimNameTail(name: string | undefined): string | undefined {
   if (!name) return name;

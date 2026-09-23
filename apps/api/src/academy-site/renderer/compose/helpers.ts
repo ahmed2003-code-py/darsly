@@ -66,7 +66,11 @@ export const SECTION_LABEL: Record<string, LT> = {
 };
 
 /** Eyebrow + heading, the standard opening of a section. */
-export function sectionHead(type: string, heading: LT | undefined, opts: { eyebrow?: boolean } = {}): string {
+export function sectionHead(
+  type: string,
+  heading: LT | undefined,
+  opts: { eyebrow?: boolean } = {},
+): string {
   const label = opts.eyebrow === false ? undefined : SECTION_LABEL[type];
   const eyebrow = label ? `<p class="eyebrow">${i18n(label)}</p>` : '';
   const h = hasText(heading) ? `<h2>${i18n(heading!)}</h2>` : '';
@@ -94,16 +98,23 @@ export function sectionOpen(
     `data-surface="${escapeAttr(spec.surface)}"`,
     `data-width="${escapeAttr(spec.width)}"`,
     spec.accents.length ? `data-accent="${escapeAttr(spec.accents.join(' '))}"` : '',
-    opts.hydrate ? `data-hydrate="${escapeAttr(opts.hydrate)}" data-limit="${Number(opts.limit) || 6}"` : '',
+    opts.hydrate
+      ? `data-hydrate="${escapeAttr(opts.hydrate)}" data-limit="${Number(opts.limit) || 6}"`
+      : '',
     `style="${style.join(';')}"`,
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
   return `<section ${attrs}><div class="wrap">`;
 }
 
 export const SECTION_CLOSE = '</div></section>';
 
 const WIDTH_VALUE: Record<string, string> = {
-  narrow: '860px', standard: '1120px', wide: '1340px', full: '100%',
+  narrow: '860px',
+  standard: '1120px',
+  wide: '1340px',
+  full: '100%',
 };
 
 /** An image, with the treatment the composition asked for. Never a raw URL. */
@@ -140,10 +151,15 @@ export function hasImage(mediaId: string | undefined, ctx: ComposeContext): bool
  * scroll to contact, because a visitor who is interested but not ready to enrol
  * otherwise has nothing on the first screen to click.
  */
-export function actions(ctx: ComposeContext, label: LT, opts: { secondary?: boolean } = {}): string {
-  const second = opts.secondary === false
-    ? ''
-    : `<a class="btn btn-ghost" href="#${CONTACT_ANCHOR}">${i18n({ ar: 'تواصل معي', en: 'Get in touch' })}</a>`;
+export function actions(
+  ctx: ComposeContext,
+  label: LT,
+  opts: { secondary?: boolean } = {},
+): string {
+  const second =
+    opts.secondary === false
+      ? ''
+      : `<a class="btn btn-ghost" href="#${CONTACT_ANCHOR}">${i18n({ ar: 'تواصل معي', en: 'Get in touch' })}</a>`;
   return `<div class="actions">
     <a class="btn" data-cta target="_top" href="${escapeAttr(ctx.ctaHref)}">${i18n(label)}<span class="btn-arrow" aria-hidden="true">→</span></a>
     ${second}</div>`;
@@ -152,10 +168,12 @@ export function actions(ctx: ComposeContext, label: LT, opts: { secondary?: bool
 export const COURSES_ANCHOR = 'courses';
 export const CONTACT_ANCHOR = 'contact';
 
-export const ENROLLING_BADGE = `<p class="badge"><span class="dot" aria-hidden="true"></span>${i18n({
-  ar: 'الحجز مفتوح الآن',
-  en: 'Now enrolling',
-})}</p>`;
+export const ENROLLING_BADGE = `<p class="badge"><span class="dot" aria-hidden="true"></span>${i18n(
+  {
+    ar: 'الحجز مفتوح الآن',
+    en: 'Now enrolling',
+  },
+)}</p>`;
 
 export function skeleton(n: number): string {
   return Array.from({ length: n }, () => '<div class="skeleton"></div>').join('');
@@ -163,7 +181,18 @@ export function skeleton(n: number): string {
 
 /** Glyphs for the platforms teachers actually link to. */
 export const SOCIAL_GLYPH: Record<string, string> = {
-  whatsapp: '💬', telegram: '✈️', facebook: 'f', instagram: '◎', youtube: '▶',
-  tiktok: '♪', linkedin: 'in', twitter: '𝕏', x: '𝕏', email: '✉', mail: '✉',
-  phone: '☎', website: '⌂', site: '⌂',
+  whatsapp: '💬',
+  telegram: '✈️',
+  facebook: 'f',
+  instagram: '◎',
+  youtube: '▶',
+  tiktok: '♪',
+  linkedin: 'in',
+  twitter: '𝕏',
+  x: '𝕏',
+  email: '✉',
+  mail: '✉',
+  phone: '☎',
+  website: '⌂',
+  site: '⌂',
 };

@@ -40,13 +40,22 @@ import { YoutubeImportService } from './youtube-import.service';
         fairplay: FairPlayDrmProvider,
       ) => {
         switch (process.env.DRM_SCHEME) {
-          case 'WIDEVINE': return widevine;
-          case 'PLAYREADY': return playready;
-          case 'FAIRPLAY': return fairplay;
-          default: return native;
+          case 'WIDEVINE':
+            return widevine;
+          case 'PLAYREADY':
+            return playready;
+          case 'FAIRPLAY':
+            return fairplay;
+          default:
+            return native;
         }
       },
-      inject: [NativeAesDrmProvider, WidevineDrmProvider, PlayReadyDrmProvider, FairPlayDrmProvider],
+      inject: [
+        NativeAesDrmProvider,
+        WidevineDrmProvider,
+        PlayReadyDrmProvider,
+        FairPlayDrmProvider,
+      ],
     },
     {
       provide: NativeAesDrmProvider,
@@ -67,6 +76,13 @@ import { YoutubeImportService } from './youtube-import.service';
     VideoJobService,
     VideoJobWorker,
   ],
-  exports: [VideoProcessingService, VideoJobService, HlsKeyService, SignedUrlService, DRM_PROVIDER, YoutubeImportService],
+  exports: [
+    VideoProcessingService,
+    VideoJobService,
+    HlsKeyService,
+    SignedUrlService,
+    DRM_PROVIDER,
+    YoutubeImportService,
+  ],
 })
 export class VideoModule {}

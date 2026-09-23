@@ -1,4 +1,10 @@
-import { ADMIN_THEME_PRESETS, presetEntry, type AdminThemeEntry, type AdminThemeMode, type AdminThemeTokens } from '@darsly/shared-types';
+import {
+  ADMIN_THEME_PRESETS,
+  presetEntry,
+  type AdminThemeEntry,
+  type AdminThemeMode,
+  type AdminThemeTokens,
+} from '@darsly/shared-types';
 import { resolveMode } from './colorMode';
 
 /**
@@ -70,7 +76,10 @@ export function applyAdminTheme(theme: AdminThemeLook, remember = true): void {
     // The resolved tokens travel with the id so a Center's or a store theme's
     // look — which only the API can resolve — replays before first paint too.
     // Both ends are cached, so the mode switch is a repaint from memory.
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ id: theme.id, tokens, modes: theme.modes ?? null }));
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ id: theme.id, tokens, modes: theme.modes ?? null }),
+    );
   } catch {
     // A full or blocked storage costs the next load its head start, nothing more.
   }
@@ -174,7 +183,9 @@ function readCache(): AdminThemeLook | null {
 function isTokens(v: unknown): v is AdminThemeTokens {
   if (!v || typeof v !== 'object') return false;
   const keys = Object.keys(DEFAULT_ADMIN_THEME.tokens);
-  return keys.every((k) => /^\d{1,3} \d{1,3} \d{1,3}$/.test(String((v as Record<string, unknown>)[k] ?? '')));
+  return keys.every((k) =>
+    /^\d{1,3} \d{1,3} \d{1,3}$/.test(String((v as Record<string, unknown>)[k] ?? '')),
+  );
 }
 
 function camelToKebab(s: string): string {

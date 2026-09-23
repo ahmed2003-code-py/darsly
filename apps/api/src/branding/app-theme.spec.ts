@@ -25,21 +25,38 @@ const rgb = (t: AppTheme, name: string) => {
 
 /** Tokens are stored as "R G B" triples; tests read them back as hex. */
 const hexOf = (t: AppTheme, name: string) =>
-  '#' + rgb(t, name).split(' ').map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+  '#' +
+  rgb(t, name)
+    .split(' ')
+    .map((n) => Number(n).toString(16).padStart(2, '0'))
+    .join('');
 
 const ratio = (t: AppTheme, fg: string, bg: string) => contrastRatio(hexOf(t, fg), hexOf(t, bg));
 
 const LIGHT = {
-  background: '#FFFDF7', ink: '#1A1A1A', surface: '#F3EFE4', surfaceAlt: '#EAE4D5',
-  primary: '#B4531F', accent: '#3F6B4A', mode: 'light',
+  background: '#FFFDF7',
+  ink: '#1A1A1A',
+  surface: '#F3EFE4',
+  surfaceAlt: '#EAE4D5',
+  primary: '#B4531F',
+  accent: '#3F6B4A',
+  mode: 'light',
 };
 const DARK = {
-  background: '#0E1116', ink: '#E8EAF0', surface: '#161A21', surfaceAlt: '#1E232C',
-  primary: '#5EE0C0', accent: '#8B7CF6', mode: 'dark',
+  background: '#0E1116',
+  ink: '#E8EAF0',
+  surface: '#161A21',
+  surfaceAlt: '#1E232C',
+  primary: '#5EE0C0',
+  accent: '#8B7CF6',
+  mode: 'dark',
 };
 
 describe('every surface that carries text stays readable', () => {
-  for (const [name, palette] of [['a light palette', LIGHT], ['a dark palette', DARK]] as const) {
+  for (const [name, palette] of [
+    ['a light palette', LIGHT],
+    ['a dark palette', DARK],
+  ] as const) {
     describe(name, () => {
       const t = deriveAppTheme(palette);
 
@@ -64,7 +81,9 @@ describe('every surface that carries text stays readable', () => {
 
       it('keeps text on tinted chips legible', () => {
         expect(ratio(t, 'on-primary-fixed', 'primary-fixed')).toBeGreaterThanOrEqual(4.5);
-        expect(ratio(t, 'on-secondary-container', 'secondary-container')).toBeGreaterThanOrEqual(4.5);
+        expect(ratio(t, 'on-secondary-container', 'secondary-container')).toBeGreaterThanOrEqual(
+          4.5,
+        );
         expect(ratio(t, 'on-error-container', 'error-container')).toBeGreaterThanOrEqual(4.5);
         expect(ratio(t, 'on-tertiary-container', 'tertiary-container')).toBeGreaterThanOrEqual(4.5);
       });
@@ -240,8 +259,9 @@ describe('the brand ramp keeps the meaning the platform scale had', () => {
   });
 
   it('runs light to dark across the scale', () => {
-    const steps = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900]
-      .map((s) => contrastRatio(hexOf(t, `accent-${s}`), '#000000'));
+    const steps = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((s) =>
+      contrastRatio(hexOf(t, `accent-${s}`), '#000000'),
+    );
     for (let i = 1; i < steps.length; i++) expect(steps[i]).toBeLessThan(steps[i - 1]);
   });
 
@@ -301,8 +321,13 @@ describe('what a publish records on the academy', () => {
 
   it('keeps recording what an older document recorded', () => {
     const design = {
-      background: '#FFFDF7', ink: '#1A1A1A', surface: '#F3EFE4',
-      radius: 8, density: 'regular', headingScale: 'balanced', heroTreatment: 'flat',
+      background: '#FFFDF7',
+      ink: '#1A1A1A',
+      surface: '#F3EFE4',
+      radius: 8,
+      density: 'regular',
+      headingScale: 'balanced',
+      heroTreatment: 'flat',
     };
     const stored = brandTokensFromTheme({ primary: '#B4531F', accent: '#3F6B4A', design });
     expect(stored).toMatchObject(design);
@@ -316,7 +341,10 @@ describe('what a publish records on the academy', () => {
   it('round-trips: what publish stores is what the console derives from', () => {
     // The two halves are written apart — one at publish, one at read — so this
     // pins the seam between them.
-    const stored = brandTokensFromTheme({ primary: LIGHT.primary, designSpec: { palette: { ...LIGHT } } });
+    const stored = brandTokensFromTheme({
+      primary: LIGHT.primary,
+      designSpec: { palette: { ...LIGHT } },
+    });
     const theme = deriveAppTheme(paletteFromBrandTokens(stored, '#000000', '#000000'));
     expect(hexOf(theme, 'primary')).toBe(LIGHT.primary.toLowerCase());
     expect(hexOf(theme, 'background')).toBe(LIGHT.background.toLowerCase());
@@ -331,6 +359,8 @@ describe('what a publish records on the academy', () => {
   });
 
   it('leaves the platform palette in place when there is nothing at all', () => {
-    expect(hexOf(deriveAppTheme(paletteFromBrandTokens(null, null, null)), 'primary')).toBe('#4a32c9');
+    expect(hexOf(deriveAppTheme(paletteFromBrandTokens(null, null, null)), 'primary')).toBe(
+      '#4a32c9',
+    );
   });
 });

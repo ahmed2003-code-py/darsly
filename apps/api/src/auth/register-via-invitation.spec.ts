@@ -14,8 +14,19 @@ function harness(role: 'TEACHER' | 'ASSISTANT' = 'TEACHER') {
     academyMembership: { upsert: jest.fn() },
   };
   tx.user.create.mockImplementation(async ({ data }: any) => ({
-    id: 'new-user', role: data.role, email: data.email, fullName: data.fullName, passwordHash: data.passwordHash, failedLogins: 0, lockedUntil: null,
-    teacherProfile: { id: 'tp-new', status: data.teacherProfile.create.status, slug: data.teacherProfile.create.slug, stages: data.teacherProfile.create.stages },
+    id: 'new-user',
+    role: data.role,
+    email: data.email,
+    fullName: data.fullName,
+    passwordHash: data.passwordHash,
+    failedLogins: 0,
+    lockedUntil: null,
+    teacherProfile: {
+      id: 'tp-new',
+      status: data.teacherProfile.create.status,
+      slug: data.teacherProfile.create.slug,
+      stages: data.teacherProfile.create.stages,
+    },
     studentProfile: null,
   }));
   const prisma: any = {
@@ -25,19 +36,43 @@ function harness(role: 'TEACHER' | 'ASSISTANT' = 'TEACHER') {
     academy: { findUnique: jest.fn().mockResolvedValue(null) },
     $transaction: jest.fn(async (fn: any) => fn(tx)),
   };
-  const tokenService = { createSession: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r', kickedSessions: 0 }) };
+  const tokenService = {
+    createSession: jest
+      .fn()
+      .mockResolvedValue({ accessToken: 'a', refreshToken: 'r', kickedSessions: 0 }),
+  };
   const mail = { sendInBackground: jest.fn(), send: jest.fn(), webUrl: (p: string) => p };
   const links = {
-    resolveLive: jest.fn().mockResolvedValue({ tokenHash: 'hash', role, academyId: 'center-1', expiresAt: new Date(Date.now() + 60_000), academy: { name: 'Center' } }),
-    claimForNewUser: jest.fn().mockImplementation(async (_tx: any, _hash: string, userId: string) => ({ id: 'm1', academyId: 'center-1', role, status: 'ACTIVE', userId })),
+    resolveLive: jest.fn().mockResolvedValue({
+      tokenHash: 'hash',
+      role,
+      academyId: 'center-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      academy: { name: 'Center' },
+    }),
+    claimForNewUser: jest
+      .fn()
+      .mockImplementation(async (_tx: any, _hash: string, userId: string) => ({
+        id: 'm1',
+        academyId: 'center-1',
+        role,
+        status: 'ACTIVE',
+        userId,
+      })),
   };
   const svc = new AuthService(prisma, tokenService as any, mail as any, links as any);
   return { svc, prisma, tx, tokenService, mail, links };
 }
 
 const body = (over: Record<string, unknown> = {}) => ({
-  token: 'raw-token', email: 'New@Example.com', fullName: 'New Teacher', password: 'Passw0rd!', phone: '01012345678',
-  subjectIds: ['s1'], stages: ['SECONDARY' as const], ...over,
+  token: 'raw-token',
+  email: 'New@Example.com',
+  fullName: 'New Teacher',
+  password: 'Passw0rd!',
+  phone: '01012345678',
+  subjectIds: ['s1'],
+  stages: ['SECONDARY' as const],
+  ...over,
 });
 
 describe('AuthService.registerViaInvitation — TEACHER invitation', () => {
@@ -46,7 +81,11 @@ describe('AuthService.registerViaInvitation — TEACHER invitation', () => {
     const res = await svc.registerViaInvitation(body(), { ip: '1.1.1.1' });
 
     const created = tx.user.create.mock.calls[0][0].data;
-    expect(created).toMatchObject({ role: 'TEACHER', email: 'new@example.com', fullName: 'New Teacher' });
+    expect(created).toMatchObject({
+      role: 'TEACHER',
+      email: 'new@example.com',
+      fullName: 'New Teacher',
+    });
     expect(created.teacherProfile.create.status).toBe('APPROVED');
     expect(created.teacherProfile.create.subjects.create).toEqual([{ subjectId: 's1' }]);
     expect(created.teacherProfile.create.stages).toEqual(['SECONDARY']);
@@ -61,16 +100,30 @@ describe('AuthService.registerViaInvitation — TEACHER invitation', () => {
     expect(mail.send).not.toHaveBeenCalled();
 
     // Signed in at once, with the teacher identity as authorship tenant.
-    expect(tokenService.createSession).toHaveBeenCalledWith({ id: 'new-user', role: 'TEACHER', tenantId: 'tp-new' }, expect.objectContaining({ ip: '1.1.1.1' }));
-    expect(res).toMatchObject({ isNewUser: true, accessToken: 'a', refreshToken: 'r', membership: { academyId: 'center-1', role: 'TEACHER', status: 'ACTIVE' } });
+    expect(tokenService.createSession).toHaveBeenCalledWith(
+      { id: 'new-user', role: 'TEACHER', tenantId: 'tp-new' },
+      expect.objectContaining({ ip: '1.1.1.1' }),
+    );
+    expect(res).toMatchObject({
+      isNewUser: true,
+      accessToken: 'a',
+      refreshToken: 'r',
+      membership: { academyId: 'center-1', role: 'TEACHER', status: 'ACTIVE' },
+    });
     expect(res.user).not.toHaveProperty('passwordHash');
   });
 
   it('subjects and stages are mandatory for a TEACHER — nothing is created without them', async () => {
     const { svc, tx } = harness('TEACHER');
-    await expect(svc.registerViaInvitation(body({ subjectIds: [] }), {})).rejects.toMatchObject({ response: { code: 'SUBJECT_REQUIRED' } });
-    await expect(svc.registerViaInvitation(body({ stages: [] }), {})).rejects.toMatchObject({ response: { code: 'STAGES_REQUIRED' } });
-    await expect(svc.registerViaInvitation(body({ subjectIds: undefined, stages: undefined }), {})).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.registerViaInvitation(body({ subjectIds: [] }), {})).rejects.toMatchObject({
+      response: { code: 'SUBJECT_REQUIRED' },
+    });
+    await expect(svc.registerViaInvitation(body({ stages: [] }), {})).rejects.toMatchObject({
+      response: { code: 'STAGES_REQUIRED' },
+    });
+    await expect(
+      svc.registerViaInvitation(body({ subjectIds: undefined, stages: undefined }), {}),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.user.create).not.toHaveBeenCalled();
   });
 });
@@ -78,7 +131,10 @@ describe('AuthService.registerViaInvitation — TEACHER invitation', () => {
 describe('AuthService.registerViaInvitation — ASSISTANT invitation', () => {
   it('needs no subjects/stages, still gets the teacher identity the Center checks staff against, joins as ASSISTANT', async () => {
     const { svc, tx } = harness('ASSISTANT');
-    const res = await svc.registerViaInvitation(body({ subjectIds: undefined, stages: undefined }), {});
+    const res = await svc.registerViaInvitation(
+      body({ subjectIds: undefined, stages: undefined }),
+      {},
+    );
     const created = tx.user.create.mock.calls[0][0].data;
     expect(created.role).toBe('TEACHER');
     expect(created.teacherProfile.create.status).toBe('APPROVED');
@@ -93,7 +149,14 @@ describe('AuthService.registerViaInvitation — the request decides nothing abou
   it('extra fields naming a role, an academy or an owner are ignored: membership comes from the row', async () => {
     const { svc, links, tx } = harness('ASSISTANT');
     const res = await svc.registerViaInvitation(
-      body({ subjectIds: undefined, stages: undefined, role: 'TEACHER', academyId: 'attacker-center', ownerUserId: 'attacker', membershipRole: 'OWNER' }) as any,
+      body({
+        subjectIds: undefined,
+        stages: undefined,
+        role: 'TEACHER',
+        academyId: 'attacker-center',
+        ownerUserId: 'attacker',
+        membershipRole: 'OWNER',
+      }) as any,
       {},
     );
     expect(res.membership).toMatchObject({ role: 'ASSISTANT', academyId: 'center-1' });

@@ -1,13 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import {
-  IsBoolean,
-  IsInt,
-  IsOptional,
-  IsString,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
@@ -71,9 +64,19 @@ export class TeacherGamificationController {
   @Get('leaderboard')
   @AcademyStaff('analytics.read')
   @ApiOperation({ summary: '[teacher] This academy’s leaderboard' })
-  board(@CurrentAcademy() ctx: AcademyContext, @Query('period') period: LeaderboardPeriod = 'WEEKLY') {
-    const safe: LeaderboardPeriod = ['WEEKLY', 'MONTHLY', 'ALLTIME'].includes(period) ? period : 'WEEKLY';
-    return this.leaderboard.board({ scope: 'ACADEMY', scopeId: ctx.academyId, period: safe, limit: 50 });
+  board(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Query('period') period: LeaderboardPeriod = 'WEEKLY',
+  ) {
+    const safe: LeaderboardPeriod = ['WEEKLY', 'MONTHLY', 'ALLTIME'].includes(period)
+      ? period
+      : 'WEEKLY';
+    return this.leaderboard.board({
+      scope: 'ACADEMY',
+      scopeId: ctx.academyId,
+      period: safe,
+      limit: 50,
+    });
   }
 }
 
@@ -125,7 +128,10 @@ export class AdminGamificationController {
   @Patch('levels/:level')
   @ApiOperation({ summary: '[admin] Move a level threshold or rename a tier' })
   async updateLevel(@Param('level') level: string, @Body() dto: UpdateLevelDto) {
-    const row = await this.prisma.levelTier.update({ where: { level: Number(level) }, data: { ...dto } });
+    const row = await this.prisma.levelTier.update({
+      where: { level: Number(level) },
+      data: { ...dto },
+    });
     this.config.invalidate();
     return row;
   }

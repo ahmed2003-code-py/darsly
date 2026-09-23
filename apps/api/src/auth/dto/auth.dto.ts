@@ -37,7 +37,8 @@ const PASSWORD_MSG = 'Password must be at least 8 characters and include a lette
 // A username starts with a letter so it can never be read as a phone number,
 // and has no "@" so it can never be read as an email. 3–30 chars.
 export const USERNAME_REGEX = /^[a-z][a-z0-9_]{2,29}$/i;
-const USERNAME_MSG = 'Username must be 3–30 characters: letters, digits or _, starting with a letter';
+const USERNAME_MSG =
+  'Username must be 3–30 characters: letters, digits or _, starting with a letter';
 
 export class LoginDto {
   /**

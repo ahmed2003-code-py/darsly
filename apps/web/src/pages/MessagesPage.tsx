@@ -58,9 +58,7 @@ export default function MessagesPage() {
     if (!fetched) return;
     setMessages((prev) => {
       const byId = new Map(fetched.map((m) => [m.id, m]));
-      const newest = fetched.length
-        ? new Date(fetched[fetched.length - 1].createdAt).getTime()
-        : 0;
+      const newest = fetched.length ? new Date(fetched[fetched.length - 1].createdAt).getTime() : 0;
       for (const m of prev) {
         if (!byId.has(m.id) && new Date(m.createdAt).getTime() > newest) byId.set(m.id, m);
       }
@@ -239,7 +237,9 @@ export default function MessagesPage() {
           {!active ? (
             <div className="flex flex-1 items-center justify-center text-outline">
               <div className="text-center">
-                <span className="material-symbols-outlined text-5xl text-outline-variant">chat</span>
+                <span className="material-symbols-outlined text-5xl text-outline-variant">
+                  chat
+                </span>
                 <p className="mt-2">{t('messages.selectThread')}</p>
               </div>
             </div>
@@ -493,7 +493,12 @@ function VoiceBubble({
   const [failed, setFailed] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  useEffect(
+    () => () => {
+      if (url) URL.revokeObjectURL(url);
+    },
+    [url],
+  );
 
   async function toggle() {
     if (audioRef.current) {
@@ -509,7 +514,10 @@ function VoiceBubble({
       audioRef.current = audio;
       audio.onplay = () => setPlaying(true);
       audio.onpause = () => setPlaying(false);
-      audio.onended = () => { setPlaying(false); setAt(0); };
+      audio.onended = () => {
+        setPlaying(false);
+        setAt(0);
+      };
       audio.ontimeupdate = () => setAt(audio.currentTime);
       await audio.play();
     } catch {
@@ -533,7 +541,9 @@ function VoiceBubble({
         </span>
       </button>
       <span className="flex min-w-[7rem] flex-1 flex-col gap-1">
-        <span className={`h-1.5 overflow-hidden rounded-full ${mine ? 'bg-black/20' : 'bg-surface-container-high'}`}>
+        <span
+          className={`h-1.5 overflow-hidden rounded-full ${mine ? 'bg-black/20' : 'bg-surface-container-high'}`}
+        >
           <span
             className={`block h-full rounded-full transition-[width] ${mine ? 'bg-on-primary/80' : 'bg-primary'}`}
             style={{ width: `${pct}%` }}
@@ -585,10 +595,13 @@ function Composer({
 
   const stopTracks = () => recorderRef.current?.stream.getTracks().forEach((tr) => tr.stop());
 
-  useEffect(() => () => {
-    window.clearInterval(tickRef.current);
-    stopTracks();
-  }, []);
+  useEffect(
+    () => () => {
+      window.clearInterval(tickRef.current);
+      stopTracks();
+    },
+    [],
+  );
 
   async function start() {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
@@ -650,7 +663,9 @@ function Composer({
         <span className="flex flex-1 items-center gap-2 text-sm font-bold text-error">
           <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-error" />
           {t('messages.recording')}
-          <span dir="ltr" className="tabular-nums text-on-surface-variant">{clock(elapsed)}</span>
+          <span dir="ltr" className="tabular-nums text-on-surface-variant">
+            {clock(elapsed)}
+          </span>
         </span>
         <button
           type="button"
@@ -665,7 +680,10 @@ function Composer({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex items-center gap-2 border-t border-outline-variant/40 p-3">
+    <form
+      onSubmit={onSubmit}
+      className="flex items-center gap-2 border-t border-outline-variant/40 p-3"
+    >
       <input
         ref={inputRef}
         className="input py-2.5"

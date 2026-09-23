@@ -7,9 +7,30 @@ import { GamificationService } from './gamification.service';
  */
 
 const RULES: Record<string, any> = {
-  LESSON_COMPLETED: { event: 'LESSON_COMPLETED', xp: 25, coins: 10, dailyCap: 300, perEntityLimit: 1, isActive: true },
-  QUIZ_COMPLETED: { event: 'QUIZ_COMPLETED', xp: 20, coins: 5, dailyCap: 60, perEntityLimit: 0, isActive: true },
-  MISSION_COMPLETED: { event: 'MISSION_COMPLETED', xp: 50, coins: 25, dailyCap: 0, perEntityLimit: 1, isActive: true },
+  LESSON_COMPLETED: {
+    event: 'LESSON_COMPLETED',
+    xp: 25,
+    coins: 10,
+    dailyCap: 300,
+    perEntityLimit: 1,
+    isActive: true,
+  },
+  QUIZ_COMPLETED: {
+    event: 'QUIZ_COMPLETED',
+    xp: 20,
+    coins: 5,
+    dailyCap: 60,
+    perEntityLimit: 0,
+    isActive: true,
+  },
+  MISSION_COMPLETED: {
+    event: 'MISSION_COMPLETED',
+    xp: 50,
+    coins: 25,
+    dailyCap: 0,
+    perEntityLimit: 1,
+    isActive: true,
+  },
   LEVEL_UP: { event: 'LEVEL_UP', xp: 0, coins: 0, dailyCap: 0, perEntityLimit: 1, isActive: true },
   RETIRED: { event: 'RETIRED', xp: 10, coins: 0, dailyCap: 0, perEntityLimit: 1, isActive: false },
 };
@@ -20,7 +41,9 @@ const TIERS = [
   { level: 3, minXp: 500, nameAr: 'دارس', nameEn: 'Learner', icon: 'menu_book', coinReward: 50 },
 ];
 
-function makeCtx(opts: { agg?: any; priorSameEntity?: number; xpSpentToday?: number; notifiedToday?: number } = {}) {
+function makeCtx(
+  opts: { agg?: any; priorSameEntity?: number; xpSpentToday?: number; notifiedToday?: number } = {},
+) {
   const agg = opts.agg ?? { studentId: 's1', xp: 0, level: 1, coins: 0, bestRank: null };
   const created: any[] = [];
 
@@ -81,8 +104,26 @@ function makeCtx(opts: { agg?: any; priorSameEntity?: number; xpSpentToday?: num
   const leaderboard: any = { bump: jest.fn().mockResolvedValue(undefined) };
   const notifications: any = { create: jest.fn().mockResolvedValue({}) };
 
-  const svc = new GamificationService(prisma, config, achievements, missions, leaderboard, notifications);
-  return { svc, prisma, tx, created, agg, achievements, missions, leaderboard, notifications, config };
+  const svc = new GamificationService(
+    prisma,
+    config,
+    achievements,
+    missions,
+    leaderboard,
+    notifications,
+  );
+  return {
+    svc,
+    prisma,
+    tx,
+    created,
+    agg,
+    achievements,
+    missions,
+    leaderboard,
+    notifications,
+    config,
+  };
 }
 
 const lessonEvent = (over: any = {}) => ({
@@ -104,9 +145,17 @@ describe('GamificationService', () => {
     expect(out.awarded).toBe(true);
     expect(out.xp).toBe(25);
     expect(out.coins).toBe(10);
-    expect(created[0]).toMatchObject({ type: 'LESSON_COMPLETED', xpAwarded: 25, tenantId: 't1', courseId: 'c1' });
+    expect(created[0]).toMatchObject({
+      type: 'LESSON_COMPLETED',
+      xpAwarded: 25,
+      tenantId: 't1',
+      courseId: 'c1',
+    });
     // The board is updated in the same transaction as the award.
-    expect(leaderboard.bump).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ xp: 25, tenantId: 't1' }));
+    expect(leaderboard.bump).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ xp: 25, tenantId: 't1' }),
+    );
   });
 
   it('pays nothing when the same action is reported twice', async () => {
@@ -165,7 +214,9 @@ describe('GamificationService', () => {
   });
 
   it('promotes the student when the new total crosses a tier, once', async () => {
-    const { svc, prisma, notifications } = makeCtx({ agg: { studentId: 's1', xp: 90, level: 1, coins: 0 } });
+    const { svc, prisma, notifications } = makeCtx({
+      agg: { studentId: 's1', xp: 90, level: 1, coins: 0 },
+    });
     const out = await svc.recordOrThrow(lessonEvent()); // 90 + 25 = 115 → level 2
 
     expect(out.leveledUp).toBe(true);
@@ -192,7 +243,15 @@ describe('GamificationService', () => {
   it('does not notify for each achievement — those are celebrated in the interface', async () => {
     const { svc, achievements, notifications } = makeCtx();
     achievements.evaluate.mockResolvedValueOnce([
-      { key: 'first_lesson', icon: 'star', titleAr: 'أول درس', titleEn: 'First lesson', xpReward: 0, coinReward: 0, titleKey: null },
+      {
+        key: 'first_lesson',
+        icon: 'star',
+        titleAr: 'أول درس',
+        titleEn: 'First lesson',
+        xpReward: 0,
+        coinReward: 0,
+        titleKey: null,
+      },
     ]);
     const out = await svc.recordOrThrow(lessonEvent());
     expect(out.achievements).toHaveLength(1);
@@ -214,7 +273,11 @@ describe('GamificationService', () => {
 
     expect(out.missions).toHaveLength(1);
     const missionAward = created.find((c) => c.type === 'MISSION_COMPLETED');
-    expect(missionAward).toMatchObject({ xpAwarded: 50, coinsAwarded: 25, idempotencyKey: 'MISSION:m1' });
+    expect(missionAward).toMatchObject({
+      xpAwarded: 50,
+      coinsAwarded: 25,
+      idempotencyKey: 'MISSION:m1',
+    });
   });
 
   it('multiplies a lesson award while an XP boost is running, and spends a charge', async () => {
@@ -227,7 +290,9 @@ describe('GamificationService', () => {
 
     expect(out.xp).toBe(50); // 25 × 2
     expect(prisma.rewardRedemption.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ meta: { remaining: 1, multiplier: 2 } }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ meta: { remaining: 1, multiplier: 2 } }),
+      }),
     );
   });
 

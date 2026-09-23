@@ -4,11 +4,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { LessonAccessService } from './lesson-access.service';
 import { CertificatesService } from './certificates.service';
 import { GamificationService } from '../gamification/gamification.service';
-import {
-  GradeSubmissionDto,
-  SubmitAssignmentDto,
-  UpsertAssignmentDto,
-} from './dto/assignment.dto';
+import { GradeSubmissionDto, SubmitAssignmentDto, UpsertAssignmentDto } from './dto/assignment.dto';
 
 @Injectable()
 export class AssignmentsService {
@@ -132,7 +128,12 @@ export class AssignmentsService {
 
     const submission = await this.prisma.assignmentSubmission.upsert({
       where: { assignmentId_studentId: { assignmentId: assignment.id, studentId } },
-      create: { assignmentId: assignment.id, studentId, body: dto.body ?? '', fileKey: dto.fileKey ?? null },
+      create: {
+        assignmentId: assignment.id,
+        studentId,
+        body: dto.body ?? '',
+        fileKey: dto.fileKey ?? null,
+      },
       update: { body: dto.body ?? '', fileKey: dto.fileKey ?? null },
     });
 

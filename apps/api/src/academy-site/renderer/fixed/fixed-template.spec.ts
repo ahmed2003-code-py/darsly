@@ -6,13 +6,19 @@ function doc(): SiteDocument {
   return {
     version: 1,
     theme: { primary: '#4f46e5', accent: '#06b6d4' },
-    seo: { title: { ar: 'عنوان الصفحة', en: 'Page title' }, description: { ar: 'وصف', en: 'Description' } },
+    seo: {
+      title: { ar: 'عنوان الصفحة', en: 'Page title' },
+      description: { ar: 'وصف', en: 'Description' },
+    },
     blocks: [
       {
         type: 'hero',
         id: 'h1',
         headline: { ar: 'مرحبًا بيكم', en: 'Welcome aboard' },
-        subheadline: { ar: 'تعلّم معايا خطوة بخطوة كل يوم', en: 'Learn with me step by step every day' },
+        subheadline: {
+          ar: 'تعلّم معايا خطوة بخطوة كل يوم',
+          en: 'Learn with me step by step every day',
+        },
         ctaLabel: { ar: 'سجّل الآن', en: 'Sign up now' },
       },
       {

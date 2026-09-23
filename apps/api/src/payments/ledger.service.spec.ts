@@ -10,20 +10,37 @@ function makePrisma() {
     _created: created,
     payment: {
       findUnique: jest.fn().mockResolvedValue({
-        id: 'pay1', status: 'PAID', amountCents: 45000, tenantId: 't1', ledgerTransaction: null,
+        id: 'pay1',
+        status: 'PAID',
+        amountCents: 45000,
+        tenantId: 't1',
+        ledgerTransaction: null,
       }),
     },
-    teacherProfile: { findUnique: jest.fn().mockResolvedValue({ commissionPercent: 20, userId: 'u1' }) },
+    teacherProfile: {
+      findUnique: jest.fn().mockResolvedValue({ commissionPercent: 20, userId: 'u1' }),
+    },
     // No academyId on the fixture payment/payout ⇒ academyId falls back to
     // tenantId, and that "academy" is PERSONAL — same account as before Phase 7.
-    academy: { findUnique: jest.fn().mockResolvedValue({ id: 't1', kind: 'PERSONAL', teacherSharePercent: null }) },
+    academy: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ id: 't1', kind: 'PERSONAL', teacherSharePercent: null }),
+    },
     academyMembership: { findFirst: jest.fn().mockResolvedValue(null) },
     payoutRequest: {
       findUnique: jest.fn().mockResolvedValue({
-        id: 'po1', tenantId: 't1', amountCents: 30000, ledgerTransaction: null,
+        id: 'po1',
+        tenantId: 't1',
+        amountCents: 30000,
+        ledgerTransaction: null,
       }),
     },
-    invoice: { findUnique: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(0), create: jest.fn() },
+    invoice: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0),
+      create: jest.fn(),
+    },
     ledgerTransaction: {
       create: jest.fn((args: any) => {
         created.push(args.data.entries.create);
@@ -68,7 +85,11 @@ describe('LedgerService', () => {
   it('is idempotent — never double-books a payment', async () => {
     const prisma = makePrisma();
     prisma.payment.findUnique.mockResolvedValue({
-      id: 'pay1', status: 'PAID', amountCents: 45000, tenantId: 't1', ledgerTransaction: { id: 'existing' },
+      id: 'pay1',
+      status: 'PAID',
+      amountCents: 45000,
+      tenantId: 't1',
+      ledgerTransaction: { id: 'existing' },
     });
     const svc = new LedgerService(prisma);
     await svc.recordPayment('pay1');
@@ -117,8 +138,16 @@ describe('LedgerService', () => {
     it('TEACHER-received cash: the liability account is debited ONLY the fee (not the gross); the teacher earnings account is credited their full share', async () => {
       const prisma = makePrisma();
       prisma.payment.findUnique.mockResolvedValue({
-        id: 'payCash1', status: 'PAID', amountCents: 1000, netCents: 900, feeCents: 100,
-        tenantId: 't1', academyId: 't1', method: 'CASH', cashReceiver: 'TEACHER', ledgerTransaction: null,
+        id: 'payCash1',
+        status: 'PAID',
+        amountCents: 1000,
+        netCents: 900,
+        feeCents: 100,
+        tenantId: 't1',
+        academyId: 't1',
+        method: 'CASH',
+        cashReceiver: 'TEACHER',
+        ledgerTransaction: null,
       });
       const svc = new LedgerService(prisma);
       await svc.recordPayment('payCash1');
@@ -184,10 +213,22 @@ describe('LedgerService', () => {
      */
     it("CENTER-received cash: the Center liability account is debited ONLY what it still owes (fee plus the teacher's share) — not the gross; both earnings accounts are credited their own share in full", async () => {
       const prisma = makePrisma();
-      prisma.academy.findUnique.mockResolvedValue({ id: 'centerA', kind: 'CENTER', teacherSharePercent: 60 });
+      prisma.academy.findUnique.mockResolvedValue({
+        id: 'centerA',
+        kind: 'CENTER',
+        teacherSharePercent: 60,
+      });
       prisma.payment.findUnique.mockResolvedValue({
-        id: 'payCash2', status: 'PAID', amountCents: 1000, netCents: 900, feeCents: 100,
-        tenantId: 't1', academyId: 'centerA', method: 'CASH', cashReceiver: 'CENTER', ledgerTransaction: null,
+        id: 'payCash2',
+        status: 'PAID',
+        amountCents: 1000,
+        netCents: 900,
+        feeCents: 100,
+        tenantId: 't1',
+        academyId: 'centerA',
+        method: 'CASH',
+        cashReceiver: 'CENTER',
+        ledgerTransaction: null,
       });
       const svc = new LedgerService(prisma);
       await svc.recordPayment('payCash2');
@@ -203,7 +244,9 @@ describe('LedgerService', () => {
 
       // Leg 2: ONLY the 640 still owed (100 fee + 540 teacher share) — never
       // the full 1000 — lands on the Center's OWN liability account.
-      const liabilityDebit = entries.find((e: any) => e.account === 'academy:centerA:cash-liability');
+      const liabilityDebit = entries.find(
+        (e: any) => e.account === 'academy:centerA:cash-liability',
+      );
       expect(liabilityDebit).toMatchObject({ direction: 'DEBIT', amountCents: 640 });
 
       // The Center never held on to the teacher's share as its own earning —
@@ -217,8 +260,14 @@ describe('LedgerService', () => {
       expect(centerCredit.amountCents + teacherCredit.amountCents).toBe(900); // == netCents
 
       // Neither earnings account was ever debited by this collection.
-      expect(entries.some((e: any) => e.account === 'academy:centerA:balance' && e.direction === 'DEBIT')).toBe(false);
-      expect(entries.some((e: any) => e.account === 'teacher:t1:balance' && e.direction === 'DEBIT')).toBe(false);
+      expect(
+        entries.some(
+          (e: any) => e.account === 'academy:centerA:balance' && e.direction === 'DEBIT',
+        ),
+      ).toBe(false);
+      expect(
+        entries.some((e: any) => e.account === 'teacher:t1:balance' && e.direction === 'DEBIT'),
+      ).toBe(false);
     });
 
     it('orgBalance for the Center is pure earnings (its own share only) — structurally cannot include what it still owes', async () => {
@@ -244,13 +293,15 @@ describe('LedgerService', () => {
     it('zero-fills days with no ledger activity', async () => {
       const prisma = makePrisma();
       const today = new Date();
-      prisma.$queryRaw.mockResolvedValue([
-        { day: today, gross: 50000n, fee: 10000n },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ day: today, gross: 50000n, fee: 10000n }]);
       const svc = new LedgerService(prisma);
       const trend = await svc.revenueTrend(7);
       expect(trend).toHaveLength(1);
-      expect(trend[0]).toEqual({ date: today.toISOString().slice(0, 10), grossCents: 50000, feeCents: 10000 });
+      expect(trend[0]).toEqual({
+        date: today.toISOString().slice(0, 10),
+        grossCents: 50000,
+        feeCents: 10000,
+      });
     });
   });
 });

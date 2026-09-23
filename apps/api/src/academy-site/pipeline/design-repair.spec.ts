@@ -38,7 +38,9 @@ describe('repairDesign — colour', () => {
   it('rescues body text that is illegible on its own background', () => {
     // The single most valuable rule in the system. Nothing checked this before,
     // so a page could — and eventually would — go live effectively blank.
-    const { design, verdicts } = repairDesign(withPalette({ background: '#101010', ink: '#141414' }));
+    const { design, verdicts } = repairDesign(
+      withPalette({ background: '#101010', ink: '#141414' }),
+    );
     expect(codes(verdicts)).toContain('ink-contrast-raised');
     expect(contrastRatio(design.palette.ink, design.palette.background)).toBeGreaterThanOrEqual(7);
   });
@@ -46,24 +48,36 @@ describe('repairDesign — colour', () => {
   it('brightens ink on a dark page and darkens it on a light one', () => {
     const dark = repairDesign(withPalette({ background: '#0A0A0A', ink: '#151515' })).design;
     const light = repairDesign(withPalette({ background: '#FAFAFA', ink: '#EFEFEF' })).design;
-    expect(contrastRatio(dark.palette.ink, '#000000')).toBeGreaterThan(contrastRatio('#151515', '#000000'));
-    expect(contrastRatio(light.palette.ink, '#FFFFFF')).toBeGreaterThan(contrastRatio('#EFEFEF', '#FFFFFF'));
+    expect(contrastRatio(dark.palette.ink, '#000000')).toBeGreaterThan(
+      contrastRatio('#151515', '#000000'),
+    );
+    expect(contrastRatio(light.palette.ink, '#FFFFFF')).toBeGreaterThan(
+      contrastRatio('#EFEFEF', '#FFFFFF'),
+    );
   });
 
   it('gives a surface an edge when it is identical to the background', () => {
-    const { design, verdicts } = repairDesign(withPalette({ background: '#FFFFFF', surface: '#FFFFFF' }));
+    const { design, verdicts } = repairDesign(
+      withPalette({ background: '#FFFFFF', surface: '#FFFFFF' }),
+    );
     expect(codes(verdicts)).toContain('surface-indistinct');
     expect(design.palette.surface).not.toBe('#FFFFFF');
   });
 
   it('pulls back a surface that reads as a second theme', () => {
-    const { design, verdicts } = repairDesign(withPalette({ background: '#FFF9F2', surface: '#101020' }));
+    const { design, verdicts } = repairDesign(
+      withPalette({ background: '#FFF9F2', surface: '#101020' }),
+    );
     expect(codes(verdicts)).toContain('surface-overpowering');
-    expect(contrastRatio(design.palette.surface, design.palette.background)).toBeLessThanOrEqual(2.7);
+    expect(contrastRatio(design.palette.surface, design.palette.background)).toBeLessThanOrEqual(
+      2.7,
+    );
   });
 
   it('separates an accent that is nearly, but not exactly, the primary', () => {
-    const { design, verdicts } = repairDesign(withPalette({ primary: '#3B82F6', accent: '#3B84F6' }));
+    const { design, verdicts } = repairDesign(
+      withPalette({ primary: '#3B82F6', accent: '#3B84F6' }),
+    );
     expect(codes(verdicts)).toContain('accent-indistinct');
     expect(design.palette.accent).not.toBe('#3B84F6');
   });
@@ -74,7 +88,9 @@ describe('repairDesign — colour', () => {
   });
 
   it('corrects a palette that describes itself wrongly', () => {
-    const { design, verdicts } = repairDesign(withPalette({ background: '#0A0A12', mode: 'light' }));
+    const { design, verdicts } = repairDesign(
+      withPalette({ background: '#0A0A12', mode: 'light' }),
+    );
     expect(codes(verdicts)).toContain('mode-corrected');
     expect(design.palette.mode).toBe('dark');
   });
@@ -89,7 +105,13 @@ describe('repairDesign — colour', () => {
 describe('repairDesign — type, geometry and motion budgets', () => {
   it('eases type that has every amplifier turned up at once', () => {
     const d = structuredClone(TECHNICAL_DESIGN);
-    d.typography = { ...d.typography, scale: 'monumental', headingCase: 'upper', headingFamily: 'condensed', tracking: 'tight' };
+    d.typography = {
+      ...d.typography,
+      scale: 'monumental',
+      headingCase: 'upper',
+      headingFamily: 'condensed',
+      tracking: 'tight',
+    };
     const { design, verdicts } = repairDesign(d);
     expect(codes(verdicts)).toContain('typography-overloaded');
     expect(design.typography.scale).toBe('dramatic');
@@ -119,7 +141,18 @@ describe('repairDesign — type, geometry and motion budgets', () => {
 
   it('holds the page to three scroll effects', () => {
     const d = structuredClone(WARM_DESIGN);
-    d.motion = { intensity: 'lively', entrance: 'rise', scrollFx: ['parallax', 'counters', 'marquee', 'pointer-glow', 'progress-bar', 'sticky-headings'] };
+    d.motion = {
+      intensity: 'lively',
+      entrance: 'rise',
+      scrollFx: [
+        'parallax',
+        'counters',
+        'marquee',
+        'pointer-glow',
+        'progress-bar',
+        'sticky-headings',
+      ],
+    };
     const { design, verdicts } = repairDesign(d);
     expect(codes(verdicts)).toContain('scrollfx-budget');
     expect(design.motion.scrollFx).toEqual(['parallax', 'counters', 'marquee']);
@@ -135,7 +168,10 @@ describe('repairDesign — type, geometry and motion budgets', () => {
 
   it('holds the page to three accent marks', () => {
     const d = structuredClone(WARM_DESIGN);
-    d.decoration = { ...d.decoration, accents: ['blob', 'ring', 'rule-lines', 'corner-brackets', 'sticker-badges'] };
+    d.decoration = {
+      ...d.decoration,
+      accents: ['blob', 'ring', 'rule-lines', 'corner-brackets', 'sticker-badges'],
+    };
     const { design, verdicts } = repairDesign(d);
     expect(codes(verdicts)).toContain('accent-budget');
     expect(design.decoration.accents).toHaveLength(3);
@@ -157,7 +193,12 @@ describe('repairDesign — type, geometry and motion budgets', () => {
 describe('repairDesign — unknown values', () => {
   it('falls back rather than throwing, whatever it is handed', () => {
     const d = structuredClone(WARM_DESIGN);
-    d.decoration = { backdrop: 'lava-lamp' as never, accents: ['sparkles' as never], dividers: 'zigzag' as never, imageTreatment: 'hologram' as never };
+    d.decoration = {
+      backdrop: 'lava-lamp' as never,
+      accents: ['sparkles' as never],
+      dividers: 'zigzag' as never,
+      imageTreatment: 'hologram' as never,
+    };
     d.motion = { intensity: 'calm', entrance: 'teleport' as never, scrollFx: ['explode' as never] };
     d.typography = { ...d.typography, headingFamily: 'comic' as never };
     const { design, verdicts } = repairDesign(d);

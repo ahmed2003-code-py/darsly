@@ -52,7 +52,11 @@ export class CouponsController {
 
   @Post()
   @ApiOperation({ summary: '[teacher] Create coupon (percent or fixed amount off)' })
-  async create(@CurrentUser() user: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Body() dto: CreateCouponDto) {
+  async create(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: CreateCouponDto,
+  ) {
     const coupon = await this.coupons.create(ctx.academyId, dto);
     await this.audit.log({
       actorUserId: user.sub,
@@ -66,7 +70,11 @@ export class CouponsController {
 
   @Patch(':id')
   @ApiOperation({ summary: '[teacher] Update coupon (limits, expiry, active)' })
-  update(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string, @Body() dto: UpdateCouponDto) {
+  update(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: UpdateCouponDto,
+  ) {
     return this.coupons.update(ctx.academyId, id, dto);
   }
 

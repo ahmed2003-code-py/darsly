@@ -2,7 +2,12 @@ import { ManualPaymentsService } from './manual-payments.service';
 
 const STUDENT = { id: 's1', userId: 'u1', gradeId: null, track: null };
 const personalCourse = {
-  id: 'c1', tenantId: 'teacherT', academyId: 'teacherT', status: 'PUBLISHED', priceCents: 1000, pricingModel: 'ONE_TIME',
+  id: 'c1',
+  tenantId: 'teacherT',
+  academyId: 'teacherT',
+  status: 'PUBLISHED',
+  priceCents: 1000,
+  pricingModel: 'ONE_TIME',
   teacher: { user: { id: 'tu' } },
 };
 const centerCourse = { ...personalCourse, academyId: 'centerA' };
@@ -10,8 +15,20 @@ const centerCourse = { ...personalCourse, academyId: 'centerA' };
 function makeDeps(course = personalCourse, kind: 'PERSONAL' | 'CENTER' = 'PERSONAL') {
   const prisma: any = {
     studentProfile: { findUnique: jest.fn().mockResolvedValue(STUDENT) },
-    course: { findFirst: jest.fn().mockResolvedValue(course), findUnique: jest.fn().mockResolvedValue(course), findUniqueOrThrow: jest.fn().mockResolvedValue(course) },
-    academy: { findUnique: jest.fn().mockResolvedValue({ id: 'orgX', kind, feeType: 'PERCENT', feeValue: 20, teacherSharePercent: null }) },
+    course: {
+      findFirst: jest.fn().mockResolvedValue(course),
+      findUnique: jest.fn().mockResolvedValue(course),
+      findUniqueOrThrow: jest.fn().mockResolvedValue(course),
+    },
+    academy: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'orgX',
+        kind,
+        feeType: 'PERCENT',
+        feeValue: 20,
+        teacherSharePercent: null,
+      }),
+    },
     teacherProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'tu' }) },
     academyMembership: { findFirst: jest.fn().mockResolvedValue(null) },
     courseGrade: { findMany: jest.fn().mockResolvedValue([]) },
@@ -29,11 +46,26 @@ function makeDeps(course = personalCourse, kind: 'PERSONAL' | 'CENTER' = 'PERSON
     },
     $transaction: jest.fn(async (fn: any) => fn(prisma)),
   };
-  const ledger: any = { recordPayment: jest.fn(), ensureInvoice: jest.fn(), walletBalance: jest.fn().mockResolvedValue(0) };
-  const svc = new ManualPaymentsService(prisma, ledger, { create: jest.fn().mockResolvedValue({}) } as any, { put: jest.fn(), store: jest.fn(), remove: jest.fn() } as any, { read: jest.fn() } as any);
+  const ledger: any = {
+    recordPayment: jest.fn(),
+    ensureInvoice: jest.fn(),
+    walletBalance: jest.fn().mockResolvedValue(0),
+  };
+  const svc = new ManualPaymentsService(
+    prisma,
+    ledger,
+    { create: jest.fn().mockResolvedValue({}) } as any,
+    { put: jest.fn(), store: jest.fn(), remove: jest.fn() } as any,
+    { read: jest.fn() } as any,
+  );
   return { prisma, ledger, svc };
 }
-const dto = { courseId: 'c1', method: 'VODAFONE_CASH', reference: '01012345678', proofImageUrl: undefined } as any;
+const dto = {
+  courseId: 'c1',
+  method: 'VODAFONE_CASH',
+  reference: '01012345678',
+  proofImageUrl: undefined,
+} as any;
 
 describe('ManualPaymentsService — organisation scope on the one Payment creation path', () => {
   it('a PERSONAL payment carries academyId = course.academyId (== tenantId today)', async () => {
@@ -47,13 +79,15 @@ describe('ManualPaymentsService — organisation scope on the one Payment creati
 
   it('a Center course with no agreed revenue split is refused before any enrollment or payment row exists', async () => {
     const { prisma, svc, ledger } = makeDeps(centerCourse, 'CENTER');
-    await expect(svc.submit('u1', dto)).rejects.toMatchObject({ response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' } });
+    await expect(svc.submit('u1', dto)).rejects.toMatchObject({
+      response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' },
+    });
     expect(prisma.enrollment.create).not.toHaveBeenCalled();
     expect(prisma.payment.create).not.toHaveBeenCalled();
     expect(ledger.recordPayment).not.toHaveBeenCalled();
   });
 
-  it('the fee configuration is the organisation\'s, looked up by academyId', async () => {
+  it("the fee configuration is the organisation's, looked up by academyId", async () => {
     const { prisma, svc } = makeDeps();
     await svc.quote({ id: 'c1', priceCents: 1000, tenantId: 'teacherT', academyId: 'orgX' });
     expect(prisma.academy.findUnique.mock.calls[0][0].where).toEqual({ id: 'orgX' });

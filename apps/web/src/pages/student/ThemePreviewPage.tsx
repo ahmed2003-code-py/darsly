@@ -67,7 +67,9 @@ export default function ThemePreviewPage() {
     return (
       <div className="page">
         <p className="text-on-surface-variant">{t('myStudio.previewMissing')}</p>
-        <Link to="/studio" className="btn-ghost mt-3 inline-flex">{t('myStudio.backToStudio')}</Link>
+        <Link to="/studio" className="btn-ghost mt-3 inline-flex">
+          {t('myStudio.backToStudio')}
+        </Link>
       </div>
     );
   }
@@ -77,7 +79,8 @@ export default function ThemePreviewPage() {
   const coins = data.student?.coins ?? data.balance?.coins ?? 0;
   const layout = (item.preview as any)?.styles?.layout;
   const styles = (item.preview as any)?.styles ?? {};
-  const nameOf = (x: { nameAr: string; nameEn: string } | null | undefined) => (x ? (ar ? x.nameAr : x.nameEn) : '');
+  const nameOf = (x: { nameAr: string; nameEn: string } | null | undefined) =>
+    x ? (ar ? x.nameAr : x.nameEn) : '';
 
   return (
     <div className="page space-y-section">
@@ -86,33 +89,51 @@ export default function ThemePreviewPage() {
           scrolled. */}
       <div className="sticky top-2 z-30 flex flex-col gap-3 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest/95 px-4 py-3 shadow-elevated backdrop-blur-md sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="material-symbols-outlined shrink-0 text-student-accent-ink">visibility</span>
+          <span className="material-symbols-outlined shrink-0 text-student-accent-ink">
+            visibility
+          </span>
           <div className="min-w-0">
-            <p className="font-heading font-bold sm:truncate">{t('myStudio.previewingTheme', { name })}</p>
-            <p className="text-xs text-on-surface-variant sm:truncate">{t('myStudio.previewHint')}</p>
+            <p className="font-heading font-bold sm:truncate">
+              {t('myStudio.previewingTheme', { name })}
+            </p>
+            <p className="text-xs text-on-surface-variant sm:truncate">
+              {t('myStudio.previewHint')}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-        <Link to="/studio" className="btn-ghost text-sm">{t('myStudio.backToStudio')}</Link>
-        {equipped ? (
-          <span className="flex items-center gap-1 text-sm font-bold text-student-accent-ink">
-            <span className="material-symbols-outlined text-[18px]">check_circle</span>
-            {t('myStudio.equipped')}
-          </span>
-        ) : item.owned ? (
-          <button className="btn-primary text-sm" disabled={equip.isPending} onClick={() => equip.mutate()}>
-            {t('myStudio.equip')}
-          </button>
-        ) : item.purchasable ? (
-          <button className="btn-primary text-sm" disabled={unlock.isPending} onClick={() => unlock.mutate()}>
-            <span className="material-symbols-outlined text-base">paid</span>
-            {t('myStudio.unlockFor', { coins: item.costCoins })}
-          </button>
-        ) : (
-          <span className="text-sm text-on-surface-variant">
-            {item.levelLocked ? t('myStudio.needsLevel', { level: item.requiredLevel }) : t('myStudio.notForSale')}
-          </span>
-        )}
+          <Link to="/studio" className="btn-ghost text-sm">
+            {t('myStudio.backToStudio')}
+          </Link>
+          {equipped ? (
+            <span className="flex items-center gap-1 text-sm font-bold text-student-accent-ink">
+              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+              {t('myStudio.equipped')}
+            </span>
+          ) : item.owned ? (
+            <button
+              className="btn-primary text-sm"
+              disabled={equip.isPending}
+              onClick={() => equip.mutate()}
+            >
+              {t('myStudio.equip')}
+            </button>
+          ) : item.purchasable ? (
+            <button
+              className="btn-primary text-sm"
+              disabled={unlock.isPending}
+              onClick={() => unlock.mutate()}
+            >
+              <span className="material-symbols-outlined text-base">paid</span>
+              {t('myStudio.unlockFor', { coins: item.costCoins })}
+            </button>
+          ) : (
+            <span className="text-sm text-on-surface-variant">
+              {item.levelLocked
+                ? t('myStudio.needsLevel', { level: item.requiredLevel })
+                : t('myStudio.notForSale')}
+            </span>
+          )}
         </div>
       </div>
 
@@ -131,16 +152,45 @@ export default function ThemePreviewPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ['view_sidebar', t('myStudio.change.nav'), t(`myStudio.nav.${layout.nav.desktop}`)],
-              ['web_asset', t('myStudio.change.header'), t(`myStudio.header.${layout.header.variant}`)],
-              ['density_medium', t('myStudio.change.density'), t(`myStudio.density.${layout.density}`)],
+              [
+                'web_asset',
+                t('myStudio.change.header'),
+                t(`myStudio.header.${layout.header.variant}`),
+              ],
+              [
+                'density_medium',
+                t('myStudio.change.density'),
+                t(`myStudio.density.${layout.density}`),
+              ],
               ['width', t('myStudio.change.width'), t(`myStudio.width.${layout.width}`)],
-              ['grid_view', t('myStudio.change.cards'), t(`myStudio.cardLayout.${styles.cardLayout ?? 'grid'}`)],
-              ['animation', t('myStudio.change.motion'), t(`myStudio.motion.${styles.motion ?? 'subtle'}`)],
-              ['text_fields', t('myStudio.change.type'), t(`myStudio.font.${styles.font ?? 'default'}`)],
-              ['dock_to_bottom', t('myStudio.change.footer'), t(`myStudio.footer.${layout.footer}`)],
+              [
+                'grid_view',
+                t('myStudio.change.cards'),
+                t(`myStudio.cardLayout.${styles.cardLayout ?? 'grid'}`),
+              ],
+              [
+                'animation',
+                t('myStudio.change.motion'),
+                t(`myStudio.motion.${styles.motion ?? 'subtle'}`),
+              ],
+              [
+                'text_fields',
+                t('myStudio.change.type'),
+                t(`myStudio.font.${styles.font ?? 'default'}`),
+              ],
+              [
+                'dock_to_bottom',
+                t('myStudio.change.footer'),
+                t(`myStudio.footer.${layout.footer}`),
+              ],
             ].map(([icon, label, value]) => (
-              <div key={label} className="flex items-start gap-3 rounded-xl bg-surface-container-low p-3">
-                <span className="material-symbols-outlined text-[20px] text-student-accent-ink">{icon}</span>
+              <div
+                key={label}
+                className="flex items-start gap-3 rounded-xl bg-surface-container-low p-3"
+              >
+                <span className="material-symbols-outlined text-[20px] text-student-accent-ink">
+                  {icon}
+                </span>
                 <div className="min-w-0">
                   <p className="text-xs text-on-surface-variant">{label}</p>
                   <p className="truncate text-sm font-bold">{value}</p>
@@ -155,7 +205,10 @@ export default function ThemePreviewPage() {
       <section className="card p-5">
         <div className="flex items-center gap-4">
           <span className="grid h-14 w-14 place-items-center rounded-full bg-student-gold-soft">
-            <span className="material-symbols-outlined text-[28px] text-student-gold-ink" style={{ fontVariationSettings: "'FILL' 1" }}>
+            <span
+              className="material-symbols-outlined text-[28px] text-student-gold-ink"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
               workspace_premium
             </span>
           </span>
@@ -165,7 +218,9 @@ export default function ThemePreviewPage() {
           </div>
           <button className="btn-ghost text-sm">{t('gamification.cta.open')}</button>
         </div>
-        <div className="mt-4"><ProgressBar pct={64} tone="gold" /></div>
+        <div className="mt-4">
+          <ProgressBar pct={64} tone="gold" />
+        </div>
         <div className="mt-4 grid grid-cols-3 gap-2 border-t border-outline-variant/50 pt-4 text-center">
           {[
             ['local_fire_department', '12', t('gamification.streak'), 'text-student-secondary-ink'],
@@ -173,7 +228,12 @@ export default function ThemePreviewPage() {
             ['toll', '1.2k', t('gamification.coins'), 'text-student-gold-ink'],
           ].map(([icon, v, l, cls]) => (
             <div key={l}>
-              <span className={`material-symbols-outlined text-[20px] ${cls}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+              <span
+                className={`material-symbols-outlined text-[20px] ${cls}`}
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                {icon}
+              </span>
               <p className="font-heading text-lg font-extrabold leading-none">{v}</p>
               <p className="mt-0.5 text-[11px] text-outline">{l}</p>
             </div>
@@ -187,7 +247,13 @@ export default function ThemePreviewPage() {
         <p className="mb-3 font-heading font-bold">{t('myStudio.sample.courses')}</p>
         <div className="course-grid grid gap-card sm:grid-cols-2 lg:grid-cols-3">
           {SAMPLE_COURSES.map((c) => (
-            <CourseCard key={c.id} course={{ ...c, title: ar ? c.titleAr : c.titleEn }} ar={ar} t={t as any} name={nameOf} />
+            <CourseCard
+              key={c.id}
+              course={{ ...c, title: ar ? c.titleAr : c.titleEn }}
+              ar={ar}
+              t={t as any}
+              name={nameOf}
+            />
           ))}
         </div>
       </section>
@@ -202,19 +268,29 @@ export default function ThemePreviewPage() {
             <button className="btn-ghost">{t('common.cancel', 'إلغاء')}</button>
           </div>
           <label className="mt-4 block text-sm">
-            <span className="mb-1 block text-on-surface-variant">{t('topbar.searchPlaceholder')}</span>
+            <span className="mb-1 block text-on-surface-variant">
+              {t('topbar.searchPlaceholder')}
+            </span>
             <input className="input" placeholder={t('topbar.searchPlaceholder')} readOnly />
           </label>
         </div>
         <div className="card flex items-center gap-4 p-5">
           <span className="studio-frame grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading text-xl font-bold text-on-primary-fixed">
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" /> : (user?.fullName?.trim()?.charAt(0) ?? '?')}
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (user?.fullName?.trim()?.charAt(0) ?? '?')
+            )}
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate font-heading font-bold">{user?.fullName}</p>
-            <p className="truncate text-sm text-on-surface-variant">{t('dashboard.role.STUDENT')}</p>
+            <p className="truncate text-sm text-on-surface-variant">
+              {t('dashboard.role.STUDENT')}
+            </p>
           </div>
-          <span className="rounded-full bg-student-accent-soft px-3 py-1 text-xs font-bold text-student-accent-ink">{name}</span>
+          <span className="rounded-full bg-student-accent-soft px-3 py-1 text-xs font-bold text-student-accent-ink">
+            {name}
+          </span>
         </div>
       </section>
 
@@ -227,7 +303,55 @@ export default function ThemePreviewPage() {
 
 /** Three plausible courses. Titles are chosen for both languages. */
 const SAMPLE_COURSES = [
-  { id: 'p1', titleAr: 'الجبر — المعادلات من الدرجة الثانية', titleEn: 'Algebra — Quadratic Equations', thumbnailUrl: null, subject: { id: 's1', nameAr: 'رياضيات', nameEn: 'Maths' }, grades: [{ id: 'g1', nameAr: 'الأول الثانوي', nameEn: 'Grade 10' }], pricingModel: 'ONE_TIME' as const, priceCents: 15000, lessonsCount: 24, totalDurationSec: 6 * 3600, freePreviewCount: 2, studentsCount: 318, avgRating: 4.8, reviewsCount: 41, teacher: { fullName: 'أ. سارة عادل', verified: true } },
-  { id: 'p2', titleAr: 'الكيمياء العضوية — من الصفر', titleEn: 'Organic Chemistry — From Zero', thumbnailUrl: null, subject: { id: 's2', nameAr: 'كيمياء', nameEn: 'Chemistry' }, grades: [{ id: 'g2', nameAr: 'الثاني الثانوي', nameEn: 'Grade 11' }], pricingModel: 'MONTHLY_SUBSCRIPTION' as const, priceCents: 9000, lessonsCount: 40, totalDurationSec: 11 * 3600, freePreviewCount: 0, studentsCount: 122, avgRating: 4.6, reviewsCount: 19, teacher: { fullName: 'أ. محمود يوسف', verified: true } },
-  { id: 'p3', titleAr: 'English — Grammar Foundations', titleEn: 'English — Grammar Foundations', thumbnailUrl: null, subject: { id: 's3', nameAr: 'لغة إنجليزية', nameEn: 'English' }, grades: [], pricingModel: 'ONE_TIME' as const, priceCents: 0, lessonsCount: 12, totalDurationSec: 3 * 3600, freePreviewCount: 12, studentsCount: 940, avgRating: null, reviewsCount: 0, teacher: { fullName: 'Ms. Nour', verified: false } },
+  {
+    id: 'p1',
+    titleAr: 'الجبر — المعادلات من الدرجة الثانية',
+    titleEn: 'Algebra — Quadratic Equations',
+    thumbnailUrl: null,
+    subject: { id: 's1', nameAr: 'رياضيات', nameEn: 'Maths' },
+    grades: [{ id: 'g1', nameAr: 'الأول الثانوي', nameEn: 'Grade 10' }],
+    pricingModel: 'ONE_TIME' as const,
+    priceCents: 15000,
+    lessonsCount: 24,
+    totalDurationSec: 6 * 3600,
+    freePreviewCount: 2,
+    studentsCount: 318,
+    avgRating: 4.8,
+    reviewsCount: 41,
+    teacher: { fullName: 'أ. سارة عادل', verified: true },
+  },
+  {
+    id: 'p2',
+    titleAr: 'الكيمياء العضوية — من الصفر',
+    titleEn: 'Organic Chemistry — From Zero',
+    thumbnailUrl: null,
+    subject: { id: 's2', nameAr: 'كيمياء', nameEn: 'Chemistry' },
+    grades: [{ id: 'g2', nameAr: 'الثاني الثانوي', nameEn: 'Grade 11' }],
+    pricingModel: 'MONTHLY_SUBSCRIPTION' as const,
+    priceCents: 9000,
+    lessonsCount: 40,
+    totalDurationSec: 11 * 3600,
+    freePreviewCount: 0,
+    studentsCount: 122,
+    avgRating: 4.6,
+    reviewsCount: 19,
+    teacher: { fullName: 'أ. محمود يوسف', verified: true },
+  },
+  {
+    id: 'p3',
+    titleAr: 'English — Grammar Foundations',
+    titleEn: 'English — Grammar Foundations',
+    thumbnailUrl: null,
+    subject: { id: 's3', nameAr: 'لغة إنجليزية', nameEn: 'English' },
+    grades: [],
+    pricingModel: 'ONE_TIME' as const,
+    priceCents: 0,
+    lessonsCount: 12,
+    totalDurationSec: 3 * 3600,
+    freePreviewCount: 12,
+    studentsCount: 940,
+    avgRating: null,
+    reviewsCount: 0,
+    teacher: { fullName: 'Ms. Nour', verified: false },
+  },
 ];

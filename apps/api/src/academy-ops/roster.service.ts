@@ -99,7 +99,10 @@ export class RosterService {
 
   /** Raw query — bypasses the soft-delete middleware; GamificationEvent has
    *  no deletedAt column, so nothing to filter for it. */
-  private async lastActivityBatch(academyId: string, studentIds: string[]): Promise<Map<string, Date | null>> {
+  private async lastActivityBatch(
+    academyId: string,
+    studentIds: string[],
+  ): Promise<Map<string, Date | null>> {
     const map = new Map<string, Date | null>(studentIds.map((id) => [id, null]));
     if (studentIds.length === 0) return map;
     const rows = await this.prisma.$queryRaw<{ studentId: string; last: Date }[]>`

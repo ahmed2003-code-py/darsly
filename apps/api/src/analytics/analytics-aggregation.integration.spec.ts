@@ -64,7 +64,13 @@ async function seed() {
   await mk(students[0].id, courses[1].id, 'ACTIVE');
   await mk(students[1].id, courses[0].id, 'PENDING_PAYMENT');
   const doomed = await prisma.enrollment.create({
-    data: { studentId: students[1].id, courseId: courses[1].id, tenantId, academyId, status: 'ACTIVE' },
+    data: {
+      studentId: students[1].id,
+      courseId: courses[1].id,
+      tenantId,
+      academyId,
+      status: 'ACTIVE',
+    },
   });
   await prisma.enrollment.delete({ where: { id: doomed.id } }); // soft delete
 
@@ -72,14 +78,28 @@ async function seed() {
   // branch the split aggregate has to reproduce.
   await prisma.payment.create({
     data: {
-      studentId: students[0].id, courseId: courses[0].id, tenantId, academyId,
-      amountCents: 1000, netCents: 800, status: 'PAID', method: 'WALLET', paidAt: new Date(),
+      studentId: students[0].id,
+      courseId: courses[0].id,
+      tenantId,
+      academyId,
+      amountCents: 1000,
+      netCents: 800,
+      status: 'PAID',
+      method: 'WALLET',
+      paidAt: new Date(),
     },
   });
   await prisma.payment.create({
     data: {
-      studentId: students[1].id, courseId: courses[0].id, tenantId, academyId,
-      amountCents: 500, netCents: null, status: 'PAID', method: 'WALLET', paidAt: new Date(),
+      studentId: students[1].id,
+      courseId: courses[0].id,
+      tenantId,
+      academyId,
+      amountCents: 500,
+      netCents: null,
+      status: 'PAID',
+      method: 'WALLET',
+      paidAt: new Date(),
     },
   });
 }
@@ -115,11 +135,17 @@ describe('Tier-1 aggregation — database result equals the old in-memory result
     if (!guard()) return;
     const paid = { tenantId, status: 'PAID' as const };
 
-    const rows = await prisma.payment.findMany({ where: paid, select: { amountCents: true, netCents: true } });
+    const rows = await prisma.payment.findMany({
+      where: paid,
+      select: { amountCents: true, netCents: true },
+    });
     const inMemory = rows.reduce((s, p) => s + (p.netCents ?? p.amountCents), 0);
 
     const [net, fallback] = await Promise.all([
-      prisma.payment.aggregate({ where: { ...paid, netCents: { not: null } }, _sum: { netCents: true } }),
+      prisma.payment.aggregate({
+        where: { ...paid, netCents: { not: null } },
+        _sum: { netCents: true },
+      }),
       prisma.payment.aggregate({ where: { ...paid, netCents: null }, _sum: { amountCents: true } }),
     ]);
     const inDatabase = (net._sum.netCents ?? 0) + (fallback._sum.amountCents ?? 0);
@@ -136,7 +162,10 @@ describe('Tier-1 aggregation — database result equals the old in-memory result
     });
     const inMemory = new Set(rows.map((r) => r.studentId)).size;
 
-    const grouped = await prisma.enrollment.groupBy({ by: ['studentId'], where: { tenantId, status: 'ACTIVE' } });
+    const grouped = await prisma.enrollment.groupBy({
+      by: ['studentId'],
+      where: { tenantId, status: 'ACTIVE' },
+    });
 
     expect(grouped.length).toBe(inMemory);
     // The point of the fixture: one student, two active enrollments.
@@ -158,7 +187,10 @@ describe('Tier-1 aggregation — database result equals the old in-memory result
       where: { tenantId, status: 'ACTIVE' },
       _count: { _all: true },
     });
-    const inDatabase = grouped.reduce((s, c) => s + (lessonsPerCourse[c.courseId] ?? 0) * c._count._all, 0);
+    const inDatabase = grouped.reduce(
+      (s, c) => s + (lessonsPerCourse[c.courseId] ?? 0) * c._count._all,
+      0,
+    );
 
     expect(inDatabase).toBe(inMemory);
     expect(inDatabase).toBe(10);
@@ -166,7 +198,10 @@ describe('Tier-1 aggregation — database result equals the old in-memory result
 
   it('totalEnrollments / pendingEnrollments: count equals length and filter().length', async () => {
     if (!guard()) return;
-    const rows = await prisma.enrollment.findMany({ where: { tenantId }, select: { status: true } });
+    const rows = await prisma.enrollment.findMany({
+      where: { tenantId },
+      select: { status: true },
+    });
 
     const [total, pending] = await Promise.all([
       prisma.enrollment.count({ where: { tenantId } }),
@@ -186,7 +221,10 @@ describe('Tier-1 aggregation — database result equals the old in-memory result
   it('groupBy excludes soft-deleted rows, exactly as findMany did', async () => {
     if (!guard()) return;
     const grouped = await prisma.enrollment.groupBy({ by: ['studentId'], where: { tenantId } });
-    const visible = await prisma.enrollment.findMany({ where: { tenantId }, select: { studentId: true } });
+    const visible = await prisma.enrollment.findMany({
+      where: { tenantId },
+      select: { studentId: true },
+    });
 
     expect(grouped.length).toBe(new Set(visible.map((r) => r.studentId)).size);
 
@@ -204,7 +242,10 @@ describe('Tier-1 aggregation — database result equals the old in-memory result
     const empty = `tenant-${randomUUID()}`;
 
     const [sum, grouped, count] = await Promise.all([
-      prisma.payment.aggregate({ where: { tenantId: empty, status: 'PAID', netCents: { not: null } }, _sum: { netCents: true } }),
+      prisma.payment.aggregate({
+        where: { tenantId: empty, status: 'PAID', netCents: { not: null } },
+        _sum: { netCents: true },
+      }),
       prisma.enrollment.groupBy({ by: ['studentId'], where: { tenantId: empty } }),
       prisma.enrollment.count({ where: { tenantId: empty } }),
     ]);

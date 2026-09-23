@@ -21,14 +21,29 @@ export default function LessonRouter() {
     queryFn: async () => (await api.get(`/courses/${courseId}`)).data,
   });
 
-  if (isLoading) return <div className="grid place-items-center py-24"><Spinner /></div>;
+  if (isLoading)
+    return (
+      <div className="grid place-items-center py-24">
+        <Spinner />
+      </div>
+    );
   const lesson = course?.units.flatMap((u: any) => u.lessons).find((l: any) => l.id === lessonId);
 
   const Screen =
-    lesson?.type === 'QUIZ' ? QuizTakerPage : lesson?.type === 'ASSIGNMENT' ? AssignmentPage : SecureVideoPlayerPage;
+    lesson?.type === 'QUIZ'
+      ? QuizTakerPage
+      : lesson?.type === 'ASSIGNMENT'
+        ? AssignmentPage
+        : SecureVideoPlayerPage;
 
   return (
-    <Suspense fallback={<div className="grid place-items-center py-24"><Spinner /></div>}>
+    <Suspense
+      fallback={
+        <div className="grid place-items-center py-24">
+          <Spinner />
+        </div>
+      }
+    >
       <Screen />
     </Suspense>
   );

@@ -77,18 +77,31 @@ export class SiteGeneratorService {
     const recent = await this.evolution.recentFingerprints(academyId);
 
     const counts = { toolkit: lists.rawSubjects.length, credentials: lists.rawAchievements.length };
-    const archetypeGuess = guessArchetype(lists.rawSubjects, asStrings(facts.stages), facts.bio ?? '');
+    const archetypeGuess = guessArchetype(
+      lists.rawSubjects,
+      asStrings(facts.stages),
+      facts.bio ?? '',
+    );
 
     // ── COMPOSE (AI stage 1) ──
     const planCall = await this.ai.completeStructured<unknown>({
       system: systemComposePrompt(),
-      messages: [{
-        role: 'user',
-        content: userComposePrompt({
-          facts, academyName: academy.name, vibe, stylePrompt,
-          profile, counts, archetypeGuess, evo, recent,
-        }),
-      }],
+      messages: [
+        {
+          role: 'user',
+          content: userComposePrompt({
+            facts,
+            academyName: academy.name,
+            vibe,
+            stylePrompt,
+            profile,
+            counts,
+            archetypeGuess,
+            evo,
+            recent,
+          }),
+        },
+      ],
       // The composition is an order of magnitude larger than the old plan, and a
       // truncated one costs the whole generation.
       maxTokens: 8000,
@@ -105,10 +118,12 @@ export class SiteGeneratorService {
     // ── COPY (AI stage 2) ── writes exactly what the composition asked for.
     const copyCall = await this.ai.completeStructured<unknown>({
       system: systemPrompt(),
-      messages: [{
-        role: 'user',
-        content: composedCopyPrompt(facts, academy.name, vibe, composition),
-      }],
+      messages: [
+        {
+          role: 'user',
+          content: composedCopyPrompt(facts, academy.name, vibe, composition),
+        },
+      ],
       maxTokens: 6000,
       schemaName: AI_COPY_SCHEMA_NAME,
       schema: aiCopyJsonSchema,
@@ -124,8 +139,16 @@ export class SiteGeneratorService {
       copy: copyParsed.data!,
       media: { logoId: media.logoId, coverId: media.coverId, galleryIds: media.galleryIds },
       lists: {
-        toolkit: this.pickItems(copyParsed.data!.highlights, lists.rawSubjects, { min: 2, maxLen: 60, cap: 20 }),
-        credentials: this.pickItems(copyParsed.data!.credentials, lists.rawAchievements, { min: 2, maxLen: 240, cap: 12 }),
+        toolkit: this.pickItems(copyParsed.data!.highlights, lists.rawSubjects, {
+          min: 2,
+          maxLen: 60,
+          cap: 20,
+        }),
+        credentials: this.pickItems(copyParsed.data!.credentials, lists.rawAchievements, {
+          min: 2,
+          maxLen: 240,
+          cap: 12,
+        }),
       },
       socials: this.normalizeSocials(facts.socials),
       defaultLang: lang,
@@ -139,23 +162,28 @@ export class SiteGeneratorService {
         copy: copyParsed.data!,
         media: { logoId: media.logoId, coverId: media.coverId, galleryIds: media.galleryIds },
         lists: {
-          toolkit: this.pickItems(copyParsed.data!.highlights, lists.rawSubjects, { min: 2, maxLen: 60, cap: 20 }),
-          credentials: this.pickItems(copyParsed.data!.credentials, lists.rawAchievements, { min: 2, maxLen: 240, cap: 12 }),
+          toolkit: this.pickItems(copyParsed.data!.highlights, lists.rawSubjects, {
+            min: 2,
+            maxLen: 60,
+            cap: 20,
+          }),
+          credentials: this.pickItems(copyParsed.data!.credentials, lists.rawAchievements, {
+            min: 2,
+            maxLen: 240,
+            cap: 12,
+          }),
         },
         socials: this.normalizeSocials(facts.socials),
         defaultLang: lang,
       });
-      this.logger.warn(`composition produced too few sections for ${academyId}; used the built-in page`);
+      this.logger.warn(
+        `composition produced too few sections for ${academyId}; used the built-in page`,
+      );
     }
 
     // ── diverge ── the deterministic guarantee that regenerating gives something
     // genuinely different, whatever the model did with the history brief.
-    const diverged = enforceDivergence(
-      doc.theme.designSpec!,
-      doc.blocks,
-      recent,
-      evo.regenCount,
-    );
+    const diverged = enforceDivergence(doc.theme.designSpec!, doc.blocks, recent, evo.regenCount);
     doc.theme.designSpec = diverged.design;
     doc.blocks = diverged.blocks;
     doc.theme.primary = diverged.design.palette.primary;
@@ -209,7 +237,11 @@ export class SiteGeneratorService {
       coverId: media.coverId,
       galleryIds: media.galleryIds,
       toolkit: this.pickItems(copy.highlights, lists.rawSubjects, { min: 2, maxLen: 60, cap: 6 }),
-      credentials: this.pickItems(copy.credentials, lists.rawAchievements, { min: 2, maxLen: 200, cap: 6 }),
+      credentials: this.pickItems(copy.credentials, lists.rawAchievements, {
+        min: 2,
+        maxLen: 200,
+        cap: 6,
+      }),
       socials: this.normalizeSocials(facts.socials),
       defaultLang: lang,
     });
@@ -273,7 +305,8 @@ export class SiteGeneratorService {
     };
 
     return {
-      academy, facts,
+      academy,
+      facts,
       media: { logoId, coverId, galleryIds },
       profile,
       lists: { rawSubjects, rawAchievements },
@@ -321,7 +354,12 @@ export class SiteGeneratorService {
     // ── PLAN (AI stage 1) ── the strategist proposes a design direction only.
     const planCompletion = await this.ai.completeStructured<unknown>({
       system: systemPlanPrompt(),
-      messages: [{ role: 'user', content: userPlanPrompt(facts, academy.name, vibe, stylePrompt, signals, evo) }],
+      messages: [
+        {
+          role: 'user',
+          content: userPlanPrompt(facts, academy.name, vibe, stylePrompt, signals, evo),
+        },
+      ],
       maxTokens: 1500, // headroom for GPT-5 reasoning tokens + the small plan
       schemaName: PLANNING_SCHEMA_NAME,
       schema: planningJsonSchema,
@@ -350,7 +388,9 @@ export class SiteGeneratorService {
     // ── RULES ── resolve the DNA into render tokens + validate.
     const { tokens, verdicts } = this.rules.validatePlan({ ...plan, designDNA: dnaKey }, signals);
     if (verdicts.length) {
-      this.logger.debug(`plan verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`);
+      this.logger.debug(
+        `plan verdicts: ${verdicts.map((v) => `${v.severity}:${v.code}`).join(', ')}`,
+      );
     }
     // Colours: the model's, when they are valid hex; the DNA's signature palette
     // otherwise. Same reasoning as the direction above — a brief refines the
@@ -374,16 +414,33 @@ export class SiteGeneratorService {
 
     // Curated lists win; fall back to the raw facts (cleaned) if the model
     // returned nothing usable.
-    const toolkitItems = this.pickItems(copy.highlights, rawSubjects, { min: 2, maxLen: 60, cap: 20 });
-    const credentialItems = this.pickItems(copy.credentials, rawAchievements, { min: 2, maxLen: 240, cap: 12 });
+    const toolkitItems = this.pickItems(copy.highlights, rawSubjects, {
+      min: 2,
+      maxLen: 60,
+      cap: 20,
+    });
+    const credentialItems = this.pickItems(copy.credentials, rawAchievements, {
+      min: 2,
+      maxLen: 240,
+      cap: 12,
+    });
 
     // ── assemble (deterministic) ──
     const doc = this.assemble(
       copy,
       {
-        primary, accent, style: tokens.style, preset: tokens.preset,
-        headingFont: tokens.headingFont, dna: tokens.dna, defaultLang: lang,
-        logoId, coverId, galleryIds, toolkitItems, credentialItems,
+        primary,
+        accent,
+        style: tokens.style,
+        preset: tokens.preset,
+        headingFont: tokens.headingFont,
+        dna: tokens.dna,
+        defaultLang: lang,
+        logoId,
+        coverId,
+        galleryIds,
+        toolkitItems,
+        credentialItems,
       },
       facts.socials,
     );
@@ -418,7 +475,10 @@ export class SiteGeneratorService {
    * tokens, variants, order). One small focused AI call; the rest of the
    * document is untouched.
    */
-  async regenerateSection(academyId: string, sectionId: string): Promise<{ doc: SiteDocument; costCents: number }> {
+  async regenerateSection(
+    academyId: string,
+    sectionId: string,
+  ): Promise<{ doc: SiteDocument; costCents: number }> {
     const [academy, facts, site] = await Promise.all([
       this.prisma.academy.findUnique({ where: { id: academyId } }),
       this.prisma.academyProfileFacts.findUnique({ where: { academyId } }),
@@ -438,7 +498,12 @@ export class SiteGeneratorService {
     const archetype = (doc.theme.archetype as Archetype | undefined) ?? 'general';
     const completion = await this.ai.completeStructured<unknown>({
       system: systemPrompt(),
-      messages: [{ role: 'user', content: regenUserPrompt(block.type, spec, facts, academy.name, archetype, block) }],
+      messages: [
+        {
+          role: 'user',
+          content: regenUserPrompt(block.type, spec, facts, academy.name, archetype, block),
+        },
+      ],
       maxTokens: 2500,
       schemaName: spec.schemaName,
       schema: spec.schema,
@@ -465,10 +530,18 @@ export class SiteGeneratorService {
   private assemble(
     copy: AiCopy,
     brand: {
-      primary: string; accent: string; style?: string; preset?: string;
-      headingFont?: string; dna?: string; defaultLang?: 'ar' | 'en';
-      logoId?: string; coverId?: string; galleryIds: string[];
-      toolkitItems: ListItem[]; credentialItems: ListItem[];
+      primary: string;
+      accent: string;
+      style?: string;
+      preset?: string;
+      headingFont?: string;
+      dna?: string;
+      defaultLang?: 'ar' | 'en';
+      logoId?: string;
+      coverId?: string;
+      galleryIds: string[];
+      toolkitItems: ListItem[];
+      credentialItems: ListItem[];
     },
     socialsJson: unknown,
   ): SiteDocument {
@@ -493,7 +566,9 @@ export class SiteGeneratorService {
       blocks.push({
         type: 'toolkit',
         id: randomUUID(),
-        heading: hasText(copy.toolkitHeading) ? copy.toolkitHeading : bilingual('ما ستتعلمه', 'What you’ll learn'),
+        heading: hasText(copy.toolkitHeading)
+          ? copy.toolkitHeading
+          : bilingual('ما ستتعلمه', 'What you’ll learn'),
         items: brand.toolkitItems,
       });
     }
@@ -501,7 +576,9 @@ export class SiteGeneratorService {
       blocks.push({
         type: 'credentials',
         id: randomUUID(),
-        heading: hasText(copy.credentialsHeading) ? copy.credentialsHeading : bilingual('لماذا تثق بنا', 'Track record'),
+        heading: hasText(copy.credentialsHeading)
+          ? copy.credentialsHeading
+          : bilingual('لماذا تثق بنا', 'Track record'),
         items: brand.credentialItems,
       });
     }
@@ -559,7 +636,9 @@ export class SiteGeneratorService {
         ...(brand.logoId ? { logoMediaId: brand.logoId } : {}),
         ...(brand.style ? { style: brand.style as SiteDocument['theme']['style'] } : {}),
         ...(brand.preset ? { preset: brand.preset as SiteDocument['theme']['preset'] } : {}),
-        ...(brand.headingFont ? { headingFont: brand.headingFont as SiteDocument['theme']['headingFont'] } : {}),
+        ...(brand.headingFont
+          ? { headingFont: brand.headingFont as SiteDocument['theme']['headingFont'] }
+          : {}),
         ...(brand.dna ? { dna: brand.dna } : {}),
         ...(brand.defaultLang ? { defaultLang: brand.defaultLang } : {}),
       },
@@ -573,7 +652,10 @@ export class SiteGeneratorService {
     return json
       .filter(
         (s): s is { platform: string; url: string } =>
-          !!s && typeof s.platform === 'string' && typeof s.url === 'string' && /^https?:\/\//.test(s.url),
+          !!s &&
+          typeof s.platform === 'string' &&
+          typeof s.url === 'string' &&
+          /^https?:\/\//.test(s.url),
       )
       .slice(0, 10)
       .map((s) => ({ platform: s.platform.slice(0, 30), url: s.url.slice(0, 300) }));

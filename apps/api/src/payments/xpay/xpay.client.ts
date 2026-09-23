@@ -96,13 +96,19 @@ export class XPayClient {
       });
     } catch (e) {
       // A network failure must not read as a declined card.
-      throw new ServiceUnavailableException(`Could not reach the payment provider: ${this.redact(String(e))}`);
+      throw new ServiceUnavailableException(
+        `Could not reach the payment provider: ${this.redact(String(e))}`,
+      );
     }
 
     const text = await res.text();
     if (!res.ok) {
-      this.logger.warn(`XPay ${method} ${path} → ${res.status}: ${this.redact(text).slice(0, 400)}`);
-      throw new ServiceUnavailableException(`Payment provider rejected the request (${res.status})`);
+      this.logger.warn(
+        `XPay ${method} ${path} → ${res.status}: ${this.redact(text).slice(0, 400)}`,
+      );
+      throw new ServiceUnavailableException(
+        `Payment provider rejected the request (${res.status})`,
+      );
     }
     try {
       return JSON.parse(text) as T;

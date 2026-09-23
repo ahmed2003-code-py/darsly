@@ -54,7 +54,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     enabled: user?.role === Role.TEACHER,
     staleTime: 60_000,
   });
-  const chatClosed = user?.role === Role.TEACHER && teacherProfile?.acceptsStudentMessages === false;
+  const chatClosed =
+    user?.role === Role.TEACHER && teacherProfile?.acceptsStudentMessages === false;
 
   // The student's own layer, fetched once the session is known. `bootStudio`
   // has already replayed the cached copy, so this is a correction rather than
@@ -92,8 +93,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   // navigation item that matches the route. `document.title` is the brand and
   // never the page, so reading it put the wordmark in the header twice.
   const current =
-    nav.find((n) => (n.end ? location.pathname === n.to : location.pathname === n.to || location.pathname.startsWith(n.to + '/'))) ??
-    (location.pathname.startsWith('/profile') ? { labelKey: 'nav.profile' } : undefined);
+    nav.find((n) =>
+      n.end
+        ? location.pathname === n.to
+        : location.pathname === n.to || location.pathname.startsWith(n.to + '/'),
+    ) ?? (location.pathname.startsWith('/profile') ? { labelKey: 'nav.profile' } : undefined);
   const title = current ? t(current.labelKey) : undefined;
 
   const sidebar = (labels: boolean) => (
@@ -101,7 +105,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="shell flex min-h-screen" data-shell-nav={desktopNav} data-shell-tablet={navCfg.tablet}>
+    <div
+      className="shell flex min-h-screen"
+      data-shell-nav={desktopNav}
+      data-shell-tablet={navCfg.tablet}
+    >
       {/* Desktop sidebar. Hidden below `lg` by the base rule; the tablet
           variant can bring it back between `md` and `lg` as a rail. */}
       {showSidebar && (
@@ -141,7 +149,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             bar: a theme that uses the drawer alone gets the room back. */}
         <main
           className={`shell-content min-w-0 flex-1 ${
-            navCfg.mobile === 'bottom' ? 'pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0' : ''
+            navCfg.mobile === 'bottom'
+              ? 'pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0'
+              : ''
           } ${footer === 'bottomBar' ? 'lg:pb-24' : ''}`}
         >
           {children}

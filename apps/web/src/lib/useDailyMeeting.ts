@@ -300,7 +300,8 @@ export function useDailyMeeting(liveSessionId: string) {
    * alive and does nothing when pressed — which is what it did before.
    */
   const canShare =
-    typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+    typeof navigator !== 'undefined' &&
+    typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 
   const toggleShare = useCallback(async () => {
     const c = callRef.current;

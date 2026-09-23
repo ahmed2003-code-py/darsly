@@ -11,7 +11,15 @@ import {
   type AcademySubjectRow,
 } from '../../lib/academySubjects';
 import { useAuthStore } from '../../stores/auth';
-import { Badge, EmptyState, ErrorNote, Field, Modal, PageHeader, Skeleton } from '../../components/ui';
+import {
+  Badge,
+  EmptyState,
+  ErrorNote,
+  Field,
+  Modal,
+  PageHeader,
+  Skeleton,
+} from '../../components/ui';
 
 /**
  * Which platform subjects this Center offers.
@@ -51,15 +59,27 @@ export default function CenterSubjectsPage() {
     const found = needle
       ? all.filter((s) => `${s.nameAr} ${s.nameEn} ${s.code ?? ''}`.toLowerCase().includes(needle))
       : all;
-    return [...found].sort((a, b) => Number(b.offered) - Number(a.offered) || Number(b.isCore) - Number(a.isCore));
+    return [...found].sort(
+      (a, b) => Number(b.offered) - Number(a.offered) || Number(b.isCore) - Number(a.isCore),
+    );
     // `data?.subjects` is the dependency on purpose: the optimistic cache write
     // re-runs this, which is the one place the order is allowed to move.
   }, [data?.subjects, q]);
 
   const offeredCount = (data?.subjects ?? []).filter((s) => s.offered).length;
 
-  if (isLoading || loadingSubjects) return <div className="page"><Skeleton className="h-40 rounded-2xl" /></div>;
-  if (!academy || !data) return <div className="page"><EmptyState icon="apartment" title={t('center.noCenter')} /></div>;
+  if (isLoading || loadingSubjects)
+    return (
+      <div className="page">
+        <Skeleton className="h-40 rounded-2xl" />
+      </div>
+    );
+  if (!academy || !data)
+    return (
+      <div className="page">
+        <EmptyState icon="apartment" title={t('center.noCenter')} />
+      </div>
+    );
 
   const busy = setAll.isPending;
 
@@ -83,7 +103,9 @@ export default function CenterSubjectsPage() {
       <div className="mb-4 rounded-2xl border border-outline-variant bg-surface-container-low p-3 sm:p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline">search</span>
+            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline">
+              search
+            </span>
             <input
               className="input w-full ps-11 pe-10"
               value={q}
@@ -103,13 +125,19 @@ export default function CenterSubjectsPage() {
           </div>
           {data.gated && (
             <div className="flex shrink-0 gap-2">
-              <button className="btn-secondary px-4 py-2 text-sm" disabled={busy} onClick={() => setAll.mutate(true)}>
+              <button
+                className="btn-secondary px-4 py-2 text-sm"
+                disabled={busy}
+                onClick={() => setAll.mutate(true)}
+              >
                 {t('center.subjectEnableAll')}
               </button>
               <button
                 className="rounded-xl border border-error/30 px-4 py-2 text-sm font-bold text-error transition hover:bg-error-container/40"
                 disabled={busy}
-                onClick={async () => { if (await askConfirm(t('center.subjectDisableAllConfirm'))) setAll.mutate(false); }}
+                onClick={async () => {
+                  if (await askConfirm(t('center.subjectDisableAllConfirm'))) setAll.mutate(false);
+                }}
               >
                 {t('center.subjectDisableAll')}
               </button>
@@ -130,13 +158,17 @@ export default function CenterSubjectsPage() {
           <ul className="divide-y divide-outline-variant">
             {rows.map((s) => (
               <li key={s.id} className="flex items-center gap-3 p-4">
-                <span className="material-symbols-outlined text-2xl text-primary">{s.icon ?? 'menu_book'}</span>
+                <span className="material-symbols-outlined text-2xl text-primary">
+                  {s.icon ?? 'menu_book'}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold">{name(s)}</p>
                   <p className="truncate text-xs text-outline">{other(s)}</p>
                 </div>
                 {s.isCore && <Badge tone="primary">{t('center.subjectCore')}</Badge>}
-                <Badge tone={s.offered ? 'teal' : 'neutral'}>{s.offered ? t('center.subjectOffered') : t('center.subjectNotOffered')}</Badge>
+                <Badge tone={s.offered ? 'teal' : 'neutral'}>
+                  {s.offered ? t('center.subjectOffered') : t('center.subjectNotOffered')}
+                </Badge>
                 {data.gated && (
                   <button
                     className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold ${s.offered ? 'border border-error/40 text-error hover:bg-error-container/40' : 'btn-primary'}`}
@@ -152,13 +184,23 @@ export default function CenterSubjectsPage() {
         </div>
       )}
 
-      {isPlatformOwner && <AddSubjectModal open={adding} onClose={() => setAdding(false)} slug={academy.slug} />}
+      {isPlatformOwner && (
+        <AddSubjectModal open={adding} onClose={() => setAdding(false)} slug={academy.slug} />
+      )}
     </div>
   );
 }
 
 /** Platform-owner only: a subject the shipped catalogue does not have. */
-function AddSubjectModal({ open, onClose, slug }: { open: boolean; onClose: () => void; slug: string }) {
+function AddSubjectModal({
+  open,
+  onClose,
+  slug,
+}: {
+  open: boolean;
+  onClose: () => void;
+  slug: string;
+}) {
   const { t } = useTranslation();
   const create = useCreateSubject(slug);
   const [nameAr, setNameAr] = useState('');
@@ -170,7 +212,14 @@ function AddSubjectModal({ open, onClose, slug }: { open: boolean; onClose: () =
     e.preventDefault();
     create.mutate(
       { nameAr, nameEn, track, isCore },
-      { onSuccess: () => { setNameAr(''); setNameEn(''); setIsCore(false); onClose(); } },
+      {
+        onSuccess: () => {
+          setNameAr('');
+          setNameEn('');
+          setIsCore(false);
+          onClose();
+        },
+      },
     );
   };
 
@@ -180,10 +229,25 @@ function AddSubjectModal({ open, onClose, slug }: { open: boolean; onClose: () =
         <p className="text-sm text-on-surface-variant">{t('center.subjectAddHint')}</p>
         <ErrorNote error={create.error} />
         <Field label={t('center.subjectNameAr')}>
-          <input className="input" required minLength={2} maxLength={80} value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
+          <input
+            className="input"
+            required
+            minLength={2}
+            maxLength={80}
+            value={nameAr}
+            onChange={(e) => setNameAr(e.target.value)}
+          />
         </Field>
         <Field label={t('center.subjectNameEn')}>
-          <input className="input" required minLength={2} maxLength={80} value={nameEn} onChange={(e) => setNameEn(e.target.value)} dir="ltr" />
+          <input
+            className="input"
+            required
+            minLength={2}
+            maxLength={80}
+            value={nameEn}
+            onChange={(e) => setNameEn(e.target.value)}
+            dir="ltr"
+          />
         </Field>
         <Field label={t('center.subjectTrack')}>
           <select className="input" value={track} onChange={(e) => setTrack(e.target.value)}>
@@ -197,7 +261,9 @@ function AddSubjectModal({ open, onClose, slug }: { open: boolean; onClose: () =
           {t('center.subjectMarkCore')}
         </label>
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary px-4 py-2" onClick={onClose}>{t('common.cancel')}</button>
+          <button type="button" className="btn-secondary px-4 py-2" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
           <button type="submit" className="btn-primary px-4 py-2" disabled={create.isPending}>
             {create.isPending ? t('common.saving') : t('common.save')}
           </button>

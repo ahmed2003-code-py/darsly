@@ -99,7 +99,9 @@ describe('JwtAuthGuard — public routes', () => {
   });
 
   it('stays public when the token is garbage', async () => {
-    const { guard } = makeGuard({ verify: jest.fn().mockRejectedValue(new Error('bad signature')) });
+    const { guard } = makeGuard({
+      verify: jest.fn().mockRejectedValue(new Error('bad signature')),
+    });
     const { host, request } = ctx(bearer);
 
     await expect(guard.canActivate(host)).resolves.toBe(true);

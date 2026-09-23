@@ -8,7 +8,11 @@ import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
 import { arrivalAcademy } from '../lib/arrival';
 import { useAcademyBranding } from '../lib/academy';
-import { invitationTokenFromPath, registerViaInvitation, useInvitationPreview } from '../lib/invitationLinks';
+import {
+  invitationTokenFromPath,
+  registerViaInvitation,
+  useInvitationPreview,
+} from '../lib/invitationLinks';
 import { REDIRECT_PARAM, safeRedirect, withRedirect } from '../lib/redirect';
 import { useAuthStore } from '../stores/auth';
 import GradeSelect from '../components/GradeSelect';
@@ -42,7 +46,11 @@ export default function RegisterPage() {
   // question "teacher or student?" is never asked, and the answer is never
   // sent — the token carries it.
   const inviteToken = invitationTokenFromPath(destination);
-  const { data: invite, isLoading: inviteLoading, isError: inviteInvalid } = useInvitationPreview(inviteToken ?? undefined);
+  const {
+    data: invite,
+    isLoading: inviteLoading,
+    isError: inviteInvalid,
+  } = useInvitationPreview(inviteToken ?? undefined);
   const [role, setRole] = useState<Role>('student');
   // Which extra questions the form asks. An invited TEACHER still names what
   // they teach (courses are filed under it); an invited ASSISTANT authors
@@ -94,7 +102,10 @@ export default function RegisterPage() {
         // No role, no Center, no owner in this body — the token is all of them.
         const data = await registerViaInvitation({
           token: inviteToken,
-          fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
+          fullName: fullName.trim(),
+          email: email.trim(),
+          password,
+          phone: phone.trim(),
           ...(asksTeaching ? { subjectIds, stages } : {}),
           deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
         });
@@ -105,8 +116,12 @@ export default function RegisterPage() {
         if (!gradeId) throw new Error(t('auth.gradeRequired'));
         if (!track) throw new Error(t('auth.trackRequired'));
         const { data } = await api.post('/auth/register/student', {
-          fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
-          gradeId, track,
+          fullName: fullName.trim(),
+          email: email.trim(),
+          password,
+          phone: phone.trim(),
+          gradeId,
+          track,
           deviceName: navigator.userAgent.split(') ')[0].split(' (')[0],
         });
         setTokens(data.accessToken, data.refreshToken);
@@ -118,8 +133,12 @@ export default function RegisterPage() {
         if (!subjectIds.length) throw new Error(t('auth.subjectRequired'));
         if (!stages.length) throw new Error(t('auth.stagesRequired'));
         await api.post('/auth/register/teacher', {
-          fullName: fullName.trim(), email: email.trim(), password, phone: phone.trim(),
-          subjectIds, stages,
+          fullName: fullName.trim(),
+          email: email.trim(),
+          password,
+          phone: phone.trim(),
+          subjectIds,
+          stages,
         });
         setPendingDone(true);
       }
@@ -133,7 +152,10 @@ export default function RegisterPage() {
   if (pendingDone) {
     return (
       <AuthShell title={t('auth.pendingTitle')} subtitle={t('auth.pendingSub')}>
-        <m.div variants={rise} className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center">
+        <m.div
+          variants={rise}
+          className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center"
+        >
           <m.span
             className="material-symbols-outlined mb-2 inline-block text-5xl text-secondary"
             initial={{ scale: 0.6, rotate: -10 }}
@@ -146,7 +168,12 @@ export default function RegisterPage() {
           <p className="mt-1 text-sm text-on-surface-variant">{t('auth.pendingBody')}</p>
         </m.div>
         <m.div variants={rise}>
-          <Link to={withRedirect('/login', destination)} className="btn-primary mt-6 block w-full py-3 text-center">{t('auth.backToLogin')}</Link>
+          <Link
+            to={withRedirect('/login', destination)}
+            className="btn-primary mt-6 block w-full py-3 text-center"
+          >
+            {t('auth.backToLogin')}
+          </Link>
         </m.div>
       </AuthShell>
     );
@@ -166,13 +193,19 @@ export default function RegisterPage() {
     );
   }
 
-  const inviteRoleLabel = invite ? t(invite.role === 'TEACHER' ? 'academy.roleTeacher' : 'academy.roleAssistant') : '';
+  const inviteRoleLabel = invite
+    ? t(invite.role === 'TEACHER' ? 'academy.roleTeacher' : 'academy.roleAssistant')
+    : '';
   const title = invite
     ? t('auth.joinCenterTitle', { name: invite.academyName })
-    : academy ? t('auth.joinAcademyTitle', { name: academy.name }) : t('auth.createAccount');
+    : academy
+      ? t('auth.joinAcademyTitle', { name: academy.name })
+      : t('auth.createAccount');
   const subtitle = invite
     ? t('auth.joinCenterSubtitle', { role: inviteRoleLabel })
-    : academy ? t('auth.joinAcademySubtitle', { name: academy.name }) : t('auth.signupSubtitle');
+    : academy
+      ? t('auth.joinAcademySubtitle', { name: academy.name })
+      : t('auth.signupSubtitle');
 
   return (
     <AuthShell
@@ -183,16 +216,27 @@ export default function RegisterPage() {
       footer={
         <>
           {t('auth.haveAccount')}{' '}
-          <Link to={withRedirect('/login', destination)} className="font-bold text-primary hover:underline">{t('auth.loginLink')}</Link>
+          <Link
+            to={withRedirect('/login', destination)}
+            className="font-bold text-primary hover:underline"
+          >
+            {t('auth.loginLink')}
+          </Link>
         </>
       }
     >
       <form onSubmit={submit}>
         {inviteToken && inviteLoading && <Skeleton className="mb-4 h-10 rounded-xl" />}
         {invite && (
-          <m.div variants={rise} className="mb-4 flex items-center gap-2 rounded-xl bg-primary-container/40 px-4 py-2.5 text-sm">
+          <m.div
+            variants={rise}
+            className="mb-4 flex items-center gap-2 rounded-xl bg-primary-container/40 px-4 py-2.5 text-sm"
+          >
             <span className="material-symbols-outlined text-primary">apartment</span>
-            <span>{t('joinCenter.invitedAs')} <span className="font-bold">{inviteRoleLabel}</span> · {invite.academyName}</span>
+            <span>
+              {t('joinCenter.invitedAs')} <span className="font-bold">{inviteRoleLabel}</span> ·{' '}
+              {invite.academyName}
+            </span>
           </m.div>
         )}
         {/* Role toggle — hidden for anyone who came in through an academy or a
@@ -218,18 +262,56 @@ export default function RegisterPage() {
             {error}
           </m.p>
         )}
-        <AuthField icon="person" label={t('auth.fullName')} placeholder={t('auth.fullNamePh')}
-          value={fullName} onChange={setFullName} autoComplete="name" maxLength={120} />
-        <AuthField icon="mail" type="email" dir="ltr" label={t('auth.email')} placeholder="name@example.com"
-          value={email} onChange={setEmail} autoComplete="email" maxLength={160} />
+        <AuthField
+          icon="person"
+          label={t('auth.fullName')}
+          placeholder={t('auth.fullNamePh')}
+          value={fullName}
+          onChange={setFullName}
+          autoComplete="name"
+          maxLength={120}
+        />
+        <AuthField
+          icon="mail"
+          type="email"
+          dir="ltr"
+          label={t('auth.email')}
+          placeholder="name@example.com"
+          value={email}
+          onChange={setEmail}
+          autoComplete="email"
+          maxLength={160}
+        />
         {/* Mirrors EGY_PHONE_REGEX on the API — a wrong number is caught here
             rather than after a round trip that also creates nothing. */}
-        <AuthField icon="phone" type="tel" dir="ltr" label={t('auth.phone')} inputMode="tel"
-          pattern="(\+20|0020|20|0)?1[0125][0-9]{8}" title={t('auth.phoneHint')} maxLength={16}
-          placeholder="01xxxxxxxxx" value={phone} onChange={setPhone} autoComplete="tel" />
-        <AuthField icon="lock" type={show ? 'text' : 'password'} dir="ltr" label={t('auth.password')}
-          placeholder="••••••••" value={password} onChange={setPassword} autoComplete="new-password"
-          reveal revealed={show} onReveal={() => setShow((s) => !s)} hint={t('auth.passwordHint')} />
+        <AuthField
+          icon="phone"
+          type="tel"
+          dir="ltr"
+          label={t('auth.phone')}
+          inputMode="tel"
+          pattern="(\+20|0020|20|0)?1[0125][0-9]{8}"
+          title={t('auth.phoneHint')}
+          maxLength={16}
+          placeholder="01xxxxxxxxx"
+          value={phone}
+          onChange={setPhone}
+          autoComplete="tel"
+        />
+        <AuthField
+          icon="lock"
+          type={show ? 'text' : 'password'}
+          dir="ltr"
+          label={t('auth.password')}
+          placeholder="••••••••"
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          reveal
+          revealed={show}
+          onReveal={() => setShow((s) => !s)}
+          hint={t('auth.passwordHint')}
+        />
 
         {asksStudent && (
           <label className="mb-4 block">
@@ -277,7 +359,11 @@ export default function RegisterPage() {
               <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
                 {t('auth.subject')}
               </span>
-              <SubjectPicker subjects={subjects ?? []} value={subjectIds} onChange={setSubjectIds} />
+              <SubjectPicker
+                subjects={subjects ?? []}
+                value={subjectIds}
+                onChange={setSubjectIds}
+              />
               <span className="mt-1.5 block text-xs text-outline">{t('auth.subjectHint')}</span>
             </label>
 
@@ -291,12 +377,17 @@ export default function RegisterPage() {
                 {STAGES.map((st) => {
                   const on = stages.includes(st);
                   return (
-                    <button key={st} type="button" onClick={() => toggleStage(st)} aria-pressed={on}
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => toggleStage(st)}
+                      aria-pressed={on}
                       className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                         on
                           ? 'border-primary bg-primary text-on-primary'
                           : 'border-outline-variant text-on-surface-variant hover:border-outline'
-                      }`}>
+                      }`}
+                    >
                       {t(`stage.${st}`)}
                     </button>
                   );
@@ -308,7 +399,9 @@ export default function RegisterPage() {
         )}
 
         <div className="mt-6">
-          <AuthSubmit busy={busy || (!!inviteToken && !invite)}>{busy ? t('auth.creating') : t('auth.createBtn')}</AuthSubmit>
+          <AuthSubmit busy={busy || (!!inviteToken && !invite)}>
+            {busy ? t('auth.creating') : t('auth.createBtn')}
+          </AuthSubmit>
         </div>
       </form>
     </AuthShell>

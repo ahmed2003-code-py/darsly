@@ -16,7 +16,16 @@ export function hexToRgb(hex: string): [number, number, number] {
 }
 
 export function rgbToHex(rgb: number[]): string {
-  return '#' + rgb.map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0')).join('');
+  return (
+    '#' +
+    rgb
+      .map((x) =>
+        Math.max(0, Math.min(255, Math.round(x)))
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')
+  );
 }
 
 /** Blend `hex` toward `target` by weight `w` (0..1). */

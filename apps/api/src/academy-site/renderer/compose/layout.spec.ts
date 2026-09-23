@@ -28,7 +28,10 @@ const render = (accents: (typeof ACCENT_MARKS)[number][], pattern: string) =>
   composeSite(
     brain.compose(
       buildComposition({
-        design: { ...structuredClone(WARM_DESIGN), decoration: { ...WARM_DESIGN.decoration, accents } },
+        design: {
+          ...structuredClone(WARM_DESIGN),
+          decoration: { ...WARM_DESIGN.decoration, accents },
+        },
         sections: { hero: { pattern, accents } },
       }),
       PROFILE,
@@ -41,10 +44,16 @@ describe('an accent never consumes a layout cell', () => {
     const css = ACCENT_CSS[mark];
     // A pseudo-element on the container is only safe if it is taken out of flow
     // or told to span the whole row.
-    const rules = css.split('\n').filter((r) => /\.wrap::(before|after)/.test(r) && r.includes('content:'));
+    const rules = css
+      .split('\n')
+      .filter((r) => /\.wrap::(before|after)/.test(r) && r.includes('content:'));
     for (const rule of rules) {
       const safe = rule.includes('position:absolute') || rule.includes('grid-column:1/-1');
-      expect({ mark, rule: rule.slice(0, 80), safe }).toEqual({ mark, rule: rule.slice(0, 80), safe: true });
+      expect({ mark, rule: rule.slice(0, 80), safe }).toEqual({
+        mark,
+        rule: rule.slice(0, 80),
+        safe: true,
+      });
     }
   });
 
@@ -54,7 +63,11 @@ describe('an accent never consumes a layout cell', () => {
     const withRule = render(['rule-lines'], 'hero.split-portrait');
     const without = render([], 'hero.split-portrait');
     const cells = (html: string) =>
-      (html.match(/<section[^>]*class="block hero[\s\S]*?<\/section>/)![0].match(/<div class="hero-(copy|media)"/g) ?? []).length;
+      (
+        html
+          .match(/<section[^>]*class="block hero[\s\S]*?<\/section>/)![0]
+          .match(/<div class="hero-(copy|media)"/g) ?? []
+      ).length;
     expect(cells(withRule)).toBe(cells(without));
     expect(withRule).toContain('grid-column:1/-1');
   });
@@ -72,7 +85,16 @@ describe('an accent never consumes a layout cell', () => {
 describe('brand colours have to read on the page they are on', () => {
   const dark = (primary: string, accent: string) => {
     const d = structuredClone(WARM_DESIGN);
-    d.palette = { ...d.palette, background: '#0B0B10', ink: '#EDEAE3', surface: '#141418', surfaceAlt: '#1A1A20', primary, accent, mode: 'dark' };
+    d.palette = {
+      ...d.palette,
+      background: '#0B0B10',
+      ink: '#EDEAE3',
+      surface: '#141418',
+      surfaceAlt: '#1A1A20',
+      primary,
+      accent,
+      mode: 'dark',
+    };
     return repairDesign(d);
   };
 
@@ -81,13 +103,17 @@ describe('brand colours have to read on the page they are on', () => {
     // label is perfectly legible — and still looks like a rectangle of nothing.
     const { design, verdicts } = dark('#14532D', '#C8A96A');
     expect(verdicts.map((v) => v.code)).toContain('primary-indistinct');
-    expect(contrastRatio(design.palette.primary, design.palette.background)).toBeGreaterThanOrEqual(2);
+    expect(contrastRatio(design.palette.primary, design.palette.background)).toBeGreaterThanOrEqual(
+      2,
+    );
   });
 
   it('lifts an accent that disappears into the page', () => {
     const { design, verdicts } = dark('#3B82F6', '#101018');
     expect(verdicts.map((v) => v.code)).toContain('accent-indistinct-on-page');
-    expect(contrastRatio(design.palette.accent, design.palette.background)).toBeGreaterThanOrEqual(1.6);
+    expect(contrastRatio(design.palette.accent, design.palette.background)).toBeGreaterThanOrEqual(
+      1.6,
+    );
   });
 
   it('leaves a palette that already reads exactly as it was', () => {

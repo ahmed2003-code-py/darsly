@@ -131,7 +131,14 @@ export class DeviceEnrollmentService {
     const rows = await this.prisma.deviceEnrollmentCode.findMany({
       where: { consumedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, phone: true, label: true, expiresAt: true, attempts: true, createdAt: true },
+      select: {
+        id: true,
+        phone: true,
+        label: true,
+        expiresAt: true,
+        attempts: true,
+        createdAt: true,
+      },
     });
     return rows;
   }
@@ -142,8 +149,14 @@ export class DeviceEnrollmentService {
       orderBy: { createdAt: 'desc' },
       take: 50,
       select: {
-        id: true, phone: true, model: true, appVersion: true,
-        lastSeenAt: true, revokedAt: true, revokedReason: true, createdAt: true,
+        id: true,
+        phone: true,
+        model: true,
+        appVersion: true,
+        lastSeenAt: true,
+        revokedAt: true,
+        revokedReason: true,
+        createdAt: true,
         _count: { select: { smsEvents: true } },
       },
     });
@@ -159,7 +172,8 @@ export class DeviceEnrollmentService {
     const pick = () =>
       Array.from(
         { length: DeviceEnrollmentService.GROUP },
-        () => DeviceEnrollmentService.ALPHABET[randomInt(0, DeviceEnrollmentService.ALPHABET.length)],
+        () =>
+          DeviceEnrollmentService.ALPHABET[randomInt(0, DeviceEnrollmentService.ALPHABET.length)],
       ).join('');
     return `${pick()}-${pick()}`;
   }

@@ -37,9 +37,7 @@ export function trackAdmits(
  * Null for a student who never answered: the caller leaves the filter off
  * entirely rather than narrowing to nothing.
  */
-export function trackFilter(
-  studentTrack: SubjectTrack | null | undefined,
-): SubjectTrack[] | null {
+export function trackFilter(studentTrack: SubjectTrack | null | undefined): SubjectTrack[] | null {
   if (!studentTrack || studentTrack === 'BOTH') return null;
   return [studentTrack, 'BOTH'];
 }

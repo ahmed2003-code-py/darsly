@@ -69,7 +69,10 @@ export class PublicSiteController {
   async page(@Param('slug') slug: string, @Req() req: Request, @Res() res: Response) {
     const published = await this.site.getPublished(slug);
     if (!published) {
-      res.status(404).type('html').send('<!doctype html><meta charset="utf-8"><title>404</title><h1>Page not found</h1>');
+      res
+        .status(404)
+        .type('html')
+        .send('<!doctype html><meta charset="utf-8"><title>404</title><h1>Page not found</h1>');
       return;
     }
     const etag = `W/"site-${published.academyId}-v${published.version}"`;
@@ -131,7 +134,9 @@ export class PublicSiteController {
       .join('');
     res
       .type('application/xml')
-      .send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
+      .send(
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`,
+      );
   }
 
   @Get('robots.txt')

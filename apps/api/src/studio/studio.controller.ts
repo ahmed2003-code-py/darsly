@@ -8,7 +8,14 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { StudioService } from './studio.service';
 
 const CATEGORIES: CosmeticCategory[] = [
-  'THEME', 'ACCENT', 'BUTTON_STYLE', 'CARD_STYLE', 'NAV_STYLE', 'AVATAR', 'FRAME', 'EFFECT',
+  'THEME',
+  'ACCENT',
+  'BUTTON_STYLE',
+  'CARD_STYLE',
+  'NAV_STYLE',
+  'AVATAR',
+  'FRAME',
+  'EFFECT',
 ];
 
 class KeyDto {
@@ -24,7 +31,8 @@ class CategoryDto {
 }
 
 class AccentDto {
-  @IsString() @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'accent must be a six-digit hex colour' })
+  @IsString()
+  @Matches(/^#[0-9a-fA-F]{6}$/, { message: 'accent must be a six-digit hex colour' })
   hex: string;
 }
 

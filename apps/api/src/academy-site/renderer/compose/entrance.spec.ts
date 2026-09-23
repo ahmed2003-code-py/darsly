@@ -46,15 +46,15 @@ describe('no entrance may clip the element the observer watches', () => {
       if (!selector.includes('.block')) continue;
       // Declarations only — `clip-path` named inside a `transition` shorthand is
       // not a clip, and matching it would make this test meaningless.
-      const clips = body
-        .split(';')
-        .some((d) =>
+      const clips = body.split(';').some(
+        (d) =>
           // Only declarations that HIDE. `clip-path:none` is how the
           // reduced-motion block reveals everything, and flagging it would be
           // backwards.
           /^\s*clip-path\s*:\s*inset\((?!0 0 0 0\))/.test(d) ||
           /^\s*content-visibility\s*:\s*hidden/.test(d) ||
-          /^\s*display\s*:\s*none/.test(d));
+          /^\s*display\s*:\s*none/.test(d),
+      );
       if (!clips) continue;
       expect(selector).toMatch(/\.block[^{]*>/);
     }

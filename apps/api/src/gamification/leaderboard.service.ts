@@ -119,7 +119,13 @@ export class LeaderboardService {
     period: LeaderboardPeriod;
     studentId?: string;
     limit?: number;
-  }): Promise<{ top: LeaderboardRow[]; me: LeaderboardRow | null; around: LeaderboardRow[]; total: number; toNextRank: number | null }> {
+  }): Promise<{
+    top: LeaderboardRow[];
+    me: LeaderboardRow | null;
+    around: LeaderboardRow[];
+    total: number;
+    toNextRank: number | null;
+  }> {
     const where = this.where(opts.scope, opts.scopeId ?? '', opts.period);
     const limit = Math.min(opts.limit ?? 20, 100);
 
@@ -211,7 +217,10 @@ export class LeaderboardService {
     });
     if (!agg) return null;
     if (agg.bestRank == null || rank < agg.bestRank) {
-      await this.prisma.studentGamification.update({ where: { studentId }, data: { bestRank: rank } });
+      await this.prisma.studentGamification.update({
+        where: { studentId },
+        data: { bestRank: rank },
+      });
       return rank;
     }
     return agg.bestRank;
@@ -230,7 +239,14 @@ export class LeaderboardService {
   }
 
   private toRow(
-    r: { xp: number; studentId: string; student: { user: { fullName: string; avatarUrl: string | null }; gamification: { level: number; activeTitle: string | null } | null } },
+    r: {
+      xp: number;
+      studentId: string;
+      student: {
+        user: { fullName: string; avatarUrl: string | null };
+        gamification: { level: number; activeTitle: string | null } | null;
+      };
+    },
     rank: number,
     meId?: string,
   ): LeaderboardRow {

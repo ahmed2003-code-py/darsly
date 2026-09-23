@@ -31,7 +31,9 @@ describe('CouponsService.create', () => {
   it('requires a discount of some kind', async () => {
     const svc = new CouponsService(makePrisma());
 
-    await expect(svc.create('academyA', { code: 'X1' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.create('academyA', { code: 'X1' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('refuses both a percentage and a fixed amount', async () => {
@@ -45,7 +47,10 @@ describe('CouponsService.create', () => {
   it('normalises the code to upper case and trims it', async () => {
     const prisma = makePrisma();
 
-    const coupon = await new CouponsService(prisma).create('academyA', { ...valid, code: '  eid2026 ' });
+    const coupon = await new CouponsService(prisma).create('academyA', {
+      ...valid,
+      code: '  eid2026 ',
+    });
 
     expect(coupon.code).toBe('EID2026');
   });
@@ -56,9 +61,9 @@ describe('CouponsService.create', () => {
     prisma.course.findFirst.mockResolvedValue(null);
     const svc = new CouponsService(prisma);
 
-    await expect(svc.create('academyA', { ...valid, courseId: 'someone-elses' })).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      svc.create('academyA', { ...valid, courseId: 'someone-elses' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.coupon.create).not.toHaveBeenCalled();
   });
 
@@ -134,7 +139,10 @@ describe('CouponsService.remove', () => {
 
     expect(out).toEqual({ id: 'c1', deactivated: true, deleted: false });
     expect(prisma.coupon.delete).not.toHaveBeenCalled();
-    expect(prisma.coupon.update).toHaveBeenCalledWith({ where: { id: 'c1' }, data: { isActive: false } });
+    expect(prisma.coupon.update).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      data: { isActive: false },
+    });
   });
 
   it('404s on another academy’s coupon — never "forbidden"', async () => {
@@ -153,13 +161,17 @@ describe('CouponsService.update', () => {
 
     await new CouponsService(prisma).update('academyA', 'c1', { isActive: false });
 
-    expect(prisma.coupon.findFirst).toHaveBeenCalledWith({ where: { id: 'c1', tenantId: 'academyA' } });
+    expect(prisma.coupon.findFirst).toHaveBeenCalledWith({
+      where: { id: 'c1', tenantId: 'academyA' },
+    });
   });
 
   it('turns an ISO expiry into a Date', async () => {
     const prisma = makePrisma();
 
-    await new CouponsService(prisma).update('academyA', 'c1', { expiresAt: '2026-12-31T00:00:00.000Z' });
+    await new CouponsService(prisma).update('academyA', 'c1', {
+      expiresAt: '2026-12-31T00:00:00.000Z',
+    });
 
     expect(prisma.coupon.update.mock.calls[0][0].data.expiresAt).toBeInstanceOf(Date);
   });

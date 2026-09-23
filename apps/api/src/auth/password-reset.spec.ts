@@ -36,7 +36,10 @@ describe('AuthService — password reset by emailed code', () => {
       deviceSession: { updateMany: jest.fn() },
       $transaction: jest.fn().mockResolvedValue([]),
     };
-    mail = { send: jest.fn().mockResolvedValue({ delivered: true, id: 'm1' }), webUrl: (p = '') => p };
+    mail = {
+      send: jest.fn().mockResolvedValue({ delivered: true, id: 'm1' }),
+      webUrl: (p = '') => p,
+    };
     service = new AuthService(prisma, {} as any, mail, {} as any);
     delete process.env.OTP_DEV_MODE;
   });
@@ -114,7 +117,9 @@ describe('AuthService — password reset by emailed code', () => {
     await service.forgotPassword({ email: USER.email });
     const code = sentCode();
 
-    await expect(service.verifyResetCode({ email: USER.email, code })).resolves.toEqual({ ok: true });
+    await expect(service.verifyResetCode({ email: USER.email, code })).resolves.toEqual({
+      ok: true,
+    });
     await expect(
       service.verifyResetCode({ email: USER.email, code: '000000' }),
     ).rejects.toMatchObject({ response: { code: 'INVALID_CODE' } });

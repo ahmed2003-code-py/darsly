@@ -42,7 +42,8 @@ describe('the course card select', () => {
 
   it('flattens the join away so a card exposes plain years', () => {
     const card = svc.mapCard({
-      id: 'c1', title: 'A course',
+      id: 'c1',
+      title: 'A course',
       grades: [
         { grade: { nameAr: 'الصف الأول', nameEn: 'Grade 1' } },
         { grade: { nameAr: 'الصف الثاني', nameEn: 'Grade 2' } },

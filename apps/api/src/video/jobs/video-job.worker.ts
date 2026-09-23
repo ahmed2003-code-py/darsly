@@ -110,7 +110,9 @@ export class VideoJobWorker implements OnModuleInit, OnModuleDestroy {
       Math.floor(LEASE_MS / 2),
     );
     try {
-      this.logger.log(`job ${job.id} packaging asset ${job.videoAssetId} (attempt ${job.attempts})`);
+      this.logger.log(
+        `job ${job.id} packaging asset ${job.videoAssetId} (attempt ${job.attempts})`,
+      );
       await this.processing.process(job.videoAssetId);
       await this.jobs.succeed(job.id);
     } catch (e) {

@@ -47,9 +47,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <div className="max-w-sm space-y-4">
             <div className="text-4xl">😕</div>
             <h1 className="text-lg font-bold text-slate-800">{i18n.t('common.unexpectedError')}</h1>
-            <p className="text-sm text-slate-500">
-              {i18n.t('common.unexpectedErrorBody')}
-            </p>
+            <p className="text-sm text-slate-500">{i18n.t('common.unexpectedErrorBody')}</p>
             <button
               onClick={() => {
                 sessionStorage.removeItem('chunk-reloaded');

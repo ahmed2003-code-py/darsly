@@ -67,7 +67,9 @@ export function UploadPanel({
   return (
     <div
       className={`rounded-2xl border p-3 ${
-        failed ? 'border-error/40 bg-error-container/30' : 'border-outline-variant/60 bg-surface-container-lowest'
+        failed
+          ? 'border-error/40 bg-error-container/30'
+          : 'border-outline-variant/60 bg-surface-container-lowest'
       }`}
     >
       <div className="flex items-center gap-3">
@@ -101,7 +103,10 @@ export function UploadPanel({
 
         {/* A number only where there is a real one to show. */}
         {uploading && (
-          <span className="shrink-0 font-heading text-sm font-bold tabular-nums text-on-surface" dir="ltr">
+          <span
+            className="shrink-0 font-heading text-sm font-bold tabular-nums text-on-surface"
+            dir="ltr"
+          >
             {clamped}%
           </span>
         )}
@@ -118,24 +123,36 @@ export function UploadPanel({
           </button>
         )}
         {failed && onRetry && (
-          <button type="button" onClick={onRetry} className="btn-ghost shrink-0 px-3 py-1.5 text-xs">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="btn-ghost shrink-0 px-3 py-1.5 text-xs"
+          >
             {t('upload.retry')}
           </button>
         )}
       </div>
 
       {!failed && (
-        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-container-high" dir="ltr">
+        <div
+          className="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-container-high"
+          dir="ltr"
+        >
           {phase === 'working' ? (
             // No width: there is no percentage, and pretending otherwise is the
             // whole thing this avoids.
-            <div className={`h-full w-full text-primary ${motion.off ? 'bg-primary/40' : 'up-work'}`} />
+            <div
+              className={`h-full w-full text-primary ${motion.off ? 'bg-primary/40' : 'up-work'}`}
+            />
           ) : (
             <div
               className={`relative h-full overflow-hidden rounded-full bg-primary transition-[width] ease-premium ${
                 uploading && clamped > 0 && !motion.off ? 'up-sheen' : ''
               }`}
-              style={{ width: `${done ? 100 : clamped}%`, transitionDuration: `${motion.dur * 420}ms` }}
+              style={{
+                width: `${done ? 100 : clamped}%`,
+                transitionDuration: `${motion.dur * 420}ms`,
+              }}
             />
           )}
         </div>

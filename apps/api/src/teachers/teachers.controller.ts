@@ -31,13 +31,15 @@ class DiscoverTeachersDto implements DiscoverTeachersQuery {
   @IsOptionalId() subjectId?: string;
   @IsOptionalId() gradeId?: string;
   /** Look outside my own year. Without it a signed-in student sees theirs. */
-  @IsOptional() @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
   allStages?: boolean;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) priceMinCents?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) priceMaxCents?: number;
   @IsOptional() @Type(() => Number) @Min(0) @Max(5) minRating?: number;
-  @IsOptional() @IsIn(['rating', 'priceAsc', 'priceDesc', 'newest'])
+  @IsOptional()
+  @IsIn(['rating', 'priceAsc', 'priceDesc', 'newest'])
   sort?: 'rating' | 'priceAsc' | 'priceDesc' | 'newest';
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(10_000) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) pageSize?: number;
@@ -49,10 +51,19 @@ class UpdateMyTeacherProfileDto {
   @IsOptional() @IsUrl({ require_tld: false }) @MaxLength(500) introVideoUrl?: string;
   @IsOptional() @IsIn(['ar', 'en']) language?: string;
   /** The whole set, replaced — the list the teacher submitted is the list. */
-  @IsOptional() @IsArray() @ArrayNotEmpty() @ArrayMaxSize(12) @ArrayUnique()
-  @IsString({ each: true }) @MaxLength(LIMITS.ID, { each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(12)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(LIMITS.ID, { each: true })
   subjectIds?: string[];
-  @IsOptional() @IsArray() @ArrayMaxSize(4) @ArrayUnique() @IsIn(EDUCATION_STAGES, { each: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @ArrayUnique()
+  @IsIn(EDUCATION_STAGES, { each: true })
   stages?: EducationStageValue[];
 }
 
@@ -67,7 +78,9 @@ export class TeachersController {
 
   @Public()
   @Get('teachers')
-  @ApiOperation({ summary: 'Discover teachers (search + filters: subject, grade, price, rating, language)' })
+  @ApiOperation({
+    summary: 'Discover teachers (search + filters: subject, grade, price, rating, language)',
+  })
   // Public, but viewer-aware: a signed-in student does not see the teachers
   // competing with the one they already study that subject with.
   discover(@Query() query: DiscoverTeachersDto, @CurrentUser() viewer?: JwtPayload) {
@@ -100,7 +113,9 @@ export class TeachersController {
   @Patch('teacher/profile')
   @Roles(Role.TEACHER)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[teacher] Update my public profile (bio, intro video, subject, stages)' })
+  @ApiOperation({
+    summary: '[teacher] Update my public profile (bio, intro video, subject, stages)',
+  })
   async updateMyProfile(@Body() dto: UpdateMyTeacherProfileDto, @CurrentUser() user: JwtPayload) {
     // Narrowing the stages leaves existing courses aimed where they were: a
     // course already sold to a stage is not un-sold by a later edit to the
@@ -112,7 +127,10 @@ export class TeachersController {
         where: { id: { in: subjectIds }, isActive: true },
       });
       if (live !== subjectIds.length) {
-        throw new BadRequestException({ message: 'Pick the subjects you teach', code: 'UNKNOWN_SUBJECT' });
+        throw new BadRequestException({
+          message: 'Pick the subjects you teach',
+          code: 'UNKNOWN_SUBJECT',
+        });
       }
     }
     const profile = await this.prisma.teacherProfile.update({

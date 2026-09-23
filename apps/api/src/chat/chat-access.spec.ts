@@ -20,7 +20,13 @@ const none = {} as any;
 function makeService(over: { thread?: unknown; studentId?: string | null } = {}) {
   const thread =
     over.thread === undefined
-      ? { id: 't1', tenantId: 'teacherA', studentId: 'studentA', clearedForTeacherAt: null, clearedForStudentAt: null }
+      ? {
+          id: 't1',
+          tenantId: 'teacherA',
+          studentId: 'studentA',
+          clearedForTeacherAt: null,
+          clearedForStudentAt: null,
+        }
       : over.thread;
   const prisma = {
     chatThread: {
@@ -28,11 +34,20 @@ function makeService(over: { thread?: unknown; studentId?: string | null } = {})
       findUniqueOrThrow: jest.fn().mockResolvedValue(thread),
       update: jest.fn().mockResolvedValue({}),
     },
-    chatMessage: { findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn().mockResolvedValue({}) },
+    chatMessage: {
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({}),
+    },
     studentProfile: {
       findUnique: jest
         .fn()
-        .mockResolvedValue(over.studentId === undefined ? { id: 'studentA' } : over.studentId ? { id: over.studentId } : null),
+        .mockResolvedValue(
+          over.studentId === undefined
+            ? { id: 'studentA' }
+            : over.studentId
+              ? { id: over.studentId }
+              : null,
+        ),
     },
   } as any;
   return { svc: new ChatService(prisma, none, none, none), prisma };
@@ -67,14 +82,18 @@ describe('ChatService.canAccessThread', () => {
   it('lets the thread’s own teacher read it', async () => {
     const { svc } = makeService();
 
-    await expect(svc.canAccessThread(user(Role.TEACHER, { tenantId: 'teacherA' }), 't1')).resolves.toBe(true);
+    await expect(
+      svc.canAccessThread(user(Role.TEACHER, { tenantId: 'teacherA' }), 't1'),
+    ).resolves.toBe(true);
   });
 
   /** The other half of the same incident, between teachers. */
   it('refuses a teacher from another tenant', async () => {
     const { svc } = makeService();
 
-    await expect(svc.canAccessThread(user(Role.TEACHER, { tenantId: 'teacherB' }), 't1')).resolves.toBe(false);
+    await expect(
+      svc.canAccessThread(user(Role.TEACHER, { tenantId: 'teacherB' }), 't1'),
+    ).resolves.toBe(false);
   });
 
   /**
@@ -95,7 +114,9 @@ describe('ChatService.canAccessThread', () => {
   it('refuses a thread that does not exist, rather than throwing', async () => {
     const { svc } = makeService({ thread: null });
 
-    await expect(svc.canAccessThread(user(Role.TEACHER, { tenantId: 'teacherA' }), 'ghost')).resolves.toBe(false);
+    await expect(
+      svc.canAccessThread(user(Role.TEACHER, { tenantId: 'teacherA' }), 'ghost'),
+    ).resolves.toBe(false);
   });
 
   /** Documented behaviour, pinned so it cannot change by accident. */
@@ -110,14 +131,18 @@ describe('ChatService — the gate is actually applied', () => {
   it('getMessages refuses a thread the caller cannot access', async () => {
     const { svc, prisma } = makeService({ studentId: 'someone-else' });
 
-    await expect(svc.getMessages(user(Role.STUDENT), 't1')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.getMessages(user(Role.STUDENT), 't1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     expect(prisma.chatMessage.findMany).not.toHaveBeenCalled();
   });
 
   it('clearThread refuses a thread the caller cannot access', async () => {
     const { svc, prisma } = makeService({ studentId: 'someone-else' });
 
-    await expect(svc.clearThread(user(Role.STUDENT), 't1')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.clearThread(user(Role.STUDENT), 't1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     expect(prisma.chatThread.update).not.toHaveBeenCalled();
   });
 

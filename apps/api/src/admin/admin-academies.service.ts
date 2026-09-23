@@ -100,24 +100,39 @@ export class AdminAcademiesService {
     ]);
 
     const ids = academies.map((a) => a.id);
-    const [courseCounts, publishedCounts, enrollmentCounts, staffRows, studentCounts, revenue, lastActivity] =
-      await Promise.all([
-        this.prisma.course.groupBy({ by: ['academyId'], where: { academyId: { in: ids } }, _count: { _all: true } }),
-        this.prisma.course.groupBy({
-          by: ['academyId'],
-          where: { academyId: { in: ids }, status: 'PUBLISHED' },
-          _count: { _all: true },
-        }),
-        this.prisma.enrollment.groupBy({ by: ['academyId'], where: { academyId: { in: ids } }, _count: { _all: true } }),
-        this.prisma.academyMembership.groupBy({
-          by: ['academyId', 'role'],
-          where: { academyId: { in: ids }, deletedAt: null },
-          _count: { _all: true },
-        }),
-        this.studentCountsBatch(ids),
-        this.ledger.academyRevenueBatch(ids),
-        this.lastActivityBatch(ids),
-      ]);
+    const [
+      courseCounts,
+      publishedCounts,
+      enrollmentCounts,
+      staffRows,
+      studentCounts,
+      revenue,
+      lastActivity,
+    ] = await Promise.all([
+      this.prisma.course.groupBy({
+        by: ['academyId'],
+        where: { academyId: { in: ids } },
+        _count: { _all: true },
+      }),
+      this.prisma.course.groupBy({
+        by: ['academyId'],
+        where: { academyId: { in: ids }, status: 'PUBLISHED' },
+        _count: { _all: true },
+      }),
+      this.prisma.enrollment.groupBy({
+        by: ['academyId'],
+        where: { academyId: { in: ids } },
+        _count: { _all: true },
+      }),
+      this.prisma.academyMembership.groupBy({
+        by: ['academyId', 'role'],
+        where: { academyId: { in: ids }, deletedAt: null },
+        _count: { _all: true },
+      }),
+      this.studentCountsBatch(ids),
+      this.ledger.academyRevenueBatch(ids),
+      this.lastActivityBatch(ids),
+    ]);
 
     const courseByTenant = new Map(courseCounts.map((r) => [r.academyId, r._count._all]));
     const publishedByTenant = new Map(publishedCounts.map((r) => [r.academyId, r._count._all]));
@@ -175,27 +190,44 @@ export class AdminAcademiesService {
         currency: true,
         feeType: true,
         feeValue: true,
-        owner: { select: { id: true, fullName: true, email: true, phone: true, role: true, isActive: true } },
+        owner: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            role: true,
+            isActive: true,
+          },
+        },
         domains: { select: { hostname: true, isPrimary: true, verifiedAt: true } },
       },
     });
     if (!academy) throw new NotFoundException('Academy not found');
 
-    const [members, courseCount, publishedCount, enrollmentCount, studentCounts, revenue, lastActivity, flags] =
-      await Promise.all([
-        this.prisma.academyMembership.findMany({
-          where: { academyId, deletedAt: null, role: { not: 'STUDENT' } },
-          orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
-          include: { user: { select: { fullName: true, email: true, avatarUrl: true } } },
-        }),
-        this.prisma.course.count({ where: { academyId } }),
-        this.prisma.course.count({ where: { academyId, status: 'PUBLISHED' } }),
-        this.prisma.enrollment.count({ where: { academyId } }),
-        this.studentCountsBatch([academyId]),
-        this.ledger.academyRevenueBatch([academyId]),
-        this.lastActivityBatch([academyId]),
-        this.flags.listForAcademy(academyId),
-      ]);
+    const [
+      members,
+      courseCount,
+      publishedCount,
+      enrollmentCount,
+      studentCounts,
+      revenue,
+      lastActivity,
+      flags,
+    ] = await Promise.all([
+      this.prisma.academyMembership.findMany({
+        where: { academyId, deletedAt: null, role: { not: 'STUDENT' } },
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+        include: { user: { select: { fullName: true, email: true, avatarUrl: true } } },
+      }),
+      this.prisma.course.count({ where: { academyId } }),
+      this.prisma.course.count({ where: { academyId, status: 'PUBLISHED' } }),
+      this.prisma.enrollment.count({ where: { academyId } }),
+      this.studentCountsBatch([academyId]),
+      this.ledger.academyRevenueBatch([academyId]),
+      this.lastActivityBatch([academyId]),
+      this.flags.listForAcademy(academyId),
+    ]);
 
     const rev = revenue.get(academyId) ?? { netCents: 0, feeCents: 0 };
     return {

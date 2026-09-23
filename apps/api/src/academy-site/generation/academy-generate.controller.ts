@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  NotFoundException,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AcademyContext, CurrentAcademy } from '../../academy/academy-context';
@@ -61,7 +53,10 @@ export class AcademyGenerateController {
   // Cheaper than a full generation, but still AI work — keep a per-user cap.
   @Throttle({ default: { limit: 30, ttl: 3_600_000 } })
   @ApiOperation({ summary: '[staff] Regenerate a single section, keeping the design' })
-  async regenerateSection(@CurrentAcademy() ctx: AcademyContext, @Body() dto: RegenerateSectionDto) {
+  async regenerateSection(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Body() dto: RegenerateSectionDto,
+  ) {
     const job = await this.jobs.enqueue(ctx.academyId, 'SITE_GENERATE', {
       regenerateSectionId: dto.sectionId,
     });

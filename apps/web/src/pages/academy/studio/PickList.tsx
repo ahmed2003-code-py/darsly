@@ -30,8 +30,7 @@ export function PickList({
   const { t } = useTranslation();
   const [adding, setAdding] = useState('');
   const has = (v: string) => value.includes(v);
-  const toggle = (v: string) =>
-    onChange(has(v) ? value.filter((x) => x !== v) : [...value, v]);
+  const toggle = (v: string) => onChange(has(v) ? value.filter((x) => x !== v) : [...value, v]);
 
   // Whatever is selected but not on offer — typed before this control existed,
   // or added by hand just now.

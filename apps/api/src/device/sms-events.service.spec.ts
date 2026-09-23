@@ -7,7 +7,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { SenderRuleLike } from './sms-parser';
 
 const RULES: SenderRuleLike[] = [
-  { brand: 'CIB', matchType: 'CONTAINS', pattern: 'cib', provider: PaymentMethod.BANK_TRANSFER, enabled: true, forwardToBackend: true, priority: 10 },
+  {
+    brand: 'CIB',
+    matchType: 'CONTAINS',
+    pattern: 'cib',
+    provider: PaymentMethod.BANK_TRANSFER,
+    enabled: true,
+    forwardToBackend: true,
+    priority: 10,
+  },
 ];
 
 function p2002(): Prisma.PrismaClientKnownRequestError {
@@ -32,7 +40,9 @@ function makeService(overrides: {
     // The platform's own receiving handles, excluded from sender identities.
     platformPaymentAccount: { findMany: jest.fn().mockResolvedValue([]) },
   } as unknown as PrismaService;
-  const rules = { listEnabled: jest.fn().mockResolvedValue(RULES) } as unknown as SenderRulesService;
+  const rules = {
+    listEnabled: jest.fn().mockResolvedValue(RULES),
+  } as unknown as SenderRulesService;
   const matching = { ingest: overrides.ingest ?? jest.fn() } as unknown as PaymentMatchingService;
   return { service: new SmsEventsService(prisma, rules, matching), prisma, rules, matching };
 }
@@ -47,15 +57,28 @@ const cibDto = {
 describe('SmsEventsService.ingest', () => {
   it('classifies + forwards a configured CIB payment SMS', async () => {
     const create = jest.fn().mockResolvedValue({ id: 'evt1' });
-    const ingest = jest.fn().mockResolvedValue({ eventId: 'pe1', status: 'MATCHED', matchedPaymentId: 'pay1' });
+    const ingest = jest
+      .fn()
+      .mockResolvedValue({ eventId: 'pe1', status: 'MATCHED', matchedPaymentId: 'pay1' });
     const { service, matching } = makeService({ create, ingest });
 
     const res = await service.ingest({ id: 'dev1' }, cibDto);
 
     expect(matching.ingest).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: PaymentMethod.BANK_TRANSFER, amountCents: 500000, reference: '884213', deviceId: 'dev1' }),
+      expect.objectContaining({
+        provider: PaymentMethod.BANK_TRANSFER,
+        amountCents: 500000,
+        reference: '884213',
+        deviceId: 'dev1',
+      }),
     );
-    expect(res).toMatchObject({ status: 'MATCHED', forwarded: true, brand: 'CIB', amountCents: 500000, reference: '884213' });
+    expect(res).toMatchObject({
+      status: 'MATCHED',
+      forwarded: true,
+      brand: 'CIB',
+      amountCents: 500000,
+      reference: '884213',
+    });
   });
 
   it('keeps an unknown sender local-only and never forwards', async () => {
@@ -63,7 +86,10 @@ describe('SmsEventsService.ingest', () => {
     const ingest = jest.fn();
     const { service } = makeService({ create, ingest });
 
-    const res = await service.ingest({ id: 'dev1' }, { ...cibDto, sender: '+201099998888', messageHash: 'h2' });
+    const res = await service.ingest(
+      { id: 'dev1' },
+      { ...cibDto, sender: '+201099998888', messageHash: 'h2' },
+    );
 
     expect(ingest).not.toHaveBeenCalled();
     expect(res).toMatchObject({ status: 'LOCAL_ONLY', forwarded: false, brand: null });
@@ -71,7 +97,15 @@ describe('SmsEventsService.ingest', () => {
 
   it('reports a duplicate of an already-forwarded SMS without re-forwarding', async () => {
     const create = jest.fn().mockRejectedValue(p2002());
-    const findUnique = jest.fn().mockResolvedValue({ id: 'evt1', forwarded: true, brand: 'CIB', provider: PaymentMethod.BANK_TRANSFER, amountCents: 500000, reference: '884213', matchStatus: 'MATCHED' });
+    const findUnique = jest.fn().mockResolvedValue({
+      id: 'evt1',
+      forwarded: true,
+      brand: 'CIB',
+      provider: PaymentMethod.BANK_TRANSFER,
+      amountCents: 500000,
+      reference: '884213',
+      matchStatus: 'MATCHED',
+    });
     const ingest = jest.fn();
     const { service } = makeService({ create, findUnique, ingest });
 
@@ -83,8 +117,18 @@ describe('SmsEventsService.ingest', () => {
 
   it('self-heals: a duplicate that was never forwarded gets forwarded now', async () => {
     const create = jest.fn().mockRejectedValue(p2002());
-    const findUnique = jest.fn().mockResolvedValue({ id: 'evt1', forwarded: false, brand: 'CIB', provider: PaymentMethod.BANK_TRANSFER, amountCents: 500000, reference: '884213', matchStatus: null });
-    const ingest = jest.fn().mockResolvedValue({ eventId: 'pe1', status: 'MATCHED', matchedPaymentId: 'pay1' });
+    const findUnique = jest.fn().mockResolvedValue({
+      id: 'evt1',
+      forwarded: false,
+      brand: 'CIB',
+      provider: PaymentMethod.BANK_TRANSFER,
+      amountCents: 500000,
+      reference: '884213',
+      matchStatus: null,
+    });
+    const ingest = jest
+      .fn()
+      .mockResolvedValue({ eventId: 'pe1', status: 'MATCHED', matchedPaymentId: 'pay1' });
     const { service } = makeService({ create, findUnique, ingest });
 
     const res = await service.ingest({ id: 'dev1' }, cibDto);

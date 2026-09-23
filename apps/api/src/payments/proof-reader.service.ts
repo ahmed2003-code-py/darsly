@@ -58,29 +58,62 @@ const SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'isReceipt', 'amountCents', 'sentAtText', 'sentAtLocal', 'recipientHandle',
-    'recipientName', 'senderHandle', 'senderName', 'reference', 'issuer', 'concerns',
+    'isReceipt',
+    'amountCents',
+    'sentAtText',
+    'sentAtLocal',
+    'recipientHandle',
+    'recipientName',
+    'senderHandle',
+    'senderName',
+    'reference',
+    'issuer',
+    'concerns',
   ],
   properties: {
-    isReceipt: { type: 'boolean', description: 'True only if this image is a money-transfer receipt.' },
+    isReceipt: {
+      type: 'boolean',
+      description: 'True only if this image is a money-transfer receipt.',
+    },
     amountCents: {
       type: ['integer', 'null'],
-      description: 'The total transferred, in piasters (EGP × 100). 2,000 EGP is 200000. Null if not printed.',
+      description:
+        'The total transferred, in piasters (EGP × 100). 2,000 EGP is 200000. Null if not printed.',
     },
-    sentAtText: { type: ['string', 'null'], description: 'The date and time exactly as printed, verbatim.' },
+    sentAtText: {
+      type: ['string', 'null'],
+      description: 'The date and time exactly as printed, verbatim.',
+    },
     sentAtLocal: {
       type: ['string', 'null'],
-      description: 'The same moment as YYYY-MM-DDTHH:mm in 24-hour local time, no timezone. Null if no time is printed.',
+      description:
+        'The same moment as YYYY-MM-DDTHH:mm in 24-hour local time, no timezone. Null if no time is printed.',
     },
     recipientHandle: {
       type: ['string', 'null'],
-      description: 'The account the money was sent TO (under «إلى» / "to"): an InstaPay address, phone number, or account number.',
+      description:
+        'The account the money was sent TO (under «إلى» / "to"): an InstaPay address, phone number, or account number.',
     },
-    recipientName: { type: ['string', 'null'], description: 'The recipient name as printed, masking included.' },
-    senderHandle: { type: ['string', 'null'], description: 'The account the money was sent FROM (under «من» / "from").' },
-    senderName: { type: ['string', 'null'], description: 'The sender name as printed, in its original script.' },
-    reference: { type: ['string', 'null'], description: 'The receipt reference («المرجع» / "reference"), as printed.' },
-    issuer: { type: ['string', 'null'], description: 'The app or bank that issued the receipt, e.g. InstaPay, QNB, Vodafone Cash.' },
+    recipientName: {
+      type: ['string', 'null'],
+      description: 'The recipient name as printed, masking included.',
+    },
+    senderHandle: {
+      type: ['string', 'null'],
+      description: 'The account the money was sent FROM (under «من» / "from").',
+    },
+    senderName: {
+      type: ['string', 'null'],
+      description: 'The sender name as printed, in its original script.',
+    },
+    reference: {
+      type: ['string', 'null'],
+      description: 'The receipt reference («المرجع» / "reference"), as printed.',
+    },
+    issuer: {
+      type: ['string', 'null'],
+      description: 'The app or bank that issued the receipt, e.g. InstaPay, QNB, Vodafone Cash.',
+    },
     concerns: {
       type: 'array',
       items: { type: 'string' },
@@ -121,7 +154,10 @@ export class ProofReaderService {
     return Promise.race([
       p,
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('reading the receipt took too long')), ProofReaderService.DEADLINE_MS).unref?.(),
+        setTimeout(
+          () => reject(new Error('reading the receipt took too long')),
+          ProofReaderService.DEADLINE_MS,
+        ).unref?.(),
       ),
     ]);
   }
@@ -134,18 +170,20 @@ export class ProofReaderService {
   async read(imageDataUrl: string): Promise<ProofReading | null> {
     if (!imageDataUrl?.startsWith('data:image/')) return null;
     try {
-      const res = await this.withDeadline(this.ai.completeStructured<ProofReading>({
-        system: SYSTEM,
-        messages: [
-          {
-            role: 'user',
-            content: 'Read this transfer receipt and report every field you can see.',
-            images: [imageDataUrl],
-          },
-        ],
-        schemaName: 'transfer_receipt',
-        schema: SCHEMA as unknown as Record<string, unknown>,
-      }));
+      const res = await this.withDeadline(
+        this.ai.completeStructured<ProofReading>({
+          system: SYSTEM,
+          messages: [
+            {
+              role: 'user',
+              content: 'Read this transfer receipt and report every field you can see.',
+              images: [imageDataUrl],
+            },
+          ],
+          schemaName: 'transfer_receipt',
+          schema: SCHEMA as unknown as Record<string, unknown>,
+        }),
+      );
       return res.data;
     } catch (e) {
       // Deliberately swallowed: this is corroboration, not a precondition.

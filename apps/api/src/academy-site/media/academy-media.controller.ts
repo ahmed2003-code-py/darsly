@@ -41,7 +41,9 @@ export class AcademyMediaController {
   @Post('academy/media')
   @AcademyStaff('academy.manage')
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: '[staff] Upload an academy image or PROMO clip (multipart: file, kind)' })
+  @ApiOperation({
+    summary: '[staff] Upload an academy image or PROMO clip (multipart: file, kind)',
+  })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -53,7 +55,10 @@ export class AcademyMediaController {
       fileFilter: (_req, file, cb) =>
         IMAGE_MIME.test(file.mimetype) || VIDEO_MIME.test(file.mimetype)
           ? cb(null, true)
-          : cb(new BadRequestException('Only PNG, JPEG, WebP images or MP4 video are accepted'), false),
+          : cb(
+              new BadRequestException('Only PNG, JPEG, WebP images or MP4 video are accepted'),
+              false,
+            ),
     }),
   )
   async upload(

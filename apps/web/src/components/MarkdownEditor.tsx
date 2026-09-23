@@ -138,7 +138,10 @@ export function MarkdownEditor({
       {/* The title field counts its characters and this one did not, so the
           only sign of the limit was typing stopping for no stated reason. */}
       {maxLength != null && !preview && (
-        <p className={`mt-1 text-end text-xs tabular-nums ${over ? 'text-error' : 'text-outline'}`} dir="ltr">
+        <p
+          className={`mt-1 text-end text-xs tabular-nums ${over ? 'text-error' : 'text-outline'}`}
+          dir="ltr"
+        >
           {value.length}/{maxLength}
         </p>
       )}

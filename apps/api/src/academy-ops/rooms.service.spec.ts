@@ -2,7 +2,15 @@ import { NotFoundException } from '@nestjs/common';
 import { RoomsService } from './rooms.service';
 
 function ctx(overrides: Partial<{ academyId: string; userId: string }> = {}) {
-  return { academyId: 'a1', userId: 'owner1', role: 'OWNER', status: 'ACTIVE', isPlatformAdmin: false, can: () => true, ...overrides } as any;
+  return {
+    academyId: 'a1',
+    userId: 'owner1',
+    role: 'OWNER',
+    status: 'ACTIVE',
+    isPlatformAdmin: false,
+    can: () => true,
+    ...overrides,
+  } as any;
 }
 
 describe('RoomsService', () => {
@@ -11,14 +19,21 @@ describe('RoomsService', () => {
     const audit: any = { log: jest.fn() };
     const svc = new RoomsService(prisma, audit);
     await svc.list(ctx());
-    expect(prisma.room.findMany).toHaveBeenCalledWith({ where: { academyId: 'a1' }, orderBy: { createdAt: 'desc' } });
+    expect(prisma.room.findMany).toHaveBeenCalledWith({
+      where: { academyId: 'a1' },
+      orderBy: { createdAt: 'desc' },
+    });
   });
 
   it('404s updating a room from a different academy — never leaks it', async () => {
-    const prisma: any = { room: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() } };
+    const prisma: any = {
+      room: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
+    };
     const audit: any = { log: jest.fn() };
     const svc = new RoomsService(prisma, audit);
-    await expect(svc.update(ctx(), 'foreign-room', { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.update(ctx(), 'foreign-room', { name: 'x' })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     expect(prisma.room.update).not.toHaveBeenCalled();
   });
 
@@ -27,6 +42,8 @@ describe('RoomsService', () => {
     const audit: any = { log: jest.fn() };
     const svc = new RoomsService(prisma, audit);
     await svc.create(ctx(), { name: 'Room A' });
-    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'room.create', academyId: 'a1' }));
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'room.create', academyId: 'a1' }),
+    );
   });
 });

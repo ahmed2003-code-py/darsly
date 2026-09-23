@@ -28,7 +28,8 @@ export default function QuizTakerPage() {
   });
 
   const submit = useMutation({
-    mutationFn: async () => (await api.post(`/lessons/${lessonId}/quiz/attempts`, { answers })).data,
+    mutationFn: async () =>
+      (await api.post(`/lessons/${lessonId}/quiz/attempts`, { answers })).data,
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['quiz', lessonId] });
@@ -72,7 +73,6 @@ export default function QuizTakerPage() {
     setAnswers(prior);
   }, [quiz?.lastAttempt?.answers, retaking]);
 
-
   /**
    * The countdown on a timed paper.
    *
@@ -105,7 +105,12 @@ export default function QuizTakerPage() {
     if (Object.keys(answers).length) submit.mutate();
   }, [msLeft, done, submit, answers]);
 
-  if (isLoading) return <div className="grid place-items-center py-24"><Spinner /></div>;
+  if (isLoading)
+    return (
+      <div className="grid place-items-center py-24">
+        <Spinner />
+      </div>
+    );
   if (!quiz) return null;
 
   const reviewById: Record<string, any> = {};
@@ -119,8 +124,12 @@ export default function QuizTakerPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8 sm:px-8">
-      <Link to={`/course/${courseId}`} className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline">
-        <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>{t('assess.take.backCourse')}
+      <Link
+        to={`/course/${courseId}`}
+        className="mb-2 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+      >
+        <span className="material-symbols-outlined text-base rtl:-scale-x-100">arrow_back</span>
+        {t('assess.take.backCourse')}
       </Link>
       <div className="mb-6 flex items-center gap-3">
         <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary-fixed text-on-primary-fixed">
@@ -128,26 +137,40 @@ export default function QuizTakerPage() {
         </span>
         <div>
           <h1 className="font-heading text-2xl font-extrabold">{t('assess.take.quizTitle')}</h1>
-          <p className="text-sm text-outline">{t('assess.take.passNeeded', { pct: quiz.passingScore })}</p>
+          <p className="text-sm text-outline">
+            {t('assess.take.passNeeded', { pct: quiz.passingScore })}
+          </p>
         </div>
       </div>
 
       {/* Result banner */}
       {done && (
-        <div className={`card mb-6 text-center ${outcome.passed ? 'border-secondary' : outcome.needsManualGrading ? 'border-warn' : 'border-error'} border-2`}>
+        <div
+          className={`card mb-6 text-center ${outcome.passed ? 'border-secondary' : outcome.needsManualGrading ? 'border-warn' : 'border-error'} border-2`}
+        >
           {outcome.needsManualGrading ? (
             <>
-              <span className="material-symbols-outlined mb-1 text-4xl text-warn">hourglass_top</span>
+              <span className="material-symbols-outlined mb-1 text-4xl text-warn">
+                hourglass_top
+              </span>
               <p className="font-heading text-lg font-bold">{t('assess.take.pendingManual')}</p>
               <p className="text-sm text-outline">{t('assess.take.pendingManualHint')}</p>
             </>
           ) : (
             <>
-              <p className={`font-heading text-4xl font-extrabold ${outcome.passed ? 'text-secondary' : 'text-error'}`}>{outcome.scorePct}%</p>
-              <p className="mt-1 font-bold">{outcome.passed ? t('assess.take.passed') : t('assess.take.failed')}</p>
+              <p
+                className={`font-heading text-4xl font-extrabold ${outcome.passed ? 'text-secondary' : 'text-error'}`}
+              >
+                {outcome.scorePct}%
+              </p>
+              <p className="mt-1 font-bold">
+                {outcome.passed ? t('assess.take.passed') : t('assess.take.failed')}
+              </p>
               {/* Said plainly, because arriving at a paper you have already sat
                   and being shown a blank one is what this replaces. */}
-              {!result && <p className="mt-1 text-sm text-outline">{t('assess.take.alreadySat')}</p>}
+              {!result && (
+                <p className="mt-1 text-sm text-outline">{t('assess.take.alreadySat')}</p>
+              )}
             </>
           )}
 
@@ -157,10 +180,15 @@ export default function QuizTakerPage() {
               advertises a second. */}
           {quiz.canSitAgain && !outcome.needsManualGrading && (
             <div className="mt-4">
-              <button className="btn-ghost" onClick={() => {
-                restored.current = true; // a retake starts from a blank paper
-                setRetaking(true); setResult(null); setAnswers({});
-              }}>
+              <button
+                className="btn-ghost"
+                onClick={() => {
+                  restored.current = true; // a retake starts from a blank paper
+                  setRetaking(true);
+                  setResult(null);
+                  setAnswers({});
+                }}
+              >
                 <span className="material-symbols-outlined text-base">refresh</span>
                 {t('assess.take.retake')}
               </button>
@@ -186,9 +214,11 @@ export default function QuizTakerPage() {
       {/* The clock. Turns urgent under a minute, because a countdown nobody
           notices is the same as no countdown. */}
       {!done && msLeft != null && (
-        <div className={`card mb-6 flex items-center justify-center gap-2 border-2 ${
-          msLeft <= 60_000 ? 'border-error text-error' : 'border-outline-variant/60'
-        }`}>
+        <div
+          className={`card mb-6 flex items-center justify-center gap-2 border-2 ${
+            msLeft <= 60_000 ? 'border-error text-error' : 'border-outline-variant/60'
+          }`}
+        >
           <span className="material-symbols-outlined">timer</span>
           <span className="font-heading text-2xl font-extrabold tabular-nums">{clock(msLeft)}</span>
           <span className="text-sm text-on-surface-variant">{t('assess.take.timeLeft')}</span>
@@ -201,9 +231,13 @@ export default function QuizTakerPage() {
           <span className="text-sm text-on-surface-variant">{t('assess.take.lastAttempt')}</span>
           {/* A score of null is a paper still being marked, not a score of
               nothing — it used to render as a bare "%". */}
-          {quiz.lastAttempt.needsManualGrading || quiz.lastAttempt.scorePct == null
-            ? <Badge tone="warn">{t('assess.q.needsGrading')}</Badge>
-            : <Badge tone={quiz.lastAttempt.passed ? 'teal' : 'error'}>{quiz.lastAttempt.scorePct}%</Badge>}
+          {quiz.lastAttempt.needsManualGrading || quiz.lastAttempt.scorePct == null ? (
+            <Badge tone="warn">{t('assess.q.needsGrading')}</Badge>
+          ) : (
+            <Badge tone={quiz.lastAttempt.passed ? 'teal' : 'error'}>
+              {quiz.lastAttempt.scorePct}%
+            </Badge>
+          )}
         </div>
       )}
 
@@ -213,14 +247,22 @@ export default function QuizTakerPage() {
           return (
             <div key={q.id} className="card">
               <p className="mb-3 font-bold" dir="auto">
-                <span className="me-1 text-primary">{i + 1}.</span>{q.prompt}
-                <span className="ms-2 text-xs font-normal text-outline">({t('assess.q.pointsN', { n: q.points })})</span>
+                <span className="me-1 text-primary">{i + 1}.</span>
+                {q.prompt}
+                <span className="ms-2 text-xs font-normal text-outline">
+                  ({t('assess.q.pointsN', { n: q.points })})
+                </span>
               </p>
 
               {q.type === 'SHORT_ANSWER' ? (
-                <textarea className="input min-h-[4rem]" dir="auto" disabled={done}
-                  value={answers[q.id] ?? ''} onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
-                  placeholder={t('assess.take.yourAnswer')} />
+                <textarea
+                  className="input min-h-[4rem]"
+                  dir="auto"
+                  disabled={done}
+                  value={answers[q.id] ?? ''}
+                  onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                  placeholder={t('assess.take.yourAnswer')}
+                />
               ) : (
                 <div className="space-y-2">
                   {/* A question may ask for more than one. Saying so is the
@@ -235,7 +277,8 @@ export default function QuizTakerPage() {
                     const picked = answers[q.id];
                     const many = (q.maxSelections ?? 1) > 1;
                     const chosen = Array.isArray(picked) ? picked.includes(o.id) : picked === o.id;
-                    const key: string[] = rev?.correctOptionIds ?? (rev?.correctOptionId ? [rev.correctOptionId] : []);
+                    const key: string[] =
+                      rev?.correctOptionIds ?? (rev?.correctOptionId ? [rev.correctOptionId] : []);
                     const isCorrect = done && key.includes(o.id);
                     const isWrongChosen = done && chosen && !isCorrect;
                     const toggle = () => {
@@ -243,21 +286,38 @@ export default function QuizTakerPage() {
                       const cur = Array.isArray(picked) ? picked : picked ? [picked] : [];
                       const next = cur.includes(o.id)
                         ? cur.filter((x) => x !== o.id)
-                        // Past the limit the oldest choice makes way, so the
-                        // student is never stuck having to untick first.
-                        : [...cur, o.id].slice(-q.maxSelections);
+                        : // Past the limit the oldest choice makes way, so the
+                          // student is never stuck having to untick first.
+                          [...cur, o.id].slice(-q.maxSelections);
                       setAnswers((a) => ({ ...a, [q.id]: next }));
                     };
                     return (
-                      <label key={o.id}
+                      <label
+                        key={o.id}
                         className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
-                          isCorrect ? 'border-secondary bg-secondary-container/40'
-                          : isWrongChosen ? 'border-error bg-error-container/30'
-                          : chosen ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
-                        <input type={many ? 'checkbox' : 'radio'} className="accent-primary" name={q.id}
-                          disabled={done} checked={chosen} onChange={toggle} />
+                          isCorrect
+                            ? 'border-secondary bg-secondary-container/40'
+                            : isWrongChosen
+                              ? 'border-error bg-error-container/30'
+                              : chosen
+                                ? 'border-primary bg-primary-fixed/40'
+                                : 'border-outline-variant/50'
+                        }`}
+                      >
+                        <input
+                          type={many ? 'checkbox' : 'radio'}
+                          className="accent-primary"
+                          name={q.id}
+                          disabled={done}
+                          checked={chosen}
+                          onChange={toggle}
+                        />
                         <span dir="auto">{o.text}</span>
-                        {isCorrect && <span className="material-symbols-outlined ms-auto text-base text-secondary">check_circle</span>}
+                        {isCorrect && (
+                          <span className="material-symbols-outlined ms-auto text-base text-secondary">
+                            check_circle
+                          </span>
+                        )}
                       </label>
                     );
                   })}
@@ -268,36 +328,56 @@ export default function QuizTakerPage() {
                   essay is not something a student can learn from or argue
                   with, and the teacher can still regrade it. */}
               {done && outcome.aiFeedback?.[q.id] && (
-                <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${
-                  outcome.aiFeedback[q.id].awarded
-                    ? 'bg-secondary-container/40 text-on-secondary-container'
-                    : 'bg-error-container/40 text-on-error-container'
-                }`} dir="auto">
+                <p
+                  className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+                    outcome.aiFeedback[q.id].awarded
+                      ? 'bg-secondary-container/40 text-on-secondary-container'
+                      : 'bg-error-container/40 text-on-error-container'
+                  }`}
+                  dir="auto"
+                >
                   <span className="font-bold">
-                    {t(outcome.aiFeedback[q.id].awarded ? 'assess.take.aiAwarded' : 'assess.take.aiNotAwarded', {
-                      pct: outcome.aiFeedback[q.id].similarityPct,
-                    })}
+                    {t(
+                      outcome.aiFeedback[q.id].awarded
+                        ? 'assess.take.aiAwarded'
+                        : 'assess.take.aiNotAwarded',
+                      {
+                        pct: outcome.aiFeedback[q.id].similarityPct,
+                      },
+                    )}
                   </span>
-                  {outcome.aiFeedback[q.id].reason && <span className="block">{outcome.aiFeedback[q.id].reason}</span>}
+                  {outcome.aiFeedback[q.id].reason && (
+                    <span className="block">{outcome.aiFeedback[q.id].reason}</span>
+                  )}
                 </p>
               )}
 
               {done && rev?.modelAnswer && (
-                <p className="mt-2 rounded-lg border border-secondary/30 bg-secondary-container/25 px-3 py-2 text-xs" dir="auto">
-                  <span className="font-bold">{t('assess.q.modelAnswer')}: </span>{rev.modelAnswer}
+                <p
+                  className="mt-2 rounded-lg border border-secondary/30 bg-secondary-container/25 px-3 py-2 text-xs"
+                  dir="auto"
+                >
+                  <span className="font-bold">{t('assess.q.modelAnswer')}: </span>
+                  {rev.modelAnswer}
                 </p>
               )}
 
               {done && rev?.explanation && (
-                <p className="mt-2 rounded-lg bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant" dir="auto">
-                  <span className="font-bold">{t('assess.take.explanation')}: </span>{rev.explanation}
+                <p
+                  className="mt-2 rounded-lg bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant"
+                  dir="auto"
+                >
+                  <span className="font-bold">{t('assess.take.explanation')}: </span>
+                  {rev.explanation}
                 </p>
               )}
 
               {/* The one thing a student can do about a key with the wrong
                   letter in it. Only once the paper is sat and only on a keyed
                   question — there is nothing to be wrong about in an essay. */}
-              {done && q.type !== 'SHORT_ANSWER' && lessonId && <ReportQuestion lessonId={lessonId} questionId={q.id} />}
+              {done && q.type !== 'SHORT_ANSWER' && lessonId && (
+                <ReportQuestion lessonId={lessonId} questionId={q.id} />
+              )}
             </div>
           );
         })}
@@ -305,12 +385,17 @@ export default function QuizTakerPage() {
 
       <ErrorNote error={submit.error} />
       {!done ? (
-        <button className="btn-primary mt-6 w-full" disabled={submit.isPending || answered < quiz.questions.length}
-          onClick={() => submit.mutate()}>
+        <button
+          className="btn-primary mt-6 w-full"
+          disabled={submit.isPending || answered < quiz.questions.length}
+          onClick={() => submit.mutate()}
+        >
           {submit.isPending ? t('common.saving') : t('assess.take.submit')}
         </button>
       ) : (
-        <Link to={`/course/${courseId}`} className="btn-primary mt-6 block w-full text-center">{t('assess.take.backCourse')}</Link>
+        <Link to={`/course/${courseId}`} className="btn-primary mt-6 block w-full text-center">
+          {t('assess.take.backCourse')}
+        </Link>
       )}
     </div>
   );
@@ -332,9 +417,11 @@ function ReportQuestion({ lessonId, questionId }: { lessonId: string; questionId
   const [note, setNote] = useState('');
   const send = useMutation({
     mutationFn: async () =>
-      (await api.post(`/lessons/${lessonId}/quiz/questions/${questionId}/report`, {
-        note: note.trim() || undefined,
-      })).data,
+      (
+        await api.post(`/lessons/${lessonId}/quiz/questions/${questionId}/report`, {
+          note: note.trim() || undefined,
+        })
+      ).data,
   });
 
   if (send.isSuccess) {
@@ -363,10 +450,16 @@ function ReportQuestion({ lessonId, questionId }: { lessonId: string; questionId
         placeholder={t('grading.reportNotePh')}
       />
       <div className="mt-2 flex gap-2">
-        <button className="btn-primary py-1.5 text-xs" disabled={send.isPending} onClick={() => send.mutate()}>
+        <button
+          className="btn-primary py-1.5 text-xs"
+          disabled={send.isPending}
+          onClick={() => send.mutate()}
+        >
           {send.isPending ? t('common.saving') : t('grading.send')}
         </button>
-        <button className="btn-ghost py-1.5 text-xs" onClick={() => setOpen(false)}>{t('common.cancel')}</button>
+        <button className="btn-ghost py-1.5 text-xs" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </button>
       </div>
       <ErrorNote error={send.error} />
     </div>

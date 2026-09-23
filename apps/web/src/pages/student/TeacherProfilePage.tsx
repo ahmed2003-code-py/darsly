@@ -135,7 +135,9 @@ export default function TeacherProfilePage() {
               </div>
               <div className="flex flex-1 flex-col p-5">
                 <h3 className="mb-1 font-heading text-lg font-bold">{c.title}</h3>
-                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">{stripMarkdown(c.description)}</p>
+                <p className="mb-3 line-clamp-2 flex-1 text-sm text-on-surface-variant">
+                  {stripMarkdown(c.description)}
+                </p>
                 <div className="mb-3 flex items-center gap-4 text-xs text-outline">
                   <span className="flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">smart_display</span>
@@ -146,14 +148,19 @@ export default function TeacherProfilePage() {
                     {duration(c.totalDurationSec)}
                   </span>
                   {c.freePreviewCount > 0 && (
-                    <Badge tone="teal">{t('teacherProfile.freePreviewCount', { count: c.freePreviewCount })}</Badge>
+                    <Badge tone="teal">
+                      {t('teacherProfile.freePreviewCount', { count: c.freePreviewCount })}
+                    </Badge>
                   )}
                 </div>
                 <div className="flex items-center justify-between gap-2 border-t border-outline-variant/50 pt-3">
                   <p className="font-heading text-xl font-extrabold">
                     {egp(c.priceCents)}
                     {c.pricingModel === 'MONTHLY_SUBSCRIPTION' && (
-                      <span className="text-xs font-normal text-outline"> / {t('course.perMonth')}</span>
+                      <span className="text-xs font-normal text-outline">
+                        {' '}
+                        / {t('course.perMonth')}
+                      </span>
                     )}
                   </p>
                   <Link to={`/course/${c.id}`} className="btn-primary px-4 py-2 text-sm">

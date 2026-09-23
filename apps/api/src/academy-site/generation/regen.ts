@@ -45,9 +45,16 @@ export interface SectionSpec {
 export const SECTION_SPECS: Partial<Record<SiteBlock['type'], SectionSpec>> = {
   hero: {
     schemaName: 'regen_hero',
-    schema: obj({ headline: LT, subheadline: LT, ctaLabel: LT }, ['headline', 'subheadline', 'ctaLabel']),
+    schema: obj({ headline: LT, subheadline: LT, ctaLabel: LT }, [
+      'headline',
+      'subheadline',
+      'ctaLabel',
+    ]),
     shape: '{ headline, subheadline, ctaLabel }',
-    current: (b) => (b.type === 'hero' ? { headline: b.headline, subheadline: b.subheadline, ctaLabel: b.ctaLabel } : {}),
+    current: (b) =>
+      b.type === 'hero'
+        ? { headline: b.headline, subheadline: b.subheadline, ctaLabel: b.ctaLabel }
+        : {},
     apply: (b, d) => {
       if (b.type !== 'hero') return;
       const x = d as { headline: unknown; subheadline: unknown; ctaLabel: unknown };

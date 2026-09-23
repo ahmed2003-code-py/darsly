@@ -26,10 +26,20 @@ describe('AuthService.activationPreview', () => {
   it('looks the token up by its hash and reveals only name/email/center', async () => {
     const prisma = makePrisma();
     prisma.academyActivationToken.findUnique.mockResolvedValue({
-      expiresAt: future, usedAt: null, revokedAt: null, user: { fullName: 'A', email: 'a@x' }, academy: { name: 'C' },
+      expiresAt: future,
+      usedAt: null,
+      revokedAt: null,
+      user: { fullName: 'A', email: 'a@x' },
+      academy: { name: 'C' },
     });
-    await expect(svc(prisma).activationPreview(RAW)).resolves.toEqual({ fullName: 'A', email: 'a@x', academyName: 'C' });
-    expect(prisma.academyActivationToken.findUnique.mock.calls[0][0].where).toEqual({ tokenHash: sha(RAW) });
+    await expect(svc(prisma).activationPreview(RAW)).resolves.toEqual({
+      fullName: 'A',
+      email: 'a@x',
+      academyName: 'C',
+    });
+    expect(prisma.academyActivationToken.findUnique.mock.calls[0][0].where).toEqual({
+      tokenHash: sha(RAW),
+    });
   });
 
   it('unknown token → 404', async () => {
@@ -44,7 +54,11 @@ describe('AuthService.activationPreview', () => {
     ['revoked', { expiresAt: future, usedAt: null, revokedAt: past }],
   ])('%s token → 410', async (_l, row) => {
     const prisma = makePrisma();
-    prisma.academyActivationToken.findUnique.mockResolvedValue({ ...row, user: { fullName: 'A', email: null }, academy: { name: 'C' } });
+    prisma.academyActivationToken.findUnique.mockResolvedValue({
+      ...row,
+      user: { fullName: 'A', email: null },
+      academy: { name: 'C' },
+    });
     await expect(svc(prisma).activationPreview(RAW)).rejects.toBeInstanceOf(GoneException);
   });
 });
@@ -53,20 +67,37 @@ describe('AuthService.activateAccount', () => {
   it('claims the token atomically, then activates exactly the user/academy the token was issued for', async () => {
     const prisma = makePrisma();
     prisma.academyActivationToken.updateMany.mockResolvedValue({ count: 1 });
-    await expect(svc(prisma).activateAccount({ token: RAW, password: 'Passw0rd!' })).resolves.toEqual({ ok: true });
+    await expect(
+      svc(prisma).activateAccount({ token: RAW, password: 'Passw0rd!' }),
+    ).resolves.toEqual({ ok: true });
     const claim = prisma.academyActivationToken.updateMany.mock.calls[0][0];
     expect(claim.where).toMatchObject({ tokenHash: sha(RAW), usedAt: null, revokedAt: null });
     expect(claim.where.expiresAt.gt).toBeInstanceOf(Date);
-    expect(prisma.user.update.mock.calls[0][0]).toMatchObject({ where: { id: 'u1' }, data: { isActive: true } });
+    expect(prisma.user.update.mock.calls[0][0]).toMatchObject({
+      where: { id: 'u1' },
+      data: { isActive: true },
+    });
     expect(prisma.user.update.mock.calls[0][0].data.passwordHash).toMatch(/^\$argon2/);
-    expect(prisma.academyMembership.updateMany.mock.calls[0][0].where).toEqual({ userId: 'u1', academyId: 'c1', status: 'INVITED' });
-    expect(prisma.academy.updateMany.mock.calls[0][0].where).toEqual({ id: 'c1', status: 'PENDING' });
+    expect(prisma.academyMembership.updateMany.mock.calls[0][0].where).toEqual({
+      userId: 'u1',
+      academyId: 'c1',
+      status: 'INVITED',
+    });
+    expect(prisma.academy.updateMany.mock.calls[0][0].where).toEqual({
+      id: 'c1',
+      status: 'PENDING',
+    });
   });
 
   it('the identity it unlocks comes from the row, never from the request', async () => {
     const prisma = makePrisma();
     prisma.academyActivationToken.updateMany.mockResolvedValue({ count: 1 });
-    await svc(prisma).activateAccount({ token: RAW, password: 'Passw0rd!', userId: 'attacker', academyId: 'other' } as any);
+    await svc(prisma).activateAccount({
+      token: RAW,
+      password: 'Passw0rd!',
+      userId: 'attacker',
+      academyId: 'other',
+    } as any);
     expect(prisma.user.update.mock.calls[0][0].where).toEqual({ id: 'u1' });
     expect(prisma.academy.updateMany.mock.calls[0][0].where.id).toBe('c1');
   });
@@ -74,7 +105,9 @@ describe('AuthService.activateAccount', () => {
   it('a second redemption (replay / lost race) finds nothing to claim → 410, and touches nothing', async () => {
     const prisma = makePrisma();
     prisma.academyActivationToken.updateMany.mockResolvedValue({ count: 0 });
-    await expect(svc(prisma).activateAccount({ token: RAW, password: 'Passw0rd!' })).rejects.toBeInstanceOf(GoneException);
+    await expect(
+      svc(prisma).activateAccount({ token: RAW, password: 'Passw0rd!' }),
+    ).rejects.toBeInstanceOf(GoneException);
     expect(prisma.user.update).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

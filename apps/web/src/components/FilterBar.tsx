@@ -85,11 +85,7 @@ export function FilterBar({
         </label>
 
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            onClick={onOpen}
-            className="btn-secondary h-12 shrink-0"
-            aria-haspopup="dialog"
-          >
+          <button onClick={onOpen} className="btn-secondary h-12 shrink-0" aria-haspopup="dialog">
             <span className="material-symbols-outlined text-[20px]">tune</span>
             {t('filters.button')}
             {activeCount > 0 && (
@@ -105,7 +101,9 @@ export function FilterBar({
             aria-label={sortLabel}
           >
             {sorts.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
             ))}
           </select>
         </div>
@@ -148,7 +146,10 @@ export function FilterBar({
                 <span className="material-symbols-outlined text-[14px]">close</span>
               </m.button>
             ))}
-            <button className="text-xs font-semibold text-primary hover:underline" onClick={onClear}>
+            <button
+              className="text-xs font-semibold text-primary hover:underline"
+              onClick={onClear}
+            >
               {t('filters.clear')}
             </button>
           </m.div>
@@ -158,7 +159,15 @@ export function FilterBar({
   );
 }
 
-function ChipButton({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
+function ChipButton({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   const reduce = useReducedMotion();
   return (
     <m.button
@@ -241,7 +250,9 @@ export function FilterSheet({
                 <span className="material-symbols-outlined text-[20px]">tune</span>
                 {t('filters.button')}
                 {count > 0 && (
-                  <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-on-primary">{count}</span>
+                  <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-on-primary">
+                    {count}
+                  </span>
                 )}
               </h2>
               <button

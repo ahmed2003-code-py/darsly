@@ -1,4 +1,14 @@
-import { ArrayMaxSize, IsArray, IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { EGY_PHONE_REGEX } from '../../auth/dto/auth.dto';
 
 const THEME_ID = /^(preset|academy|cosmetic):[A-Za-z0-9_-]{1,64}$/;
@@ -8,7 +18,9 @@ export class CreateCenterDto {
   @IsOptional() @IsString() @MaxLength(120) slug?: string;
   @IsString() @MinLength(2) @MaxLength(120) adminName: string;
   @IsEmail() adminEmail: string;
-  @IsOptional() @Matches(EGY_PHONE_REGEX, { message: 'Invalid Egyptian mobile number' }) adminPhone?: string;
+  @IsOptional()
+  @Matches(EGY_PHONE_REGEX, { message: 'Invalid Egyptian mobile number' })
+  adminPhone?: string;
   /**
    * The looks this Center may choose from in its own Studio. Set here because
    * this is the screen where a Center's terms are decided — leaving it to a

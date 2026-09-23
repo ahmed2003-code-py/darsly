@@ -162,7 +162,9 @@ export default function CourseBuilderPage() {
     refetchInterval: (q) => {
       const c = q.state.data as any;
       const pending = c?.units?.some((u: any) =>
-        u.lessons.some((l: any) => l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status)),
+        u.lessons.some(
+          (l: any) => l.videoAsset && ['UPLOADING', 'PROCESSING'].includes(l.videoAsset.status),
+        ),
       );
       if (!pending) return false;
       // Backed off while a file is going up. This poll watches transcoding,
@@ -221,7 +223,10 @@ export default function CourseBuilderPage() {
       if (!intoNewDefaultUnit) return prev;
       return {
         ...prev,
-        units: [...prev.units, { id: lesson.unitId, title: '', isDefault: true, lessons: [lesson] }],
+        units: [
+          ...prev.units,
+          { id: lesson.unitId, title: '', isDefault: true, lessons: [lesson] },
+        ],
       };
     });
   };
@@ -523,12 +528,17 @@ export default function CourseBuilderPage() {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await api.post<PlaybackTicket>('/playback/sessions', { lessonId: selectedLessonId });
+        const { data } = await api.post<PlaybackTicket>('/playback/sessions', {
+          lessonId: selectedLessonId,
+        });
         if (cancelled) return;
         previewSessionRef.current = data.playbackSessionId;
         setPreviewTicket(data);
       } catch (e: any) {
-        if (!cancelled) setPreviewError(e.response?.data?.message?.toString() ?? t('teacher.builder.previewError'));
+        if (!cancelled)
+          setPreviewError(
+            e.response?.data?.message?.toString() ?? t('teacher.builder.previewError'),
+          );
       }
     })();
     return () => {
@@ -643,7 +653,9 @@ export default function CourseBuilderPage() {
   useEffect(() => {
     if (!course || !selectedLessonId || scrolledFor.current === selectedLessonId) return;
     scrolledFor.current = selectedLessonId;
-    requestAnimationFrame(() => panelRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    requestAnimationFrame(() =>
+      panelRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+    );
   }, [course, selectedLessonId]);
 
   if (isLoading || !course) return <Spinner />;
@@ -689,7 +701,9 @@ export default function CourseBuilderPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-bold">{t('teacher.builder.descLabel')}</label>
+            <label className="mb-1.5 block text-sm font-bold">
+              {t('teacher.builder.descLabel')}
+            </label>
             <MarkdownEditor
               id="lesson-description"
               minHeight="min-h-20"
@@ -738,7 +752,10 @@ export default function CourseBuilderPage() {
                 </p>
                 <VideoActions
                   onReplace={() => videoInput.current?.click()}
-                  onDelete={async () => (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) && removeVideo.mutate()}
+                  onDelete={async () =>
+                    (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
+                    removeVideo.mutate()
+                  }
                   busy={removeVideo.isPending}
                   t={t}
                 />
@@ -750,7 +767,10 @@ export default function CourseBuilderPage() {
                     an honest sweep — see UploadPanel. */}
                 <UploadPanel phase="working" note={t('teacher.builder.videoProcessing')} />
                 <VideoActions
-                  onDelete={async () => (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) && removeVideo.mutate()}
+                  onDelete={async () =>
+                    (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
+                    removeVideo.mutate()
+                  }
                   busy={removeVideo.isPending}
                   t={t}
                 />
@@ -772,13 +792,19 @@ export default function CourseBuilderPage() {
                   {t('teacher.builder.videoReady')}
                   {selected!.durationSec > 0 && (
                     <span className="font-normal text-outline">
-                      · {t('teacher.builder.videoDuration', { time: duration(selected!.durationSec) })}
+                      ·{' '}
+                      {t('teacher.builder.videoDuration', {
+                        time: duration(selected!.durationSec),
+                      })}
                     </span>
                   )}
                 </p>
                 <VideoActions
                   onReplace={() => videoInput.current?.click()}
-                  onDelete={async () => (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) && removeVideo.mutate()}
+                  onDelete={async () =>
+                    (await askConfirm(t('teacher.builder.videoDeleteConfirm'))) &&
+                    removeVideo.mutate()
+                  }
                   busy={removeVideo.isPending}
                   t={t}
                 />
@@ -796,32 +822,67 @@ export default function CourseBuilderPage() {
               {t('teacher.builder.drip')}
             </p>
             <div className="space-y-2">
-              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${drip === 'now' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50 bg-surface-container-lowest'}`}>
-                <input type="radio" className="mt-1 accent-primary" checked={drip === 'now'} onChange={() => setDrip('now')} />
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${drip === 'now' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50 bg-surface-container-lowest'}`}
+              >
+                <input
+                  type="radio"
+                  className="mt-1 accent-primary"
+                  checked={drip === 'now'}
+                  onChange={() => setDrip('now')}
+                />
                 <span>
-                  <span className="block text-sm font-bold">{t('teacher.builder.dripImmediate')}</span>
-                  <span className="text-xs text-outline">{t('teacher.builder.dripImmediateHint')}</span>
+                  <span className="block text-sm font-bold">
+                    {t('teacher.builder.dripImmediate')}
+                  </span>
+                  <span className="text-xs text-outline">
+                    {t('teacher.builder.dripImmediateHint')}
+                  </span>
                 </span>
               </label>
-              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${drip === 'date' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50 bg-surface-container-lowest'}`}>
-                <input type="radio" className="mt-1 accent-primary" checked={drip === 'date'} onChange={() => setDrip('date')} />
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${drip === 'date' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50 bg-surface-container-lowest'}`}
+              >
+                <input
+                  type="radio"
+                  className="mt-1 accent-primary"
+                  checked={drip === 'date'}
+                  onChange={() => setDrip('date')}
+                />
                 <span className="flex-1">
                   <span className="block text-sm font-bold">{t('teacher.builder.dripDate')}</span>
                   {drip === 'date' && (
-                    <input type="date" className="input mt-2 py-1.5 text-sm" value={dripDate}
-                      onChange={(e) => setDripDate(e.target.value)} />
+                    <input
+                      type="date"
+                      className="input mt-2 py-1.5 text-sm"
+                      value={dripDate}
+                      onChange={(e) => setDripDate(e.target.value)}
+                    />
                   )}
                 </span>
               </label>
-              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${drip === 'days' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50 bg-surface-container-lowest'}`}>
-                <input type="radio" className="mt-1 accent-primary" checked={drip === 'days'} onChange={() => setDrip('days')} />
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${drip === 'days' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50 bg-surface-container-lowest'}`}
+              >
+                <input
+                  type="radio"
+                  className="mt-1 accent-primary"
+                  checked={drip === 'days'}
+                  onChange={() => setDrip('days')}
+                />
                 <span className="flex-1">
                   <span className="block text-sm font-bold">{t('teacher.builder.dripDays')}</span>
                   {drip === 'days' && (
                     <span className="mt-2 flex items-center gap-2">
-                      <input className="input w-20 py-1.5 text-sm" inputMode="numeric" value={dripDays}
-                        onChange={(e) => setDripDays(e.target.value.replace(/\D/g, ''))} />
-                      <span className="text-xs text-outline">{t('teacher.builder.dripDaysHint')}</span>
+                      <input
+                        className="input w-20 py-1.5 text-sm"
+                        inputMode="numeric"
+                        value={dripDays}
+                        onChange={(e) => setDripDays(e.target.value.replace(/\D/g, ''))}
+                      />
+                      <span className="text-xs text-outline">
+                        {t('teacher.builder.dripDaysHint')}
+                      </span>
                     </span>
                   )}
                 </span>
@@ -835,14 +896,18 @@ export default function CourseBuilderPage() {
               {t('teacher.builder.accessType')}
             </p>
             <div className="mb-1 grid grid-cols-2 overflow-hidden rounded-lg border border-outline-variant/60">
-              <button type="button"
+              <button
+                type="button"
                 className={`py-2 text-sm font-bold ${!freePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
-                onClick={() => setFreePreview(false)}>
+                onClick={() => setFreePreview(false)}
+              >
                 {t('teacher.builder.paid')}
               </button>
-              <button type="button"
+              <button
+                type="button"
                 className={`py-2 text-sm font-bold ${freePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
-                onClick={() => setFreePreview(true)}>
+                onClick={() => setFreePreview(true)}
+              >
                 {t('teacher.builder.freePreview')}
               </button>
             </div>
@@ -859,10 +924,13 @@ export default function CourseBuilderPage() {
             {/* Naming this lesson as the course's exam, rather than giving every
                 lesson its own. One course, one exam, one assignment. */}
             <div className="space-y-2">
-              <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm transition ${
-                course?.examLessonId === selected!.id
-                  ? 'border-primary bg-primary-fixed/30' : 'border-outline-variant/60'
-              } ${selected!.type === 'QUIZ' ? '' : 'opacity-50'}`}>
+              <label
+                className={`flex items-start gap-2 rounded-lg border p-3 text-sm transition ${
+                  course?.examLessonId === selected!.id
+                    ? 'border-primary bg-primary-fixed/30'
+                    : 'border-outline-variant/60'
+                } ${selected!.type === 'QUIZ' ? '' : 'opacity-50'}`}
+              >
                 <input
                   type="checkbox"
                   className="mt-0.5 accent-primary"
@@ -882,7 +950,9 @@ export default function CourseBuilderPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold">{t('assess.builder.isExam')}</span>
                   <span className="mt-0.5 block text-xs text-on-surface-variant">
-                    {selected!.type !== 'QUIZ' ? t('assess.builder.onlyQuizLesson') : t('assess.builder.isExamHint')}
+                    {selected!.type !== 'QUIZ'
+                      ? t('assess.builder.onlyQuizLesson')
+                      : t('assess.builder.isExamHint')}
                   </span>
                 </span>
               </label>
@@ -893,12 +963,18 @@ export default function CourseBuilderPage() {
                   their students out of the course on the way to it. */}
               {course?.examLessonId === selected!.id && (
                 <div className="space-y-2 rounded-lg bg-surface-container-low p-3">
-                  <p className="text-xs font-bold text-on-surface-variant">{t('assess.builder.examModeTitle')}</p>
+                  <p className="text-xs font-bold text-on-surface-variant">
+                    {t('assess.builder.examModeTitle')}
+                  </p>
                   {(['FINAL', 'GATE'] as const).map((mode) => (
-                    <label key={mode} className={`flex items-start gap-2 rounded-lg border p-2.5 text-sm transition ${
-                      (course?.examMode ?? 'FINAL') === mode
-                        ? 'border-primary bg-primary-fixed/30' : 'border-outline-variant/60'
-                    }`}>
+                    <label
+                      key={mode}
+                      className={`flex items-start gap-2 rounded-lg border p-2.5 text-sm transition ${
+                        (course?.examMode ?? 'FINAL') === mode
+                          ? 'border-primary bg-primary-fixed/30'
+                          : 'border-outline-variant/60'
+                      }`}
+                    >
                       <input
                         type="radio"
                         className="mt-0.5 accent-primary"
@@ -908,7 +984,9 @@ export default function CourseBuilderPage() {
                         onChange={() => setRole.mutate({ examMode: mode })}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block font-bold">{t(`assess.builder.examMode.${mode}`)}</span>
+                        <span className="block font-bold">
+                          {t(`assess.builder.examMode.${mode}`)}
+                        </span>
                         <span className="mt-0.5 block text-xs text-on-surface-variant">
                           {t(`assess.builder.examMode.${mode}Hint`)}
                         </span>
@@ -918,16 +996,21 @@ export default function CourseBuilderPage() {
                 </div>
               )}
 
-              <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm transition ${
-                course?.assignmentLessonId === selected!.id
-                  ? 'border-primary bg-primary-fixed/30' : 'border-outline-variant/60'
-              } ${selected!.type === 'ASSIGNMENT' ? '' : 'opacity-50'}`}>
+              <label
+                className={`flex items-start gap-2 rounded-lg border p-3 text-sm transition ${
+                  course?.assignmentLessonId === selected!.id
+                    ? 'border-primary bg-primary-fixed/30'
+                    : 'border-outline-variant/60'
+                } ${selected!.type === 'ASSIGNMENT' ? '' : 'opacity-50'}`}
+              >
                 <input
                   type="checkbox"
                   className="mt-0.5 accent-primary"
                   disabled={selected!.type !== 'ASSIGNMENT' || setRole.isPending}
                   checked={course?.assignmentLessonId === selected!.id}
-                  onChange={(e) => setRole.mutate({ assignmentLessonId: e.target.checked ? selected!.id : null })}
+                  onChange={(e) =>
+                    setRole.mutate({ assignmentLessonId: e.target.checked ? selected!.id : null })
+                  }
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold">{t('assess.builder.isAssignment')}</span>
@@ -943,13 +1026,17 @@ export default function CourseBuilderPage() {
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               {/* `?course=` so the back link there returns to this lesson. */}
-              <Link to={`/teacher/lessons/${selected!.id}/quiz?course=${id}`}
-                className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary">
+              <Link
+                to={`/teacher/lessons/${selected!.id}/quiz?course=${id}`}
+                className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+              >
                 <span className="material-symbols-outlined text-base">quiz</span>
                 {t('assess.builder.editQuiz')}
               </Link>
-              <Link to={`/teacher/lessons/${selected!.id}/assignment?course=${id}`}
-                className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary">
+              <Link
+                to={`/teacher/lessons/${selected!.id}/assignment?course=${id}`}
+                className="flex items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest py-2.5 text-sm font-bold text-on-surface-variant transition hover:border-primary hover:text-primary"
+              >
                 <span className="material-symbols-outlined text-base">assignment</span>
                 {t('assess.builder.editAssignment')}
               </Link>
@@ -963,19 +1050,34 @@ export default function CourseBuilderPage() {
             </p>
             <ul className="mb-2 space-y-1">
               {selected!.attachments?.map((a: any) => (
-                <li key={a.id} className="flex items-center justify-between rounded-lg bg-surface-container-low px-3 py-2 text-sm">
+                <li
+                  key={a.id}
+                  className="flex items-center justify-between rounded-lg bg-surface-container-low px-3 py-2 text-sm"
+                >
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="material-symbols-outlined text-base text-error">picture_as_pdf</span>
-                    <span className="truncate" dir="auto">{a.fileName}</span>
+                    <span className="material-symbols-outlined text-base text-error">
+                      picture_as_pdf
+                    </span>
+                    <span className="truncate" dir="auto">
+                      {a.fileName}
+                    </span>
                   </span>
-                  <button className="text-outline hover:text-error" onClick={() => removeAttachment.mutate(a.id)}>
+                  <button
+                    className="text-outline hover:text-error"
+                    onClick={() => removeAttachment.mutate(a.id)}
+                  >
                     <span className="material-symbols-outlined text-base">close</span>
                   </button>
                 </li>
               ))}
             </ul>
-            <input ref={fileInput} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.zip,.doc,.docx,.txt"
-              className="hidden" onChange={(e) => e.target.files?.[0] && uploadAttachment(e.target.files[0])} />
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.zip,.doc,.docx,.txt"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && uploadAttachment(e.target.files[0])}
+            />
             {filePct != null ? (
               <UploadPanel
                 phase="uploading"
@@ -1003,7 +1105,9 @@ export default function CourseBuilderPage() {
         <p className="flex items-center gap-1.5 text-xs text-on-surface-variant">
           {savedFlash ? (
             <>
-              <span className="material-symbols-outlined text-[14px] text-secondary">cloud_done</span>
+              <span className="material-symbols-outlined text-[14px] text-secondary">
+                cloud_done
+              </span>
               {t('teacher.builder.saved')}
             </>
           ) : (
@@ -1044,7 +1148,11 @@ export default function CourseBuilderPage() {
               standing once the lessons are in. Up here it only appears once the
               course is already live, to push later edits out. */}
           {isPublished && course.canEdit !== false && (
-            <button className="btn-secondary py-2 text-sm" disabled={publish.isPending} onClick={() => publish.mutate('PUBLISHED')}>
+            <button
+              className="btn-secondary py-2 text-sm"
+              disabled={publish.isPending}
+              onClick={() => publish.mutate('PUBLISHED')}
+            >
               <span className="material-symbols-outlined text-[20px]">publish</span>
               {t('teacher.builder.republish')}
             </button>
@@ -1077,8 +1185,13 @@ export default function CourseBuilderPage() {
         vertical room than three lessons, and pushed the thing the page is
         actually for below the fold.
       */}
-      <input ref={thumbInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-        onChange={(e) => e.target.files?.[0] && thumbUpload.mutate(e.target.files[0])} />
+      <input
+        ref={thumbInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && thumbUpload.mutate(e.target.files[0])}
+      />
       {course.thumbnailUrl ? (
         <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
           <div className="relative h-44 bg-surface-container-high sm:h-56">
@@ -1088,7 +1201,9 @@ export default function CourseBuilderPage() {
               disabled={thumbUpload.isPending}
               onClick={() => thumbInput.current?.click()}
             >
-              <span className="material-symbols-outlined text-base">{thumbUpload.isPending ? 'hourglass' : 'photo_camera'}</span>
+              <span className="material-symbols-outlined text-base">
+                {thumbUpload.isPending ? 'hourglass' : 'photo_camera'}
+              </span>
               {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.changeCover')}
             </button>
           </div>
@@ -1108,7 +1223,9 @@ export default function CourseBuilderPage() {
             <span className="block font-heading font-bold">
               {thumbUpload.isPending ? t('common.saving') : t('teacher.builder.addCover')}
             </span>
-            <span className="mt-0.5 block text-sm text-on-surface-variant">{t('teacher.builder.addCoverHint')}</span>
+            <span className="mt-0.5 block text-sm text-on-surface-variant">
+              {t('teacher.builder.addCoverHint')}
+            </span>
           </span>
         </button>
       )}
@@ -1121,12 +1238,17 @@ export default function CourseBuilderPage() {
         visitor can watch before paying — so it is stored and served as a plain
         public MP4, not through the protected lesson pipeline.
       */}
-      <input ref={introInput} type="file" accept="video/mp4" className="hidden"
+      <input
+        ref={introInput}
+        type="file"
+        accept="video/mp4"
+        className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = '';
           if (f) uploadIntro(f);
-        }} />
+        }}
+      />
       {course.introVideoUrl ? (
         <div className="mb-5 overflow-hidden rounded-2xl border border-outline-variant/50">
           <video
@@ -1143,12 +1265,16 @@ export default function CourseBuilderPage() {
               onClick={() => introInput.current?.click()}
             >
               <span className="material-symbols-outlined text-base">autorenew</span>
-              {introPct !== null ? t('teacher.builder.uploading', { pct: introPct }) : t('teacher.builder.replaceIntro')}
+              {introPct !== null
+                ? t('teacher.builder.uploading', { pct: introPct })
+                : t('teacher.builder.replaceIntro')}
             </button>
             <button
               className="flex items-center gap-1.5 text-sm font-bold text-error hover:underline disabled:opacity-50"
               disabled={removeIntro.isPending || introPct !== null}
-              onClick={async () => (await askConfirm(t('teacher.builder.removeIntroConfirm'))) && removeIntro.mutate()}
+              onClick={async () =>
+                (await askConfirm(t('teacher.builder.removeIntroConfirm'))) && removeIntro.mutate()
+              }
             >
               <span className="material-symbols-outlined text-base">delete</span>
               {t('common.delete')}
@@ -1172,7 +1298,9 @@ export default function CourseBuilderPage() {
                 ? t('teacher.builder.uploading', { pct: introPct })
                 : t('teacher.builder.addIntro')}
             </span>
-            <span className="mt-0.5 block text-sm text-on-surface-variant">{t('teacher.builder.addIntroHint')}</span>
+            <span className="mt-0.5 block text-sm text-on-surface-variant">
+              {t('teacher.builder.addIntroHint')}
+            </span>
           </span>
         </button>
       )}
@@ -1189,7 +1317,11 @@ export default function CourseBuilderPage() {
           {t('teacher.builder.countSummary', { lessons: lessons.length, time: duration(totalSec) })}
         </p>
         <p className="flex items-baseline gap-2 text-sm text-on-surface-variant">
-          <span>{t(`teacher.courses.form.${course.pricingModel === 'ONE_TIME' ? 'oneTime' : course.pricingModel === 'MONTHLY_SUBSCRIPTION' ? 'monthly' : 'bundle'}`)}</span>
+          <span>
+            {t(
+              `teacher.courses.form.${course.pricingModel === 'ONE_TIME' ? 'oneTime' : course.pricingModel === 'MONTHLY_SUBSCRIPTION' ? 'monthly' : 'bundle'}`,
+            )}
+          </span>
           <span className="font-heading text-xl font-extrabold text-on-surface">
             {egp(course.priceCents)}
             {course.pricingModel === 'MONTHLY_SUBSCRIPTION' && (
@@ -1216,7 +1348,10 @@ export default function CourseBuilderPage() {
           <p className="font-heading text-lg font-bold">{t('teacher.builder.curriculum')}</p>
           <span className="text-sm text-on-surface-variant">
             {missingVideo > 0
-              ? t('teacher.builder.lessonsMetaMissing', { count: lessons.length, missing: missingVideo })
+              ? t('teacher.builder.lessonsMetaMissing', {
+                  count: lessons.length,
+                  missing: missingVideo,
+                })
               : t('teacher.builder.lessonsMeta', { count: lessons.length })}
           </span>
           <button
@@ -1238,8 +1373,13 @@ export default function CourseBuilderPage() {
                 l={l}
                 li={li}
                 open={selectedLessonId === l.id}
-                onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
-                onDelete={async () => (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) && removeLesson.mutate(l.id)}
+                onToggle={() =>
+                  selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l)
+                }
+                onDelete={async () =>
+                  (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) &&
+                  removeLesson.mutate(l.id)
+                }
                 panel={lessonPanel}
                 t={t}
               />
@@ -1267,7 +1407,9 @@ export default function CourseBuilderPage() {
                   title={t(shut ? 'teacher.builder.unfold' : 'teacher.builder.fold')}
                   onClick={() => toggleFold(u.id)}
                 >
-                  <span className={`material-symbols-outlined text-[20px] transition-transform ${shut ? '-rotate-90' : ''}`}>
+                  <span
+                    className={`material-symbols-outlined text-[20px] transition-transform ${shut ? '-rotate-90' : ''}`}
+                  >
                     expand_more
                   </span>
                 </button>
@@ -1288,7 +1430,10 @@ export default function CourseBuilderPage() {
                     figure for the whole course sits at the top of this list. */}
                 <span className="ms-auto hidden shrink-0 text-sm text-on-surface-variant sm:inline">
                   {gap
-                    ? t('teacher.builder.lessonsMetaMissing', { count: u.lessons.length, missing: gap })
+                    ? t('teacher.builder.lessonsMetaMissing', {
+                        count: u.lessons.length,
+                        missing: gap,
+                      })
                     : t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
                 </span>
                 {/* Arms on the first press instead of stopping the page with a
@@ -1309,8 +1454,13 @@ export default function CourseBuilderPage() {
                         l={l}
                         li={li}
                         open={selectedLessonId === l.id}
-                        onToggle={() => (selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l))}
-                        onDelete={async () => (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) && removeLesson.mutate(l.id)}
+                        onToggle={() =>
+                          selectedLessonId === l.id ? setSelectedLessonId(null) : selectLesson(l)
+                        }
+                        onDelete={async () =>
+                          (await askConfirm(t('teacher.builder.deleteLessonConfirm'))) &&
+                          removeLesson.mutate(l.id)
+                        }
                         panel={lessonPanel}
                         t={t}
                       />
@@ -1333,7 +1483,11 @@ export default function CourseBuilderPage() {
         <button
           className="flex w-full items-center justify-center gap-1.5 border-t border-outline-variant/40 py-4 font-bold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary"
           disabled={addUnit.isPending}
-          onClick={() => addSection(() => addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })))}
+          onClick={() =>
+            addSection(() =>
+              addUnit.mutate(t('teacher.builder.newUnitName', { n: sections.length + 1 })),
+            )
+          }
         >
           <span className="material-symbols-outlined text-[20px]">add</span>
           {t('teacher.builder.addUnit')}
@@ -1351,12 +1505,20 @@ export default function CourseBuilderPage() {
           </p>
         </div>
         {isPublished ? (
-          <button className="btn-secondary" disabled={publish.isPending} onClick={() => publish.mutate('DRAFT')}>
+          <button
+            className="btn-secondary"
+            disabled={publish.isPending}
+            onClick={() => publish.mutate('DRAFT')}
+          >
             <span className="material-symbols-outlined text-[20px]">visibility_off</span>
             {t('teacher.builder.unpublish')}
           </button>
         ) : (
-          <button className="btn-primary px-7 py-3" disabled={publish.isPending} onClick={() => publish.mutate('PUBLISHED')}>
+          <button
+            className="btn-primary px-7 py-3"
+            disabled={publish.isPending}
+            onClick={() => publish.mutate('PUBLISHED')}
+          >
             <span className="material-symbols-outlined text-[20px]">publish</span>
             {t('teacher.builder.publishNow')}
           </button>
@@ -1364,10 +1526,17 @@ export default function CourseBuilderPage() {
       </div>
       {publish.error && <PublishError error={publish.error} t={t} />}
 
-      <Modal open={importOpen} title={t('teacher.builder.importYoutubeTitle')} onClose={() => setImportOpen(false)} wide>
+      <Modal
+        open={importOpen}
+        title={t('teacher.builder.importYoutubeTitle')}
+        onClose={() => setImportOpen(false)}
+        wide
+      >
         <div className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-bold">{t('teacher.builder.importYoutubeLabel')}</label>
+            <label className="mb-1.5 block text-sm font-bold">
+              {t('teacher.builder.importYoutubeLabel')}
+            </label>
             <div className="space-y-2">
               {importUrls.map((url, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -1410,14 +1579,18 @@ export default function CourseBuilderPage() {
               {t('teacher.builder.accessType')}
             </p>
             <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-outline-variant/60">
-              <button type="button"
+              <button
+                type="button"
                 className={`py-2 text-sm font-bold ${!importFreePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
-                onClick={() => setImportFreePreview(false)}>
+                onClick={() => setImportFreePreview(false)}
+              >
                 {t('teacher.builder.paid')}
               </button>
-              <button type="button"
+              <button
+                type="button"
                 className={`py-2 text-sm font-bold ${importFreePreview ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-surface-container-lowest text-on-surface-variant'}`}
-                onClick={() => setImportFreePreview(true)}>
+                onClick={() => setImportFreePreview(true)}
+              >
                 {t('teacher.builder.freePreview')}
               </button>
             </div>
@@ -1429,32 +1602,67 @@ export default function CourseBuilderPage() {
               {t('teacher.builder.drip')}
             </p>
             <div className="space-y-2">
-              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'now' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
-                <input type="radio" className="mt-1 accent-primary" checked={importDrip === 'now'} onChange={() => setImportDrip('now')} />
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'now' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}
+              >
+                <input
+                  type="radio"
+                  className="mt-1 accent-primary"
+                  checked={importDrip === 'now'}
+                  onChange={() => setImportDrip('now')}
+                />
                 <span>
-                  <span className="block text-sm font-bold">{t('teacher.builder.dripImmediate')}</span>
-                  <span className="text-xs text-outline">{t('teacher.builder.dripImmediateHint')}</span>
+                  <span className="block text-sm font-bold">
+                    {t('teacher.builder.dripImmediate')}
+                  </span>
+                  <span className="text-xs text-outline">
+                    {t('teacher.builder.dripImmediateHint')}
+                  </span>
                 </span>
               </label>
-              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'date' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
-                <input type="radio" className="mt-1 accent-primary" checked={importDrip === 'date'} onChange={() => setImportDrip('date')} />
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'date' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}
+              >
+                <input
+                  type="radio"
+                  className="mt-1 accent-primary"
+                  checked={importDrip === 'date'}
+                  onChange={() => setImportDrip('date')}
+                />
                 <span className="flex-1">
                   <span className="block text-sm font-bold">{t('teacher.builder.dripDate')}</span>
                   {importDrip === 'date' && (
-                    <input type="date" className="input mt-2 py-1.5 text-sm" value={importDripDate}
-                      onChange={(e) => setImportDripDate(e.target.value)} />
+                    <input
+                      type="date"
+                      className="input mt-2 py-1.5 text-sm"
+                      value={importDripDate}
+                      onChange={(e) => setImportDripDate(e.target.value)}
+                    />
                   )}
                 </span>
               </label>
-              <label className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'days' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}>
-                <input type="radio" className="mt-1 accent-primary" checked={importDrip === 'days'} onChange={() => setImportDrip('days')} />
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${importDrip === 'days' ? 'border-primary bg-primary-fixed/40' : 'border-outline-variant/50'}`}
+              >
+                <input
+                  type="radio"
+                  className="mt-1 accent-primary"
+                  checked={importDrip === 'days'}
+                  onChange={() => setImportDrip('days')}
+                />
                 <span className="flex-1">
                   <span className="block text-sm font-bold">{t('teacher.builder.dripDays')}</span>
                   {importDrip === 'days' && (
                     <span className="mt-2 flex items-center gap-2">
-                      <input className="input w-20 py-1.5 text-sm" inputMode="numeric" value={importDripDays}
-                        onChange={(e) => setImportDripDays(e.target.value.replace(/\D/g, ''))} />
-                      <span className="text-xs text-outline">{t('teacher.builder.dripDaysHint')}</span>
+                      <input
+                        className="input w-20 py-1.5 text-sm"
+                        inputMode="numeric"
+                        value={importDripDays}
+                        onChange={(e) => setImportDripDays(e.target.value.replace(/\D/g, ''))}
+                      />
+                      <span className="text-xs text-outline">
+                        {t('teacher.builder.dripDaysHint')}
+                      </span>
                     </span>
                   )}
                 </span>
@@ -1467,12 +1675,18 @@ export default function CourseBuilderPage() {
               {importYoutube.data.results.map((r, i) => (
                 <li key={i} className={r.error ? 'text-error' : 'text-secondary'}>
                   <span className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined shrink-0 text-base">{r.error ? 'error' : 'check_circle'}</span>
+                    <span className="material-symbols-outlined shrink-0 text-base">
+                      {r.error ? 'error' : 'check_circle'}
+                    </span>
                     <span className="min-w-0 flex-1 truncate">
                       {r.error ? t(`teacher.builder.importError.${r.error}`) : r.lesson?.title}
                     </span>
                   </span>
-                  {r.detail && <span className="ms-6 block truncate text-xs text-outline" dir="ltr">{r.detail}</span>}
+                  {r.detail && (
+                    <span className="ms-6 block truncate text-xs text-outline" dir="ltr">
+                      {r.detail}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -1484,7 +1698,9 @@ export default function CourseBuilderPage() {
             disabled={importYoutube.isPending || !importUrls.some((u) => u.trim())}
             onClick={() => importYoutube.mutate()}
           >
-            {importYoutube.isPending ? t('teacher.builder.importing') : t('teacher.builder.importNow')}
+            {importYoutube.isPending
+              ? t('teacher.builder.importing')
+              : t('teacher.builder.importNow')}
           </button>
         </div>
       </Modal>
@@ -1496,7 +1712,8 @@ export default function CourseBuilderPage() {
  *  its own line; anything else falls back to whatever the server said. */
 function PublishError({ error, t }: { error: unknown; t: (k: string) => string }) {
   const data = (error as any)?.response?.data;
-  const text = data?.code === 'NO_LESSONS' ? t('teacher.builder.noLessonsToPublish') : data?.message;
+  const text =
+    data?.code === 'NO_LESSONS' ? t('teacher.builder.noLessonsToPublish') : data?.message;
   return (
     <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
       {text || t('common.error')}
@@ -1506,7 +1723,10 @@ function PublishError({ error, t }: { error: unknown; t: (k: string) => string }
 
 /** Replace / delete, shared by every state a video can be in. */
 function VideoActions({
-  onReplace, onDelete, busy, t,
+  onReplace,
+  onDelete,
+  busy,
+  t,
 }: {
   onReplace?: () => void;
   onDelete: () => void;
@@ -1541,7 +1761,13 @@ function VideoActions({
  * only where the list comes from differs.
  */
 function LessonRow({
-  l, li, open, onToggle, onDelete, panel, t,
+  l,
+  li,
+  open,
+  onToggle,
+  onDelete,
+  panel,
+  t,
 }: {
   l: any;
   li: number;
@@ -1572,16 +1798,26 @@ function LessonRow({
           title={needsVideo ? t('teacher.builder.needsVideo') : undefined}
         >
           <span className="material-symbols-outlined text-[20px]">
-            {l.type === 'QUIZ' ? 'quiz' : l.type === 'ASSIGNMENT' ? 'assignment' : l.videoAsset ? 'play_circle' : 'videocam_off'}
+            {l.type === 'QUIZ'
+              ? 'quiz'
+              : l.type === 'ASSIGNMENT'
+                ? 'assignment'
+                : l.videoAsset
+                  ? 'play_circle'
+                  : 'videocam_off'}
           </span>
         </span>
         <span className="w-5 shrink-0 text-sm tabular-nums text-on-surface-variant">{li + 1}</span>
-        <span className="min-w-0 flex-1 truncate font-semibold" title={l.title}>{l.title}</span>
+        <span className="min-w-0 flex-1 truncate font-semibold" title={l.title}>
+          {l.title}
+        </span>
 
         {/* Everything after the name is optional detail, and drops off first
             when the row runs out of width. */}
         {processing && (
-          <span className="shrink-0 text-sm font-semibold text-primary">{t('teacher.builder.videoProcessing')}</span>
+          <span className="shrink-0 text-sm font-semibold text-primary">
+            {t('teacher.builder.videoProcessing')}
+          </span>
         )}
         {l.isFreePreview && (
           <span className="hidden shrink-0 rounded-full bg-secondary-container px-2 py-0.5 text-xs font-bold text-on-secondary-container sm:inline">
@@ -1589,10 +1825,17 @@ function LessonRow({
           </span>
         )}
         {(l.dripUnlockAt || l.dripAfterEnrollDays != null) && (
-          <span className="material-symbols-outlined hidden shrink-0 text-[18px] text-on-surface-variant sm:inline" title="Drip">lock_clock</span>
+          <span
+            className="material-symbols-outlined hidden shrink-0 text-[18px] text-on-surface-variant sm:inline"
+            title="Drip"
+          >
+            lock_clock
+          </span>
         )}
         {l.durationSec > 0 && (
-          <span className="hidden shrink-0 text-sm tabular-nums text-on-surface-variant sm:inline">{duration(l.durationSec)}</span>
+          <span className="hidden shrink-0 text-sm tabular-nums text-on-surface-variant sm:inline">
+            {duration(l.durationSec)}
+          </span>
         )}
 
         <button
@@ -1606,7 +1849,9 @@ function LessonRow({
         >
           <span className="material-symbols-outlined text-[18px]">delete</span>
         </button>
-        <span className={`material-symbols-outlined shrink-0 text-[20px] text-outline transition ${open ? 'rotate-180' : ''}`}>
+        <span
+          className={`material-symbols-outlined shrink-0 text-[20px] text-outline transition ${open ? 'rotate-180' : ''}`}
+        >
           expand_more
         </span>
       </div>
@@ -1644,7 +1889,10 @@ function useOnce(busy: boolean) {
 }
 
 function AddLessonRow({
-  onAdd, busy, placeholder, label,
+  onAdd,
+  busy,
+  placeholder,
+  label,
 }: {
   onAdd: (title: string) => void;
   busy: boolean;
@@ -1708,7 +1956,12 @@ function AddLessonRow({
  * click, type, Enter. Escape puts it back.
  */
 function InlineName({
-  value, editing, onEdit, onDone, className = '', clickToEdit = true,
+  value,
+  editing,
+  onEdit,
+  onDone,
+  className = '',
+  clickToEdit = true,
 }: {
   value: string;
   editing: boolean;
@@ -1730,7 +1983,11 @@ function InlineName({
 
   if (!editing) {
     if (!clickToEdit) {
-      return <span className={`min-w-0 truncate ${className}`} title={value}>{value}</span>;
+      return (
+        <span className={`min-w-0 truncate ${className}`} title={value}>
+          {value}
+        </span>
+      );
     }
     return (
       <button

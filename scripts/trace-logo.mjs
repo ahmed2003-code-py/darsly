@@ -90,5 +90,7 @@ open(dst, 'w').write(svg)
 print(f'{dst}  ({w}x{h}, {len(path)} shapes, {len(svg)/1024:.1f} KB)')
 `;
 
-const res = spawnSync('python3', ['-c', py, input, output, String(threshold)], { stdio: 'inherit' });
+const res = spawnSync('python3', ['-c', py, input, output, String(threshold)], {
+  stdio: 'inherit',
+});
 exit(res.status ?? 1);

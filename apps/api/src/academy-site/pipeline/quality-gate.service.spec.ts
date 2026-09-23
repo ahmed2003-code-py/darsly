@@ -12,7 +12,8 @@ import { QualityGateService } from './quality-gate.service';
 
 const gate = new QualityGateService(new DesignRulesService());
 
-const doc = (): SiteDocument => buildFixtureDoc({ dna: 'academic_precise', persona: 'math_science' });
+const doc = (): SiteDocument =>
+  buildFixtureDoc({ dna: 'academic_precise', persona: 'math_science' });
 const codes = (issues: { code: string }[]) => issues.map((i) => i.code);
 
 describe('QualityGateService — what blocks a publish', () => {
@@ -85,8 +86,13 @@ describe('QualityGateService — legibility', () => {
     // checked it before.
     const d = doc();
     d.theme.design = {
-      background: '#101010', ink: '#141414', surface: '#111111',
-      radius: 8, density: 'regular', headingScale: 'balanced', heroTreatment: 'flat',
+      background: '#101010',
+      ink: '#141414',
+      surface: '#111111',
+      radius: 8,
+      density: 'regular',
+      headingScale: 'balanced',
+      heroTreatment: 'flat',
     };
     expect(codes(gate.blockingErrors(d))).toContain('body-contrast');
   });
@@ -105,8 +111,13 @@ describe('QualityGateService — legibility', () => {
     // problem. Checking only body-on-background would let this through.
     const d = doc();
     d.theme.design = {
-      background: '#FFFFFF', ink: '#111111', surface: '#1A1A1A',
-      radius: 8, density: 'regular', headingScale: 'balanced', heroTreatment: 'flat',
+      background: '#FFFFFF',
+      ink: '#111111',
+      surface: '#1A1A1A',
+      radius: 8,
+      density: 'regular',
+      headingScale: 'balanced',
+      heroTreatment: 'flat',
     };
     expect(codes(gate.blockingErrors(d))).toContain('surface-contrast');
   });
@@ -134,7 +145,9 @@ describe('QualityGateService — sections that render to nothing', () => {
       if (b.type === 'faq') b.items = [];
       if (b.type === 'about') b.body = { ar: '', en: '' };
     }
-    d.blocks = d.blocks.filter((b) => b.type !== 'courses' && b.type !== 'reviews' && b.type !== 'contact');
+    d.blocks = d.blocks.filter(
+      (b) => b.type !== 'courses' && b.type !== 'reviews' && b.type !== 'contact',
+    );
     expect(codes(gate.blockingErrors(d))).toContain('empty-sections');
   });
 });
@@ -145,12 +158,18 @@ describe('QualityGateService — composition', () => {
   });
 
   it('warns when a section names a layout that does not exist', () => {
-    const d = buildComposition({ design: WARM_DESIGN, sections: { hero: { pattern: 'hero.invented' } } });
+    const d = buildComposition({
+      design: WARM_DESIGN,
+      sections: { hero: { pattern: 'hero.invented' } },
+    });
     expect(codes(gate.evaluate(d).warnings)).toContain('unknown-pattern');
   });
 
   it('warns when a section names a layout built for something else', () => {
-    const d = buildComposition({ design: WARM_DESIGN, sections: { about: { pattern: 'courses.grid' } } });
+    const d = buildComposition({
+      design: WARM_DESIGN,
+      sections: { about: { pattern: 'courses.grid' } },
+    });
     expect(codes(gate.evaluate(d).warnings)).toContain('mismatched-pattern');
   });
 
@@ -160,7 +179,12 @@ describe('QualityGateService — composition', () => {
     const d = buildComposition({
       design: WARM_DESIGN,
       sections: {
-        hero: { pattern: 'hero.image-full', surface: 'inverted', emphasis: 'feature', width: 'full' },
+        hero: {
+          pattern: 'hero.image-full',
+          surface: 'inverted',
+          emphasis: 'feature',
+          width: 'full',
+        },
         about: { pattern: 'about.statement', surface: 'accent', align: 'center' },
         toolkit: { pattern: 'toolkit.marquee', surface: 'inverted' },
       },

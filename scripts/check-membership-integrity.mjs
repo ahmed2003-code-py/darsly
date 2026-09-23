@@ -9,7 +9,10 @@
  */
 import { PrismaClient } from '@prisma/client';
 
-if (!process.env.DATABASE_URL) { console.error('DATABASE_URL is not set.'); process.exit(2); }
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set.');
+  process.exit(2);
+}
 const prisma = new PrismaClient();
 
 const findings = [];
@@ -17,34 +20,58 @@ const report = (kind, rows) => {
   if (!rows.length) return;
   findings.push(kind);
   console.log(`\n${kind} (${rows.length})`);
-  for (const r of rows) console.log(`   membership=${r.id} user=${r.userId} academy=${r.academyId} role=${r.role} status=${r.status}`);
+  for (const r of rows)
+    console.log(
+      `   membership=${r.id} user=${r.userId} academy=${r.academyId} role=${r.role} status=${r.status}`,
+    );
 };
 
 const base = { deletedAt: null, status: { in: ['INVITED', 'ACTIVE', 'SUSPENDED'] } };
 const sel = { id: true, userId: true, academyId: true, role: true, status: true };
 
 // 1) Staff role held by a learner identity.
-report('STUDENT identity holding a staff membership (OWNER/TEACHER/ASSISTANT)', await prisma.academyMembership.findMany({
-  where: { ...base, role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] }, user: { role: 'STUDENT' } }, select: sel,
-}));
+report(
+  'STUDENT identity holding a staff membership (OWNER/TEACHER/ASSISTANT)',
+  await prisma.academyMembership.findMany({
+    where: { ...base, role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] }, user: { role: 'STUDENT' } },
+    select: sel,
+  }),
+);
 
 // 2) TEACHER/ASSISTANT membership without an approved TeacherProfile.
-report('TEACHER/ASSISTANT membership whose user is not an APPROVED teacher', await prisma.academyMembership.findMany({
-  where: {
-    ...base, role: { in: ['TEACHER', 'ASSISTANT'] },
-    OR: [{ user: { role: { not: 'TEACHER' } } }, { user: { teacherProfile: null } }, { user: { teacherProfile: { status: { not: 'APPROVED' } } } }],
-  }, select: sel,
-}));
+report(
+  'TEACHER/ASSISTANT membership whose user is not an APPROVED teacher',
+  await prisma.academyMembership.findMany({
+    where: {
+      ...base,
+      role: { in: ['TEACHER', 'ASSISTANT'] },
+      OR: [
+        { user: { role: { not: 'TEACHER' } } },
+        { user: { teacherProfile: null } },
+        { user: { teacherProfile: { status: { not: 'APPROVED' } } } },
+      ],
+    },
+    select: sel,
+  }),
+);
 
 // 3) ACTIVE membership on a disabled account (would now be refused a context).
-report('ACTIVE membership on an inactive user', await prisma.academyMembership.findMany({
-  where: { deletedAt: null, status: 'ACTIVE', user: { isActive: false } }, select: sel,
-}));
+report(
+  'ACTIVE membership on an inactive user',
+  await prisma.academyMembership.findMany({
+    where: { deletedAt: null, status: 'ACTIVE', user: { isActive: false } },
+    select: sel,
+  }),
+);
 
 // 4) Soft-deleted row still marked ACTIVE (previously granted via findUnique).
-report('Soft-deleted membership still ACTIVE', await prisma.academyMembership.findMany({
-  where: { deletedAt: { not: null }, status: 'ACTIVE' }, select: sel,
-}));
+report(
+  'Soft-deleted membership still ACTIVE',
+  await prisma.academyMembership.findMany({
+    where: { deletedAt: { not: null }, status: 'ACTIVE' },
+    select: sel,
+  }),
+);
 
 // 5) Orphaned per-group scope: assignments/sessions for a member who is no longer ACTIVE.
 const stale = await prisma.$queryRaw`
@@ -55,5 +82,8 @@ const stale = await prisma.$queryRaw`
 report('GroupAssignment retained by a non-ACTIVE member', stale);
 
 await prisma.$disconnect();
-if (findings.length) { console.log(`\n${findings.length} anomaly class(es) found. Nothing was modified.`); process.exit(1); }
+if (findings.length) {
+  console.log(`\n${findings.length} anomaly class(es) found. Nothing was modified.`);
+  process.exit(1);
+}
 console.log('No membership anomalies.');

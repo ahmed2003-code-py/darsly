@@ -21,8 +21,14 @@ interface Usage {
   byStatus: Record<string, number>;
   failedLast24h: number;
   recentJobs: {
-    id: string; academyId: string; status: string; stage: string | null;
-    attempts: number; costCents: number; error: string | null; createdAt: string;
+    id: string;
+    academyId: string;
+    status: string;
+    stage: string | null;
+    attempts: number;
+    costCents: number;
+    error: string | null;
+    createdAt: string;
   }[];
 }
 
@@ -40,10 +46,15 @@ export default function AdminAcademyStudioPage() {
       <PageHeader title={t('adminStudio.title')} subtitle={t('adminStudio.subtitle')} />
       <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((tb) => (
-          <button key={tb.key} onClick={() => setTab(tb.key)}
+          <button
+            key={tb.key}
+            onClick={() => setTab(tb.key)}
             className={`flex items-center gap-2 rounded-full px-5 py-2 font-heading text-sm font-semibold transition-colors ${
-              tab === tb.key ? 'bg-primary text-on-primary' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
-            }`}>
+              tab === tb.key
+                ? 'bg-primary text-on-primary'
+                : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'
+            }`}
+          >
             <span className="material-symbols-outlined text-[20px]">{tb.icon}</span>
             {tb.label}
           </button>
@@ -62,13 +73,27 @@ function ModerationQueue() {
     queryFn: async () => (await api.get('/admin/academy-studio/moderation-queue')).data,
   });
   const moderate = useMutation({
-    mutationFn: async ({ academyId, decision, reason }: { academyId: string; decision: 'approve' | 'reject'; reason?: string }) =>
-      (await api.post(`/admin/academy-studio/sites/${academyId}/moderate`, { decision, reason })).data,
+    mutationFn: async ({
+      academyId,
+      decision,
+      reason,
+    }: {
+      academyId: string;
+      decision: 'approve' | 'reject';
+      reason?: string;
+    }) =>
+      (await api.post(`/admin/academy-studio/sites/${academyId}/moderate`, { decision, reason }))
+        .data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-moderation-queue'] }),
   });
 
   if (q.isLoading) return <Spinner />;
-  if (q.isError) return <div className="card"><ErrorNote error={q.error} /></div>;
+  if (q.isError)
+    return (
+      <div className="card">
+        <ErrorNote error={q.error} />
+      </div>
+    );
   if (!q.data?.length) {
     return (
       <div className="card grid place-items-center py-16 text-center">
@@ -81,25 +106,42 @@ function ModerationQueue() {
     <div className="space-y-3">
       <ErrorNote error={moderate.error} />
       {q.data.map((it) => (
-        <QueueRow key={it.academyId} it={it} pending={moderate.isPending}
+        <QueueRow
+          key={it.academyId}
+          it={it}
+          pending={moderate.isPending}
           onApprove={() => moderate.mutate({ academyId: it.academyId, decision: 'approve' })}
           onReject={() => {
             const reason = prompt(t('adminStudio.rejectPrompt')) ?? undefined;
             moderate.mutate({ academyId: it.academyId, decision: 'reject', reason });
-          }} />
+          }}
+        />
       ))}
     </div>
   );
 }
 
-function QueueRow({ it, pending, onApprove, onReject }: {
-  it: QueueItem; pending: boolean; onApprove: () => void; onReject: () => void;
+function QueueRow({
+  it,
+  pending,
+  onApprove,
+  onReject,
+}: {
+  it: QueueItem;
+  pending: boolean;
+  onApprove: () => void;
+  onReject: () => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const preview = useQuery<string>({
     queryKey: ['admin-site-preview', it.academyId],
-    queryFn: async () => (await api.get(`/admin/academy-studio/sites/${it.academyId}/preview`, { responseType: 'text' })).data,
+    queryFn: async () =>
+      (
+        await api.get(`/admin/academy-studio/sites/${it.academyId}/preview`, {
+          responseType: 'text',
+        })
+      ).data,
     enabled: open,
     retry: false,
   });
@@ -108,28 +150,41 @@ function QueueRow({ it, pending, onApprove, onReject }: {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-heading font-bold">{it.academyName}</p>
-          <p className="text-sm text-on-surface-variant">/{it.slug} • {t('adminStudio.version', { n: it.version })} • {t('adminStudio.sentAt', { date: dateShort(it.submittedAt) })}</p>
+          <p className="text-sm text-on-surface-variant">
+            /{it.slug} • {t('adminStudio.version', { n: it.version })} •{' '}
+            {t('adminStudio.sentAt', { date: dateShort(it.submittedAt) })}
+          </p>
         </div>
         <div className="flex gap-2">
           <button className="btn-secondary" onClick={() => setOpen((o) => !o)}>
-            <span className="material-symbols-outlined text-[20px]">{open ? 'visibility_off' : 'visibility'}</span>
+            <span className="material-symbols-outlined text-[20px]">
+              {open ? 'visibility_off' : 'visibility'}
+            </span>
             {open ? t('adminStudio.hide') : t('adminStudio.preview')}
           </button>
           <button className="btn-primary" disabled={pending} onClick={onApprove}>
-            <span className="material-symbols-outlined text-[20px]">check</span>{t('adminStudio.approve')}
+            <span className="material-symbols-outlined text-[20px]">check</span>
+            {t('adminStudio.approve')}
           </button>
           <button className="btn-secondary" disabled={pending} onClick={onReject}>
-            <span className="material-symbols-outlined text-[20px]">close</span>{t('adminStudio.reject')}
+            <span className="material-symbols-outlined text-[20px]">close</span>
+            {t('adminStudio.reject')}
           </button>
         </div>
       </div>
       {open && (
         <div className="mt-4">
-          {preview.isLoading ? <Spinner /> : preview.isError ? (
+          {preview.isLoading ? (
+            <Spinner />
+          ) : preview.isError ? (
             <p className="text-sm text-error">{t('adminStudio.loadError')}</p>
           ) : (
-            <iframe title={it.slug} srcDoc={preview.data}
-              className="w-full rounded-xl border border-outline-variant bg-white" style={{ height: '70vh' }} />
+            <iframe
+              title={it.slug}
+              srcDoc={preview.data}
+              className="w-full rounded-xl border border-outline-variant bg-white"
+              style={{ height: '70vh' }}
+            />
           )}
         </div>
       )}
@@ -146,41 +201,63 @@ function UsageDashboard() {
     refetchInterval: 15000,
   });
   const rerun = useMutation({
-    mutationFn: async (id: string) => (await api.post(`/admin/academy-studio/ai/jobs/${id}/rerun`)).data,
+    mutationFn: async (id: string) =>
+      (await api.post(`/admin/academy-studio/ai/jobs/${id}/rerun`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-ai-usage'] }),
   });
 
   if (q.isLoading) return <Spinner />;
-  if (q.isError) return <div className="card"><ErrorNote error={q.error} /></div>;
+  if (q.isError)
+    return (
+      <div className="card">
+        <ErrorNote error={q.error} />
+      </div>
+    );
   const u = q.data!;
-  const pct = u.budgetCents > 0 ? Math.min(100, Math.round((u.spentCents / u.budgetCents) * 100)) : 0;
+  const pct =
+    u.budgetCents > 0 ? Math.min(100, Math.round((u.spentCents / u.budgetCents) * 100)) : 0;
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-sm text-on-surface-variant">{t('adminStudio.spend', { month: u.month })}</p>
+          <p className="text-sm text-on-surface-variant">
+            {t('adminStudio.spend', { month: u.month })}
+          </p>
           <p className="font-heading text-3xl font-bold tabular-nums">{usd(u.spentCents)}</p>
           {u.budgetCents > 0 && (
             <>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-container-high">
-                <div className={`h-full ${pct >= 90 ? 'bg-error' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
+                <div
+                  className={`h-full ${pct >= 90 ? 'bg-error' : 'bg-primary'}`}
+                  style={{ width: `${pct}%` }}
+                />
               </div>
               <p className="mt-1 text-xs text-on-surface-variant">
-                {t('adminStudio.ofBudget', { budget: usd(u.budgetCents), rem: usd(u.budgetRemainingCents ?? 0) })}
+                {t('adminStudio.ofBudget', {
+                  budget: usd(u.budgetCents),
+                  rem: usd(u.budgetRemainingCents ?? 0),
+                })}
               </p>
             </>
           )}
         </div>
         <div className="card">
           <p className="text-sm text-on-surface-variant">{t('adminStudio.failed24')}</p>
-          <p className={`font-heading text-3xl font-bold tabular-nums ${u.failedLast24h ? 'text-error' : ''}`}>{u.failedLast24h}</p>
+          <p
+            className={`font-heading text-3xl font-bold tabular-nums ${u.failedLast24h ? 'text-error' : ''}`}
+          >
+            {u.failedLast24h}
+          </p>
         </div>
         <div className="card">
           <p className="mb-2 text-sm text-on-surface-variant">{t('adminStudio.byStatus')}</p>
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(u.byStatus).map(([s, n]) => (
-              <Badge key={s} tone={s === 'FAILED' ? 'error' : s === 'SUCCEEDED' ? 'teal' : 'neutral'}>
+              <Badge
+                key={s}
+                tone={s === 'FAILED' ? 'error' : s === 'SUCCEEDED' ? 'teal' : 'neutral'}
+              >
                 {t([`adminStudio.jobStatus.${s}`, s])}: {n}
               </Badge>
             ))}
@@ -199,15 +276,23 @@ function UsageDashboard() {
           {u.recentJobs.map((j) => (
             <li key={j.id} className="py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={j.status === 'FAILED' ? 'error' : j.status === 'SUCCEEDED' ? 'teal' : 'neutral'}>
+                <Badge
+                  tone={
+                    j.status === 'FAILED' ? 'error' : j.status === 'SUCCEEDED' ? 'teal' : 'neutral'
+                  }
+                >
                   {t([`adminStudio.jobStatus.${j.status}`, j.status])}
                 </Badge>
                 <span className="text-sm text-on-surface-variant">{dateShort(j.createdAt)}</span>
               </div>
               {j.error && <JobError error={j.error} />}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-on-surface-variant">
-                <span className="tabular-nums">{t('adminStudio.attempts')}: {j.attempts}</span>
-                <span className="tabular-nums" dir="ltr">{usd(j.costCents)}</span>
+                <span className="tabular-nums">
+                  {t('adminStudio.attempts')}: {j.attempts}
+                </span>
+                <span className="tabular-nums" dir="ltr">
+                  {usd(j.costCents)}
+                </span>
                 {j.status === 'FAILED' && <RerunButton id={j.id} rerun={rerun} />}
               </div>
             </li>
@@ -229,7 +314,15 @@ function UsageDashboard() {
                 <tr key={j.id} className="border-t border-outline-variant align-top">
                   <td className="whitespace-nowrap p-2">{dateShort(j.createdAt)}</td>
                   <td className="p-2">
-                    <Badge tone={j.status === 'FAILED' ? 'error' : j.status === 'SUCCEEDED' ? 'teal' : 'neutral'}>
+                    <Badge
+                      tone={
+                        j.status === 'FAILED'
+                          ? 'error'
+                          : j.status === 'SUCCEEDED'
+                            ? 'teal'
+                            : 'neutral'
+                      }
+                    >
                       {t([`adminStudio.jobStatus.${j.status}`, j.status])}
                     </Badge>
                     {/* On its own line: an English failure reason set beside an
@@ -240,7 +333,11 @@ function UsageDashboard() {
                   <td className="whitespace-nowrap p-2 tabular-nums">{j.attempts}</td>
                   {/* A dollar amount is Latin script inside an RTL row; without
                       an explicit direction the "$" drifts and the number clips. */}
-                  <td className="whitespace-nowrap p-2 tabular-nums" dir="ltr" style={{ textAlign: 'start' }}>
+                  <td
+                    className="whitespace-nowrap p-2 tabular-nums"
+                    dir="ltr"
+                    style={{ textAlign: 'start' }}
+                  >
                     {usd(j.costCents)}
                   </td>
                   <td className="p-2">
@@ -257,11 +354,22 @@ function UsageDashboard() {
 }
 
 /** Shared by the phone list and the table so a retry behaves the same in both. */
-function RerunButton({ id, rerun }: { id: string; rerun: { mutate: (id: string) => void; isPending: boolean } }) {
+function RerunButton({
+  id,
+  rerun,
+}: {
+  id: string;
+  rerun: { mutate: (id: string) => void; isPending: boolean };
+}) {
   const { t } = useTranslation();
   return (
-    <button className="whitespace-nowrap text-sm font-bold text-primary hover:underline" disabled={rerun.isPending}
-      onClick={() => rerun.mutate(id)}>{t('adminStudio.rerun')}</button>
+    <button
+      className="whitespace-nowrap text-sm font-bold text-primary hover:underline"
+      disabled={rerun.isPending}
+      onClick={() => rerun.mutate(id)}
+    >
+      {t('adminStudio.rerun')}
+    </button>
   );
 }
 
@@ -316,7 +424,10 @@ function JobError({ error }: { error: string }) {
   const exact = JOB_ERROR_KEY[trimmed];
   const prefixed = exact ? null : JOB_ERROR_PREFIX.find(([p]) => trimmed.startsWith(p))?.[1];
   const key = exact ?? prefixed;
-  if (key) return <p className="mt-1 text-xs leading-relaxed text-error">{t(`adminStudio.jobError.${key}`)}</p>;
+  if (key)
+    return (
+      <p className="mt-1 text-xs leading-relaxed text-error">{t(`adminStudio.jobError.${key}`)}</p>
+    );
   return (
     <p className="mt-1 text-xs leading-relaxed text-error" dir="ltr" style={{ textAlign: 'start' }}>
       {error}

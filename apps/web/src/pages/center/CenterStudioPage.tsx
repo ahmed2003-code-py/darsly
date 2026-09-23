@@ -20,20 +20,38 @@ export default function CenterStudioPage() {
   const shelf = useCenterStudioThemes(isCenter ? slug : undefined);
   const apply = useApplyCenterTheme(slug ?? '');
 
-  if (isLoading) return <div className="page"><Skeleton className="h-32 rounded-2xl" /></div>;
+  if (isLoading)
+    return (
+      <div className="page">
+        <Skeleton className="h-32 rounded-2xl" />
+      </div>
+    );
   if (!academy || !isCenter) {
-    return <div className="page"><EmptyState icon="apartment" title={t('center.noCenter')} /></div>;
+    return (
+      <div className="page">
+        <EmptyState icon="apartment" title={t('center.noCenter')} />
+      </div>
+    );
   }
 
   return (
     <div className="page">
-      <PageHeader title={t('centerStudio.title')} subtitle={t('centerStudio.subtitle', { name: academy.name })} />
+      <PageHeader
+        title={t('centerStudio.title')}
+        subtitle={t('centerStudio.subtitle', { name: academy.name })}
+      />
       {shelf.isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 rounded-2xl" />
+          ))}
         </div>
       ) : !shelf.data?.themes.length ? (
-        <EmptyState icon="palette" title={t('centerStudio.empty')} hint={t('centerStudio.emptyHint')} />
+        <EmptyState
+          icon="palette"
+          title={t('centerStudio.empty')}
+          hint={t('centerStudio.emptyHint')}
+        />
       ) : (
         <ThemeApplyGrid
           themes={shelf.data.themes}

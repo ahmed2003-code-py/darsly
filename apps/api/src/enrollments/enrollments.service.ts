@@ -69,7 +69,13 @@ export class EnrollmentsService {
     const teacherUserId = course.teacher?.user?.id;
     if (!teacherUserId) return;
     await this.notifications
-      .create({ userId: teacherUserId, type: 'ANNOUNCEMENT', title, body, meta: { courseId: course.id, audience: 'teacher' } })
+      .create({
+        userId: teacherUserId,
+        type: 'ANNOUNCEMENT',
+        title,
+        body,
+        meta: { courseId: course.id, audience: 'teacher' },
+      })
       .catch(() => undefined);
   }
 
@@ -114,14 +120,18 @@ export class EnrollmentsService {
     }
     const net = Math.max(0, course.priceCents - discount);
     const fee = await this.serviceFee(this.orgOf(course), net);
-    const basePlusFee = course.priceCents + (await this.serviceFee(this.orgOf(course), course.priceCents));
+    const basePlusFee =
+      course.priceCents + (await this.serviceFee(this.orgOf(course), course.priceCents));
 
     // What the student is shown: one price, and the discount they actually
     // earned. basePriceCents/netCents/feeCents stay out of the response — the
     // split between the academy's price and the platform's fee is not something
     // either side of the transaction needs to see, and publishing it made the
     // course card and the checkout show two different numbers for one course.
-    const org = await this.prisma.academy.findUnique({ where: { id: this.orgOf(course) }, select: { kind: true } });
+    const org = await this.prisma.academy.findUnique({
+      where: { id: this.orgOf(course) },
+      select: { kind: true },
+    });
     return {
       basePriceCents: basePlusFee,
       discountCents: discount,
@@ -129,7 +139,8 @@ export class EnrollmentsService {
       currency: course.currency,
       coupon: coupon ? { id: coupon.id, code: coupon.code, maxUses: coupon.maxUses } : null,
       // Phase 7: where cash can be handed over — the teacher always; the desk only in a Center.
-      cashReceivers: org?.kind === 'CENTER' ? (['TEACHER', 'CENTER'] as const) : (['TEACHER'] as const),
+      cashReceivers:
+        org?.kind === 'CENTER' ? (['TEACHER', 'CENTER'] as const) : (['TEACHER'] as const),
     };
   }
 
@@ -139,7 +150,11 @@ export class EnrollmentsService {
    * free by rule (enforced at create/update), and this closes the door on any
    * row that slipped past that with a price.
    */
-  private async assertCenterSplitConfiguredIfPaid(course: { academyId: string | null; tenantId: string; priceCents: number }) {
+  private async assertCenterSplitConfiguredIfPaid(course: {
+    academyId: string | null;
+    tenantId: string;
+    priceCents: number;
+  }) {
     // Phase 7: a paid Center course is sellable once its revenue split is agreed.
     await assertSplitConfigured(this.prisma, course);
   }
@@ -192,7 +207,11 @@ export class EnrollmentsService {
     // Paid → must pay first (manual proof + verification), in every
     // enrollmentMode — unchanged.
     if (quote.totalCents > 0) {
-      throw new BadRequestException({ message: 'Payment required', code: 'PAYMENT_REQUIRED', quote });
+      throw new BadRequestException({
+        message: 'Payment required',
+        code: 'PAYMENT_REQUIRED',
+        quote,
+      });
     }
 
     // AUTOMATIC (the default — byte-for-byte the existing behavior) needs no
@@ -239,11 +258,18 @@ export class EnrollmentsService {
     // risk, and far simpler than threading a pending reservation through the
     // approval workflow.
     const enrollment = await this.prisma.$transaction(async (tx) => {
-      if (quote.coupon && !needsApproval) await reserveCouponUse(tx, quote.coupon.id, quote.coupon.maxUses);
+      if (quote.coupon && !needsApproval)
+        await reserveCouponUse(tx, quote.coupon.id, quote.coupon.maxUses);
       return existing
         ? tx.enrollment.update({ where: { id: existing.id }, data })
         : tx.enrollment.create({
-            data: { studentId: student.id, courseId, tenantId: course.tenantId, academyId: this.orgOf(course), ...data },
+            data: {
+              studentId: student.id,
+              courseId,
+              tenantId: course.tenantId,
+              academyId: this.orgOf(course),
+              ...data,
+            },
           });
     });
 
@@ -334,7 +360,10 @@ export class EnrollmentsService {
             subject: true,
             grades: { include: { grade: true } },
             teacher: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
-            units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
+            units: {
+              where: { deletedAt: null },
+              select: { _count: { select: { lessons: { where: { deletedAt: null } } } } },
+            },
           },
         },
       },
@@ -357,7 +386,9 @@ export class EnrollmentsService {
       const cid = r.lesson.unit.courseId;
       completedByCourse.set(cid, (completedByCourse.get(cid) ?? 0) + 1);
     }
-    const certByCourse = new Map(certs.map((c) => [c.courseId, { serial: c.serial, verifyToken: c.verifyToken }]));
+    const certByCourse = new Map(
+      certs.map((c) => [c.courseId, { serial: c.serial, verifyToken: c.verifyToken }]),
+    );
 
     return enrollments.map((e) => {
       const lessonsCount = e.course.units.reduce((s, u) => s + u._count.lessons, 0);
@@ -459,7 +490,10 @@ export class EnrollmentsService {
   async approve(academyId: string, id: string) {
     const enrollment = await this.assertTenantEnrollment(academyId, id);
     if (enrollment.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException({ message: 'Only a pending request can be approved', code: 'NOT_PENDING_APPROVAL' });
+      throw new BadRequestException({
+        message: 'Only a pending request can be approved',
+        code: 'NOT_PENDING_APPROVAL',
+      });
     }
     const expiresAt = this.expiryFor(enrollment.course);
     // Conditional update is the idempotency guard: two simultaneous approve
@@ -471,7 +505,10 @@ export class EnrollmentsService {
       data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt, source: 'MANUAL_APPROVAL' },
     });
     if (flip.count === 0) {
-      throw new BadRequestException({ message: 'Only a pending request can be approved', code: 'NOT_PENDING_APPROVAL' });
+      throw new BadRequestException({
+        message: 'Only a pending request can be approved',
+        code: 'NOT_PENDING_APPROVAL',
+      });
     }
     const updated = await this.prisma.enrollment.findUniqueOrThrow({ where: { id } });
     await activateBundleChildren(this.prisma, enrollment.course, enrollment.studentId, expiresAt);
@@ -489,14 +526,20 @@ export class EnrollmentsService {
   async reject(academyId: string, id: string, reason?: string) {
     const enrollment = await this.assertTenantEnrollment(academyId, id);
     if (enrollment.status !== 'PENDING_APPROVAL') {
-      throw new BadRequestException({ message: 'Only a pending request can be rejected', code: 'NOT_PENDING_APPROVAL' });
+      throw new BadRequestException({
+        message: 'Only a pending request can be rejected',
+        code: 'NOT_PENDING_APPROVAL',
+      });
     }
     const flip = await this.prisma.enrollment.updateMany({
       where: { id, status: 'PENDING_APPROVAL' },
       data: { status: 'REJECTED', revokedReason: reason ?? null },
     });
     if (flip.count === 0) {
-      throw new BadRequestException({ message: 'Only a pending request can be rejected', code: 'NOT_PENDING_APPROVAL' });
+      throw new BadRequestException({
+        message: 'Only a pending request can be rejected',
+        code: 'NOT_PENDING_APPROVAL',
+      });
     }
     const updated = await this.prisma.enrollment.findUniqueOrThrow({ where: { id } });
     await this.notifications.create({
@@ -518,11 +561,19 @@ export class EnrollmentsService {
    * departure from the academy's normal flow, not something available
    * silently underneath it) and the enrollmentApprovalMode flag is on.
    */
-  async demoEnroll(academyId: string, identify: { studentUserId?: string; studentEmail?: string }, courseId: string) {
-    const academy = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { enrollmentMode: true } });
+  async demoEnroll(
+    academyId: string,
+    identify: { studentUserId?: string; studentEmail?: string },
+    courseId: string,
+  ) {
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { enrollmentMode: true },
+    });
     if (!academy || academy.enrollmentMode === 'AUTOMATIC') {
       throw new BadRequestException({
-        message: 'Demo enrollment is only available when this academy is in MANUAL or DEMO enrollment mode',
+        message:
+          'Demo enrollment is only available when this academy is in MANUAL or DEMO enrollment mode',
         code: 'ENROLLMENT_MODE_MISMATCH',
       });
     }
@@ -531,7 +582,9 @@ export class EnrollmentsService {
     // student who isn't enrolled anywhere at this academy yet (a genuinely
     // new "free onboarding" demo), so there is nothing to pick from a list.
     const student = await this.prisma.studentProfile.findFirst({
-      where: identify.studentUserId ? { userId: identify.studentUserId } : { user: { email: identify.studentEmail?.toLowerCase().trim() } },
+      where: identify.studentUserId
+        ? { userId: identify.studentUserId }
+        : { user: { email: identify.studentEmail?.toLowerCase().trim() } },
       include: { user: { select: { id: true, fullName: true } } },
     });
     if (!student) throw new NotFoundException('Student not found');
@@ -560,7 +613,8 @@ export class EnrollmentsService {
     });
     if (pendingPayment) {
       throw new ConflictException({
-        message: 'A payment is already pending for this student and course — resolve it before demo-enrolling',
+        message:
+          'A payment is already pending for this student and course — resolve it before demo-enrolling',
         code: 'PAYMENT_PENDING',
       });
     }

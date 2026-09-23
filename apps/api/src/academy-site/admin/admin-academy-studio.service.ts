@@ -58,15 +58,25 @@ export class AdminAcademyStudioService {
     const dayAgo = new Date(Date.now() - 86_400_000);
 
     const [spend, grouped, failed24h, recent] = await Promise.all([
-      this.prisma.aiJob.aggregate({ _sum: { costCents: true }, where: { createdAt: { gte: monthStart } } }),
+      this.prisma.aiJob.aggregate({
+        _sum: { costCents: true },
+        where: { createdAt: { gte: monthStart } },
+      }),
       this.prisma.aiJob.groupBy({ by: ['status'], _count: { _all: true } }),
       this.prisma.aiJob.count({ where: { status: 'FAILED', updatedAt: { gte: dayAgo } } }),
       this.prisma.aiJob.findMany({
         orderBy: { createdAt: 'desc' },
         take: 20,
         select: {
-          id: true, academyId: true, status: true, stage: true, attempts: true,
-          costCents: true, error: true, createdAt: true, updatedAt: true,
+          id: true,
+          academyId: true,
+          status: true,
+          stage: true,
+          attempts: true,
+          costCents: true,
+          error: true,
+          createdAt: true,
+          updatedAt: true,
         },
       }),
     ]);

@@ -85,12 +85,28 @@ export function useWebNotifications(navigate?: (to: string) => void) {
     const socket = getSocket();
     if (!socket) return;
 
-    const onNotification = (n: { id?: string; title?: string; body?: string; type?: string; meta?: Record<string, unknown> }) => {
+    const onNotification = (n: {
+      id?: string;
+      title?: string;
+      body?: string;
+      type?: string;
+      meta?: Record<string, unknown>;
+    }) => {
       if (!n?.title) return;
       const to = notificationRoute(n, roleOf());
-      show(n.title, n.body ?? '', `notif-${n.id ?? n.title}`, to ? () => go.current?.(to) : undefined);
+      show(
+        n.title,
+        n.body ?? '',
+        `notif-${n.id ?? n.title}`,
+        to ? () => go.current?.(to) : undefined,
+      );
     };
-    const onMessage = (m: { threadId?: string; senderName?: string; body?: string; mine?: boolean }) => {
+    const onMessage = (m: {
+      threadId?: string;
+      senderName?: string;
+      body?: string;
+      mine?: boolean;
+    }) => {
       // The sender gets the same event echoed back; don't notify them of
       // their own message.
       if (!m || m.mine) return;

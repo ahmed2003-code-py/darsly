@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import {
-  ACCENT_MARKS, CONTAINER_WIDTHS, IMAGE_TREATMENTS, SECTION_ALIGNS, SECTION_EMPHASIS,
-  SECTION_SURFACES, designSpecSchema,
+  ACCENT_MARKS,
+  CONTAINER_WIDTHS,
+  IMAGE_TREATMENTS,
+  SECTION_ALIGNS,
+  SECTION_EMPHASIS,
+  SECTION_SURFACES,
+  designSpecSchema,
 } from '../schema/design-spec';
 import { ARCHETYPES } from './planning.schema';
 
@@ -21,8 +26,20 @@ import { ARCHETYPES } from './planning.schema';
 
 /** The sections a composition may place. Live ones resolve at view time. */
 export const COMPOSABLE_SECTIONS = [
-  'hero', 'about', 'toolkit', 'credentials', 'stats', 'timeline', 'process',
-  'quote', 'courses', 'gallery', 'reviews', 'faq', 'contact', 'cta',
+  'hero',
+  'about',
+  'toolkit',
+  'credentials',
+  'stats',
+  'timeline',
+  'process',
+  'quote',
+  'courses',
+  'gallery',
+  'reviews',
+  'faq',
+  'contact',
+  'cta',
 ] as const;
 
 export type ComposableSection = (typeof COMPOSABLE_SECTIONS)[number];

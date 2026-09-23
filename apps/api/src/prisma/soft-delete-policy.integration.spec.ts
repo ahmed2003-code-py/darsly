@@ -35,7 +35,13 @@ let deletedCourseId = '';
 let teacherId = '';
 
 beforeAll(async () => {
-  available = await databaseReady(prisma, ['course', 'enrollment', 'studentProfile', 'user', 'teacherProfile']);
+  available = await databaseReady(prisma, [
+    'course',
+    'enrollment',
+    'studentProfile',
+    'user',
+    'teacherProfile',
+  ]);
   if (!available) return;
   await prisma.onModuleInit();
 
@@ -95,12 +101,16 @@ describe('soft delete — lookup by primary id hides deleted rows', () => {
 
   it('findUniqueOrThrow by id throws for a deleted row', async () => {
     if (!guard()) return;
-    await expect(prisma.course.findUniqueOrThrow({ where: { id: deletedCourseId } })).rejects.toBeDefined();
+    await expect(
+      prisma.course.findUniqueOrThrow({ where: { id: deletedCourseId } }),
+    ).rejects.toBeDefined();
   });
 
   it('an explicit deletedAt still wins, so a restore/trash view can look', async () => {
     if (!guard()) return;
-    const row = await prisma.course.findUnique({ where: { id: deletedCourseId, deletedAt: undefined } });
+    const row = await prisma.course.findUnique({
+      where: { id: deletedCourseId, deletedAt: undefined },
+    });
     expect(row?.id).toBe(deletedCourseId);
   });
 

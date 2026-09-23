@@ -35,7 +35,9 @@ export class AdminAcademiesController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: '[admin] Academy drill-down: identity, staff, counts, revenue, feature flags' })
+  @ApiOperation({
+    summary: '[admin] Academy drill-down: identity, staff, counts, revenue, feature flags',
+  })
   detail(@Param('id') id: string) {
     return this.academies.academyDetail(id);
   }

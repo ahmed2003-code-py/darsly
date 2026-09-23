@@ -4,7 +4,8 @@ import { useStaffAcademyStore } from '../stores/staffAcademy';
 
 // Production build is served by the API itself -> same-origin relative calls.
 // Local dev (vite on :5173) talks to the API on :4000 unless VITE_API_URL says otherwise.
-const API_ORIGIN = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:4000' : '');
+const API_ORIGIN =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:4000' : '');
 
 /** Absolute API origin — needed for URLs handed to hls.js / <a download> that
  *  bypass the axios client (must resolve to the API, not the web origin). */

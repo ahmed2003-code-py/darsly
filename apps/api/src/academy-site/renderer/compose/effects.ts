@@ -15,7 +15,8 @@ import { AccentMark, Backdrop, ImageTreatment } from '../../schema/design-spec';
 /** The element the page renders behind everything, when the design has a backdrop. */
 export function backdropHtml(kind: Backdrop): string {
   if (kind === 'none') return '';
-  const layers = kind === 'mesh' || kind === 'aurora' || kind === 'orbits' ? '<i></i><i></i><i></i>' : '';
+  const layers =
+    kind === 'mesh' || kind === 'aurora' || kind === 'orbits' ? '<i></i><i></i><i></i>' : '';
   return `<div class="backdrop" data-kind="${kind}" aria-hidden="true">${layers}</div>`;
 }
 

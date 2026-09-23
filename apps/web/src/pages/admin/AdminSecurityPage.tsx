@@ -4,7 +4,9 @@ import { api } from '../../lib/api';
 import { Badge, PageHeader, Spinner } from '../../components/ui';
 
 const SEV_TONE: Record<string, 'error' | 'warn' | 'neutral'> = {
-  CRITICAL: 'error', WARNING: 'warn', INFO: 'neutral',
+  CRITICAL: 'error',
+  WARNING: 'warn',
+  INFO: 'neutral',
 };
 
 export default function AdminSecurityPage() {
@@ -30,7 +32,9 @@ export default function AdminSecurityPage() {
             <Spinner />
           ) : !events?.length ? (
             <div className="card py-10 text-center text-outline">
-              <span className="material-symbols-outlined mb-2 text-4xl text-secondary">verified_user</span>
+              <span className="material-symbols-outlined mb-2 text-4xl text-secondary">
+                verified_user
+              </span>
               <p>{t('admin.noEvents')}</p>
             </div>
           ) : (

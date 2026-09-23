@@ -5,13 +5,26 @@ function makePrisma(kind: 'PERSONAL' | 'CENTER') {
   return {
     academy: { findUniqueOrThrow: jest.fn().mockResolvedValue({ kind }) },
     subject: {
-      findMany: jest.fn().mockResolvedValue([{ id: 'maths', code: 'MATH', nameAr: 'رياضيات', nameEn: 'Maths', icon: null, track: 'BOTH' }, { id: 'phys', code: 'PHY', nameAr: 'فيزياء', nameEn: 'Physics', icon: null, track: 'BOTH' }]),
+      findMany: jest.fn().mockResolvedValue([
+        {
+          id: 'maths',
+          code: 'MATH',
+          nameAr: 'رياضيات',
+          nameEn: 'Maths',
+          icon: null,
+          track: 'BOTH',
+        },
+        { id: 'phys', code: 'PHY', nameAr: 'فيزياء', nameEn: 'Physics', icon: null, track: 'BOTH' },
+      ]),
       findFirst: jest.fn().mockResolvedValue({ id: 'maths' }),
       create: jest.fn(),
     },
     academySubject: {
       findMany: jest.fn().mockResolvedValue([{ subjectId: 'maths', isActive: true }]),
-      upsert: jest.fn(async ({ create, update }: any) => ({ subjectId: create.subjectId, isActive: update.isActive })),
+      upsert: jest.fn(async ({ create, update }: any) => ({
+        subjectId: create.subjectId,
+        isActive: update.isActive,
+      })),
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -23,7 +36,10 @@ describe('AcademySubjectsService', () => {
   it('CENTER: opt-in — only rows switched on read as offered', async () => {
     const res = await new AcademySubjectsService(makePrisma('CENTER')).list('centerA');
     expect(res.gated).toBe(true);
-    expect(res.subjects.map((s) => [s.id, s.offered])).toEqual([['maths', true], ['phys', false]]);
+    expect(res.subjects.map((s) => [s.id, s.offered])).toEqual([
+      ['maths', true],
+      ['phys', false],
+    ]);
   });
 
   it('PERSONAL: never gated — everything offered, activation rows ignored', async () => {
@@ -35,7 +51,9 @@ describe('AcademySubjectsService', () => {
   it('activating upserts one (academyId, subjectId) row and never creates a Subject', async () => {
     const prisma = makePrisma('CENTER');
     await new AcademySubjectsService(prisma).setOffered('centerA', 'maths', true);
-    expect(prisma.academySubject.upsert.mock.calls[0][0].where).toEqual({ academyId_subjectId: { academyId: 'centerA', subjectId: 'maths' } });
+    expect(prisma.academySubject.upsert.mock.calls[0][0].where).toEqual({
+      academyId_subjectId: { academyId: 'centerA', subjectId: 'maths' },
+    });
     expect(prisma.subject.create).not.toHaveBeenCalled();
   });
 
@@ -47,17 +65,21 @@ describe('AcademySubjectsService', () => {
   });
 
   it('a PERSONAL workspace cannot activate subjects', async () => {
-    await expect(new AcademySubjectsService(makePrisma('PERSONAL')).setOffered('t', 'maths', true)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      new AcademySubjectsService(makePrisma('PERSONAL')).setOffered('t', 'maths', true),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('an unknown / inactive master subject cannot be activated', async () => {
     const prisma = makePrisma('CENTER');
     prisma.subject.findFirst.mockResolvedValue(null);
-    await expect(new AcademySubjectsService(prisma).setOffered('centerA', 'ghost', true)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      new AcademySubjectsService(prisma).setOffered('centerA', 'ghost', true),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.academySubject.upsert).not.toHaveBeenCalled();
   });
 
-  it('scope is always the caller\'s academyId — Center A can only ever write Center A rows', async () => {
+  it("scope is always the caller's academyId — Center A can only ever write Center A rows", async () => {
     const prisma = makePrisma('CENTER');
     await new AcademySubjectsService(prisma).setOffered('centerA', 'maths', true);
     expect(prisma.academySubject.upsert.mock.calls[0][0].create.academyId).toBe('centerA');
@@ -77,8 +99,24 @@ describe('AcademySubjectsService — core subjects', () => {
           where?.isCore
             ? [{ id: 'arabic' }]
             : [
-                { id: 'arabic', code: 'arabic', nameAr: 'عربي', nameEn: 'Arabic', icon: null, track: 'BOTH', isCore: true },
-                { id: 'phys', code: 'PHY', nameAr: 'فيزياء', nameEn: 'Physics', icon: null, track: 'BOTH', isCore: false },
+                {
+                  id: 'arabic',
+                  code: 'arabic',
+                  nameAr: 'عربي',
+                  nameEn: 'Arabic',
+                  icon: null,
+                  track: 'BOTH',
+                  isCore: true,
+                },
+                {
+                  id: 'phys',
+                  code: 'PHY',
+                  nameAr: 'فيزياء',
+                  nameEn: 'Physics',
+                  icon: null,
+                  track: 'BOTH',
+                  isCore: false,
+                },
               ],
         ),
       },
@@ -121,12 +159,17 @@ describe('AcademySubjectsService — core subjects', () => {
     const prisma = corePrisma([]);
     const res = await new AcademySubjectsService(prisma).setAllOffered('centerA', true);
     expect(res).toEqual({ count: 2, isActive: true });
-    expect(prisma.academySubject.updateMany).toHaveBeenCalledWith({ where: { academyId: 'centerA' }, data: { isActive: true } });
+    expect(prisma.academySubject.updateMany).toHaveBeenCalledWith({
+      where: { academyId: 'centerA' },
+      data: { isActive: true },
+    });
   });
 
   it('a PERSONAL workspace cannot activate-all', async () => {
     const prisma = corePrisma([]);
     prisma.academy.findUniqueOrThrow.mockResolvedValue({ kind: 'PERSONAL' });
-    await expect(new AcademySubjectsService(prisma).setAllOffered('teacherT', true)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      new AcademySubjectsService(prisma).setAllOffered('teacherT', true),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

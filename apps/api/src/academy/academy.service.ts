@@ -1,5 +1,11 @@
 import { EARNED_LOOK_STATUSES } from './earned-academy-look';
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AcademyRole } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
 import { deriveAppThemes, paletteFromBrandTokens } from '../branding/app-theme';
@@ -34,39 +40,49 @@ export class AcademyService {
       include: {
         academy: {
           select: {
-            id: true, slug: true, name: true, status: true, kind: true,
-            logoUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true,
+            id: true,
+            slug: true,
+            name: true,
+            status: true,
+            kind: true,
+            logoUrl: true,
+            colorPrimary: true,
+            colorAccent: true,
+            brandTokens: true,
             enrollmentMode: true,
           },
         },
       },
     });
-    const mine = rows
-      .map((m) => ({
-        academyId: m.academyId,
-        slug: m.academy.slug,
-        name: m.academy.name,
-        role: m.role,
-        isHome: m.isHome,
-        status: m.academy.status,
-        kind: m.academy.kind,
-        enrollmentMode: m.academy.enrollmentMode,
-        // brandTokens carries the published design system, so the console can
-        // dress itself in the academy's own look rather than the platform default.
-        branding: {
-          logoUrl: m.academy.logoUrl,
-          colorPrimary: m.academy.colorPrimary,
-          colorAccent: m.academy.colorAccent,
-          brandTokens: m.academy.brandTokens ?? null,
-          // The console's own token set, derived here rather than in the browser
-          // so the contrast floors are enforced in one tested place. Derived on
-          // read, not frozen at publish, so sharpening the rules improves every
-          // academy rather than only the ones that publish again.
-          appTheme: deriveAppThemes(
-            paletteFromBrandTokens(m.academy.brandTokens, m.academy.colorPrimary, m.academy.colorAccent),
+    const mine = rows.map((m) => ({
+      academyId: m.academyId,
+      slug: m.academy.slug,
+      name: m.academy.name,
+      role: m.role,
+      isHome: m.isHome,
+      status: m.academy.status,
+      kind: m.academy.kind,
+      enrollmentMode: m.academy.enrollmentMode,
+      // brandTokens carries the published design system, so the console can
+      // dress itself in the academy's own look rather than the platform default.
+      branding: {
+        logoUrl: m.academy.logoUrl,
+        colorPrimary: m.academy.colorPrimary,
+        colorAccent: m.academy.colorAccent,
+        brandTokens: m.academy.brandTokens ?? null,
+        // The console's own token set, derived here rather than in the browser
+        // so the contrast floors are enforced in one tested place. Derived on
+        // read, not frozen at publish, so sharpening the rules improves every
+        // academy rather than only the ones that publish again.
+        appTheme: deriveAppThemes(
+          paletteFromBrandTokens(
+            m.academy.brandTokens,
+            m.academy.colorPrimary,
+            m.academy.colorAccent,
           ),
-        },
-      }));
+        ),
+      },
+    }));
 
     // A student who enrolled through a teacher's link is not a member of
     // anything — enrolling in a course has never created an AcademyMembership,
@@ -97,14 +113,23 @@ export class AcademyService {
       orderBy: { createdAt: 'asc' },
     });
     // Organisation scope; tenantId only as the pre-backfill fallback.
-    const ids = [...new Set(rows.map((r) => r.academyId ?? r.tenantId))].filter((id) => !already.has(id));
+    const ids = [...new Set(rows.map((r) => r.academyId ?? r.tenantId))].filter(
+      (id) => !already.has(id),
+    );
     if (!ids.length) return [];
 
     const academies = await this.prisma.academy.findMany({
       where: { id: { in: ids }, deletedAt: null, status: { not: 'ARCHIVED' } },
       select: {
-        id: true, slug: true, name: true, status: true, kind: true,
-        logoUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true,
+        id: true,
+        slug: true,
+        name: true,
+        status: true,
+        kind: true,
+        logoUrl: true,
+        colorPrimary: true,
+        colorAccent: true,
+        brandTokens: true,
       },
     });
     const byId = new Map(academies.map((a) => [a.id, a]));
@@ -128,7 +153,9 @@ export class AcademyService {
           colorPrimary: a.colorPrimary,
           colorAccent: a.colorAccent,
           brandTokens: a.brandTokens ?? null,
-          appTheme: deriveAppThemes(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
+          appTheme: deriveAppThemes(
+            paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent),
+          ),
         },
       }));
   }
@@ -138,8 +165,17 @@ export class AcademyService {
     const a = await this.prisma.academy.findFirst({
       where: { slug, deletedAt: null, status: { in: ['ACTIVE', 'PENDING'] } },
       select: {
-        id: true, slug: true, name: true, tagline: true, status: true,
-        logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true, brandTokens: true, language: true,
+        id: true,
+        slug: true,
+        name: true,
+        tagline: true,
+        status: true,
+        logoUrl: true,
+        coverUrl: true,
+        colorPrimary: true,
+        colorAccent: true,
+        brandTokens: true,
+        language: true,
       },
     });
     if (!a) return a;
@@ -149,7 +185,9 @@ export class AcademyService {
     // moment they decide to join reads as having left the teacher's site.
     return {
       ...a,
-      appTheme: deriveAppThemes(paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent)),
+      appTheme: deriveAppThemes(
+        paletteFromBrandTokens(a.brandTokens, a.colorPrimary, a.colorAccent),
+      ),
     };
   }
 
@@ -162,7 +200,9 @@ export class AcademyService {
    */
   async resolveAcademyId(req: any): Promise<string | null> {
     // 1) host / subdomain
-    const host = (req.headers?.['x-forwarded-host'] || req.headers?.host || '').split(':')[0].toLowerCase();
+    const host = (req.headers?.['x-forwarded-host'] || req.headers?.host || '')
+      .split(':')[0]
+      .toLowerCase();
     if (host) {
       const domain = await this.prisma.academyDomain.findFirst({
         where: { hostname: host, verifiedAt: { not: null } },
@@ -173,13 +213,20 @@ export class AcademyService {
     // 2) explicit id
     const headerId = req.headers?.['x-academy-id'];
     if (typeof headerId === 'string' && headerId) {
-      const exists = await this.prisma.academy.findFirst({ where: { id: headerId, deletedAt: null }, select: { id: true } });
+      const exists = await this.prisma.academy.findFirst({
+        where: { id: headerId, deletedAt: null },
+        select: { id: true },
+      });
       if (exists) return exists.id;
     }
     // 2) slug (header or route param)
-    const slug = (req.headers?.['x-academy-slug'] as string) || req.params?.slug || req.params?.academySlug;
+    const slug =
+      (req.headers?.['x-academy-slug'] as string) || req.params?.slug || req.params?.academySlug;
     if (typeof slug === 'string' && slug) {
-      const bySlug = await this.prisma.academy.findFirst({ where: { slug, deletedAt: null }, select: { id: true } });
+      const bySlug = await this.prisma.academy.findFirst({
+        where: { slug, deletedAt: null },
+        select: { id: true },
+      });
       if (bySlug) return bySlug.id;
     }
     // 3) fallback: the teacher's own academy from the JWT tenantId (== academyId
@@ -187,7 +234,10 @@ export class AcademyService {
     //    academy without any client change. Only used when nothing above matched.
     const jwtTenant = req.user?.tenantId;
     if (typeof jwtTenant === 'string' && jwtTenant) {
-      const exists = await this.prisma.academy.findFirst({ where: { id: jwtTenant, deletedAt: null }, select: { id: true } });
+      const exists = await this.prisma.academy.findFirst({
+        where: { id: jwtTenant, deletedAt: null },
+        select: { id: true },
+      });
       if (exists) return exists.id;
     }
     return null;
@@ -213,8 +263,15 @@ export class AcademyService {
 
   private courseCardSelect() {
     return {
-      id: true, title: true, description: true, thumbnailUrl: true,
-      priceCents: true, currency: true, pricingModel: true, status: true, createdAt: true,
+      id: true,
+      title: true,
+      description: true,
+      thumbnailUrl: true,
+      priceCents: true,
+      currency: true,
+      pricingModel: true,
+      status: true,
+      createdAt: true,
       subject: { select: { nameAr: true, nameEn: true } },
       // `grades`, not `grade`: a course is offered to a LIST of years through
       // the CourseGrade join, and Course has no singular `grade` field at all.
@@ -224,7 +281,10 @@ export class AcademyService {
       // (see COURSE_REACH in courses.service.ts).
       grades: { select: { grade: { select: { nameAr: true, nameEn: true } } } },
       teacher: { select: { user: { select: { fullName: true } } } },
-      units: { where: { deletedAt: null }, select: { _count: { select: { lessons: { where: { deletedAt: null } } } } } },
+      units: {
+        where: { deletedAt: null },
+        select: { _count: { select: { lessons: { where: { deletedAt: null } } } } },
+      },
     };
   }
 
@@ -237,8 +297,6 @@ export class AcademyService {
     });
     return rows.map((c) => this.mapCard(c));
   }
-
-
 
   // ── Academy settings (owner: academy.manage) ──────────────────────────────
 
@@ -259,11 +317,23 @@ export class AcademyService {
     return this.prisma.academy.findUnique({
       where: { id: academyId },
       select: {
-        id: true, slug: true, name: true, tagline: true, status: true, kind: true,
-        logoUrl: true, coverUrl: true, colorPrimary: true, colorAccent: true,
-        language: true, currency: true,
-        maxConcurrentSessions: true, feeType: true, feeValue: true,
-        enrollmentMode: true, teacherSharePercent: true,
+        id: true,
+        slug: true,
+        name: true,
+        tagline: true,
+        status: true,
+        kind: true,
+        logoUrl: true,
+        coverUrl: true,
+        colorPrimary: true,
+        colorAccent: true,
+        language: true,
+        currency: true,
+        maxConcurrentSessions: true,
+        feeType: true,
+        feeValue: true,
+        enrollmentMode: true,
+        teacherSharePercent: true,
       },
     });
   }
@@ -303,7 +373,10 @@ export class AcademyService {
   /** Taken by another academy, or by another teacher's profile address. */
   private async slugTaken(academyId: string, slug: string): Promise<boolean> {
     const [academy, owner] = await Promise.all([
-      this.prisma.academy.findFirst({ where: { slug, NOT: { id: academyId } }, select: { id: true } }),
+      this.prisma.academy.findFirst({
+        where: { slug, NOT: { id: academyId } },
+        select: { id: true },
+      }),
       this.prisma.academy.findUnique({ where: { id: academyId }, select: { ownerUserId: true } }),
     ]);
     if (academy) return true;
@@ -340,16 +413,26 @@ export class AcademyService {
     // Phase 7: a revenue split is a Center concept; a PERSONAL workspace has none.
     let isCenter = false;
     if (dto.teacherSharePercent !== undefined) {
-      const k = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { kind: true } });
+      const k = await this.prisma.academy.findUnique({
+        where: { id: academyId },
+        select: { kind: true },
+      });
       isCenter = k?.kind === 'CENTER';
-      if (!isCenter) throw new BadRequestException({ message: 'Only a Center has a teacher revenue share', code: 'NOT_A_CENTER' });
+      if (!isCenter)
+        throw new BadRequestException({
+          message: 'Only a Center has a teacher revenue share',
+          code: 'NOT_A_CENTER',
+        });
     }
 
     if (dto.slug !== undefined) {
       const slug = dto.slug.trim().toLowerCase();
       const shape = slugShapeError(slug);
       if (shape === 'RESERVED') {
-        throw new BadRequestException({ message: 'هذا الرابط محجوز، اختر غيره', code: 'SLUG_RESERVED' });
+        throw new BadRequestException({
+          message: 'هذا الرابط محجوز، اختر غيره',
+          code: 'SLUG_RESERVED',
+        });
       }
       if (shape) {
         throw new BadRequestException({ message: 'رابط غير صالح', code: 'SLUG_INVALID' });
@@ -390,18 +473,32 @@ export class AcademyService {
         ...(dto.colorPrimary !== undefined ? { colorPrimary: dto.colorPrimary } : {}),
         ...(dto.colorAccent !== undefined ? { colorAccent: dto.colorAccent } : {}),
         ...(dto.language !== undefined ? { language: dto.language } : {}),
-        ...(dto.maxConcurrentSessions !== undefined ? { maxConcurrentSessions: dto.maxConcurrentSessions } : {}),
+        ...(dto.maxConcurrentSessions !== undefined
+          ? { maxConcurrentSessions: dto.maxConcurrentSessions }
+          : {}),
         ...(dto.enrollmentMode !== undefined ? { enrollmentMode: dto.enrollmentMode } : {}),
-        ...(dto.teacherSharePercent !== undefined && isCenter ? { teacherSharePercent: dto.teacherSharePercent } : {}),
+        ...(dto.teacherSharePercent !== undefined && isCenter
+          ? { teacherSharePercent: dto.teacherSharePercent }
+          : {}),
       },
-      select: { id: true, slug: true, name: true, colorPrimary: true, enrollmentMode: true, teacherSharePercent: true },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        colorPrimary: true,
+        enrollmentMode: true,
+        teacherSharePercent: true,
+      },
     });
   }
 
   // ── Members (owner: member.manage) ────────────────────────────────────────
 
   private async ownerUserId(academyId: string): Promise<string> {
-    const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { ownerUserId: true } });
+    const a = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { ownerUserId: true },
+    });
     if (!a) throw new NotFoundException('Academy not found');
     return a.ownerUserId;
   }
@@ -413,13 +510,20 @@ export class AcademyService {
       include: { user: { select: { fullName: true, email: true, avatarUrl: true } } },
     });
     return rows.map((m) => ({
-      id: m.id, userId: m.userId, role: m.role, status: m.status, isHome: m.isHome,
-      fullName: m.user.fullName, email: m.user.email, avatarUrl: m.user.avatarUrl,
+      id: m.id,
+      userId: m.userId,
+      role: m.role,
+      status: m.status,
+      isHome: m.isHome,
+      fullName: m.user.fullName,
+      email: m.user.email,
+      avatarUrl: m.user.avatarUrl,
       joinedAt: m.joinedAt,
       // Phase 7 (CENTER only): this member's revenue-share override and
       // whether they hold the organisation's cash-collector permission.
       revenueSharePercent: m.revenueSharePercent,
-      canCollectCash: Array.isArray(m.permissions) && (m.permissions as string[]).includes('payment.collect'),
+      canCollectCash:
+        Array.isArray(m.permissions) && (m.permissions as string[]).includes('payment.collect'),
     }));
   }
 
@@ -438,10 +542,18 @@ export class AcademyService {
     const email = dto.email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({
       where: { email },
-      select: { id: true, role: true, isActive: true, teacherProfile: { select: { status: true } } },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+        teacherProfile: { select: { status: true } },
+      },
     });
     if (!user) {
-      throw new BadRequestException({ message: 'No user with this email — they must register first', code: 'USER_NOT_FOUND' });
+      throw new BadRequestException({
+        message: 'No user with this email — they must register first',
+        code: 'USER_NOT_FOUND',
+      });
     }
     assertStaffEligible(user, dto.role as AcademyRole);
     const existing = await this.prisma.academyMembership.findUnique({
@@ -452,7 +564,10 @@ export class AcademyService {
     }
     return this.prisma.academyMembership.upsert({
       where: { userId_academyId: { userId: user.id, academyId } },
-      update: { role: dto.role as AcademyRole, ...(existing?.status === 'ACTIVE' ? {} : { status: 'INVITED' }) },
+      update: {
+        role: dto.role as AcademyRole,
+        ...(existing?.status === 'ACTIVE' ? {} : { status: 'INVITED' }),
+      },
       create: { userId: user.id, academyId, role: dto.role as AcademyRole, status: 'INVITED' },
     });
   }
@@ -465,13 +580,17 @@ export class AcademyService {
       include: { academy: { select: { id: true, name: true, slug: true, logoUrl: true } } },
     });
     return rows.map((m) => ({
-      id: m.id, role: m.role, createdAt: m.createdAt,
+      id: m.id,
+      role: m.role,
+      createdAt: m.createdAt,
       academy: m.academy,
     }));
   }
 
   private async assertOwnInvitation(userId: string, membershipId: string) {
-    const m = await this.prisma.academyMembership.findFirst({ where: { id: membershipId, userId, status: 'INVITED' } });
+    const m = await this.prisma.academyMembership.findFirst({
+      where: { id: membershipId, userId, status: 'INVITED' },
+    });
     if (!m) throw new NotFoundException('Invitation not found');
     return m;
   }
@@ -497,7 +616,9 @@ export class AcademyService {
   }
 
   private async assertManageableMember(academyId: string, membershipId: string) {
-    const m = await this.prisma.academyMembership.findFirst({ where: { id: membershipId, academyId } });
+    const m = await this.prisma.academyMembership.findFirst({
+      where: { id: membershipId, academyId },
+    });
     if (!m) throw new NotFoundException('Member not found');
     if (m.role === 'OWNER' || m.userId === (await this.ownerUserId(academyId))) {
       throw new ForbiddenException('The academy owner cannot be changed here');
@@ -522,7 +643,12 @@ export class AcademyService {
     // Same for future live streams in this academy. tenantId (who authored it)
     // is history and stays; the teacher slot is what stops blocking their time.
     await this.prisma.liveSession.updateMany({
-      where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startsAt: { gt: new Date() } },
+      where: {
+        academyId,
+        teacherUserId: userId,
+        status: 'SCHEDULED',
+        startsAt: { gt: new Date() },
+      },
       data: { teacherUserId: null },
     });
   }
@@ -534,20 +660,40 @@ export class AcademyService {
    * unapproved teachers and other Centers' teachers all fail here — the id
    * comes from a client and proves nothing by itself.
    */
-  async assertAssignableTeacher(academyId: string, teacherUserId: string): Promise<{ userId: string; teacherProfileId: string }> {
+  async assertAssignableTeacher(
+    academyId: string,
+    teacherUserId: string,
+  ): Promise<{ userId: string; teacherProfileId: string }> {
     const user = await this.prisma.user.findFirst({
       where: { id: teacherUserId, isActive: true, deletedAt: null },
       select: { id: true, role: true, teacherProfile: { select: { id: true, status: true } } },
     });
-    if (!user || user.role !== Role.TEACHER || !user.teacherProfile || user.teacherProfile.status !== 'APPROVED') {
-      throw new BadRequestException({ message: 'That user is not an approved teacher', code: 'TEACHER_NOT_ASSIGNABLE' });
+    if (
+      !user ||
+      user.role !== Role.TEACHER ||
+      !user.teacherProfile ||
+      user.teacherProfile.status !== 'APPROVED'
+    ) {
+      throw new BadRequestException({
+        message: 'That user is not an approved teacher',
+        code: 'TEACHER_NOT_ASSIGNABLE',
+      });
     }
     const membership = await this.prisma.academyMembership.findFirst({
-      where: { userId: teacherUserId, academyId, status: 'ACTIVE', deletedAt: null, role: { in: ['TEACHER', 'OWNER'] } },
+      where: {
+        userId: teacherUserId,
+        academyId,
+        status: 'ACTIVE',
+        deletedAt: null,
+        role: { in: ['TEACHER', 'OWNER'] },
+      },
       select: { id: true },
     });
     if (!membership) {
-      throw new BadRequestException({ message: 'That teacher is not a member of this academy', code: 'TEACHER_NOT_MEMBER' });
+      throw new BadRequestException({
+        message: 'That teacher is not a member of this academy',
+        code: 'TEACHER_NOT_MEMBER',
+      });
     }
     return { userId: user.id, teacherProfileId: user.teacherProfile.id };
   }
@@ -558,7 +704,10 @@ export class AcademyService {
     // un-suspension. An owner may not silently resurrect a LEFT/INVITED row —
     // that bypasses the invite-then-accept consent the whole flow rests on.
     if (dto.status === 'ACTIVE' && m.status !== 'ACTIVE' && m.status !== 'SUSPENDED') {
-      throw new BadRequestException({ message: 'Re-invite this person; they must accept again', code: 'REINVITE_REQUIRED' });
+      throw new BadRequestException({
+        message: 'Re-invite this person; they must accept again',
+        code: 'REINVITE_REQUIRED',
+      });
     }
     // Phase 7: the cash-collector grant lives in the membership's permission
     // overrides (the same ceilinged mechanism permissionsFor() already reads).
@@ -574,10 +723,19 @@ export class AcademyService {
       data: {
         ...(dto.role ? { role: dto.role as AcademyRole } : {}),
         ...(dto.status ? { status: dto.status } : {}),
-        ...(dto.revenueSharePercent !== undefined ? { revenueSharePercent: dto.revenueSharePercent } : {}),
+        ...(dto.revenueSharePercent !== undefined
+          ? { revenueSharePercent: dto.revenueSharePercent }
+          : {}),
         ...(permissions ? { permissions } : {}),
       },
-      select: { id: true, role: true, status: true, userId: true, revenueSharePercent: true, permissions: true },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        userId: true,
+        revenueSharePercent: true,
+        permissions: true,
+      },
     });
     if (dto.status === 'SUSPENDED') await this.revokeStaffResources(academyId, updated.userId);
     return { id: updated.id, role: updated.role, status: updated.status };
@@ -585,7 +743,10 @@ export class AcademyService {
 
   async removeMember(academyId: string, membershipId: string) {
     const m = await this.assertManageableMember(academyId, membershipId);
-    await this.prisma.academyMembership.update({ where: { id: membershipId }, data: { status: 'LEFT' } });
+    await this.prisma.academyMembership.update({
+      where: { id: membershipId },
+      data: { status: 'LEFT' },
+    });
     await this.revokeStaffResources(academyId, m.userId);
     return { id: membershipId, removed: true };
   }
@@ -601,28 +762,50 @@ export class AcademyService {
    * request, not only at the next login. findFirst (not findUnique) so the
    * soft-delete middleware applies; a deleted row must never grant.
    */
-  async buildContext(userId: string, academyId: string, globalRole?: string): Promise<AcademyContext | null> {
+  async buildContext(
+    userId: string,
+    academyId: string,
+    globalRole?: string,
+  ): Promise<AcademyContext | null> {
     if (globalRole === Role.SUPER_ADMIN) {
       const all = new Set<Capability>(ROLE_PERMISSIONS.OWNER);
       return {
-        academyId, userId, role: 'OWNER', status: 'ACTIVE', isPlatformAdmin: true,
+        academyId,
+        userId,
+        role: 'OWNER',
+        status: 'ACTIVE',
+        isPlatformAdmin: true,
         can: (c) => all.has(c),
       };
     }
     const membership = await this.prisma.academyMembership.findFirst({
       where: { userId, academyId, status: 'ACTIVE', deletedAt: null },
       include: {
-        user: { select: { isActive: true, role: true, teacherProfile: { select: { status: true } } } },
+        user: {
+          select: { isActive: true, role: true, teacherProfile: { select: { status: true } } },
+        },
         academy: { select: { status: true, deletedAt: true } },
       },
     });
     if (!membership) return null;
     if (!membership.user.isActive) return null;
-    if (membership.academy.deletedAt || membership.academy.status === 'SUSPENDED' || membership.academy.status === 'ARCHIVED') return null;
-    if (membership.user.role === Role.TEACHER && membership.user.teacherProfile?.status !== 'APPROVED') return null;
+    if (
+      membership.academy.deletedAt ||
+      membership.academy.status === 'SUSPENDED' ||
+      membership.academy.status === 'ARCHIVED'
+    )
+      return null;
+    if (
+      membership.user.role === Role.TEACHER &&
+      membership.user.teacherProfile?.status !== 'APPROVED'
+    )
+      return null;
     const perms = permissionsFor(membership.role as AcademyRole, membership.permissions as unknown);
     return {
-      academyId, userId, role: membership.role as AcademyRole, status: membership.status,
+      academyId,
+      userId,
+      role: membership.role as AcademyRole,
+      status: membership.status,
       isPlatformAdmin: false,
       can: (c) => perms.has(c),
     };

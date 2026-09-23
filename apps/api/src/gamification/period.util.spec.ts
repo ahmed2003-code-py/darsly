@@ -1,4 +1,12 @@
-import { cairoHour, dayKey, isCairoWeekend, monthKey, startOfCairoDay, startOfCairoWeek, weekKey } from './period.util';
+import {
+  cairoHour,
+  dayKey,
+  isCairoWeekend,
+  monthKey,
+  startOfCairoDay,
+  startOfCairoWeek,
+  weekKey,
+} from './period.util';
 
 /**
  * These boundaries decide when a mission expires and when a leaderboard week

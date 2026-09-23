@@ -111,7 +111,12 @@ async function creditWallet(studentId, amountCents) {
   await prisma.ledgerEntry.createMany({
     data: [
       { transactionId: txn.id, account: 'platform:cash', direction: 'DEBIT', amountCents },
-      { transactionId: txn.id, account: `student:${studentId}:wallet`, direction: 'CREDIT', amountCents },
+      {
+        transactionId: txn.id,
+        account: `student:${studentId}:wallet`,
+        direction: 'CREDIT',
+        amountCents,
+      },
     ],
   });
 }
@@ -130,8 +135,14 @@ async function quotedTotal(courseId, token) {
 async function walletBalance(studentId) {
   const acct = `student:${studentId}:wallet`;
   const [cr, dr] = await Promise.all([
-    prisma.ledgerEntry.aggregate({ where: { account: acct, direction: 'CREDIT' }, _sum: { amountCents: true } }),
-    prisma.ledgerEntry.aggregate({ where: { account: acct, direction: 'DEBIT' }, _sum: { amountCents: true } }),
+    prisma.ledgerEntry.aggregate({
+      where: { account: acct, direction: 'CREDIT' },
+      _sum: { amountCents: true },
+    }),
+    prisma.ledgerEntry.aggregate({
+      where: { account: acct, direction: 'DEBIT' },
+      _sum: { amountCents: true },
+    }),
   ]);
   return (cr._sum.amountCents ?? 0) - (dr._sum.amountCents ?? 0);
 }
@@ -142,7 +153,8 @@ async function login(email) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ email, password: TEST_PASSWORD }),
   });
-  if (!r.ok) throw new Error(`login failed (${r.status}) — seed the test user with the demo password`);
+  if (!r.ok)
+    throw new Error(`login failed (${r.status}) — seed the test user with the demo password`);
   return (await r.json()).accessToken;
 }
 
@@ -182,7 +194,9 @@ async function scenario(name, { priceCents, purchases }) {
     where: { account: `student:${student.id}:wallet`, direction: 'DEBIT' },
     _sum: { amountCents: true },
   });
-  const active = await prisma.enrollment.count({ where: { studentId: student.id, status: 'ACTIVE' } });
+  const active = await prisma.enrollment.count({
+    where: { studentId: student.id, status: 'ACTIVE' },
+  });
 
   const checks = [
     ['exactly one purchase succeeded', ok.length === 1, `${ok.length} succeeded`],
@@ -197,10 +211,22 @@ async function scenario(name, { priceCents, purchases }) {
      * to retry with). Demanding 409 from both would be demanding the system
      * report an empty wallet as a transient conflict.
      */
-    ['every loser got a clean refusal', refusals.length === purchases - 1, `${refusals.length} of ${purchases - 1} refused cleanly (${conflicts.length} conflict, ${refusals.length - conflicts.length} insufficient)`],
+    [
+      'every loser got a clean refusal',
+      refusals.length === purchases - 1,
+      `${refusals.length} of ${purchases - 1} refused cleanly (${conflicts.length} conflict, ${refusals.length - conflicts.length} insufficient)`,
+    ],
     ['balance never went negative', balance >= 0, `final ${money(balance)}`],
-    ['balance dropped by exactly one purchase', balance === balanceCents - priceToPay, `final ${money(balance)}, expected ${money(balanceCents - priceToPay)}`],
-    ['ledger debited exactly one purchase', (debits._sum.amountCents ?? 0) === priceToPay, `debited ${money(debits._sum.amountCents ?? 0)}`],
+    [
+      'balance dropped by exactly one purchase',
+      balance === balanceCents - priceToPay,
+      `final ${money(balance)}, expected ${money(balanceCents - priceToPay)}`,
+    ],
+    [
+      'ledger debited exactly one purchase',
+      (debits._sum.amountCents ?? 0) === priceToPay,
+      `debited ${money(debits._sum.amountCents ?? 0)}`,
+    ],
     ['exactly one enrolment activated', active === 1, `${active} active`],
   ];
   for (const [what, passed, detail] of checks) {
@@ -209,21 +235,26 @@ async function scenario(name, { priceCents, purchases }) {
   }
   console.log(`   statuses: ${results.map((r) => r.status).join(', ')}`);
   for (const r of results) {
-    if (r.status >= 400) console.log(`   body[${r.status}]: ${JSON.stringify(r.body).slice(0, 220)}`);
+    if (r.status >= 400)
+      console.log(`   body[${r.status}]: ${JSON.stringify(r.body).slice(0, 220)}`);
   }
 }
 
 async function cleanup() {
   // Reverse order, best effort: a failed teardown must not mask a failed assertion.
   for (const id of created.students) {
-    await prisma.ledgerEntry.deleteMany({ where: { account: { contains: `student:${id}:` } } }).catch(() => {});
+    await prisma.ledgerEntry
+      .deleteMany({ where: { account: { contains: `student:${id}:` } } })
+      .catch(() => {});
     await prisma.enrollment.deleteMany({ where: { studentId: id } }).catch(() => {});
     await prisma.payment.deleteMany({ where: { studentId: id } }).catch(() => {});
     await prisma.studentProfile.delete({ where: { id } }).catch(() => {});
   }
   for (const id of created.courses) await prisma.course.delete({ where: { id } }).catch(() => {});
   for (const id of created.users) await prisma.user.delete({ where: { id } }).catch(() => {});
-  await prisma.ledgerTransaction.deleteMany({ where: { description: { startsWith: tag } } }).catch(() => {});
+  await prisma.ledgerTransaction
+    .deleteMany({ where: { description: { startsWith: tag } } })
+    .catch(() => {});
 }
 
 try {

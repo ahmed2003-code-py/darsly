@@ -81,7 +81,10 @@ describe('authorization matrix (e2e)', () => {
       controllers: [ProbeController],
       providers: [
         Reflector,
-        { provide: PrismaService, useValue: { deviceSession: { findUnique: async () => session } } },
+        {
+          provide: PrismaService,
+          useValue: { deviceSession: { findUnique: async () => session } },
+        },
         // The same order app.module.ts declares: authenticate, then authorize.
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: RolesGuard },
@@ -89,7 +92,9 @@ describe('authorization matrix (e2e)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+    );
     await app.init();
     jwt = moduleRef.get(JwtService);
   });
@@ -177,17 +182,26 @@ describe('authorization matrix (e2e)', () => {
   describe('session revocation, enforced at the edge', () => {
     it('a revoked device is refused even with a valid, unexpired token', () => {
       session = { revokedAt: new Date(), user: { isActive: true } };
-      return request(app.getHttpServer()).get('/probe/any-authenticated').set(as(Role.TEACHER)).expect(401);
+      return request(app.getHttpServer())
+        .get('/probe/any-authenticated')
+        .set(as(Role.TEACHER))
+        .expect(401);
     });
 
     it('a disabled account is refused', () => {
       session = { revokedAt: null, user: { isActive: false } };
-      return request(app.getHttpServer()).get('/probe/any-authenticated').set(as(Role.TEACHER)).expect(401);
+      return request(app.getHttpServer())
+        .get('/probe/any-authenticated')
+        .set(as(Role.TEACHER))
+        .expect(401);
     });
 
     it('a session that no longer exists is refused', () => {
       session = null;
-      return request(app.getHttpServer()).get('/probe/any-authenticated').set(as(Role.TEACHER)).expect(401);
+      return request(app.getHttpServer())
+        .get('/probe/any-authenticated')
+        .set(as(Role.TEACHER))
+        .expect(401);
     });
 
     it('a revoked device still reaches @Public routes — public means public', () => {

@@ -53,9 +53,7 @@ const statsBlock = z.object({
   variant,
   section,
   heading: localizedText(120),
-  items: z
-    .array(z.object({ label: localizedText(60), value: z.string().max(40) }))
-    .max(6),
+  items: z.array(z.object({ label: localizedText(60), value: z.string().max(40) })).max(6),
 });
 
 const faqBlock = z.object({

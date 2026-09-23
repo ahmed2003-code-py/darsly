@@ -25,7 +25,11 @@ import { StorageProvider } from './storage.provider';
 const PREFIX = 'payment-proofs';
 const TTL_SEC = 10 * 60;
 
-const EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+const EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
 
 function b64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -37,7 +41,8 @@ export class ProofStorageService {
 
   private get secret(): string {
     const s = process.env.VIDEO_SIGNING_SECRET ?? process.env.JWT_ACCESS_SECRET;
-    if (!s) throw new Error('VIDEO_SIGNING_SECRET (or JWT_ACCESS_SECRET) must be set to sign proof URLs');
+    if (!s)
+      throw new Error('VIDEO_SIGNING_SECRET (or JWT_ACCESS_SECRET) must be set to sign proof URLs');
     return s;
   }
 
@@ -52,7 +57,9 @@ export class ProofStorageService {
       const code = value.charCodeAt(c);
       if (code < 0x20 || code === 0x7f || value[c] === String.fromCharCode(92)) return false;
     }
-    return value.split('/').every((seg, i) => (i === 0 ? true : seg.length > 0 && seg !== '.' && seg !== '..'));
+    return value
+      .split('/')
+      .every((seg, i) => (i === 0 ? true : seg.length > 0 && seg !== '.' && seg !== '..'));
   }
 
   /**

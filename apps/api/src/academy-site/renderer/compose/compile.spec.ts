@@ -3,7 +3,12 @@ import { DesignRulesService } from '../../pipeline/design-rules.service';
 import { SiteBrainService } from '../../pipeline/site-brain.service';
 import { SiteDocument } from '../../schema/site-document';
 import {
-  AUSTERE_DESIGN, PROFILE, TECHNICAL_DESIGN, THIN_PROFILE, WARM_DESIGN, buildComposition,
+  AUSTERE_DESIGN,
+  PROFILE,
+  TECHNICAL_DESIGN,
+  THIN_PROFILE,
+  WARM_DESIGN,
+  buildComposition,
 } from '../../__fixtures__/composition.fixture';
 import { fixtureContext } from '../../__fixtures__/site-doc.fixture';
 import { baseCss } from './base';
@@ -22,7 +27,8 @@ import './patterns';
 const brain = new SiteBrainService(new DesignRulesService());
 const ctx = fixtureContext();
 
-const render = (doc: SiteDocument, profile = PROFILE) => composeSite(brain.compose(doc, profile), ctx);
+const render = (doc: SiteDocument, profile = PROFILE) =>
+  composeSite(brain.compose(doc, profile), ctx);
 const digest = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const styles = (html: string) => html.match(/<style>([\s\S]*?)<\/style>/)![1];
 const script = (html: string) => html.match(/<script>([\s\S]*?)<\/script>/)![1];
@@ -37,7 +43,21 @@ describe('the composition engine renders a page', () => {
   });
 
   it('emits every section it was given', () => {
-    for (const id of ['hero', 'about', 'toolkit', 'timeline', 'credentials', 'process', 'stats', 'courses', 'gallery', 'reviews', 'quote', 'faq', 'contact']) {
+    for (const id of [
+      'hero',
+      'about',
+      'toolkit',
+      'timeline',
+      'credentials',
+      'process',
+      'stats',
+      'courses',
+      'gallery',
+      'reviews',
+      'quote',
+      'faq',
+      'contact',
+    ]) {
       expect(html).toContain(`class="block ${id}`);
     }
   });
@@ -62,7 +82,9 @@ describe('the composition engine renders a page', () => {
 
   it('reads the academy slug out of its own URL', () => {
     const src = script(html);
-    const decl = src.slice(src.indexOf('var SLUG='), src.indexOf('})();') + 5).replace('location.pathname', 'pathname');
+    const decl = src
+      .slice(src.indexOf('var SLUG='), src.indexOf('})();') + 5)
+      .replace('location.pathname', 'pathname');
     const read = new Function('pathname', `${decl}return SLUG;`);
     expect(read('/a/ahmed-elsayed')).toBe('ahmed-elsayed');
     expect(read('/elsewhere')).toBe('khaled-academy');
@@ -71,23 +93,25 @@ describe('the composition engine renders a page', () => {
 
 describe('two designs produce two different pages', () => {
   const technical = render(buildComposition({ design: TECHNICAL_DESIGN, persona: 'programming' }));
-  const warm = render(buildComposition({
-    design: WARM_DESIGN,
-    persona: 'languages',
-    sections: {
-      hero: { pattern: 'hero.offset-collage' },
-      toolkit: { pattern: 'toolkit.marquee' },
-      credentials: { pattern: 'credentials.record' },
-      courses: { pattern: 'courses.rail' },
-      gallery: { pattern: 'gallery.immersive' },
-      faq: { pattern: 'faq.accordion' },
-      contact: { pattern: 'contact.band' },
-      stats: { pattern: 'stats.strip' },
-      timeline: { pattern: 'timeline.columns' },
-      about: { pattern: 'about.statement' },
-      process: { pattern: 'process.rail' },
-    },
-  }));
+  const warm = render(
+    buildComposition({
+      design: WARM_DESIGN,
+      persona: 'languages',
+      sections: {
+        hero: { pattern: 'hero.offset-collage' },
+        toolkit: { pattern: 'toolkit.marquee' },
+        credentials: { pattern: 'credentials.record' },
+        courses: { pattern: 'courses.rail' },
+        gallery: { pattern: 'gallery.immersive' },
+        faq: { pattern: 'faq.accordion' },
+        contact: { pattern: 'contact.band' },
+        stats: { pattern: 'stats.strip' },
+        timeline: { pattern: 'timeline.columns' },
+        about: { pattern: 'about.statement' },
+        process: { pattern: 'process.rail' },
+      },
+    }),
+  );
 
   it('shares no layout at all', () => {
     // The old system's failure mode was two academies rendering the same markup
@@ -137,8 +161,18 @@ describe('two designs produce two different pages', () => {
 
 /** The stylesheet a page adds on top of the shared base vocabulary. */
 function ownRules(html: string): Set<string> {
-  const base = new Set(baseCss().split('\n').map((l) => l.trim()).filter(Boolean));
-  return new Set(styles(html).split('\n').map((l) => l.trim()).filter((l) => l && !base.has(l)));
+  const base = new Set(
+    baseCss()
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean),
+  );
+  return new Set(
+    styles(html)
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !base.has(l)),
+  );
 }
 
 /** The quietest page the system can build: no backdrop, no effects, no images. */
@@ -155,13 +189,15 @@ const AUSTERE_SECTIONS = {
 };
 
 const austerePage = () =>
-  render(buildComposition({
-    design: AUSTERE_DESIGN,
-    sections: AUSTERE_SECTIONS,
-    rich: false,
-    hasGallery: false,
-    hasCover: false,
-  }));
+  render(
+    buildComposition({
+      design: AUSTERE_DESIGN,
+      sections: AUSTERE_SECTIONS,
+      rich: false,
+      hasGallery: false,
+      hasCover: false,
+    }),
+  );
 
 describe('the page ships only what it uses', () => {
   it('leaves out the stylesheet for effects the design never asked for', () => {
@@ -212,7 +248,18 @@ describe('composition is deterministic', () => {
 
 describe('the pattern library', () => {
   it('offers real choice in every section it renders', () => {
-    for (const section of ['hero', 'about', 'toolkit', 'credentials', 'stats', 'courses', 'reviews', 'gallery', 'faq', 'contact']) {
+    for (const section of [
+      'hero',
+      'about',
+      'toolkit',
+      'credentials',
+      'stats',
+      'courses',
+      'reviews',
+      'gallery',
+      'faq',
+      'contact',
+    ]) {
       expect(patternsFor(section).length).toBeGreaterThanOrEqual(2);
     }
   });
@@ -228,7 +275,10 @@ describe('the pattern library', () => {
     // A pattern nobody has exercised is a pattern that will fail the first time
     // a model chooses it, on a teacher's live page.
     for (const p of allPatterns()) {
-      const doc = buildComposition({ design: WARM_DESIGN, sections: { [p.section]: { pattern: p.id } } });
+      const doc = buildComposition({
+        design: WARM_DESIGN,
+        sections: { [p.section]: { pattern: p.id } },
+      });
       expect(() => render(doc)).not.toThrow();
     }
   });
@@ -238,7 +288,9 @@ describe('the pattern library', () => {
       const doc = buildComposition({
         design: AUSTERE_DESIGN,
         sections: { [p.section]: { pattern: p.id } },
-        hasCover: false, hasGallery: false, rich: false,
+        hasCover: false,
+        hasGallery: false,
+        rich: false,
       });
       expect(() => render(doc, THIN_PROFILE)).not.toThrow();
     }

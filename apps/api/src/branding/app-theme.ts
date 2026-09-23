@@ -108,7 +108,8 @@ function legible(fg: string, bg: string, target: number): string {
  * a light one stays light; only the extremity changes.
  */
 function seat(bg: string, mode: 'light' | 'dark'): string {
-  const reachable = (c: string) => Math.max(contrastRatio(c, '#000000'), contrastRatio(c, '#ffffff'));
+  const reachable = (c: string) =>
+    Math.max(contrastRatio(c, '#000000'), contrastRatio(c, '#ffffff'));
   if (reachable(bg) >= FLOOR.body) return bg;
   const pole = mode === 'dark' ? '#000000' : '#ffffff';
   for (let i = 1; i <= 20; i++) {
@@ -120,17 +121,23 @@ function seat(bg: string, mode: 'light' | 'dark'): string {
 
 /** "#4A32C9" → "74 50 201", the form `rgb(var(--x) / <alpha>)` expects. */
 const triple = (h: string): string =>
-  h.replace('#', '').match(/../g)!.map((p) => parseInt(p, 16)).join(' ');
+  h
+    .replace('#', '')
+    .match(/../g)!
+    .map((p) => parseInt(p, 16))
+    .join(' ');
 
 /** Hue in degrees, 0–360. Only the angle is needed, so saturation is ignored. */
 function hue(h: string): number {
-  const [r, g, b] = h.replace('#', '').match(/../g)!.map((p) => parseInt(p, 16) / 255);
+  const [r, g, b] = h
+    .replace('#', '')
+    .match(/../g)!
+    .map((p) => parseInt(p, 16) / 255);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   if (max === min) return 0;
   const d = max - min;
-  const deg =
-    max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  const deg = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return (deg * 60 + 360) % 360;
 }
 
@@ -212,7 +219,11 @@ export function deriveAppTheme(input: BrandPalette | null | undefined): AppTheme
   const background = seat(raw, mode);
 
   // Ink drives every reading surface, so it is the one value held to AAA.
-  const ink = legible(hex(p.ink, mode === 'dark' ? '#EDEDF2' : PLATFORM.ink), background, FLOOR.body);
+  const ink = legible(
+    hex(p.ink, mode === 'dark' ? '#EDEDF2' : PLATFORM.ink),
+    background,
+    FLOOR.body,
+  );
 
   /** A panel `w` of the way from the background toward the ink. */
   const panel = (w: number) => mix(background, ink, w);
@@ -226,17 +237,12 @@ export function deriveAppTheme(input: BrandPalette | null | undefined): AppTheme
   // card with no edges, which is the most common way these palettes arrive.
   const named = hex(p.surface, '');
   const step = mode === 'dark' ? 0.07 : 0.055;
-  const surfaceContainer =
-    named && contrastRatio(named, background) >= 1.04 ? named : panel(step);
+  const surfaceContainer = named && contrastRatio(named, background) >= 1.04 ? named : panel(step);
   const namedAlt = hex(p.surfaceAlt, '');
   const surfaceAlt =
     namedAlt && contrastRatio(namedAlt, background) >= 1.04 ? namedAlt : panel(step * 1.5);
 
-  const onPrimary = legible(
-    relLuminance(primary) > 0.5 ? ink : '#ffffff',
-    primary,
-    FLOOR.onFill,
-  );
+  const onPrimary = legible(relLuminance(primary) > 0.5 ? ink : '#ffffff', primary, FLOOR.onFill);
   const onAccent = legible(relLuminance(accent) > 0.5 ? ink : '#ffffff', accent, FLOOR.onFill);
 
   // Error keeps the platform's red so danger still reads as danger, but it is
@@ -282,7 +288,8 @@ export function deriveAppTheme(input: BrandPalette | null | undefined): AppTheme
     'on-primary-container': onPrimary,
     // The hover partner for a primary button. On a dark palette a darker hover
     // vanishes into the page, so it brightens instead.
-    'primary-hover': mode === 'dark' ? mix(primary, '#ffffff', 0.16) : mix(primary, '#000000', 0.22),
+    'primary-hover':
+      mode === 'dark' ? mix(primary, '#ffffff', 0.16) : mix(primary, '#000000', 0.22),
     'inverse-primary': mix(primary, '#ffffff', 0.53),
 
     'primary-fixed': chip,
@@ -418,14 +425,16 @@ export function paletteFromDocumentTheme(theme: unknown): BrandPalette | null {
  */
 export function brandTokensFromTheme(theme: unknown): Record<string, unknown> | null {
   const th = theme as
-    | { design?: Record<string, unknown>; designSpec?: Record<string, unknown> }
-    | null
-    | undefined;
+    { design?: Record<string, unknown>; designSpec?: Record<string, unknown> } | null | undefined;
   const palette = paletteFromDocumentTheme(theme);
   if (!palette) return null;
 
   const spec = th?.designSpec as
-    | { geometry?: { radius?: number }; rhythm?: { density?: string }; typography?: Record<string, unknown> }
+    | {
+        geometry?: { radius?: number };
+        rhythm?: { density?: string };
+        typography?: Record<string, unknown>;
+      }
     | undefined;
   const legacy = th?.design ?? {};
 
@@ -448,7 +457,12 @@ export function paletteFromBrandTokens(
   colorPrimary?: string | null,
   colorAccent?: string | null,
 ): BrandPalette | null {
-  const bt = brandTokens as { palette?: BrandPalette; background?: string; ink?: string; surface?: string } | null;
+  const bt = brandTokens as {
+    palette?: BrandPalette;
+    background?: string;
+    ink?: string;
+    surface?: string;
+  } | null;
   if (bt?.palette) return bt.palette;
   if (bt?.background || bt?.ink || bt?.surface) {
     // Published before the palette was recorded: the three surface colours are

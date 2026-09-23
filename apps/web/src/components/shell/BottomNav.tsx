@@ -42,7 +42,9 @@ export default function BottomNav({
             className={({ isActive }) =>
               floating
                 ? `grid h-11 w-11 place-items-center rounded-full transition-colors ${
-                    isActive ? 'bg-student-accent-soft text-student-accent-ink' : 'text-on-surface-variant hover:bg-surface-container-low'
+                    isActive
+                      ? 'bg-student-accent-soft text-student-accent-ink'
+                      : 'text-on-surface-variant hover:bg-surface-container-low'
                   }`
                 : `flex min-h-[3.75rem] min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 px-1 pt-1.5 pb-1 transition-colors ${
                     isActive ? 'text-student-accent-ink' : 'text-on-surface-variant'
@@ -74,8 +76,12 @@ export default function BottomNav({
             onClick={onMore}
             className="flex min-h-[3.75rem] min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 px-1 pb-1 pt-1.5 text-on-surface-variant transition-colors"
           >
-            <span className="material-symbols-outlined text-[22px] leading-none text-outline">menu</span>
-            <span className="w-full truncate text-center text-[11px] font-bold leading-tight">{t('nav.more')}</span>
+            <span className="material-symbols-outlined text-[22px] leading-none text-outline">
+              menu
+            </span>
+            <span className="w-full truncate text-center text-[11px] font-bold leading-tight">
+              {t('nav.more')}
+            </span>
           </button>
         )}
       </div>

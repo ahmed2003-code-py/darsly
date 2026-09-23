@@ -17,40 +17,80 @@ function makePrisma(course: { id: string; tenantId: string }) {
     academy: { findUnique: jest.fn().mockResolvedValue({ id: 'centerA', kind: 'CENTER' }) },
     academySubject: { findUnique: jest.fn().mockResolvedValue({ isActive: true }) },
     course: {
-      findFirst: jest.fn().mockResolvedValue({ ...course, academyId: 'centerA', priceCents: 0, status: 'PUBLISHED' }),
-      findUnique: jest.fn().mockResolvedValue({ subjectId: 'maths', examLessonId: null, grades: [] }),
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({ ...course, academyId: 'centerA', priceCents: 0, status: 'PUBLISHED' }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ subjectId: 'maths', examLessonId: null, grades: [] }),
       update: jest.fn(async ({ data }: any) => ({ id: course.id, ...data, grades: [] })),
       delete: jest.fn(),
     },
-    courseUnit: { findFirst: jest.fn().mockResolvedValue({ id: 'u1', course: { ...course, academyId: 'centerA' } }) },
+    courseUnit: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({ id: 'u1', course: { ...course, academyId: 'centerA' } }),
+    },
     lesson: { count: jest.fn().mockResolvedValue(1) },
     enrollment: { count: jest.fn().mockResolvedValue(0) },
   } as any;
 }
 const svc = (prisma: any) =>
-  new CoursesService(prisma, { applyToMany: async (i: unknown[]) => i } as any, { hiddenTeacherIds: async () => [] } as any, none, none, none, none, none, none);
+  new CoursesService(
+    prisma,
+    { applyToMany: async (i: unknown[]) => i } as any,
+    { hiddenTeacherIds: async () => [] } as any,
+    none,
+    none,
+    none,
+    none,
+    none,
+    none,
+  );
 
-const theAuthor: CourseScope = { academyId: 'centerA', authorTenantId: 'teacherT', manageAll: false };
-const centerOwner: CourseScope = { academyId: 'centerA', authorTenantId: 'teacherX', manageAll: true };
-const platformAdmin: CourseScope = { academyId: 'centerA', authorTenantId: undefined, manageAll: true };
+const theAuthor: CourseScope = {
+  academyId: 'centerA',
+  authorTenantId: 'teacherT',
+  manageAll: false,
+};
+const centerOwner: CourseScope = {
+  academyId: 'centerA',
+  authorTenantId: 'teacherX',
+  manageAll: true,
+};
+const platformAdmin: CourseScope = {
+  academyId: 'centerA',
+  authorTenantId: undefined,
+  manageAll: true,
+};
 const someoneElses = { id: 'c1', tenantId: 'teacherT' };
 
 describe('a course an overseer did not write', () => {
-  it.each([['the Center owner', centerOwner], ['the platform admin', platformAdmin]])('%s may unpublish it', async (_label, scope) => {
+  it.each([
+    ['the Center owner', centerOwner],
+    ['the platform admin', platformAdmin],
+  ])('%s may unpublish it', async (_label, scope) => {
     const prisma = makePrisma(someoneElses);
     const updated = await svc(prisma).update(scope, 'c1', { status: 'DRAFT' } as any);
     expect(updated.status).toBe('DRAFT');
   });
 
-  it.each([['the Center owner', centerOwner], ['the platform admin', platformAdmin]])('%s may not retitle it', async (_label, scope) => {
+  it.each([
+    ['the Center owner', centerOwner],
+    ['the platform admin', platformAdmin],
+  ])('%s may not retitle it', async (_label, scope) => {
     const prisma = makePrisma(someoneElses);
-    await expect(svc(prisma).update(scope, 'c1', { title: 'mine now' } as any)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      svc(prisma).update(scope, 'c1', { title: 'mine now' } as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.course.update).not.toHaveBeenCalled();
   });
 
   it('a status change smuggled in beside a content change is refused whole', async () => {
     const prisma = makePrisma(someoneElses);
-    await expect(svc(prisma).update(centerOwner, 'c1', { status: 'DRAFT', priceCents: 1 } as any)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      svc(prisma).update(centerOwner, 'c1', { status: 'DRAFT', priceCents: 1 } as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.course.update).not.toHaveBeenCalled();
   });
 
@@ -62,7 +102,9 @@ describe('a course an overseer did not write', () => {
 
   it('an overseer may not add a unit to it', async () => {
     const prisma = makePrisma(someoneElses);
-    await expect(svc(prisma).createUnit(centerOwner, 'c1', { title: 'u' } as any)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      svc(prisma).createUnit(centerOwner, 'c1', { title: 'u' } as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('the teacher who wrote it still edits it freely', async () => {

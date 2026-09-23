@@ -109,10 +109,12 @@ ${body}
 function aiPalette(design: DesignTokens): string {
   const { background, ink, surface } = design;
   if (!isHex(background) || !isHex(ink) || !isHex(surface)) return '';
-  return `:root{--bg:${background};--ink:${ink};--surface:${surface};--card:${surface};` +
+  return (
+    `:root{--bg:${background};--ink:${ink};--surface:${surface};--card:${surface};` +
     '--mut:color-mix(in srgb,var(--ink) 62%,var(--bg));' +
     '--line:color-mix(in srgb,var(--ink) 14%,var(--bg));' +
-    '--body:color-mix(in srgb,var(--ink) 86%,var(--bg))}';
+    '--body:color-mix(in srgb,var(--ink) 86%,var(--bg))}'
+  );
 }
 
 /** The corner radius, held to the range the design system actually defines. */
@@ -143,7 +145,11 @@ function brandFor(lang: string, academyName: string, ownerName?: string): string
 }
 
 const STYLE_RADIUS: Record<string, string> = {
-  modern: '18px', bold: '12px', elegant: '10px', minimal: '10px', playful: '26px',
+  modern: '18px',
+  bold: '12px',
+  elegant: '10px',
+  minimal: '10px',
+  playful: '26px',
 };
 
 /** Vertical rhythm per density choice: section padding, top and bottom. */
@@ -195,7 +201,9 @@ function css(primary: string, accent: string, style?: string, design?: DesignTok
   const p = /^#[0-9a-fA-F]{6}$/.test(primary) ? primary : '#4A32C9';
   const a = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : p;
   // The model's radius wins when it composed a system; otherwise the DNA's.
-  const rad = design ? `${safeRadius(design.radius)}px` : (STYLE_RADIUS[style ?? 'modern'] ?? '18px');
+  const rad = design
+    ? `${safeRadius(design.radius)}px`
+    : (STYLE_RADIUS[style ?? 'modern'] ?? '18px');
   const pDark = darken(p, 0.18);
   const pl = mix(p, '#ffffff', 0.42); // lightened brand — for accents on dark presets
   const onP = onColor(p);
@@ -206,9 +214,9 @@ function css(primary: string, accent: string, style?: string, design?: DesignTok
 :root{
   --p:${p};--pl:${pl};--p-dark:${pDark};--on-p:${onP};--a:${a};--pr:${pr};--ar:${ar};
   --acc:var(--p);--rad:${rad};
-  --pad:${design ? DENSITY_PAD[design.density] ?? '104px' : '104px'};
-  --h2:${design ? HEADING_SCALE[design.headingScale] ?? HEADING_SCALE.balanced : HEADING_SCALE.balanced};
-  --body-font:${design?.bodyFont ? BODY_STACK[design.bodyFont] ?? BODY_STACK.sans : BODY_STACK.sans};
+  --pad:${design ? (DENSITY_PAD[design.density] ?? '104px') : '104px'};
+  --h2:${design ? (HEADING_SCALE[design.headingScale] ?? HEADING_SCALE.balanced) : HEADING_SCALE.balanced};
+  --body-font:${design?.bodyFont ? (BODY_STACK[design.bodyFont] ?? BODY_STACK.sans) : BODY_STACK.sans};
   --bg:#ffffff;--ink:#14141f;--mut:#5a5a72;--surface:#f7f7fb;--card:#ffffff;--line:#e9e9f1;
   --body:color-mix(in srgb,var(--ink) 82%,var(--bg));
 }

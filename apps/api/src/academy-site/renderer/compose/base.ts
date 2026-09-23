@@ -213,7 +213,8 @@ ${stagger()}
 
 /** Stagger delays for grid entrances — six steps, then everything after shares one. */
 function stagger(): string {
-  const sel = '[data-entrance=stagger-grid] .reveal-on .block.in :is(.card,.tag,li,.grid>*,.auto-grid>*)';
+  const sel =
+    '[data-entrance=stagger-grid] .reveal-on .block.in :is(.card,.tag,li,.grid>*,.auto-grid>*)';
   const steps = [1, 2, 3, 4, 5, 6]
     .map((n) => `${sel}:nth-child(${n}){transition-delay:${(n * 0.06).toFixed(2)}s}`)
     .join('\n');

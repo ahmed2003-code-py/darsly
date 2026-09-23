@@ -22,13 +22,16 @@ function hueOf(hex: string): number {
   if (max === r) h = ((g - b) / d) % 6;
   else if (max === g) h = (b - r) / d + 2;
   else h = (r - g) / d + 4;
-  return Math.round(((h * 60) + 360) % 360);
+  return Math.round((h * 60 + 360) % 360);
 }
 
 const radiusBand = (r: number): DesignFingerprint['radiusBand'] =>
   r <= 6 ? 'sharp' : r <= 18 ? 'moderate' : 'round';
 
-export function fingerprint(design: DesignSpec, doc: Pick<SiteDocument, 'blocks'>): DesignFingerprint {
+export function fingerprint(
+  design: DesignSpec,
+  doc: Pick<SiteDocument, 'blocks'>,
+): DesignFingerprint {
   const hero = doc.blocks.find((b) => b.type === 'hero');
   return {
     mode: design.palette.mode,

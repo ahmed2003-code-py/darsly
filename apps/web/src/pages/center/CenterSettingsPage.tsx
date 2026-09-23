@@ -16,8 +16,18 @@ import { EmptyState, ErrorNote, PageHeader, Skeleton } from '../../components/ui
 export default function CenterSettingsPage() {
   const { t } = useTranslation();
   const { academy, isLoading } = useOwnedAcademy();
-  if (isLoading) return <div className="page"><Skeleton className="h-32 rounded-2xl" /></div>;
-  if (!academy) return <div className="page"><EmptyState icon="apartment" title={t('center.noCenter')} /></div>;
+  if (isLoading)
+    return (
+      <div className="page">
+        <Skeleton className="h-32 rounded-2xl" />
+      </div>
+    );
+  if (!academy)
+    return (
+      <div className="page">
+        <EmptyState icon="apartment" title={t('center.noCenter')} />
+      </div>
+    );
   return (
     <div className="page">
       <PageHeader title={t('center.settings')} subtitle={academy.name} />
@@ -48,13 +58,17 @@ function RevenueShareCard({ slug }: { slug: string }) {
     queryFn: async () => (await api.get(`/academies/${slug}/settings`)).data,
   });
   const [pct, setPct] = useState('');
-  useEffect(() => { if (data) setPct(data.teacherSharePercent == null ? '' : String(data.teacherSharePercent)); }, [data]);
+  useEffect(() => {
+    if (data) setPct(data.teacherSharePercent == null ? '' : String(data.teacherSharePercent));
+  }, [data]);
 
   const save = useMutation({
     mutationFn: async () =>
-      (await api.patch(`/academies/${slug}/settings`, {
-        teacherSharePercent: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))),
-      })).data,
+      (
+        await api.patch(`/academies/${slug}/settings`, {
+          teacherSharePercent: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))),
+        })
+      ).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['academy-settings', slug] }),
   });
 
@@ -65,11 +79,16 @@ function RevenueShareCard({ slug }: { slug: string }) {
       <p className="mb-4 text-sm text-on-surface-variant">{t('center.revenueShare.hint')}</p>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-bold text-on-surface-variant">{t('center.revenueShare.label')}</span>
+          <span className="text-xs font-bold text-on-surface-variant">
+            {t('center.revenueShare.label')}
+          </span>
           <div className="flex items-center gap-2">
             <input
-              className="input w-28" inputMode="numeric" placeholder="—"
-              value={pct} onChange={(e) => setPct(e.target.value.replace(/[^\d]/g, ''))}
+              className="input w-28"
+              inputMode="numeric"
+              placeholder="—"
+              value={pct}
+              onChange={(e) => setPct(e.target.value.replace(/[^\d]/g, ''))}
             />
             <span className="text-on-surface-variant">%</span>
           </div>

@@ -51,7 +51,8 @@ function StudentsTab({ groupId }: { groupId: string }) {
     <div>
       <div className="mb-4 flex justify-end">
         <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setShowAdd(true)}>
-          <span className="material-symbols-outlined align-middle text-lg">person_add</span> {t('groups.addStudents')}
+          <span className="material-symbols-outlined align-middle text-lg">person_add</span>{' '}
+          {t('groups.addStudents')}
         </button>
       </div>
       {!data?.members.length ? (
@@ -61,11 +62,17 @@ function StudentsTab({ groupId }: { groupId: string }) {
           {data.members.map((m) => (
             <div key={m.membershipId} className="card flex items-center gap-4 p-4">
               <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
-                {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" /> : m.fullName?.trim()?.charAt(0)}
+                {m.avatarUrl ? (
+                  <img src={m.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  m.fullName?.trim()?.charAt(0)
+                )}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-heading font-bold">{m.fullName}</p>
-                <p className="truncate text-xs text-outline" dir="ltr">{m.email}</p>
+                <p className="truncate text-xs text-outline" dir="ltr">
+                  {m.email}
+                </p>
               </div>
               <button
                 className="rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
@@ -101,7 +108,11 @@ function StudentsTab({ groupId }: { groupId: string }) {
               <span className="material-symbols-outlined text-primary">add_circle</span>
             </button>
           ))}
-          {!candidates.length && <p className="p-4 text-center text-sm text-on-surface-variant">{t('groups.noCandidates')}</p>}
+          {!candidates.length && (
+            <p className="p-4 text-center text-sm text-on-surface-variant">
+              {t('groups.noCandidates')}
+            </p>
+          )}
         </div>
         <ErrorNote error={addMembers.error} />
       </Modal>
@@ -123,13 +134,21 @@ function StaffTab({ groupId }: { groupId: string }) {
           {data.assignments.map((a) => (
             <div key={a.assignmentId} className="card flex items-center gap-4 p-4">
               <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
-                {a.avatarUrl ? <img src={a.avatarUrl} alt="" className="h-full w-full object-cover" /> : a.fullName?.trim()?.charAt(0)}
+                {a.avatarUrl ? (
+                  <img src={a.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  a.fullName?.trim()?.charAt(0)
+                )}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-heading font-bold">{a.fullName}</p>
-                <p className="truncate text-xs text-outline" dir="ltr">{a.email}</p>
+                <p className="truncate text-xs text-outline" dir="ltr">
+                  {a.email}
+                </p>
               </div>
-              <Badge tone={a.role === 'TEACHER' ? 'primary' : 'neutral'}>{t(`groups.staffRole.${a.role}`)}</Badge>
+              <Badge tone={a.role === 'TEACHER' ? 'primary' : 'neutral'}>
+                {t(`groups.staffRole.${a.role}`)}
+              </Badge>
               <button
                 className="rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
                 onClick={() => unassign.mutate(a.userId)}
@@ -194,12 +213,20 @@ function AttendanceTab({ groupId }: { groupId: string }) {
     if (!data) return;
     // `status: null` means "not marked on this date". Everyone starts present;
     // an already-taken date overrides that with what is actually recorded.
-    const next = Object.fromEntries(data.students.map((s) => [s.studentId, s.status ?? 'PRESENT'])) as Record<string, Status>;
+    const next = Object.fromEntries(
+      data.students.map((s) => [s.studentId, s.status ?? 'PRESENT']),
+    ) as Record<string, Status>;
     setDraft(next);
-    setBaseline(Object.fromEntries(data.students.map((s) => [s.studentId, s.status ?? 'PRESENT'])) as Record<string, Status>);
+    setBaseline(
+      Object.fromEntries(data.students.map((s) => [s.studentId, s.status ?? 'PRESENT'])) as Record<
+        string,
+        Status
+      >,
+    );
   }, [data]);
 
-  const setStatus = (studentId: string, status: Status) => setDraft((d) => ({ ...d, [studentId]: status }));
+  const setStatus = (studentId: string, status: Status) =>
+    setDraft((d) => ({ ...d, [studentId]: status }));
   /** One tap on the row moves to the next status, wrapping. */
   const cycle = (studentId: string) =>
     setDraft((d) => {
@@ -207,14 +234,20 @@ function AttendanceTab({ groupId }: { groupId: string }) {
       return { ...d, [studentId]: STATUSES[(at + 1) % STATUSES.length] };
     });
   const setAll = (status: Status) =>
-    setDraft((d) => Object.fromEntries(Object.keys(d).map((id) => [id, status])) as Record<string, Status>);
+    setDraft(
+      (d) => Object.fromEntries(Object.keys(d).map((id) => [id, status])) as Record<string, Status>,
+    );
   /** Everyone still sitting at the default becomes absent — the shape of a day
    *  where only the handful who turned up need marking. */
   const restAbsent = () =>
-    setDraft((d) =>
-      Object.fromEntries(
-        Object.entries(d).map(([id, s]) => [id, s === 'PRESENT' && baseline[id] === 'PRESENT' ? 'ABSENT' : s]),
-      ) as Record<string, Status>,
+    setDraft(
+      (d) =>
+        Object.fromEntries(
+          Object.entries(d).map(([id, s]) => [
+            id,
+            s === 'PRESENT' && baseline[id] === 'PRESENT' ? 'ABSENT' : s,
+          ]),
+        ) as Record<string, Status>,
     );
 
   const counts = STATUSES.reduce(
@@ -270,7 +303,11 @@ function AttendanceTab({ groupId }: { groupId: string }) {
           </button>
         </div>
         {date !== today() && (
-          <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => goToDate(today())}>
+          <button
+            type="button"
+            className="btn-secondary px-3 py-1.5 text-sm"
+            onClick={() => goToDate(today())}
+          >
             {t('groups.attendance.today')}
           </button>
         )}
@@ -291,15 +328,31 @@ function AttendanceTab({ groupId }: { groupId: string }) {
               </span>
             ))}
             <span className="ms-auto text-xs text-outline">
-              {dirty ? t('groups.attendance.unsaved') : taken ? t('groups.attendance.saved') : t('groups.attendance.defaulted')}
+              {dirty
+                ? t('groups.attendance.unsaved')
+                : taken
+                  ? t('groups.attendance.saved')
+                  : t('groups.attendance.defaulted')}
             </span>
           </div>
 
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setAll('PRESENT')}>{t('groups.markAllPresent')}</button>
-            <button className="btn-secondary px-4 py-2 text-sm" onClick={restAbsent}>{t('groups.attendance.restAbsent')}</button>
-            <button className="btn-primary ms-auto px-5 py-2 text-sm" onClick={save} disabled={mark.isPending || !canSave}>
-              {mark.isPending ? t('common.saving') : dirty || !taken ? t('groups.attendance.save') : t('groups.attendance.saved')}
+            <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setAll('PRESENT')}>
+              {t('groups.markAllPresent')}
+            </button>
+            <button className="btn-secondary px-4 py-2 text-sm" onClick={restAbsent}>
+              {t('groups.attendance.restAbsent')}
+            </button>
+            <button
+              className="btn-primary ms-auto px-5 py-2 text-sm"
+              onClick={save}
+              disabled={mark.isPending || !canSave}
+            >
+              {mark.isPending
+                ? t('common.saving')
+                : dirty || !taken
+                  ? t('groups.attendance.save')
+                  : t('groups.attendance.saved')}
             </button>
           </div>
         </>
@@ -308,7 +361,11 @@ function AttendanceTab({ groupId }: { groupId: string }) {
       {isLoading ? (
         <Skeleton className="h-64 rounded-2xl" />
       ) : !data?.students.length ? (
-        <EmptyState icon="groups" title={t('groups.noMembers')} hint={t('groups.attendance.addStudentsFirst')} />
+        <EmptyState
+          icon="groups"
+          title={t('groups.noMembers')}
+          hint={t('groups.attendance.addStudentsFirst')}
+        />
       ) : (
         <div className="grid gap-2">
           {data.students.map((s) => {
@@ -325,10 +382,16 @@ function AttendanceTab({ groupId }: { groupId: string }) {
                   title={t('groups.attendance.tapToCycle') as string}
                 >
                   <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed text-sm font-bold text-on-primary-fixed">
-                    {s.avatarUrl ? <img src={s.avatarUrl} alt="" className="h-full w-full object-cover" /> : s.fullName?.trim()?.charAt(0)}
+                    {s.avatarUrl ? (
+                      <img src={s.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      s.fullName?.trim()?.charAt(0)
+                    )}
                   </span>
                   <span className="min-w-0 flex-1 truncate font-bold">{s.fullName}</span>
-                  <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_CLASS[status]}`} />
+                  <span
+                    className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT_CLASS[status]}`}
+                  />
                 </button>
                 <div className="flex gap-1.5">
                   {STATUSES.map((st) => (
@@ -337,7 +400,9 @@ function AttendanceTab({ groupId }: { groupId: string }) {
                       onClick={() => setStatus(s.studentId, st)}
                       aria-pressed={status === st}
                       className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                        status === st ? STATUS_ACTIVE_CLASS[st] : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
+                        status === st
+                          ? STATUS_ACTIVE_CLASS[st]
+                          : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
                       }`}
                     >
                       {t(`groups.status.${st}`)}
@@ -361,12 +426,25 @@ export default function TeacherGroupDetailPage() {
   const { data, isLoading, error } = useGroupDetail(groupId);
   const updateGroup = useUpdateGroup(groupId ?? '');
 
-  if (isLoading) return <div className="page"><Skeleton className="h-40 rounded-2xl" /></div>;
-  if (error || !data) return <div className="page"><ErrorNote error={error} /></div>;
+  if (isLoading)
+    return (
+      <div className="page">
+        <Skeleton className="h-40 rounded-2xl" />
+      </div>
+    );
+  if (error || !data)
+    return (
+      <div className="page">
+        <ErrorNote error={error} />
+      </div>
+    );
 
   return (
     <div className="page">
-      <Link to="/teacher/groups" className="mb-3 inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface">
+      <Link
+        to="/teacher/groups"
+        className="mb-3 inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface"
+      >
         <span className="material-symbols-outlined text-lg">arrow_forward</span>
         {t('groups.backToGroups')}
       </Link>
@@ -378,7 +456,9 @@ export default function TeacherGroupDetailPage() {
         </div>
         <button
           className="rounded-lg border border-outline px-4 py-2 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low"
-          onClick={() => updateGroup.mutate({ status: data.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE' })}
+          onClick={() =>
+            updateGroup.mutate({ status: data.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE' })
+          }
           disabled={updateGroup.isPending}
         >
           {data.status === 'ACTIVE' ? t('groups.archiveGroup') : t('groups.reactivateGroup')}
@@ -390,7 +470,9 @@ export default function TeacherGroupDetailPage() {
           <button
             key={tb}
             className={`rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
-              tab === tb ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
+              tab === tb
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
             }`}
             onClick={() => setTab(tb)}
           >

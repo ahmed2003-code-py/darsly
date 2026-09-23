@@ -45,7 +45,10 @@ describe('HealthController', () => {
 
       const out = await controller.ready(r);
 
-      expect(out).toMatchObject({ status: 'ok', checks: { database: 'ok', redis: 'ok', storage: 'ok' } });
+      expect(out).toMatchObject({
+        status: 'ok',
+        checks: { database: 'ok', redis: 'ok', storage: 'ok' },
+      });
       expect(r.status).not.toHaveBeenCalled();
     });
 

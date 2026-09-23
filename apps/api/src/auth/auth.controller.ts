@@ -59,12 +59,19 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @Post('register/invitation')
   @HttpCode(201)
-  @ApiOperation({ summary: 'Signup through a Center invitation link — role and Center come from the token; joins and logs in at once' })
+  @ApiOperation({
+    summary:
+      'Signup through a Center invitation link — role and Center come from the token; joins and logs in at once',
+  })
   async registerViaInvitation(@Body() dto: RegisterViaInvitationDto, @Req() req: Request) {
     const result = await this.authService.registerViaInvitation(dto, deviceContext(req));
     await this.audit.log({
-      actorUserId: result.user.id, action: 'member.invitationLink.register', entity: 'AcademyMembership',
-      entityId: result.membership.id, academyId: result.membership.academyId, meta: { role: result.membership.role },
+      actorUserId: result.user.id,
+      action: 'member.invitationLink.register',
+      entity: 'AcademyMembership',
+      entityId: result.membership.id,
+      academyId: result.membership.academyId,
+      meta: { role: result.membership.role },
     });
     return result;
   }
@@ -87,7 +94,9 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @Post('forgot-password')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Email a 6-digit reset code — always 200, whether or not the address is registered' })
+  @ApiOperation({
+    summary: 'Email a 6-digit reset code — always 200, whether or not the address is registered',
+  })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
   }

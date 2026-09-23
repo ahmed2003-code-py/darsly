@@ -57,25 +57,35 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
   // so the reset token is never returned over HTTP regardless of this flag.
   // Hence this is a loud warning (fix your config) rather than a fatal error.
   if (isProd && env.OTP_DEV_MODE === 'true') {
-    warnings.push('OTP_DEV_MODE=true is ignored in production (token leak is disabled), but you should unset it');
+    warnings.push(
+      'OTP_DEV_MODE=true is ignored in production (token leak is disabled), but you should unset it',
+    );
   }
 
   if (isProd && (!env.ALLOWED_ORIGINS || env.ALLOWED_ORIGINS.includes('localhost'))) {
-    warnings.push('ALLOWED_ORIGINS is unset or points at localhost — CORS will reject your real domain');
+    warnings.push(
+      'ALLOWED_ORIGINS is unset or points at localhost — CORS will reject your real domain',
+    );
   }
 
   // Mail is best-effort by design (MailService never throws into a flow), but a
   // production deploy without it silently breaks password recovery — the reset
   // link would only ever reach the server log.
   if (isProd && !env.RESEND_API_KEY) {
-    warnings.push('RESEND_API_KEY unset — password-reset and approval emails will be logged, not sent');
+    warnings.push(
+      'RESEND_API_KEY unset — password-reset and approval emails will be logged, not sent',
+    );
   }
   if (isProd && env.MAIL_FROM?.includes('resend.dev')) {
-    warnings.push('MAIL_FROM still uses resend.dev — verify your own domain in Resend, or mail only reaches the account owner');
+    warnings.push(
+      'MAIL_FROM still uses resend.dev — verify your own domain in Resend, or mail only reaches the account owner',
+    );
   }
 
   if (isProd && !env.PAYMENT_LISTENER_KEY) {
-    warnings.push('PAYMENT_LISTENER_KEY unset — automatic payment verification endpoint will reject all events');
+    warnings.push(
+      'PAYMENT_LISTENER_KEY unset — automatic payment verification endpoint will reject all events',
+    );
   }
 
   // Production runs more than one replica. Login/forgot-password throttling and
@@ -100,7 +110,9 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     // Media MUST live on durable object storage — the prod filesystem is
     // ephemeral, so local-disk media would vanish on every redeploy.
     if ((env.STORAGE_DRIVER ?? 'local') !== 's3') {
-      errors.push('AI_ACADEMY_ENABLED=true requires STORAGE_DRIVER=s3 in production (local disk is ephemeral; media would be lost on redeploy)');
+      errors.push(
+        'AI_ACADEMY_ENABLED=true requires STORAGE_DRIVER=s3 in production (local disk is ephemeral; media would be lost on redeploy)',
+      );
     }
     if (!env.OPENAI_API_KEY) {
       errors.push('AI_ACADEMY_ENABLED=true requires OPENAI_API_KEY');
@@ -119,7 +131,8 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
   }
   if (errors.length) {
     throw new Error(
-      'Fatal configuration errors (refusing to start):\n' + errors.map((e) => `  • ${e}`).join('\n'),
+      'Fatal configuration errors (refusing to start):\n' +
+        errors.map((e) => `  • ${e}`).join('\n'),
     );
   }
 }

@@ -30,8 +30,13 @@ function makePrisma(over: Record<string, unknown> = {}) {
     },
     review: { aggregate: jest.fn().mockResolvedValue({ _avg: { rating: 4.26 }, _count: 7 }) },
     quizAttempt: { count: jest.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(6) },
-    lessonProgress: { count: jest.fn().mockResolvedValue(4), groupBy: jest.fn().mockResolvedValue([]) },
-    courseUnit: { findMany: jest.fn().mockResolvedValue([{ courseId: 'c1', _count: { lessons: 5 } }]) },
+    lessonProgress: {
+      count: jest.fn().mockResolvedValue(4),
+      groupBy: jest.fn().mockResolvedValue([]),
+    },
+    courseUnit: {
+      findMany: jest.fn().mockResolvedValue([{ courseId: 'c1', _count: { lessons: 5 } }]),
+    },
     lesson: { groupBy: jest.fn().mockResolvedValue([]), findMany: jest.fn().mockResolvedValue([]) },
     $queryRaw: jest.fn().mockResolvedValue([]),
     ...over,

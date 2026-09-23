@@ -41,9 +41,11 @@ describe('starting an enrolment', () => {
   const prismaFor = (gradeIds: string[]) =>
     ({
       courseGrade: {
-        findMany: jest.fn().mockResolvedValue(
-          gradeIds.map((gradeId) => ({ gradeId, grade: { nameAr: `سنة ${gradeId}` } })),
-        ),
+        findMany: jest
+          .fn()
+          .mockResolvedValue(
+            gradeIds.map((gradeId) => ({ gradeId, grade: { nameAr: `سنة ${gradeId}` } })),
+          ),
       },
     }) as unknown as PrismaService;
 
@@ -81,8 +83,8 @@ describe('starting an enrolment', () => {
 
   it('does not let a rejected payment pass for having been tried before', async () => {
     const prisma = prismaFor(['secondary-3']);
-    await expect(
-      assertCourseYear(prisma, 'c1', 'bacc-1', { status: 'REJECTED' }),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(assertCourseYear(prisma, 'c1', 'bacc-1', { status: 'REJECTED' })).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 });

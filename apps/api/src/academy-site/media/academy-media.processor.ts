@@ -76,7 +76,9 @@ export class AcademyMediaProcessor {
       throw new BadRequestException('Only MP4 video is accepted');
     }
     if (input.length > maxBytes) {
-      throw new BadRequestException(`Video is too large (max ${Math.round(maxBytes / (1024 * 1024))}MB)`);
+      throw new BadRequestException(
+        `Video is too large (max ${Math.round(maxBytes / (1024 * 1024))}MB)`,
+      );
     }
     const contentHash = createHash('sha256').update(input).digest('hex');
     const dims = await this.probeDimensions(input);
@@ -96,17 +98,23 @@ export class AcademyMediaProcessor {
     try {
       await fs.writeFile(tmp, input);
       const { stdout } = await execFileAsync('ffprobe', [
-        '-v', 'error',
-        '-select_streams', 'v:0',
-        '-show_entries', 'stream=width,height',
-        '-of', 'json',
+        '-v',
+        'error',
+        '-select_streams',
+        'v:0',
+        '-show_entries',
+        'stream=width,height',
+        '-of',
+        'json',
         tmp,
       ]);
       const width = Number(JSON.parse(stdout)?.streams?.[0]?.width);
       const height = Number(JSON.parse(stdout)?.streams?.[0]?.height);
       return Number.isFinite(width) && Number.isFinite(height) ? { width, height } : null;
     } catch (e) {
-      this.logger.warn(`ffprobe failed for a PROMO upload, dimensions will be null: ${(e as Error).message}`);
+      this.logger.warn(
+        `ffprobe failed for a PROMO upload, dimensions will be null: ${(e as Error).message}`,
+      );
       return null;
     } finally {
       await fs.unlink(tmp).catch(() => undefined);

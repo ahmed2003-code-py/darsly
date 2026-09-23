@@ -58,7 +58,8 @@ export class AnalyticsService {
     // An academy's revenue is what it earns, not what the student paid: the
     // difference between the two is the platform fee, so reporting the total
     // here would disclose it by subtraction against the price they set.
-    const earning = (p: { amountCents: number; netCents: number | null }) => p.netCents ?? p.amountCents;
+    const earning = (p: { amountCents: number; netCents: number | null }) =>
+      p.netCents ?? p.amountCents;
     const paid = { tenantId, status: 'PAID' as const };
 
     const [
@@ -77,8 +78,14 @@ export class AnalyticsService {
       // `netCents ?? amountCents` has no SQL expression Prisma can build, so
       // the sum is split on exactly that condition and added back. Two index
       // scans instead of one table read.
-      this.prisma.payment.aggregate({ where: { ...paid, netCents: { not: null } }, _sum: { netCents: true } }),
-      this.prisma.payment.aggregate({ where: { ...paid, netCents: null }, _sum: { amountCents: true } }),
+      this.prisma.payment.aggregate({
+        where: { ...paid, netCents: { not: null } },
+        _sum: { netCents: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { ...paid, netCents: null },
+        _sum: { amountCents: true },
+      }),
       // Bounded to the window it was always displaying. `paidAt ?? createdAt`
       // is the bucket key, so a payment with no paidAt is matched on createdAt.
       this.prisma.payment.findMany({
@@ -107,16 +114,30 @@ export class AnalyticsService {
       }),
       this.prisma.review.aggregate({ where: { tenantId }, _avg: { rating: true }, _count: true }),
       this.prisma.quizAttempt.count({
-        where: { quiz: { lesson: { unit: { course: { tenantId } } } }, passed: { not: null }, ...LIVE_STUDENT },
+        where: {
+          quiz: { lesson: { unit: { course: { tenantId } } } },
+          passed: { not: null },
+          ...LIVE_STUDENT,
+        },
       }),
       this.prisma.quizAttempt.count({
-        where: { quiz: { lesson: { unit: { course: { tenantId } } } }, passed: true, ...LIVE_STUDENT },
+        where: {
+          quiz: { lesson: { unit: { course: { tenantId } } } },
+          passed: true,
+          ...LIVE_STUDENT,
+        },
       }),
     ]);
 
     const grossCents = (netSum._sum.netCents ?? 0) + (grossFallbackSum._sum.amountCents ?? 0);
-    const revenueByMonth = bucketByMonth(months, seriesPayments.map((p) => ({ at: p.paidAt ?? p.createdAt, v: earning(p) })));
-    const enrollmentsByMonth = bucketByMonth(months, seriesEnrollments.map((e) => ({ at: e.createdAt, v: 1 })));
+    const revenueByMonth = bucketByMonth(
+      months,
+      seriesPayments.map((p) => ({ at: p.paidAt ?? p.createdAt, v: earning(p) })),
+    );
+    const enrollmentsByMonth = bucketByMonth(
+      months,
+      seriesEnrollments.map((e) => ({ at: e.createdAt, v: 1 })),
+    );
 
     const activeStudents = activeStudentRows.length;
 
@@ -127,7 +148,10 @@ export class AnalyticsService {
       where: {
         completedAt: { not: null },
         lesson: { unit: { course: { tenantId } } },
-        student: { deletedAt: null, enrollments: { some: { tenantId, status: 'ACTIVE', deletedAt: null } } },
+        student: {
+          deletedAt: null,
+          enrollments: { some: { tenantId, status: 'ACTIVE', deletedAt: null } },
+        },
       },
     });
     // Total lessons per course (via units), then × active enrollments per course.
@@ -136,7 +160,9 @@ export class AnalyticsService {
       (s, c) => s + (lessonsPerCourse[c.courseId] ?? 0) * c._count._all,
       0,
     );
-    const completionRatePct = totalRequired ? Math.round((completedByStudent / totalRequired) * 100) : 0;
+    const completionRatePct = totalRequired
+      ? Math.round((completedByStudent / totalRequired) * 100)
+      : 0;
 
     const quizPassRatePct = quizTotal ? Math.round((quizPassed / quizTotal) * 100) : 0;
 
@@ -183,7 +209,11 @@ export class AnalyticsService {
     const titles = Object.fromEntries(lessons.map((l) => [l.id, l.title]));
     return rows
       .filter((r) => titles[r.lessonId])
-      .map((r) => ({ lessonId: r.lessonId, title: titles[r.lessonId], views: r._sum.viewCount ?? 0 }));
+      .map((r) => ({
+        lessonId: r.lessonId,
+        title: titles[r.lessonId],
+        views: r._sum.viewCount ?? 0,
+      }));
   }
 
   // ── Phase 6: analytics expansion ────────────────────────────────────────
@@ -215,7 +245,11 @@ export class AnalyticsService {
       this.prisma.enrollment.groupBy({ by: ['studentId'], where: { academyId } }),
       this.prisma.enrollment.groupBy({
         by: ['studentId'],
-        where: { academyId, status: 'ACTIVE', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        where: {
+          academyId,
+          status: 'ACTIVE',
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
       }),
       this.prisma.$queryRaw<{ n: bigint }[]>`
         SELECT COUNT(*) AS n FROM (
@@ -249,7 +283,13 @@ export class AnalyticsService {
   async growth(academyId: string, days: number) {
     const tenantId = academyId;
     const rows = await this.prisma.$queryRaw<
-      { day: Date; newstudents: bigint; newenrollments: bigint; activated: bigint; courseactivity: bigint }[]
+      {
+        day: Date;
+        newstudents: bigint;
+        newenrollments: bigint;
+        activated: bigint;
+        courseactivity: bigint;
+      }[]
     >`
       WITH days AS (
         SELECT generate_series(
@@ -317,10 +357,21 @@ export class AnalyticsService {
    */
   async enrollmentBreakdown(academyId: string) {
     const [statusAgg, sourceAgg] = await Promise.all([
-      this.prisma.enrollment.groupBy({ by: ['status'], where: { academyId }, _count: { _all: true } }),
-      this.prisma.enrollment.groupBy({ by: ['source'], where: { academyId, status: 'ACTIVE' }, _count: { _all: true } }),
+      this.prisma.enrollment.groupBy({
+        by: ['status'],
+        where: { academyId },
+        _count: { _all: true },
+      }),
+      this.prisma.enrollment.groupBy({
+        by: ['source'],
+        where: { academyId, status: 'ACTIVE' },
+        _count: { _all: true },
+      }),
     ]);
-    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<string, number>;
+    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<
+      string,
+      number
+    >;
     let automatic = 0;
     let manual = 0;
     let demo = 0;
@@ -389,7 +440,9 @@ export class AnalyticsService {
         ORDER BY d.day ASC
       `,
       tenantId
-        ? this.prisma.$queryRaw<{ groupId: string; name: string; present: bigint; total: bigint }[]>`
+        ? this.prisma.$queryRaw<
+            { groupId: string; name: string; present: bigint; total: bigint }[]
+          >`
             SELECT g.id AS "groupId", g.name,
               COUNT(*) FILTER (WHERE r.status = 'PRESENT') AS present, COUNT(*) AS total
             FROM "AttendanceRecord" r
@@ -399,11 +452,16 @@ export class AnalyticsService {
               AND g."academyId" = ${tenantId} AND g."deletedAt" IS NULL
             GROUP BY g.id, g.name
           `
-        : Promise.resolve([] as { groupId: string; name: string; present: bigint; total: bigint }[]),
+        : Promise.resolve(
+            [] as { groupId: string; name: string; present: bigint; total: bigint }[],
+          ),
       ctx ? this.needsAttention.overview(ctx) : Promise.resolve(null),
     ]);
 
-    const byStatus = Object.fromEntries(counts.map((r) => [r.status, Number(r.n)])) as Record<string, number>;
+    const byStatus = Object.fromEntries(counts.map((r) => [r.status, Number(r.n)])) as Record<
+      string,
+      number
+    >;
     const present = byStatus.PRESENT ?? 0;
     const totalMarked = Object.values(byStatus).reduce((s, n) => s + n, 0);
     return {
@@ -453,14 +511,20 @@ export class AnalyticsService {
         WHERE r."deletedAt" IS NULL AND s."deletedAt" IS NULL AND s."groupId" = ANY(${groupIds}::text[])
         GROUP BY s."groupId"
       `,
-      this.prisma.groupSession.groupBy({ by: ['groupId', 'status'], where: { groupId: { in: groupIds } }, _count: { _all: true } }),
+      this.prisma.groupSession.groupBy({
+        by: ['groupId', 'status'],
+        where: { groupId: { in: groupIds } },
+        _count: { _all: true },
+      }),
       this.prisma.groupSession.groupBy({
         by: ['groupId'],
         where: { groupId: { in: groupIds }, status: 'SCHEDULED', startAt: { gt: new Date() } },
         _count: { _all: true },
       }),
     ]);
-    const attByGroup = new Map(attendanceAgg.map((r) => [r.groupId, { present: Number(r.present), total: Number(r.total) }]));
+    const attByGroup = new Map(
+      attendanceAgg.map((r) => [r.groupId, { present: Number(r.present), total: Number(r.total) }]),
+    );
     const sessByGroup = new Map<string, Record<string, number>>();
     for (const r of sessionAgg) {
       const m = sessByGroup.get(r.groupId) ?? {};
@@ -500,8 +564,14 @@ export class AnalyticsService {
     const since = new Date(Date.now() - days * 86_400_000);
 
     const [statusAgg, upcoming, roomAgg, teacherAgg, groupAgg] = await Promise.all([
-      this.prisma.groupSession.groupBy({ by: ['status'], where: { academyId: tenantId, startAt: { gte: since } }, _count: { _all: true } }),
-      this.prisma.groupSession.count({ where: { academyId: tenantId, status: 'SCHEDULED', startAt: { gt: new Date() } } }),
+      this.prisma.groupSession.groupBy({
+        by: ['status'],
+        where: { academyId: tenantId, startAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      this.prisma.groupSession.count({
+        where: { academyId: tenantId, status: 'SCHEDULED', startAt: { gt: new Date() } },
+      }),
       this.prisma.$queryRaw<{ roomId: string; name: string; sessions: bigint; minutes: number }[]>`
         SELECT r.id AS "roomId", r.name,
           COUNT(gs.id) AS sessions,
@@ -517,19 +587,36 @@ export class AnalyticsService {
         where: { academyId: tenantId, startAt: { gte: since }, teacherUserId: { not: null } },
         _count: { _all: true },
       }),
-      this.prisma.groupSession.groupBy({ by: ['groupId'], where: { academyId: tenantId, startAt: { gte: since } }, _count: { _all: true } }),
+      this.prisma.groupSession.groupBy({
+        by: ['groupId'],
+        where: { academyId: tenantId, startAt: { gte: since } },
+        _count: { _all: true },
+      }),
     ]);
 
     const teacherIds = teacherAgg.map((t) => t.teacherUserId).filter((x): x is string => !!x);
     const groupIds = groupAgg.map((g) => g.groupId);
     const [teachers, groupsMeta] = await Promise.all([
-      teacherIds.length ? this.prisma.user.findMany({ where: { id: { in: teacherIds } }, select: { id: true, fullName: true } }) : Promise.resolve([]),
-      groupIds.length ? this.prisma.group.findMany({ where: { id: { in: groupIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+      teacherIds.length
+        ? this.prisma.user.findMany({
+            where: { id: { in: teacherIds } },
+            select: { id: true, fullName: true },
+          })
+        : Promise.resolve([]),
+      groupIds.length
+        ? this.prisma.group.findMany({
+            where: { id: { in: groupIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
     ]);
     const teacherNameById = new Map(teachers.map((t) => [t.id, t.fullName]));
     const groupNameById = new Map(groupsMeta.map((g) => [g.id, g.name]));
 
-    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<string, number>;
+    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<
+      string,
+      number
+    >;
     return {
       rangeDays: days,
       total: Object.values(byStatus).reduce((s, n) => s + n, 0),
@@ -537,13 +624,22 @@ export class AnalyticsService {
       cancelled: byStatus.CANCELLED ?? 0,
       scheduledInRange: byStatus.SCHEDULED ?? 0,
       upcoming,
-      roomUsage: roomAgg.map((r) => ({ roomId: r.roomId, name: r.name, sessions: Number(r.sessions), scheduledMinutes: Math.round(Number(r.minutes)) })),
+      roomUsage: roomAgg.map((r) => ({
+        roomId: r.roomId,
+        name: r.name,
+        sessions: Number(r.sessions),
+        scheduledMinutes: Math.round(Number(r.minutes)),
+      })),
       teacherLoad: teacherAgg.map((t) => ({
         userId: t.teacherUserId as string,
         fullName: teacherNameById.get(t.teacherUserId as string) ?? '—',
         sessions: t._count._all,
       })),
-      groupLoad: groupAgg.map((g) => ({ groupId: g.groupId, name: groupNameById.get(g.groupId) ?? '—', sessions: g._count._all })),
+      groupLoad: groupAgg.map((g) => ({
+        groupId: g.groupId,
+        name: groupNameById.get(g.groupId) ?? '—',
+        sessions: g._count._all,
+      })),
     };
   }
 
@@ -563,20 +659,25 @@ export class AnalyticsService {
     if (!courses.length) return [];
     const courseIds = courses.map((c) => c.id);
 
-    const [enrollAgg, sourceAgg, paymentAgg, quizAgg, lessonsPerCourse, completedAgg] = await Promise.all([
-      this.prisma.enrollment.groupBy({ by: ['courseId', 'status'], where: { academyId, courseId: { in: courseIds } }, _count: { _all: true } }),
-      this.prisma.enrollment.groupBy({
-        by: ['courseId', 'source'],
-        where: { academyId, courseId: { in: courseIds }, status: 'ACTIVE' },
-        _count: { _all: true },
-      }),
-      this.prisma.payment.groupBy({
-        by: ['courseId'],
-        where: { academyId, courseId: { in: courseIds }, status: 'PAID' },
-        _sum: { netCents: true, amountCents: true },
-        _count: { _all: true },
-      }),
-      this.prisma.$queryRaw<{ courseId: string; attempted: bigint; passed: bigint }[]>`
+    const [enrollAgg, sourceAgg, paymentAgg, quizAgg, lessonsPerCourse, completedAgg] =
+      await Promise.all([
+        this.prisma.enrollment.groupBy({
+          by: ['courseId', 'status'],
+          where: { academyId, courseId: { in: courseIds } },
+          _count: { _all: true },
+        }),
+        this.prisma.enrollment.groupBy({
+          by: ['courseId', 'source'],
+          where: { academyId, courseId: { in: courseIds }, status: 'ACTIVE' },
+          _count: { _all: true },
+        }),
+        this.prisma.payment.groupBy({
+          by: ['courseId'],
+          where: { academyId, courseId: { in: courseIds }, status: 'PAID' },
+          _sum: { netCents: true, amountCents: true },
+          _count: { _all: true },
+        }),
+        this.prisma.$queryRaw<{ courseId: string; attempted: bigint; passed: bigint }[]>`
         SELECT u."courseId" AS "courseId",
           COUNT(*) FILTER (WHERE qa.passed IS NOT NULL) AS attempted,
           COUNT(*) FILTER (WHERE qa.passed = TRUE) AS passed
@@ -587,8 +688,8 @@ export class AnalyticsService {
         WHERE u."courseId" = ANY(${courseIds}::text[])
         GROUP BY u."courseId"
       `,
-      this.lessonsPerCourse(courseIds),
-      this.prisma.$queryRaw<{ courseId: string; completed: bigint }[]>`
+        this.lessonsPerCourse(courseIds),
+        this.prisma.$queryRaw<{ courseId: string; completed: bigint }[]>`
         SELECT u."courseId" AS "courseId", COUNT(*) AS completed
         FROM "LessonProgress" lp
         JOIN "Lesson" l ON l.id = lp."lessonId"
@@ -598,10 +699,15 @@ export class AnalyticsService {
           AND e.status = 'ACTIVE' AND e."deletedAt" IS NULL AND lp."completedAt" IS NOT NULL
         GROUP BY u."courseId"
       `,
-    ]);
+      ]);
 
     const completedByCourse = new Map(completedAgg.map((r) => [r.courseId, Number(r.completed)]));
-    const quizByCourse = new Map(quizAgg.map((r) => [r.courseId, { attempted: Number(r.attempted), passed: Number(r.passed) }]));
+    const quizByCourse = new Map(
+      quizAgg.map((r) => [
+        r.courseId,
+        { attempted: Number(r.attempted), passed: Number(r.passed) },
+      ]),
+    );
     const enrollByCourse = new Map<string, Record<string, number>>();
     for (const r of enrollAgg) {
       const m = enrollByCourse.get(r.courseId) ?? {};
@@ -637,7 +743,7 @@ export class AnalyticsService {
         activeStudents: activeCount,
         avgProgressPct: totalRequired ? Math.round((completed / totalRequired) * 100) : 0,
         quizPassRatePct: quiz?.attempted ? Math.round((quiz.passed / quiz.attempted) * 100) : null,
-        revenueNetCents: p ? p._sum.netCents ?? p._sum.amountCents ?? 0 : 0,
+        revenueNetCents: p ? (p._sum.netCents ?? p._sum.amountCents ?? 0) : 0,
         paidTransactions: p?._count._all ?? 0,
         automaticEnrollments: src.automatic,
         manualEnrollments: src.manual,
@@ -659,15 +765,27 @@ export class AnalyticsService {
   async teachersOverview(ctx: AcademyContext) {
     const tenantId = ctx.academyId;
     const staff = await this.prisma.academyMembership.findMany({
-      where: { academyId: tenantId, status: 'ACTIVE', role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] } },
+      where: {
+        academyId: tenantId,
+        status: 'ACTIVE',
+        role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] },
+      },
       select: { userId: true, role: true, user: { select: { fullName: true, avatarUrl: true } } },
     });
     if (!staff.length) return [];
     const userIds = staff.map((s) => s.userId);
 
     const [groupAssignAgg, sessionAgg, attendanceAgg] = await Promise.all([
-      this.prisma.groupAssignment.groupBy({ by: ['userId'], where: { academyId: tenantId, userId: { in: userIds } }, _count: { _all: true } }),
-      this.prisma.groupSession.groupBy({ by: ['teacherUserId'], where: { academyId: tenantId, teacherUserId: { in: userIds } }, _count: { _all: true } }),
+      this.prisma.groupAssignment.groupBy({
+        by: ['userId'],
+        where: { academyId: tenantId, userId: { in: userIds } },
+        _count: { _all: true },
+      }),
+      this.prisma.groupSession.groupBy({
+        by: ['teacherUserId'],
+        where: { academyId: tenantId, teacherUserId: { in: userIds } },
+        _count: { _all: true },
+      }),
       this.prisma.$queryRaw<{ userId: string; present: bigint; total: bigint }[]>`
         SELECT ga."userId" AS "userId",
           COUNT(*) FILTER (WHERE r.status = 'PRESENT') AS present, COUNT(*) AS total
@@ -680,8 +798,12 @@ export class AnalyticsService {
       `,
     ]);
     const groupsByUser = new Map(groupAssignAgg.map((r) => [r.userId, r._count._all]));
-    const sessionsByUser = new Map(sessionAgg.map((r) => [r.teacherUserId as string, r._count._all]));
-    const attByUser = new Map(attendanceAgg.map((r) => [r.userId, { present: Number(r.present), total: Number(r.total) }]));
+    const sessionsByUser = new Map(
+      sessionAgg.map((r) => [r.teacherUserId as string, r._count._all]),
+    );
+    const attByUser = new Map(
+      attendanceAgg.map((r) => [r.userId, { present: Number(r.present), total: Number(r.total) }]),
+    );
 
     return staff.map((s) => {
       const att = attByUser.get(s.userId);
@@ -716,9 +838,28 @@ export class AnalyticsService {
     const now = new Date();
     const weekAhead = new Date(now.getTime() + 7 * 86_400_000);
     const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
-    const [teachers, studentRows, coursesTotal, coursesPublished, groups, upcomingGroup, upcomingLive, completedMonth, attendanceRows, subjectsActive, recent, kindRow] = await Promise.all([
+    const [
+      teachers,
+      studentRows,
+      coursesTotal,
+      coursesPublished,
+      groups,
+      upcomingGroup,
+      upcomingLive,
+      completedMonth,
+      attendanceRows,
+      subjectsActive,
+      recent,
+      kindRow,
+    ] = await Promise.all([
       this.prisma.academyMembership.count({
-        where: { academyId, status: 'ACTIVE', deletedAt: null, role: { in: ['TEACHER', 'OWNER'] }, user: { role: 'TEACHER', teacherProfile: { status: 'APPROVED' } } },
+        where: {
+          academyId,
+          status: 'ACTIVE',
+          deletedAt: null,
+          role: { in: ['TEACHER', 'OWNER'] },
+          user: { role: 'TEACHER', teacherProfile: { status: 'APPROVED' } },
+        },
       }),
       this.prisma.$queryRaw<{ n: bigint }[]>`
         SELECT COUNT(DISTINCT "studentId") AS n FROM (
@@ -728,9 +869,15 @@ export class AnalyticsService {
       this.prisma.course.count({ where: { academyId } }),
       this.prisma.course.count({ where: { academyId, status: 'PUBLISHED' } }),
       this.prisma.group.count({ where: { academyId, status: 'ACTIVE' } }),
-      this.prisma.groupSession.count({ where: { academyId, status: 'SCHEDULED', startAt: { gt: now, lt: weekAhead } } }),
-      this.prisma.liveSession.count({ where: { academyId, status: 'SCHEDULED', startsAt: { gt: now, lt: weekAhead } } }),
-      this.prisma.groupSession.count({ where: { academyId, status: 'COMPLETED', startAt: { gte: monthAgo } } }),
+      this.prisma.groupSession.count({
+        where: { academyId, status: 'SCHEDULED', startAt: { gt: now, lt: weekAhead } },
+      }),
+      this.prisma.liveSession.count({
+        where: { academyId, status: 'SCHEDULED', startsAt: { gt: now, lt: weekAhead } },
+      }),
+      this.prisma.groupSession.count({
+        where: { academyId, status: 'COMPLETED', startAt: { gte: monthAgo } },
+      }),
       this.prisma.$queryRaw<{ present: bigint; total: bigint }[]>`
         SELECT COUNT(*) FILTER (WHERE r.status IN ('PRESENT', 'LATE')) AS present, COUNT(*) AS total
         FROM "AttendanceRecord" r JOIN "AttendanceSession" s ON s.id = r."sessionId"
@@ -740,9 +887,19 @@ export class AnalyticsService {
         where: { academyId },
         orderBy: { createdAt: 'desc' },
         take: 10,
-        select: { id: true, action: true, entity: true, entityId: true, createdAt: true, actor: { select: { fullName: true } } },
+        select: {
+          id: true,
+          action: true,
+          entity: true,
+          entityId: true,
+          createdAt: true,
+          actor: { select: { fullName: true } },
+        },
       }),
-      this.prisma.academy.findUnique({ where: { id: academyId }, select: { kind: true, name: true } }),
+      this.prisma.academy.findUnique({
+        where: { id: academyId },
+        select: { kind: true, name: true },
+      }),
     ]);
     const att = attendanceRows[0];
     const total = Number(att?.total ?? 0);
@@ -752,10 +909,25 @@ export class AnalyticsService {
       students: Number(studentRows[0]?.n ?? 0),
       courses: { total: coursesTotal, published: coursesPublished },
       groups,
-      sessions: { upcoming7d: upcomingGroup + upcomingLive, upcomingPhysical: upcomingGroup, upcomingLive, completed30d: completedMonth },
-      attendance: { records30d: total, presentRate: total ? Math.round((Number(att.present) / total) * 100) : null },
+      sessions: {
+        upcoming7d: upcomingGroup + upcomingLive,
+        upcomingPhysical: upcomingGroup,
+        upcomingLive,
+        completed30d: completedMonth,
+      },
+      attendance: {
+        records30d: total,
+        presentRate: total ? Math.round((Number(att.present) / total) * 100) : null,
+      },
       subjectsActive: kindRow?.kind === 'CENTER' ? subjectsActive : null,
-      recentActivity: recent.map((r) => ({ id: r.id, action: r.action, entity: r.entity, entityId: r.entityId, at: r.createdAt, by: r.actor?.fullName ?? null })),
+      recentActivity: recent.map((r) => ({
+        id: r.id,
+        action: r.action,
+        entity: r.entity,
+        entityId: r.entityId,
+        at: r.createdAt,
+        by: r.actor?.fullName ?? null,
+      })),
     };
   }
 
@@ -770,20 +942,33 @@ export class AnalyticsService {
     const userId = ctx.userId;
     const now = new Date();
     const since = new Date(now.getTime() - days * 86_400_000);
-    const [courses, activeEnrollments, groups, upcoming, completed, attendanceRows, upcomingLive] = await Promise.all([
-      authorTenantId ? this.prisma.course.count({ where: { academyId, tenantId: authorTenantId } }) : 0,
-      authorTenantId ? this.prisma.enrollment.count({ where: { academyId, status: 'ACTIVE', course: { tenantId: authorTenantId } } }) : 0,
-      this.prisma.groupAssignment.count({ where: { academyId, userId } }),
-      this.prisma.groupSession.count({ where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startAt: { gt: now } } }),
-      this.prisma.groupSession.count({ where: { academyId, teacherUserId: userId, status: 'COMPLETED', startAt: { gte: since } } }),
-      this.prisma.$queryRaw<{ present: bigint; total: bigint }[]>`
+    const [courses, activeEnrollments, groups, upcoming, completed, attendanceRows, upcomingLive] =
+      await Promise.all([
+        authorTenantId
+          ? this.prisma.course.count({ where: { academyId, tenantId: authorTenantId } })
+          : 0,
+        authorTenantId
+          ? this.prisma.enrollment.count({
+              where: { academyId, status: 'ACTIVE', course: { tenantId: authorTenantId } },
+            })
+          : 0,
+        this.prisma.groupAssignment.count({ where: { academyId, userId } }),
+        this.prisma.groupSession.count({
+          where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startAt: { gt: now } },
+        }),
+        this.prisma.groupSession.count({
+          where: { academyId, teacherUserId: userId, status: 'COMPLETED', startAt: { gte: since } },
+        }),
+        this.prisma.$queryRaw<{ present: bigint; total: bigint }[]>`
         SELECT COUNT(*) FILTER (WHERE r.status IN ('PRESENT', 'LATE')) AS present, COUNT(*) AS total
         FROM "AttendanceRecord" r
         JOIN "AttendanceSession" s ON s.id = r."sessionId"
         JOIN "GroupAssignment" ga ON ga."groupId" = s."groupId" AND ga."userId" = ${userId} AND ga."deletedAt" IS NULL
         WHERE r."academyId" = ${academyId} AND r."deletedAt" IS NULL AND s."deletedAt" IS NULL AND s.date >= ${since}`,
-      this.prisma.liveSession.count({ where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startsAt: { gt: now } } }),
-    ]);
+        this.prisma.liveSession.count({
+          where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startsAt: { gt: now } },
+        }),
+      ]);
     const att = attendanceRows[0];
     const total = Number(att?.total ?? 0);
     return {
@@ -791,8 +976,16 @@ export class AnalyticsService {
       courses,
       activeEnrollments,
       groups,
-      sessions: { upcoming: upcoming + upcomingLive, upcomingPhysical: upcoming, upcomingLive, completed: completed },
-      attendance: { records: total, presentRate: total ? Math.round((Number(att.present) / total) * 100) : null },
+      sessions: {
+        upcoming: upcoming + upcomingLive,
+        upcomingPhysical: upcoming,
+        upcomingLive,
+        completed: completed,
+      },
+      attendance: {
+        records: total,
+        presentRate: total ? Math.round((Number(att.present) / total) * 100) : null,
+      },
     };
   }
 
@@ -800,11 +993,18 @@ export class AnalyticsService {
     // Phase 7: organisation scope. A Center's figures come from its OWN ledger
     // account (its share of the net), a PERSONAL workspace's from the
     // teacher's — never the author's personal configuration for a Center.
-    const academy = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { id: true, kind: true } });
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { id: true, kind: true },
+    });
     if (!academy) throw new NotFoundException('Academy not found');
     const since = new Date(Date.now() - days * 86_400_000);
     const [statusAgg, netTrend, earnings, byCourse] = await Promise.all([
-      this.prisma.payment.groupBy({ by: ['status'], where: { academyId, createdAt: { gte: since } }, _count: { _all: true } }),
+      this.prisma.payment.groupBy({
+        by: ['status'],
+        where: { academyId, createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
       this.ledger.academyRevenueTrend(academy, days),
       this.ledger.orgEarnings(academy),
       this.prisma.payment.groupBy({
@@ -814,10 +1014,16 @@ export class AnalyticsService {
         _count: { _all: true },
       }),
     ]);
-    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<string, number>;
+    const byStatus = Object.fromEntries(statusAgg.map((r) => [r.status, r._count._all])) as Record<
+      string,
+      number
+    >;
     const courseIds = byCourse.map((r) => r.courseId);
     const courses = courseIds.length
-      ? await this.prisma.course.findMany({ where: { id: { in: courseIds } }, select: { id: true, title: true } })
+      ? await this.prisma.course.findMany({
+          where: { id: { in: courseIds } },
+          select: { id: true, title: true },
+        })
       : [];
     const titleById = new Map(courses.map((c) => [c.id, c.title]));
     return {

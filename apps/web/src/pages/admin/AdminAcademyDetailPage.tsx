@@ -22,6 +22,7 @@ import {
 } from '../../lib/adminStudio';
 import { Badge, ErrorNote, Field, Modal, Skeleton } from '../../components/ui';
 import { CenterThemeGrantEditor } from './CenterThemeGrantPicker';
+import { confirmDelete } from '../../lib/confirm';
 
 const TABS_PERSONAL = ['overview', 'staff', 'flags', 'activity'] as const;
 const TABS_CENTER = ['overview', 'staff', 'studio', 'flags', 'activity'] as const;
@@ -631,7 +632,12 @@ export default function AdminAcademyDetailPage() {
                       <button
                         className="rounded-lg px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
                         disabled={removeMember.isPending}
-                        onClick={() => removeMember.mutate(s.id)}
+                        onClick={async () =>
+                          (await confirmDelete({
+                            kind: 'remove',
+                            name: s.fullName ?? s.user?.fullName,
+                          })) && removeMember.mutate(s.id)
+                        }
                       >
                         {t('adminControlStudio.staff.remove')}
                       </button>

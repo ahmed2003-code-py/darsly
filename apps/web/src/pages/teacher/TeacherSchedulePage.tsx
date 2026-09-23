@@ -16,6 +16,7 @@ import {
   useUpdateRoom,
 } from '../../lib/scheduling';
 import { Badge, EmptyState, ErrorNote, Modal, PageHeader, Skeleton } from '../../components/ui';
+import { confirmDelete } from '../../lib/confirm';
 
 const TABS = ['calendar', 'rooms'] as const;
 type Tab = (typeof TABS)[number];
@@ -315,7 +316,7 @@ function SessionChip({
       {s.status === 'SCHEDULED' && s.kind !== 'LIVE' && (
         <button
           className="mt-2 text-xs font-bold text-error hover:underline"
-          onClick={onCancel}
+          onClick={async () => (await confirmDelete({ kind: 'cancel' })) && onCancel()}
           disabled={cancelling}
         >
           {t('schedule.cancel')}

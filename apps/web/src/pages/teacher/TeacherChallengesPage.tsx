@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
+import { confirmDelete } from '../../lib/confirm';
+import { toastError, toastSuccess } from '../../lib/toast';
 import { dateShort } from '../../lib/format';
 import {
   useChallengeAnalytics,
@@ -26,17 +28,27 @@ const STATUS_TONE: Record<string, 'teal' | 'warn' | 'neutral' | 'error'> = {
   ARCHIVED: 'neutral',
 };
 
-const TABS = ['ALL', 'DRAFT', 'PUBLISHED', 'CLOSED', 'ARCHIVED'] as const;
+/**
+ * RUNNING first, and the default: a teacher opening this page is asking "what
+ * are my students doing right now", not "show me everything I ever made".
+ * RUNNING is the two statuses students can actually play.
+ */
+const TABS = ['RUNNING', 'DRAFT', 'CLOSED', 'ARCHIVED', 'ALL'] as const;
+type Tab = (typeof TABS)[number];
+const RUNNING = new Set(['PUBLISHED', 'ACTIVE']);
+const inTab = (status: string, tab: Tab) =>
+  tab === 'ALL' ? true : tab === 'RUNNING' ? RUNNING.has(status) : status === tab;
 
 export default function TeacherChallengesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<(typeof TABS)[number]>('ALL');
+  const [tab, setTab] = useState<Tab>('RUNNING');
   const [resultsFor, setResultsFor] = useState<string | null>(null);
 
   const { data: all, isLoading } = useTeacherChallenges();
-  const rows = (all ?? []).filter((c) => tab === 'ALL' || c.status === tab);
+  const rows = (all ?? []).filter((c) => inTab(c.status, tab));
+  const count = (tb: Tab) => (all ?? []).filter((c) => inTab(c.status, tb)).length;
 
   const create = useMutation({
     mutationFn: async () =>
@@ -49,9 +61,25 @@ export default function TeacherChallengesPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-challenges'] }),
   });
 
-  const remove = useMutation({
+  // Two different actions, said as two buttons. The one button used to change
+  // its meaning — "delete" on a fresh challenge, "archive" on a played one —
+  // so a teacher who wanted a played challenge gone had no way to do it.
+  const archive = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/teacher/challenges/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-challenges'] }),
+    onSuccess: () => {
+      toastSuccess(t('challenges.teacher.archived'));
+      return qc.invalidateQueries({ queryKey: ['teacher-challenges'] });
+    },
+    onError: (e) => toastError(e),
+  });
+  const remove = useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/teacher/challenges/${id}`, { params: { force: 'true' } })).data,
+    onSuccess: () => {
+      toastSuccess(t('challenges.teacher.deleted'));
+      return qc.invalidateQueries({ queryKey: ['teacher-challenges'] });
+    },
+    onError: (e) => toastError(e),
   });
 
   return (
@@ -72,7 +100,7 @@ export default function TeacherChallengesPage() {
       />
       <ErrorNote error={create.error} />
 
-      <div className="mb-6 inline-flex gap-1 rounded-full bg-surface-container-high p-1">
+      <div className="scroll-x mb-6 inline-flex max-w-full gap-1 rounded-full bg-surface-container-high p-1">
         {TABS.map((s) => (
           <button
             key={s}
@@ -83,7 +111,12 @@ export default function TeacherChallengesPage() {
             }`}
             onClick={() => setTab(s)}
           >
-            {s === 'ALL' ? t('common.all') : t(`challenges.teacher.status.${s}`)}
+            {s === 'ALL'
+              ? t('common.all')
+              : s === 'RUNNING'
+                ? t('challenges.teacher.running')
+                : t(`challenges.teacher.status.${s}`)}
+            <span className="ms-1.5 opacity-60">{count(s)}</span>
           </button>
         ))}
       </div>
@@ -91,7 +124,12 @@ export default function TeacherChallengesPage() {
       {isLoading ? (
         <CardGridSkeleton />
       ) : !rows.length ? (
-        <EmptyState icon="social_leaderboard" title={t('challenges.teacher.empty')} />
+        <EmptyState
+          icon="social_leaderboard"
+          title={t(
+            tab === 'RUNNING' ? 'challenges.teacher.emptyRunning' : 'challenges.teacher.empty',
+          )}
+        />
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((c) => (
@@ -127,13 +165,40 @@ export default function TeacherChallengesPage() {
                 <button className="btn-ghost text-sm" onClick={() => duplicate.mutate(c.id)}>
                   {t('challenges.teacher.duplicate')}
                 </button>
+                {c.attemptCount > 0 && c.status !== 'ARCHIVED' && (
+                  <button
+                    className="btn-ghost text-sm"
+                    disabled={archive.isPending}
+                    onClick={async () =>
+                      (await confirmDelete({
+                        kind: 'remove',
+                        title: t('challenges.teacher.archiveTitle'),
+                        message: t('challenges.teacher.archiveConfirm', { name: c.title }),
+                        confirmLabel: t('challenges.teacher.archive'),
+                      })) && archive.mutate(c.id)
+                    }
+                  >
+                    {t('challenges.teacher.archive')}
+                  </button>
+                )}
                 <button
-                  className="btn-ghost text-sm text-error/80 hover:text-error"
-                  onClick={() => remove.mutate(c.id)}
+                  className="btn-ghost ms-auto text-sm text-error/80 hover:text-error"
+                  disabled={remove.isPending}
+                  onClick={async () =>
+                    (await confirmDelete({
+                      name: c.title,
+                      message:
+                        c.attemptCount > 0
+                          ? t('challenges.teacher.deletePlayedConfirm', {
+                              name: c.title,
+                              count: c.attemptCount,
+                            })
+                          : undefined,
+                    })) && remove.mutate(c.id)
+                  }
                 >
-                  {c.attemptCount > 0
-                    ? t('challenges.teacher.archive')
-                    : t('challenges.teacher.delete')}
+                  <span className="material-symbols-outlined text-[18px] align-[-4px]">delete</span>{' '}
+                  {t('challenges.teacher.delete')}
                 </button>
               </div>
             </div>

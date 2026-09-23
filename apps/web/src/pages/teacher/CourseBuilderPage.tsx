@@ -15,6 +15,7 @@ import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
 import { Badge, ErrorNote, Modal, Spinner } from '../../components/ui';
 import { MarkdownEditor } from '../../components/MarkdownEditor';
+import { confirmDelete } from '../../lib/confirm';
 
 /**
  * Course builder — the curriculum is the page, and a lesson opens in place.
@@ -1179,7 +1180,9 @@ export default function CourseBuilderPage() {
                   </span>
                   <button
                     className="text-outline hover:text-error"
-                    onClick={() => removeAttachment.mutate(a.id)}
+                    onClick={async () =>
+                      (await confirmDelete({ name: a.fileName })) && removeAttachment.mutate(a.id)
+                    }
                   >
                     <span className="material-symbols-outlined text-base">close</span>
                   </button>
@@ -1631,10 +1634,9 @@ export default function CourseBuilderPage() {
                         })
                       : t('teacher.builder.lessonsMeta', { count: u.lessons.length })}
                   </span>
-                  {/* Arms on the first press instead of stopping the page with a
-                    dialog nobody reads — see DeleteButton. */}
                   <DeleteButton
                     compact
+                    name={u.title}
                     className="shrink-0 border-0 sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover/unit:opacity-100"
                     onConfirm={() => removeUnit.mutateAsync(u.id)}
                   />

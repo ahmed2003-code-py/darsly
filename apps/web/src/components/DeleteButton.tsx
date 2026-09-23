@@ -1,39 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { confirmDelete } from '../lib/confirm';
 import { useMotion } from './motion';
 
 type Phase = 'idle' | 'armed' | 'working' | 'done';
 
 /**
- * Delete, as one movement instead of a dialog.
+ * Delete, confirmed in the product's own popup, then shown going.
  *
- * A destructive action wants two things that usually fight: it must be hard to
- * do by accident, and it must not feel like paperwork. A confirm dialog buys
- * the first with the second — it stops the page, asks a question nobody reads,
- * and is dismissed by muscle memory.
- *
- * So the button arms itself instead. The first press opens the bin and the
- * label changes to the question; the second press *feeds the label to it* —
- * the word slides into the bin, the pill collapses to a disc around it, and the
- * request goes while an arc sweeps the rim. Nothing is deleted until the second
- * press, an armed button disarms itself after a few seconds of being ignored,
- * and pressing anywhere else disarms it too.
- *
- * The whole thing is one control, so it stays where the row is and takes no
- * layout with it. Under reduced motion it is a plain two-press button, which is
- * the same safety with none of the theatre.
+ * It used to arm itself: the first press turned the label into "متأكد؟" and
+ * the second deleted. That was the one delete in the product that did not ask
+ * the way every other one asks — and a label that changes under the pointer is
+ * easy to press twice without reading. Every delete now asks through
+ * `confirmDelete()`; what this button keeps is the part after "yes": the lid
+ * tips, the label drops into the bin, and an arc sweeps the rim while the
+ * request is in flight. Under reduced motion it is a plain button.
  */
 export function DeleteButton({
   onConfirm,
   label,
-  confirmLabel,
   className = '',
   disabled,
   compact,
+  name,
+  confirmMessage,
 }: {
   onConfirm: () => Promise<unknown> | unknown;
+  /** What is being deleted, for the popup's question. */
+  name?: string;
+  /** The popup's whole question, when the consequence needs saying. */
+  confirmMessage?: string;
   label?: string;
-  confirmLabel?: string;
   className?: string;
   disabled?: boolean;
   /** Icon only until armed — for a row of actions with no room for a word. */
@@ -58,16 +55,18 @@ export function DeleteButton({
     setPhase('idle');
   };
 
-  // An armed button left alone is a button somebody walked away from.
   const arm = () => {
-    setPhase('armed');
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => alive.current && setPhase('idle'), 4000);
+    setPhase('armed');
   };
 
   async function press() {
-    if (disabled || phase === 'working') return;
-    if (phase === 'idle') return arm();
+    if (disabled || phase === 'working' || phase === 'armed') return;
+    // Open while the question is up: the bin tips as the popup asks.
+    arm();
+    const ok = await confirmDelete({ name, message: confirmMessage });
+    if (!alive.current) return;
+    if (!ok) return disarm();
     if (timer.current) clearTimeout(timer.current);
     setPhase('working');
     try {
@@ -83,8 +82,7 @@ export function DeleteButton({
     }
   }
 
-  const text =
-    phase === 'armed' ? (confirmLabel ?? t('common.confirmDelete')) : (label ?? t('common.delete'));
+  const text = label ?? t('common.delete');
   const showText = !compact || phase !== 'idle';
   const open = phase === 'armed';
   const eaten = phase === 'working' || phase === 'done';
@@ -93,7 +91,6 @@ export function DeleteButton({
     <button
       type="button"
       onClick={press}
-      onBlur={() => phase === 'armed' && disarm()}
       disabled={disabled || phase === 'working'}
       aria-label={label ?? t('common.delete')}
       title={label ?? t('common.delete')}

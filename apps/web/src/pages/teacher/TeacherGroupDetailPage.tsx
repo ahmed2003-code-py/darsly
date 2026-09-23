@@ -14,6 +14,7 @@ import {
 } from '../../lib/academyOps';
 import { Badge, EmptyState, ErrorNote, Modal, Skeleton } from '../../components/ui';
 import { askConfirm } from '../../lib/confirm';
+import { confirmDelete } from '../../lib/confirm';
 
 const TABS = ['students', 'staff', 'attendance'] as const;
 type Tab = (typeof TABS)[number];
@@ -76,7 +77,10 @@ function StudentsTab({ groupId }: { groupId: string }) {
               </div>
               <button
                 className="rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
-                onClick={() => removeMember.mutate(m.studentId)}
+                onClick={async () =>
+                  (await confirmDelete({ kind: 'remove', name: m.fullName })) &&
+                  removeMember.mutate(m.studentId)
+                }
                 disabled={removeMember.isPending}
               >
                 {t('groups.remove')}
@@ -151,7 +155,10 @@ function StaffTab({ groupId }: { groupId: string }) {
               </Badge>
               <button
                 className="rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
-                onClick={() => unassign.mutate(a.userId)}
+                onClick={async () =>
+                  (await confirmDelete({ kind: 'remove', name: a.fullName })) &&
+                  unassign.mutate(a.userId)
+                }
                 disabled={unassign.isPending}
               >
                 {t('groups.remove')}

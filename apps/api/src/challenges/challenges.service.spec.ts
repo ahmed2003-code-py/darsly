@@ -437,3 +437,47 @@ describe('ChallengesService — attempt lifecycle & anti-cheat', () => {
     );
   });
 });
+
+describe('ChallengesService — removing a challenge', () => {
+  const build = (attempts: number) => {
+    const prisma: any = {
+      challengeAttempt: { count: jest.fn().mockResolvedValue(attempts) },
+      challenge: { update: jest.fn().mockResolvedValue({}) },
+    };
+    const access: any = { requireTeacherChallenge: jest.fn().mockResolvedValue({}) };
+    const svc = new ChallengesService(
+      prisma,
+      access,
+      new ChallengeScoringService(),
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    return { svc, prisma, access };
+  };
+
+  it('one nobody has played is deleted', async () => {
+    const { svc, prisma } = build(0);
+    expect(await svc.remove('t1', 'c1')).toEqual({ deleted: true, archived: false });
+    expect(prisma.challenge.update.mock.calls[0][0].data).toHaveProperty('deletedAt');
+  });
+
+  it('one students have played is archived by default, so its results stay reachable', async () => {
+    const { svc, prisma } = build(4);
+    expect(await svc.remove('t1', 'c1')).toEqual({ deleted: false, archived: true });
+    expect(prisma.challenge.update.mock.calls[0][0].data).toMatchObject({ status: 'ARCHIVED' });
+  });
+
+  it('the teacher can still delete it outright — soft, and nothing a student earned is touched', async () => {
+    const { svc, prisma, access } = build(4);
+    expect(await svc.remove('t1', 'c1', { force: true })).toEqual({
+      deleted: true,
+      archived: false,
+    });
+    expect(access.requireTeacherChallenge).toHaveBeenCalledWith('t1', 'c1');
+    expect(prisma.challenge.update).toHaveBeenCalledTimes(1);
+    expect(prisma.challenge.update.mock.calls[0][0].data).toEqual({ deletedAt: expect.any(Date) });
+    // No attempt, XP or coin row is written to at all.
+    expect(Object.keys(prisma)).toEqual(['challengeAttempt', 'challenge']);
+  });
+});

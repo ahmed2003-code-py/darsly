@@ -13,6 +13,7 @@ import { useAuthStore } from '../../stores/auth';
 import { GAMIFICATION_KEY, GamificationOutcome } from '../../lib/gamification';
 import { Markdown } from '../../lib/markdown';
 import { RewardBurst } from '../../components/gamification/RewardBurst';
+import { confirmDelete } from '../../lib/confirm';
 
 type Tab = 'notes' | 'attachments' | 'qa';
 
@@ -849,7 +850,7 @@ export default function SecureVideoPlayerPage() {
                     <p className="min-w-0 flex-1 text-sm">{n.body}</p>
                     <button
                       className="text-outline hover:text-error"
-                      onClick={() => delNote.mutate(n.id)}
+                      onClick={async () => (await confirmDelete()) && delNote.mutate(n.id)}
                     >
                       <span className="material-symbols-outlined text-base">delete</span>
                     </button>

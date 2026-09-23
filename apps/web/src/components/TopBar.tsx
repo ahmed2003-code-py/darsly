@@ -13,6 +13,7 @@ import { useNotificationPermission } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
 import { NavLink, useLocation } from 'react-router-dom';
 import type { NavItem } from './shell/nav';
+import { confirmDelete } from '../lib/confirm';
 
 /**
  * The header, in whichever shape the theme asked for.
@@ -101,6 +102,7 @@ export default function TopBar({
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
   }
   async function dismiss(id: string) {
+    if (!(await confirmDelete())) return;
     await api.delete(`/notifications/${id}`);
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
   }

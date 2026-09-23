@@ -144,6 +144,7 @@ export default function TeacherCouponsPage() {
                       </button>
                       <DeleteButton
                         compact
+                        name={c.code}
                         className="border-0 px-2 py-1"
                         onConfirm={() => remove.mutateAsync(c.id)}
                       />

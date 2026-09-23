@@ -5,6 +5,7 @@ import { api, apiOrigin } from '../../../lib/api';
 import { imageForUpload } from '../../../lib/image';
 import { ErrorNote, Spinner } from '../../../components/ui';
 import type { Media, MediaKind } from './types';
+import { confirmDelete } from '../../../lib/confirm';
 
 const ACCEPT = 'image/png,image/jpeg,image/webp';
 const ACCEPT_GALLERY = 'image/png,image/jpeg,image/webp,video/mp4';
@@ -64,6 +65,8 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
 
   const media = list.data ?? [];
   const byKind = (k: MediaKind) => media.filter((m) => m.kind === k);
+  // Every picture here may be on the published site; removing one is asked.
+  const removeAsked = async (id: string) => (await confirmDelete()) && remove.mutate(id);
   const doUpload = (kind: MediaKind, file?: File) => file && upload.mutate({ kind, file });
   // Which slot is actually busy. One shared `isPending` meant uploading a logo
   // put every other slot into "uploading…" as well — three fields claiming to
@@ -88,20 +91,20 @@ export default function MediaManager({ onNext }: { onNext?: () => void }) {
         title={t('studio.media.logo')}
         item={byKind('LOGO')[0]}
         onUpload={(f) => doUpload('LOGO', f)}
-        onRemove={(id) => remove.mutate(id)}
+        onRemove={removeAsked}
         busy={busyKind === 'LOGO'}
       />
       <SingleSlot
         title={t('studio.media.cover')}
         item={byKind('COVER')[0]}
         onUpload={(f) => doUpload('COVER', f)}
-        onRemove={(id) => remove.mutate(id)}
+        onRemove={removeAsked}
         busy={busyKind === 'COVER'}
       />
       <GallerySlot
         items={byKind('GALLERY')}
         onUpload={doUploadGallery}
-        onRemove={(id) => remove.mutate(id)}
+        onRemove={removeAsked}
         busy={busyKind === 'GALLERY' || uploadMany.isPending}
       />
 

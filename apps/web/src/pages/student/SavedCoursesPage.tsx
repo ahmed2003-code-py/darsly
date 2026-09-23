@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { CardGridSkeleton, EmptyState, PageHeader } from '../../components/ui';
+import { confirmDelete } from '../../lib/confirm';
 
 export default function SavedCoursesPage() {
   const { t } = useTranslation();
@@ -39,7 +40,10 @@ export default function SavedCoursesPage() {
                   className="absolute end-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-surface-container-lowest/90 text-error shadow-card backdrop-blur transition hover:scale-105"
                   onClick={(e) => {
                     e.preventDefault();
-                    unsave.mutate(c.id);
+                    void confirmDelete({
+                      kind: 'remove',
+                      message: t('saved.removeConfirm', { title: c.title }),
+                    }).then((ok) => ok && unsave.mutate(c.id));
                   }}
                   title={t('saved.remove')}
                 >

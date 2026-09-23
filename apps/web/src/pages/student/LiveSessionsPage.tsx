@@ -14,6 +14,7 @@ import {
   PageHeader,
 } from '../../components/ui';
 import SessionSummary from '../live/SessionSummary';
+import { confirmDelete } from '../../lib/confirm';
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', {
@@ -174,7 +175,12 @@ export default function LiveSessionsPage() {
                       <button
                         className="btn-ghost px-4 py-2.5 text-sm"
                         disabled={cancel.isPending}
-                        onClick={() => cancel.mutate(s.id)}
+                        onClick={async () =>
+                          (await confirmDelete({
+                            kind: 'cancel',
+                            message: t('live.cancelBookingConfirm', { title: s.title }),
+                          })) && cancel.mutate(s.id)
+                        }
                       >
                         {t('live.cancel')}
                       </button>

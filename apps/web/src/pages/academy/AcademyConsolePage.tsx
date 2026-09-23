@@ -10,6 +10,7 @@ import {
   useRevokeInvitationLink,
 } from '../../lib/invitationLinks';
 import { Badge, ErrorNote, Field, Spinner } from '../../components/ui';
+import { confirmDelete } from '../../lib/confirm';
 
 export function BrandingTab({ slug }: { slug: string }) {
   const { t } = useTranslation();
@@ -453,7 +454,12 @@ function InvitationLinksSection({ slug }: { slug: string }) {
               <button
                 className="ms-auto rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
                 disabled={revoke.isPending}
-                onClick={() => revoke.mutate(l.id)}
+                onClick={async () =>
+                  (await confirmDelete({
+                    kind: 'cancel',
+                    message: t('academy.inviteLinkRevokeConfirm'),
+                  })) && revoke.mutate(l.id)
+                }
               >
                 {t('academy.inviteLinkRevoke')}
               </button>
@@ -571,7 +577,10 @@ export function MembersTab({ slug, isCenter = false }: { slug: string; isCenter?
                     </select>
                     <button
                       className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
-                      onClick={() => remove.mutate(m.id)}
+                      onClick={async () =>
+                        (await confirmDelete({ kind: 'remove', name: m.fullName })) &&
+                        remove.mutate(m.id)
+                      }
                     >
                       {t('common.remove')}
                     </button>

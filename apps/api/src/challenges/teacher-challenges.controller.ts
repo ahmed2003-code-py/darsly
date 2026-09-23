@@ -72,9 +72,12 @@ export class TeacherChallengesController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: '[teacher] Delete (or archive, if it has real attempts)' })
-  remove(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.challenges.remove(u.tenantId!, id);
+  @ApiOperation({
+    summary:
+      '[teacher] Delete (archives instead if it has attempts, unless ?force=true). Earned XP is never touched.',
+  })
+  remove(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Query('force') force?: string) {
+    return this.challenges.remove(u.tenantId!, id, { force: force === 'true' });
   }
 
   @Get(':id/submissions')

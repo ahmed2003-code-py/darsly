@@ -57,10 +57,40 @@ const flatten = (obj, prefix = '') =>
 const ar = flatten(JSON.parse(readFileSync(join(WEB, 'src/i18n/ar.json'), 'utf8')));
 const en = flatten(JSON.parse(readFileSync(join(WEB, 'src/i18n/en.json'), 'utf8')));
 
+// Plural forms are one key with a suffix per form, and the forms differ by
+// language: Arabic has six (zero, one, two, few, many, other), English two.
+// A key written with only `_one`/`_other` in Arabic works for 1 and fails for
+// 12 — Arabic's 12 is "many" — and the reader sees the raw key. That shipped
+// once ("drafts.removedAll" after clearing twelve drafts), so a plural key must
+// carry every form its language uses, and is not compared form-by-form across
+// languages.
+const PLURAL = /_(zero|one|two|few|many|other)$/;
+const FORMS = { ar: ['zero', 'one', 'two', 'few', 'many', 'other'], en: ['one', 'other'] };
+const pluralBases = (dict) =>
+  new Set(
+    Object.keys(dict)
+      .filter((k) => PLURAL.test(k))
+      .map((k) => k.replace(PLURAL, '')),
+  );
+const arPlural = pluralBases(ar);
+const enPlural = pluralBases(en);
+for (const [lang, dict, bases] of [
+  ['ar', ar, new Set([...arPlural, ...enPlural])],
+  ['en', en, new Set([...arPlural, ...enPlural])],
+]) {
+  for (const base of bases) {
+    const missing = FORMS[lang].filter((f) => !(`${base}_${f}` in dict));
+    if (missing.length)
+      fail.push(`i18n: ${lang}.json plural "${base}" is missing form(s) ${missing.join(', ')}`);
+  }
+}
+/** Defined as a plain key, or as a plural whose base this is. */
+const defined = (dict, key) => key in dict || `${key}_other` in dict;
+
 for (const key of Object.keys(ar))
-  if (!(key in en)) fail.push(`i18n: "${key}" missing from en.json`);
+  if (!PLURAL.test(key) && !(key in en)) fail.push(`i18n: "${key}" missing from en.json`);
 for (const key of Object.keys(en))
-  if (!(key in ar)) fail.push(`i18n: "${key}" missing from ar.json`);
+  if (!PLURAL.test(key) && !(key in ar)) fail.push(`i18n: "${key}" missing from ar.json`);
 
 // The language switcher legitimately names the other language in its own script.
 const ALLOW_ARABIC_IN_ENGLISH = new Set(['common.language']);
@@ -76,7 +106,8 @@ for (const file of sources) {
   for (const m of text.matchAll(/\bt\(\s*'([A-Za-z][\w.]*)'/g)) used.add(m[1]);
 }
 for (const key of used) {
-  if (!(key in ar) && !(key in en)) fail.push(`i18n: t('${key}') is used but defined nowhere`);
+  if (!defined(ar, key) && !defined(en, key))
+    fail.push(`i18n: t('${key}') is used but defined nowhere`);
 }
 
 // A key does not have to sit inside `t(` to be a key.
@@ -99,7 +130,7 @@ for (const file of sources) {
     const key = m[1];
     if (NOT_KEYS.has(key)) continue;
     if (!namespaces.has(key.split('.')[0])) continue;
-    if (key in ar || key in en) continue;
+    if (defined(ar, key) || defined(en, key)) continue;
     // A prefix of real keys is a template base (`paper.type.` + a variable).
     if (Object.keys(ar).some((k) => k.startsWith(`${key}.`))) continue;
     fail.push(

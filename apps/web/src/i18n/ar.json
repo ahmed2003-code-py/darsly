@@ -686,7 +686,27 @@
     "confirmDelete": "متأكد؟",
     "loadMore": "عرض المزيد",
     "copyLink": "نسخ الرابط",
-    "copied": "اتنسخ ✓"
+    "copied": "اتنسخ ✓",
+    "confirmKind": {
+      "delete": {
+        "title": "تأكيد الحذف",
+        "body": "متأكد إنك عايز تمسح ده؟ مفيش رجوع في الخطوة دي.",
+        "named": "متأكد إنك عايز تمسح «{{name}}»؟ مفيش رجوع في الخطوة دي.",
+        "action": "امسح"
+      },
+      "remove": {
+        "title": "تأكيد الإزالة",
+        "body": "متأكد إنك عايز تشيل ده؟",
+        "named": "متأكد إنك عايز تشيل «{{name}}»؟",
+        "action": "شيل"
+      },
+      "cancel": {
+        "title": "تأكيد الإلغاء",
+        "body": "متأكد إنك عايز تلغي ده؟",
+        "named": "متأكد إنك عايز تلغي «{{name}}»؟",
+        "action": "ألغِ"
+      }
+    }
   },
   "wallet": {
     "title": "المحفظة",
@@ -1230,7 +1250,8 @@
     "viewSession": "تفاصيل الحصة",
     "sessionRecord": "سجل الحصة",
     "attendance": "الحضور",
-    "noAttendance": "محدش حضر الحصة دي"
+    "noAttendance": "محدش حضر الحصة دي",
+    "cancelBookingConfirm": "متأكد إنك عايز تلغي حجزك في «{{title}}»؟"
   },
   "analytics": {
     "title": "التحليلات",
@@ -1340,7 +1361,8 @@
     "save": "حفظ",
     "saved": "محفوظة",
     "add": "أضف للمحفوظة",
-    "remove": "إزالة من المحفوظة"
+    "remove": "إزالة من المحفوظة",
+    "removeConfirm": "تشيل «{{title}}» من المحفوظات؟"
   },
   "badges": {
     "title": "إنجازاتك",
@@ -1932,7 +1954,8 @@
       "EXPIRED": "منتهي"
     },
     "revenueShareOverride": "النسبة",
-    "canCollectCash": "محصّل الكاش"
+    "canCollectCash": "محصّل الكاش",
+    "inviteLinkRevokeConfirm": "هتلغي رابط الدعوة ده — أي حد معاه مش هيقدر ينضم بيه بعد كده."
   },
   "method": {
     "INSTAPAY": "إنستاباي",
@@ -2380,7 +2403,19 @@
         "hardest": "أصعب سؤال",
         "easiest": "أسهل سؤال",
         "perQuestion": "أداء الأسئلة"
-      }
+      },
+      "running": "شغالة حاليًا",
+      "emptyRunning": "مفيش تحديات شغالة دلوقتي. انشر تحدي أو ابدأ واحد جديد.",
+      "archived": "اتنقل للأرشيف",
+      "deleted": "اتمسح التحدي",
+      "archiveTitle": "نقل للأرشيف",
+      "archiveConfirm": "«{{name}}» هيختفي من عند الطلاب، ونتايجه هتفضل موجودة عندك في الأرشيف.",
+      "deletePlayedConfirm_zero": "متأكد إنك عايز تمسح «{{name}}»؟ مفيش رجوع في الخطوة دي.",
+      "deletePlayedConfirm_one": "«{{name}}» اتحل مرة واحدة. لو مسحته هيختفي هو ونتيجته — والنقط والعملات اللي الطالب كسبها هتفضل معاه. مفيش رجوع في الخطوة دي.",
+      "deletePlayedConfirm_two": "«{{name}}» اتحل مرتين. لو مسحته هيختفي هو ونتايجه — والنقط والعملات اللي الطلبة كسبوها هتفضل معاهم. مفيش رجوع في الخطوة دي.",
+      "deletePlayedConfirm_few": "«{{name}}» اتحل {{count}} مرات. لو مسحته هيختفي هو ونتايجه — والنقط والعملات اللي الطلبة كسبوها هتفضل معاهم. مفيش رجوع في الخطوة دي.",
+      "deletePlayedConfirm_many": "«{{name}}» اتحل {{count}} مرة. لو مسحته هيختفي هو ونتايجه — والنقط والعملات اللي الطلبة كسبوها هتفضل معاهم. مفيش رجوع في الخطوة دي.",
+      "deletePlayedConfirm_other": "«{{name}}» اتحل {{count}} مرة. لو مسحته هيختفي هو ونتايجه — والنقط والعملات اللي الطلبة كسبوها هتفضل معاهم. مفيش رجوع في الخطوة دي."
     }
   },
   "engagement": {
@@ -3409,16 +3444,24 @@
     "clearAllTitle": "تمسح كل الشغل اللي لسه مكمّلوش؟",
     "clearAllBody": "هتمسح {{count}} حاجة من القائمة، ولو فيه امتحان لسه بيتجهز هيتوقف. ده بيمسح شغلك إنت بس. مفيش رجوع في ده.",
     "clearAllConfirm": "امسح الكل",
-    "removedAll_one": "اتمسحت حاجة واحدة",
-    "removedAll_other": "اتمسح {{count}}",
     "showAll": "عرض الكل (+{{count}})",
     "showLess": "عرض أقل",
-    "pages_one": "صفحة واحدة",
-    "pages_other": "{{count}} صفحات",
     "studioName": {
       "PAPER": "امتحان مستورد من ورق",
       "CONTENT": "امتحان من محتوى"
     },
-    "startedAgo": "بدأ {{ago}}"
+    "startedAgo": "بدأ {{ago}}",
+    "removedAll_zero": "مفيش حاجة اتمسحت",
+    "removedAll_one": "اتمسحت حاجة واحدة",
+    "removedAll_two": "اتمسحت حاجتين",
+    "removedAll_few": "اتمسحت {{count}} حاجات",
+    "removedAll_many": "اتمسحت {{count}} حاجة",
+    "removedAll_other": "اتمسحت {{count}} حاجة",
+    "pages_zero": "من غير صفحات",
+    "pages_one": "صفحة واحدة",
+    "pages_two": "صفحتين",
+    "pages_few": "{{count}} صفحات",
+    "pages_many": "{{count}} صفحة",
+    "pages_other": "{{count}} صفحة"
   }
 }

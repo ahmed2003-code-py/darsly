@@ -686,7 +686,27 @@
     "confirmDelete": "Sure?",
     "loadMore": "Load more",
     "copyLink": "Copy link",
-    "copied": "Copied ✓"
+    "copied": "Copied ✓",
+    "confirmKind": {
+      "delete": {
+        "title": "Confirm delete",
+        "body": "Are you sure you want to delete this? This cannot be undone.",
+        "named": "Are you sure you want to delete “{{name}}”? This cannot be undone.",
+        "action": "Delete"
+      },
+      "remove": {
+        "title": "Confirm removal",
+        "body": "Are you sure you want to remove this?",
+        "named": "Are you sure you want to remove “{{name}}”?",
+        "action": "Remove"
+      },
+      "cancel": {
+        "title": "Confirm cancellation",
+        "body": "Are you sure you want to cancel this?",
+        "named": "Are you sure you want to cancel “{{name}}”?",
+        "action": "Cancel it"
+      }
+    }
   },
   "wallet": {
     "title": "Wallet",
@@ -1230,7 +1250,8 @@
     "viewSession": "Session details",
     "sessionRecord": "Session record",
     "attendance": "Attendance",
-    "noAttendance": "Nobody attended this session"
+    "noAttendance": "Nobody attended this session",
+    "cancelBookingConfirm": "Cancel your booking for “{{title}}”?"
   },
   "analytics": {
     "title": "Analytics",
@@ -1340,7 +1361,8 @@
     "save": "Save",
     "saved": "Saved",
     "add": "Add to saved",
-    "remove": "Remove from saved"
+    "remove": "Remove from saved",
+    "removeConfirm": "Remove “{{title}}” from your saved courses?"
   },
   "badges": {
     "title": "Your achievements",
@@ -1932,7 +1954,8 @@
       "EXPIRED": "Expired"
     },
     "revenueShareOverride": "Share",
-    "canCollectCash": "Cash collector"
+    "canCollectCash": "Cash collector",
+    "inviteLinkRevokeConfirm": "This invitation link will stop working — nobody can join with it after this."
   },
   "method": {
     "INSTAPAY": "InstaPay",
@@ -2380,7 +2403,15 @@
         "hardest": "Hardest question",
         "easiest": "Easiest question",
         "perQuestion": "Per-question performance"
-      }
+      },
+      "running": "Running now",
+      "emptyRunning": "No challenges are running right now. Publish one, or start a new one.",
+      "archived": "Moved to the archive",
+      "deleted": "Challenge deleted",
+      "archiveTitle": "Move to the archive",
+      "archiveConfirm": "“{{name}}” will disappear for students; its results stay with you in the archive.",
+      "deletePlayedConfirm_one": "“{{name}}” has 1 attempt. Deleting it removes it and its results — the points and coins students earned stay theirs. This cannot be undone.",
+      "deletePlayedConfirm_other": "“{{name}}” has {{count}} attempts. Deleting it removes it and its results — the points and coins students earned stay theirs. This cannot be undone."
     }
   },
   "engagement": {

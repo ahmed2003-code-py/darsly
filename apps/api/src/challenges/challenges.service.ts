@@ -317,10 +317,21 @@ export class ChallengesService {
    * every result exactly where it is and simply takes the challenge out of the
    * "create new" list — the same shape as a course's soft delete.
    */
-  async remove(tenantId: string, challengeId: string) {
+  /**
+   * Take a Challenge away.
+   *
+   * By default one that students have played is archived rather than deleted,
+   * so its results stay reachable. `force` is the teacher saying "delete it
+   * anyway" — and they could not, which left a list of old challenges with no
+   * way to clear them. It is still a soft delete: the row, its attempts and
+   * every XP and coin a student earned from it stay exactly where they are;
+   * the challenge simply stops existing for everyone, because every read
+   * goes through the access check, which excludes deleted rows.
+   */
+  async remove(tenantId: string, challengeId: string, opts: { force?: boolean } = {}) {
     await this.access.requireTeacherChallenge(tenantId, challengeId);
     const hasAttempts = await this.prisma.challengeAttempt.count({ where: { challengeId } });
-    if (hasAttempts > 0) {
+    if (hasAttempts > 0 && !opts.force) {
       await this.prisma.challenge.update({
         where: { id: challengeId },
         data: { status: 'ARCHIVED', archivedAt: new Date() },

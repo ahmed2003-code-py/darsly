@@ -59,6 +59,14 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+/** Two grades by name, the rest as a count — the full list is on hover. */
+function gradesLabel(grades: Grade[], ar: boolean): string {
+  const names = grades.map((g) => (ar ? g.nameAr : g.nameEn));
+  return names.length <= 2
+    ? names.join('، ')
+    : `${names.slice(0, 2).join('، ')} +${names.length - 2}`;
+}
+
 export default function TeacherCoursesPage() {
   const { t, i18n } = useTranslation();
   // A Center's desk administers; it does not teach. STAFF sees the Center's
@@ -275,13 +283,15 @@ export default function TeacherCoursesPage() {
             )}
           </div>
 
-          <label className="flex shrink-0 items-center gap-1.5 text-sm text-on-surface-variant">
+          <label className="flex shrink-0 items-center gap-2 text-sm text-on-surface-variant">
             <span className="material-symbols-outlined text-base">sort</span>
-            <span className="sr-only sm:not-sr-only">{t('teacher.courses.sortBy')}</span>
-            {/* Narrower than a text input's `px-4`: the label already says what
-                this is, so the padding was reading as a gap between the two. */}
+            <span className="sr-only whitespace-nowrap sm:not-sr-only">
+              {t('teacher.courses.sortBy')}
+            </span>
+            {/* `.input` is full-width, which inside this row squeezed the label
+                until the two overlapped. Sized to its options instead. */}
             <select
-              className="input px-3 py-2"
+              className="input w-auto min-w-[9rem] px-3 py-2"
               value={sort}
               onChange={(e) => setSort(e.target.value as (typeof SORTS)[number])}
             >
@@ -323,15 +333,20 @@ export default function TeacherCoursesPage() {
               key={c.id}
               className="card flex flex-col p-5 transition hover:-translate-y-0.5 hover:shadow-md"
             >
-              <div className="mb-2 flex items-center justify-between">
-                <Badge tone={STATUS_TONE[c.status]}>
-                  {t(`teacher.courses.status.${c.status}`)}
-                </Badge>
-                <span className="text-xs text-outline">
+              {/* The badge keeps its size and the grades line wraps beside it —
+                  a course for six grades used to run its text under the badge. */}
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <span className="shrink-0">
+                  <Badge tone={STATUS_TONE[c.status]}>
+                    {t(`teacher.courses.status.${c.status}`)}
+                  </Badge>
+                </span>
+                <span
+                  className="line-clamp-2 min-w-0 text-end text-xs leading-relaxed text-outline"
+                  title={(c.grades ?? []).map((g: Grade) => (ar ? g.nameAr : g.nameEn)).join('، ')}
+                >
                   {c.subject ? (ar ? c.subject.nameAr : c.subject.nameEn) : ''}
-                  {(c.grades ?? []).length
-                    ? ` · ${c.grades.map((g: Grade) => (ar ? g.nameAr : g.nameEn)).join('، ')}`
-                    : ''}
+                  {(c.grades ?? []).length ? ` · ${gradesLabel(c.grades, ar)}` : ''}
                 </span>
               </div>
               <h3 className="mb-1 font-heading text-lg font-bold">{c.title}</h3>

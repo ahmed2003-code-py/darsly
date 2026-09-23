@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import i18n from '../i18n';
 
 /**
  * "Are you sure?", asked by the app instead of by the browser.
@@ -71,5 +72,38 @@ export function askConfirm(
       ...options,
       settle: resolve,
     });
+  });
+}
+
+/**
+ * The one question every delete in the product asks.
+ *
+ * Every removal goes through this popup — no silent one-click deletes, and no
+ * two-press buttons that change their own label. Pass `name` to say what is
+ * being removed ("«اختبار الوحدة الأولى»"), or `message` when the consequence
+ * needs spelling out (a running exam that will be stopped, a student who
+ * loses access).
+ */
+export function confirmDelete(
+  opts: {
+    name?: string;
+    message?: string;
+    confirmLabel?: string;
+    title?: string;
+    /** Deleting a thing, taking someone or something out of a list, or
+     *  calling something off — the same popup, worded for what it does. */
+    kind?: 'delete' | 'remove' | 'cancel';
+  } = {},
+): Promise<boolean> {
+  const kind = opts.kind ?? 'delete';
+  const message =
+    opts.message ??
+    (opts.name
+      ? i18n.t(`common.confirmKind.${kind}.named`, { name: opts.name })
+      : i18n.t(`common.confirmKind.${kind}.body`));
+  return askConfirm(message, {
+    title: opts.title ?? i18n.t(`common.confirmKind.${kind}.title`),
+    confirmLabel: opts.confirmLabel ?? i18n.t(`common.confirmKind.${kind}.action`),
+    danger: true,
   });
 }

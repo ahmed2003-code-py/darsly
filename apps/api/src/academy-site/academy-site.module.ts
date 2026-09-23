@@ -35,6 +35,8 @@ import { PaperImportHandler } from '../paper-import/paper-import.handler';
 import { ContentGenerationService } from '../paper-import/content-generation.service';
 import { QuestionGeneratorService } from '../paper-import/question-generator.service';
 import { SourceReaderService } from '../paper-import/source-reader.service';
+import { ImageVariantsService } from '../paper-import/ocr/image-variants.service';
+import { TranscriberService } from '../paper-import/ocr/transcriber.service';
 
 /**
  * Academy Studio (AI site) module. Slice 2 wires the job infrastructure only;
@@ -59,6 +61,8 @@ import { SourceReaderService } from '../paper-import/source-reader.service';
     AiJobService,
     AiJobWorker,
     LiveSummaryHandler,
+    ImageVariantsService,
+    TranscriberService,
     PaperExtractionService,
     SourceReaderService,
     QuestionGeneratorService,

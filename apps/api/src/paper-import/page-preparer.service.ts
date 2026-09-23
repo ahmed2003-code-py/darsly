@@ -57,11 +57,22 @@ export class PagePreparerService {
   constructor(private readonly config: PaperImportConfig) {}
 
   /**
-   * Turn an uploaded picture into the one that gets sent.
+   * Turn an uploaded picture into the one that is stored to read from.
    *
-   * `rotate()` with no argument applies the EXIF orientation and then drops
-   * the metadata — which is both the rotation fix and the EXIF/GPS scrub. Grey
-   * because an exam is ink on paper: colour is bytes spent on nothing.
+   * What this no longer does is as important as what it does. It used to
+   * greyscale every page unconditionally, refuse to enlarge a small one, and
+   * hand the result to the model as the only copy that existed. All three were
+   * wrong: greyscale is destructive and saves nothing (image tokens come from
+   * the pixel dimensions, not the channels), a photograph of small handwriting
+   * is exactly the case where enlarging is the point, and having one processed
+   * copy meant a question that needed a closer look could only be re-examined
+   * at the same resolution it had already failed at.
+   *
+   * The repairs a page actually needs — deskew, flat-field, contrast — are now
+   * measured and applied by ImageVariantsService, per page, on the way to the
+   * model. This stage only normalises orientation and size for storage, and
+   * the untouched original is kept beside it, because every crop the
+   * transcriber takes later is taken from that.
    */
   async normalizeImage(input: Buffer): Promise<PreparedPage> {
     let meta: { width?: number; height?: number };
@@ -79,44 +90,18 @@ export class PagePreparerService {
         code: 'PAPER_IMAGE_TOO_LARGE',
       });
     }
-    const target = this.fitToPatchBudget(meta.width ?? 0, meta.height ?? 0);
-    const pipeline = this.sharp(input)
-      .rotate()
-      .grayscale()
-      .resize({
-        width: target.width,
-        height: target.height,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: this.config.renderQuality, mozjpeg: true });
-    const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
-    return { data, mimeType: 'image/jpeg', width: info.width, height: info.height };
-  }
 
-  /**
-   * The largest size worth sending, in the units the bill is actually in.
-   *
-   * Image tokens are 32x32 patches, and the model has a patch budget: a page
-   * bigger than the budget is resized by the provider anyway, and a page
-   * smaller than it is detail thrown away for nothing. So the page is sized to
-   * land just inside the budget at its own aspect ratio, rather than to a flat
-   * pixel count that suits a portrait scan and starves a landscape one.
-   */
-  fitToPatchBudget(width: number, height: number): { width: number; height: number } {
-    const cap = this.config.maxRenderDim;
-    if (!width || !height) return { width: cap, height: cap };
-    const budget = this.config.renderPatchBudget;
-    const ratio = width / height;
-    // budget = (w/32)*(h/32) and w = h*ratio, so h = sqrt(budget*1024/ratio).
-    let h = Math.floor(Math.sqrt((budget * 1024) / ratio));
-    let w = Math.round(h * ratio);
-    if (Math.max(w, h) > cap) {
-      const shrink = cap / Math.max(w, h);
-      w = Math.round(w * shrink);
-      h = Math.round(h * shrink);
-    }
-    return { width: Math.max(1, w), height: Math.max(1, h) };
+    // Generous compared to what one call can use, because this copy is what
+    // crops are taken from and a crop wants the detail the page pass did not.
+    const cap = this.config.storedPageDim;
+    const { data, info } = await this.sharp(input)
+      // EXIF orientation applied and the metadata dropped, which is both the
+      // rotation fix and the EXIF/GPS scrub.
+      .rotate()
+      .resize({ width: cap, height: cap, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: this.config.storedPageQuality, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+    return { data, mimeType: 'image/jpeg', width: info.width, height: info.height };
   }
 
   /**

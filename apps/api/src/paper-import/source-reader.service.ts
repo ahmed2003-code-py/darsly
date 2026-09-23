@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiClient } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
+import { TranscriberService } from './ocr/transcriber.service';
+import { UNCLEAR } from './ocr/transcript.schema';
 
 /** What reading one page of lecture material produced, and what it cost. */
 export interface SourceReadResult {
@@ -64,6 +66,7 @@ export class SourceReaderService {
   constructor(
     private readonly ai: AiClient,
     private readonly config: PaperImportConfig,
+    private readonly transcriber: TranscriberService,
   ) {}
 
   /**
@@ -75,6 +78,40 @@ export class SourceReaderService {
    * in practice almost nothing escalates.
    */
   async readPage(input: { pageNumber: number; image: Buffer }): Promise<SourceReadResult> {
+    // The same pipeline the exam path uses. A scanned lecture is the same
+    // problem as a scanned exam — faded print, a phone's shadow, a page at an
+    // angle — and having two transcribers would have meant fixing each of
+    // them twice.
+    if (this.config.ocrMultiPass) {
+      const read = await this.transcriber.transcribe(input.image, {
+        pageNumber: input.pageNumber,
+      });
+      if (read.transcript) {
+        return {
+          // Regions joined back into a page: the chunker wants prose, and the
+          // region boundaries were a means of reading it, not part of it.
+          text: read.transcript.regions
+            .map((r) => [r.label, r.text].filter(Boolean).join(' '))
+            .join('\n\n')
+            // A lecture is material to write questions from, so a word nobody
+            // could read is better absent than present as a marker that would
+            // end up quoted in a question.
+            .split(UNCLEAR)
+            .join('')
+            .trim(),
+          blank: read.transcript.blank,
+          model: this.config.primaryModel,
+          escalated: read.cost.escalated,
+          inputTokens: read.cost.inputTokens,
+          outputTokens: read.cost.outputTokens,
+          millicents: read.cost.millicents,
+          error: null,
+        };
+      }
+      // Fall through to the single call below: a transcription that failed
+      // outright is not a reason to lose the page.
+    }
+
     const first = await this.readWith(this.config.primaryModel, this.config.primaryPrice, input);
     if (!first.error && (first.blank || first.text.trim().length >= MIN_USEFUL_CHARS)) {
       return first;

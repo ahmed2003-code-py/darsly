@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiClient, AiPrice, AiReasoningEffort } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
+import { TranscriberService } from './ocr/transcriber.service';
+import { STRUCTURE_SYSTEM, structurePrompt, transcriptAsFallback } from './ocr/structure.schema';
+import { PageTranscript } from './ocr/transcript.schema';
 import {
   EXTRACTION_SYSTEM_PROMPT,
   EscalationReason,
@@ -56,6 +59,7 @@ export class PaperExtractionService {
   constructor(
     private readonly ai: AiClient,
     private readonly config: PaperImportConfig,
+    private readonly transcriber: TranscriberService,
   ) {}
 
   /**
@@ -71,6 +75,13 @@ export class PaperExtractionService {
     text?: string | null;
     tier?: ExtractionTier;
   }): Promise<PageExtractionResult> {
+    // A photograph goes through the transcription pipeline: read the page,
+    // then decide its shape from the words. A page that arrived as text has
+    // nothing to read and goes straight to the shaping call below.
+    if (input.image && !input.text?.trim() && this.config.ocrMultiPass) {
+      return this.transcribeThenStructure(input.pageNumber, input.image, input.tier);
+    }
+
     // The teacher asked for the best read available. There is no cheap first
     // pass here: they have already seen what the cheap pass produced.
     if (input.tier === 'STRONG') {
@@ -126,6 +137,120 @@ export class PaperExtractionService {
       escalated: true,
       error: secondProblem && first.error ? first.error : winner.error,
     };
+  }
+
+  /**
+   * Read the page, then work out its shape from what was read.
+   *
+   * Two stages because they are two jobs. Reading faded handwriting is visual,
+   * expensive and irreversible — get it wrong and nothing downstream can tell.
+   * Deciding that three of those lines are the options of question four is
+   * textual, costs a twentieth as much, and can be redone from the transcript
+   * any number of times without touching the photograph again.
+   *
+   * Doing them in one call, which is what this did before, meant a layout
+   * mistake and a reading mistake arrived indistinguishable from each other.
+   */
+  private async transcribeThenStructure(
+    pageNumber: number,
+    image: Buffer,
+    tier?: ExtractionTier,
+  ): Promise<PageExtractionResult> {
+    const read = await this.transcriber.transcribe(image, {
+      pageNumber,
+      tier: tier === 'STRONG' ? 'STRONG' : 'AUTO',
+    });
+
+    if (!read.transcript) {
+      return {
+        extraction: null,
+        model: this.config.primaryModel,
+        escalationReason: 'ERROR',
+        escalated: read.cost.escalated,
+        inputTokens: read.cost.inputTokens,
+        outputTokens: read.cost.outputTokens,
+        millicents: read.cost.millicents,
+        error: read.error ?? 'Page could not be transcribed',
+      };
+    }
+    if (read.transcript.blank) {
+      return {
+        extraction: {
+          examTitle: '',
+          instructions: [],
+          sectionTitle: '',
+          blank: true,
+          questions: [],
+        },
+        model: this.config.primaryModel,
+        escalationReason: null,
+        escalated: read.cost.escalated,
+        inputTokens: read.cost.inputTokens,
+        outputTokens: read.cost.outputTokens,
+        millicents: read.cost.millicents,
+        error: null,
+      };
+    }
+
+    const shaped = await this.structure(read.transcript, pageNumber);
+    const extraction = shaped.data ?? transcriptAsFallback(read.transcript);
+
+    // Confidence from the reading flows into the flag the review screen
+    // already understands, so a question nobody could read cleanly arrives
+    // marked rather than looking as settled as the rest.
+    if (extraction && !shaped.data)
+      this.logger.warn(`Page ${pageNumber}: kept the transcript, structuring failed`);
+    if (extraction) {
+      extraction.questions = extraction.questions.map((q) => ({
+        ...q,
+        lowConfidence: q.lowConfidence || read.needsReview,
+      }));
+    }
+
+    this.logger.log(
+      `Page ${pageNumber}: ${read.cost.calls} call(s) (${read.cost.cropCalls} crop), ` +
+        `confidence ${read.transcript.confidence.toFixed(2)}, ` +
+        `${((read.cost.millicents + shaped.millicents) / 1000).toFixed(2)}¢`,
+    );
+
+    return {
+      extraction,
+      model: this.config.primaryModel,
+      // Reported as an escalation only when one actually happened, so the
+      // number that watches the cheap-first strategy stays honest.
+      escalationReason: read.cost.escalated ? 'LOW_CONFIDENCE' : null,
+      escalated: read.cost.escalated,
+      inputTokens: read.cost.inputTokens + shaped.inputTokens,
+      outputTokens: read.cost.outputTokens + shaped.outputTokens,
+      millicents: read.cost.millicents + shaped.millicents,
+      error: null,
+    };
+  }
+
+  /** The cheap half: questions out of words, no pixels involved. */
+  private async structure(transcript: PageTranscript, pageNumber: number) {
+    const price = this.config.primaryPrice;
+    try {
+      const res = await this.ai.completeStructured<PageExtraction>({
+        model: this.config.primaryModel,
+        price,
+        reasoningEffort: this.config.primaryEffort,
+        maxTokens: this.config.maxTokens,
+        system: STRUCTURE_SYSTEM,
+        schemaName: 'exam_page_extraction',
+        schema: PAGE_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
+        messages: [{ role: 'user', content: structurePrompt(transcript, pageNumber) }],
+      });
+      return {
+        data: res.data,
+        inputTokens: res.inputTokens,
+        outputTokens: res.outputTokens,
+        millicents: this.ai.costMillicents(res.inputTokens, res.outputTokens, price),
+      };
+    } catch (e) {
+      this.logger.warn(`Structuring page ${pageNumber} failed: ${(e as Error).message}`);
+      return { data: null, inputTokens: 0, outputTokens: 0, millicents: 0 };
+    }
   }
 
   private async readWith(

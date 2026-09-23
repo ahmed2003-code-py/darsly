@@ -155,6 +155,114 @@ in the same call repeat each other's words when they repeat each other.
 
 ---
 
+## Reading a page
+
+Not one model call. The version that shipped first was exactly that — the
+whole page, one call, "give me the exam questions" — and every way it failed on
+handwriting came from that single decision.
+
+```
+photograph
+  → measure it              (free, a few milliseconds)
+  → repair only what is broken   (deskew · flat-field · contrast · upscale)
+  → PASS A: read the whole page, with per-region confidence
+  → PASS B: crop the regions it could not read, FROM THE ORIGINAL
+  → PASS C: crop the individual numbers it flagged
+  → reconcile the readings on visual evidence
+  → structure the transcript into questions, from TEXT
+```
+
+**The crop is the whole idea.** A whole A4 page inside the model's image budget
+is about fifty pixels per line of text. One question from that page, sent at
+the *same* budget, is several times the linear detail — **for the same number
+of image tokens**, because tokens are counted in 32×32 patches and a crop has
+fewer of them to spend on less of the page. Measured on the real 1947
+manuscript that started this: the page pass gets 1,600 patches over the whole
+sheet; its seven question crops get 2.4× to 4.8× the detail each, at 1,050–2,628
+patches. Cropping is free magnification, and it is spent exactly where the
+reading failed.
+
+**Measure, then repair.** `image-analysis.ts` works out sharpness, ink-to-paper
+separation, lighting unevenness, skew and the height of a line of text, all
+from a small greyscale copy, and `decideVariants` turns that into the list of
+operations worth doing. A clean scan gets none of them. The previous pipeline
+greyscaled and resized every page identically, which is why a shadowed,
+skewed photograph of faded ink went through the same four operations as a
+300dpi scan.
+
+Three of those measurements had to be rewritten after meeting a real page, and
+the reasons are worth keeping:
+
+- **Local background, not a global threshold.** A photograph has paper at 240
+  in the light and 120 under the hand holding it. One cut either calls the
+  shadow ink or calls the ink in the shadow paper — the shadowed fixture
+  measured as 94% ink with a line of text 940 pixels tall. Every measurement
+  now judges a pixel against the paper beside it.
+- **Ink separation, not standard deviation.** A page is mostly white, so crisp
+  black print and faded pencil both scored 0.03 and the number said nothing.
+- **The profile's gradient, not its squares,** for skew. What a rotated page
+  destroys is the *edge* between a line of text and the white above it. On the
+  squares objective the correct angle scored 1.6% above flat — inside the
+  noise. On the gradient it scores 24%.
+
+**Thresholds measured against the page itself.** The gaps between lines of real
+handwriting are never empty: they carry paper grain, and a scan's dark top edge
+is brighter than any line of text. A cut set as a fraction of the busiest row
+put that whole manuscript in one band. The pedestal is now subtracted and the
+peak taken from a percentile, and the same page segments into eleven bands —
+merged down to the seven questions the model reports, closest pair first,
+because a question written over two paragraphs is two bands.
+
+**Transcribe, then structure.** Reading faded handwriting is visual, expensive
+and irreversible; deciding that three lines are the options of question four is
+textual and costs a twentieth as much. Doing both in one call meant a layout
+mistake and a reading mistake arrived indistinguishable. The transcript is kept,
+so a better structuring pass tomorrow needs no new photograph and no image
+tokens at all — and if the structuring call fails, the transcript still becomes
+questions rather than being lost.
+
+**Visual evidence outranks sense.** When one pass reads `١٢٨` and another reads
+`١٢٨٠`, the tempting resolution is the one where the arithmetic works, and that
+is exactly the resolution that silently changes a student's exam. `reconcile.ts`
+ranks by how closely the page was looked at; a closer look beats two distant
+looks that agreed with each other; and a disagreement about a *number* that the
+evidence cannot settle is marked `[UNCLEAR]` rather than guessed.
+
+**Nothing unreadable is discarded quietly.** The prompt forbids placeholders,
+invented completions, spelling corrections and solving — and asks for
+`[UNCLEAR]` where the pixels genuinely do not say. Anything still uncertain
+after every pass reaches the teacher flagged.
+
+### What it costs
+
+| page | calls | notes |
+|---|---|---|
+| clean, printed | 1 vision + 1 text | the text call is ~1/20 the price — roughly flat against the old single call |
+| one hard question | + 1 crop | a crop is a *smaller* picture than the page |
+| a flagged number | + 1 crop | a few hundred image tokens |
+| mostly unreadable | 1 whole-page re-read | crops of everything cost more than one better look |
+
+Tunable without a deploy: `PAPER_IMPORT_OCR_ACCEPT` (0.90), `_OCR_VERIFY`
+(0.70), `_OCR_MAX_CROPS` (6), `_OCR_MAX_FRAGMENTS` (3), `_OCR_REGION_PASSES`
+(2), and `PAPER_IMPORT_OCR_MULTIPASS=false` to go back to one call per page.
+
+### How it is measured
+
+`src/paper-import/ocr/eval/` renders ten pages — clean print, faded
+handwriting, Arabic-Indic numerals, fractions, percentages and decimals, mixed
+script, bad lighting, 3.5° of skew, low resolution, and a dense seven-question
+sheet — and scores against them. **Numeric accuracy is scored separately, and
+that is the point**: a pipeline that reads 96% of the Arabic correctly and
+turns ١٢٨ into ١٢٨٠ is worse than useless here, because the text reads fine, a
+teacher publishes it, and a class is marked against a number nobody typed. A
+blended score hides exactly that.
+
+The automated suite measures everything deterministic and stops where the model
+begins. `npm run ocr:evaluate` (needs a key, spends money) measures the rest,
+and takes `--pages=scan.jpg --reference=text.txt` for a real page.
+
+---
+
 ## The cost strategy
 
 This is the part worth reading twice, because it is the part that has a bill

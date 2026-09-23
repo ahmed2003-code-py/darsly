@@ -1,6 +1,7 @@
 import { AiClient } from '../academy-site/ai/ai.client';
 import { PaperExtractionService } from './paper-extraction.service';
 import { PaperImportConfig } from './paper-import.config';
+import { TranscriberService } from './ocr/transcriber.service';
 import { PageExtraction } from './extraction.schema';
 
 /**
@@ -48,7 +49,13 @@ describe('choosing which model reads a page', () => {
       costMillicents: (i: number, o: number, p?: { inPerMToken: number; outPerMToken: number }) =>
         Math.round(((i / 1e6) * (p?.inPerMToken ?? 0) + (o / 1e6) * (p?.outPerMToken ?? 0)) * 1000),
     } as unknown as AiClient;
-    service = new PaperExtractionService(ai, config);
+    // The transcription pipeline has its own suite; this one is about the
+    // ladder, so the multi-pass path is switched off and the single-call path
+    // — still what a text-layer page takes — is what is exercised.
+    (config as { ocrMultiPass: boolean }).ocrMultiPass = false;
+    service = new PaperExtractionService(ai, config, {
+      transcribe: jest.fn(),
+    } as unknown as TranscriberService);
   });
 
   const answer = (data: PageExtraction, tokens = { inputTokens: 1500, outputTokens: 400 }) => ({

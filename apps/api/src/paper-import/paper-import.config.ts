@@ -114,6 +114,22 @@ export class PaperImportConfig {
   /** A hard ceiling on the long edge, whatever the budget works out to. */
   readonly maxRenderDim = Math.max(600, num(process.env.PAPER_IMPORT_RENDER_DIM, 2400));
   /**
+   * How big the stored copy of a page is, in pixels on its long edge.
+   *
+   * Deliberately larger than anything one model call can use. This copy is
+   * what every later crop is taken from, and a crop of one question wants the
+   * detail the page pass could not spend — so storing a page already squeezed
+   * to a page-sized budget would throw away the thing that makes re-reading
+   * work. The untouched upload is kept as well; this is the working copy.
+   */
+  readonly storedPageDim = Math.max(1200, num(process.env.PAPER_IMPORT_STORED_DIM, 3000));
+  /** Quality of that stored copy. Bytes, not tokens — it is never sent. */
+  readonly storedPageQuality = Math.min(
+    100,
+    Math.max(60, num(process.env.PAPER_IMPORT_STORED_QUALITY, 90)),
+  );
+
+  /**
    * JPEG quality of the page that is sent.
    *
    * Free, and that is the whole point: image tokens are counted from the pixel
@@ -196,4 +212,52 @@ export class PaperImportConfig {
   /** Ceiling on how much lecture material one session may hold, in pages.
    *  Fifty pages is a chapter; past that a teacher is uploading a textbook. */
   readonly maxContentPages = Math.max(1, num(process.env.PAPER_IMPORT_MAX_CONTENT_PAGES, 60));
+
+  // ── Reading a page ───────────────────────────────────────────────────────
+  //
+  // Transcription is now several passes rather than one call, and these are
+  // the thresholds that decide how many. They are the whole cost/accuracy
+  // dial: raise them and more regions get a second, closer look; lower them
+  // and a hard page is accepted as read.
+
+  /**
+   * At or above this, a region is taken as read and never looked at again.
+   *
+   * 0.90 is deliberately high for a document that becomes an exam. A wrong
+   * number in a question costs a class their marks and nobody finds out; a
+   * needless crop costs a fraction of a cent.
+   */
+  readonly ocrAcceptConfidence = num(process.env.PAPER_IMPORT_OCR_ACCEPT, 0.9);
+  /**
+   * Below this, the region is re-read from a crop of the original.
+   *
+   * Between the two thresholds a region is checked rather than re-read: its
+   * flagged fragments get cropped, the rest of it stands.
+   */
+  readonly ocrVerifyConfidence = num(process.env.PAPER_IMPORT_OCR_VERIFY, 0.7);
+  /** Past this many re-reads of one region, stop and mark what is left
+   *  unreadable. A third look at the same pixels rarely says anything new. */
+  readonly ocrMaxRegionPasses = Math.max(
+    1,
+    Math.min(4, num(process.env.PAPER_IMPORT_OCR_REGION_PASSES, 2)),
+  );
+  /**
+   * How many regions of one page may be re-read before the page is simply
+   * re-read whole.
+   *
+   * Past this the page is not a good page with a bad question on it; it is a
+   * bad page, and eleven crops of a bad page cost more than one better look.
+   */
+  readonly ocrMaxRegionCrops = Math.max(
+    0,
+    Math.min(30, num(process.env.PAPER_IMPORT_OCR_MAX_CROPS, 6)),
+  );
+  /** How many flagged fragments inside one region get their own crop. */
+  readonly ocrMaxFragmentCrops = Math.max(
+    0,
+    Math.min(10, num(process.env.PAPER_IMPORT_OCR_MAX_FRAGMENTS, 3)),
+  );
+  /** Turn the whole multi-pass pipeline off and read pages in one call, as
+   *  the studio did before it existed. A way back, not a default. */
+  readonly ocrMultiPass = (process.env.PAPER_IMPORT_OCR_MULTIPASS ?? 'true') !== 'false';
 }

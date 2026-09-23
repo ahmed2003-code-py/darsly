@@ -8,6 +8,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { PlaybackTicket } from '@darsly/shared-types';
 import { api, apiOrigin } from '../../lib/api';
 import { askConfirm } from '../../lib/confirm';
+import { DraftsBar } from '../../components/DraftsBar';
+import { draftKey as draftKeyFor, fetchDraft, useAutosaveDraft } from '../../lib/drafts';
 import { toastError } from '../../lib/toast';
 import { imageToDataUrl } from '../../lib/image';
 import { duration, egp } from '../../lib/format';
@@ -98,6 +100,9 @@ export default function CourseBuilderPage() {
   const [introPct, setIntroPct] = useState<number | null>(null);
   const [introError, setIntroError] = useState<unknown>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  /** Set when a draft written somewhere else was put back into the panel, so
+   *  the teacher is told rather than left wondering why the fields are full. */
+  const [restoredDraft, setRestoredDraft] = useState(false);
 
   // Lesson-settings drafts (per selected lesson)
   const [description, setDescription] = useState('');
@@ -378,6 +383,27 @@ export default function CourseBuilderPage() {
     },
   });
 
+  /**
+   * The same panel, saved to the server as well.
+   *
+   * The line above keeps it in this browser, which is instant and works with
+   * no network — and is gone the moment the teacher opens the course on their
+   * phone, clears the site, or uses a different machine. Both layers, because
+   * they fail at different times: the local copy covers a reload, the server
+   * copy covers everything else, and the drafts list at the top of the page
+   * can only see the second one.
+   */
+  const lessonDraft = useAutosaveDraft({
+    kind: 'LESSON',
+    scopeKey: selectedLessonId ? draftKeyFor.lesson(selectedLessonId) : null,
+    courseId: id,
+    lessonId: selectedLessonId ?? undefined,
+    label: title || selected?.title || '',
+    step: 'settings',
+    data: { isFreePreview: freePreview, description, drip, dripDate, dripDays },
+    enabled: !!selectedLessonId && course?.canEdit !== false,
+  });
+
   const removeLesson = useMutation({
     mutationFn: async (lessonId: string) => (await api.delete(`/teacher/lessons/${lessonId}`)).data,
     onSuccess: () => {
@@ -391,6 +417,12 @@ export default function CourseBuilderPage() {
     onSuccess: () => {
       invalidate();
       if (selectedLessonId) localStorage.removeItem(draftKey(selectedLessonId));
+      // The draft is now a stale copy of a lesson that exists. Left behind, it
+      // would sit at the top of the course offering to restore an older
+      // version of the work the teacher just saved.
+      lessonDraft.clear();
+      setRestoredDraft(false);
+      queryClient.invalidateQueries({ queryKey: ['drafts'] });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     },
@@ -657,6 +689,35 @@ export default function CourseBuilderPage() {
       JSON.stringify({ isFreePreview: freePreview, description, drip, dripDate, dripDays }),
     );
   }, [selectedLessonId, freePreview, description, drip, dripDate, dripDays]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * What was being written on another device, brought back.
+   *
+   * Only when this browser has nothing of its own: a local draft is newer by
+   * definition — it is what is in front of the teacher — and letting a server
+   * copy overwrite it would be this feature causing exactly the loss it
+   * exists to prevent.
+   */
+  const restoredFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!course || !selectedLessonId || restoredFor.current === selectedLessonId) return;
+    restoredFor.current = selectedLessonId;
+    if (readDraft(selectedLessonId)) return;
+    const lessonId = selectedLessonId;
+    let alive = true;
+    void fetchDraft<any>(draftKeyFor.lesson(lessonId))
+      .then((saved) => {
+        if (!alive || !saved?.data) return;
+        const lesson = lessons.find((l: any) => l.id === lessonId);
+        if (!lesson) return;
+        applyLesson(lesson, saved.data);
+        setRestoredDraft(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [course, selectedLessonId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Landing on the page with ?lesson=… — a back button, a bookmark, a reload —
   // opens that lesson rather than an empty panel.
@@ -1153,9 +1214,22 @@ export default function CourseBuilderPage() {
         </div>
       </div>
 
+      {restoredDraft && (
+        <div className="mt-5 flex items-start gap-3 rounded-xl border border-secondary/40 bg-secondary/5 p-3">
+          <span className="material-symbols-outlined text-secondary">restore</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-on-surface">{t('drafts.restored')}</p>
+            <p className="text-xs text-on-surface-variant">{t('drafts.restoredHint')}</p>
+          </div>
+        </div>
+      )}
+
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-outline-variant/60 pt-4">
-        {/* Held in the browser until it is saved, so leaving this page for a
-            quiz and coming back does not lose the work. */}
+        {/* What has happened to this panel's contents, said precisely.
+            "Unsaved" on its own was true and unhelpful: the work is in fact
+            being kept, just not published to the lesson yet, and a teacher who
+            reads "unsaved" and does not dare leave the page is reading it
+            exactly as written. */}
         <p className="flex items-center gap-1.5 text-xs text-on-surface-variant">
           {savedFlash ? (
             <>
@@ -1163,6 +1237,25 @@ export default function CourseBuilderPage() {
                 cloud_done
               </span>
               {t('teacher.builder.saved')}
+            </>
+          ) : lessonDraft.state === 'saving' ? (
+            <>
+              <span className="material-symbols-outlined text-[14px] animate-spin">
+                progress_activity
+              </span>
+              {t('drafts.saving')}
+            </>
+          ) : lessonDraft.state === 'error' ? (
+            <>
+              <span className="material-symbols-outlined text-[14px] text-error">cloud_off</span>
+              {t('drafts.saveFailed')}
+            </>
+          ) : lessonDraft.state === 'saved' ? (
+            <>
+              <span className="material-symbols-outlined text-[14px] text-secondary">
+                cloud_done
+              </span>
+              {t('drafts.saved')} · {t('teacher.builder.unsaved')}
             </>
           ) : (
             <>
@@ -1219,6 +1312,12 @@ export default function CourseBuilderPage() {
         </div>
       </div>
       {publish.error && <PublishError error={publish.error} t={t} />}
+
+      {/* The way back into work that was left half-done. Above everything
+          else on the page because it is the first question a teacher who
+          closed the tab yesterday is asking, and it draws nothing at all when
+          there is nothing unfinished. */}
+      <DraftsBar courseId={id} />
 
       {/* Oversight, not authorship. A Center's desk and the platform admin can
           open any course under them and watch every lesson in full, for free —

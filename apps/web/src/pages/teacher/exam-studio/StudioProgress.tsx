@@ -66,11 +66,21 @@ export function StudioProgress({
         </div>
       )}
 
-      <ol className="mt-6 space-y-2">
+      {/*
+        What each step is, not only that it exists.
+        
+        A list of five nouns tells a teacher that five things happen and
+        nothing about what any of them is — so a four-minute wait on "استخراج
+        الأسئلة" reads as a machine that has stopped. The sentence under the
+        step being worked on says what is happening to their pages right now;
+        finished steps keep theirs, folded down, so the screen also answers
+        "what has already been done to my paper".
+      */}
+      <ol className="mt-6 space-y-3">
         {CREATION_STEPS.map((step) => (
-          <li key={step} className="flex items-center gap-2 text-sm">
+          <li key={step} className="flex items-start gap-2 text-sm">
             <span
-              className={`material-symbols-outlined text-base ${
+              className={`material-symbols-outlined mt-0.5 text-base ${
                 steps[step] === 'done'
                   ? 'text-primary'
                   : steps[step] === 'active'
@@ -84,11 +94,26 @@ export function StudioProgress({
                   ? 'radio_button_checked'
                   : 'radio_button_unchecked'}
             </span>
-            <span
-              className={steps[step] === 'todo' ? 'text-outline' : 'font-semibold text-on-surface'}
-            >
-              {t(`examStudio.step.${step}`, { context: record.kind })}
-            </span>
+            <div className="min-w-0">
+              <p
+                className={
+                  steps[step] === 'todo' ? 'text-outline' : 'font-semibold text-on-surface'
+                }
+              >
+                {t(`examStudio.step.${step}`, { context: record.kind })}
+              </p>
+              {/* Not on the steps still to come: describing work that has not
+                  started is noise on a screen somebody is watching. */}
+              {steps[step] !== 'todo' && (
+                <p
+                  className={`mt-0.5 text-xs ${
+                    steps[step] === 'active' ? 'text-on-surface-variant' : 'text-outline'
+                  }`}
+                >
+                  {t(`examStudio.stepWhat.${step}`, { context: record.kind })}
+                </p>
+              )}
+            </div>
           </li>
         ))}
       </ol>

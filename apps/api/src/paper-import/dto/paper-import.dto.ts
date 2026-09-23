@@ -60,6 +60,10 @@ export class DraftQuestionDto {
   @IsOptional() @IsString() @MaxLength(LIMITS.NAME) sourceFile?: string;
   @IsString() @MaxLength(LIMITS.NAME) unsupportedKind: string;
   @IsBoolean() needsReview: boolean;
+  /** Set on a question written by varying another one, for the same reason
+   *  `sourceChunk` is here: the generator writes it, the review screen shows
+   *  it, and an undeclared property is a 400 on save rather than a field. */
+  @IsOptional() @IsBoolean() variant?: boolean;
 }
 
 export class DraftSectionDto {

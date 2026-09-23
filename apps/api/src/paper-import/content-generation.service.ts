@@ -349,6 +349,25 @@ export class ContentGenerationService {
       });
     }
 
+    // ── filling the count ─────────────────────────────────────────────────
+    //
+    // The material has given what it has. What the teacher asked for is still
+    // what the teacher asked for, so the remaining slots are written by
+    // varying the questions that did come out of it — different numbers, the
+    // other end of the same relationship, a different facet of the same idea.
+    // Nothing new is claimed: a variant is grounded in a chunk like everything
+    // else and faces the same duplicate check, which is what stops this from
+    // becoming the same question twenty times.
+    const variants = await this.fillWithVariants({
+      importId: record.id,
+      asked,
+      accepted,
+      chunks,
+      language: spec.language,
+    });
+    millicents += variants.millicents;
+    batches += variants.calls;
+
     // ── the deterministic gate ────────────────────────────────────────────
     await this.prisma.paperImport.update({
       where: { id: record.id },
@@ -367,6 +386,25 @@ export class ContentGenerationService {
     // Now the stored spec is the exam, and the warning explains the difference.
     const finalSpec: ExamSpec =
       numbered.length < asked.questionCount ? specFromQuestions(asked, numbered) : asked;
+
+    // The exam is the length that was ordered, and part of it came from a
+    // second look at the same material. That is a thing the teacher has to be
+    // told — not because it went wrong, but because "which of these are
+    // variants" is a question they are entitled to the answer to before they
+    // set the paper.
+    if (variants.made > 0) {
+      warnings.push({
+        code: 'COMPLETED_WITH_VARIANTS',
+        params: {
+          variants: variants.made,
+          fromMaterial: numbered.length - variants.made,
+          wanted: asked.questionCount,
+        },
+        detail:
+          `The material supported ${numbered.length - variants.made} distinct questions; ` +
+          `${variants.made} more were written as variants of them to reach ${asked.questionCount}.`,
+      });
+    }
 
     if (numbered.length < asked.questionCount) {
       warnings.push({
@@ -490,6 +528,87 @@ export class ContentGenerationService {
    * seven questions kept and one asked for again, rather than eight thrown
    * away and eight paid for twice.
    */
+  /**
+   * Reach the number that was asked for, without inventing content.
+   *
+   * Runs only when the ordinary generation came up short, and only for as many
+   * rounds as the config allows. Each round asks for exactly what is still
+   * missing and hands the model the questions the material did support, so a
+   * variant has something concrete to vary.
+   *
+   * Everything a variant produces goes through `acceptable` unchanged — the
+   * same grounding check, the same duplicate check at the same threshold. That
+   * is deliberate and is the only reason this is safe: a "variant" that is its
+   * source reworded scores above the duplicate threshold and is dropped, so
+   * the failure mode this invites cannot reach a teacher. It costs a call to
+   * find that out, which is why the rounds are capped at two.
+   *
+   * `accepted` is mutated, because it is the exam being assembled and the
+   * caller carries on using it.
+   */
+  private async fillWithVariants(opts: {
+    importId: string;
+    asked: ExamSpec;
+    accepted: GradedQuestion[];
+    chunks: SourceChunk[];
+    language: ExamSpec['language'];
+  }): Promise<{ made: number; millicents: number; calls: number }> {
+    const { asked, accepted, chunks } = opts;
+    const rounds = this.config.generationVariantRounds;
+    let millicents = 0;
+    let calls = 0;
+    let made = 0;
+
+    if (!rounds || !accepted.length || accepted.length >= asked.questionCount) {
+      return { made, millicents, calls };
+    }
+
+    // The slots still to fill, taken from the plan for what was actually
+    // asked for rather than from the scaled-down one — the type mix a teacher
+    // chose is part of the request, not a casualty of the material being thin.
+    const fullPlan = planQuestions(asked);
+
+    for (let round = 0; round < rounds && accepted.length < asked.questionCount; round++) {
+      const slots = fullPlan.slice(accepted.length, asked.questionCount);
+      if (!slots.length) break;
+
+      const material = selectChunksForBatch(chunks, 0, 1, this.config.generationSourceTokens);
+      const result = await this.generator.generateVariants({
+        plan: slots,
+        chunks: material,
+        language: opts.language,
+        // The questions the material did support, which is what there is to
+        // vary. Capped: a long list crowds out the material itself.
+        source: accepted.slice(0, 20).map((q) => ({ text: q.text, modelAnswer: q.modelAnswer })),
+        avoid: accepted.map((q) => q.text),
+        // A second round on the same material got the same answer often
+        // enough to be worth paying for a better reader once.
+        stronger: round > 0,
+      });
+      calls += 1;
+      millicents += result.millicents;
+
+      const kept = this.acceptable(result.questions, slots, material, accepted).map((q) => ({
+        ...q,
+        variant: true,
+      }));
+      if (!kept.length) break; // nothing usable came back; another round will not help
+      accepted.push(...kept);
+      made += kept.length;
+
+      await this.prisma.paperImport.update({
+        where: { id: opts.importId },
+        data: { progressDone: accepted.length },
+      });
+    }
+
+    this.logger.log(
+      `Import ${opts.importId}: ${made} variant question(s) in ${calls} call(s) ` +
+        `to reach ${accepted.length}/${asked.questionCount}`,
+    );
+    return { made, millicents, calls };
+  }
+
   private acceptable(
     written: GeneratedQuestion[],
     plan: PlannedQuestion[],

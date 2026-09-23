@@ -120,6 +120,11 @@ function QuestionCard({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="font-heading font-semibold text-on-surface">{question.number}.</span>
         {question.needsReview && <Badge tone="warn">{t('paper.checkThis')}</Badge>}
+        {/* Written by varying another question, to reach the number asked for.
+            Marked rather than hidden: a teacher setting this paper is entitled
+            to know which questions came from new material and which from a
+            second look at the same material. */}
+        {question.variant && <Badge tone="neutral">{t('paper.variant')}</Badge>}
         {question.type === 'UNSUPPORTED' && (
           <Badge tone="error">{question.unsupportedKind || t('paper.unsupported')}</Badge>
         )}

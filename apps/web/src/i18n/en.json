@@ -3207,8 +3207,10 @@
       "NOT_ENOUGH_CONTENT": "The material you uploaded supports {{got}} of the {{wanted}} questions you asked for. Upload more material, or ask for fewer.",
       "DUPLICATE_QUESTION": "Question {{number}} repeats an earlier one. Rewrite it or delete it.",
       "PAGE_PROVIDER_ERROR": "Page {{page}} could not be processed — the reading service did not respond. Your file is safe; read the failed pages again.",
-      "PAGE_OUTPUT_INVALID": "Page {{page}} was read but the result came back malformed, so it was not used. Your file is safe; read the failed pages again."
-    }
+      "PAGE_OUTPUT_INVALID": "Page {{page}} was read but the result came back malformed, so it was not used. Your file is safe; read the failed pages again.",
+      "COMPLETED_WITH_VARIANTS": "You asked for {{wanted}} questions and the exam has {{wanted}}. The material carried {{fromMaterial}} distinct ones; the other {{variants}} were written as variants of them, with different numbers and framing — each is marked so you can check it."
+    },
+    "variant": "Variant"
   },
   "examStudio": {
     "entry": "Create an exam",
@@ -3312,6 +3314,54 @@
     "limits": "Up to {{pages}} pages per exam. One image up to {{image}} MB, one PDF up to {{pdf}} MB, {{files}} files at a time.",
     "limitsContent": "Up to {{pages}} pages of material. One image up to {{image}} MB, one PDF up to {{pdf}} MB, {{files}} files at a time.",
     "tooManyFiles": "That is more than {{limit}} files. Upload the first {{limit}}, then add the rest as another exam.",
-    "fileTooLarge": "“{{name}}” is {{mb}} MB, and one file can be at most {{limit}} MB."
+    "fileTooLarge": "“{{name}}” is {{mb}} MB, and one file can be at most {{limit}} MB.",
+    "stepWhat": {
+      "UPLOAD": "Your files are in and the originals are kept, so we can always go back to them.",
+      "UPLOAD_CONTENT": "Your lecture material is in and the originals are kept.",
+      "READ": "Reading every page for its words and numbers. A page that does not come back clearly is cropped and read again, closer.",
+      "READ_CONTENT": "Reading the material and splitting it into parts, so every question can point at the part it came from.",
+      "BUILD": "Turning what was read into questions: each one's type, its options and its marks.",
+      "BUILD_CONTENT": "Writing the questions from the material itself — the number, types and difficulty you asked for.",
+      "VALIDATE": "Checking our own work: no question without an answer, no repeats, no gap in the numbering.",
+      "VALIDATE_CONTENT": "Checking every question has a correct answer, that none repeat, and that each really comes from your material.",
+      "DONE": "Getting the exam ready for you to review. Nothing is published until you say so.",
+      "DONE_CONTENT": "Getting the exam ready for you to review. Nothing is published until you say so."
+    }
+  },
+  "drafts": {
+    "title": "Still unfinished",
+    "hint": "We save what you write as you go. Pick up where you left off.",
+    "resume": "Carry on",
+    "discard": "Discard",
+    "discardTitle": "Discard this draft?",
+    "discardBody": "What you wrote and never saved will be gone. This cannot be undone.",
+    "discardConfirm": "Discard draft",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "Could not save the draft just now — we will try again",
+    "savedAgo": "Saved {{ago}}",
+    "restored": "We brought back what you were writing",
+    "restoredHint": "There was a saved draft for this lesson and we restored it. Discard it if you would rather start fresh.",
+    "studioWorking": "Working — {{done}} of {{total}}",
+    "kind": {
+      "LESSON": "Lesson in progress",
+      "ASSIGNMENT": "Assignment in progress",
+      "QUIZ": "Exam being built",
+      "COURSE": "Course being set up"
+    },
+    "untitled": {
+      "LESSON": "Untitled lesson",
+      "ASSIGNMENT": "Untitled assignment",
+      "QUIZ": "Untitled exam",
+      "COURSE": "Untitled course",
+      "EXAM_STUDIO": "Untitled exam"
+    },
+    "studioStatus": {
+      "UPLOADING": "Files still uploading",
+      "PROCESSING": "Working on the exam",
+      "CONFIGURING": "Waiting for you to say what exam you want",
+      "REVIEW": "Ready for you to review",
+      "FAILED": "Stopped and needs a decision"
+    }
   }
 }

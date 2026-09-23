@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { DraftSummary, agoLabel, discardDraft, listDrafts, resumeHref } from '../lib/drafts';
+import {
+  DraftKind,
+  DraftSummary,
+  agoLabel,
+  discardDraft,
+  listDrafts,
+  resumeHref,
+} from '../lib/drafts';
 import { askConfirm } from '../lib/confirm';
 import { toastError } from '../lib/toast';
 
@@ -17,11 +24,19 @@ import { toastError } from '../lib/toast';
  * It renders nothing at all when there is nothing unfinished, which is the
  * normal case and has to stay silent.
  */
-export function DraftsBar({ courseId }: { courseId?: string }) {
+export function DraftsBar({
+  courseId,
+  only,
+}: {
+  courseId?: string;
+  /** Narrow to one kind — the Exam Studio's start screen lists only its own
+   *  sessions, where a half-written lesson would be beside the point. */
+  only?: DraftKind;
+}) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
 
-  const { data: drafts = [] } = useQuery({
+  const { data: all = [] } = useQuery({
     queryKey: ['drafts', courseId ?? 'all'],
     queryFn: () => listDrafts(courseId),
     // A studio session's progress moves while this list is on screen, so it is
@@ -36,6 +51,7 @@ export function DraftsBar({ courseId }: { courseId?: string }) {
     onError: (e) => toastError(e),
   });
 
+  const drafts = only ? all.filter((d) => d.kind === only) : all;
   if (!drafts.length) return null;
 
   return (

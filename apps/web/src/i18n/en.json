@@ -2610,7 +2610,9 @@
     "eCenterAdminPendingElsewhere": "This email is already the admin of the center “{{center}}”, which has not been activated yet — that center was probably created by an earlier attempt. Open it, or use another email.",
     "eUserInactive": "This account is disabled, so it can’t be assigned. Re-enable it first, or use another account.",
     "eTeacherNotApproved": "This account belongs to a teacher who is not approved yet. Approve them under “Teacher approval” first, or use another account.",
-    "eIdentityNotEligible": "This account (a student account, for example) can’t be assigned here. Use another email."
+    "eIdentityNotEligible": "This account (a student account, for example) can’t be assigned here. Use another email.",
+    "eImportInProgress": "Your other exam is still being prepared — exams are prepared one at a time. Open it and carry on, or wait for it to finish and start the new one.",
+    "eImportInProgressOther": "Another exam is being prepared in this academy right now — exams are prepared one at a time. Try again in a few minutes."
   },
   "myStudio": {
     "title": "My Studio",
@@ -3347,12 +3349,24 @@
       "VALIDATE_CONTENT": "Checking every question has a correct answer, that none repeat, and that each really comes from your material.",
       "DONE": "Getting the exam ready for you to review. Nothing is published until you say so.",
       "DONE_CONTENT": "Getting the exam ready for you to review. Nothing is published until you say so."
+    },
+    "openRunning": "Open the exam in progress",
+    "livePage": "Page {{page}} of {{total}}",
+    "leaveHint": "You don't have to wait here — the work carries on even if you close this page, and you'll find it under “Unfinished work” at the top of",
+    "leaveHintLink": "My courses",
+    "phase": {
+      "PREPARING": "Cleaning up the image — lighting, tilt and sharpness",
+      "READING": "Reading the whole page",
+      "LOCATING": "Finding where each question sits on the page",
+      "REREADING": "Zooming in to re-read the unclear parts ({{done}} of {{total}})",
+      "CHECKING_NUMBERS": "Checking the numbers one by one",
+      "SHAPING": "Arranging the text into questions and options"
     }
   },
   "drafts": {
     "title": "Still unfinished",
     "hint": "We save what you write as you go. Pick up where you left off.",
-    "resume": "Carry on",
+    "resume": "Go to draft",
     "discard": "Discard",
     "discardTitle": "Discard this draft?",
     "discardBody": "What you wrote and never saved will be gone. This cannot be undone.",

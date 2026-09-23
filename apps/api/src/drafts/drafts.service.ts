@@ -51,6 +51,10 @@ const KEEP_DAYS = 30;
  *  a bug in the caller, and rejecting it is cheaper than storing it. */
 const MAX_DATA_BYTES = 256 * 1024;
 
+/** How long a studio session may sit in UPLOADING before it is taken to be
+ *  abandoned rather than arriving. Storing pages takes seconds. */
+const UPLOADING_STALE_MS = 10 * 60_000;
+
 /**
  * Work a teacher started and has not finished.
  *
@@ -149,8 +153,25 @@ export class DraftsService {
           academyId: scope.academyId,
           deletedAt: null,
           ...mine,
-          ...(courseId ? { courseId } : {}),
-          status: { in: ['UPLOADING', 'PROCESSING', 'CONFIGURING', 'REVIEW', 'FAILED'] },
+          AND: [
+            // A session started from "create exam" on the courses screen has
+            // no course until the teacher picks one at the end — so inside a
+            // course it was invisible, and a teacher who left it and went to
+            // their course found nothing. Unassigned sessions show everywhere.
+            ...(courseId ? [{ OR: [{ courseId }, { courseId: null }] }] : []),
+            {
+              OR: [
+                { status: { in: ['PROCESSING', 'CONFIGURING', 'REVIEW', 'FAILED'] } },
+                // UPLOADING lasts seconds. One older than that was left behind
+                // by a refused start (before those were cleaned up) and has
+                // nothing in it to resume.
+                {
+                  status: 'UPLOADING',
+                  updatedAt: { gt: new Date(Date.now() - UPLOADING_STALE_MS) },
+                },
+              ],
+            },
+          ],
         },
         orderBy: { updatedAt: 'desc' },
         take: 25,

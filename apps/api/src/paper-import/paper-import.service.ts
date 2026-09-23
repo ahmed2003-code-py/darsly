@@ -117,6 +117,10 @@ export class PaperImportService {
     }
     const kind: ExamCreationKind = opts.kind ?? 'PAPER';
     for (const file of files) this.assertAcceptable(file);
+    // Before anything is stored. This used to be found out at the very end,
+    // after the pages were uploaded and a session row created — so the refusal
+    // left that row behind, stuck in UPLOADING, and said only "conflict".
+    await this.assertNotBusy(scope);
 
     const hasPdf = files.some((f) => f.mimetype === PAPER_PDF_MIME);
     const hasImage = files.some((f) => f.mimetype !== PAPER_PDF_MIME);
@@ -162,16 +166,25 @@ export class PaperImportService {
       throw e;
     }
 
-    const job = await this.jobs.enqueue(
-      scope.academyId,
-      'PAPER_IMPORT',
-      // The content path reads the material now and writes the questions later,
-      // once the teacher has said what exam they want out of it.
-      { importId: record.id, ...(kind === 'CONTENT' ? { phase: 'READ' } : {}) },
-      // Only another session blocks a session. A teacher scanning an exam and
-      // an academy regenerating its site have nothing to do with each other.
-      { conflictsWith: ['PAPER_IMPORT'] },
-    );
+    let job;
+    try {
+      job = await this.enqueue(
+        scope,
+        // The content path reads the material now and writes the questions
+        // later, once the teacher has said what exam they want out of it.
+        { importId: record.id, ...(kind === 'CONTENT' ? { phase: 'READ' } : {}) },
+      );
+    } catch (e) {
+      // Another session started between the check above and here. This one
+      // never ran, so it is not unfinished work: it is closed and its pages
+      // removed, rather than left on the drafts list as something to resume.
+      await this.prisma.paperImport.update({
+        where: { id: record.id },
+        data: { status: 'CANCELED', error: (e as Error).message.slice(0, 500) },
+      });
+      await this.storage.deletePrefix(this.prefix(record.id)).catch(() => undefined);
+      throw e;
+    }
 
     await this.audit.log({
       actorUserId: scope.userId,
@@ -185,6 +198,62 @@ export class PaperImportService {
     return this.prisma.paperImport.update({
       where: { id: record.id },
       data: { status: 'PROCESSING', stage: 'READING', jobId: job.id, progressTotal: pageCount },
+    });
+  }
+
+  /**
+   * Queue a session's work. Only another session blocks a session — a teacher
+   * scanning an exam and an academy regenerating its site have nothing to do
+   * with each other — and when one does, the refusal says which.
+   */
+  private async enqueue(scope: ImportScope, input: Prisma.InputJsonValue) {
+    await this.assertNotBusy(scope);
+    try {
+      return await this.jobs.enqueue(scope.academyId, 'PAPER_IMPORT', input, {
+        conflictsWith: ['PAPER_IMPORT'],
+      });
+    } catch (e) {
+      // Lost a race with a session that started a moment ago: same answer.
+      if (e instanceof ConflictException) await this.assertNotBusy(scope);
+      throw e;
+    }
+  }
+
+  /**
+   * One session is read at a time per academy. When another is running, say
+   * so — and, when it is this teacher's own, where it is, so "conflict with
+   * existing data" becomes "your other exam is still being read: open it".
+   * Another teacher's session is named only as existing; its id is theirs.
+   */
+  private async assertNotBusy(scope: ImportScope): Promise<void> {
+    const job = await this.prisma.aiJob.findFirst({
+      where: {
+        academyId: scope.academyId,
+        type: 'PAPER_IMPORT',
+        status: { in: ['QUEUED', 'RUNNING'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { input: true },
+    });
+    if (!job) return;
+    const importId = (job.input as { importId?: unknown } | null)?.importId;
+    const running =
+      typeof importId === 'string'
+        ? await this.prisma.paperImport.findFirst({
+            where: { id: importId, academyId: scope.academyId },
+            select: { id: true, courseId: true, createdBy: true },
+          })
+        : null;
+    if (running && running.createdBy === scope.userId) {
+      throw new ConflictException({
+        message: 'Your other exam is still being prepared',
+        code: 'IMPORT_IN_PROGRESS',
+        params: { importId: running.id, courseId: running.courseId },
+      });
+    }
+    throw new ConflictException({
+      message: 'Another exam is being prepared in this academy right now',
+      code: 'IMPORT_IN_PROGRESS_OTHER',
     });
   }
 
@@ -399,6 +468,9 @@ export class PaperImportService {
             error: true,
             width: true,
             height: true,
+            phase: true,
+            phaseDone: true,
+            phaseTotal: true,
           },
         },
       },
@@ -485,12 +557,10 @@ export class PaperImportService {
       }
     }
 
-    const job = await this.jobs.enqueue(
-      scope.academyId,
-      'PAPER_IMPORT',
-      { importId: record.id, ...(dto.escalate ? { tier: 'STRONG' } : {}) },
-      { conflictsWith: ['PAPER_IMPORT'] },
-    );
+    const job = await this.enqueue(scope, {
+      importId: record.id,
+      ...(dto.escalate ? { tier: 'STRONG' } : {}),
+    });
     await this.audit.log({
       actorUserId: scope.userId,
       academyId: scope.academyId,
@@ -614,12 +684,7 @@ export class PaperImportService {
       });
     }
 
-    const job = await this.jobs.enqueue(
-      scope.academyId,
-      'PAPER_IMPORT',
-      { importId: record.id, phase: 'GENERATE' },
-      { conflictsWith: ['PAPER_IMPORT'] },
-    );
+    const job = await this.enqueue(scope, { importId: record.id, phase: 'GENERATE' });
     return this.prisma.paperImport.update({
       where: { id: record.id },
       data: {

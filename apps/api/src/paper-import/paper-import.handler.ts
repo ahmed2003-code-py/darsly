@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { aggregatePages, PageExtraction, PageInput } from './extraction.schema';
 import { ContentGenerationService } from './content-generation.service';
-import { ExtractionTier, PaperExtractionService } from './paper-extraction.service';
+import { ExtractionTier, PaperExtractionService, ReadPhase } from './paper-extraction.service';
 
 /**
  * Which half of the content path a job is for.
@@ -165,17 +165,42 @@ export class PaperImportHandler implements AiJobHandler {
       return;
     }
 
+    // What is happening to this page, written as it happens. Chained so the
+    // writes land in the order they were said — "re-reading 3 of 8" must never
+    // be overwritten by a late "re-reading 2 of 8" — and never awaited by the
+    // reading itself: a slow write about progress must not slow the progress.
+    let reported: Promise<unknown> = Promise.resolve();
+    const onPhase = (p: ReadPhase) => {
+      reported = reported
+        .then(() =>
+          this.prisma.paperImportPage.update({
+            where: { id: page.id },
+            data: {
+              phase: p.phase,
+              phaseDone: 'done' in p ? p.done : null,
+              phaseTotal: 'total' in p ? p.total : null,
+            },
+          }),
+        )
+        .catch(() => undefined);
+    };
+
     const result = await this.extraction.extractPage({
       pageNumber: page.pageNumber,
       image,
       text,
       tier,
+      onPhase,
     });
+    await reported;
 
     const failed = !result.extraction;
     await this.prisma.paperImportPage.update({
       where: { id: page.id },
       data: {
+        phase: null,
+        phaseDone: null,
+        phaseTotal: null,
         status: failed ? 'FAILED' : result.escalated ? 'ESCALATED' : 'EXTRACTED',
         model: result.model,
         attempts: { increment: 1 },

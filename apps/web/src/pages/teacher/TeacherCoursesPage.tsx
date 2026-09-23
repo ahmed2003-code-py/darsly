@@ -19,6 +19,7 @@ import {
   PageHeader,
 } from '../../components/ui';
 import { useAuthStore } from '../../stores/auth';
+import { DraftsBar } from '../../components/DraftsBar';
 import { Role } from '@darsly/shared-types';
 
 interface CourseForm {
@@ -204,6 +205,12 @@ export default function TeacherCoursesPage() {
           )
         }
       />
+
+      {/* Where a teacher lands after leaving something half-done — an exam
+          still being read, a lesson half-written — so this is where the way
+          back has to be. It was only inside a course, and an exam started from
+          the button above belongs to no course until it is finished. */}
+      {!isDesk && <DraftsBar />}
 
       {/* Same toolbar as My students: filters with live counts, then a visible
           search box — the header search alone is easy to miss and impossible to

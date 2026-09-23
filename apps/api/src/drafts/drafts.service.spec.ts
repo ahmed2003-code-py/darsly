@@ -162,17 +162,29 @@ describe('keeping half-finished work', () => {
   it('leaves a finished session off it — that is an exam, not a draft', async () => {
     await service.list(scope);
 
-    const { status } = prisma.paperImport.findMany.mock.calls[0][0].where;
-    expect(status.in).not.toContain('COMPLETED');
-    expect(status.in).not.toContain('CANCELED');
-    expect(status.in).toContain('REVIEW');
+    const where = JSON.stringify(prisma.paperImport.findMany.mock.calls[0][0].where);
+    expect(where).not.toContain('COMPLETED');
+    expect(where).not.toContain('CANCELED');
+    expect(where).toContain('REVIEW');
   });
 
   it('narrows to one course when the course screen asks', async () => {
     await service.list(scope, 'c1');
 
     expect(prisma.contentDraft.findMany.mock.calls[0][0].where.courseId).toBe('c1');
-    expect(prisma.paperImport.findMany.mock.calls[0][0].where.courseId).toBe('c1');
+    // Sessions of this course — and sessions not tied to any course yet,
+    // which is where one started from the courses screen lives.
+    expect(prisma.paperImport.findMany.mock.calls[0][0].where.AND).toContainEqual({
+      OR: [{ courseId: 'c1' }, { courseId: null }],
+    });
+  });
+
+  it('does not offer a session abandoned mid-upload as something to resume', async () => {
+    await service.list(scope);
+    const statusClause = prisma.paperImport.findMany.mock.calls[0][0].where.AND.at(-1);
+    const uploading = statusClause.OR.find((c: any) => c.status === 'UPLOADING');
+    expect(uploading.updatedAt.gt.getTime()).toBeGreaterThan(Date.now() - 11 * 60_000);
+    expect(statusClause.OR[0].status.in).not.toContain('UPLOADING');
   });
 
   it('deletes only the caller’s own draft, by key', async () => {

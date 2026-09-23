@@ -6,6 +6,8 @@ import { api } from '../../lib/api';
 import { askConfirm } from '../../lib/confirm';
 import { toastError, toastErrorText, toastSuccess } from '../../lib/toast';
 import { PageHeader, ProgressBar, Spinner } from '../../components/ui';
+import { DraftsBar } from '../../components/DraftsBar';
+import { resolveError } from '../../lib/errorMessage';
 import { ExamReviewPanel } from './exam-studio/ExamReviewPanel';
 import { ExamSpecForm } from './exam-studio/ExamSpecForm';
 import { StudioProgress } from './exam-studio/StudioProgress';
@@ -90,6 +92,8 @@ function ModeChoice({ courseId }: { courseId: string | null }) {
   return (
     <div className="page">
       <PageHeader title={t('examStudio.title')} subtitle={t('examStudio.subtitle')} />
+      {/* An exam already on its way comes before starting another one. */}
+      <DraftsBar only="EXAM_STUDIO" />
       <div className="grid gap-4 sm:grid-cols-2">
         <Choice
           icon="description"
@@ -174,6 +178,20 @@ function Upload({
     // scroll away from whatever caused them.
     onError: (e) => toastError(e),
   });
+  // The one refusal with somewhere to go: this teacher's other exam is still
+  // being read. The pop-up says so; this says where it is.
+  const busy = resolveError(upload.error);
+  const running =
+    busy.code === 'IMPORT_IN_PROGRESS'
+      ? ((upload.error as { response?: { data?: { params?: Record<string, unknown> } } }).response
+          ?.data?.params ?? null)
+      : null;
+  const runningHref =
+    running && typeof running.importId === 'string'
+      ? `/teacher/exam-studio/${running.importId}${
+          typeof running.courseId === 'string' ? `?course=${running.courseId}` : ''
+        }`
+      : null;
 
   const add = (picked: FileList | null) => {
     if (!picked) return;
@@ -295,6 +313,16 @@ function Upload({
               {t('examStudio.uploading', { pct })}
             </p>
             <ProgressBar pct={pct} />
+          </div>
+        )}
+
+        {runningHref && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+            <span className="material-symbols-outlined text-primary">hourglass_top</span>
+            <span className="min-w-0 flex-1 text-on-surface">{busy.message}</span>
+            <Link className="btn-primary px-4 py-1.5 text-sm" to={runningHref}>
+              {t('examStudio.openRunning')}
+            </Link>
           </div>
         )}
 

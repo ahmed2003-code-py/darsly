@@ -103,6 +103,17 @@ export interface TranscriptionResult {
  * A clean page costs exactly one call, same as before. A hard page costs a few
  * small ones instead of one large one on the flagship.
  */
+/**
+ * What the reader is doing to a page right now, for the screen a teacher
+ * watches. Each one is said when the work starts, never on a timer.
+ */
+export type PagePhase =
+  | { phase: 'PREPARING' }
+  | { phase: 'READING' }
+  | { phase: 'LOCATING' }
+  | { phase: 'REREADING'; done: number; total: number }
+  | { phase: 'CHECKING_NUMBERS' };
+
 @Injectable()
 export class TranscriberService {
   private readonly logger = new Logger(TranscriberService.name);
@@ -115,8 +126,21 @@ export class TranscriberService {
 
   async transcribe(
     original: Buffer,
-    opts: { pageNumber: number; tier?: 'AUTO' | 'STRONG' } = { pageNumber: 1 },
+    opts: {
+      pageNumber: number;
+      tier?: 'AUTO' | 'STRONG';
+      /** Told as each step starts. Never awaited: a slow write about progress
+       *  must not become slower progress. */
+      onPhase?: (phase: PagePhase) => void;
+    } = { pageNumber: 1 },
   ): Promise<TranscriptionResult> {
+    const say = (phase: PagePhase) => {
+      try {
+        opts.onPhase?.(phase);
+      } catch {
+        // Reporting is never a reason for reading to fail.
+      }
+    };
     const cost: TranscriptionCost = {
       inputTokens: 0,
       outputTokens: 0,
@@ -127,6 +151,7 @@ export class TranscriberService {
     };
 
     let prepared;
+    say({ phase: 'PREPARING' });
     try {
       prepared = await this.images.prepare(original);
     } catch (e) {
@@ -172,6 +197,7 @@ export class TranscriberService {
     );
 
     // ── pass A: the whole page ────────────────────────────────────────────
+    say({ phase: 'READING' });
     const pageCall = await this.read(
       images,
       strong ? 'strong' : 'primary',
@@ -203,6 +229,7 @@ export class TranscriberService {
 
     // Where the regions actually are on the page, so a re-read can be a crop
     // rather than another look at the same fifty pixels per line.
+    say({ phase: 'LOCATING' });
     const boxes = await this.locate(original, transcript.regions.length, trace);
     trace(`SEGMENTATION_RESULT boxes=${boxes.length} forRegions=${transcript.regions.length}`);
 
@@ -234,9 +261,14 @@ export class TranscriberService {
      * already have.
      */
     if (boxes.length) {
-      for (const { region, index } of ranked.slice(0, this.config.ocrMaxRegionCrops)) {
+      const crops = ranked
+        .slice(0, this.config.ocrMaxRegionCrops)
+        .filter(({ index }) => boxes[index]);
+      let cropped = 0;
+      for (const { region, index } of crops) {
         const box = boxes[index];
         if (!box) continue;
+        say({ phase: 'REREADING', done: cropped++, total: crops.length });
         trace(
           `CROP_CREATED id=q${index + 1} bbox=${box.left},${box.top},${box.width}x${box.height}`,
         );
@@ -259,6 +291,7 @@ export class TranscriberService {
       // Nothing to aim a crop at, and the reading is known to be poor: one
       // more look at the whole page is all that is left.
       trace('NO_BOXES re-reading whole page on fallback');
+      say({ phase: 'REREADING', done: 0, total: 1 });
       const retry = await this.read(images, 'fallback', `Page ${opts.pageNumber}. Transcribe it.`);
       this.add(cost, retry);
       cost.escalated = true;
@@ -278,6 +311,7 @@ export class TranscriberService {
         .slice(0, this.config.ocrMaxFragmentCrops);
       if (!fragments.length) continue;
 
+      say({ phase: 'CHECKING_NUMBERS' });
       let updated = region;
       for (const fragment of fragments) {
         const resolution = await this.rereadFragment(original, box, fragment.text, cost);

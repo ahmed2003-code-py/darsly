@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiClient, AiPrice, AiReasoningEffort } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
-import { TranscriberService } from './ocr/transcriber.service';
+import { PagePhase, TranscriberService } from './ocr/transcriber.service';
+
+/** Everything the reader says while it works, plus the step after it. */
+export type ReadPhase = PagePhase | { phase: 'SHAPING' };
 import { STRUCTURE_SYSTEM, structurePrompt, transcriptAsFallback } from './ocr/structure.schema';
 import { PageTranscript } from './ocr/transcript.schema';
 import {
@@ -80,13 +83,17 @@ export class PaperExtractionService {
     image?: Buffer;
     text?: string | null;
     tier?: ExtractionTier;
+    onPhase?: (phase: ReadPhase) => void;
   }): Promise<PageExtractionResult> {
     // A photograph goes through the transcription pipeline: read the page,
     // then decide its shape from the words. A page that arrived as text has
     // nothing to read and goes straight to the shaping call below.
     if (input.image && !input.text?.trim() && this.config.ocrMultiPass) {
-      return this.transcribeThenStructure(input.pageNumber, input.image, input.tier);
+      return this.transcribeThenStructure(input.pageNumber, input.image, input.tier, input.onPhase);
     }
+
+    // One call reads and shapes at once here, so it is one step on the screen.
+    input.onPhase?.({ phase: input.text?.trim() ? 'SHAPING' : 'READING' });
 
     // The teacher asked for the best read available. There is no cheap first
     // pass here: they have already seen what the cheap pass produced.
@@ -161,10 +168,12 @@ export class PaperExtractionService {
     pageNumber: number,
     image: Buffer,
     tier?: ExtractionTier,
+    onPhase?: (phase: ReadPhase) => void,
   ): Promise<PageExtractionResult> {
     const read = await this.transcriber.transcribe(image, {
       pageNumber,
       tier: tier === 'STRONG' ? 'STRONG' : 'AUTO',
+      onPhase,
     });
 
     if (!read.transcript) {
@@ -199,6 +208,7 @@ export class PaperExtractionService {
       };
     }
 
+    onPhase?.({ phase: 'SHAPING' });
     const shaped = await this.structure(read.transcript, pageNumber);
 
     /**

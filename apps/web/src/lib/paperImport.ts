@@ -122,6 +122,32 @@ export interface ImportPage {
   model: string | null;
   escalationReason: string | null;
   error: string | null;
+  /** What the worker is doing to this page right now; null before and after. */
+  phase?: PagePhase | null;
+  phaseDone?: number | null;
+  phaseTotal?: number | null;
+}
+
+export type PagePhase =
+  'PREPARING' | 'READING' | 'LOCATING' | 'REREADING' | 'CHECKING_NUMBERS' | 'SHAPING';
+
+/**
+ * The page being worked on this second, and what is being done to it — the
+ * worker's own report, written as each step starts. Null when no page is mid-
+ * read (between pages, or on the text-only path), and the screen then says
+ * only what the counts say.
+ */
+export function livePage(
+  record: Pick<PaperImport, 'pages'> | null | undefined,
+): { pageNumber: number; phase: PagePhase; done: number; total: number } | null {
+  const page = record?.pages.find((p) => p.phase);
+  if (!page?.phase) return null;
+  return {
+    pageNumber: page.pageNumber,
+    phase: page.phase,
+    done: page.phaseDone ?? 0,
+    total: page.phaseTotal ?? 0,
+  };
 }
 
 export interface PaperImport {

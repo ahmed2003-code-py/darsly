@@ -55,6 +55,7 @@ describe('accepting a stack of paper', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       paperImportPage: { create: jest.fn().mockResolvedValue({}), count: jest.fn() },
+      aiJob: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     storage = {
       put: jest.fn().mockResolvedValue(undefined),
@@ -238,6 +239,47 @@ describe('accepting a stack of paper', () => {
     );
   });
 
+  it('while this teacher’s other exam is being read: refuses before storing anything, and says where it is', async () => {
+    prisma.aiJob.findFirst.mockResolvedValue({ input: { importId: 'running' } });
+    prisma.paperImport.findFirst.mockResolvedValue({
+      id: 'running',
+      courseId: 'c9',
+      createdBy: 'user1',
+    });
+    const err = await service.create(scope, [file()]).catch((e) => e);
+    expect(err.getStatus()).toBe(409);
+    expect(err.getResponse()).toMatchObject({
+      code: 'IMPORT_IN_PROGRESS',
+      params: { importId: 'running', courseId: 'c9' },
+    });
+    // Nothing half-made is left behind to show up as a draft.
+    expect(prisma.paperImport.create).not.toHaveBeenCalled();
+    expect(storage.put).not.toHaveBeenCalled();
+  });
+
+  it('another teacher’s session blocks too, but is not named', async () => {
+    prisma.aiJob.findFirst.mockResolvedValue({ input: { importId: 'theirs' } });
+    prisma.paperImport.findFirst.mockResolvedValue({
+      id: 'theirs',
+      courseId: null,
+      createdBy: 'someone-else',
+    });
+    const err = await service.create(scope, [file()]).catch((e) => e);
+    expect(err.getResponse()).toEqual({
+      message: expect.any(String),
+      code: 'IMPORT_IN_PROGRESS_OTHER',
+    });
+  });
+
+  it('a start that loses the race is closed, not left as unfinished work', async () => {
+    jobs.enqueue.mockRejectedValue(new ConflictException('busy'));
+    await expect(service.create(scope, [file()])).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.paperImport.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELED' }) }),
+    );
+    expect(storage.deletePrefix).toHaveBeenCalledWith('paper-imports/imp1');
+  });
+
   it('records who uploaded what', async () => {
     await service.create(scope, [file()]);
     expect(audit.log).toHaveBeenCalledWith(
@@ -299,6 +341,7 @@ describe('who may touch an import', () => {
     prisma = {
       paperImport: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn() },
       paperImportPage: { findFirst: jest.fn().mockResolvedValue(null), count: jest.fn() },
+      aiJob: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     service = new PaperImportService(
       prisma as PrismaService,

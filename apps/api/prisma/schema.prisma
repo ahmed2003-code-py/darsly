@@ -3414,6 +3414,14 @@ model PaperImportPage {
   escalationReason String?
   attempts         Int                   @default(0)
   error            String?
+  /// What the worker is doing to this page right now, while it is being read:
+  /// PREPARING · READING · LOCATING · REREADING · SHAPING. Null before and
+  /// after. Written as it happens, so the progress screen can say "re-reading
+  /// question 3 of 8" instead of showing one bar that sits still for a minute.
+  phase            String?
+  /// For REREADING: how many of the doubtful regions are done, out of how many.
+  phaseDone        Int?
+  phaseTotal       Int?
 
   inputTokens    Int @default(0)
   outputTokens   Int @default(0)

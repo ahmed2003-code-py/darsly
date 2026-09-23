@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { ProgressBar } from '../../../components/ui';
 import {
   CREATION_STEPS,
   CreationState,
   PaperImport,
   creationState,
+  livePage,
   stepStates,
 } from '../../../lib/paperImport';
 
@@ -35,13 +37,22 @@ export function StudioProgress({
   const { t } = useTranslation();
   const state = creationState(record);
   const steps = stepStates(record);
+  const active = CREATION_STEPS.find((step) => steps[step] === 'active');
+  const live = livePage(record);
   const { done, total } = record.progress;
   const measurable = total > 0;
   const pct = measurable ? Math.round((done / total) * 100) : 0;
 
   return (
     <div className="card">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      {/*
+        The whole road, at the top, before anything else: the steps behind it
+        (green, ticked), the one it is on, and the ones still to come. A
+        teacher should know how far along their exam is at a glance.
+      */}
+      <Stepper steps={steps} kind={record.kind} />
+
+      <div className="mb-4 mt-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-heading text-lg font-semibold text-on-surface">
             {t(`examStudio.state.${state}`)}
@@ -67,56 +78,48 @@ export function StudioProgress({
       )}
 
       {/*
-        What each step is, not only that it exists.
-        
-        A list of five nouns tells a teacher that five things happen and
-        nothing about what any of them is — so a four-minute wait on "استخراج
-        الأسئلة" reads as a machine that has stopped. The sentence under the
-        step being worked on says what is happening to their pages right now;
-        finished steps keep theirs, folded down, so the screen also answers
-        "what has already been done to my paper".
+        What is being done to which page, this second — the worker's own
+        report, written as each step starts, not an animation. A page can take
+        a minute, and "re-reading the unclear parts, 3 of 8" is the difference
+        between waiting and wondering whether anything is happening at all.
+        Between pages, the step being worked on says what it does instead.
       */}
-      <ol className="mt-6 space-y-3">
-        {CREATION_STEPS.map((step) => (
-          <li key={step} className="flex items-start gap-2 text-sm">
-            <span
-              className={`material-symbols-outlined mt-0.5 text-base ${
-                steps[step] === 'done'
-                  ? 'text-primary'
-                  : steps[step] === 'active'
-                    ? 'text-on-surface'
-                    : 'text-outline-variant'
-              }`}
-            >
-              {steps[step] === 'done'
-                ? 'check_circle'
-                : steps[step] === 'active'
-                  ? 'radio_button_checked'
-                  : 'radio_button_unchecked'}
-            </span>
-            <div className="min-w-0">
-              <p
-                className={
-                  steps[step] === 'todo' ? 'text-outline' : 'font-semibold text-on-surface'
-                }
-              >
-                {t(`examStudio.step.${step}`, { context: record.kind })}
-              </p>
-              {/* Not on the steps still to come: describing work that has not
-                  started is noise on a screen somebody is watching. */}
-              {steps[step] !== 'todo' && (
-                <p
-                  className={`mt-0.5 text-xs ${
-                    steps[step] === 'active' ? 'text-on-surface-variant' : 'text-outline'
-                  }`}
-                >
-                  {t(`examStudio.stepWhat.${step}`, { context: record.kind })}
-                </p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
+      {live ? (
+        <p className="mt-4 flex items-start gap-2 rounded-xl bg-primary/5 px-3 py-2 text-sm text-on-surface">
+          <span className="material-symbols-outlined mt-px animate-pulse text-base text-primary">
+            motion_photos_on
+          </span>
+          <span className="min-w-0">
+            {record.pages.length > 1 && (
+              <span className="font-semibold">
+                {t('examStudio.livePage', { page: live.pageNumber, total: record.pages.length })}
+                {' — '}
+              </span>
+            )}
+            {t(`examStudio.phase.${live.phase}`, {
+              done: Math.min(live.done + 1, live.total),
+              total: live.total,
+            })}
+          </span>
+        </p>
+      ) : (
+        active && (
+          <p className="mt-4 text-sm text-on-surface-variant">
+            {t(`examStudio.stepWhat.${active}`, { context: record.kind })}
+          </p>
+        )
+      )}
+
+      {/* The one thing somebody watching this most needs to be told. */}
+      <p className="mt-4 flex items-start gap-2 text-xs text-outline">
+        <span className="material-symbols-outlined text-sm">info</span>
+        <span>
+          {t('examStudio.leaveHint')}{' '}
+          <Link to="/teacher/courses" className="font-semibold text-primary underline">
+            {t('examStudio.leaveHintLink')}
+          </Link>
+        </span>
+      </p>
 
       {record.pages.length > 1 && <PageDetail record={record} />}
 
@@ -126,6 +129,76 @@ export function StudioProgress({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * The steps as a row of dots that turn green one at a time.
+ *
+ * Read from `stepStates`, which reads the server's own `stage`: a green dot
+ * means the worker finished that step, never that a timer ran out.
+ */
+function Stepper({
+  steps,
+  kind,
+}: {
+  steps: ReturnType<typeof stepStates>;
+  kind: PaperImport['kind'];
+}) {
+  const { t } = useTranslation();
+  return (
+    <ol className="flex items-start">
+      {CREATION_STEPS.map((step, i) => {
+        const s = steps[step];
+        const last = i === CREATION_STEPS.length - 1;
+        return (
+          <li key={step} className="relative flex min-w-0 flex-1 flex-col items-center text-center">
+            {/* The line to the next dot — green once this step is behind us.
+                Logical `start`, so it runs the right way in Arabic and English. */}
+            {!last && (
+              <span
+                aria-hidden="true"
+                className={`absolute top-4 h-0.5 w-full transition-colors duration-500 ${
+                  s === 'done' ? 'bg-emerald-500' : 'bg-outline-variant/60'
+                }`}
+                style={{ insetInlineStart: '50%' }}
+              />
+            )}
+            <span
+              className={`relative z-10 grid h-8 w-8 place-items-center rounded-full border-2 transition-colors duration-500 ${
+                s === 'done'
+                  ? 'border-emerald-500 bg-emerald-500 text-white'
+                  : s === 'active'
+                    ? 'border-primary bg-surface-container-lowest text-primary ring-4 ring-primary/15'
+                    : 'border-outline-variant bg-surface-container-lowest text-outline'
+              }`}
+              aria-current={s === 'active' ? 'step' : undefined}
+            >
+              {s === 'done' ? (
+                <span className="material-symbols-outlined text-lg">check</span>
+              ) : s === 'active' ? (
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary" />
+              ) : (
+                <span className="text-xs font-bold" dir="ltr">
+                  {i + 1}
+                </span>
+              )}
+            </span>
+            <span
+              className={`mt-2 px-1 text-[11px] leading-tight sm:text-xs ${
+                s === 'done'
+                  ? 'font-semibold text-emerald-700 dark:text-emerald-400'
+                  : s === 'active'
+                    ? 'font-semibold text-on-surface'
+                    : 'text-outline'
+              }`}
+            >
+              {t(`examStudio.step.${step}`, { context: kind })}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -152,12 +225,22 @@ function PageDetail({ record }: { record: PaperImport }) {
             >
               {page.status === 'FAILED'
                 ? 'error'
-                : page.status === 'PENDING'
-                  ? 'schedule'
-                  : 'check'}
+                : page.phase
+                  ? 'motion_photos_on'
+                  : page.status === 'PENDING'
+                    ? 'schedule'
+                    : 'check'}
             </span>
             <span className="text-on-surface">{t('paper.page', { n: page.pageNumber })}</span>
-            <span className="text-outline">— {t(`examStudio.pageStatus.${page.status}`)}</span>
+            <span className="text-outline">
+              —{' '}
+              {page.phase
+                ? t(`examStudio.phase.${page.phase}`, {
+                    done: Math.min((page.phaseDone ?? 0) + 1, page.phaseTotal ?? 0),
+                    total: page.phaseTotal ?? 0,
+                  })
+                : t(`examStudio.pageStatus.${page.status}`)}
+            </span>
           </li>
         ))}
       </ul>

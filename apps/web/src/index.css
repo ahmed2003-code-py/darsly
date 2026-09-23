@@ -568,9 +568,19 @@
  * closed list, matched here. That is the whole of why personalisation cannot
  * corrupt the layout: there is no path from a preference to arbitrary CSS.
  *
- * Everything below is scoped to `.studio-*` classes, applied on the student's
- * own surfaces. A course page, a lesson and a teacher's profile keep the
- * academy's shapes and colours, because those screens belong to the teacher.
+ * What is NOT true of the rules below, despite how they used to be described:
+ * they are not confined to `.studio-*`. Each one also names the shared
+ * `.btn-primary`, `.btn-ghost` and `.card` classes, deliberately. That pairing
+ * is the entire mechanism by which an equipped theme reaches a hundred and
+ * thirty screens without a single page asking which theme is active — remove
+ * the shared class from a selector and the theme stops existing outside the
+ * student's own surfaces.
+ *
+ * What keeps that safe is the split between shape and colour. A theme may set
+ * a radius, a shadow or a weight; the surface and text colours are never
+ * touched here, so no combination of preferences can render a card or a button
+ * unreadable. A page that needs to opt out states its own radius locally,
+ * which wins on specificity.
  */
 
 /* ── Buttons ───────────────────────────────────────────────────────────────

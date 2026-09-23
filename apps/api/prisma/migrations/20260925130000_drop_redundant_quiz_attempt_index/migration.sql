@@ -1,0 +1,16 @@
+-- Drop QuizAttempt(quizId, studentId): a strict prefix of another index.
+--
+-- 20260707220131_init created it. 20260914120000 later added
+-- QuizAttempt(quizId, studentId, voidedAt), and Postgres can serve any query
+-- filtering on (quizId) or (quizId, studentId) from that index's leading
+-- columns. So the two-column one has answered nothing since September 14th.
+-- What it still does is cost a write on every quiz attempt and take its own
+-- pages in the buffer cache.
+--
+-- Dropped by name rather than by shape, so this removes exactly the index the
+-- initial migration created and nothing else. IF EXISTS keeps the statement
+-- idempotent on an environment where it was already removed by hand.
+--
+-- No data is touched and no query plan loses an index it was using: the wider
+-- index remains and covers every prefix the dropped one covered.
+DROP INDEX IF EXISTS "QuizAttempt_quizId_studentId_idx";

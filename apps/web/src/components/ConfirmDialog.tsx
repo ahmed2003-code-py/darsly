@@ -32,7 +32,7 @@ export function ConfirmDialog() {
       <p className="whitespace-pre-line text-on-surface-variant">{current?.message}</p>
       <div className="mt-6 flex justify-end gap-2">
         <button type="button" className="btn-ghost" onClick={() => answer(false)}>
-          {t('common.cancel')}
+          {current?.cancelLabel ?? t('common.cancel')}
         </button>
         <button
           type="button"

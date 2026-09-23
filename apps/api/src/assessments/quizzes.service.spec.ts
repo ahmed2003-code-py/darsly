@@ -1,4 +1,4 @@
-import { QuizzesService } from './quizzes.service';
+import { QuizzesService, derivedSubmitKey } from './quizzes.service';
 
 /**
  * Verifies quiz auto-grading (MCQ/TRUE_FALSE scored instantly), the
@@ -48,15 +48,24 @@ function makeCtx(
       }),
     },
     quizAttempt: {
+      // A submission claims its row first (no score yet) and records the
+      // marked paper onto it after; `created` holds what was submitted.
       create: jest.fn((args: any) => {
-        created.push(args.data);
+        if ('submittedAt' in args.data) created.push(args.data);
         return Promise.resolve({ id: 'a1', ...args.data });
       }),
       findFirst: jest.fn(),
+      // No earlier submission with this key, unless a test says so.
+      findUnique: jest.fn().mockResolvedValue(null),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       // The attempt cap ("you get N tries") counts prior attempts before
       // accepting a submission; without this the service throws before it grades.
       count: jest.fn().mockResolvedValue(0),
-      update: jest.fn((args: any) => Promise.resolve({ id: args.where.id, ...args.data })),
+      update: jest.fn((args: any) => {
+        if ('submittedAt' in args.data) created.push(args.data);
+        return Promise.resolve({ id: args.where.id, ...args.data });
+      }),
     },
     lessonProgress: { upsert: jest.fn().mockResolvedValue({}) },
     // scopeOf() resolves the academy/course an award belongs to.
@@ -657,3 +666,109 @@ describe('a paper that has already been sat', () => {
     });
   });
 });
+
+describe('one sitting is one attempt', () => {
+  const ANSWERS = { q1: 'o1', q2: 'true' };
+
+  it('the same sitting submitted again gets the first result back — no second attempt, no second marking', async () => {
+    const { svc, prisma, aiGrader, created } = makeCtx();
+    const first = await svc.submit('u1', 'l1', { answers: ANSWERS, submitKey: 'sit-1' });
+    const stored = prisma.quizAttempt.update.mock.calls.at(-1)[0].data.submitResult;
+    prisma.quizAttempt.findUnique.mockResolvedValue({
+      submittedAt: new Date(),
+      submitResult: stored,
+    });
+    const again = await svc.submit('u1', 'l1', { answers: ANSWERS, submitKey: 'sit-1' });
+    expect(again).toMatchObject({
+      scorePct: first.scorePct,
+      attemptId: first.attemptId,
+      replayed: true,
+    });
+    expect(prisma.quizAttempt.create).toHaveBeenCalledTimes(1);
+    expect(created).toHaveLength(1);
+    expect(aiGrader.mark).toHaveBeenCalledTimes(0); // no essays here, and never a second marking
+  });
+
+  it('a retry of the last allowed attempt is answered, not refused as "no attempts left"', async () => {
+    const { svc, prisma } = makeCtx(QUESTIONS, { maxAttempts: 1 });
+    prisma.quizAttempt.count.mockResolvedValue(1); // the one attempt is spent — by this very sitting
+    prisma.quizAttempt.findUnique.mockResolvedValue({
+      submittedAt: new Date(),
+      submitResult: { attemptId: 'a1', scorePct: 100, passed: true },
+    });
+    await expect(
+      svc.submit('u1', 'l1', { answers: ANSWERS, submitKey: 'sit-1' }),
+    ).resolves.toMatchObject({ attemptId: 'a1', replayed: true });
+  });
+
+  it('two copies arriving together: the one that loses the claim is told the paper is being submitted', async () => {
+    const { svc, prisma } = makeCtx();
+    prisma.quizAttempt.create.mockRejectedValueOnce(
+      Object.assign(new Error('dup'), { code: 'P2002' }),
+    );
+    prisma.quizAttempt.findUnique
+      .mockResolvedValueOnce(null) // before the claim: nothing yet
+      .mockResolvedValueOnce({ submittedAt: null, submitResult: null }); // the winner is still marking
+    await expect(
+      svc.submit('u1', 'l1', { answers: ANSWERS, submitKey: 'sit-1' }),
+    ).rejects.toMatchObject({ response: { code: 'SUBMISSION_IN_PROGRESS' } });
+    // Nothing was recorded by the loser.
+    expect(prisma.quizAttempt.update).not.toHaveBeenCalled();
+  });
+
+  it('a timed sitting takes the key on its own row, only if nobody else has', async () => {
+    const { svc, prisma } = makeCtx(QUESTIONS, { timeLimitSec: 600 });
+    prisma.quizAttempt.findFirst.mockImplementation(({ where }: any) =>
+      Promise.resolve(
+        where.submittedAt === null
+          ? { id: 'open1', startedAt: new Date(Date.now() - 60_000) }
+          : null,
+      ),
+    );
+    prisma.quizAttempt.updateMany.mockResolvedValue({ count: 0 }); // somebody got there first
+    prisma.quizAttempt.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ submittedAt: new Date(), submitResult: { attemptId: 'open1' } });
+    await expect(
+      svc.submit('u1', 'l1', { answers: ANSWERS, submitKey: 'sit-1' }),
+    ).resolves.toMatchObject({ attemptId: 'open1', replayed: true });
+    expect(prisma.quizAttempt.updateMany.mock.calls[0][0].where).toEqual({
+      id: 'open1',
+      submittedAt: null,
+      submitKey: null,
+    });
+  });
+
+  it('if marking fails, the key is let go so the student can try again', async () => {
+    const { svc, prisma, aiGrader } = makeCtx(ESSAY_QUESTIONS_FOR_RELEASE, { aiGrading: true });
+    aiGrader.mark.mockRejectedValueOnce(new Error('provider down'));
+    await expect(
+      svc.submit('u1', 'l1', { answers: { e1: 'text' }, submitKey: 'sit-1' }),
+    ).rejects.toThrow('provider down');
+    expect(prisma.quizAttempt.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'a1', submittedAt: null },
+    });
+  });
+
+  it('a page without a key: the same answers within two minutes are the same submission', () => {
+    const t = Date.UTC(2026, 8, 23, 12, 0, 10);
+    const a = derivedSubmitKey('s1', 'q1', { b: '2', a: '1' }, t);
+    expect(derivedSubmitKey('s1', 'q1', { a: '1', b: '2' }, t + 30_000)).toBe(a); // order of answers is irrelevant
+    expect(derivedSubmitKey('s1', 'q1', { a: '1', b: '3' }, t)).not.toBe(a); // different paper
+    expect(derivedSubmitKey('s2', 'q1', { a: '1', b: '2' }, t)).not.toBe(a); // different student
+    expect(a).toMatch(/^auto-[0-9a-f]{40}$/);
+  });
+});
+
+const ESSAY_QUESTIONS_FOR_RELEASE = [
+  {
+    id: 'e1',
+    type: 'SHORT_ANSWER',
+    prompt: 'Explain',
+    options: [],
+    correctOptionId: null,
+    correctOptionIds: [],
+    modelAnswer: 'model',
+    points: 1,
+  },
+];

@@ -112,7 +112,120 @@ describe('exporting an exam as a Word document', () => {
   });
 
   it('prints the marks beside the question when the paper carried them', () => {
-    expect(documentXml(doc())).toContain('[2]');
+    expect(documentXml(doc())).toContain('(2 marks)');
+    const arabic = doc({
+      rtl: true,
+      sections: [
+        {
+          title: '',
+          questions: [
+            { number: 1, text: 'ما وحدة القوة؟', options: [], marks: 2, writtenAnswer: false },
+          ],
+        },
+      ],
+    });
+    expect(documentXml(arabic)).toContain('(2 درجة)');
+    // An English question keeps English marks even on an Arabic paper.
+    expect(documentXml(doc({ rtl: true }))).toContain('(2 marks)');
+  });
+
+  it('opens like a paper handed to a class: who set it, the facts, the student boxes', () => {
+    const body = documentXml(
+      doc({
+        rtl: true,
+        header: {
+          academy: 'سنتر النور',
+          teacher: 'أحمد عبدالعزيز',
+          subject: 'الفيزياء',
+          grade: 'الثالث الثانوي',
+          questionCount: 20,
+          passingScore: 50,
+        },
+      }),
+    );
+    for (const text of [
+      'سنتر النور',
+      'المدرس: أحمد عبدالعزيز',
+      'المادة: الفيزياء',
+      'الصف: الثالث الثانوي',
+      'عدد الأسئلة',
+      '>20<',
+      'الزمن',
+      '90 دقيقة',
+      'الدرجة الكلية',
+      'درجة النجاح',
+      '50%',
+      'اسم الطالب',
+      'رقم الجلوس',
+      'انتهت الأسئلة',
+    ]) {
+      expect(body).toContain(text);
+    }
+    // The tables read right to left too.
+    expect(body).toContain('<w:bidiVisual/>');
+  });
+
+  it('numbers a question «س١» in Arabic and "Q1." in English', () => {
+    const arabic = doc({
+      rtl: true,
+      sections: [
+        {
+          title: '',
+          questions: [
+            {
+              number: 1,
+              text: 'ما وحدة القوة؟',
+              options: ['النيوتن'],
+              marks: 1,
+              writtenAnswer: false,
+            },
+          ],
+        },
+      ],
+    });
+    expect(documentXml(arabic)).toContain('س1: ');
+    expect(documentXml(doc())).toContain('Q1. ');
+  });
+
+  it('an English question on an Arabic paper is laid out left to right, not scrambled', () => {
+    const body = documentXml(doc({ rtl: true })); // the fixture's question is English
+    const para = body.slice(body.indexOf('Which organelle') - 900, body.indexOf('Which organelle'));
+    const props = para.slice(para.lastIndexOf('<w:pPr>'));
+    expect(props).not.toContain('<w:bidi/>');
+  });
+
+  it('gives a written question lines to write on, one per line', () => {
+    const written = doc({
+      sections: [
+        {
+          title: '',
+          questions: [{ number: 1, text: 'Explain.', options: [], marks: 5, writtenAnswer: true }],
+        },
+      ],
+    });
+    expect(documentXml(written).match(/w:leader="dot"/g)).toHaveLength(4);
+  });
+
+  it('letters an option only when it does not already carry its letter', () => {
+    const unlabelled = doc({
+      sections: [
+        {
+          title: '',
+          questions: [
+            { number: 1, text: 'Pick', options: ['Red', 'Blue'], marks: 1, writtenAnswer: false },
+          ],
+        },
+      ],
+    });
+    expect(documentXml(unlabelled)).toContain('>A) <');
+    // The default fixture's options are "A) Mitochondrion": never "A) A) …".
+    expect(documentXml(doc())).not.toContain('>A) <');
+  });
+
+  it('puts the page count in a footer Word fills in', () => {
+    const files = unzipNames(buildDocx(doc({ rtl: true })));
+    expect(files).toContain('word/footer1.xml');
+    expect(documentXml(doc())).toContain('r:id="rIdFooter1"');
   });
 
   it('writes the time and the total in the language of the paper', () => {
@@ -168,3 +281,17 @@ describe('exporting an exam as a Word document', () => {
     expect(buildDocx(doc()).equals(buildDocx(doc()))).toBe(true);
   });
 });
+
+/** The file names inside a ZIP, read from its central directory. */
+function unzipNames(buf: Buffer): string[] {
+  const names: string[] = [];
+  let at = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  const count = buf.readUInt16LE(at + 10);
+  at = buf.readUInt32LE(at + 16);
+  for (let i = 0; i < count; i++) {
+    const len = buf.readUInt16LE(at + 28);
+    names.push(buf.toString('utf8', at + 46, at + 46 + len));
+    at += 46 + len + buf.readUInt16LE(at + 30) + buf.readUInt16LE(at + 32);
+  }
+  return names;
+}

@@ -1902,7 +1902,16 @@ model QuizAttempt {
   /// Covers (quizId) and (quizId, studentId) from its leading columns too, so
   /// the two-column index that used to sit beside it answered nothing and only
   /// cost a write per attempt. Dropped by 20260925130000.
+  /// One sitting's identity, sent by the page that sat it. Unique per student
+  /// and quiz, so the same paper submitted twice — a double tap while the
+  /// written answers were being marked, a retried request, a second tab — is
+  /// one attempt, not seven. See QuizzesService.submit.
+  submitKey          String?
+  /// What that submission answered, returned as-is when it arrives again.
+  submitResult       Json?
+
   @@index([quizId, studentId, voidedAt])
+  @@unique([quizId, studentId, submitKey])
 }
 
 model Assignment {

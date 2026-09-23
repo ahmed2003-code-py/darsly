@@ -64,6 +64,11 @@ export class ExamExportService {
               select: {
                 title: true,
                 teacher: { select: { user: { select: { fullName: true } } } },
+                academy: { select: { name: true, kind: true } },
+                subject: { select: { nameAr: true, nameEn: true } },
+                grades: {
+                  select: { grade: { select: { nameAr: true, nameEn: true, sortOrder: true } } },
+                },
               },
             },
           },
@@ -98,16 +103,34 @@ export class ExamExportService {
 
     const meta = [course.title, course.teacher?.user?.fullName ?? ''].filter(Boolean);
 
+    const rtl = looksRtl(`${lesson.title} ${lesson.quiz.questions.map((q) => q.prompt).join(' ')}`);
+    const grades = [...course.grades]
+      .map((g) => g.grade)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((g) => (rtl ? g.nameAr : g.nameEn));
+
     return {
       title: lesson.title,
       meta,
+      // The facts a printed paper carries at the top, in the paper's language.
+      header: {
+        // A teacher's personal academy is named after them; printing both says
+        // the same thing twice. A Center's name is worth printing.
+        academy: course.academy?.kind === 'CENTER' ? course.academy.name : null,
+        teacher: course.teacher?.user?.fullName ?? null,
+        course: course.title,
+        subject: course.subject ? (rtl ? course.subject.nameAr : course.subject.nameEn) : null,
+        grade: grades.length ? grades.join(rtl ? '، ' : ', ') : null,
+        questionCount: lesson.quiz.questions.length,
+        passingScore: lesson.quiz.passingScore ?? null,
+      },
       instructions,
       timeLimitMin: lesson.quiz.timeLimitSec ? Math.round(lesson.quiz.timeLimitSec / 60) : null,
       totalMarks: total,
       sections,
       // Decided from the paper's own text, so an Arabic exam prints
       // right-to-left whoever asked for it.
-      rtl: looksRtl(`${lesson.title} ${lesson.quiz.questions.map((q) => q.prompt).join(' ')}`),
+      rtl,
     };
   }
 

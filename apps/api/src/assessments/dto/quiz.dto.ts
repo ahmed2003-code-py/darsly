@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  Matches,
   MaxLength,
   Min,
   ValidateNested,
@@ -113,6 +114,19 @@ export class SubmitAttemptDto {
     allowArrays: MAX_OPTIONS,
   })
   answers: Record<string, string | string[]>;
+
+  /**
+   * This sitting's identity, made by the page when the paper is opened and
+   * sent with every try at submitting it. The same key twice is the same
+   * submission: the second gets the first one's result, and no second attempt
+   * is recorded. Optional so a page loaded before this existed still works —
+   * the server then derives one from the answers.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  @Matches(/^[A-Za-z0-9_-]+$/)
+  submitKey?: string;
 }
 
 export class GradeAttemptDto {

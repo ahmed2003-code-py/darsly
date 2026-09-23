@@ -1,4 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AiGraderService } from './ai-grader.service';
@@ -443,6 +450,26 @@ export class QuizzesService {
     if (!quiz) throw new NotFoundException('This lesson has no quiz');
     if (!quiz.questions.length) throw new BadRequestException('Quiz has no questions yet');
 
+    /**
+     * One sitting, one attempt.
+     *
+     * A student pressed "submit" while their written answers were being
+     * marked — which takes seconds — pressed it again, and again, and the
+     * teacher's queue filled with seven copies of the same paper. Nothing tied
+     * a request to the sitting it came from, so every request was a new
+     * attempt.
+     *
+     * The page now sends a key per sitting. If that key has already been
+     * submitted, its result is returned as it was — before any rule below
+     * runs, because a retry of the last allowed attempt must get its answer,
+     * not "no attempts left". A page without a key (loaded before this
+     * shipped) gets one derived from its answers, so an identical paper sent
+     * twice in the same couple of minutes is still one attempt.
+     */
+    const submitKey = dto.submitKey ?? derivedSubmitKey(studentId, quiz.id, dto.answers);
+    const replay = await this.replayOf(quiz.id, studentId, submitKey);
+    if (replay) return replay;
+
     // Anti-gaming: you can't keep resubmitting to harvest the answer key. Once
     // you pass, or your attempts are used up, submission is closed.
     const [priorCount, passedBefore, sitting] = await Promise.all([
@@ -516,6 +543,117 @@ export class QuizzesService {
         timeLimitSec: quiz.timeLimitSec,
       });
     }
+
+    /**
+     * Claim the key before the slow part.
+     *
+     * The unique index on (quiz, student, key) is what makes this safe under
+     * concurrency: of two identical requests arriving together, exactly one
+     * gets the row. The other is told the first is still being marked, or — if
+     * it already finished — handed its result.
+     */
+    const attemptId = await this.claim(quiz.id, studentId, submitKey, sitting?.id ?? null);
+    if (!attemptId) {
+      const finished = await this.replayOf(quiz.id, studentId, submitKey);
+      if (finished) return finished;
+      throw new ConflictException({
+        message: 'This paper is already being submitted',
+        code: 'SUBMISSION_IN_PROGRESS',
+      });
+    }
+    try {
+      return await this.gradeAndRecord({
+        quiz,
+        studentId,
+        lessonId,
+        dto,
+        attemptId,
+        priorCount,
+        passedBefore,
+      });
+    } catch (e) {
+      // Nothing was recorded: let the next try through rather than leaving a
+      // claimed key that would answer "still submitting" for ever.
+      await this.release(attemptId, !!sitting);
+      throw e;
+    }
+  }
+
+  /** The previous answer to this exact submission, or null if there is none. */
+  private async replayOf(
+    quizId: string,
+    studentId: string,
+    submitKey: string,
+  ): Promise<(SubmitResponse & { replayed: true }) | null> {
+    const prior = await this.prisma.quizAttempt.findUnique({
+      where: { quizId_studentId_submitKey: { quizId, studentId, submitKey } },
+      select: { submittedAt: true, submitResult: true },
+    });
+    if (!prior) return null;
+    if (prior.submittedAt && prior.submitResult) {
+      // Written by `gradeAndRecord` from exactly this shape.
+      return { ...(prior.submitResult as unknown as SubmitResponse), replayed: true };
+    }
+    throw new ConflictException({
+      message: 'This paper is already being submitted',
+      code: 'SUBMISSION_IN_PROGRESS',
+    });
+  }
+
+  /**
+   * Take the key. A timed paper already has its row — the sitting whose clock
+   * started when the questions were handed over — so the key goes on it, and
+   * only if nobody else has put one there. An untimed paper gets its row now.
+   * Returns the attempt id, or null when another request holds the key.
+   */
+  private async claim(
+    quizId: string,
+    studentId: string,
+    submitKey: string,
+    sittingId: string | null,
+  ): Promise<string | null> {
+    if (sittingId) {
+      const { count } = await this.prisma.quizAttempt.updateMany({
+        where: { id: sittingId, submittedAt: null, submitKey: null },
+        data: { submitKey },
+      });
+      return count ? sittingId : null;
+    }
+    try {
+      const row = await this.prisma.quizAttempt.create({
+        data: { quizId, studentId, submitKey },
+        select: { id: true },
+      });
+      return row.id;
+    } catch (e) {
+      if ((e as { code?: string }).code === 'P2002') return null;
+      throw e;
+    }
+  }
+
+  /** Undo a claim whose submission failed before anything was recorded. */
+  private async release(attemptId: string, wasSitting: boolean): Promise<void> {
+    await (
+      wasSitting
+        ? this.prisma.quizAttempt.updateMany({
+            where: { id: attemptId, submittedAt: null },
+            data: { submitKey: null },
+          })
+        : this.prisma.quizAttempt.deleteMany({ where: { id: attemptId, submittedAt: null } })
+    ).catch(() => undefined);
+  }
+
+  /** Mark the paper, record it on the claimed row, and keep the answer for a retry. */
+  private async gradeAndRecord(args: {
+    quiz: Prisma.QuizGetPayload<{ include: { questions: true } }>;
+    studentId: string;
+    lessonId: string;
+    dto: SubmitAttemptDto;
+    attemptId: string;
+    priorCount: number;
+    passedBefore: { id: string; scorePct: number | null } | null;
+  }) {
+    const { quiz, studentId, lessonId, dto, attemptId, priorCount, passedBefore } = args;
 
     /**
      * The written answers, marked against the teacher's model answer.
@@ -600,12 +738,12 @@ export class QuizzesService {
       gradedAt: needsManual ? null : new Date(),
       aiFeedback: Object.keys(aiFeedback).length ? (aiFeedback as any) : undefined,
     };
-    // A timed paper already has its row — the one whose clock has been running
-    // since the questions were handed over. Creating a second one here would
-    // spend two attempts on one sitting and leave the first open forever.
-    const attempt = sitting
-      ? await this.prisma.quizAttempt.update({ where: { id: sitting.id }, data: record })
-      : await this.prisma.quizAttempt.create({ data: { quizId: quiz.id, studentId, ...record } });
+    // The row claimed for this submission — the timed sitting, or the one made
+    // for an untimed paper when its key was taken. Never a second row.
+    const attempt = await this.prisma.quizAttempt.update({
+      where: { id: attemptId },
+      data: record,
+    });
 
     if (passed) await this.markLessonComplete(studentId, lessonId);
 
@@ -640,7 +778,7 @@ export class QuizzesService {
     const attemptsRemaining =
       quiz.maxAttempts != null ? Math.max(0, quiz.maxAttempts - attemptNumber) : null;
 
-    return {
+    const response = {
       attemptId: attempt.id,
       scorePct,
       passed,
@@ -664,6 +802,13 @@ export class QuizzesService {
       bestScorePct: bestSoFar,
       review: reveal ? this.reviewOf(quiz.questions, dto.answers) : [],
     };
+    // Kept on the attempt so the same submission arriving again is answered
+    // with exactly this, rather than marked a second time.
+    await this.prisma.quizAttempt.update({
+      where: { id: attempt.id },
+      data: { submitResult: JSON.parse(JSON.stringify(response)) as Prisma.InputJsonValue },
+    });
+    return response;
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
@@ -959,4 +1104,31 @@ export class QuizzesService {
       missions: [...a.missions, ...b.missions],
     };
   }
+}
+
+/** What a submission answers — stored with the attempt and replayed as-is. */
+type SubmitResponse = Awaited<ReturnType<QuizzesService['gradeAndRecord']>>;
+
+/**
+ * A key for a page that did not send one — loaded before keys existed.
+ *
+ * The same student, the same quiz and the same answers inside the same two
+ * minutes are the same submission: that is a double tap or a retried request,
+ * never a student deliberately sitting the paper again with identical answers
+ * that fast. Stable JSON (sorted keys) so the order answers were given in
+ * cannot make two copies look different.
+ */
+export function derivedSubmitKey(
+  studentId: string,
+  quizId: string,
+  answers: Record<string, string | string[]>,
+  now = Date.now(),
+): string {
+  const stable = JSON.stringify(
+    Object.keys(answers ?? {})
+      .sort()
+      .map((k) => [k, answers[k]]),
+  );
+  const window = Math.floor(now / 120_000);
+  return `auto-${createHash('sha256').update(`${studentId}|${quizId}|${stable}|${window}`).digest('hex').slice(0, 40)}`;
 }

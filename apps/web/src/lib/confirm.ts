@@ -28,6 +28,8 @@ export interface ConfirmRequest {
   danger?: boolean;
   /** Overrides the generic "Confirm" when a verb reads better on the button. */
   confirmLabel?: string;
+  /** Overrides "Cancel" when going back is itself an action ("keep answering"). */
+  cancelLabel?: string;
 }
 
 interface PendingRequest extends ConfirmRequest {

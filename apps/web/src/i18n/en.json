@@ -1088,7 +1088,7 @@
     "pendingBody": "We’ll review your details and activate your account soon. You’ll be notified once approved.",
     "backToLogin": "Back to sign in",
     "forgotTitle": "Forgot your password?",
-    "forgotSub": "Enter your email and we’ll send you a verification code.",
+    "forgotSub": "Enter your email. If an account exists for it, a verification code is on the way.",
     "sendResetCode": "Send verification code",
     "sending": "Sending…",
     "codeSentTo": "We sent a 6-digit code to {{email}}",

@@ -79,13 +79,15 @@ export class AuthController {
   }
 
   // The throttle is load-bearing here, not routine hardening: this endpoint
-  // confirms whether an email is registered, so the rate limit is what keeps
-  // that from becoming a way to harvest a list of the platform's users.
+  // answers identically whether or not the address is registered (see
+  // AuthService.forgotPassword), so it is no longer a membership oracle. The
+  // rate limit stays: it is what stops the endpoint being used to send mail at
+  // someone, which is a separate abuse from enumeration.
   @Public()
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @Post('forgot-password')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Email a 6-digit reset code — 404s if the email is unknown' })
+  @ApiOperation({ summary: 'Email a 6-digit reset code — always 200, whether or not the address is registered' })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
   }

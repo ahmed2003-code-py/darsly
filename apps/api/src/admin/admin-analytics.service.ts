@@ -132,10 +132,13 @@ export class AdminAnalyticsService {
     // Enrollment.tenantId is a denormalized string, not a Prisma relation to
     // Academy (see the model comment), so this is two batched queries rather
     // than a single relational filter — still no per-academy loop.
-    const recentTenantIds = await this.prisma.enrollment.findMany({
+    // Platform-wide and unfiltered by tenant, so this was the single widest
+    // read in the codebase: every enrollment anyone made in the window, only
+    // to learn which academies appear in it. Grouped, it returns one row per
+    // academy — bounded by the number of academies, not by their success.
+    const recentTenantIds = await this.prisma.enrollment.groupBy({
+      by: ['academyId'],
       where: { createdAt: { gte: since } },
-      distinct: ['academyId'],
-      select: { academyId: true },
     });
     const [totalActive, activeWithEnrollment] = await Promise.all([
       this.prisma.academy.count({ where: { status: 'ACTIVE' } }),

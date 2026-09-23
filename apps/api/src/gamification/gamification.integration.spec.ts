@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { databaseReady } from '../common/testing/db-available';
 import { PrismaService } from '../prisma/prisma.service';
 import { AchievementsService } from './achievements.service';
 import { GamificationConfigService } from './gamification.config.service';
@@ -24,13 +25,8 @@ let available = true;
 
 // `describe.skip` needs to be decided synchronously, so connectivity is probed
 // in beforeAll and every test bails early if the probe failed.
-const guard = () => {
-  if (!available) {
-    // eslint-disable-next-line no-console
-    console.warn('skipping: no database reachable at DATABASE_URL');
-  }
-  return available;
-};
+/** `databaseReady` has already explained why, once, if this is false. */
+const guard = () => available;
 
 let engine: GamificationService;
 let students: StudentGamificationService;
@@ -51,13 +47,18 @@ async function makeStudent(): Promise<string> {
 }
 
 beforeAll(async () => {
-  try {
-    await prisma.$connect();
-    await prisma.xpRule.count();
-  } catch {
-    available = false;
-    return;
-  }
+  // Every model this suite writes to, so a database that is running but behind
+  // on migrations skips rather than failing ten tests with a column error.
+  available = await databaseReady(prisma, [
+    'xpRule',
+    'user',
+    'studentProfile',
+    'gamificationEvent',
+    'achievement',
+    'studentAchievement',
+    'levelTier',
+  ]);
+  if (!available) return;
   await prisma.onModuleInit();
   config = new GamificationConfigService(prisma);
   leaderboard = new LeaderboardService(prisma);

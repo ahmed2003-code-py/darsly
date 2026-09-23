@@ -636,7 +636,7 @@ model TeacherProfile {
   subjects               TeacherSubject[]
   /// The bands this teacher teaches, chosen when they sign up. Every course
   /// they create is offered to some subset of these and never outside them.
-  stages                 EducationStage[]
+  stages                 EducationStage[] @default([])
   introVideoUrl          String?
   /// Whether this academy is reachable by message at all. Turning it off closes
   /// the conversation in both directions: the student cannot write, the teacher
@@ -1876,6 +1876,8 @@ model QuizAttempt {
   aiFeedback         Json?
 
   @@index([quizId, studentId])
+  /// Created by 20260914120000_exam_mode_timing_ai_grading and present in production. The two-column index above is kept deliberately — removing it is an optimisation, not a drift fix.
+  @@index([quizId, studentId, voidedAt])
 }
 
 model Assignment {
@@ -2213,6 +2215,8 @@ model ChatMessage {
 
   @@index([threadId, createdAt])
   @@index([lessonId])
+  /// Created by 20260913011318_chat_replies_and_voice and present in production; declared here so the schema describes the database rather than a subset of it.
+  @@index([replyToId])
 }
 
 enum AnnouncementScope {
@@ -3111,12 +3115,11 @@ model CosmeticItem {
   /// Everyone has it from the first day: the baseline to customise away from.
   isStarter           Boolean @default(false)
 
-  isActive  Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  owners StudentCosmetic[]
+  isActive  Boolean           @default(true)
+  sortOrder Int               @default(0)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @default(now()) @updatedAt
+  owners    StudentCosmetic[]
 
   @@index([category, isActive, sortOrder])
   @@index([isActive, sortOrder])
@@ -3175,5 +3178,5 @@ model StudentCustomization {
   effectKey String?
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 }

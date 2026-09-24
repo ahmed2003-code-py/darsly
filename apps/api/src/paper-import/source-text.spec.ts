@@ -3,6 +3,8 @@ import {
   estimateTokens,
   foldArabic,
   normalizePageText,
+  numberStatements,
+  teachableLines,
   selectChunksForBatch,
   selectChunksForQuestion,
   stripRunningLines,
@@ -191,5 +193,29 @@ describe('comparing Arabic that is spelled two ways', () => {
   it('estimates tokens close enough to batch with', () => {
     expect(estimateTokens('a'.repeat(320))).toBe(100);
     expect(estimateTokens('')).toBe(0);
+  });
+});
+
+describe('numbering the statements of a chunk', () => {
+  const sheet = [
+    '- الوصف التفصيلي',
+    '- سورة الجن عدد آياتها (٢٨) آية - سورة مكية.',
+    '',
+    '- عند نطق الميم المشددة نغن بمقدار حركتين',
+    'حول (٥٥) نسمة.',
+    '- ظل نوح عليه السلام يدعو قومه لمدة ٩٥٠ سنة.',
+  ].join('\n');
+
+  it('numbers exactly the lines that count as statements, and changes nothing else', () => {
+    const out = numberStatements(sheet).split('\n');
+    expect(out).toEqual([
+      '- الوصف التفصيلي',
+      'L1. - سورة الجن عدد آياتها (٢٨) آية - سورة مكية.',
+      '',
+      'L2. - عند نطق الميم المشددة نغن بمقدار حركتين',
+      'حول (٥٥) نسمة.',
+      'L3. - ظل نوح عليه السلام يدعو قومه لمدة ٩٥٠ سنة.',
+    ]);
+    expect(teachableLines(sheet)).toBe(3);
   });
 });

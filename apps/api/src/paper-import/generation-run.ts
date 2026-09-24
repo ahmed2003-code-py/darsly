@@ -23,6 +23,8 @@ import {
   GradedQuestion,
   isQualityReason,
   questionProblem,
+  repeatsPoint,
+  variantNumbersProblem,
   RejectReason,
 } from './question-quality';
 import {
@@ -30,6 +32,7 @@ import {
   selectChunksForBatch,
   SourceChunk,
   supportableQuestions,
+  teachableLines,
 } from './source-text';
 
 let counter = 0;
@@ -165,6 +168,9 @@ interface Slot {
    *  material in proportion to what each chunk can carry, so one page is not
    *  asked for eight questions while the next is asked for one. */
   target: number | null;
+  /** The numbered statement of that chunk it is to test (1-based), spread
+   *  so no two slots share one while the chunk has statements left. */
+  line: number | null;
   /** The accepted question a VARIANT slot varies, by id. */
   source: string | null;
   question: GradedQuestion | null;
@@ -408,6 +414,7 @@ export class GenerationRun {
         mode: isDistinct ? 'DISTINCT' : 'VARIANT',
         batch: -1,
         target: null,
+        line: null,
         source: null,
         question: null,
         attempts: 0,
@@ -432,6 +439,17 @@ export class GenerationRun {
       if (best < 0) best = 0;
       remaining[best] = Math.max(0, remaining[best] - 1);
       slot.target = chunks[best]?.index ?? null;
+    }
+
+    // A statement per slot within each chunk: spread over the whole chunk
+    // when it has more statements than slots, in turn when it has fewer.
+    for (const chunk of chunks) {
+      const mine = fresh.filter((s) => s.target === chunk.index);
+      const n = teachableLines(chunk.text);
+      if (!n) continue;
+      mine.forEach((s, k) => {
+        s.line = mine.length <= n ? Math.floor((k * n) / mine.length) + 1 : (k % n) + 1;
+      });
     }
 
     // Even batches, in the material's order: ten slots are 5 + 5, not 8 + 2,
@@ -527,6 +545,7 @@ export class GenerationRun {
               mode,
               plan: piece.map((s) => s.plan),
               targets: piece.map((s) => s.target),
+              lines: piece.map((s) => s.line),
               chunks: material,
               language: opts.language,
               avoid: avoidFor(accepted, material, []),
@@ -759,11 +778,20 @@ export class GenerationRun {
       const problem = questionProblem(question, {
         chunkText: chunk?.text ?? null,
         anchor: opts.anchor,
+        numbers: target.mode !== 'VARIANT',
       });
       if (problem) {
         blame(target, problem);
         sample(problem, w);
         return;
+      }
+      if (target.mode === 'VARIANT') {
+        const original = all.find((s) => s.question?.id === target.source)?.question ?? null;
+        if (variantNumbersProblem(question, original, chunk?.text ?? '')) {
+          blame(target, 'UNSUPPORTED_NUMBER');
+          sample('UNSUPPORTED_NUMBER', w);
+          return;
+        }
       }
       const onExam = all.filter((s) => s.question).map((s) => s.question!);
       const dup = findDuplicates(
@@ -775,6 +803,15 @@ export class GenerationRun {
           duplicateOf: onExam.find((q) => q.id === dup.duplicateOfId)?.text.slice(0, 120),
           score: Math.round(dup.score * 100) / 100,
         });
+        return;
+      }
+      // A variant tests an existing question's idea on purpose; a new
+      // question testing one already on the exam is a wasted place.
+      const samePoint =
+        target.mode === 'DISTINCT' ? onExam.find((q) => repeatsPoint(question, q)) : undefined;
+      if (samePoint) {
+        blame(target, 'SAME_POINT');
+        sample('SAME_POINT', w, { duplicateOf: samePoint.text.slice(0, 120) });
         return;
       }
       target.question = target.mode === 'VARIANT' ? { ...question, variant: true } : question;
@@ -795,6 +832,7 @@ export class GenerationRun {
           result.insufficient ||
           s.lastReason === 'NOT_RETURNED' ||
           s.lastReason === 'DUPLICATE' ||
+          s.lastReason === 'SAME_POINT' ||
           s.lastReason === 'SURPLUS';
         if (!exhausted) continue;
         if (opts.variantsOn) {
@@ -827,7 +865,11 @@ export function acceptOne(
   const byIndex = new Map(material.map((c) => [c.index, c]));
   const question = build(w, { plan: planned }, byIndex);
   const chunk = question.chunkIndex != null ? byIndex.get(question.chunkIndex) : undefined;
-  const problem = questionProblem(question, { chunkText: chunk?.text ?? null, anchor });
+  const problem = questionProblem(question, {
+    chunkText: chunk?.text ?? null,
+    anchor,
+    numbers: true,
+  });
   if (problem) return { question: null, reason: problem };
   const dup = findDuplicates([...others, { id: question.id, text: question.text }]).some(
     (d) => d.id === question.id,
@@ -916,6 +958,8 @@ function reasonFor(slots: Slot[]): string | undefined {
     EMPTY_TEXT: 'it was empty or a fragment',
     PLACEHOLDER: 'it was a placeholder, not a question',
     DUPLICATE: 'it repeated a question already on the exam',
+    SAME_POINT: 'it tested a fact another question on the exam already tests',
+    UNSUPPORTED_NUMBER: 'it gave a number the material does not state',
   };
   const said = [...new Set(slots.map((s) => s.lastReason).filter(Boolean))]
     .map((r) => words[r as RejectReason])

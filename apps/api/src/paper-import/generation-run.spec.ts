@@ -61,16 +61,19 @@ const TOPICS = [
 ];
 let topic = 0;
 
+// Each question gets its own answer. Twenty questions that all answer
+// "Mitochondria" are, to the learning-point check, largely one question.
 const q = (over: Partial<GeneratedQuestion> = {}): GeneratedQuestion => {
   const type = over.type ?? 'MCQ';
+  const n = topic++;
   return {
     type,
     difficulty: 'MEDIUM',
-    text: TOPICS[topic++ % TOPICS.length],
+    text: TOPICS[n % TOPICS.length],
     options:
       type === 'MCQ'
         ? [
-            { label: 'A', text: 'Mitochondria', correct: true },
+            { label: 'A', text: `Answer ${n}`, correct: true },
             { label: 'B', text: 'Ribosome', correct: false },
             { label: 'C', text: 'Golgi body', correct: false },
             { label: 'D', text: 'Nucleus', correct: false },
@@ -81,7 +84,7 @@ const q = (over: Partial<GeneratedQuestion> = {}): GeneratedQuestion => {
               { label: 'B', text: 'False', correct: false },
             ]
           : [],
-    modelAnswer: type === 'SHORT_ANSWER' ? 'Through cellular respiration in the mitochondria.' : '',
+    modelAnswer: type === 'SHORT_ANSWER' ? `Answer ${n}.` : '',
     explanation: '',
     marks: 1,
     chunkIndex: 0,
@@ -898,5 +901,252 @@ describe('a billed failure is still a cost', () => {
     expect(res.error).toMatch(/cut off/);
     expect(res.millicents).toBe(6200);
     expect(res.usageUnknown).toBe(false);
+  });
+});
+
+describe('one learning point per question', () => {
+  // The revision sheet of cmufjoy7t001414et7nu9v3dz, fourteen one-line facts.
+  const SHEET = [
+    '← عدد حبس المسلمين ثلاثة آلاف مقاتل',
+    '← عدد جيش القساسة وحلفائهم الروم مائتى ألف مقاتل',
+    '← استمر القتال بينهما ستة أيام',
+    '- أسر خالد بن الوليد بعد صلح الحديبية عام (٦) هـ',
+    '- سورة الجن عدد آياتها (٢٨) آية - سورة مكية.',
+    '- عند نطق الميم المشددة نغن بمقدار حركتين',
+    '- تم صلح الحديبية في السنة السادسة من الهجرة',
+    '- تم نص الصلح على وقف الحرب لمدة عشر سنوات',
+    '- لم تنقض قريش صلح الحديبية بعد عامين من عقده في السنة الثامنة من الهجرة',
+    '- ظل نوح عليه السلام يدعو قومه لمدة ٩٥٠ سنة.',
+    '- الصاع يساوي أربع حفنات من الطعام باليدين',
+    '- مقدار المد من الطعام من كيلوجرام تقريبا.',
+    '- فتح مكة في السنة الثامنة للهجرة في شهر رمضان',
+    '- توفي خالد بن الوليد من الشام وعمره حوالي ٦٠ عاماً',
+  ].join('\n');
+  const sheet: SourceChunk = {
+    index: 0,
+    text: SHEET,
+    sourceFile: 'images.jpg',
+    page: 1,
+    tokensApprox: 231,
+  };
+
+  it('gives two calls over one revision sheet different statements, and says which in the prompt', async () => {
+    const t = setup();
+    await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 8, TRUE_FALSE: 3, SHORT_ANSWER: 3 }),
+      chunks: [sheet],
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 10_000,
+    });
+    // The first round: calls not repeating a slot that was rejected before.
+    const first = t.calls.filter((c) => c.mode === 'DISTINCT' && !c.reason);
+    expect(first.length).toBeGreaterThanOrEqual(2);
+    const lines = first.flatMap((c) => c.lines ?? []);
+    // Fourteen questions, fourteen statements: none tested twice.
+    expect(lines).toHaveLength(14);
+    expect(new Set(lines).size).toBe(14);
+    const prompt = (t.generator as unknown as { prompt(r: GenerationRequest): string }).prompt(
+      first[0],
+    );
+    expect(prompt).toContain('L1. ← عدد حبس المسلمين');
+    expect(prompt).toMatch(/chunk=0 line=L\d+/);
+  });
+
+  it('turns away a new question that tests a fact already on the exam', async () => {
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req, n) =>
+      result(
+        req,
+        req.plan.map((p, i) => ({
+          ...q({ type: 'MCQ', difficulty: p.difficulty }),
+          chunkIndex: 0,
+          ...(n === 0 && i === 0
+            ? {
+                type: 'TRUE_FALSE' as const,
+                text: 'ظل نوح عليه السلام يدعو قومه لمدة ٩٥٠ سنة.',
+                options: [
+                  { label: 'أ', text: 'صواب', correct: true },
+                  { label: 'ب', text: 'خطأ', correct: false },
+                ],
+              }
+            : n === 0 && i === 1
+              ? {
+                  text: 'كم سنة ظل نوح عليه السلام يدعو قومه بحسب المادة؟',
+                  options: [
+                    { label: 'أ', text: '٩٥٠ سنة', correct: true },
+                    { label: 'ب', text: '٩٠٠ سنة', correct: false },
+                    { label: 'ج', text: '١٠٠٠ سنة', correct: false },
+                  ],
+                }
+              : {
+                  text: `ما الذي يذكره السطر ${i + 1} من ورقة المراجعة عن الصاع والمد وفتح مكة؟ ${i}`,
+                }),
+        })),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 3, TRUE_FALSE: 1, SHORT_ANSWER: 0 }),
+      chunks: [sheet],
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 10_000,
+    });
+    expect(out.report.rejections.SAME_POINT).toBe(1);
+    expect(out.questions.filter((x) => /نوح/.test(x.text))).toHaveLength(1);
+  });
+
+  it('turns away a problem with a given the material does not state', async () => {
+    const page: SourceChunk = {
+      index: 0,
+      text: '(٥) تاجر ملابس يضع على كل بنطلون ورقة مكتوب عليها الثمن الذي يبيع به ولكنه يتنازل لزبائنه عن ٢٥٪ من ذلك الثمن المكتوب ومع ذلك يكسب ٥٪ من ثمن الشراء.',
+      sourceFile: 'exam2.jpg',
+      page: 1,
+      tokensApprox: 120,
+    };
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req) =>
+      result(
+        req,
+        req.plan.map((p) => ({
+          ...q({ type: 'MCQ', difficulty: p.difficulty }),
+          chunkIndex: 0,
+          text: 'يتنازل تاجر الملابس عن ٢٥٪ من الثمن المكتوب ويكسب ٥٪ من ثمن الشراء. إذا كان ثمن الشراء ١٠٠ جنيه، فما الثمن المكتوب على البنطلون؟',
+        })),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 1, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [page],
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 10_000,
+    });
+    expect(out.report.rejections.UNSUPPORTED_NUMBER).toBe(1);
+    expect(out.report.accepted).toBe(0);
+  });
+});
+
+describe('statements are a hint for spreading questions, not a rule', () => {
+  const ask = (t: ReturnType<typeof setup>, chunks: SourceChunk[], types: Record<string, number>) =>
+    t.run.run({
+      importId: 'imp',
+      asked: spec(types as never),
+      chunks,
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 10_000,
+    });
+  const mcqOf = (text: string, key: string, chunkIndex = 0) => ({
+    ...q({ type: 'MCQ' }),
+    text,
+    chunkIndex,
+    options: [key, 'أ', 'ب', 'ج'].map((t, i) => ({ label: String(i), text: t, correct: i === 0 })),
+  });
+
+  it('accepts a grounded question written from another statement than the one named', async () => {
+    // One problem runs over two lines; the second line has nothing of its own
+    // to ask. The model writes the second question from the third statement.
+    const page: SourceChunk = {
+      index: 0,
+      text:
+        '(٤) سبيكتان من الذهب الأولى تحتوي على ذهب خالص مقداره ٨١٪ من وزنها\n' +
+        'والثانية تحتوي على ذهب خالص مقداره ٩٦٪ من وزنها فإذا خلط منهما مقداران بنسبة ٢ : ٣\n' +
+        '(٥) تاجر ملابس يتنازل لزبائنه عن ٢٥٪ من الثمن المكتوب ومع ذلك يكسب ٥٪ من ثمن الشراء',
+      sourceFile: 'exam2.jpg',
+      page: 1,
+      tokensApprox: 90,
+    };
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req) =>
+      result(req, [
+        mcqOf(
+          'سبيكتان من الذهب نسبة الذهب الخالص فيهما ٨١٪ و٩٦٪ خلط منهما مقداران بنسبة ٢ : ٣. ما نسبة الذهب الخالص في الخليط؟',
+          '٩٠٪',
+        ),
+        mcqOf(
+          'يتنازل تاجر ملابس عن ٢٥٪ من الثمن المكتوب ويكسب ٥٪ من ثمن الشراء. ما نسبة الثمن المكتوب إلى ثمن الشراء؟',
+          '١٤٠٪',
+        ),
+      ]),
+    );
+    const out = await ask(t, [page], { MCQ: 2, TRUE_FALSE: 0, SHORT_ANSWER: 0 });
+    expect(t.calls[0].lines).toEqual([1, 2]);
+    expect(out.report.accepted).toBe(2);
+    expect(out.report.rejections).toEqual({});
+  });
+
+  it('lets two questions test different facts of one statement', async () => {
+    const line: SourceChunk = {
+      index: 0,
+      text: '- سورة الجن عدد آياتها (٢٨) آية - سورة مكية.',
+      sourceFile: 'images.jpg',
+      page: 1,
+      tokensApprox: 150, // two questions by length, one statement by lines
+    };
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req) =>
+      result(req, [
+        mcqOf('كم عدد آيات سورة الجن؟', '٢٨ آية'),
+        {
+          ...q({ type: 'TRUE_FALSE' }),
+          text: 'سورة الجن سورة مكية.',
+          chunkIndex: 0,
+          options: [
+            { label: 'أ', text: 'صواب', correct: true },
+            { label: 'ب', text: 'خطأ', correct: false },
+          ],
+        },
+      ]),
+    );
+    const out = await ask(t, [line], { MCQ: 1, TRUE_FALSE: 1, SHORT_ANSWER: 0 });
+    expect(t.calls[0].lines).toEqual([1, 1]);
+    expect(out.report.accepted).toBe(2);
+  });
+
+  it('accepts what a cut-off statement does say, and nothing it does not', async () => {
+    const cut: SourceChunk = {
+      index: 0,
+      text: '(٥) تاجر ملابس يضع على كل بنطلون ورقة مكتوب عليها الثمن الذي يبيع به ولكنه يتنازل لزبائنه عن ٢٥٪ من ذلك الثمن المكتوب ومع ذلك يكسب ٥٪ من ثمن الشراء. فإذا كان ٢٨٠ قرشاً',
+      sourceFile: 'exam2.jpg',
+      page: 1,
+      tokensApprox: 150,
+    };
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req) =>
+      result(req, [
+        mcqOf(
+          'تاجر ملابس يتنازل عن ٢٥٪ من الثمن المكتوب على البنطلون ويكسب ٥٪ من ثمن الشراء. إذا كان الثمن المكتوب ٢٨٠ قرشًا، فما ثمن الشراء؟',
+          '٢٠٠ قرش',
+        ),
+        mcqOf(
+          'تاجر ملابس يتنازل عن ٢٥٪ من الثمن المكتوب على البنطلون ويكسب ٥٪ من ثمن الشراء. إذا كان ثمن الشراء ١٠٠ جنيه، فما الثمن المكتوب؟',
+          '١٤٠ جنيهًا',
+        ),
+      ]),
+    );
+    const out = await ask(t, [cut], { MCQ: 2, TRUE_FALSE: 0, SHORT_ANSWER: 0 });
+    expect(out.report.accepted).toBe(1);
+    expect(out.report.rejections.UNSUPPORTED_NUMBER).toBe(1);
+    expect(out.questions[0].text).toContain('٢٨٠');
+  });
+
+  it('on a short sheet, names each statement once and asks the rest as variants, never as new lines', async () => {
+    const short: SourceChunk = {
+      index: 0,
+      text:
+        '- ظل نوح عليه السلام يدعو قومه لمدة ٩٥٠ سنة.\n' +
+        '- الصاع يساوي أربع حفنات من الطعام باليدين\n' +
+        '- فتح مكة في السنة الثامنة للهجرة في شهر رمضان',
+      sourceFile: 'images.jpg',
+      page: 1,
+      tokensApprox: 60,
+    };
+    const t = setup();
+    const out = await ask(t, [short], { MCQ: 8, TRUE_FALSE: 0, SHORT_ANSWER: 0 });
+    const first = t.calls.find((c) => c.mode === 'DISTINCT')!;
+    expect(first.plan).toHaveLength(3);
+    expect(first.lines).toEqual([1, 2, 3]);
+    expect(t.calls.filter((c) => c.mode === 'VARIANT').every((c) => !c.lines)).toBe(true);
+    expect(out.report.sourceSufficient).toBe(false);
   });
 });

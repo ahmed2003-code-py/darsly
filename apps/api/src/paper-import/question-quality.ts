@@ -238,6 +238,437 @@ export function similarity(a: string, b: string): number {
   return overlap;
 }
 
+// ── learning points ────────────────────────────────────────────────────────
+
+/** Function words and question scaffolding of three letters or more, folded:
+ *  "بحسب المادة" names where a fact is, not which fact. */
+const POINT_STOP = new Set([
+  'علي',
+  'الي',
+  'التي',
+  'الذي',
+  'كان',
+  'كانت',
+  'هذا',
+  'هذه',
+  'ذلك',
+  'تلك',
+  'وهي',
+  'وهو',
+  'لها',
+  'فيه',
+  'فيها',
+  'بين',
+  'عند',
+  'كما',
+  'مما',
+  'لكن',
+  'ليس',
+  'غير',
+  'بعد',
+  'قبل',
+  'حتي',
+  'ماذا',
+  'متي',
+  'كيف',
+  'لماذا',
+  'بحسب',
+  'حسب',
+  'وفق',
+  'وفقا',
+  'ماده',
+  'الماده',
+  'النص',
+  'المذكور',
+  'المذكوره',
+  'المذكورين',
+  'الوارده',
+  'ورد',
+  'وردت',
+  'وردتا',
+  'يلي',
+  'عدد',
+  'خيار',
+  'الخيار',
+  'وصف',
+  'يطابق',
+  'يوافق',
+  'يجمع',
+  'تجمع',
+  'بصوره',
+  'صوره',
+  'the',
+  'and',
+  'for',
+  'are',
+  'was',
+  'were',
+  'not',
+  'its',
+  'has',
+  'have',
+  'but',
+  'you',
+  'can',
+  'how',
+  'why',
+  'who',
+  'did',
+  'according',
+  'material',
+  'text',
+]);
+
+/** Arabic prefixes and endings that change a word's case or number, not its
+ *  meaning: "حركتان" and "حركتين" are one answer. Only ever cut down to three
+ *  letters, so a short root is left alone. */
+function lightStem(w: string): string {
+  let s = w;
+  for (const p of ['وال', 'بال', 'فال', 'كال', 'لل', 'ال']) {
+    if (s.startsWith(p) && s.length - p.length >= 3) {
+      s = s.slice(p.length);
+      break;
+    }
+  }
+  if (s === w && /^[وبلفك]/.test(s) && s.length >= 5) s = s.slice(1);
+  for (const suf of ['هم', 'ها', 'ان', 'ين', 'ون', 'ات', 'ه', 'ي', 'ا']) {
+    if (s.endsWith(suf) && s.length - suf.length >= 3) return s.slice(0, -suf.length);
+  }
+  return s;
+}
+
+/** What a stretch of text says, for comparing learning points: its numbers
+ *  and its content words (three letters and up, stemmed). */
+function pointFeatures(text: string): Set<string> {
+  const out = new Set<string>();
+  const folded = normaliseMath(foldArabic(text ?? '')).toLowerCase();
+  for (const n of folded.match(/\d+(?:\.\d+)?/g) ?? []) out.add(`#${n}`);
+  for (const w of folded.split(/[^\p{L}\p{N}]+/u)) {
+    if (w.length < 3 || /\d/.test(w) || GENERIC_WORDS.has(w) || POINT_STOP.has(w)) continue;
+    const s = lightStem(w);
+    if (GENERIC_WORDS.has(s) || POINT_STOP.has(s)) continue;
+    out.add(s);
+  }
+  return out;
+}
+
+type PointQuestion = Pick<GradedQuestion, 'type' | 'text' | 'options' | 'modelAnswer'>;
+
+/**
+ * What a question tests: the answer it expects, less what its own wording
+ * already says. A true/false question tests its whole statement.
+ */
+function testedBy(q: PointQuestion): Set<string> {
+  if (q.type === 'TRUE_FALSE') return pointFeatures(q.text);
+  const answer =
+    q.type === 'SHORT_ANSWER'
+      ? (q.modelAnswer ?? '')
+      : (q.options ?? [])
+          .filter((o) => o.correct)
+          .map((o) => o.text)
+          .join(' ');
+  const stem = pointFeatures(q.text);
+  return new Set([...pointFeatures(answer)].filter((f) => !stem.has(f)));
+}
+
+function wholeOf(q: PointQuestion): Set<string> {
+  const parts = [
+    q.text,
+    q.modelAnswer ?? '',
+    ...(q.options ?? []).filter((o) => o.correct).map((o) => o.text),
+  ];
+  return pointFeatures(parts.join(' '));
+}
+
+/**
+ * Whether two questions test the same learning point — the number of verses
+ * in a surah asked once as true/false and again as multiple choice — or one
+ * gives away the other's answer in its wording.
+ *
+ * Not the same as a duplicate: the two may be worded nothing alike. And not
+ * the same as a shared topic: two questions about one surah, one asking how
+ * many verses it has and one whether it is Meccan, test different points.
+ *
+ * The rule: the two share a subject (a content word or number in both
+ * stems), and what one of them tests, apart from that subject, is at least
+ * half present in the other — asked by it, answered by it, or stated in it.
+ */
+export function repeatsPoint(a: PointQuestion, b: PointQuestion): boolean {
+  const stemA = pointFeatures(a.text);
+  const stemB = pointFeatures(b.text);
+  const subject = new Set([...stemA].filter((f) => stemB.has(f)));
+  if (!subject.size) return false;
+  // Two questions whose answer is the same word — "mitochondria" for where
+  // ATP is made and for which organelle has its own DNA — are two points.
+  // More than half of what the smaller one says must be in the other too.
+  const wholeA = wholeOf(a);
+  const wholeB = wholeOf(b);
+  const [small, large] = wholeA.size <= wholeB.size ? [wholeA, wholeB] : [wholeB, wholeA];
+  if ([...small].filter((f) => large.has(f)).length * 2 <= small.size) return false;
+  const covers = (x: PointQuestion, other: Set<string>) => {
+    const tested = [...testedBy(x)].filter((f) => !subject.has(f));
+    if (!tested.length) return false;
+    return tested.filter((f) => other.has(f)).length * 2 >= tested.length;
+  };
+  return covers(a, wholeB) || covers(b, wholeA);
+}
+
+// ── numbers a question gives ───────────────────────────────────────────────
+
+/** Folded Arabic number words, cardinal and ordinal. The material says
+ *  "ستة أيام" where a question writes "٦ أيام"; both are the number 6. */
+const NUMBER_WORDS: Record<string, number> = {
+  واحد: 1,
+  احد: 1,
+  احدي: 1,
+  اول: 1,
+  اولي: 1,
+  حادي: 1,
+  حاديه: 1,
+  اثنان: 2,
+  اثنين: 2,
+  اثنتان: 2,
+  اثنتين: 2,
+  اثنا: 2,
+  اثنتا: 2,
+  ثاني: 2,
+  ثانيه: 2,
+  ثلاث: 3,
+  ثلاثه: 3,
+  ثالث: 3,
+  ثالثه: 3,
+  اربع: 4,
+  اربعه: 4,
+  رابع: 4,
+  رابعه: 4,
+  خمس: 5,
+  خمسه: 5,
+  خامس: 5,
+  خامسه: 5,
+  ست: 6,
+  سته: 6,
+  سادس: 6,
+  سادسه: 6,
+  سبع: 7,
+  سبعه: 7,
+  سابع: 7,
+  سابعه: 7,
+  ثمان: 8,
+  ثماني: 8,
+  ثمانيه: 8,
+  ثامن: 8,
+  ثامنه: 8,
+  تسع: 9,
+  تسعه: 9,
+  تاسع: 9,
+  تاسعه: 9,
+  عشر: 10,
+  عشره: 10,
+  عاشر: 10,
+  عاشره: 10,
+  عشرون: 20,
+  عشرين: 20,
+  ثلاثون: 30,
+  ثلاثين: 30,
+  اربعون: 40,
+  اربعين: 40,
+  خمسون: 50,
+  خمسين: 50,
+  ستون: 60,
+  ستين: 60,
+  سبعون: 70,
+  سبعين: 70,
+  ثمانون: 80,
+  ثمانين: 80,
+  تسعون: 90,
+  تسعين: 90,
+  مائه: 100,
+  مئه: 100,
+  مائتا: 200,
+  مائتي: 200,
+  مائتان: 200,
+  مئتا: 200,
+  مئتي: 200,
+  مئتان: 200,
+  الف: 1000,
+  الفا: 1000,
+  الفان: 2000,
+  الفين: 2000,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  hundred: 100,
+  thousand: 1000,
+};
+const THOUSANDS = new Set(['الف', 'الاف', 'thousand']);
+const TEENS = new Set(['عشر', 'عشره']);
+
+/** Numbers a text writes in words: "ثلاثة آلاف" 3000, "الحادية عشرة" 11. */
+function wordNumbers(text: string): Set<number> {
+  const out = new Set<number>();
+  const words = foldArabic(text ?? '')
+    .toLowerCase()
+    .split(/[^\p{L}]+/u)
+    .filter(Boolean)
+    .map((w) => {
+      for (const p of ['وال', 'بال', 'لل', 'ال', 'و', 'ب', 'ل'])
+        if (w.startsWith(p) && NUMBER_WORDS[w.slice(p.length)] != null) return w.slice(p.length);
+      return w === 'الاف' ? 'الاف' : w;
+    });
+  for (let i = 0; i < words.length; i++) {
+    let n = NUMBER_WORDS[words[i]];
+    if (n == null) continue;
+    if (n < 10 && TEENS.has(words[i + 1] ?? '')) {
+      n += 10;
+      i++;
+    }
+    if (n < 1000 && THOUSANDS.has(words[i + 1] ?? '')) {
+      n *= 1000;
+      i++;
+    }
+    out.add(n);
+  }
+  return out;
+}
+
+/** Words after which a small number is a reference, not data: "المسألة (٥)",
+ *  "الخطوة ٢". Folded. */
+const LABEL_WORDS = new Set([
+  'المساله',
+  'مساله',
+  'السؤال',
+  'سؤال',
+  'الخطوه',
+  'خطوه',
+  'السطر',
+  'سطر',
+  'البند',
+  'بند',
+  'الفقره',
+  'فقره',
+  'الشكل',
+  'شكل',
+  'رقم',
+  'الجزء',
+  'جزء',
+  'التمرين',
+  'تمرين',
+  'step',
+  'question',
+  'problem',
+  'line',
+  'part',
+  'item',
+  'number',
+  'no',
+  'exercise',
+]);
+
+/**
+ * Every reading of the numbers in a text. "٩,٢" is 9.2 in Arabic writing and
+ * "22,000" is 22000 in English; which one a comma means cannot be told from
+ * the text, so both readings are kept.
+ */
+function numbersIn(text: string): Set<number> {
+  const out = new Set<number>();
+  const t = normaliseMath(foldArabic(text ?? '')).replace(/،/g, ' ');
+  for (const m of t.match(/\d+(?:[.,]\d+)*/g) ?? []) {
+    out.add(Number(m.replace(/,/g, '')));
+    if (/^\d+,\d+$/.test(m)) out.add(Number(m.replace(',', '.')));
+  }
+  out.delete(NaN);
+  return out;
+}
+
+/** The text of the answer a question is keyed to. */
+function keyOf(q: Pick<GradedQuestion, 'type' | 'options' | 'modelAnswer'>): string {
+  return q.type === 'SHORT_ANSWER'
+    ? (q.modelAnswer ?? '')
+    : ((q.options ?? []).find((o) => o.correct)?.text ?? '');
+}
+
+/** Whether a true/false statement is keyed as false — it may then quote a
+ *  wrong number on purpose. */
+function keyedFalse(q: Pick<GradedQuestion, 'type' | 'options'>): boolean {
+  if (q.type !== 'TRUE_FALSE') return false;
+  const key = (q.options ?? []).find((o) => o.correct)?.text ?? '';
+  return /خطا|خاطئ|غلط|false|incorrect|wrong/i.test(foldArabic(key));
+}
+
+/**
+ * Numbers a question hands the student that its chunk never gives.
+ *
+ * Only the question's own wording is read: the answer and the options may be
+ * worked out, and a worked-out value is not in the material by definition.
+ * The givens are different — "if the purchase price was 100" when the
+ * material names no purchase price is a new problem the material does not
+ * support, however well it is solved.
+ */
+export function unsupportedNumbers(
+  q: Pick<GradedQuestion, 'type' | 'text' | 'options'>,
+  chunkText: string,
+): number[] {
+  if (keyedFalse(q)) return [];
+  const source = new Set([...numbersIn(chunkText), ...wordNumbers(chunkText)]);
+  const out: number[] = [];
+  const text = normaliseMath(foldArabic(q.text ?? ''));
+  for (const match of text.matchAll(/\d+(?:[.,]\d+)*/g)) {
+    const m = match[0];
+    const readings = numbersIn(m);
+    if ([...readings].some((n) => source.has(n))) continue;
+    // A reference is not data: "(٥)" or "المسألة ٥" names a problem. Any other
+    // number, however small, can change what is asked — "٣ أيام" is not six.
+    const before = text.slice(0, match.index);
+    const after = text.slice((match.index ?? 0) + m.length);
+    const word = /([\p{L}]+)\s*$/u.exec(before)?.[1]?.toLowerCase() ?? '';
+    const bracketed = /\(\s*$/.test(before) && /^\s*\)/.test(after);
+    if (/^\d+$/.test(m) && (bracketed || LABEL_WORDS.has(word))) continue;
+    out.push([...readings][0]);
+  }
+  return out;
+}
+
+/**
+ * Whether a variant's new numbers are a problem.
+ *
+ * A variant of a worked problem may change its inputs on purpose — that is a
+ * different question to sit for. It may not change a fact: Noah's 950 years
+ * stay 950. So a number that is in neither the material nor the question
+ * being varied (its answer included) is allowed only when:
+ * - the question being varied is itself a problem, with two numbers or more
+ *   given in it;
+ * - the variant is keyed to a worked-out number, not "true" or a name;
+ * - that answer differs from the original's — new inputs with the old answer
+ *   means the answer was not worked out again.
+ *
+ * It checks the answer was recomputed, not that it is right; that remains the
+ * review screen's job.
+ */
+export function variantNumbersProblem(
+  variant: Pick<GradedQuestion, 'type' | 'text' | 'options' | 'modelAnswer'>,
+  original: Pick<GradedQuestion, 'type' | 'text' | 'options' | 'modelAnswer'> | null,
+  chunkText: string,
+): boolean {
+  // Asking a problem from the other end gives its answer as an input.
+  const given = original ? `${original.text}\n${keyOf(original)}` : '';
+  const extra = unsupportedNumbers(variant, `${chunkText}\n${given}`);
+  if (!extra.length) return false;
+  if (!original || numbersIn(original.text).size < 2) return true;
+  const key = keyOf(variant);
+  if (!numbersIn(key).size) return true;
+  const fold = (s: string) => normaliseMath(foldArabic(s)).replace(/\s+/g, ' ').trim();
+  return fold(key) === fold(keyOf(original));
+}
+
 /** Pairs of questions that are really one question. Returns the *later* one of
  *  each pair, which is the one worth rewriting. */
 export function findDuplicates(
@@ -370,13 +801,21 @@ export type RejectReason =
   | 'NO_KEY'
   | 'MULTIPLE_KEYS'
   | 'UNGROUNDED'
+  | 'UNSUPPORTED_NUMBER'
   // not the question's fault:
   | 'DUPLICATE'
+  | 'SAME_POINT'
   | 'SURPLUS'
   | 'NOT_RETURNED'
   | 'CALL_FAILED';
 
-const NOT_QUALITY: RejectReason[] = ['DUPLICATE', 'SURPLUS', 'NOT_RETURNED', 'CALL_FAILED'];
+const NOT_QUALITY: RejectReason[] = [
+  'DUPLICATE',
+  'SAME_POINT',
+  'SURPLUS',
+  'NOT_RETURNED',
+  'CALL_FAILED',
+];
 
 export function isQualityReason(reason: RejectReason): boolean {
   return !NOT_QUALITY.includes(reason);
@@ -401,10 +840,14 @@ const MCQ_MAX_OPTIONS = 6;
  * question about something the chunk never mentions. Off when the exam is
  * written in a different language from the material, where no word would
  * match.
+ *
+ * `numbers` checks the givens: every number the question states must be one
+ * its chunk states (see `unsupportedNumbers`). Sharing a word with the chunk
+ * says nothing about a price the model made up to finish a problem.
  */
 export function questionProblem(
   q: GradedQuestion,
-  opts: { chunkText?: string | null; anchor?: boolean } = {},
+  opts: { chunkText?: string | null; anchor?: boolean; numbers?: boolean } = {},
 ): RejectReason | null {
   const text = (q.text ?? '').trim();
   if (text.length < MIN_QUESTION_CHARS) return 'EMPTY_TEXT';
@@ -441,5 +884,7 @@ export function questionProblem(
     }
     if (!shared) return 'UNGROUNDED';
   }
+  // Variants are checked by the run, against the question they vary.
+  if (opts.numbers && unsupportedNumbers(q, opts.chunkText).length) return 'UNSUPPORTED_NUMBER';
   return null;
 }

@@ -348,15 +348,30 @@ const TOKENS_PER_QUESTION = 70;
  * النهائية") or a stray OCR fragment does not.
  */
 export function teachableLines(text: string): number {
+  return (text ?? '').split('\n').filter(isStatement).length;
+}
+
+function isStatement(raw: string): boolean {
+  const line = raw.trim();
+  if (!line) return false;
+  const words = line.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  const letters = line.replace(/[^\p{L}\p{N}]/gu, '').length;
+  return words >= 4 && letters >= 15;
+}
+
+/**
+ * The chunk with each statement numbered — "L1. …", "L2. …" — the lines
+ * `teachableLines` counts, in order, and nothing else changed. So a question
+ * can be assigned a statement rather than only a chunk: two calls writing
+ * from one revision sheet at the same time otherwise both pick its most
+ * prominent facts, and the exam asks the same fact twice.
+ */
+export function numberStatements(text: string): string {
   let n = 0;
-  for (const raw of (text ?? '').split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    const words = line.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
-    const letters = line.replace(/[^\p{L}\p{N}]/gu, '').length;
-    if (words >= 4 && letters >= 15) n++;
-  }
-  return n;
+  return (text ?? '')
+    .split('\n')
+    .map((line) => (isStatement(line) ? `L${++n}. ${line.trim()}` : line))
+    .join('\n');
 }
 
 /**

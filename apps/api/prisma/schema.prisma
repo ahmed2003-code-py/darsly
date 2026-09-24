@@ -1906,12 +1906,12 @@ model QuizAttempt {
   /// and quiz, so the same paper submitted twice — a double tap while the
   /// written answers were being marked, a retried request, a second tab — is
   /// one attempt, not seven. See QuizzesService.submit.
-  submitKey          String?
+  submitKey    String?
   /// What that submission answered, returned as-is when it arrives again.
-  submitResult       Json?
+  submitResult Json?
 
-  @@index([quizId, studentId, voidedAt])
   @@unique([quizId, studentId, submitKey])
+  @@index([quizId, studentId, voidedAt])
 }
 
 model Assignment {
@@ -3551,4 +3551,55 @@ model ContentDraft {
   @@index([tenantId, updatedAt])
   @@index([courseId, updatedAt])
   @@index([academyId, updatedAt])
+}
+
+/// One row per model call — the raw material for "what did this exam cost,
+/// and where did the money go".
+///
+/// PaperImport and PaperImportPage keep totals, which answer "how much" and
+/// nothing else: they could not say which stage, which retry or which model
+/// spent it, and they kept only input and output tokens, so cached input and
+/// reasoning tokens were never seen at all. `responseId` is the provider's own
+/// id for the call, which is what reconciles this table with the provider's
+/// usage export. Written after the call, never in its way: a failure to record
+/// is logged and the call's result still returned.
+model AiCallLog {
+  id                String   @id @default(cuid())
+  /// PaperImport.id, when the call belonged to an exam-creation session.
+  importId          String?
+  phase             String?
+  /// What the call did — OCR_PAGE, OCR_REGION, QUESTION_GENERATION, …
+  stage             String?
+  pageNumber        Int?
+  region            String?
+  batch             Int?
+  attempt           Int?
+  model             String
+  reasoningEffort   String?
+  imageDetail       String?
+  schemaName        String?
+  imageCount        Int      @default(0)
+  maxOutputTokens   Int?
+  startedAt         DateTime
+  latencyMs         Int
+  /// ok | failed | incomplete | refused | invalid_json
+  status            String
+  error             String?
+  responseId        String?
+  inputTokens       Int      @default(0)
+  cachedInputTokens Int      @default(0)
+  outputTokens      Int      @default(0)
+  reasoningTokens   Int      @default(0)
+  /// The per-million prices (cents) this call was costed at, so a later price
+  /// change does not rewrite what an old call is said to have cost.
+  priceInPerMToken  Float?
+  priceOutPerMToken Float?
+  /// Input and output at the prices above — cached input is NOT discounted,
+  /// because no cached price is configured; the raw counts are here to do it.
+  costMillicents    Int      @default(0)
+  meta              Json?
+  createdAt         DateTime @default(now())
+
+  @@index([importId, startedAt])
+  @@index([createdAt])
 }

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { AiClient, AiPrice, AiReasoningEffort } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
 import { PagePhase, TranscriberService } from './ocr/transcriber.service';
@@ -272,18 +273,22 @@ export class PaperExtractionService {
   private async structure(transcript: PageTranscript, pageNumber: number) {
     const price = this.config.primaryPrice;
     try {
-      const res = await this.ai.completeStructured<PageExtraction>({
-        timeoutMs: this.config.ocrCallTimeoutMs,
-        maxRetries: this.config.ocrCallRetries,
-        model: this.config.primaryModel,
-        price,
-        reasoningEffort: this.config.primaryEffort,
-        maxTokens: this.config.maxTokens,
-        system: STRUCTURE_SYSTEM,
-        schemaName: 'exam_page_extraction',
-        schema: PAGE_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
-        messages: [{ role: 'user', content: structurePrompt(transcript, pageNumber) }],
-      });
+      const res = await withAiTrace(
+        { stage: 'OCR_STRUCTURE', meta: { model: this.config.primaryModel } },
+        () =>
+          this.ai.completeStructured<PageExtraction>({
+            timeoutMs: this.config.ocrCallTimeoutMs,
+            maxRetries: this.config.ocrCallRetries,
+            model: this.config.primaryModel,
+            price,
+            reasoningEffort: this.config.primaryEffort,
+            maxTokens: this.config.maxTokens,
+            system: STRUCTURE_SYSTEM,
+            schemaName: 'exam_page_extraction',
+            schema: PAGE_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
+            messages: [{ role: 'user', content: structurePrompt(transcript, pageNumber) }],
+          }),
+      );
       return {
         data: res.data,
         inputTokens: res.inputTokens,
@@ -316,30 +321,34 @@ export class PaperExtractionService {
       : `Page ${input.pageNumber} of an exam paper. Transcribe it.`;
 
     try {
-      const res = await this.ai.completeStructured<PageExtraction>({
-        timeoutMs: this.config.ocrCallTimeoutMs,
-        maxRetries: this.config.ocrCallRetries,
-        model,
-        price,
-        reasoningEffort: effort,
-        maxTokens: this.config.maxTokens,
-        // A page of an exam is small print that has to be read exactly, which
-        // is the case the provider's guide names for `original`. It was
-        // `high` — the setting for a picture being looked at rather than read.
-        imageDetail: this.config.imageDetail,
-        system: EXTRACTION_SYSTEM_PROMPT,
-        schemaName: 'exam_page_extraction',
-        schema: PAGE_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
-        messages: [
-          {
-            role: 'user',
-            content,
-            ...(useText || !input.image
-              ? {}
-              : { images: [`data:image/jpeg;base64,${input.image.toString('base64')}`] }),
-          },
-        ],
-      });
+      const res = await withAiTrace(
+        { stage: model === this.config.primaryModel ? 'EXTRACT_PAGE' : 'EXTRACT_ESCALATION' },
+        () =>
+          this.ai.completeStructured<PageExtraction>({
+            timeoutMs: this.config.ocrCallTimeoutMs,
+            maxRetries: this.config.ocrCallRetries,
+            model,
+            price,
+            reasoningEffort: effort,
+            maxTokens: this.config.maxTokens,
+            // A page of an exam is small print that has to be read exactly, which
+            // is the case the provider's guide names for `original`. It was
+            // `high` — the setting for a picture being looked at rather than read.
+            imageDetail: this.config.imageDetail,
+            system: EXTRACTION_SYSTEM_PROMPT,
+            schemaName: 'exam_page_extraction',
+            schema: PAGE_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
+            messages: [
+              {
+                role: 'user',
+                content,
+                ...(useText || !input.image
+                  ? {}
+                  : { images: [`data:image/jpeg;base64,${input.image.toString('base64')}`] }),
+              },
+            ],
+          }),
+      );
       return {
         extraction: res.data,
         model,

@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import OpenAI from 'openai';
+import { PrismaService } from '../../prisma/prisma.service';
 import { AcademySiteConfig } from '../academy-site.config';
 import { AiJobError } from './ai-job.error';
+import { currentAiTrace } from './ai-trace';
 
 export interface AiMessage {
   role: 'user' | 'assistant';
@@ -110,7 +112,12 @@ export class AiClient {
   private readonly logger = new Logger(AiClient.name);
   private client: OpenAI | null = null;
 
-  constructor(private readonly config: AcademySiteConfig) {}
+  constructor(
+    private readonly config: AcademySiteConfig,
+    /** Where every call is recorded (AiCallLog). Optional so a unit test can
+     *  build a client without a database; in the app it is always there. */
+    @Optional() private readonly prisma?: PrismaService,
+  ) {}
 
   /** Cost in whole cents for a given token usage (prices are per million
    *  tokens). Without a `price` the configured AI_MODEL prices are used, which
@@ -147,7 +154,15 @@ export class AiClient {
       temperature?: number;
     } & AiCallOverrides,
   ): Promise<AiCompletion> {
-    const resp = await this.callResponses(opts);
+    const startedAt = new Date();
+    let resp: any = null;
+    try {
+      resp = await this.callResponses(opts);
+    } catch (e) {
+      this.record(opts, startedAt, null, 'failed', (e as Error).message);
+      throw e;
+    }
+    this.record(opts, startedAt, resp, 'ok', null);
     const text: string = resp.output_text ?? '';
     const { inputTokens, outputTokens } = this.usage(resp);
     return {
@@ -172,21 +187,45 @@ export class AiClient {
       schema: Record<string, unknown>;
     } & AiCallOverrides,
   ): Promise<AiStructuredResult<T>> {
-    const resp = await this.callResponses({
-      system: opts.system,
-      messages: opts.messages,
-      maxTokens: opts.maxTokens,
-      model: opts.model,
-      reasoningEffort: opts.reasoningEffort,
-      imageDetail: opts.imageDetail,
-      timeoutMs: opts.timeoutMs,
-      maxRetries: opts.maxRetries,
-      format: { name: opts.schemaName, schema: opts.schema },
-    });
+    const startedAt = new Date();
+    let resp: any = null;
+    // What went wrong, when something did — named just before each throw, so
+    // the call's record says "cut off" rather than lumping every failure in
+    // with a network error. Every call is recorded exactly once: here on
+    // failure, below on success.
+    let outcome = 'failed';
+    try {
+      resp = await this.callResponses({
+        system: opts.system,
+        messages: opts.messages,
+        maxTokens: opts.maxTokens,
+        model: opts.model,
+        reasoningEffort: opts.reasoningEffort,
+        imageDetail: opts.imageDetail,
+        timeoutMs: opts.timeoutMs,
+        maxRetries: opts.maxRetries,
+        format: { name: opts.schemaName, schema: opts.schema },
+      });
+      const result = this.structuredFrom<T>(resp, opts.price, (o) => (outcome = o));
+      this.record(opts, startedAt, resp, 'ok', null);
+      return result;
+    } catch (e) {
+      this.record(opts, startedAt, resp, outcome, (e as Error).message);
+      throw e;
+    }
+  }
 
+  /** The checks on a structured response, in order. `mark` names what failed
+   *  before it is thrown, so the call's record carries the reason. */
+  private structuredFrom<T>(
+    resp: any,
+    price: AiPrice | undefined,
+    mark: (outcome: string) => void,
+  ): AiStructuredResult<T> {
     const text: string = resp.output_text ?? '';
     const refusal = this.extractRefusal(resp);
     if (refusal) {
+      mark('refused');
       throw new AiJobError(`AI refused the request: ${this.redact(refusal)}`, 'TERMINAL');
     }
 
@@ -203,12 +242,14 @@ export class AiClient {
      */
     if (resp.status === 'incomplete') {
       const why = resp.incomplete_details?.reason ?? 'unknown';
+      mark('incomplete');
       throw new AiJobError(
         `AI response was cut off before it finished (${why}); raise max_output_tokens`,
         'RETRYABLE',
       );
     }
     if (!text) {
+      mark('empty');
       throw new AiJobError('AI returned empty output', 'RETRYABLE');
     }
 
@@ -220,6 +261,7 @@ export class AiClient {
     } catch (e) {
       // Enough to tell a truncation from a prose answer from an empty object,
       // without putting the document itself in a log.
+      mark('invalid_json');
       throw new AiJobError(
         `Structured output was not valid JSON ` +
           `(status=${resp.status ?? 'n/a'}, ${text.length} chars, ` +
@@ -233,7 +275,7 @@ export class AiClient {
       data,
       inputTokens,
       outputTokens,
-      costCents: this.costCents(inputTokens, outputTokens, opts.price),
+      costCents: this.costCents(inputTokens, outputTokens, price),
     };
   }
 
@@ -313,11 +355,86 @@ export class AiClient {
     }
   }
 
-  private usage(resp: any): { inputTokens: number; outputTokens: number } {
+  /**
+   * The provider's usage report. `cachedInputTokens` is part of
+   * `inputTokens`, and `reasoningTokens` part of `outputTokens` — both billed
+   * inside those totals, reported separately so neither is invisible.
+   */
+  private usage(resp: any): {
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens: number;
+    reasoningTokens: number;
+  } {
     return {
       inputTokens: resp?.usage?.input_tokens ?? 0,
       outputTokens: resp?.usage?.output_tokens ?? 0,
+      cachedInputTokens: resp?.usage?.input_tokens_details?.cached_tokens ?? 0,
+      reasoningTokens: resp?.usage?.output_tokens_details?.reasoning_tokens ?? 0,
     };
+  }
+
+  /**
+   * One AiCallLog row for this call, with whatever the caller's trace says it
+   * was for (see ai-trace.ts).
+   *
+   * Never awaited and never allowed to throw: a teacher's page must not fail
+   * because a cost record could not be written. A failed call is recorded too
+   * — with the usage the provider reported if a response arrived (a truncated
+   * answer is billed in full), or none if it did not.
+   */
+  private record(
+    opts: { messages: AiMessage[]; maxTokens?: number; schemaName?: string } & AiCallOverrides,
+    startedAt: Date,
+    resp: any,
+    status: string,
+    error: string | null,
+  ): void {
+    if (!this.prisma) return;
+    try {
+      const trace = currentAiTrace();
+      const model = opts.model || this.config.model;
+      const u = this.usage(resp);
+      const price = opts.price ?? {
+        inPerMToken: this.config.priceInPerMToken,
+        outPerMToken: this.config.priceOutPerMToken,
+      };
+      const imageCount = opts.messages.reduce((n, m) => n + (m.images?.length ?? 0), 0);
+      void this.prisma.aiCallLog
+        .create({
+          data: {
+            importId: trace.importId ?? null,
+            phase: trace.phase ?? null,
+            stage: trace.stage ?? null,
+            pageNumber: trace.pageNumber ?? null,
+            region: trace.region ?? null,
+            batch: trace.batch ?? null,
+            attempt: trace.attempt ?? null,
+            model,
+            reasoningEffort: isReasoningModel(model) ? (opts.reasoningEffort ?? 'low') : null,
+            imageDetail: imageCount ? (opts.imageDetail ?? 'high') : null,
+            schemaName: opts.schemaName ?? null,
+            imageCount,
+            maxOutputTokens: opts.maxTokens ?? 2000,
+            startedAt,
+            latencyMs: Date.now() - startedAt.getTime(),
+            status,
+            error: error ? this.redact(error).slice(0, 500) : null,
+            responseId: typeof resp?.id === 'string' ? resp.id : null,
+            inputTokens: u.inputTokens,
+            cachedInputTokens: u.cachedInputTokens,
+            outputTokens: u.outputTokens,
+            reasoningTokens: u.reasoningTokens,
+            priceInPerMToken: price.inPerMToken,
+            priceOutPerMToken: price.outPerMToken,
+            costMillicents: this.costMillicents(u.inputTokens, u.outputTokens, price),
+            ...(trace.meta ? { meta: trace.meta as object } : {}),
+          },
+        })
+        .catch((e: Error) => this.logger.warn(`Could not record an AI call: ${e.message}`));
+    } catch (e) {
+      this.logger.warn(`Could not record an AI call: ${(e as Error).message}`);
+    }
   }
 
   private extractRefusal(resp: any): string | null {

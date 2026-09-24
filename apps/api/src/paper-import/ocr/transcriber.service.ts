@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AiTrace, withAiTrace } from '../../academy-site/ai/ai-trace';
 import { AiClient, AiPrice, AiReasoningEffort } from '../../academy-site/ai/ai.client';
 import { PaperImportConfig } from '../paper-import.config';
 import { ImageVariantsService, RenderedImage } from './image-variants.service';
@@ -245,6 +246,7 @@ export class TranscriberService {
         (images.length > 1
           ? ' Two processed copies of the same page are attached; where they disagree, trust the one you can actually see.'
           : ''),
+      { stage: 'OCR_PAGE', attempt: 0 },
     );
     this.add(cost, pageCall);
     if (!pageCall.data) {
@@ -337,7 +339,10 @@ export class TranscriberService {
       // more look at the whole page is all that is left.
       trace('NO_BOXES re-reading whole page on fallback');
       say({ phase: 'REREADING', done: 0, total: 1 });
-      const retry = await this.read(images, 'fallback', `Page ${opts.pageNumber}. Transcribe it.`);
+      const retry = await this.read(images, 'fallback', `Page ${opts.pageNumber}. Transcribe it.`, {
+        stage: 'OCR_RETRY',
+        attempt: 1,
+      });
       this.add(cost, retry);
       cost.escalated = true;
       if (retry.data && transcriptIsUsable(retry.data)) transcript = normalise(retry.data);
@@ -483,6 +488,7 @@ export class TranscriberService {
             'It is a close-up crop of one region, so read it carefully and completely.',
             'Return it as a single region.',
           ].join(' '),
+          { stage: 'OCR_REGION', region: `q${index + 1}`, attempt: pass },
         );
         // Counted here, inside the gate, so the next call waiting on this
         // tier already knows about it.
@@ -563,6 +569,7 @@ export class TranscriberService {
         'Report only what the strokes show. Do not adjust it to make any calculation work out, and do not convert between Arabic-Indic and Western digits.',
         'Return one region whose text is that number alone.',
       ].join(' '),
+      { stage: 'OCR_FRAGMENT', region: fragment.slice(0, 40) },
     );
     this.add(cost, call);
     cost.cropCalls += 1;
@@ -634,6 +641,8 @@ export class TranscriberService {
     images: RenderedImage[],
     tier: 'primary' | 'fallback' | 'strong',
     instruction: string,
+    /** What this look is, for the call's cost record (AiCallLog). */
+    tag: AiTrace,
   ): Promise<{
     data: PageTranscript | null;
     error: string | null;
@@ -642,25 +651,27 @@ export class TranscriberService {
   }> {
     const { model, price, effort } = this.tier(tier);
     try {
-      const res = await this.ai.completeStructured<PageTranscript>({
-        timeoutMs: this.config.ocrCallTimeoutMs,
-        maxRetries: this.config.ocrCallRetries,
-        model,
-        price,
-        reasoningEffort: effort,
-        maxTokens: this.config.ocrMaxTokens,
-        imageDetail: this.config.imageDetail,
-        system: TRANSCRIBE_SYSTEM,
-        schemaName: 'page_transcript',
-        schema: PAGE_TRANSCRIPT_SCHEMA as unknown as Record<string, unknown>,
-        messages: [
-          {
-            role: 'user',
-            content: instruction,
-            images: images.map((i) => `data:image/jpeg;base64,${i.data.toString('base64')}`),
-          },
-        ],
-      });
+      const res = await withAiTrace({ ...tag, meta: { tier } }, () =>
+        this.ai.completeStructured<PageTranscript>({
+          timeoutMs: this.config.ocrCallTimeoutMs,
+          maxRetries: this.config.ocrCallRetries,
+          model,
+          price,
+          reasoningEffort: effort,
+          maxTokens: this.config.ocrMaxTokens,
+          imageDetail: this.config.imageDetail,
+          system: TRANSCRIBE_SYSTEM,
+          schemaName: 'page_transcript',
+          schema: PAGE_TRANSCRIPT_SCHEMA as unknown as Record<string, unknown>,
+          messages: [
+            {
+              role: 'user',
+              content: instruction,
+              images: images.map((i) => `data:image/jpeg;base64,${i.data.toString('base64')}`),
+            },
+          ],
+        }),
+      );
       return {
         data: res.data,
         error: null,

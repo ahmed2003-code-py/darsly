@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiJob, AiJobType, PaperImportPage, Prisma } from '@prisma/client';
 import { AiJobError } from '../academy-site/ai/ai-job.error';
+import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { AiJobHandler, AiJobResult } from '../academy-site/jobs/ai-job.handler';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
@@ -43,6 +44,20 @@ export class PaperImportHandler implements AiJobHandler {
   ) {}
 
   async handle(job: AiJob): Promise<AiJobResult | void> {
+    // Every model call below is recorded against this session and phase
+    // (AiCallLog), so one exam's cost can be read back call by call.
+    const input = (job.input ?? {}) as { importId?: string; phase?: string; tier?: string };
+    return withAiTrace(
+      {
+        importId: input.importId,
+        phase: input.phase ?? 'READ',
+        ...(input.tier === 'STRONG' ? { meta: { tier: 'STRONG' } } : {}),
+      },
+      () => this.run(job),
+    );
+  }
+
+  private async run(job: AiJob): Promise<AiJobResult | void> {
     const input = job.input as {
       importId?: string;
       tier?: ExtractionTier;
@@ -199,13 +214,15 @@ export class PaperImportHandler implements AiJobHandler {
         .catch(() => undefined);
     };
 
-    const result = await this.extraction.extractPage({
-      pageNumber: page.pageNumber,
-      image,
-      text,
-      tier,
-      onPhase,
-    });
+    const result = await withAiTrace({ pageNumber: page.pageNumber }, () =>
+      this.extraction.extractPage({
+        pageNumber: page.pageNumber,
+        image,
+        text,
+        tier,
+        onPhase,
+      }),
+    );
     await reported;
 
     const failed = !result.extraction;

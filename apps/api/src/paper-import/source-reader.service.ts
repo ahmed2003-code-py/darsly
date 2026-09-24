@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { AiClient } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
 import { TranscriberService } from './ocr/transcriber.service';
@@ -135,25 +136,29 @@ export class SourceReaderService {
     input: { pageNumber: number; image: Buffer },
   ): Promise<SourceReadResult> {
     try {
-      const res = await this.ai.completeStructured<{ text: string; blank: boolean }>({
-        model,
-        price,
-        reasoningEffort: this.config.primaryEffort,
-        // Reading text off a page is the case the provider's guide names for
-        // `original`, the same as the paper path.
-        imageDetail: this.config.imageDetail,
-        maxTokens: this.config.maxTokens,
-        system: SYSTEM_PROMPT,
-        schemaName: 'source_page_text',
-        schema: PAGE_TEXT_SCHEMA as unknown as Record<string, unknown>,
-        messages: [
-          {
-            role: 'user',
-            content: `Page ${input.pageNumber} of teaching material. Transcribe it.`,
-            images: [`data:image/jpeg;base64,${input.image.toString('base64')}`],
-          },
-        ],
-      });
+      const res = await withAiTrace(
+        { stage: model === this.config.primaryModel ? 'SOURCE_READ' : 'SOURCE_READ_ESCALATION' },
+        () =>
+          this.ai.completeStructured<{ text: string; blank: boolean }>({
+            model,
+            price,
+            reasoningEffort: this.config.primaryEffort,
+            // Reading text off a page is the case the provider's guide names for
+            // `original`, the same as the paper path.
+            imageDetail: this.config.imageDetail,
+            maxTokens: this.config.maxTokens,
+            system: SYSTEM_PROMPT,
+            schemaName: 'source_page_text',
+            schema: PAGE_TEXT_SCHEMA as unknown as Record<string, unknown>,
+            messages: [
+              {
+                role: 'user',
+                content: `Page ${input.pageNumber} of teaching material. Transcribe it.`,
+                images: [`data:image/jpeg;base64,${input.image.toString('base64')}`],
+              },
+            ],
+          }),
+      );
       return {
         text: res.data?.text ?? '',
         blank: !!res.data?.blank,

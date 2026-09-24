@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaperImport, PaperImportPage, Prisma } from '@prisma/client';
+import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { DraftQuestion, DraftWarning, ExamDraft } from './extraction.schema';
@@ -149,7 +150,9 @@ export class ContentGenerationService {
       return { millicents: 0 };
     }
 
-    const result = await this.reader.readPage({ pageNumber: page.pageNumber, image });
+    const result = await withAiTrace({ pageNumber: page.pageNumber }, () =>
+      this.reader.readPage({ pageNumber: page.pageNumber, image }),
+    );
     const usable = !result.error && !result.blank && result.text.trim().length > 0;
 
     if (usable) {
@@ -298,13 +301,22 @@ export class ContentGenerationService {
       let exhausted = false;
       for (let attempt = 0; attempt < this.config.generationMaxAttempts; attempt++) {
         const stronger = attempt > 0;
-        const result = await this.generator.generateBatch({
-          plan: batchPlan,
-          chunks: material,
-          language: spec.language,
-          avoid: accepted.map((q) => q.text),
-          stronger,
-        });
+        const result = await withAiTrace(
+          {
+            stage: stronger ? 'QUESTION_REGENERATION' : 'QUESTION_GENERATION',
+            batch: b,
+            attempt,
+            meta: { planned: countTypes(batchPlan), stronger },
+          },
+          () =>
+            this.generator.generateBatch({
+              plan: batchPlan,
+              chunks: material,
+              language: spec.language,
+              avoid: accepted.map((q) => q.text),
+              stronger,
+            }),
+        );
         batches += 1;
         millicents += result.millicents;
         if (stronger) escalatedChunks += 1;
@@ -317,6 +329,13 @@ export class ContentGenerationService {
         }
 
         kept = this.acceptable(result.questions, batchPlan, material, accepted);
+        // One line per call, beside its AiCallLog row: what the call returned
+        // and how much of it survived the checks.
+        this.logger.log(
+          `GEN_RESULT import=${record.id} batch=${b} attempt=${attempt} model=${result.model} ` +
+            `planned=${batchPlan.length} returned=${result.questions.length} kept=${kept.length} ` +
+            `insufficient=${result.insufficient} error=${result.error ? 'yes' : 'no'}`,
+        );
 
         // Every question asked for came back usable. Done.
         if (kept.length >= batchPlan.length) break;
@@ -573,18 +592,28 @@ export class ContentGenerationService {
       if (!slots.length) break;
 
       const material = selectChunksForBatch(chunks, 0, 1, this.config.generationSourceTokens);
-      const result = await this.generator.generateVariants({
-        plan: slots,
-        chunks: material,
-        language: opts.language,
-        // The questions the material did support, which is what there is to
-        // vary. Capped: a long list crowds out the material itself.
-        source: accepted.slice(0, 20).map((q) => ({ text: q.text, modelAnswer: q.modelAnswer })),
-        avoid: accepted.map((q) => q.text),
-        // A second round on the same material got the same answer often
-        // enough to be worth paying for a better reader once.
-        stronger: round > 0,
-      });
+      const result = await withAiTrace(
+        {
+          stage: 'QUESTION_VARIANTS',
+          attempt: round,
+          meta: { planned: countTypes(slots), stronger: round > 0 },
+        },
+        () =>
+          this.generator.generateVariants({
+            plan: slots,
+            chunks: material,
+            language: opts.language,
+            // The questions the material did support, which is what there is to
+            // vary. Capped: a long list crowds out the material itself.
+            source: accepted
+              .slice(0, 20)
+              .map((q) => ({ text: q.text, modelAnswer: q.modelAnswer })),
+            avoid: accepted.map((q) => q.text),
+            // A second round on the same material got the same answer often
+            // enough to be worth paying for a better reader once.
+            stronger: round > 0,
+          }),
+      );
       calls += 1;
       millicents += result.millicents;
 
@@ -697,4 +726,12 @@ function selectChunksForQuestionOf(chunks: SourceChunk[], question: DraftQuestio
     text: question.text,
     chunkIndex: question.sourceChunk ?? null,
   });
+}
+
+/** How many of each kind a plan asks for — kept with each generation call so
+ *  objective and written questions can be costed apart. */
+function countTypes(plan: { type: string }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const q of plan) out[q.type] = (out[q.type] ?? 0) + 1;
+  return out;
 }

@@ -1,6 +1,7 @@
 import { AcademySiteConfig } from '../academy-site.config';
 import { AiClient } from './ai.client';
 import { AiJobError } from './ai-job.error';
+import { withAiTrace } from './ai-trace';
 
 /**
  * What the client says went wrong.
@@ -108,5 +109,104 @@ describe('reporting why a structured call failed', () => {
     expect(out.data).toEqual({ ok: true });
     expect(out.inputTokens).toBe(100);
     expect(out.outputTokens).toBe(50);
+  });
+});
+
+/**
+ * Every call leaves a record of what it cost and what it was for.
+ *
+ * The totals kept per page and per import could say how much and nothing
+ * else — and they dropped cached input and reasoning tokens entirely, so a
+ * cost audit had nothing to read.
+ */
+describe('recording each call', () => {
+  const config = {
+    enabled: true,
+    apiKey: 'test-key',
+    model: 'gpt-6-luna',
+    priceInPerMToken: 10,
+    priceOutPerMToken: 50,
+  } as unknown as AcademySiteConfig;
+
+  const build = (create: jest.Mock) => {
+    const log = { create: jest.fn().mockResolvedValue({}) };
+    const client = new AiClient(config, { aiCallLog: log } as never);
+    (client as unknown as { client: unknown }).client = { responses: { create } };
+    return { client, log };
+  };
+
+  const call = (client: AiClient) =>
+    client.completeStructured({
+      model: 'gpt-6-sol',
+      price: { inPerMToken: 200, outPerMToken: 1000 },
+      reasoningEffort: 'medium',
+      messages: [{ role: 'user', content: 'write questions' }],
+      schemaName: 'thing',
+      schema: { type: 'object' },
+    });
+
+  it('keeps cached input, reasoning tokens, the response id and the stage it was for', async () => {
+    const { client, log } = build(
+      jest.fn().mockResolvedValue({
+        id: 'resp_123',
+        status: 'completed',
+        output_text: '{"ok":true}',
+        usage: {
+          input_tokens: 5000,
+          input_tokens_details: { cached_tokens: 4000 },
+          output_tokens: 3000,
+          output_tokens_details: { reasoning_tokens: 2500 },
+        },
+      }),
+    );
+
+    await withAiTrace(
+      { importId: 'imp1', phase: 'GENERATE', stage: 'QUESTION_GENERATION', batch: 2 },
+      () => call(client),
+    );
+
+    expect(log.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        importId: 'imp1',
+        phase: 'GENERATE',
+        stage: 'QUESTION_GENERATION',
+        batch: 2,
+        model: 'gpt-6-sol',
+        reasoningEffort: 'medium',
+        status: 'ok',
+        responseId: 'resp_123',
+        inputTokens: 5000,
+        cachedInputTokens: 4000,
+        outputTokens: 3000,
+        reasoningTokens: 2500,
+        // 5000 × $2/M + 3000 × $10/M = 4¢ = 4000 millicents
+        costMillicents: 4000,
+      }),
+    });
+  });
+
+  it('records a call that failed, with what the provider billed for it', async () => {
+    const { client, log } = build(
+      jest.fn().mockResolvedValue({
+        id: 'resp_cut',
+        status: 'incomplete',
+        incomplete_details: { reason: 'max_output_tokens' },
+        output_text: '{"questions":[',
+        usage: { input_tokens: 1000, output_tokens: 6000 },
+      }),
+    );
+
+    await expect(call(client)).rejects.toThrow(/cut off/);
+    expect(log.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ status: 'incomplete', outputTokens: 6000 }),
+    });
+  });
+
+  it('never lets a failed write stop the call', async () => {
+    const { client, log } = build(
+      jest.fn().mockResolvedValue({ status: 'completed', output_text: '{}', usage: {} }),
+    );
+    log.create.mockRejectedValue(new Error('db down'));
+    await expect(call(client)).resolves.toMatchObject({ data: {} });
   });
 });

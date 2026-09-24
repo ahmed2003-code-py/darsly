@@ -92,17 +92,23 @@ export class AiJobService {
    * increments attempts. Returns null when nothing is claimable.
    */
   async claimNext(leaseMs: number): Promise<AiJob | null> {
-    const lease = new Date(Date.now() + leaseMs);
+    // Every value in these columns is UTC with no zone attached — that is how
+    // Prisma writes a Date (renewLease, fail, the retry's nextRunAt). Raw SQL
+    // has to speak the same language: a JS Date bound here was converted to
+    // the session's zone, and a bare now() compares in it too. On a database
+    // whose zone is not UTC the first heartbeat therefore put the lease hours
+    // in the past, and a second worker picked the job up while the first was
+    // still running it — the same exam read, and billed, twice.
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       UPDATE "AiJob"
       SET status = 'RUNNING'::"AiJobStatus",
-          "leaseExpiresAt" = ${lease},
+          "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') + ${leaseMs} * interval '1 millisecond',
           attempts = attempts + 1,
-          "updatedAt" = now()
+          "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE id = (
         SELECT id FROM "AiJob"
         WHERE status = 'QUEUED'::"AiJobStatus"
-           OR (status = 'RUNNING'::"AiJobStatus" AND "leaseExpiresAt" < now())
+           OR (status = 'RUNNING'::"AiJobStatus" AND "leaseExpiresAt" < (now() AT TIME ZONE 'UTC'))
         ORDER BY "createdAt" ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED

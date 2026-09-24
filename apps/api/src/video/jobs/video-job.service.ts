@@ -102,17 +102,23 @@ export class VideoJobService {
    * late".
    */
   async claimNext(leaseMs: number): Promise<VideoJob | null> {
-    const lease = new Date(Date.now() + leaseMs);
+    // Every value in these columns is UTC with no zone attached — that is how
+    // Prisma writes a Date (renewLease, fail, the retry's nextRunAt). Raw SQL
+    // has to speak the same language: a JS Date bound here was converted to
+    // the session's zone, and a bare now() compares in it too. On a database
+    // whose zone is not UTC the first heartbeat therefore put the lease hours
+    // in the past, and a second worker picked the job up while the first was
+    // still running it — the same exam read, and billed, twice.
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       UPDATE "VideoJob"
       SET status = 'RUNNING'::"VideoJobStatus",
-          "leaseExpiresAt" = ${lease},
+          "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') + ${leaseMs} * interval '1 millisecond',
           attempts = attempts + 1,
-          "updatedAt" = now()
+          "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE id = (
         SELECT id FROM "VideoJob"
-        WHERE (status = 'QUEUED'::"VideoJobStatus" AND "nextRunAt" <= now())
-           OR (status = 'RUNNING'::"VideoJobStatus" AND "leaseExpiresAt" < now())
+        WHERE (status = 'QUEUED'::"VideoJobStatus" AND "nextRunAt" <= (now() AT TIME ZONE 'UTC'))
+           OR (status = 'RUNNING'::"VideoJobStatus" AND "leaseExpiresAt" < (now() AT TIME ZONE 'UTC'))
         ORDER BY "nextRunAt" ASC, "createdAt" ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED

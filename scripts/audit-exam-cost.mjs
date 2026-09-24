@@ -3,6 +3,7 @@
  * One exam, costed call by call.
  *
  *   node scripts/audit-exam-cost.mjs run <file.pdf> [--mcq 10 --tf 5 --written 5]
+ *   node scripts/audit-exam-cost.mjs paper <page.jpg> [more pages…]
  *   node scripts/audit-exam-cost.mjs report <importId>
  *
  * `run` drives the same HTTP flow a teacher's browser does — log in, upload
@@ -107,6 +108,26 @@ async function run(file) {
   // The AiCallLog write is fire-and-forget; give the last one a moment.
   await sleep(2000);
   await report(id, types);
+}
+
+/** A ready-made exam: its pages are read and its questions extracted — the
+ *  "import a paper exam" path, which writes nothing new. */
+async function paper(files) {
+  console.log(`Logging in as ${LOGIN} …`);
+  const auth = await http('POST', '/auth/login', null, { identifier: LOGIN, password: PASSWORD });
+  const token = auth.accessToken;
+  console.log(`Uploading ${files.map((f) => basename(f)).join(', ')} as an exam paper …`);
+  const form = new FormData();
+  form.append('kind', 'PAPER');
+  for (const f of files) {
+    const type = /\.png$/i.test(f) ? 'image/png' : 'image/jpeg';
+    form.append('files', new Blob([readFileSync(f)], { type }), basename(f));
+  }
+  const created = await http('POST', '/teacher/paper-imports', token, form);
+  console.log(`  session ${created.id}`);
+  await waitFor(token, created.id, (r) => ['REVIEW', 'FAILED', 'COMPLETED'].includes(r.status));
+  await sleep(2000);
+  await report(created.id);
 }
 
 // ── the report ────────────────────────────────────────────────────────────
@@ -592,6 +613,7 @@ async function report(id, types) {
 
 const [, , cmd, target] = process.argv;
 if (cmd === 'run' && target) await run(target);
+else if (cmd === 'paper' && target) await paper(process.argv.slice(3));
 else if (cmd === 'report' && target) await report(target);
 else {
   console.error('usage: audit-exam-cost.mjs run <file.pdf> | report <importId>');

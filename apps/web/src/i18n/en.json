@@ -345,6 +345,22 @@
   "myCourses": {
     "title": "My courses",
     "subtitle": "All the courses you enrolled in",
+    "free": "Free",
+    "exam": {
+      "badge": "Exam",
+      "questions_one": "{{count}} question",
+      "questions_other": "{{count}} questions",
+      "minutes": "{{n}} min",
+      "noLimit": "No time limit",
+      "passMark": "Pass {{pct}}%",
+      "start": "Start the exam",
+      "open": "Open the exam",
+      "yourScore": "Your score",
+      "passed": "Passed",
+      "failed": "Not passed",
+      "awaiting": "Waiting for the teacher to mark it",
+      "notTaken": "Not taken yet"
+    },
     "empty": "You haven't enrolled in any course yet",
     "emptyHint": "Discover teachers and start your learning journey",
     "browse": "Discover teachers",

@@ -390,6 +390,47 @@ export class EnrollmentsService {
       certs.map((c) => [c.courseId, { serial: c.serial, verifyToken: c.verifyToken }]),
     );
 
+    // An exam course is shown as the exam it is — questions, time, pass mark
+    // and where the student stands — rather than as "1 lesson, 0 minutes".
+    const examLessonIds = enrollments
+      .filter((e) => e.course.kind === 'EXAM' && e.course.examLessonId)
+      .map((e) => e.course.examLessonId!);
+    const exams = examLessonIds.length
+      ? await this.prisma.quiz.findMany({
+          where: { lessonId: { in: examLessonIds } },
+          select: {
+            id: true,
+            lessonId: true,
+            passingScore: true,
+            timeLimitSec: true,
+            _count: { select: { questions: true } },
+            // Only sittings that were sat — an opened timed paper is not a result.
+            attempts: {
+              where: { studentId: student.id, voidedAt: null, submittedAt: { not: null } },
+              select: { scorePct: true, passed: true, needsManualGrading: true },
+            },
+          },
+        })
+      : [];
+    const examByLesson = new Map(
+      exams.map((q) => {
+        const scored = q.attempts.filter((a) => a.scorePct != null);
+        return [
+          q.lessonId,
+          {
+            lessonId: q.lessonId,
+            questionCount: q._count.questions,
+            timeLimitSec: q.timeLimitSec,
+            passingScore: q.passingScore,
+            attemptsUsed: q.attempts.length,
+            bestScorePct: scored.length ? Math.max(...scored.map((a) => a.scorePct!)) : null,
+            passed: q.attempts.some((a) => a.passed === true),
+            awaitingMarking: q.attempts.some((a) => a.needsManualGrading),
+          },
+        ];
+      }),
+    );
+
     return enrollments.map((e) => {
       const lessonsCount = e.course.units.reduce((s, u) => s + u._count.lessons, 0);
       const completedLessons = Math.min(lessonsCount, completedByCourse.get(e.course.id) ?? 0);
@@ -412,6 +453,11 @@ export class EnrollmentsService {
           pricingModel: e.course.pricingModel,
           priceCents: e.course.priceCents,
           lessonsCount,
+          kind: e.course.kind,
+          exam:
+            e.course.kind === 'EXAM' && e.course.examLessonId
+              ? (examByLesson.get(e.course.examLessonId) ?? null)
+              : null,
           teacherName: e.course.teacher.user.fullName,
           teacherSlug: e.course.teacher.slug,
           teacherAvatarUrl: e.course.teacher.user.avatarUrl,

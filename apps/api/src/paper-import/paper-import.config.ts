@@ -322,4 +322,71 @@ export class PaperImportConfig {
     0,
     Math.min(3, num(process.env.PAPER_IMPORT_OCR_CALL_RETRIES, 1)),
   );
+
+  // ── Reading a page: the adaptive strategy ────────────────────────────────
+  //
+  // `current` is the multi-pass transcriber above, unchanged. `adaptive` is
+  // AdaptiveReaderService: crops from the page's own lines rather than from a
+  // count the cheap model guessed, the reader chosen from evidence, and a
+  // deterministic reason behind every escalation. Both stay available so one
+  // can be measured against the other on the same pages.
+
+  readonly extractionStrategy: 'current' | 'adaptive' =
+    process.env.EXAM_EXTRACTION_STRATEGY === 'adaptive' ? 'adaptive' : 'current';
+
+  /** The reader for a page the cheap model could not read, and its effort at
+   *  each rung. High is the last rung, not the second. */
+  readonly adaptiveReaderEffort = (process.env.ADAPTIVE_READER_EFFORT ??
+    'low') as AiReasoningEffort;
+  readonly adaptiveRecoveryEffort = (process.env.ADAPTIVE_RECOVERY_EFFORT ??
+    'medium') as AiReasoningEffort;
+  readonly adaptiveLastResortEffort = (process.env.ADAPTIVE_LAST_RESORT_EFFORT ??
+    'high') as AiReasoningEffort;
+  /** Whether `high` may be used at all. On by default, but only reachable
+   *  through the evidence rules in AdaptiveReaderService. */
+  readonly adaptiveAllowHigh = (process.env.ADAPTIVE_ALLOW_HIGH ?? 'true') !== 'false';
+
+  /**
+   * Above this share of [UNCLEAR] in its whole-page pass, the cheap model is
+   * not a reader for this page. Measured, not guessed: on the three benchmark
+   * pages it returned 100% [UNCLEAR] on the two it could not read — and, given
+   * crops of the same pages, invented exam questions with 0.45–0.74 confidence.
+   */
+  readonly adaptiveCheapUnclearMax = num(process.env.ADAPTIVE_CHEAP_UNCLEAR_MAX, 0.35);
+
+  /** Lines per crop: enough context to hold a question, few enough that one
+   *  crop does not swallow three of them. */
+  readonly adaptiveMaxLinesPerChunk = Math.max(
+    2,
+    Math.min(12, num(process.env.ADAPTIVE_MAX_LINES_PER_CHUNK, 6)),
+  );
+
+  /**
+   * How tall one line of text is made in a crop, in pixels.
+   *
+   * Image tokens are counted from pixels, so a crop is sized to what reading
+   * needs rather than blown up to the patch budget. The current path enlarged
+   * a five-line strip to 4800px wide — thousands of tokens of interpolated
+   * pixels that hold no information the original did not.
+   */
+  readonly adaptiveLinePx = Math.max(24, Math.min(96, num(process.env.ADAPTIVE_LINE_PX, 56)));
+
+  /**
+   * What reading one page may cost before recovery stops climbing, in cents.
+   * Past it, nothing dearer than low effort is started and what is still
+   * unread is flagged for review — an honest gap, never a silent one.
+   */
+  readonly adaptivePageBudgetCents = Math.max(1, num(process.env.ADAPTIVE_PAGE_BUDGET_CENTS, 10));
+
+  /**
+   * Several crops in one call rather than one call each. On by default
+   * because it was measured, not assumed: on the three benchmark pages it cut
+   * the cost of a handwritten page to about a third (2.8–3.4¢ against
+   * 8.9–10.8¢ for the 1927 exam) with the same recall and slightly better
+   * transcription, over repeated runs. A batched answer that does not line up
+   * one-to-one with its crops is thrown away and the crops read singly.
+   */
+  readonly adaptiveBatch = (process.env.ADAPTIVE_BATCH ?? 'true') !== 'false';
+  /** At most this many crops in one batched call. */
+  readonly adaptiveBatchSize = Math.max(1, Math.min(12, num(process.env.ADAPTIVE_BATCH_SIZE, 6)));
 }

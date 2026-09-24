@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { AiClient, AiPrice, AiReasoningEffort } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
@@ -6,7 +6,14 @@ import { PagePhase, TranscriberService } from './ocr/transcriber.service';
 
 /** Everything the reader says while it works, plus the step after it. */
 export type ReadPhase = PagePhase | { phase: 'SHAPING' };
-import { STRUCTURE_SYSTEM, structurePrompt, transcriptAsFallback } from './ocr/structure.schema';
+import {
+  STRUCTURE_SYSTEM,
+  STRUCTURE_SYSTEM_STRICT,
+  structurePrompt,
+  transcriptAsFallback,
+} from './ocr/structure.schema';
+import { AdaptiveReaderService } from './ocr/adaptive-reader.service';
+import { grounding, numbering, questionMarkers } from './ocr/validation';
 import { PageTranscript } from './ocr/transcript.schema';
 import {
   EXTRACTION_SYSTEM_PROMPT,
@@ -70,6 +77,9 @@ export class PaperExtractionService {
     private readonly ai: AiClient,
     private readonly config: PaperImportConfig,
     private readonly transcriber: TranscriberService,
+    /** EXAM_EXTRACTION_STRATEGY=adaptive. Optional so the current strategy —
+     *  and every test written for it — needs nothing new. */
+    @Optional() private readonly adaptive?: AdaptiveReaderService,
   ) {}
 
   /**
@@ -171,7 +181,9 @@ export class PaperExtractionService {
     tier?: ExtractionTier,
     onPhase?: (phase: ReadPhase) => void,
   ): Promise<PageExtractionResult> {
-    const read = await this.transcriber.transcribe(image, {
+    const useAdaptive = this.config.extractionStrategy === 'adaptive' && !!this.adaptive;
+    const reader = useAdaptive ? this.adaptive! : this.transcriber;
+    const read = await reader.transcribe(image, {
       pageNumber,
       tier: tier === 'STRONG' ? 'STRONG' : 'AUTO',
       onPhase,
@@ -210,7 +222,13 @@ export class PaperExtractionService {
     }
 
     onPhase?.({ phase: 'SHAPING' });
-    const shaped = await this.structure(read.transcript, pageNumber);
+    let shaped = await this.structure(read.transcript, pageNumber, { strict: useAdaptive });
+    let structureMillicents = 0;
+    if (useAdaptive) {
+      const checked = await this.checkStructure(read.transcript, pageNumber, shaped);
+      shaped = checked.shaped;
+      structureMillicents = checked.extraMillicents;
+    }
 
     /**
      * Never lose a page that was read.
@@ -228,8 +246,14 @@ export class PaperExtractionService {
      */
     const shapedNothing = !shaped.data?.questions?.length;
     const transcriptHasText = read.transcript.regions.some((r) => (r.text ?? '').trim().length > 4);
+    // The adaptive strategy's strict structuring may say, correctly, that a
+    // page of notes holds no questions; turning its transcript into "written
+    // questions" would put the fabrication back. The current strategy keeps
+    // its fallback exactly as it was.
     const extraction =
-      shapedNothing && transcriptHasText ? transcriptAsFallback(read.transcript) : shaped.data;
+      shapedNothing && transcriptHasText && !useAdaptive
+        ? transcriptAsFallback(read.transcript)
+        : shaped.data;
 
     if (shapedNothing && transcriptHasText) {
       this.logger.warn(
@@ -251,7 +275,7 @@ export class PaperExtractionService {
       `Page ${pageNumber}: ${read.outcome} in ${read.cost.calls} call(s) ` +
         `(${read.cost.cropCalls} crop), visual=${read.confidence.visual.toFixed(2)} ` +
         `read=${read.confidence.transcription.toFixed(2)} seg=${read.confidence.segmentation}, ` +
-        `${((read.cost.millicents + shaped.millicents) / 1000).toFixed(2)}¢`,
+        `${((read.cost.millicents + shaped.millicents + structureMillicents) / 1000).toFixed(2)}¢`,
     );
 
     return {
@@ -264,29 +288,107 @@ export class PaperExtractionService {
       escalated: read.cost.escalated,
       inputTokens: read.cost.inputTokens + shaped.inputTokens,
       outputTokens: read.cost.outputTokens + shaped.outputTokens,
-      millicents: read.cost.millicents + shaped.millicents,
+      millicents: read.cost.millicents + shaped.millicents + structureMillicents,
       error: null,
     };
   }
 
+  /**
+   * What the adaptive strategy checks after structuring, deterministically.
+   *
+   * 1. Every question must be on the page: a question whose words are mostly
+   *    absent from the transcript was invented, and is dropped — logged, not
+   *    shown to a teacher as if it had been printed.
+   * 2. Every question number the page prints must come out as a question. If
+   *    the transcript numbers questions 1–7 and the structuring returned
+   *    fewer, it is asked once more — on the capable model, with the numbers
+   *    it has to account for — and the better of the two answers is kept.
+   */
+  private async checkStructure(
+    transcript: PageTranscript,
+    pageNumber: number,
+    shaped: Awaited<ReturnType<PaperExtractionService['structure']>>,
+  ): Promise<{ shaped: typeof shaped; extraMillicents: number }> {
+    const text = transcript.regions.map((r) => r.text).join('\n');
+    const printed = numbering(questionMarkers(text));
+    const grounded = (s: typeof shaped) => {
+      if (!s.data) return s;
+      const kept = s.data.questions.filter((q) => {
+        const g = grounding(q.text, text);
+        if (g < 0.6) {
+          this.logger.warn(
+            `FABRICATION_DROPPED page=${pageNumber} grounding=${g.toFixed(2)} "${(q.text ?? '').slice(0, 80)}"`,
+          );
+          return false;
+        }
+        return true;
+      });
+      return { ...s, data: { ...s.data, questions: kept } };
+    };
+    const missingFrom = (s: typeof shaped) => {
+      const got = new Set((s.data?.questions ?? []).map((q) => q.number).filter((n) => n != null));
+      return [...new Set(printed.numbers)].filter((n) => !got.has(n));
+    };
+
+    let best = grounded(shaped);
+    let extra = 0;
+    const missing = printed.numbered ? missingFrom(best) : [];
+    if (missing.length) {
+      this.logger.log(
+        `STRUCTURE_RETRY page=${pageNumber} printed=[${[...new Set(printed.numbers)].join(',')}] ` +
+          `missing=[${missing.join(',')}] — asking the capable model once, with the numbers to account for`,
+      );
+      const retry = grounded(
+        await this.structure(transcript, pageNumber, {
+          strict: true,
+          capable: true,
+          expectNumbers: [...new Set(printed.numbers)],
+        }),
+      );
+      extra = retry.millicents;
+      if (missingFrom(retry).length < missing.length) best = retry;
+    }
+    const q = best.data?.questions ?? [];
+    this.logger.log(
+      `PAGE_SUMMARY page=${pageNumber} printedNumbers=[${[...new Set(printed.numbers)].join(',')}] ` +
+        `questions=${q.length} numbered=[${q.map((x) => x.number ?? '-').join(',')}] ` +
+        `stillMissing=[${missingFrom(best).join(',')}] needReview=${q.filter((x) => x.lowConfidence).length}`,
+    );
+    return { shaped: best, extraMillicents: extra };
+  }
+
   /** The cheap half: questions out of words, no pixels involved. */
-  private async structure(transcript: PageTranscript, pageNumber: number) {
-    const price = this.config.primaryPrice;
+  private async structure(
+    transcript: PageTranscript,
+    pageNumber: number,
+    opts: { strict?: boolean; capable?: boolean; expectNumbers?: number[] } = {},
+  ) {
+    const price = opts.capable ? this.config.fallbackPrice : this.config.primaryPrice;
+    const model = opts.capable ? this.config.fallbackModel : this.config.primaryModel;
+    const effort = opts.capable ? this.config.adaptiveReaderEffort : this.config.primaryEffort;
+    const expect = opts.expectNumbers?.length
+      ? '\n\nThe page prints questions numbered ' +
+        opts.expectNumbers.join(', ') +
+        '. Each of them must appear as a question, with its full stem and options, unless it is plainly not a question.'
+      : '';
     try {
       const res = await withAiTrace(
-        { stage: 'OCR_STRUCTURE', meta: { model: this.config.primaryModel } },
+        {
+          stage: opts.capable ? 'OCR_STRUCTURE_RETRY' : 'OCR_STRUCTURE',
+          meta: { model, strict: !!opts.strict },
+        },
         () =>
           this.ai.completeStructured<PageExtraction>({
             timeoutMs: this.config.ocrCallTimeoutMs,
             maxRetries: this.config.ocrCallRetries,
-            model: this.config.primaryModel,
+            model,
             price,
-            reasoningEffort: this.config.primaryEffort,
+            reasoningEffort: effort,
             maxTokens: this.config.maxTokens,
-            system: STRUCTURE_SYSTEM,
+            system: opts.strict ? STRUCTURE_SYSTEM_STRICT : STRUCTURE_SYSTEM,
             schemaName: 'exam_page_extraction',
             schema: PAGE_EXTRACTION_SCHEMA as unknown as Record<string, unknown>,
-            messages: [{ role: 'user', content: structurePrompt(transcript, pageNumber) }],
+            messages: [{ role: 'user', content: structurePrompt(transcript, pageNumber) + expect }],
           }),
       );
       return {

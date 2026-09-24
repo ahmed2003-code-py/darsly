@@ -149,6 +149,50 @@ export class ImageVariantsService {
     return { data, width: info.width, height: info.height, label: 'crop' };
   }
 
+  /**
+   * A piece of the page at a chosen scale, for the adaptive reader.
+   *
+   * `crop` above always fills the patch budget, which on a strip of five lines
+   * meant enlarging it to 4800px wide — thousands of image tokens of
+   * interpolated pixels that carry nothing the original did not. Here the
+   * caller says how tall a line of text should come out, and the crop is
+   * scaled to that and no further. `enhance` is the recovery variant for a
+   * faint or low-contrast crop: grey, stretched to the full range, sharpened.
+   */
+  async cropAt(
+    source: Buffer,
+    box: { left: number; top: number; width: number; height: number },
+    opts: { scale: number; enhance?: boolean },
+  ): Promise<RenderedImage> {
+    const meta = await this.sharp(source).metadata();
+    const W = meta.width ?? 0;
+    const H = meta.height ?? 0;
+    const left = Math.max(0, Math.min(Math.round(box.left), W - 1));
+    const top = Math.max(0, Math.min(Math.round(box.top), H - 1));
+    const width = Math.max(1, Math.min(Math.round(box.width), W - left));
+    const height = Math.max(1, Math.min(Math.round(box.height), H - top));
+    // Never past the model's long edge, whatever the scale asks for.
+    const scale = Math.min(opts.scale, this.config.maxRenderDim / Math.max(width, height) || 1);
+    let img = this.sharp(source)
+      .extract({ left, top, width, height })
+      .resize({
+        width: Math.max(1, Math.round(width * scale)),
+        height: Math.max(1, Math.round(height * scale)),
+        fit: 'fill',
+        kernel: 'lanczos3',
+      });
+    if (opts.enhance) img = img.greyscale().normalise().sharpen();
+    const { data, info } = await img
+      .jpeg({ quality: this.config.renderQuality, mozjpeg: true })
+      .toBuffer({ resolveWithObject: true });
+    return {
+      data,
+      width: info.width,
+      height: info.height,
+      label: opts.enhance ? 'enhanced' : 'crop',
+    };
+  }
+
   // ── internals ────────────────────────────────────────────────────────────
 
   private async render(

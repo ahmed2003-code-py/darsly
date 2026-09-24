@@ -37,6 +37,7 @@ import { QuestionGeneratorService } from '../paper-import/question-generator.ser
 import { SourceReaderService } from '../paper-import/source-reader.service';
 import { ImageVariantsService } from '../paper-import/ocr/image-variants.service';
 import { TranscriberService } from '../paper-import/ocr/transcriber.service';
+import { AdaptiveReaderService } from '../paper-import/ocr/adaptive-reader.service';
 
 /**
  * Academy Studio (AI site) module. Slice 2 wires the job infrastructure only;
@@ -63,6 +64,7 @@ import { TranscriberService } from '../paper-import/ocr/transcriber.service';
     LiveSummaryHandler,
     ImageVariantsService,
     TranscriberService,
+    AdaptiveReaderService,
     PaperExtractionService,
     SourceReaderService,
     QuestionGeneratorService,

@@ -140,8 +140,9 @@ async function main() {
             type: p.type,
             difficulty: p.difficulty,
             // One real word of the chunk, so it is anchored; the rest unique,
-            // so it is not a duplicate. Only the call plan matters here.
-            text: `ما ${anchorWord(req.chunks[0].text)} ${rnd()} ${rnd()} ${rnd()} ${i}؟`,
+            // so it is not a duplicate; no digits, which the number check
+            // would read as givens. Only the call plan matters here.
+            text: `ما ${anchorWord(req.chunks[0].text)} ${rnd()} ${rnd()} ${rnd()} ${'abcdefghij'[i % 10]}؟`,
             options:
               p.type === 'SHORT_ANSWER'
                 ? []

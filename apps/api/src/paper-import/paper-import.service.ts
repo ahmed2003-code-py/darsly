@@ -233,7 +233,7 @@ export class PaperImportService {
         status: { in: ['QUEUED', 'RUNNING'] },
       },
       orderBy: { createdAt: 'desc' },
-      select: { input: true },
+      select: { id: true, input: true },
     });
     if (!job) return;
     const importId = (job.input as { importId?: unknown } | null)?.importId;
@@ -241,9 +241,20 @@ export class PaperImportService {
       typeof importId === 'string'
         ? await this.prisma.paperImport.findFirst({
             where: { id: importId, academyId: scope.academyId },
-            select: { id: true, courseId: true, createdBy: true },
+            select: { id: true, courseId: true, createdBy: true, status: true, deletedAt: true },
           })
         : null;
+    // A job still marked live for a session that was stopped, deleted or
+    // finished is not work in progress — it is a leftover (a job stopped
+    // before `stop` existed, or one whose worker died). It must not block the
+    // teacher, and must not be offered to them as "the exam that is running".
+    if (
+      running &&
+      (running.deletedAt || ['CANCELED', 'COMPLETED', 'FAILED'].includes(running.status))
+    ) {
+      await this.jobs.stop(scope.academyId, job.id).catch(() => undefined);
+      return;
+    }
     if (running && running.createdBy === scope.userId) {
       throw new ConflictException({
         message: 'Your other exam is still being prepared',
@@ -786,10 +797,11 @@ export class PaperImportService {
         code: 'ALREADY_CONFIRMED',
       });
     }
-    // A queued job can be cancelled cleanly; one already running cannot, and
-    // the status below is what stops its result being written anyway.
+    // Stopped whether queued or running, so the academy's lock is released
+    // now rather than when the call in flight happens to return. The status
+    // below is what stops that call's result being written.
     if (record.jobId) {
-      await this.jobs.cancel(scope.academyId, record.jobId).catch(() => undefined);
+      await this.jobs.stop(scope.academyId, record.jobId).catch(() => undefined);
     }
     return this.prisma.paperImport.update({
       where: { id: record.id },

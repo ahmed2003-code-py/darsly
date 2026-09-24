@@ -493,6 +493,40 @@ describe('writing an exam from uploaded lecture material', () => {
   });
 });
 
+describe('reading lecture material', () => {
+  it('stops between pages when the session is stopped, instead of paying for the rest', async () => {
+    const prisma = {
+      paperImport: {
+        update: jest.fn().mockResolvedValue({}),
+        // Stopped before the first page is read.
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      paperImportPage: { update: jest.fn() },
+    };
+    const reader = { readPage: jest.fn() };
+    const service = new ContentGenerationService(
+      prisma as unknown as PrismaService,
+      { getBuffer: jest.fn() } as unknown as StorageProvider,
+      reader as unknown as SourceReaderService,
+      {} as QuestionGeneratorService,
+      new PaperImportConfig(),
+    );
+    const page = (n: number) => ({
+      id: `p${n}`,
+      pageNumber: n,
+      status: 'PENDING',
+      textKey: null,
+      renderKey: `r${n}`,
+    });
+    await service.read({ id: 'imp1', pages: [page(1), page(2), page(3)] } as never);
+    expect(reader.readPage).not.toHaveBeenCalled();
+    // The session is left as its owner left it — not moved on to CONFIGURING.
+    expect(prisma.paperImport.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'CONFIGURING' }) }),
+    );
+  });
+});
+
 describe('writing one question again', () => {
   let prisma: any;
   let generator: { regenerateOne: jest.Mock };

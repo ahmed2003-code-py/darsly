@@ -135,8 +135,10 @@ export class AiJobService {
     jobId: string,
     result: { costCents?: number; resultSnapshotId?: string },
   ): Promise<void> {
-    await this.prisma.aiJob.update({
-      where: { id: jobId },
+    // updateMany on RUNNING: a job stopped by its owner while this call was
+    // in flight stays stopped, instead of reappearing as SUCCEEDED.
+    await this.prisma.aiJob.updateMany({
+      where: { id: jobId, status: 'RUNNING' },
       data: {
         status: 'SUCCEEDED',
         leaseExpiresAt: null,
@@ -155,9 +157,11 @@ export class AiJobService {
   async fail(jobId: string, err: { message: string; errorClass: AiErrorClass }): Promise<void> {
     const job = await this.prisma.aiJob.findUnique({ where: { id: jobId } });
     if (!job) return;
+    // A stopped job is not failed and is never retried.
+    if (job.status === 'CANCELED') return;
     const retry = err.errorClass === 'RETRYABLE' && job.attempts < MAX_ATTEMPTS;
-    await this.prisma.aiJob.update({
-      where: { id: jobId },
+    await this.prisma.aiJob.updateMany({
+      where: { id: jobId, status: 'RUNNING' },
       data: {
         status: retry ? 'QUEUED' : 'FAILED',
         error: err.message.slice(0, 1000),
@@ -184,6 +188,26 @@ export class AiJobService {
     return this.prisma.aiJob.update({
       where: { id: jobId },
       data: { status: 'QUEUED', attempts: 0, error: null, errorClass: null, leaseExpiresAt: null },
+    });
+  }
+
+  /**
+   * Stop a job whether or not it has started — for work its owner has put
+   * down.
+   *
+   * `cancel` below refuses a RUNNING job, which is right for a site
+   * generation nobody should interrupt, and was wrong for an exam a teacher
+   * pressed "stop" on: the import became CANCELED while its job stayed
+   * RUNNING, so the academy-wide lock held until the job finished — and every
+   * new upload was refused with "your other exam is still being prepared",
+   * pointing at the one just stopped. A stopped job leaves the lock at once;
+   * the call in flight finishes and is discarded (its handler checks the
+   * import between pages, and succeed/fail do not touch a CANCELED job).
+   */
+  async stop(academyId: string, jobId: string): Promise<void> {
+    await this.prisma.aiJob.updateMany({
+      where: { id: jobId, academyId, status: { in: ['QUEUED', 'RUNNING'] } },
+      data: { status: 'CANCELED', leaseExpiresAt: null },
     });
   }
 

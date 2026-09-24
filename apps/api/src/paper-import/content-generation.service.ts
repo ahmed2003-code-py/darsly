@@ -82,6 +82,17 @@ export class ContentGenerationService {
     let done = record.pages.length - pages.length;
 
     for (const page of pages) {
+      // Put down while reading — stopped or deleted from the drafts list:
+      // stop here rather than pay for every remaining page of something
+      // nobody wants, and leave the session as its owner left it.
+      const live = await this.prisma.paperImport.findFirst({
+        where: { id: record.id, deletedAt: null, status: { not: 'CANCELED' } },
+        select: { id: true },
+      });
+      if (!live) {
+        this.logger.log(`Import ${record.id}: stopped by its owner after ${done} page(s)`);
+        return { millicents };
+      }
       const result = await this.readOne(record.id, page);
       millicents += result.millicents;
       done += 1;

@@ -257,6 +257,40 @@ describe('accepting a stack of paper', () => {
     expect(storage.put).not.toHaveBeenCalled();
   });
 
+  it('a session that was stopped does not block a new one, and its leftover job is stopped', async () => {
+    // Production: the teacher pressed stop, the import became CANCELED, its
+    // job stayed RUNNING — and every new upload was refused with "your other
+    // exam is still being prepared", linking to the one just stopped.
+    jobs.stop = jest.fn().mockResolvedValue(undefined);
+    prisma.aiJob.findFirst.mockResolvedValue({ id: 'old-job', input: { importId: 'old' } });
+    prisma.paperImport.findFirst.mockResolvedValue({
+      id: 'old',
+      courseId: null,
+      createdBy: 'user1',
+      status: 'CANCELED',
+      deletedAt: null,
+    });
+    await expect(service.create(scope, [file()])).resolves.toBeDefined();
+    expect(jobs.stop).toHaveBeenCalledWith(scope.academyId, 'old-job');
+    expect(prisma.paperImport.create).toHaveBeenCalled();
+  });
+
+  it('stopping a session stops its job even while it is running, so the lock is released at once', async () => {
+    jobs.stop = jest.fn().mockResolvedValue(undefined);
+    prisma.paperImport.findFirst.mockResolvedValue({
+      id: 'imp1',
+      kind: 'CONTENT',
+      stage: 'READING',
+      status: 'PROCESSING',
+      jobId: 'job9',
+    });
+    await service.cancel(scope, 'imp1');
+    expect(jobs.stop).toHaveBeenCalledWith(scope.academyId, 'job9');
+    expect(prisma.paperImport.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELED' }) }),
+    );
+  });
+
   it('another teacher’s session blocks too, but is not named', async () => {
     prisma.aiJob.findFirst.mockResolvedValue({ input: { importId: 'theirs' } });
     prisma.paperImport.findFirst.mockResolvedValue({

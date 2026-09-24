@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { AdaptiveReaderService } from './ocr/adaptive-reader.service';
 import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { AiClient } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
@@ -68,6 +69,9 @@ export class SourceReaderService {
     private readonly ai: AiClient,
     private readonly config: PaperImportConfig,
     private readonly transcriber: TranscriberService,
+    /** EXAM_EXTRACTION_STRATEGY=adaptive reads lecture pages too; optional so
+     *  the current strategy and its tests need nothing new. */
+    @Optional() private readonly adaptive?: AdaptiveReaderService,
   ) {}
 
   /**
@@ -84,7 +88,16 @@ export class SourceReaderService {
     // angle — and having two transcribers would have meant fixing each of
     // them twice.
     if (this.config.ocrMultiPass) {
-      const read = await this.transcriber.transcribe(input.image, {
+      // Lecture photographs had the same problem as exam photographs — crops
+      // cut to a count the cheap model guessed, then read at high effort —
+      // and three photos took over three minutes. The adaptive strategy reads
+      // them the way it reads an exam page.
+      const useAdaptive = this.config.extractionStrategy === 'adaptive' && !!this.adaptive;
+      this.logger.log(
+        `EXTRACTION_STRATEGY source page=${input.pageNumber} strategy=${useAdaptive ? 'adaptive' : 'current'}`,
+      );
+      const reader = useAdaptive ? this.adaptive! : this.transcriber;
+      const read = await reader.transcribe(input.image, {
         pageNumber: input.pageNumber,
       });
       if (read.transcript) {

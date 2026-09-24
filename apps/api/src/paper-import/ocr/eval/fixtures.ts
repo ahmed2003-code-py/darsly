@@ -280,7 +280,7 @@ export async function renderFixture(spec: RenderSpec): Promise<Buffer> {
   const texts = spec.lines
     .map((line, i) =>
       line
-        ? `<text x="${spec.width - 70}" y="${120 + i * lineHeight}" font-family="${family}" font-size="${spec.fontSize}" fill="${colour}" text-anchor="end" direction="rtl">${escapeXml(line)}</text>`
+        ? `<text x="${spec.width - 70}" y="${120 + i * lineHeight}" font-family="${family}" font-size="${spec.fontSize}" fill="${colour}" text-anchor="start" direction="rtl">${escapeXml(line)}</text>`
         : '',
     )
     .join('');

@@ -27,6 +27,14 @@ export interface ConfirmTarget {
    *  for a new exam-only course — that is what makes it exam-only. */
   setAsCourseExam?: boolean;
   examMode?: 'GATE' | 'FINAL';
+  /**
+   * The one school year a new exam course is for. Required for NEW_COURSE:
+   * left out, the course fell back to every year the teacher teaches, and the
+   * printed paper read "Grade: Secondary 1, Secondary 2, … Baccalaureate 3".
+   */
+  gradeId?: string;
+  /** Which of the teacher's subjects; needed only when they teach several. */
+  subjectId?: string;
   /** The teacher has seen the unsupported questions and accepted losing them.
    *  Without this, confirming a draft that still holds one is refused — a
    *  question silently dropped is a question the class never gets asked. */
@@ -125,9 +133,22 @@ export class ExamBuilderService {
       // check that can drift from the first.
       courseId = opts.courseId;
     } else {
+      if (!opts.gradeId) {
+        throw new BadRequestException({
+          message: 'Choose the school year this exam is for',
+          code: 'GRADE_REQUIRED',
+        });
+      }
+      // Whether the year and subject are the teacher's own is checked by
+      // `courses.create`, the same as for a course made by hand.
       const course = await this.courses.create(
         scope,
-        { title, description: draft.instructions.join('\n').slice(0, 5_000) },
+        {
+          title,
+          description: draft.instructions.join('\n').slice(0, 5_000),
+          gradeIds: [opts.gradeId],
+          ...(opts.subjectId ? { subjectId: opts.subjectId } : {}),
+        },
         // Recorded, not derived: the builder shows an exam course the exam
         // rather than "add a section, name a lesson, upload a video".
         { kind: 'EXAM' },

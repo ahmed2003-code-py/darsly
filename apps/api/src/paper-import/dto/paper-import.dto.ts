@@ -98,6 +98,10 @@ export class ConfirmImportDto {
   /** Required for EXISTING_COURSE; ignored otherwise. */
   @IsOptionalId() courseId?: string;
   @IsOptional() @IsString() @MaxLength(LIMITS.TITLE) title?: string;
+  /** The one school year a new exam course is for. Required for NEW_COURSE. */
+  @IsOptionalId() gradeId?: string;
+  /** Which of the teacher's subjects, when they teach more than one. */
+  @IsOptionalId() subjectId?: string;
   /** Name this exam as the course's exam. Defaults on for a new course. */
   @IsOptional() @IsBoolean() setAsCourseExam?: boolean;
   @IsOptional() @IsEnum(CourseExamMode) examMode?: CourseExamMode;

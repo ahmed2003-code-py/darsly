@@ -8,6 +8,8 @@ import { toastError, toastErrorText, toastSuccess } from '../../lib/toast';
 import { PageHeader, ProgressBar, Spinner } from '../../components/ui';
 import { DraftsBar } from '../../components/DraftsBar';
 import { resolveError } from '../../lib/errorMessage';
+import { STAGES, type Grade } from '../../lib/stages';
+import { type Subject } from '../../lib/subjects';
 import { ExamReviewPanel } from './exam-studio/ExamReviewPanel';
 import { ExamSpecForm } from './exam-studio/ExamSpecForm';
 import { StudioProgress } from './exam-studio/StudioProgress';
@@ -451,9 +453,10 @@ function Review({
   courseId: string | null;
   onChange: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [draft, setDraft] = useState<ExamDraft>(record.draft);
+  const where = useRef<HTMLDivElement>(null);
   const [target, setTarget] = useState<'NEW_COURSE' | 'EXISTING_COURSE'>(
     courseId ? 'EXISTING_COURSE' : 'NEW_COURSE',
   );
@@ -511,6 +514,39 @@ function Review({
     staleTime: 60_000,
   });
 
+  /**
+   * The one year a new exam course is for, asked before it is published.
+   * Unasked, the course was aimed at every year the teacher teaches, and the
+   * printed paper read "Grade: Secondary 1, Secondary 2, … Baccalaureate 3".
+   * The same lists the course form offers: the teacher's own stages' years
+   * and their own subjects — the API checks both again.
+   */
+  const ar = i18n.language === 'ar';
+  const { data: profile } = useQuery({
+    queryKey: ['teacher-profile'],
+    queryFn: async () => (await api.get('/teacher/profile')).data,
+  });
+  const { data: grades } = useQuery({
+    queryKey: ['grades'],
+    queryFn: async () => (await api.get('/catalog/grades')).data,
+  });
+  const myStages: string[] = profile?.stages ?? [];
+  const myYears: Grade[] = (grades ?? []).filter(
+    (g: Grade) => g.stage && myStages.includes(g.stage),
+  );
+  const mySubjects: Subject[] = (profile?.subjects ?? []).map(
+    (s: { subject: Subject }) => s.subject,
+  );
+  const [gradeId, setGradeId] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+  // Nothing to choose between is not a question.
+  useEffect(() => {
+    if (!gradeId && myYears.length === 1) setGradeId(myYears[0].id);
+  }, [gradeId, myYears]);
+  const needsSubject = mySubjects.length > 1;
+  const missingYear = target === 'NEW_COURSE' && !gradeId;
+  const missingSubject = target === 'NEW_COURSE' && needsSubject && !subjectId;
+
   const state = creationState(record);
   const problems = draftProblems(draft);
   const unsupported = unsupportedCount(draft);
@@ -533,9 +569,12 @@ function Review({
   const confirm = useMutation({
     mutationFn: async () => {
       await saveDraft(record.id, draft);
+      const fresh = target === 'NEW_COURSE';
       return confirmImport(record.id, {
         target,
         courseId: target === 'EXISTING_COURSE' ? pickedCourse : undefined,
+        gradeId: fresh ? gradeId : undefined,
+        subjectId: fresh && needsSubject ? subjectId : undefined,
         title: draft.title,
         dropUnsupported: unsupported > 0,
       });
@@ -566,7 +605,16 @@ function Review({
             <button
               className="btn-primary"
               disabled={confirm.isPending || problems.includes('EMPTY')}
-              onClick={() => confirm.mutate()}
+              onClick={() => {
+                // Said, and shown where to answer — not a button that just
+                // does nothing.
+                if (missingYear || missingSubject) {
+                  toastErrorText(t(missingYear ? 'paper.yearRequired' : 'paper.subjectRequired'));
+                  where.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  return;
+                }
+                confirm.mutate();
+              }}
             >
               {t('paper.confirm')}
             </button>
@@ -645,7 +693,7 @@ function Review({
 
       <ExamReviewPanel record={record} draft={draft} onDraft={setDraft} />
 
-      <div className="card mt-8">
+      <div ref={where} className="card mt-8 scroll-mt-24">
         <p className="mb-3 font-heading font-semibold text-on-surface">{t('paper.whereTitle')}</p>
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm text-on-surface">
@@ -679,6 +727,63 @@ function Review({
             </select>
           )}
         </div>
+        {target === 'NEW_COURSE' && (
+          <div className="mt-5 border-t border-outline-variant/50 pt-4">
+            {needsSubject && (
+              <label className="mb-4 block">
+                <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+                  {t('paper.whichSubject')}
+                </span>
+                <select
+                  className={`input ${missingSubject ? 'border-error' : ''}`}
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {mySubjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {ar ? s.nameAr : s.nameEn}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <p className="font-heading font-semibold text-on-surface">{t('paper.whichYear')}</p>
+            <p className="mb-3 text-sm text-on-surface-variant">{t('paper.whichYearHint')}</p>
+            <div className="space-y-3">
+              {STAGES.filter((st) => myYears.some((g) => g.stage === st)).map((st) => (
+                <div key={st}>
+                  <span className="mb-1.5 block text-xs font-semibold text-outline">
+                    {t(`stage.${st}`)}
+                  </span>
+                  <div role="radiogroup" className="flex flex-wrap gap-2">
+                    {myYears
+                      .filter((g) => g.stage === st)
+                      .map((g) => {
+                        const on = gradeId === g.id;
+                        return (
+                          <button
+                            key={g.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            onClick={() => setGradeId(g.id)}
+                            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                              on
+                                ? 'border-primary bg-primary text-on-primary'
+                                : 'border-outline-variant text-on-surface-variant hover:border-outline'
+                            }`}
+                          >
+                            {ar ? g.nameAr : g.nameEn}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {unsupported > 0 && (
           <p className="mt-3 text-sm text-on-surface-variant">
             {t('paper.dropUnsupported', { n: unsupported })}

@@ -564,6 +564,9 @@ export async function confirmImport(
     target: 'NEW_COURSE' | 'EXISTING_COURSE';
     courseId?: string;
     title?: string;
+    /** The one school year a new exam course is for — required for NEW_COURSE. */
+    gradeId?: string;
+    subjectId?: string;
     setAsCourseExam?: boolean;
     examMode?: 'GATE' | 'FINAL';
     dropUnsupported?: boolean;

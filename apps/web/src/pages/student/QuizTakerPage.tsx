@@ -133,7 +133,14 @@ export default function QuizTakerPage() {
    * on arrival — a countdown in a browser is a courtesy.
    */
   const deadline = quiz?.deadlineAt ? new Date(quiz.deadlineAt).getTime() : null;
-  const skew = quiz?.serverNow ? Date.now() - new Date(quiz.serverNow).getTime() : 0;
+  // Measured once, when the server's answer arrives. It used to be measured on
+  // every render — and every tick is a render — so each second the offset grew
+  // by exactly the second that had passed, cancelled it out, and the clock
+  // stood still at its starting value.
+  const skew = useMemo(
+    () => (quiz?.serverNow ? Date.now() - new Date(quiz.serverNow).getTime() : 0),
+    [quiz?.serverNow],
+  );
   const [msLeft, setMsLeft] = useState<number | null>(null);
   const autoSent = useRef(false);
 

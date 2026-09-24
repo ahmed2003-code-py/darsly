@@ -61,11 +61,14 @@ describe('turning a confirmed draft into an ordinary exam', () => {
   });
 
   it('makes a course whose only content is the exam, and names it as the exam', async () => {
-    const built = await builder.build(scope, draft([draftQuestion()]), { target: 'NEW_COURSE' });
+    const built = await builder.build(scope, draft([draftQuestion()]), {
+      target: 'NEW_COURSE',
+      gradeId: 'year1',
+    });
 
     expect(courses.create).toHaveBeenCalledWith(
       scope,
-      expect.objectContaining({ title: 'Biology — Final' }),
+      expect.objectContaining({ title: 'Biology — Final', gradeIds: ['year1'] }),
       // Marked as an exam course, so its builder shows the exam rather than
       // "add a section, name a lesson, upload a video".
       { kind: 'EXAM' },
@@ -81,6 +84,28 @@ describe('turning a confirmed draft into an ordinary exam', () => {
       expect.objectContaining({ examLessonId: 'lesson1', examMode: 'FINAL' }),
     );
     expect(built).toMatchObject({ courseId: 'course1', lessonId: 'lesson1', questionCount: 1 });
+  });
+
+  it('will not make a new exam course without the one year it is for', async () => {
+    // Left out, the course fell back to every year the teacher teaches, and
+    // the printed paper listed all six.
+    await expect(
+      builder.build(scope, draft([draftQuestion()]), { target: 'NEW_COURSE' }),
+    ).rejects.toMatchObject({ response: { code: 'GRADE_REQUIRED' } });
+    expect(courses.create).not.toHaveBeenCalled();
+  });
+
+  it('files a new exam course under the subject the teacher picked', async () => {
+    await builder.build(scope, draft([draftQuestion()]), {
+      target: 'NEW_COURSE',
+      gradeId: 'year1',
+      subjectId: 'arabic',
+    });
+    expect(courses.create).toHaveBeenCalledWith(
+      scope,
+      expect.objectContaining({ gradeIds: ['year1'], subjectId: 'arabic' }),
+      { kind: 'EXAM' },
+    );
   });
 
   it('does not touch the kind of a course the teacher already had', async () => {
@@ -125,7 +150,10 @@ describe('turning a confirmed draft into an ordinary exam', () => {
   });
 
   it('carries the printed label, the key and the marks onto the quiz question', async () => {
-    await builder.build(scope, draft([draftQuestion()]), { target: 'NEW_COURSE' });
+    await builder.build(scope, draft([draftQuestion()]), {
+      target: 'NEW_COURSE',
+      gradeId: 'year1',
+    });
 
     const [, , dto] = quizzes.setQuestions.mock.calls[0];
     const q = dto.questions[0];
@@ -146,7 +174,7 @@ describe('turning a confirmed draft into an ordinary exam', () => {
         { id: 'o3', label: 'C', text: 'Three', correct: false },
       ],
     });
-    await builder.build(scope, draft([multi]), { target: 'NEW_COURSE' });
+    await builder.build(scope, draft([multi]), { target: 'NEW_COURSE', gradeId: 'year1' });
     expect(quizzes.setQuestions.mock.calls[0][2].questions[0].maxSelections).toBe(2);
   });
 
@@ -157,7 +185,7 @@ describe('turning a confirmed draft into an ordinary exam', () => {
       modelAnswer: 'Light energy becomes chemical energy.',
       marks: null,
     });
-    await builder.build(scope, draft([written]), { target: 'NEW_COURSE' });
+    await builder.build(scope, draft([written]), { target: 'NEW_COURSE', gradeId: 'year1' });
 
     const q = quizzes.setQuestions.mock.calls[0][2].questions[0];
     expect(q.type).toBe('SHORT_ANSWER');
@@ -171,7 +199,10 @@ describe('turning a confirmed draft into an ordinary exam', () => {
     const odd = draftQuestion({ type: 'UNSUPPORTED', unsupportedKind: 'matching', options: [] });
 
     await expect(
-      builder.build(scope, draft([draftQuestion(), odd]), { target: 'NEW_COURSE' }),
+      builder.build(scope, draft([draftQuestion(), odd]), {
+        target: 'NEW_COURSE',
+        gradeId: 'year1',
+      }),
     ).rejects.toMatchObject({ response: { code: 'UNSUPPORTED_QUESTIONS' } });
     expect(quizzes.setQuestions).not.toHaveBeenCalled();
   });
@@ -181,6 +212,7 @@ describe('turning a confirmed draft into an ordinary exam', () => {
 
     const built = await builder.build(scope, draft([draftQuestion(), odd]), {
       target: 'NEW_COURSE',
+      gradeId: 'year1',
       dropUnsupported: true,
     });
 
@@ -189,7 +221,9 @@ describe('turning a confirmed draft into an ordinary exam', () => {
   });
 
   it('refuses a draft with nothing in it', async () => {
-    await expect(builder.build(scope, draft([]), { target: 'NEW_COURSE' })).rejects.toMatchObject({
+    await expect(
+      builder.build(scope, draft([]), { target: 'NEW_COURSE', gradeId: 'year1' }),
+    ).rejects.toMatchObject({
       response: { code: 'NO_QUESTIONS' },
     });
   });
@@ -203,7 +237,7 @@ describe('turning a confirmed draft into an ordinary exam', () => {
         { title: 'Section B', questions: [draftQuestion({ id: 'd2', text: 'Second section Q' })] },
       ],
     };
-    await builder.build(scope, sectioned, { target: 'NEW_COURSE' });
+    await builder.build(scope, sectioned, { target: 'NEW_COURSE', gradeId: 'year1' });
 
     const prompts = quizzes.setQuestions.mock.calls[0][2].questions.map(
       (q: { prompt: string }) => q.prompt,
@@ -213,7 +247,10 @@ describe('turning a confirmed draft into an ordinary exam', () => {
   });
 
   it('builds the quiz through the same service the manual builder uses', async () => {
-    await builder.build(scope, draft([draftQuestion()]), { target: 'NEW_COURSE' });
+    await builder.build(scope, draft([draftQuestion()]), {
+      target: 'NEW_COURSE',
+      gradeId: 'year1',
+    });
     expect(quizzes.upsertForTeacher).toHaveBeenCalledWith('teacher1', 'lesson1', {});
     expect(quizzes.setQuestions).toHaveBeenCalledWith('teacher1', 'lesson1', expect.anything());
   });
@@ -222,7 +259,7 @@ describe('turning a confirmed draft into an ordinary exam', () => {
     await builder.build(
       scope,
       draft([draftQuestion()]),
-      { target: 'NEW_COURSE' },
+      { target: 'NEW_COURSE', gradeId: 'year1' },
       { timeLimitMin: 45, shuffle: true, showAnswers: false },
     );
     expect(quizzes.upsertForTeacher).toHaveBeenCalledWith('teacher1', 'lesson1', {
@@ -236,7 +273,7 @@ describe('turning a confirmed draft into an ordinary exam', () => {
     await builder.build(
       scope,
       draft([draftQuestion()]),
-      { target: 'NEW_COURSE' },
+      { target: 'NEW_COURSE', gradeId: 'year1' },
       { timeLimitMin: null, shuffle: false, showAnswers: true },
     );
     expect(quizzes.upsertForTeacher.mock.calls[0][2]).toMatchObject({ timeLimitSec: null });

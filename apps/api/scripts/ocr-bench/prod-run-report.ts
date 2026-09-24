@@ -40,12 +40,29 @@ async function main() {
   );
 
   const wanted = process.argv[2];
+  // Only the columns this report needs — no exam content (draft, warnings),
+  // no teacher or academy identifiers — so it runs under a role granted
+  // exactly these columns and nothing else (see prod-run-report.sql).
+  const importColumns = {
+    id: true,
+    kind: true,
+    status: true,
+    stage: true,
+    createdAt: true,
+    updatedAt: true,
+    durationMs: true,
+    costCents: true,
+    inputTokens: true,
+    outputTokens: true,
+    escalatedPages: true,
+    highAccuracy: true,
+  } as const;
   const imp = wanted
-    ? await prisma.paperImport.findUnique({ where: { id: wanted }, include: { pages: true } })
+    ? await prisma.paperImport.findUnique({ where: { id: wanted }, select: importColumns })
     : await prisma.paperImport.findFirst({
         where: { kind: 'PAPER' },
         orderBy: { createdAt: 'desc' },
-        include: { pages: true },
+        select: importColumns,
       });
   if (!imp) throw new Error('No import found');
 
@@ -57,7 +74,6 @@ async function main() {
         kind: imp.kind,
         status: imp.status,
         stage: imp.stage,
-        pages: imp.pages.length,
         createdAt: imp.createdAt,
         updatedAt: imp.updatedAt,
         wallClock: s(ms(imp.updatedAt) - ms(imp.createdAt)),
@@ -67,8 +83,6 @@ async function main() {
         outputTokens: imp.outputTokens,
         escalatedPages: imp.escalatedPages,
         highAccuracy: imp.highAccuracy,
-        questions: ((imp.draft as any)?.sections ?? []).flatMap((x: any) => x.questions ?? [])
-          .length,
       },
       null,
       2,
@@ -78,6 +92,16 @@ async function main() {
   const jobs = await prisma.aiJob.findMany({
     where: { input: { path: ['importId'], equals: imp.id } },
     orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      status: true,
+      attempts: true,
+      stage: true,
+      createdAt: true,
+      updatedAt: true,
+      costCents: true,
+      errorClass: true,
+    },
   });
   console.log('\n## Jobs');
   for (const j of jobs) {
@@ -95,6 +119,25 @@ async function main() {
     calls = await prisma.aiCallLog.findMany({
       where: { importId: imp.id },
       orderBy: { startedAt: 'asc' },
+      select: {
+        stage: true,
+        region: true,
+        attempt: true,
+        model: true,
+        reasoningEffort: true,
+        imageCount: true,
+        startedAt: true,
+        latencyMs: true,
+        status: true,
+        error: true,
+        responseId: true,
+        inputTokens: true,
+        cachedInputTokens: true,
+        outputTokens: true,
+        reasoningTokens: true,
+        costMillicents: true,
+        meta: true,
+      },
     });
   } catch (e) {
     console.log(

@@ -548,3 +548,102 @@ describe('numbers in a variant', () => {
     expect(variantNumbersProblem(inverse, loan, PAGE)).toBe(false);
   });
 });
+
+// Rejected in the Luna-first benchmark on cmufswxi600ab6gh0f3diz9b2
+// (2026-09-25, a 33-page English lecture on unsupervised learning): five
+// of its six rejections were these checks being wrong, not the model.
+describe('a short question and a longer one on the same topic', () => {
+  const WHAT = 'What is unsupervised learning?';
+
+  it.each([
+    'In supervised learning, the input is X + Y, while in unsupervised learning, the input is X only.',
+    'Which pair lists the two main tasks of unsupervised learning?',
+    'Unsupervised learning has no target variable (Y).',
+    'What does unsupervised learning help do when real-world datasets have no labels?',
+  ])('is not a duplicate of %s', (other) => {
+    expect(similarity(WHAT, other)).toBeLessThan(DUPLICATE_THRESHOLD);
+    expect(
+      findDuplicates([
+        { id: 'a', text: WHAT },
+        { id: 'b', text: other },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('is still a duplicate of itself, and of itself reworded', () => {
+    expect(similarity(WHAT, 'what is  Unsupervised Learning?')).toBe(1);
+    expect(similarity(WHAT, 'What does unsupervised learning mean?')).toBeGreaterThanOrEqual(
+      DUPLICATE_THRESHOLD,
+    );
+  });
+
+  it('does not test the same point as a question on one of its properties', () => {
+    const what = mcq(
+      WHAT,
+      'A machine learning technique in which an algorithm learns from unlabeled data.',
+    );
+    const tasks = mcq(
+      'Which pair lists the two main tasks of unsupervised learning?',
+      'Clustering and dimensionality reduction',
+    );
+    expect(repeatsPoint(what, tasks)).toBe(false);
+    expect(repeatsPoint(what, tf('Unsupervised learning has no target variable (Y).'))).toBe(false);
+  });
+});
+
+describe('questions that ask for opposite answers', () => {
+  it('keeps good and bad clustering apart, though "bad" is too short to be a feature', () => {
+    expect(
+      similarity(
+        'Which combination describes bad clustering according to the material?',
+        'According to the material, which combination describes good clustering?',
+      ),
+    ).toBeLessThan(DUPLICATE_THRESHOLD);
+  });
+
+  it('does the same in Arabic', () => {
+    expect(
+      similarity(
+        'ما العدد الأكبر في المجموعة الواردة في الجدول؟',
+        'ما العدد الأصغر في المجموعة الواردة في الجدول؟',
+      ),
+    ).toBeLessThan(DUPLICATE_THRESHOLD);
+  });
+
+  it('still calls the same question a duplicate when both say the same word', () => {
+    const a = 'According to the material, which combination describes good clustering?';
+    expect(
+      similarity(a, 'Which combination describes good clustering, according to the material?'),
+    ).toBe(1);
+  });
+});
+
+describe('two steps of one algorithm', () => {
+  // The rejected short answer's model answer was not logged; this is the
+  // lecture's own wording for step 4, and with it the check before this fix
+  // flagged the pair exactly as production did.
+  const update = written(
+    'How is the new centroid of each cluster determined?',
+    'The mean of the data points assigned to it.',
+  );
+  const assign = tf(
+    'In step 3, a point is assigned to a cluster based on its distance to other data points rather than its distance to each cluster center.',
+    false,
+  );
+
+  it('keeps updating a centroid apart from assigning points to clusters', () => {
+    expect(repeatsPoint(update, assign)).toBe(false);
+    expect(repeatsPoint(assign, update)).toBe(false);
+  });
+
+  it('still catches the same step asked twice', () => {
+    const again = mcq(
+      'In step 3, how is each point assigned to a cluster?',
+      'By its distance to each cluster center',
+    );
+    const stated = tf(
+      'In step 3, each point is assigned to a cluster based on its distance to each cluster center.',
+    );
+    expect(repeatsPoint(again, stated)).toBe(true);
+  });
+});

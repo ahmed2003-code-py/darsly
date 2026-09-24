@@ -805,8 +805,10 @@ export class GenerationRun {
         });
         return;
       }
-      // A variant tests an existing question's idea on purpose; a new
-      // question testing one already on the exam is a wasted place.
+      // After DUPLICATE, never instead of it: a reworded question is a
+      // duplicate; a different question on a fact already tested is
+      // SAME_POINT. A variant tests an existing question's idea on purpose,
+      // so only new questions are held to it.
       const samePoint =
         target.mode === 'DISTINCT' ? onExam.find((q) => repeatsPoint(question, q)) : undefined;
       if (samePoint) {

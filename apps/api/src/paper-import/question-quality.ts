@@ -126,6 +126,71 @@ const GENERIC_WORDS = new Set([
  *  full match on the strength of one shared word. */
 const MIN_EVIDENCE = 2;
 
+/** Two questions are compared over at least this share of the larger one's
+ *  features. A paraphrase says about as much as what it rewords; a question
+ *  a third the length of another, all of whose words the other contains,
+ *  is about the same topic and asks something smaller. */
+const SIZE_BALANCE = 0.75;
+
+/** Words that turn a question into its opposite, in pairs, folded. "Which
+ *  combination describes good clustering" and "…bad clustering" share every
+ *  other word and ask for opposite answers. Any length: "bad" is three
+ *  letters, and the features below keep only four and up. */
+const OPPOSITES: [string, string][] = [
+  ['good', 'bad'],
+  ['high', 'low'],
+  ['higher', 'lower'],
+  ['highest', 'lowest'],
+  ['increase', 'decrease'],
+  ['increases', 'decreases'],
+  ['more', 'less'],
+  ['most', 'least'],
+  ['largest', 'smallest'],
+  ['larger', 'smaller'],
+  ['maximum', 'minimum'],
+  ['best', 'worst'],
+  ['advantage', 'disadvantage'],
+  ['advantages', 'disadvantages'],
+  ['true', 'false'],
+  ['correct', 'incorrect'],
+  ['before', 'after'],
+  ['first', 'last'],
+  ['strong', 'weak'],
+  ['اكبر', 'اصغر'],
+  ['اعلي', 'اقل'],
+  ['اكثر', 'اقل'],
+  ['زياده', 'نقصان'],
+  ['يزيد', 'يقل'],
+  ['مزايا', 'عيوب'],
+  ['ميزه', 'عيب'],
+  ['صحيح', 'خطا'],
+  ['صحيحه', 'خاطئه'],
+  ['قبل', 'بعد'],
+  ['اول', 'اخر'],
+  ['جيد', 'سيئ'],
+  ['جيده', 'سيئه'],
+  ['قوي', 'ضعيف'],
+];
+
+/** Whether one question holds a word whose opposite only the other holds. */
+function opposed(a: string, b: string): boolean {
+  // Each word as written and stemmed, so "الأكبر" is "أكبر".
+  const words = (t: string) =>
+    new Set(
+      foldArabic(t ?? '')
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean)
+        .flatMap((w) => [w, lightStem(w)]),
+    );
+  const [left, right] = [words(a), words(b)];
+  return OPPOSITES.map(([x, y]) => [lightStem(x), lightStem(y)]).some(
+    ([x, y]) =>
+      (left.has(x) && !left.has(y) && right.has(y) && !right.has(x)) ||
+      (left.has(y) && !left.has(x) && right.has(x) && !right.has(y)),
+  );
+}
+
 /** Both questions carry numbers and fewer than half of them agree: different
  *  problems, however alike the wording. */
 const NUMBERS_AGREE = 0.5;
@@ -223,7 +288,14 @@ export function similarity(a: string, b: string): number {
   if (!left.all.size || !right.all.size) return 0;
   let shared = 0;
   for (const f of left.all) if (right.all.has(f)) shared++;
-  const overlap = shared / Math.max(MIN_EVIDENCE, Math.min(left.all.size, right.all.size));
+  // Over the smaller question, but never less than most of the larger: a
+  // short question whose every word is in a long one ("What is unsupervised
+  // learning?" in "Which pair lists the two main tasks of unsupervised
+  // learning?") shares its topic, not its question.
+  const smaller = Math.min(left.all.size, right.all.size);
+  const larger = Math.max(left.all.size, right.all.size);
+  const overlap = shared / Math.max(MIN_EVIDENCE, smaller, larger * SIZE_BALANCE);
+  if (opposed(a, b)) return Math.min(overlap, NUMBERS_AGREE);
   if (left.numbers.size && right.numbers.size) {
     let common = 0;
     for (const n of left.numbers) if (right.numbers.has(n)) common++;
@@ -243,6 +315,11 @@ export function similarity(a: string, b: string): number {
 /** Function words and question scaffolding of three letters or more, folded:
  *  "بحسب المادة" names where a fact is, not which fact. */
 const POINT_STOP = new Set([
+  'اذا',
+  'فما',
+  'وكم',
+  'وهل',
+  'فهل',
   'علي',
   'الي',
   'التي',
@@ -330,16 +407,24 @@ function lightStem(w: string): string {
       break;
     }
   }
-  if (s === w && /^[وبلفك]/.test(s) && s.length >= 5) s = s.slice(1);
-  for (const suf of ['هم', 'ها', 'ان', 'ين', 'ون', 'ات', 'ه', 'ي', 'ا']) {
-    if (s.endsWith(suf) && s.length - suf.length >= 3) return s.slice(0, -suf.length);
+  // A single-letter prefix ("ومدة", "لمدة") is cut whenever three letters are
+  // left. It sometimes cuts a letter that belongs to the word, but it cuts it
+  // the same way in both questions, and matching is all this is for.
+  if (s === w && /^[وبلفك]/.test(s) && s.length >= 4 && /[؀-ۿ]/.test(s)) s = s.slice(1);
+  // Up to two endings: "هجرية" → "هجري" → "هجر".
+  for (let pass = 0; pass < 2; pass++) {
+    const suf = ['هم', 'ها', 'ان', 'ين', 'ون', 'ات', 'ه', 'ي', 'ا'].find(
+      (x) => s.endsWith(x) && s.length - x.length >= 3,
+    );
+    if (!suf) break;
+    s = s.slice(0, -suf.length);
   }
   return s;
 }
 
 /** What a stretch of text says, for comparing learning points: its numbers
  *  and its content words (three letters and up, stemmed). */
-function pointFeatures(text: string): Set<string> {
+export function pointFeatures(text: string): Set<string> {
   const out = new Set<string>();
   const folded = normaliseMath(foldArabic(text ?? '')).toLowerCase();
   for (const n of folded.match(/\d+(?:\.\d+)?/g) ?? []) out.add(`#${n}`);
@@ -405,12 +490,24 @@ export function repeatsPoint(a: PointQuestion, b: PointQuestion): boolean {
   const wholeB = wholeOf(b);
   const [small, large] = wholeA.size <= wholeB.size ? [wholeA, wholeB] : [wholeB, wholeA];
   if ([...small].filter((f) => large.has(f)).length * 2 <= small.size) return false;
-  const covers = (x: PointQuestion, other: Set<string>) => {
+  const covers = (x: PointQuestion, other: Set<string>, otherStem: Set<string>) => {
     const tested = [...testedBy(x)].filter((f) => !subject.has(f));
     if (!tested.length) return false;
-    return tested.filter((f) => other.has(f)).length * 2 >= tested.length;
+    if (tested.filter((f) => other.has(f)).length * 2 < tested.length) return false;
+    // A worked-out number printed in the other question's wording gives the
+    // answer away, whatever else either question says.
+    const numbers = tested.filter((f) => f.startsWith('#'));
+    if (numbers.length && numbers.every((f) => otherStem.has(f))) return true;
+    // Otherwise what x asks about, beyond the shared subject, must be there
+    // too: "how is the new centroid found" is not the assignment step, however
+    // much of the assignment step its answer repeats on the way. Only when x
+    // asks about two things or more and the other mentions none of them — one
+    // leftover word is usually just the question's verb ("بلغ", "استمر").
+    if (x.type === 'TRUE_FALSE') return true;
+    const asked = [...pointFeatures(x.text)].filter((f) => !subject.has(f));
+    return asked.length < 2 || asked.some((f) => other.has(f));
   };
-  return covers(a, wholeB) || covers(b, wholeA);
+  return covers(a, wholeB, stemB) || covers(b, wholeA, stemA);
 }
 
 // ── numbers a question gives ───────────────────────────────────────────────

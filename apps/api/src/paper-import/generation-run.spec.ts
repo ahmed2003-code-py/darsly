@@ -1150,3 +1150,43 @@ describe('statements are a hint for spreading questions, not a rule', () => {
     expect(out.report.sourceSufficient).toBe(false);
   });
 });
+
+describe('DUPLICATE before SAME_POINT', () => {
+  // A question that is another reworded is a DUPLICATE, and only that; a
+  // different question on the same fact is SAME_POINT. The run checks
+  // DUPLICATE first and never reports one pair as both.
+  it('reports a reworded question as a duplicate, not as the same point', async () => {
+    const sheet: SourceChunk = {
+      index: 0,
+      text: '- ظل نوح عليه السلام يدعو قومه لمدة ٩٥٠ سنة.\n- الصاع يساوي أربع حفنات من الطعام باليدين',
+      sourceFile: 'images.jpg',
+      page: 1,
+      tokensApprox: 150,
+    };
+    const noah = (text: string) => ({
+      ...q({ type: 'MCQ' }),
+      text,
+      chunkIndex: 0,
+      options: ['٩٥٠ سنة', '٩٠٠ سنة', '١٠٠٠ سنة'].map((t, i) => ({
+        label: String(i),
+        text: t,
+        correct: i === 0,
+      })),
+    });
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req) =>
+      result(req, [
+        noah('كم سنة ظل نوح عليه السلام يدعو قومه؟'),
+        noah('كم سنة ظل نوح عليه السلام يدعو قومه بحسب المادة؟'),
+      ]),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 2, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [sheet],
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 10_000,
+    });
+    expect(out.report.rejections).toEqual({ DUPLICATE: 1 });
+  });
+});

@@ -10,7 +10,7 @@ import {
   QuestionGeneratorService,
 } from './question-generator.service';
 import { GradedQuestion, questionProblem } from './question-quality';
-import { SourceChunk } from './source-text';
+import { SourceChunk, supportableQuestions } from './source-text';
 
 /**
  * The generation algorithm, with no provider anywhere near it.
@@ -95,7 +95,13 @@ const answer = (
   over: (i: number) => Partial<GeneratedQuestion> = () => ({}),
 ) =>
   req.plan.map((p, i) =>
-    q({ type: p.type, difficulty: p.difficulty, chunkIndex: req.chunks[0].index, ...over(i) }),
+    q({
+      type: p.type,
+      difficulty: p.difficulty,
+      // From the chunk its line named, as asked.
+      chunkIndex: req.targets?.[i] ?? req.chunks[0].index,
+      ...over(i),
+    }),
   );
 
 const result = (
@@ -713,11 +719,12 @@ describe('the profiles, and the flagship', () => {
 
 describe('thin material — the import that produced 18 of 20', () => {
   // cmufhs5jl0014966dyg0tdvvn: two photographed pages, 605 tokens between
-  // them, twenty questions asked for. The material carries eight; the other
-  // twelve can only be variants.
+  // them, twenty questions asked for. What the material carries is written
+  // new; only the difference is written as variants.
   const thin = [chunk(0, 404), chunk(1, 201)];
+  const cap = supportableQuestions(thin);
 
-  it('asks for the eight it can carry, then exactly the twelve still owed, by type', async () => {
+  it('asks for what it can carry, then exactly the rest, by type', async () => {
     const t = setup();
     const out = await t.run.run({
       importId: 'imp',
@@ -726,23 +733,20 @@ describe('thin material — the import that produced 18 of 20', () => {
       profile: t.config.generationProfileOf('LUNA_FIRST'),
       budgetMillicents: 10_000,
     });
-    expect(t.calls[0].mode).toBe('DISTINCT');
-    expect(t.calls[0].plan).toHaveLength(8);
-    const variantCalls = t.calls.filter((c) => c.mode === 'VARIANT');
-    const owed = variantCalls.flatMap((c) => c.plan.map((p) => p.type));
-    expect(owed).toHaveLength(12);
-    const distinctTypes = t.calls[0].plan.map((p) => p.type);
-    const all = [...distinctTypes, ...owed];
+    const fresh = t.calls.filter((c) => c.mode === 'DISTINCT').flatMap((c) => c.plan);
+    expect(fresh).toHaveLength(cap);
+    const owed = t.calls.filter((c) => c.mode === 'VARIANT').flatMap((c) => c.plan);
+    expect(owed).toHaveLength(20 - cap);
+    const all = [...fresh, ...owed].map((p) => p.type);
     expect(all.filter((x) => x === 'MCQ')).toHaveLength(18);
     expect(all.filter((x) => x === 'TRUE_FALSE')).toHaveLength(1);
     expect(all.filter((x) => x === 'SHORT_ANSWER')).toHaveLength(1);
     expect(out.report.accepted).toBe(20);
-    expect(out.report.variants).toBe(12);
-    // No second pass over questions that were already accepted.
-    expect(t.calls).toHaveLength(3);
+    expect(out.report.variants).toBe(20 - cap);
+    expect(out.report.sourceSufficient).toBe(false);
   });
 
-  it('gives two variant calls different questions to vary', async () => {
+  it('gives each variant one question to vary, and spreads them', async () => {
     const t = setup();
     await t.run.run({
       importId: 'imp',
@@ -751,9 +755,19 @@ describe('thin material — the import that produced 18 of 20', () => {
       profile: t.config.generationProfileOf('SOL_FIRST'),
       budgetMillicents: 25_000,
     });
-    const [a, b] = t.calls.filter((c) => c.mode === 'VARIANT');
+    const variantCalls = t.calls.filter((c) => c.mode === 'VARIANT');
+    const varied: string[] = variantCalls.flatMap((c) =>
+      c.variantOf!.map((k) => c.source![k - 1].text),
+    );
+    expect(varied).toHaveLength(20 - cap);
+    // No question is varied more than its share.
+    const counts = new Map<string, number>();
+    for (const v of varied) counts.set(v, (counts.get(v) ?? 0) + 1);
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(Math.ceil((20 - cap) / cap));
+    // Two calls at once are not handed the same question to vary.
+    const [a, b] = variantCalls;
     const overlap = a.source!.filter((x) => b.source!.some((y) => y.text === x.text));
-    expect(overlap).toHaveLength(0);
+    expect(overlap.length).toBeLessThan(a.source!.length);
   });
 
   it('with variants off, reports the shortfall as the material and spends nothing on it', async () => {
@@ -767,7 +781,95 @@ describe('thin material — the import that produced 18 of 20', () => {
     });
     expect(t.calls).toHaveLength(1);
     expect(out.report.stopReason).toBe('MATERIAL');
-    expect(out.report.accepted).toBe(8);
+    expect(out.report.accepted).toBe(cap);
+  });
+});
+
+describe('two pages of different kinds — the import that produced 18 of 20, again', () => {
+  // cmufjoy7t001414et7nu9v3dz: an arithmetic page of seven problems (400
+  // tokens) and a revision sheet of fourteen one-line facts (231 tokens).
+  // Counted by tokens that was nine questions; the first batch was handed
+  // the arithmetic page alone and asked for eight, and the sheet was asked
+  // for one. Every question on the final exam came from the arithmetic page.
+  const problems = Array.from(
+    { length: 7 },
+    (_, i) =>
+      `(${i + 1}) ${TOPICS[i]} Explain the mitochondria, chloroplasts and respiration steps carefully.`,
+  ).join('\n');
+  const facts = Array.from(
+    { length: 14 },
+    (_, i) => `- ${TOPICS[i + 5]} The cell membrane controls diffusion here.`,
+  ).join('\n');
+  const pages: SourceChunk[] = [
+    { index: 0, text: problems, sourceFile: 'exam2.jpg', page: 1, tokensApprox: 400 },
+    { index: 1, text: facts, sourceFile: 'images.jpg', page: 2, tokensApprox: 231 },
+  ];
+
+  it('sees that the two pages carry the exam, and writes no variants', async () => {
+    const t = setup();
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 14, TRUE_FALSE: 3, SHORT_ANSWER: 3 }),
+      chunks: pages,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(out.report.sourceCapacity).toBe(21);
+    expect(out.report.sourceSufficient).toBe(true);
+    expect(t.calls.every((c) => c.mode === 'DISTINCT')).toBe(true);
+    expect(out.report.variants).toBe(0);
+    expect(out.report.complete).toBe(true);
+  });
+
+  it('asks each page for its share, in even batches', async () => {
+    const t = setup();
+    await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 14, TRUE_FALSE: 3, SHORT_ANSWER: 3 }),
+      chunks: pages,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    const targets = t.calls.flatMap((c) => c.targets ?? []);
+    expect(targets.filter((x) => x === 0)).toHaveLength(7);
+    expect(targets.filter((x) => x === 1)).toHaveLength(13);
+    // 20 slots in three calls are 7 + 7 + 6, not 8 + 8 + 4.
+    expect(t.calls.map((c) => c.plan.length).sort()).toEqual([6, 7, 7]);
+    // Each call is handed only the pages its lines name.
+    for (const c of t.calls) {
+      const named = new Set(c.targets);
+      expect(c.chunks.every((ch) => named.has(ch.index))).toBe(true);
+    }
+    // And the mix of types reaches both pages.
+    const typesOn = (chunkIndex: number) =>
+      new Set(
+        t.calls.flatMap((c) =>
+          c.plan.filter((_, i) => c.targets![i] === chunkIndex).map((p) => p.type),
+        ),
+      );
+    expect(typesOn(1).size).toBeGreaterThan(1);
+  });
+
+  it('logs what a duplicate repeated, and how alike the two scored', async () => {
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req, n) =>
+      result(
+        req,
+        answer(req, (i) => (n === 1 && i === 0 ? { text: TOPICS[0] } : {})),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 14, TRUE_FALSE: 3, SHORT_ANSWER: 3 }),
+      chunks: pages,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    const samples = out.report.callLog.flatMap((c) => c.rejectedSamples);
+    const dup = samples.find((x) => x.reason === 'DUPLICATE');
+    expect(dup?.text).toBe(TOPICS[0]);
+    expect(dup?.duplicateOf).toBe(TOPICS[0]);
+    expect(dup?.score).toBe(1);
   });
 });
 
@@ -775,14 +877,12 @@ describe('a billed failure is still a cost', () => {
   it('counts a truncated answer the provider charged for', async () => {
     const config = new PaperImportConfig();
     const ai = {
-      completeStructured: jest
-        .fn()
-        .mockRejectedValue(
-          new AiJobError('AI response was cut off', 'RETRYABLE', {
-            inputTokens: 3000,
-            outputTokens: 5600,
-          }),
-        ),
+      completeStructured: jest.fn().mockRejectedValue(
+        new AiJobError('AI response was cut off', 'RETRYABLE', {
+          inputTokens: 3000,
+          outputTokens: 5600,
+        }),
+      ),
       costMillicents: (i: number, o: number, p: { inPerMToken: number; outPerMToken: number }) =>
         Math.round(((i / 1e6) * p.inPerMToken + (o / 1e6) * p.outPerMToken) * 1000),
     };

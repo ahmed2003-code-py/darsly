@@ -8,6 +8,7 @@ import { ExamSpec, normalizeSpec, PlannedQuestion, specFromQuestions } from './e
 import { gradeQuestions, findDuplicates, GradedQuestion } from './question-quality';
 import { QuestionGeneratorService } from './question-generator.service';
 import { SourceReaderService } from './source-reader.service';
+import { PagePhase } from './ocr/transcriber.service';
 import { GenerationProfileName, PaperImportConfig } from './paper-import.config';
 import { acceptOne, GenerationReport, GenerationRun } from './generation-run';
 import {
@@ -68,29 +69,65 @@ export class ContentGenerationService {
 
     let millicents = 0;
     let done = record.pages.length - pages.length;
+    const started = Date.now();
+    const perPage: { page: number; ms: number; millicents: number }[] = [];
+    let stopped = false;
 
-    for (const page of pages) {
-      // Put down while reading — stopped or deleted from the drafts list:
-      // stop here rather than pay for every remaining page of something
-      // nobody wants, and leave the session as its owner left it.
-      const live = await this.prisma.paperImport.findFirst({
-        where: { id: record.id, deletedAt: null, status: { not: 'CANCELED' } },
-        select: { id: true },
-      });
-      if (!live) {
-        this.logger.log(`Import ${record.id}: stopped by its owner after ${done} page(s)`);
-        return { millicents };
+    // Pages are independent — the chunker orders them by page number once
+    // they are all in — so a few are read at once instead of one after
+    // another. Bounded: each page already reads its crops several at a time.
+    const queue = [...pages];
+    const worker = async () => {
+      for (let page = queue.shift(); page && !stopped; page = queue.shift()) {
+        // Put down while reading — stopped or deleted from the drafts list:
+        // start no more pages. One already being read finishes, and is paid
+        // for; nothing new is started.
+        const live = await this.prisma.paperImport.findFirst({
+          where: { id: record.id, deletedAt: null, status: { not: 'CANCELED' } },
+          select: { id: true },
+        });
+        if (!live) {
+          stopped = true;
+          return;
+        }
+        const t0 = Date.now();
+        const result = await this.readOne(record.id, page);
+        perPage.push({ page: page.pageNumber, ms: Date.now() - t0, millicents: result.millicents });
+        millicents += result.millicents;
+        done += 1;
+        await this.prisma.paperImport.update({
+          where: { id: record.id },
+          data: { progressDone: done },
+        });
       }
-      const result = await this.readOne(record.id, page);
-      millicents += result.millicents;
-      done += 1;
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.max(1, Math.min(this.config.contentReadConcurrency, pages.length)) },
+        worker,
+      ),
+    );
+
+    const summary = {
+      importId: record.id,
+      pages: perPage.sort((x, y) => x.page - y.page),
+      durationMs: Date.now() - started,
+      millicents,
+      concurrency: this.config.contentReadConcurrency,
+    };
+    if (stopped) {
+      // What was read before the stop was still paid for.
       await this.prisma.paperImport.update({
         where: { id: record.id },
-        data: { progressDone: done },
+        data: { costCents: { increment: Math.ceil(millicents / 1000) } },
       });
+      this.logger.log(`READ_SUMMARY ${JSON.stringify({ ...summary, stopped: true })}`);
+      this.logger.log(`Import ${record.id}: stopped by its owner after ${done} page(s)`);
+      return { millicents };
     }
 
     const chunks = await this.buildChunks(record.id);
+    this.logger.log(`READ_SUMMARY ${JSON.stringify({ ...summary, chunks })}`);
     this.logger.log(
       `Import ${record.id}: read ${record.pages.length} page(s) into ${chunks} chunk(s), ` +
         `${(millicents / 1000).toFixed(2)}¢`,
@@ -105,7 +142,9 @@ export class ContentGenerationService {
         status: chunks ? 'CONFIGURING' : 'FAILED',
         stage: 'READY',
         error: chunks ? null : 'No readable teaching material was found in the uploaded files',
-        inputTokens: { increment: 0 },
+        // Reading is part of what the exam cost. It was left out of the
+        // session's total, which then said 13¢ for an exam that cost 25¢.
+        costCents: { increment: Math.ceil(millicents / 1000) },
       },
     });
     return { millicents };
@@ -149,9 +188,27 @@ export class ContentGenerationService {
       return { millicents: 0 };
     }
 
+    // What is happening to this page, as it happens — the progress screen
+    // shows it. Chained so writes land in order, never awaited by the reading.
+    let reported: Promise<unknown> = Promise.resolve();
+    const onPhase = (p: PagePhase) => {
+      reported = reported
+        .then(() =>
+          this.prisma.paperImportPage.update({
+            where: { id: page.id },
+            data: {
+              phase: p.phase,
+              phaseDone: 'done' in p ? p.done : null,
+              phaseTotal: 'total' in p ? p.total : null,
+            },
+          }),
+        )
+        .catch(() => undefined);
+    };
     const result = await withAiTrace({ pageNumber: page.pageNumber }, () =>
-      this.reader.readPage({ pageNumber: page.pageNumber, image }),
+      this.reader.readPage({ pageNumber: page.pageNumber, image, onPhase }),
     );
+    await reported;
     const usable = !result.error && !result.blank && result.text.trim().length > 0;
 
     if (usable) {
@@ -162,6 +219,7 @@ export class ContentGenerationService {
       await this.prisma.paperImportPage.update({
         where: { id: page.id },
         data: {
+          phase: null,
           status: result.escalated ? 'ESCALATED' : 'EXTRACTED',
           textKey,
           model: result.model,
@@ -180,6 +238,7 @@ export class ContentGenerationService {
           // A blank page is not a failure — a cover sheet is a legitimate
           // thing to upload and there is simply nothing on it.
           status: result.blank ? 'SKIPPED' : 'FAILED',
+          phase: null,
           model: result.model,
           attempts: { increment: 1 },
           error: result.error,
@@ -253,6 +312,7 @@ export class ContentGenerationService {
     opts: { profile?: GenerationProfileName; budgetCents?: number } = {},
   ): Promise<{ millicents: number; report?: GenerationReport }> {
     const asked = normalizeSpec(record.spec as never);
+    const generationStarted = new Date();
     const chunks = await this.chunksOf(record.id);
 
     if (!chunks.length) {
@@ -419,6 +479,7 @@ export class ContentGenerationService {
       });
     }
 
+    await this.logExamSummary(record, report, generationStarted);
     this.logger.log(
       `Import ${record.id}: ${numbered.length}/${asked.questionCount} question(s) in ` +
         `${report.calls} call(s) on ${profile.name}, ${(millicents / 1000).toFixed(2)}¢` +
@@ -485,6 +546,78 @@ export class ContentGenerationService {
   }
 
   // ── internals ────────────────────────────────────────────────────────────
+
+  /**
+   * One line that says what this exam cost and how long each part took.
+   *
+   * Everything in it is measured: OCR cost from the pages' own records, OCR
+   * time from the recorded calls (first start to last finish), generation from
+   * the run itself. The gap between reading and writing is the teacher filling
+   * in the settings, and is reported as that rather than as system time.
+   * Costs are the application's (provider-reported tokens at configured
+   * prices), not the invoice.
+   */
+  private async logExamSummary(
+    record: PaperImport,
+    report: GenerationReport,
+    generationStarted: Date,
+  ): Promise<void> {
+    try {
+      const pages =
+        (await this.prisma.paperImportPage.findMany({
+          where: { importId: record.id },
+          select: { costMillicents: true },
+        })) ?? [];
+      const reads =
+        ((await (this.prisma as any).aiCallLog
+          ?.findMany({
+            where: { importId: record.id, phase: 'READ' },
+            select: { startedAt: true, latencyMs: true, model: true },
+          })
+          .catch(() => [])) as { startedAt: Date; latencyMs: number; model: string }[]) ?? [];
+      const ocrMillicents = pages.reduce((n, p) => n + (p.costMillicents ?? 0), 0);
+      const first = reads.length ? Math.min(...reads.map((r) => +r.startedAt)) : null;
+      const last = reads.length ? Math.max(...reads.map((r) => +r.startedAt + r.latencyMs)) : null;
+      const ocrMs = first != null && last != null ? last - first : null;
+      const byModel: Record<string, number> = { ...report.callsByModel };
+      for (const r of reads) byModel[r.model] = (byModel[r.model] ?? 0) + 1;
+      const created = record.createdAt ? +new Date(record.createdAt) : null;
+      const summary = {
+        importId: record.id,
+        profile: report.profile,
+        ocr: { millicents: ocrMillicents, durationMs: ocrMs, calls: reads.length },
+        generation: {
+          millicents: report.millicents,
+          durationMs: report.durationMs,
+          calls: report.calls,
+          rounds: report.rounds,
+        },
+        total: {
+          millicents: ocrMillicents + report.millicents,
+          // Time the system spent working, excluding the teacher's turn.
+          systemMs: (ocrMs ?? 0) + report.durationMs,
+        },
+        waits: {
+          uploadToFirstReadMs: created != null && first != null ? first - created : null,
+          teacherConfiguringMs: last != null ? +generationStarted - last : null,
+          wallSinceUploadMs: created != null ? Date.now() - created : null,
+        },
+        questions: {
+          requested: report.requested,
+          accepted: report.accepted,
+          variants: report.variants,
+          missingByType: report.missingByType,
+          stopReason: report.stopReason,
+        },
+        callsByModel: byModel,
+        rejections: report.rejections,
+        source: { capacity: report.sourceCapacity, sufficient: report.sourceSufficient },
+      };
+      this.logger.log(`EXAM_SUMMARY ${JSON.stringify(summary)}`);
+    } catch (e) {
+      this.logger.warn(`Could not summarise import ${record.id}: ${(e as Error).message}`);
+    }
+  }
 
   private async chunksOf(importId: string): Promise<SourceChunk[]> {
     const rows = await this.prisma.examSourceChunk.findMany({

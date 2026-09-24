@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { DraftQuestion } from './extraction.schema';
 import {
+  apportion,
   ExamSpec,
   planQuestions,
   PlannedQuestion,
@@ -24,7 +25,12 @@ import {
   questionProblem,
   RejectReason,
 } from './question-quality';
-import { selectChunksForBatch, SourceChunk, supportableQuestions } from './source-text';
+import {
+  chunkCapacity,
+  selectChunksForBatch,
+  SourceChunk,
+  supportableQuestions,
+} from './source-text';
 
 let counter = 0;
 const nextId = (): string =>
@@ -76,6 +82,10 @@ export interface GenerationCallLog {
   accepted: number;
   rejected: number;
   reasons: Partial<Record<RejectReason, number>>;
+  /** What was rejected, abbreviated — and for a duplicate, what it repeated
+   *  and how alike the two scored — so a rejection can be judged afterwards
+   *  instead of taken on trust. */
+  rejectedSamples: RejectedSample[];
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
@@ -92,10 +102,22 @@ export interface GenerationCallLog {
   error: string | null;
 }
 
+export interface RejectedSample {
+  reason: RejectReason;
+  type: string;
+  text: string;
+  duplicateOf?: string;
+  score?: number;
+}
+
 export interface GenerationReport {
   importId: string;
   profile: string;
   requested: number;
+  /** How many distinct questions the material can carry, by chunkCapacity,
+   *  and whether that covers what was asked for. */
+  sourceCapacity: number;
+  sourceSufficient: boolean;
   accepted: number;
   distinct: number;
   variants: number;
@@ -137,8 +159,14 @@ interface Slot {
   id: number;
   plan: PlannedQuestion;
   mode: GenerationMode;
-  /** The stretch of material a DISTINCT slot is written from. */
+  /** The call a DISTINCT slot is written in. */
   batch: number;
+  /** The chunk a DISTINCT slot is to be written from. Spread over the
+   *  material in proportion to what each chunk can carry, so one page is not
+   *  asked for eight questions while the next is asked for one. */
+  target: number | null;
+  /** The accepted question a VARIANT slot varies, by id. */
+  source: string | null;
   question: GradedQuestion | null;
   attempts: number;
   qualityFailures: number;
@@ -160,7 +188,7 @@ type Outcome =
   | { kind: 'done'; result: GenerationResult; charged: number }
   | { kind: 'skipped'; why: 'BUDGET' | 'CALLS' | 'CANCELED' };
 
-type Generator = Pick<QuestionGeneratorService, 'generate' | 'worstCase' | 'batchCount'>;
+type Generator = Pick<QuestionGeneratorService, 'generate' | 'worstCase'>;
 
 export class GenerationRun {
   private readonly logger = new Logger('GenerationRun');
@@ -180,12 +208,9 @@ export class GenerationRun {
     const variantsOn = this.config.generationVariantRounds > 0;
     const anchor = asked.language === 'AUTO';
 
-    const slots = this.slotsFor(asked, chunks);
-    const distinctCount = slots.filter((s) => s.mode === 'DISTINCT').length;
-    const batchCount = this.generator.batchCount(Math.max(1, distinctCount));
-    const windows = Array.from({ length: batchCount }, (_, b) =>
-      selectChunksForBatch(chunks, b, batchCount, this.config.generationSourceTokens),
-    );
+    const capacity = supportableQuestions(chunks);
+    const { slots, windows } = this.slotsFor(asked, chunks, capacity);
+    const sourceUse = new Map<string, number>();
     if (!variantsOn) for (const s of slots) if (s.mode === 'VARIANT') s.dropped = true;
 
     const log: GenerationCallLog[] = [];
@@ -222,6 +247,7 @@ export class GenerationRun {
         language: asked.language,
         profile,
         fallbackLeft: this.config.generationMaxFallbackCalls - fallbackCalls,
+        sourceUse,
       });
       if (!requests.length) break;
       roundsRun += 1;
@@ -267,6 +293,7 @@ export class GenerationRun {
           accepted: tally.accepted,
           rejected: result.questions.length - tally.accepted,
           reasons: tally.reasons,
+          rejectedSamples: tally.samples,
           inputTokens: result.inputTokens,
           cachedInputTokens: result.cachedInputTokens ?? 0,
           outputTokens: result.outputTokens,
@@ -322,6 +349,8 @@ export class GenerationRun {
       importId: input.importId,
       profile: profile.name,
       requested: slots.length,
+      sourceCapacity: capacity,
+      sourceSufficient: capacity >= slots.length,
       accepted: filled.length,
       distinct: filled.filter((s) => !s.question!.variant).length,
       variants: filled.filter((s) => s.question!.variant).length,
@@ -350,13 +379,25 @@ export class GenerationRun {
   // ── planning ─────────────────────────────────────────────────────────────
 
   /**
-   * The exam as ordered, as slots. The first `ceiling` of them — by type, in
-   * proportion — are to be written as new questions from the material; the
-   * rest, when the material is too short to carry them, as variants.
+   * The exam as ordered, as slots. As many of them as the material can carry
+   * — by type, in proportion — are written as new questions; the rest, when
+   * it is too short, as variants.
+   *
+   * Each new-question slot is given a chunk to be written from, in proportion
+   * to what each chunk can carry, and the slots are cut into batches of even
+   * size by chunk. Without this the first batch took the first chunk and all
+   * its slots: a seven-problem arithmetic page was asked for eight questions
+   * (two came back as repeats of each other) while a fourteen-fact revision
+   * sheet beside it was asked for one — and every later variant came from the
+   * arithmetic page too.
    */
-  private slotsFor(asked: ExamSpec, chunks: SourceChunk[]): Slot[] {
+  private slotsFor(
+    asked: ExamSpec,
+    chunks: SourceChunk[],
+    capacity: number,
+  ): { slots: Slot[]; windows: SourceChunk[][] } {
     const plan = planQuestions(asked);
-    const distinct = scaleSpec(asked, supportableQuestions(chunks)).types;
+    const distinct = scaleSpec(asked, capacity).types;
     const left: Record<string, number> = { ...distinct };
     const slots: Slot[] = plan.map((p, i) => {
       const isDistinct = (left[p.type] ?? 0) > 0;
@@ -366,6 +407,8 @@ export class GenerationRun {
         plan: p,
         mode: isDistinct ? 'DISTINCT' : 'VARIANT',
         batch: -1,
+        target: null,
+        source: null,
         question: null,
         attempts: 0,
         qualityFailures: 0,
@@ -374,13 +417,46 @@ export class GenerationRun {
         dropped: false,
       };
     });
-    const size = this.config.generationBatchSize;
-    slots
-      .filter((s) => s.mode === 'DISTINCT')
-      .forEach((s, k) => {
-        s.batch = Math.floor(k / size);
-      });
-    return slots;
+
+    const fresh = slots.filter((s) => s.mode === 'DISTINCT');
+    const quota = quotas(fresh.length, chunks.map(chunkCapacity));
+    const remaining = [...quota];
+    for (const slot of fresh) {
+      // The chunk furthest behind its share, so types spread across chunks
+      // rather than one chunk taking every multiple choice.
+      let best = -1;
+      for (let i = 0; i < chunks.length; i++) {
+        if (!remaining[i]) continue;
+        if (best < 0 || remaining[i] / quota[i] > remaining[best] / quota[best]) best = i;
+      }
+      if (best < 0) best = 0;
+      remaining[best] = Math.max(0, remaining[best] - 1);
+      slot.target = chunks[best]?.index ?? null;
+    }
+
+    // Even batches, in the material's order: ten slots are 5 + 5, not 8 + 2,
+    // because batches run side by side and the slowest one is the wait.
+    const order = new Map(chunks.map((c, i) => [c.index, i]));
+    const byChunk = [...fresh].sort(
+      (a, b) => (order.get(a.target ?? -1) ?? 0) - (order.get(b.target ?? -1) ?? 0) || a.id - b.id,
+    );
+    const count = Math.max(1, Math.ceil(byChunk.length / this.config.generationBatchSize));
+    const windows: SourceChunk[][] = [];
+    let at = 0;
+    for (let b = 0; b < count; b++) {
+      const size = Math.floor(byChunk.length / count) + (b < byChunk.length % count ? 1 : 0);
+      const group = byChunk.slice(at, at + size);
+      at += size;
+      for (const s of group) s.batch = b;
+      const wanted = new Set(group.map((s) => s.target));
+      const window = chunks.filter((c) => wanted.has(c.index));
+      windows.push(
+        window.length
+          ? window
+          : selectChunksForBatch(chunks, b, count, this.config.generationSourceTokens),
+      );
+    }
+    return { slots, windows };
   }
 
   /** The first model, unless this slot has failed its checks on it often
@@ -405,6 +481,7 @@ export class GenerationRun {
     language: ExamSpec['language'];
     profile: GenerationProfile;
     fallbackLeft: number;
+    sourceUse: Map<string, number>;
   }): PlannedRequest[] {
     const size = this.config.generationBatchSize;
     const accepted = opts.all.filter((s) => s.question);
@@ -449,6 +526,7 @@ export class GenerationRun {
               tier,
               mode,
               plan: piece.map((s) => s.plan),
+              targets: piece.map((s) => s.target),
               chunks: material,
               language: opts.language,
               avoid: avoidFor(accepted, material, []),
@@ -459,15 +537,27 @@ export class GenerationRun {
         continue;
       }
 
-      // Variants: the questions to vary are shared out between the calls so
-      // two calls running at once are not handed the same ones to vary.
+      // Variants: each slot is given one accepted question to vary — the
+      // least-varied so far, and from a chunk this call has not used yet when
+      // there is one — so twelve variants are not five versions of the same
+      // pension problem, and two calls at once are not varying the same one.
       const sources = accepted.filter((s) => s.mode === 'DISTINCT').map((s) => s.question!);
-      pieces.forEach((piece, k) => {
-        const mine =
-          sources.length >= pieces.length
-            ? sources.filter((_, i) => i % pieces.length === k)
-            : sources;
-        const own = mine.slice(0, 20);
+      for (const piece of pieces) {
+        const chunksHere = new Set<number | null | undefined>();
+        const own: GradedQuestion[] = [];
+        const variantOf: number[] = [];
+        for (const slot of piece) {
+          const pick = [...sources].sort(
+            (a, b) =>
+              (opts.sourceUse.get(a.id) ?? 0) - (opts.sourceUse.get(b.id) ?? 0) ||
+              Number(chunksHere.has(a.chunkIndex)) - Number(chunksHere.has(b.chunkIndex)),
+          )[0];
+          opts.sourceUse.set(pick.id, (opts.sourceUse.get(pick.id) ?? 0) + 1);
+          chunksHere.add(pick.chunkIndex);
+          slot.source = pick.id;
+          if (!own.includes(pick)) own.push(pick);
+          variantOf.push(own.indexOf(pick) + 1);
+        }
         const material = materialFor(own, opts.chunks, this.config.generationSourceTokens);
         const tier = tierOf(group);
         out.push({
@@ -478,6 +568,7 @@ export class GenerationRun {
             tier,
             mode,
             plan: piece.map((s) => s.plan),
+            variantOf,
             chunks: material,
             language: opts.language,
             source: own.map((q) => ({ text: q.text, modelAnswer: q.modelAnswer })),
@@ -485,7 +576,7 @@ export class GenerationRun {
             reason: reasonFor(piece),
           },
         });
-      });
+      }
     }
     return out;
   }
@@ -595,8 +686,27 @@ export class GenerationRun {
     result: GenerationResult,
     all: Slot[],
     opts: { anchor: boolean; variantsOn: boolean },
-  ): { accepted: number; reasons: Partial<Record<RejectReason, number>> } {
+  ): {
+    accepted: number;
+    reasons: Partial<Record<RejectReason, number>>;
+    samples: RejectedSample[];
+  } {
     const reasons: Partial<Record<RejectReason, number>> = {};
+    const samples: RejectedSample[] = [];
+    const sample = (
+      reason: RejectReason,
+      w: GeneratedQuestion,
+      extra: Partial<RejectedSample> = {},
+    ) => {
+      if (samples.length < 12) {
+        samples.push({
+          reason,
+          type: String(w?.type ?? ''),
+          text: (w?.text ?? '').slice(0, 120),
+          ...extra,
+        });
+      }
+    };
     const blame = (slot: Slot | undefined, reason: RejectReason) => {
       reasons[reason] = (reasons[reason] ?? 0) + 1;
       if (!slot || slot.question) return;
@@ -606,7 +716,7 @@ export class GenerationRun {
 
     if (result.error) {
       for (const s of r.slots) blame(s, 'CALL_FAILED');
-      return { accepted: 0, reasons };
+      return { accepted: 0, reasons, samples };
     }
 
     const open = [...r.slots];
@@ -617,9 +727,15 @@ export class GenerationRun {
     result.questions.forEach((w, i) => {
       const positional = r.slots[i];
       const type = w?.type;
+      // Its own type first, then the chunk its line named, then difficulty.
+      const same = (s: Slot) => s.plan.type === type;
       const target =
-        open.find((s) => s.plan.type === type && s.plan.difficulty === w.difficulty) ??
-        open.find((s) => s.plan.type === type);
+        open.find(
+          (s) => same(s) && s.target === w.chunkIndex && s.plan.difficulty === w.difficulty,
+        ) ??
+        open.find((s) => same(s) && s.target === w.chunkIndex) ??
+        open.find((s) => same(s) && s.plan.difficulty === w.difficulty) ??
+        open.find(same);
       // Every question that comes back uses up the slot it was written for,
       // pass or fail — otherwise a rejected question's reason lands on a slot
       // the next question then fills, and the slot left empty is blamed for
@@ -633,6 +749,7 @@ export class GenerationRun {
         const reason = r.slots.some((s) => s.plan.type === type) ? 'SURPLUS' : 'TYPE_MISMATCH';
         const slot = positional && open.includes(positional) ? positional : undefined;
         blame(slot, reason);
+        sample(reason, w);
         if (slot) use(slot);
         return;
       }
@@ -645,15 +762,19 @@ export class GenerationRun {
       });
       if (problem) {
         blame(target, problem);
+        sample(problem, w);
         return;
       }
       const onExam = all.filter((s) => s.question).map((s) => s.question!);
-      if (
-        findDuplicates([...onExam, question].map((q) => ({ id: q.id, text: q.text }))).some(
-          (d) => d.id === question.id,
-        )
-      ) {
+      const dup = findDuplicates(
+        [...onExam, question].map((q) => ({ id: q.id, text: q.text })),
+      ).find((d) => d.id === question.id);
+      if (dup) {
         blame(target, 'DUPLICATE');
+        sample('DUPLICATE', w, {
+          duplicateOf: onExam.find((q) => q.id === dup.duplicateOfId)?.text.slice(0, 120),
+          score: Math.round(dup.score * 100) / 100,
+        });
         return;
       }
       target.question = target.mode === 'VARIANT' ? { ...question, variant: true } : question;
@@ -684,7 +805,7 @@ export class GenerationRun {
         }
       }
     }
-    return { accepted, reasons };
+    return { accepted, reasons, samples };
   }
 }
 
@@ -800,6 +921,42 @@ function reasonFor(slots: Slot[]): string | undefined {
     .map((r) => words[r as RejectReason])
     .filter(Boolean);
   return said.length ? said.join('; ') : undefined;
+}
+
+/**
+ * `total` shared over chunks in proportion to what each can carry, never
+ * more than a chunk can carry while another still has room.
+ */
+function quotas(total: number, capacities: number[]): number[] {
+  if (!capacities.length) return [];
+  const share = apportion(
+    total,
+    Object.fromEntries(capacities.map((c, i) => [String(i), Math.max(0, c)])),
+  );
+  const out = capacities.map((_, i) => share[String(i)] ?? 0);
+  let over = 0;
+  out.forEach((n, i) => {
+    if (n > capacities[i]) {
+      over += n - capacities[i];
+      out[i] = capacities[i];
+    }
+  });
+  while (over > 0) {
+    let roomiest = -1;
+    out.forEach((n, i) => {
+      const room = capacities[i] - n;
+      if (room > 0 && (roomiest < 0 || room > capacities[roomiest] - out[roomiest])) roomiest = i;
+    });
+    if (roomiest < 0) {
+      // More asked for than the material carries: the rest goes where it
+      // would have gone anyway; variants are for the difference.
+      out[0] += over;
+      break;
+    }
+    out[roomiest] += 1;
+    over -= 1;
+  }
+  return out;
 }
 
 function countTypes(plan: { type: string }[]): TypeCounts {

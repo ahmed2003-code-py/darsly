@@ -142,6 +142,62 @@ describe('reading a page adaptively', () => {
     );
   });
 
+  it('reads enlarged lines one per call — a batched line comes back as one region', async () => {
+    // Production, 2026-09-24: both batched zoom calls answered one region for
+    // four and for two images, were thrown away, and the lines were read one
+    // by one anyway. Singly from the start is the same reading, minus the
+    // wasted call.
+    const { reader, calls } = build((ctx) => {
+      if (/Transcribe every region/.test(ctx.content)) return { regions: [{ text: '[UNCLEAR]' }] };
+      if (/One line/.test(ctx.content)) return { regions: [{ text: '(١) مثل ٩٢٦١.' }] };
+      const part = Number(/Part (\d+)/.exec(ctx.content)?.[1] ?? 1);
+      return part <= 3
+        ? {
+            regions: [
+              {
+                text: `(${part}) السؤال رقم ${part} عن الحساب والأرقام مثل [UNCLEAR].`,
+                uncertain: [{ text: '[UNCLEAR]', confidence: 0.2, reason: 'faint', numeric: true }],
+              },
+            ],
+          }
+        : { regions: [{ text: line(part) }] };
+    });
+    await reader.transcribe(await page(), { pageNumber: 1 });
+    const zooms = calls.filter((c) => /One line|single lines/.test(c.content));
+    expect(zooms.length).toBeGreaterThan(1);
+    expect(zooms.every((c) => c.images === 1)).toBe(true);
+  });
+
+  it('re-reads a batch that did not line up side by side, not one after another', async () => {
+    let inflight = 0;
+    let peak = 0;
+    const { reader, calls } = build((ctx) => {
+      if (/Transcribe every region/.test(ctx.content)) return { regions: [{ text: '[UNCLEAR]' }] };
+      const part = Number(/Part (\d+)/.exec(ctx.content)?.[1] ?? 1);
+      // A batch answers with one region for all its images: a mismatch.
+      return { regions: [{ text: line(part) }] };
+    });
+    const ai = (reader as any).ai;
+    const inner = ai.completeStructured;
+    ai.completeStructured = jest.fn(async (opts: any) => {
+      inflight += 1;
+      peak = Math.max(peak, inflight);
+      // Slower than rendering a crop, so calls that can overlap do.
+      await new Promise((r) => setTimeout(r, 300));
+      try {
+        return await inner(opts);
+      } finally {
+        inflight -= 1;
+      }
+    });
+    await reader.transcribe(await page(), { pageNumber: 1 });
+    const batched = calls.filter((c) => c.images > 1);
+    const singles = calls.filter((c) => c.images === 1 && /Part \d+/.test(c.content));
+    expect(batched.length).toBeGreaterThan(0);
+    expect(singles.length).toBeGreaterThan(1);
+    expect(peak).toBeGreaterThan(1);
+  });
+
   it('climbs past low effort only for an unread number, and never past the page budget', async () => {
     const stubborn: Script = (ctx) => {
       if (/Transcribe every region/.test(ctx.content)) return { regions: [{ text: '[UNCLEAR]' }] };

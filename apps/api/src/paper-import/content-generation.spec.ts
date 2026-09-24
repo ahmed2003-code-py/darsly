@@ -362,6 +362,103 @@ describe('reading lecture material', () => {
   });
 });
 
+describe('reading lecture material, several pages at once', () => {
+  const page = (n: number) => ({
+    id: `p${n}`,
+    pageNumber: n,
+    status: 'PENDING',
+    textKey: null,
+    renderKey: `r${n}`,
+  });
+
+  const setup = (live: () => boolean = () => true) => {
+    let inflight = 0;
+    let peak = 0;
+    const started: number[] = [];
+    const prisma = {
+      paperImport: {
+        update: jest.fn().mockResolvedValue({}),
+        findFirst: jest.fn(async () => (live() ? { id: 'imp1' } : null)),
+      },
+      paperImportPage: {
+        update: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      examSourceChunk: { deleteMany: jest.fn(), create: jest.fn() },
+      $transaction: jest.fn().mockResolvedValue([]),
+    };
+    const reader = {
+      readPage: jest.fn(async (input: { pageNumber: number; onPhase?: (p: any) => void }) => {
+        started.push(input.pageNumber);
+        inflight += 1;
+        peak = Math.max(peak, inflight);
+        input.onPhase?.({ phase: 'READING' });
+        await new Promise((r) => setTimeout(r, 20));
+        inflight -= 1;
+        return {
+          text: `page ${input.pageNumber}`,
+          blank: false,
+          model: 'gpt-6-luna',
+          escalated: false,
+          inputTokens: 100,
+          outputTokens: 50,
+          millicents: 1500,
+          error: null,
+        };
+      }),
+    };
+    const service = new ContentGenerationService(
+      prisma as unknown as PrismaService,
+      {
+        getBuffer: jest.fn().mockResolvedValue(Buffer.from('img')),
+        put: jest.fn().mockResolvedValue(undefined),
+      } as unknown as StorageProvider,
+      reader as unknown as SourceReaderService,
+      {} as QuestionGeneratorService,
+      Object.assign(new PaperImportConfig(), { contentReadConcurrency: 2 }),
+    );
+    return { service, prisma, reader, started, peak: () => peak };
+  };
+
+  it('reads two pages at a time, never more', async () => {
+    const t = setup();
+    await t.service.read({ id: 'imp1', pages: [page(1), page(2), page(3), page(4)] } as never);
+    expect(t.reader.readPage).toHaveBeenCalledTimes(4);
+    expect(t.peak()).toBe(2);
+  });
+
+  it('starts no new page once stopped', async () => {
+    let checks = 0;
+    // Live for the first two pages to start, stopped after.
+    const t = setup(() => ++checks <= 2);
+    await t.service.read({ id: 'imp1', pages: [page(1), page(2), page(3), page(4)] } as never);
+    expect(t.reader.readPage).toHaveBeenCalledTimes(2);
+    // What was read is still paid for, and the session is not moved on.
+    expect(t.prisma.paperImport.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { costCents: { increment: 3 } } }),
+    );
+    expect(t.prisma.paperImport.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'CONFIGURING' }) }),
+    );
+  });
+
+  it('counts reading in what the exam cost', async () => {
+    const t = setup();
+    await t.service.read({ id: 'imp1', pages: [page(1), page(2)] } as never);
+    const last = t.prisma.paperImport.update.mock.calls.pop()![0].data;
+    expect(last.costCents).toEqual({ increment: 3 });
+  });
+
+  it('says what it is doing to each page while it does it', async () => {
+    const t = setup();
+    await t.service.read({ id: 'imp1', pages: [page(1)] } as never);
+    const phases = t.prisma.paperImportPage.update.mock.calls.map((c: any) => c[0].data.phase);
+    expect(phases).toContain('READING');
+    // And clears it when the page is done.
+    expect(phases[phases.length - 1]).toBeNull();
+  });
+});
+
 describe('writing one question again', () => {
   let prisma: any;
   let generator: { regenerateOne: jest.Mock };

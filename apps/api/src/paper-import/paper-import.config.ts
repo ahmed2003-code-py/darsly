@@ -365,6 +365,20 @@ export class PaperImportConfig {
     Math.min(4, num(process.env.PAPER_IMPORT_VARIANT_ROUNDS, 2)),
   );
 
+  /**
+   * How many pages of lecture material are read at the same time.
+   *
+   * They used to be read one after another: two photographs took 103 s and
+   * then 55 s, end to end. Two at once, to start with — each page already
+   * reads its crops several at a time (ocrConcurrency), so this multiplies
+   * the calls in flight and is kept low until it is measured. 1 restores the
+   * old behaviour.
+   */
+  readonly contentReadConcurrency = Math.max(
+    1,
+    Math.min(4, num(process.env.PAPER_IMPORT_READ_CONCURRENCY, 2)),
+  );
+
   /** Ceiling on how much lecture material one session may hold, in pages.
    *  Fifty pages is a chapter; past that a teacher is uploading a textbook. */
   readonly maxContentPages = Math.max(1, num(process.env.PAPER_IMPORT_MAX_CONTENT_PAGES, 60));

@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AdaptiveReaderService } from './ocr/adaptive-reader.service';
+import type { PagePhase } from './ocr/transcriber.service';
 import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { AiClient } from '../academy-site/ai/ai.client';
 import { PaperImportConfig } from './paper-import.config';
@@ -82,7 +83,11 @@ export class SourceReaderService {
    * demonstrably not a transcription. A lecture is mostly ordinary print, so
    * in practice almost nothing escalates.
    */
-  async readPage(input: { pageNumber: number; image: Buffer }): Promise<SourceReadResult> {
+  async readPage(input: {
+    pageNumber: number;
+    image: Buffer;
+    onPhase?: (phase: PagePhase) => void;
+  }): Promise<SourceReadResult> {
     // The same pipeline the exam path uses. A scanned lecture is the same
     // problem as a scanned exam — faded print, a phone's shadow, a page at an
     // angle — and having two transcribers would have meant fixing each of
@@ -99,6 +104,7 @@ export class SourceReaderService {
       const reader = useAdaptive ? this.adaptive! : this.transcriber;
       const read = await reader.transcribe(input.image, {
         pageNumber: input.pageNumber,
+        onPhase: input.onPhase,
       });
       if (read.transcript) {
         return {

@@ -82,6 +82,10 @@ export interface GenerationRequest {
   tier: GenerationTier;
   mode: GenerationMode;
   plan: PlannedQuestion[];
+  /** DISTINCT: the chunk each line is to be written from, by index. */
+  targets?: (number | null)[];
+  /** VARIANT: which EXISTING question (1-based) each line varies. */
+  variantOf?: number[];
   chunks: SourceChunk[];
   language: 'AUTO' | 'AR' | 'EN';
   /** Questions already on the exam that this call could repeat. */
@@ -284,7 +288,10 @@ export class QuestionGeneratorService {
       '<<<END MATERIAL>>>',
       '',
       `Write exactly ${opts.plan.length} question(s), one for each line below, in this order:`,
-      wantedOf(opts.plan),
+      wantedOf(opts.plan, opts.targets),
+      opts.targets?.some((t) => t != null)
+        ? 'Write each question from the chunk named on its line, and give that chunk as its chunkIndex. Two lines naming the same chunk must ask about different things in it.'
+        : '',
       '',
       languageOf(opts.language),
       opts.reason ? `\nThe previous attempt at this question was rejected: ${opts.reason}` : '',
@@ -313,10 +320,13 @@ export class QuestionGeneratorService {
       '',
       'This exam is short. The material above has already produced the questions listed under EXISTING, and it has no further distinct content in it.',
       `Write exactly ${opts.plan.length} more question(s) by VARYING those existing ones, one for each line below, in this order:`,
-      wantedOf(opts.plan),
+      wantedOf(opts.plan, undefined, opts.variantOf),
+      opts.variantOf?.length
+        ? 'Each line names the EXISTING question it varies (vary=N). Vary that one; where two lines name the same one, they must differ from each other as much as from it.'
+        : '',
       '',
       'A variant tests the same idea as one of the existing questions, and is a different question to sit for. Vary it in at least one of these ways:',
-      '- change the numbers, and work the new answer out correctly from the material',
+      '- ask for a different unknown of the same situation (what was given becomes what is asked), and work the answer out correctly from the material',
       '- ask it from the other end: give what was asked for and ask for what was given',
       '- ask about a different facet of the same concept, or a different step of the same method',
       '- change the situation the concept is applied to, keeping the concept',
@@ -326,6 +336,7 @@ export class QuestionGeneratorService {
       '- Still grounded. Every variant names the chunk it is answerable from, exactly as before. Nothing may require a fact the material does not contain.',
       '- Keep the difficulty asked for on each line. A variant that is easier than its source is not the question that was ordered.',
       '- Never reword. If your variant would be recognised as the same question in different words, it is rejected and wasted — change the substance, not the sentence.',
+      '- Changing only the numbers is a reword. The same question with other numbers is rejected as a repeat.',
       '- Every answer must be correct. A variant with a wrong answer is worse than a missing question.',
       '- insufficient must be false here: you are not being asked for new content, you are being asked to vary what exists.',
       '',
@@ -422,9 +433,17 @@ function materialOf(chunks: SourceChunk[]): string {
     .join('\n\n');
 }
 
-function wantedOf(plan: PlannedQuestion[]): string {
+function wantedOf(
+  plan: PlannedQuestion[],
+  targets?: (number | null)[],
+  variantOf?: number[],
+): string {
   return plan
-    .map((p, i) => `${i + 1}. type=${p.type} difficulty=${p.difficulty} marks=${p.marks}`)
+    .map((p, i) => {
+      const chunk = targets?.[i] != null ? ` chunk=${targets[i]}` : '';
+      const vary = variantOf?.[i] ? ` vary=${variantOf[i]}` : '';
+      return `${i + 1}. type=${p.type} difficulty=${p.difficulty} marks=${p.marks}${chunk}${vary}`;
+    })
     .join('\n');
 }
 

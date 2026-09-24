@@ -575,7 +575,13 @@ export class AdaptiveReaderService {
       });
     };
 
-    const batch = this.config.adaptiveBatch && chunks.length > 1;
+    // Enlarged single lines are never batched. The zoom instruction reads
+    // "one line … as ONE region", and in production every batched zoom call
+    // came back as one region for four or two images (BATCH_MISMATCH, 2 of 2
+    // on 2026-09-24) — a billed call whose answer is thrown away before the
+    // same lines are read one by one anyway. Reading them singly from the
+    // start is the reading that was already happening, without the waste.
+    const batch = this.config.adaptiveBatch && chunks.length > 1 && variant !== 'zoom';
     const groups: ChunkState[][] = [];
     if (batch) {
       for (let i = 0; i < chunks.length; i += this.config.adaptiveBatchSize) {
@@ -624,7 +630,9 @@ export class AdaptiveReaderService {
         this.logger.log(
           `BATCH_MISMATCH page=${page} asked=${group.length} got=${regions.length} — reading separately`,
         );
-        for (const c of group) await run([c]);
+        // Side by side, as the pool reads any other crop — not one after
+        // another, which put four ten-second reads end to end.
+        await pooled(group, this.config.ocrConcurrency, (c) => run([c]));
         return;
       }
       group.forEach((c, i) => {
@@ -1038,4 +1046,14 @@ export class AdaptiveReaderService {
       },
     };
   }
+}
+
+/** Run `fn` over `items`, at most `limit` at a time. */
+async function pooled<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  const queue = [...items];
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, queue.length)) }, async () => {
+      for (let item = queue.shift(); item !== undefined; item = queue.shift()) await fn(item);
+    }),
+  );
 }

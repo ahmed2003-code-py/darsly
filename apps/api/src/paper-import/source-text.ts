@@ -338,9 +338,46 @@ export function foldArabic(text: string): string {
 export const MAX_QUESTIONS_PER_CHUNK = 6;
 const TOKENS_PER_QUESTION = 70;
 
-export function supportableQuestions(chunks: Pick<SourceChunk, 'tokensApprox'>[]): number {
+/**
+ * How many separate teachable statements a chunk holds, counted by line.
+ *
+ * Tokens undercount a revision sheet: fifteen one-line facts ("the Treaty of
+ * Hudaybiyyah was in 6 AH") are fifteen questions in 230 tokens, and the
+ * token rule called that page three. A line counts when it is a sentence —
+ * four words or more, fifteen letters or more — so a heading ("المراجعة
+ * النهائية") or a stray OCR fragment does not.
+ */
+export function teachableLines(text: string): number {
+  let n = 0;
+  for (const raw of (text ?? '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const words = line.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+    const letters = line.replace(/[^\p{L}\p{N}]/gu, '').length;
+    if (words >= 4 && letters >= 15) n++;
+  }
+  return n;
+}
+
+/**
+ * How many distinct questions one chunk can honestly carry: its length, or
+ * the number of separate statements in it when that is more — never less
+ * than one. Without text (older callers), length alone.
+ */
+export function chunkCapacity(
+  chunk: Pick<SourceChunk, 'tokensApprox'> & { text?: string },
+): number {
+  const byTokens = Math.min(
+    MAX_QUESTIONS_PER_CHUNK,
+    Math.floor(chunk.tokensApprox / TOKENS_PER_QUESTION),
+  );
+  const byLines = chunk.text ? teachableLines(chunk.text) : 0;
+  return Math.max(1, byTokens, byLines);
+}
+
+export function supportableQuestions(
+  chunks: (Pick<SourceChunk, 'tokensApprox'> & { text?: string })[],
+): number {
   if (!chunks.length) return 0;
-  const byTokens = Math.floor(chunks.reduce((n, c) => n + c.tokensApprox, 0) / TOKENS_PER_QUESTION);
-  const byChunks = chunks.length * MAX_QUESTIONS_PER_CHUNK;
-  return Math.max(1, Math.min(byTokens, byChunks));
+  return chunks.reduce((n, c) => n + chunkCapacity(c), 0);
 }

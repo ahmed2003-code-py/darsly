@@ -7,16 +7,19 @@
  *
  *   # paid — only with explicit approval
  *   npx ts-node --transpile-only scripts/gen-bench/compare.ts \
- *     --source source.json --mcq 14 --tf 3 --written 3 --budget 10 --max-total 20 \
- *     --sol-effort low --confirm-paid --out <dir>
+ *     --source source.json --mcq 14 --tf 3 --written 3 --budgets LUNA_FIRST=8,SOL_FIRST=12 \
+ *     --max-total 20 --sol-effort low --confirm-paid --out <dir>
  *
  * The source is export-source.ts's file: no page is uploaded or read again.
  * Both profiles get the same chunks, the same spec, the same prompts, schema,
  * validation and limits — GenerationRun and QuestionGeneratorService as
- * production runs them; only the profile differs. Each run is capped at
- * --budget cents (default 10), and the runs together at --max-total (default
- * 20): a run is not started if the budgets could pass it. A run that stops on
- * its budget is reported as stopped, never given more.
+ * production runs them; only the profile differs. Each run is capped at its
+ * --budgets entry (else --budget, default 10 cents), and the runs together at
+ * --max-total (default 20): nothing starts if the budgets could pass it. A run
+ * that stops on its budget is reported as stopped, never given more.
+ *
+ * A call the provider rejects for its model or effort stops that profile: no
+ * further call is sent for it, and nothing is retried on another setting.
  *
  * --sol-effort sets SOL_FIRST's writer effort for this process only (it is
  * PAPER_IMPORT_GENERATION_EFFORT, read by PaperImportConfig); LUNA_FIRST's
@@ -74,15 +77,24 @@ async function main() {
   const budgetCents = Number(arg('budget', '10'));
   const maxTotalCents = Number(arg('max-total', '20'));
   const profiles = arg('profiles', 'LUNA_FIRST,SOL_FIRST')!.split(',') as GenerationProfileName[];
+  const perProfile = Object.fromEntries(
+    (arg('budgets', '') ?? '')
+      .split(',')
+      .filter(Boolean)
+      .map((kv) => kv.split('='))
+      .map(([k, v]) => [k, Number(v)]),
+  ) as Record<string, number>;
+  const budgetOf = (name: string) => perProfile[name] ?? budgetCents;
+  const budgetTotal = profiles.reduce((n, p) => n + budgetOf(p), 0);
   const paid = flag('confirm-paid');
   const out = arg('out', `gen-bench-${Date.now()}`)!;
   const solEffort = arg('sol-effort');
   if (solEffort) process.env.PAPER_IMPORT_GENERATION_EFFORT = solEffort;
   const config = new PaperImportConfig();
 
-  if (budgetCents * profiles.length > maxTotalCents)
+  if (budgetTotal > maxTotalCents)
     throw new Error(
-      `${profiles.length} × ${budgetCents}¢ could pass --max-total ${maxTotalCents}¢; nothing was called`,
+      `budgets add up to ${budgetTotal}¢, over --max-total ${maxTotalCents}¢; nothing was called`,
     );
   // Only the two writers; the flagship is never a writer, not even by env var.
   const WRITERS = ['gpt-6-luna', 'gpt-6-sol'];
@@ -108,7 +120,7 @@ async function main() {
       `${source.chunks.reduce((n, c) => n + c.tokensApprox, 0)} tokens approx; ` +
       `BENCHMARK distribution ${types.MCQ}/${types.TRUE_FALSE}/${types.SHORT_ANSWER} ` +
       `(the teacher asked ${original ? `${original.MCQ}/${original.TRUE_FALSE}/${original.SHORT_ANSWER}` : 'unknown'}); ` +
-      `budget ${budgetCents}¢ per profile, ${maxTotalCents}¢ in all; ` +
+      `budgets ${profiles.map((p) => `${p} ${budgetOf(p)}¢`).join(', ')}, ${maxTotalCents}¢ in all; ` +
       `${paid ? 'PAID' : 'dry run, nothing is called'}`,
   );
 
@@ -157,7 +169,7 @@ async function main() {
         asked,
         chunks: source.chunks,
         profile: config.generationProfileOf(name),
-        budgetMillicents: budgetCents * 1000,
+        budgetMillicents: budgetOf(name) * 1000,
       });
       console.log(`${name}:\n${plan.join('\n')}`);
     }
@@ -172,37 +184,127 @@ async function main() {
   const reports: GenerationReport[] = [];
 
   let spent = 0;
+  const traces: Record<string, CallTrace[]> = {};
+  const stops: Record<string, string | null> = {};
   for (const name of profiles) {
-    if (spent + budgetCents * 1000 > maxTotalCents * 1000) {
+    if (spent + budgetOf(name) * 1000 > maxTotalCents * 1000) {
       console.log(`${name}: not started, ${cents(spent)} already charged of ${maxTotalCents}¢`);
       continue;
     }
     const run = `bench:${source.record.id}:${name}:${Date.now()}`;
+    const traced = traceCalls(generator);
     const { questions, report } = await withAiTrace({ importId: run, phase: 'GENERATE' }, () =>
-      new GenerationRun(generator, config).run({
+      new GenerationRun(traced.generator, config).run({
         importId: run,
         asked,
         chunks: source.chunks,
         profile: config.generationProfileOf(name),
-        budgetMillicents: budgetCents * 1000,
+        budgetMillicents: budgetOf(name) * 1000,
       }),
     );
     reports.push(report);
+    traces[report.profile] = traced.calls;
+    stops[report.profile] = traced.rejected();
     spent += report.chargedMillicents;
     writeFileSync(join(out, `${name}.report.json`), JSON.stringify(report, null, 2));
+    writeFileSync(join(out, `${name}.calls.json`), JSON.stringify(traced.calls, null, 2));
     writeFileSync(join(out, `${name}.questions.json`), JSON.stringify(questions, null, 2));
     writeFileSync(join(out, `${name}.review.md`), reviewSheet(name, questions, source.chunks));
-    console.log(`${name}: ${report.accepted}/${report.requested}, ${cents(report.millicents)}`);
+    console.log(
+      `${name}: ${report.accepted}/${report.requested}, ${cents(report.millicents)}` +
+        (traced.rejected() ? ` — STOPPED: ${traced.rejected()}` : ''),
+    );
   }
 
   writeFileSync(
     join(out, 'summary.md'),
     `Benchmark distribution ${types.MCQ} MCQ / ${types.TRUE_FALSE} true-false / ` +
       `${types.SHORT_ANSWER} short answer — not the teacher's original request.\n\n` +
-      summary(reports, source.ocrMillicents),
+      summary(reports, source.ocrMillicents, traces, stops),
   );
   console.log(readFileSync(join(out, 'summary.md'), 'utf8'));
   await prisma.$disconnect();
+}
+
+interface CallTrace {
+  model: string;
+  effort: string;
+  mode: string;
+  planned: number;
+  /** Seconds from the start of the profile's run. */
+  startS: number;
+  endS: number;
+  /** What the budget held for this call before it started. */
+  reservedMillicents: number;
+  millicents: number;
+  usageUnknown: boolean;
+  sent: boolean;
+  error: string | null;
+}
+
+/** The provider refusing the model or its settings — not a bad answer. */
+const SETTING_REJECTED =
+  /reasoning|effort|unsupported|not supported|does not exist|model_not_found|invalid.*(param|value)/i;
+
+/**
+ * The generator, with a record of every call: when it ran, what the budget
+ * reserved for it and what it cost. After the provider rejects a setting,
+ * nothing more is sent for this profile.
+ */
+function traceCalls(inner: QuestionGeneratorService) {
+  const calls: CallTrace[] = [];
+  const t0 = Date.now();
+  let rejected: string | null = null;
+  const at = () => Math.round((Date.now() - t0) / 100) / 10;
+  const generator = {
+    worstCase: (req: Parameters<QuestionGeneratorService['worstCase']>[0]) => inner.worstCase(req),
+    generate: async (req: Parameters<QuestionGeneratorService['generate']>[0]) => {
+      const base = {
+        model: req.tier.model,
+        effort: req.tier.effort,
+        mode: req.mode,
+        planned: req.plan.length,
+        reservedMillicents: inner.worstCase(req),
+      };
+      if (rejected) {
+        const now = at();
+        calls.push({
+          ...base,
+          startS: now,
+          endS: now,
+          millicents: 0,
+          usageUnknown: false,
+          sent: false,
+          error: 'NOT_SENT',
+        });
+        return {
+          questions: [],
+          insufficient: false,
+          supportable: 0,
+          model: req.tier.model,
+          inputTokens: 0,
+          outputTokens: 0,
+          millicents: 0,
+          error: `NOT_SENT after rejection: ${rejected}`,
+        };
+      }
+      const startS = at();
+      const res = await inner.generate(req);
+      calls.push({
+        ...base,
+        startS,
+        endS: at(),
+        millicents: res.millicents,
+        usageUnknown: !!res.usageUnknown,
+        sent: true,
+        error: res.error,
+      });
+      if (res.error && SETTING_REJECTED.test(res.error))
+        rejected = `${req.tier.model}/${req.tier.effort}: ${res.error}`;
+      return res;
+    },
+  } as unknown as QuestionGeneratorService;
+  return { generator, calls, rejected: () => rejected };
 }
 
 const rnd = () =>
@@ -213,7 +315,33 @@ const rnd = () =>
 const anchorWord = (text: string) =>
   text.split(/[^\p{L}\p{N}]+/u).find((w) => w.length >= 4) ?? 'material';
 
-function summary(reports: GenerationReport[], ocr: number): string {
+function summary(
+  reports: GenerationReport[],
+  ocr: number,
+  traces: Record<string, CallTrace[]>,
+  stops: Record<string, string | null>,
+): string {
+  const calls = (r: GenerationReport) => traces[r.profile] ?? [];
+  const sent = (r: GenerationReport) => calls(r).filter((c) => c.sent);
+  // Most calls in flight at once, from the recorded start and end times.
+  const peak = (r: GenerationReport) =>
+    Math.max(
+      0,
+      ...sent(r).map(
+        (c) => sent(r).filter((o) => o.startS <= c.startS && o.endS > c.startS).length,
+      ),
+    );
+  const busy = (r: GenerationReport) => sent(r).reduce((n, c) => n + (c.endS - c.startS), 0);
+  const limitedBy = (r: GenerationReport) =>
+    stops[r.profile]
+      ? 'provider rejected a setting'
+      : r.complete
+        ? '— (complete)'
+        : r.stopReason === 'BUDGET' || r.skippedForBudget
+          ? 'BUDGET (reservation)'
+          : r.stopReason === 'MATERIAL' || !r.sourceSufficient
+            ? 'source content'
+            : `model output (${r.stopReason ?? 'rounds'})`;
   const row = (label: string, f: (r: GenerationReport) => string) =>
     `| ${label} | ${reports.map(f).join(' | ')} |`;
   const missing = (r: GenerationReport) =>
@@ -240,16 +368,34 @@ function summary(reports: GenerationReport[], ocr: number): string {
     row('Accepted questions', (r) => `${r.accepted} (${r.variants} variants)`),
     row('Missing questions by type', missing),
     row('Stopped because', (r) => r.stopReason ?? '—'),
+    row('Incomplete because', limitedBy),
+    row(
+      'Source capacity (distinct questions)',
+      (r) => `${r.sourceCapacity}${r.sourceSufficient ? '' : ' — short'}`,
+    ),
+    row('Calls skipped for budget reservation', (r) => String(r.skippedForBudget)),
+    row('Provider rejection', (r) => stops[r.profile] ?? 'none'),
     row('Initial generation cost [recorded]', (r) => cents(sum(initial(r)))),
     row('Retry / variant / fallback cost [recorded]', (r) => cents(sum(later(r)))),
     row('Total generation cost [recorded]', (r) => cents(r.millicents)),
     row(
-      'Charged against budget',
+      'Charged against budget (recorded + worst case of unreported failures)',
       (r) => `${cents(r.chargedMillicents)} of ${cents(r.budgetMillicents)}`,
     ),
+    row('Reserved worst case, sum over calls sent', (r) =>
+      cents(sent(r).reduce((n, c) => n + c.reservedMillicents, 0)),
+    ),
+    row('Calls with no usage report', (r) => String(sent(r).filter((c) => c.usageUnknown).length)),
     row('OCR cost [recorded, original import]', () => cents(ocr)),
     row('Total exam cost [recorded]', (r) => cents(r.millicents + ocr)),
-    row('Generation latency', (r) => `${(r.durationMs / 1000).toFixed(1)} s`),
+    row(
+      'Generation latency (wall, incl. budget waits)',
+      (r) => `${(r.durationMs / 1000).toFixed(1)} s`,
+    ),
+    row(
+      'Sum of call durations / most calls at once',
+      (r) => `${busy(r).toFixed(1)} s / ${peak(r)}`,
+    ),
     row(
       'Total end-to-end latency',
       (r) => `${(r.durationMs / 1000).toFixed(1)} s + OCR (not re-run)`,

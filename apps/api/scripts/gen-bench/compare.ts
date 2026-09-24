@@ -7,15 +7,22 @@
  *
  *   # paid — only with explicit approval
  *   npx ts-node --transpile-only scripts/gen-bench/compare.ts \
- *     --source source.json --mcq 14 --tf 3 --written 3 --budget 10 --confirm-paid --out <dir>
+ *     --source source.json --mcq 14 --tf 3 --written 3 --budget 10 --max-total 20 \
+ *     --sol-effort low --confirm-paid --out <dir>
  *
  * The source is export-source.ts's file: no page is uploaded or read again.
  * Both profiles get the same chunks, the same spec, the same prompts, schema,
  * validation and limits — GenerationRun and QuestionGeneratorService as
  * production runs them; only the profile differs. Each run is capped at
- * --budget cents (default 10), so two runs cannot pass twice that.
+ * --budget cents (default 10), and the runs together at --max-total (default
+ * 20): a run is not started if the budgets could pass it. A run that stops on
+ * its budget is reported as stopped, never given more.
  *
- * AiCallLog rows go to whatever DATABASE_URL points at — keep it local.
+ * --sol-effort sets SOL_FIRST's writer effort for this process only (it is
+ * PAPER_IMPORT_GENERATION_EFFORT, read by PaperImportConfig); LUNA_FIRST's
+ * Sol fallback keeps its own effort. Production is untouched.
+ *
+ * AiCallLog rows go to DATABASE_URL, which must be local for a paid run.
  */
 import 'dotenv/config';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -43,7 +50,10 @@ const flag = (name: string) => process.argv.includes(`--${name}`);
 const cents = (m: number) => `${(m / 1000).toFixed(2)}¢`;
 
 interface Source {
-  record: { id: string };
+  record: {
+    id: string;
+    spec?: { types?: { MCQ: number; TRUE_FALSE: number; SHORT_ANSWER: number } };
+  };
   ocrMillicents: number;
   chunks: SourceChunk[];
 }
@@ -62,16 +72,44 @@ async function main() {
     language: 'AUTO',
   });
   const budgetCents = Number(arg('budget', '10'));
+  const maxTotalCents = Number(arg('max-total', '20'));
   const profiles = arg('profiles', 'LUNA_FIRST,SOL_FIRST')!.split(',') as GenerationProfileName[];
   const paid = flag('confirm-paid');
   const out = arg('out', `gen-bench-${Date.now()}`)!;
+  const solEffort = arg('sol-effort');
+  if (solEffort) process.env.PAPER_IMPORT_GENERATION_EFFORT = solEffort;
   const config = new PaperImportConfig();
 
+  if (budgetCents * profiles.length > maxTotalCents)
+    throw new Error(
+      `${profiles.length} × ${budgetCents}¢ could pass --max-total ${maxTotalCents}¢; nothing was called`,
+    );
+  // Only the two writers; the flagship is never a writer, not even by env var.
+  const WRITERS = ['gpt-6-luna', 'gpt-6-sol'];
+  for (const name of profiles) {
+    const p = config.generationProfileOf(name);
+    for (const tier of [p.primary, p.fallback])
+      if (tier && !WRITERS.includes(tier.model))
+        throw new Error(`${name} would call ${tier.model}; only ${WRITERS.join(', ')} may write`);
+    console.log(
+      `${name}: writes on ${p.primary.model}/${p.primary.effort}` +
+        (p.fallback ? `, fallback ${p.fallback.model}/${p.fallback.effort}` : ', no fallback'),
+    );
+  }
+  if (paid) {
+    const host = /@([^:/?]+)/.exec(process.env.DATABASE_URL ?? '')?.[1] ?? '';
+    if (!['localhost', '127.0.0.1', '::1'].includes(host))
+      throw new Error(`DATABASE_URL points at ${host || 'nothing'}; a paid run logs only locally`);
+  }
+
+  const original = source.record.spec?.types;
   console.log(
     `source ${source.record.id}: ${source.chunks.length} chunk(s), ` +
       `${source.chunks.reduce((n, c) => n + c.tokensApprox, 0)} tokens approx; ` +
-      `asked ${asked.questionCount} (${types.MCQ}/${types.TRUE_FALSE}/${types.SHORT_ANSWER}); ` +
-      `budget ${budgetCents}¢ per profile; ${paid ? 'PAID' : 'dry run, nothing is called'}`,
+      `BENCHMARK distribution ${types.MCQ}/${types.TRUE_FALSE}/${types.SHORT_ANSWER} ` +
+      `(the teacher asked ${original ? `${original.MCQ}/${original.TRUE_FALSE}/${original.SHORT_ANSWER}` : 'unknown'}); ` +
+      `budget ${budgetCents}¢ per profile, ${maxTotalCents}¢ in all; ` +
+      `${paid ? 'PAID' : 'dry run, nothing is called'}`,
   );
 
   if (!paid) {
@@ -133,7 +171,12 @@ async function main() {
   mkdirSync(out, { recursive: true });
   const reports: GenerationReport[] = [];
 
+  let spent = 0;
   for (const name of profiles) {
+    if (spent + budgetCents * 1000 > maxTotalCents * 1000) {
+      console.log(`${name}: not started, ${cents(spent)} already charged of ${maxTotalCents}¢`);
+      continue;
+    }
     const run = `bench:${source.record.id}:${name}:${Date.now()}`;
     const { questions, report } = await withAiTrace({ importId: run, phase: 'GENERATE' }, () =>
       new GenerationRun(generator, config).run({
@@ -145,13 +188,19 @@ async function main() {
       }),
     );
     reports.push(report);
+    spent += report.chargedMillicents;
     writeFileSync(join(out, `${name}.report.json`), JSON.stringify(report, null, 2));
     writeFileSync(join(out, `${name}.questions.json`), JSON.stringify(questions, null, 2));
     writeFileSync(join(out, `${name}.review.md`), reviewSheet(name, questions, source.chunks));
     console.log(`${name}: ${report.accepted}/${report.requested}, ${cents(report.millicents)}`);
   }
 
-  writeFileSync(join(out, 'summary.md'), summary(reports, source.ocrMillicents));
+  writeFileSync(
+    join(out, 'summary.md'),
+    `Benchmark distribution ${types.MCQ} MCQ / ${types.TRUE_FALSE} true-false / ` +
+      `${types.SHORT_ANSWER} short answer — not the teacher's original request.\n\n` +
+      summary(reports, source.ocrMillicents),
+  );
   console.log(readFileSync(join(out, 'summary.md'), 'utf8'));
   await prisma.$disconnect();
 }
@@ -173,6 +222,17 @@ function summary(reports: GenerationReport[], ocr: number): string {
       .map(([t, n]) => `${t} ${n}`)
       .join(', ') || 'none';
   const count = (r: GenerationReport, m: string) => String(r.callsByModel[m] ?? 0);
+  // The first round's calls on the profile's own writer, and everything after
+  // them: replacements, variants and fallback calls.
+  const initial = (r: GenerationReport) =>
+    r.callLog.filter((c) => c.stage === 'INITIAL' && c.round === 0);
+  const later = (r: GenerationReport) => r.callLog.filter((c) => !initial(r).includes(c));
+  const sum = (calls: GenerationReport['callLog']) => calls.reduce((n, c) => n + c.millicents, 0);
+  const others = (r: GenerationReport) =>
+    Object.entries(r.rejections)
+      .filter(([k, n]) => k !== 'DUPLICATE' && n)
+      .map(([k, n]) => `${k} ${n}`)
+      .join(', ') || 'none';
   return [
     `| Metric | ${reports.map((r) => r.profile).join(' | ')} |`,
     `|---|${reports.map(() => '---').join('|')}|`,
@@ -180,7 +240,13 @@ function summary(reports: GenerationReport[], ocr: number): string {
     row('Accepted questions', (r) => `${r.accepted} (${r.variants} variants)`),
     row('Missing questions by type', missing),
     row('Stopped because', (r) => r.stopReason ?? '—'),
-    row('Generation cost [recorded]', (r) => cents(r.millicents)),
+    row('Initial generation cost [recorded]', (r) => cents(sum(initial(r)))),
+    row('Retry / variant / fallback cost [recorded]', (r) => cents(sum(later(r)))),
+    row('Total generation cost [recorded]', (r) => cents(r.millicents)),
+    row(
+      'Charged against budget',
+      (r) => `${cents(r.chargedMillicents)} of ${cents(r.budgetMillicents)}`,
+    ),
     row('OCR cost [recorded, original import]', () => cents(ocr)),
     row('Total exam cost [recorded]', (r) => cents(r.millicents + ocr)),
     row('Generation latency', (r) => `${(r.durationMs / 1000).toFixed(1)} s`),
@@ -193,7 +259,9 @@ function summary(reports: GenerationReport[], ocr: number): string {
     row('Luna calls', (r) => count(r, 'gpt-6-luna')),
     row('Sol calls', (r) => count(r, 'gpt-6-sol')),
     row('Astra calls — expected zero', (r) => count(r, 'gpt-6-astra')),
-    row('Rejections', (r) => JSON.stringify(r.rejections)),
+    row('Actual model calls by model', (r) => JSON.stringify(r.callsByModel)),
+    row('Duplicate rejections', (r) => String(r.rejections.DUPLICATE ?? 0)),
+    row('Other rejection reasons', others),
     '',
     'Recorded = provider-reported tokens × configured prices (PAPER_IMPORT_*_PRICE_*), cached input not discounted. Not the provider invoice.',
   ].join('\n');

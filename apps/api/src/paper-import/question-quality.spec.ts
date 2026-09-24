@@ -1,6 +1,7 @@
 import { DraftQuestion } from './extraction.schema';
 import { PlannedQuestion } from './exam-spec';
 import {
+  DUPLICATE_THRESHOLD,
   findDuplicates,
   gradeQuestions,
   questionsNeedingWork,
@@ -134,6 +135,78 @@ describe('noticing the same question asked twice', () => {
     expect(dups).toHaveLength(1);
     expect(dups[0].id).toBe('c');
     expect(dups[0].duplicateOfId).toBe('a');
+  });
+
+  // Texts below are real, from production GEN_CALL rejection samples
+  // (import cmufolxd500186gh04mu6wsan), cut where the log cut them.
+  describe('arithmetic questions', () => {
+    const PENSION =
+      'يزداد معاش موظف كل سنة بمقدار ثابت. كان معاشه ١٢٨ جنيهًا في السنة السادسة، و٢٠٠ جنيه في السنة الحادية عشرة. احسب معاشه ف';
+    const MERCHANT =
+      'كتب تاجر على بضاعة ثمنًا قدره ٢٨٠٠ فرنك، ثم باعها بخصم ٢٥٪ من الثمن المكتوب، فحقق ربحًا يساوي ٥٪ من ثمن شرائها. كم دفع ل';
+
+    it('does not match an unrelated question on a shared instruction word', () => {
+      // Scored 1.0 in production: the only 4-letter word in the first is
+      // "قيمة", and the second contains it too.
+      const a = 'إذا كان ك = √٦ ÷ (٢ − √٦)، فما قيمة (ك + ٣)²؟';
+      const b =
+        'في العبارة «ص دالة في س»، تُحدَّد قيمة ص اعتمادًا على س، وليس العكس كما تصف العبارة.';
+      expect(similarity(a, b)).toBeLessThan(DUPLICATE_THRESHOLD);
+      expect(
+        findDuplicates([
+          { id: 'b', text: b },
+          { id: 'a', text: a },
+        ]),
+      ).toEqual([]);
+    });
+
+    it('does not match two questions on the opening words alone', () => {
+      expect(similarity('ما قيمة ٢٥ × ٤؟', 'ما قيمة ١٢ ÷ ٣؟')).toBeLessThan(DUPLICATE_THRESHOLD);
+    });
+
+    it('still catches a short question asked twice', () => {
+      expect(similarity('ما قيمة ٢٥ × ٤؟', 'احسب ناتج ٢٥ × ٤')).toBeGreaterThanOrEqual(
+        DUPLICATE_THRESHOLD,
+      );
+      expect(similarity('إذا كان ك = √٦، فما قيمة ك²؟', 'إذا كان ك = √٦، فما قيمة ك²؟')).toBe(1);
+    });
+
+    it('reads Arabic-Indic and Western digits as the same numbers', () => {
+      expect(similarity('احسب ناتج ٢٥ × ٤', 'احسب ناتج 25 × 4')).toBe(1);
+    });
+
+    it.each([
+      [
+        'بلغ معاش موظف ١٢٨ جنيهًا في السنة السادسة و٢٠٠ جنيه في السنة الحادية عشرة، وكان يزداد بمقدار ثابت كل سنة. هل الزيادة الس',
+        PENSION,
+      ],
+      [
+        'كتب تاجر على بضاعة ثمنًا قدره ٢٨٠٠ فرنك، ثم باعها بخصم ٢٥٪ من الثمن المكتوب، محققًا ربحًا يساوي ٥٪ من ثمن الشراء. كم فرن',
+        MERCHANT,
+      ],
+      [
+        // No word in common but "سبيكة", "تحتوي" and "الكسر" — Arabic
+        // inflection — while all four numbers match.
+        'تحتوي سبيكة أولى على ٨١٪ ذهب خالص، وثانية على ٥٦٪ ذهب خالص. خُلِط وزنان منهما بنسبة ٢ : ٣ على الترتيب. ما الكسر الذي يمث',
+        'خُلِط ٢ كجم من سبيكة تحتوي على ٨١٪ ذهبًا خالصًا مع ٣ كجم من سبيكة تحتوي على ٥٦٪ ذهبًا خالصًا. ما الكسر الذي يمثّل الذهب ',
+      ],
+    ])('catches the same problem reworded: %s', (a, b) => {
+      expect(similarity(a, b)).toBeGreaterThanOrEqual(DUPLICATE_THRESHOLD);
+    });
+
+    it('tells the same problem with different numbers apart', () => {
+      const other =
+        'كتب تاجر على بضاعة ثمنًا قدره ٣٦٠٠ فرنك، ثم باعها بخصم ٢٠٪ من الثمن المكتوب، فحقق ربحًا يساوي ١٠٪ من ثمن شرائها. كم دفع ل';
+      expect(similarity(MERCHANT, other)).toBeLessThan(DUPLICATE_THRESHOLD);
+    });
+
+    it('tells two problems on the same operation apart', () => {
+      const a =
+        'A cluster contains the one-dimensional data points 2, 5, 8, and 9. When its centroid is updated by calculating the mean ';
+      const b =
+        'A cluster contains the points (1, 2), (4, 8), and (7, 5). If its centroid is updated by calculating the mean of its assi';
+      expect(similarity(a, b)).toBeLessThan(DUPLICATE_THRESHOLD);
+    });
   });
 
   it('reports a duplicate as a finding on the exam', () => {

@@ -44,24 +44,197 @@ const MIN_OPTIONS = 2;
 const MIN_QUESTION_CHARS = 12;
 
 /**
+ * Words that say what kind of question this is, not what it is about. Folded
+ * (see `foldArabic`) and lowercase, and only ones long enough to survive the
+ * four-letter cut. "ما قيمة …" opens half of all arithmetic questions; sharing
+ * it says nothing about whether two of them are the same question.
+ */
+const GENERIC_WORDS = new Set([
+  'قيمه',
+  'القيمه',
+  'ناتج',
+  'الناتج',
+  'مقدار',
+  'المقدار',
+  'العدد',
+  'احسب',
+  'اوجد',
+  'اختر',
+  'اكتب',
+  'اذكر',
+  'وضح',
+  'فسر',
+  'علل',
+  'اجابه',
+  'الاجابه',
+  'صحيح',
+  'صحيحه',
+  'الصحيح',
+  'الصحيحه',
+  'خاطئ',
+  'خاطئه',
+  'عباره',
+  'العباره',
+  'العبارات',
+  'السؤال',
+  'التالي',
+  'التاليه',
+  'الاتي',
+  'الاتيه',
+  'يساوي',
+  'تساوي',
+  'ايهما',
+  'يكون',
+  'تكون',
+  'كانت',
+  'عندما',
+  'الذي',
+  'التي',
+  'هذه',
+  'هذا',
+  'معادله',
+  'المعادله',
+  'which',
+  'what',
+  'following',
+  'value',
+  'find',
+  'calculate',
+  'compute',
+  'correct',
+  'answer',
+  'true',
+  'false',
+  'statement',
+  'choose',
+  'select',
+  'given',
+  'equal',
+  'equals',
+  'that',
+  'this',
+  'these',
+  'those',
+  'with',
+  'from',
+  'does',
+  'when',
+  'where',
+]);
+
+/** Two questions with fewer distinctive features than this cannot score a
+ *  full match on the strength of one shared word. */
+const MIN_EVIDENCE = 2;
+
+/** Both questions carry numbers and fewer than half of them agree: different
+ *  problems, however alike the wording. */
+const NUMBERS_AGREE = 0.5;
+
+/** At least this many numbers, and this share of them the same, plus one
+ *  distinctive word in common: the same problem reworded. Arabic inflects —
+ *  "ذهب خالص" and "ذهبًا خالصًا" share no word — so a paraphrase of a word
+ *  problem can fall below the word threshold while its numbers match exactly. */
+const SAME_PROBLEM_NUMBERS = 3;
+const SAME_PROBLEM_AGREE = 0.75;
+
+/** Operators that make a run of tokens a mathematical expression. */
+const OPERATOR = /^[+\-×÷/=^²³√<>≤≥%:]$/;
+
+/** Arabic-Indic and Persian digits to ASCII, one spelling of each operator. */
+function normaliseMath(text: string): string {
+  return text
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/٫/g, '.')
+    .replace(/٪/g, '%')
+    .replace(/[−–—]/g, '-')
+    .replace(/[*✕]/g, '×');
+}
+
+/**
+ * What a question is about, as a set of features: its distinctive words, every
+ * number in it whatever its length, its acronyms, and each mathematical
+ * expression written as one token ("ك=√6÷(2-√6)"). A short arithmetic question
+ * is mostly numbers and symbols, which a word list alone cannot see — so to a
+ * word list two unrelated ones look like the same question.
+ */
+function features(text: string): {
+  all: Set<string>;
+  numbers: Set<string>;
+  words: Set<string>;
+} {
+  const all = new Set<string>();
+  const numbers = new Set<string>();
+  const words = new Set<string>();
+  for (const acronym of (text ?? '').match(/\b[A-Z]{2,}\b/g) ?? []) all.add(`@${acronym}`);
+  const folded = normaliseMath(foldArabic(text ?? '')).toLowerCase();
+
+  for (const n of folded.match(/\d+(?:\.\d+)?/g) ?? []) {
+    numbers.add(n);
+    all.add(`#${n}`);
+  }
+  for (const w of folded.split(/[^\p{L}\p{N}]+/u)) {
+    if (w.length >= 4 && !/\d/.test(w) && !GENERIC_WORDS.has(w)) {
+      words.add(w);
+      all.add(w);
+    }
+  }
+
+  // Expressions: maximal runs of numbers, single-letter variables, operators
+  // and brackets, kept only when an operator joins two operands or more. "81%"
+  // alone is a number, already counted; counting it twice would let unit signs
+  // outweigh the words of a paraphrase.
+  const tokens = folded.match(/\d+(?:\.\d+)?|\p{L}+|[^\s\p{L}\p{N}]/gu) ?? [];
+  let run: string[] = [];
+  const flush = () => {
+    const expr = run.join('').replace(/^[=:+×÷/]+|[=:+\-×÷/]+$/g, '');
+    const operands = run.filter((t) => /^\d/.test(t) || /^\p{L}$/u.test(t)).length;
+    if (run.some((t) => OPERATOR.test(t)) && operands >= 2) all.add(`=${expr}`);
+    run = [];
+  };
+  for (const t of tokens) {
+    const math = /^\d/.test(t) || OPERATOR.test(t) || /^[()[\]]$/.test(t) || /^\p{L}$/u.test(t);
+    if (math) run.push(t);
+    else flush();
+  }
+  flush();
+  return { all, numbers, words };
+}
+
+/**
  * How alike two questions are, from 0 to 1.
  *
- * Word overlap over the smaller question, on folded Arabic so that spelling
- * variants do not hide a duplicate. Not an embedding: there is no vector store
- * here, and two questions written from the same paragraph in the same call
- * repeat each other's words when they repeat each other — which is the case
- * this needs to catch.
+ * Feature overlap over the smaller question (see `features`), on folded Arabic
+ * so that spelling variants do not hide a duplicate. Not an embedding: there
+ * is no vector store here, and two questions written from the same paragraph
+ * in the same call repeat each other's words, numbers and expressions when
+ * they repeat each other — which is the case this needs to catch.
+ *
+ * The overlap is divided by at least `MIN_EVIDENCE`, so a question with one
+ * distinctive word cannot be a full match for every question that shares it.
+ * Two problems whose numbers mostly differ are two problems; two that share
+ * nearly all of several numbers and a word of their subject are one.
  */
 export function similarity(a: string, b: string): number {
-  const left = keywords(a);
-  const right = keywords(b);
-  if (!left.size || !right.size) return 0;
-  let shared = 0;
-  for (const word of left) if (right.has(word)) shared++;
-  const overlap = shared / Math.min(left.size, right.size);
-  // Identical text after folding is a duplicate whatever the word count says
-  // — a two-word question has too few keywords for the ratio to be stable.
+  // Identical text after folding is a duplicate whatever the features say.
   if (foldArabic(a).trim().toLowerCase() === foldArabic(b).trim().toLowerCase()) return 1;
+  const left = features(a);
+  const right = features(b);
+  if (!left.all.size || !right.all.size) return 0;
+  let shared = 0;
+  for (const f of left.all) if (right.all.has(f)) shared++;
+  const overlap = shared / Math.max(MIN_EVIDENCE, Math.min(left.all.size, right.all.size));
+  if (left.numbers.size && right.numbers.size) {
+    let common = 0;
+    for (const n of left.numbers) if (right.numbers.has(n)) common++;
+    const agree = common / (left.numbers.size + right.numbers.size - common);
+    if (agree < NUMBERS_AGREE) return Math.min(overlap, NUMBERS_AGREE);
+    const sameProblem =
+      common >= SAME_PROBLEM_NUMBERS &&
+      agree >= SAME_PROBLEM_AGREE &&
+      [...left.words].some((w) => right.words.has(w));
+    if (sameProblem) return Math.max(overlap, agree);
+  }
   return overlap;
 }
 

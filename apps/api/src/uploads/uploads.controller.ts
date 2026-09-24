@@ -64,6 +64,23 @@ export class UploadsController {
     private readonly videoProcessing: VideoProcessingService,
   ) {}
 
+  /**
+   * Refuse a file whose content does not match its declared type, and do not
+   * leave the staged copy behind when refusing.
+   *
+   * Every early return in this controller unlinks the temp file; a new one
+   * that forgot would leak a 2 GB upload onto the container's disk, so the
+   * cleanup lives with the check rather than at each call site.
+   */
+  private async rejectMismatch(file: Express.Multer.File): Promise<void> {
+    try {
+      await assertFileMatchesMime(file.path, file.mimetype);
+    } catch (e) {
+      fs.unlink(file.path, () => undefined);
+      throw e;
+    }
+  }
+
   @Post('uploads/videos')
   @Roles(Role.TEACHER)
   @ApiBearerAuth()
@@ -86,23 +103,6 @@ export class UploadsController {
           : cb(new BadRequestException('Only mp4/webm/mov/mkv videos are accepted'), false),
     }),
   )
-  /**
-   * Refuse a file whose content does not match its declared type, and do not
-   * leave the staged copy behind when refusing.
-   *
-   * Every early return in this controller unlinks the temp file; a new one
-   * that forgot would leak a 2 GB upload onto the container's disk, so the
-   * cleanup lives with the check rather than at each call site.
-   */
-  private async rejectMismatch(file: Express.Multer.File): Promise<void> {
-    try {
-      await assertFileMatchesMime(file.path, file.mimetype);
-    } catch (e) {
-      fs.unlink(file.path, () => undefined);
-      throw e;
-    }
-  }
-
   async uploadVideo(@CurrentUser() user: JwtPayload, @UploadedFile() file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('file is required');
     // The filter above checked the type the client *declared*; this checks the

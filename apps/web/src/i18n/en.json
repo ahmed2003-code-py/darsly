@@ -3299,6 +3299,7 @@
       "NO_ANSWER_KEY": "The paper did not mark any answers, so none are set. Choose the right answer for each question before students sit it.",
       "NUMBER_GAP": "The paper numbers {{numbers}} are missing. Check whether a page did not upload.",
       "NO_QUESTIONS": "Nothing readable came off these pages.",
+      "GENERATION_INCOMPLETE": "The exam has {{got}} of the {{wanted}} questions you asked for — writing stopped before the rest to stay within its limit. Missing: {{missingMcq}} multiple choice, {{missingTrueFalse}} true/false, {{missingWritten}} written. Add them yourself or generate again.",
       "NOT_ENOUGH_CONTENT": "The material you uploaded supports {{got}} of the {{wanted}} questions you asked for. Upload more material, or ask for fewer.",
       "DUPLICATE_QUESTION": "Question {{number}} repeats an earlier one. Rewrite it or delete it.",
       "PAGE_PROVIDER_ERROR": "Page {{page}} could not be processed — the reading service did not respond. Your file is safe; read the failed pages again.",
@@ -3402,6 +3403,7 @@
       "SKIPPED": "nothing on it"
     },
     "shortfallTitle": "The material was shorter than the exam",
+    "shortfallBodyIncomplete": "{{got}} of the {{wanted}} questions were written; writing stopped before the rest to keep the cost within its limit. Missing: {{missingMcq}} multiple choice, {{missingTrueFalse}} true/false, {{missingWritten}} written. The exam is set to {{got}} for now — keep it, or change the settings?",
     "shortfallBody": "What you uploaded supports {{got}} good questions, not {{wanted}}. We have set the exam to {{got}}: {{mcq}} multiple choice, {{trueFalse}} true/false, {{written}} written. Keep it as it is, or change the settings and upload more material.",
     "shortfallKeep": "Keep {{got}} questions",
     "draftSaved": "Draft saved.",

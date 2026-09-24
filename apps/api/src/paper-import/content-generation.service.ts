@@ -4,32 +4,20 @@ import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { DraftQuestion, DraftWarning, ExamDraft } from './extraction.schema';
-import {
-  ExamSpec,
-  normalizeSpec,
-  planQuestions,
-  PlannedQuestion,
-  scaleSpec,
-  specFromQuestions,
-} from './exam-spec';
+import { ExamSpec, normalizeSpec, PlannedQuestion, specFromQuestions } from './exam-spec';
 import { gradeQuestions, findDuplicates, GradedQuestion } from './question-quality';
-import { QuestionGeneratorService, GeneratedQuestion } from './question-generator.service';
+import { QuestionGeneratorService } from './question-generator.service';
 import { SourceReaderService } from './source-reader.service';
-import { PaperImportConfig } from './paper-import.config';
+import { GenerationProfileName, PaperImportConfig } from './paper-import.config';
+import { acceptOne, GenerationReport, GenerationRun } from './generation-run';
 import {
   chunkSource,
   normalizePageText,
-  selectChunksForBatch,
   selectChunksForQuestion,
-  supportableQuestions,
   SourceChunk,
   SourcePage,
   stripRunningLines,
 } from './source-text';
-
-let counter = 0;
-const nextId = (): string =>
-  `g${(++counter).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /**
  * The content path: lecture material in, an exam draft out.
@@ -249,16 +237,21 @@ export class ContentGenerationService {
   // ── phase two: write the questions ───────────────────────────────────────
 
   /**
-   * Write the exam the teacher asked for, in batches, from the chunks.
+   * Write the exam the teacher asked for, from the chunks.
    *
-   * A batch that fails the deterministic checks is written again — once on the
-   * same model, then once on the flagship — and only that batch. A shortfall
-   * that survives both is reported rather than padded: a teacher told "this
-   * material supports 13 good questions" can upload more or ask for 13, and a
-   * teacher handed 20 questions of which 7 are invented cannot do anything at
-   * all, because they do not know which 7.
+   * The work is GenerationRun's — slots, bounded rounds, a budget, luna and
+   * sol only. What is here is the session: whether it is still wanted, what
+   * the teacher is shown while it runs, and what is written when it ends.
+   *
+   * An exam that comes out short is saved as what it is — the questions that
+   * passed, a spec that matches them, and a warning that says how many of
+   * which type are missing and why. It is never presented as the exam that
+   * was ordered.
    */
-  async generate(record: PaperImport): Promise<{ millicents: number }> {
+  async generate(
+    record: PaperImport,
+    opts: { profile?: GenerationProfileName; budgetCents?: number } = {},
+  ): Promise<{ millicents: number; report?: GenerationReport }> {
     const asked = normalizeSpec(record.spec as never);
     const chunks = await this.chunksOf(record.id);
 
@@ -267,188 +260,112 @@ export class ContentGenerationService {
       return { millicents: 0 };
     }
 
-    // Work out what the material can carry BEFORE spending anything on it.
-    // Asking one page for twenty questions used to mean three batches over the
-    // same paragraph, each repeating the last, every repeat thrown away as a
-    // duplicate, the shortfall read as a model failure and all three batches
-    // escalated to the flagship. Six calls and ten minutes for thirteen
-    // questions one call could have written.
-    const ceiling = supportableQuestions(chunks);
-    const spec = scaleSpec(asked, ceiling);
-    const plan = planQuestions(spec);
-
+    const profile = this.config.generationProfileOf(opts.profile);
     await this.prisma.paperImport.update({
       where: { id: record.id },
       data: {
         stage: 'GENERATING',
         status: 'PROCESSING',
         progressDone: 0,
-        progressTotal: plan.length,
+        progressTotal: asked.questionCount,
         error: null,
         generationBatches: 0,
         escalatedChunks: 0,
       },
     });
 
-    const batchCount = this.generator.batchCount(plan.length);
-    const accepted: GradedQuestion[] = [];
-    const warnings: DraftWarning[] = [];
-    let millicents = 0;
-    let batches = 0;
-    let escalatedChunks = 0;
-    let supportable: number | null = null;
+    // Stopped from the screen: `cancel` moves the session back to its
+    // settings form (or deletes it), and nothing after that may be started.
+    const isLive = async () =>
+      !!(await this.prisma.paperImport.findFirst({
+        where: { id: record.id, deletedAt: null, status: 'PROCESSING', stage: 'GENERATING' },
+        select: { id: true },
+      }));
 
-    for (let b = 0; b < batchCount; b++) {
-      const batchPlan = this.generator.batchOf(plan, b);
-      if (!batchPlan.length) continue;
-      const material = selectChunksForBatch(
+    const { questions, report } = await withAiTrace({ phase: 'GENERATE' }, () =>
+      new GenerationRun(this.generator, this.config).run({
+        importId: record.id,
+        asked,
         chunks,
-        b,
-        batchCount,
-        this.config.generationSourceTokens,
-      );
+        profile,
+        budgetMillicents: (opts.budgetCents ?? this.config.generationBudgetCents) * 1000,
+        isLive,
+        onProgress: async (done, calls) => {
+          await this.prisma.paperImport.updateMany({
+            where: { id: record.id, status: 'PROCESSING' },
+            data: { progressDone: done, generationBatches: calls },
+          });
+        },
+      }),
+    );
+    const millicents = report.millicents;
+    const costCents = Math.ceil(millicents / 1000);
 
-      let kept: GradedQuestion[] = [];
-      let exhausted = false;
-      for (let attempt = 0; attempt < this.config.generationMaxAttempts; attempt++) {
-        const stronger = attempt > 0;
-        const result = await withAiTrace(
-          {
-            stage: stronger ? 'QUESTION_REGENERATION' : 'QUESTION_GENERATION',
-            batch: b,
-            attempt,
-            meta: { planned: countTypes(batchPlan), stronger },
-          },
-          () =>
-            this.generator.generateBatch({
-              plan: batchPlan,
-              chunks: material,
-              language: spec.language,
-              avoid: accepted.map((q) => q.text),
-              stronger,
-            }),
-        );
-        batches += 1;
-        millicents += result.millicents;
-        if (stronger) escalatedChunks += 1;
-
-        if (result.insufficient && result.supportable >= 0) {
-          supportable = Math.max(
-            supportable ?? 0,
-            accepted.length + Math.min(result.supportable, batchPlan.length),
-          );
-        }
-
-        kept = this.acceptable(result.questions, batchPlan, material, accepted);
-        // One line per call, beside its AiCallLog row: what the call returned
-        // and how much of it survived the checks.
-        this.logger.log(
-          `GEN_RESULT import=${record.id} batch=${b} attempt=${attempt} model=${result.model} ` +
-            `planned=${batchPlan.length} returned=${result.questions.length} kept=${kept.length} ` +
-            `insufficient=${result.insufficient} error=${result.error ? 'yes' : 'no'}`,
-        );
-
-        // Every question asked for came back usable. Done.
-        if (kept.length >= batchPlan.length) break;
-
-        // Short, but nothing that came back was *wrong*: the model wrote what
-        // the paragraph supports. A bigger model reading the same paragraph
-        // does not lengthen it, and this is the case that used to cost three
-        // flagship calls per import. Stop asking.
-        const rejected = result.questions.length - kept.length;
-        if (result.insufficient || rejected === 0) {
-          exhausted = true;
-          break;
-        }
-        // Something came back broken. That IS worth a better reader.
-      }
-
-      accepted.push(...kept);
-      // The material has given what it has. The remaining batches would be
-      // handed the same chunks and would repeat these questions.
-      if (exhausted && kept.length < batchPlan.length) {
-        await this.prisma.paperImport.update({
-          where: { id: record.id },
-          data: { progressDone: accepted.length, generationBatches: batches },
-        });
-        break;
-      }
+    if (report.stopReason === 'CANCELED') {
+      // What was spent is still spent; the session is left as its owner left it.
       await this.prisma.paperImport.update({
         where: { id: record.id },
-        data: { progressDone: accepted.length, generationBatches: batches },
+        data: { costCents: { increment: costCents } },
       });
+      this.logger.log(`Import ${record.id}: generation stopped by its owner`);
+      return { millicents, report };
     }
 
-    // ── filling the count ─────────────────────────────────────────────────
-    //
-    // The material has given what it has. What the teacher asked for is still
-    // what the teacher asked for, so the remaining slots are written by
-    // varying the questions that did come out of it — different numbers, the
-    // other end of the same relationship, a different facet of the same idea.
-    // Nothing new is claimed: a variant is grounded in a chunk like everything
-    // else and faces the same duplicate check, which is what stops this from
-    // becoming the same question twenty times.
-    const variants = await this.fillWithVariants({
-      importId: record.id,
-      asked,
-      accepted,
-      chunks,
-      language: spec.language,
-    });
-    millicents += variants.millicents;
-    batches += variants.calls;
-
     // ── the deterministic gate ────────────────────────────────────────────
-    await this.prisma.paperImport.update({
-      where: { id: record.id },
-      data: { stage: 'VALIDATING' },
-    });
+    const numbered = questions.map((q, i) => ({ ...q, number: i + 1 }));
+    const findings = gradeQuestions(numbered, undefined, { requireGrounding: true });
+    const warnings: DraftWarning[] = [];
 
-    const numbered = accepted.map((q, i) => ({ ...q, number: i + 1 }));
-    const findings = gradeQuestions(numbered, plan, { requireGrounding: true });
-
-    // What the teacher asked for, reconciled with what the material gave.
-    //
-    // The spec is rewritten to match the exam that actually exists. It used to
-    // keep saying "20 questions, 10 multiple choice" over a draft of 13, so
-    // "change the settings" opened a form the teacher had to correct by hand
-    // before it would save — a number they never chose, asking them to fix it.
-    // Now the stored spec is the exam, and the warning explains the difference.
+    // The spec is rewritten to match the exam that actually exists, so
+    // "change the settings" opens the real numbers; the warning below says
+    // what was ordered and what is missing.
     const finalSpec: ExamSpec =
       numbered.length < asked.questionCount ? specFromQuestions(asked, numbered) : asked;
 
-    // The exam is the length that was ordered, and part of it came from a
-    // second look at the same material. That is a thing the teacher has to be
-    // told — not because it went wrong, but because "which of these are
-    // variants" is a question they are entitled to the answer to before they
-    // set the paper.
-    if (variants.made > 0) {
+    if (report.variants > 0) {
       warnings.push({
         code: 'COMPLETED_WITH_VARIANTS',
         params: {
-          variants: variants.made,
-          fromMaterial: numbered.length - variants.made,
+          variants: report.variants,
+          fromMaterial: report.distinct,
           wanted: asked.questionCount,
         },
         detail:
-          `The material supported ${numbered.length - variants.made} distinct questions; ` +
-          `${variants.made} more were written as variants of them to reach ${asked.questionCount}.`,
+          `The material supported ${report.distinct} distinct questions; ` +
+          `${report.variants} more were written as variants of them.`,
       });
     }
 
-    if (numbered.length < asked.questionCount) {
-      warnings.push({
-        code: 'NOT_ENOUGH_CONTENT',
-        params: {
-          got: numbered.length,
-          wanted: asked.questionCount,
-          supportable: supportable ?? numbered.length,
-          mcq: finalSpec.types.MCQ,
-          trueFalse: finalSpec.types.TRUE_FALSE,
-          written: finalSpec.types.SHORT_ANSWER,
-        },
-        detail: `The uploaded material supports ${numbered.length} of the ${asked.questionCount} questions requested.`,
-      });
+    if (!report.complete) {
+      const shortfall = {
+        got: numbered.length,
+        wanted: asked.questionCount,
+        mcq: finalSpec.types.MCQ,
+        trueFalse: finalSpec.types.TRUE_FALSE,
+        written: finalSpec.types.SHORT_ANSWER,
+        missingMcq: report.missingByType.MCQ ?? 0,
+        missingTrueFalse: report.missingByType.TRUE_FALSE ?? 0,
+        missingWritten: report.missingByType.SHORT_ANSWER ?? 0,
+      };
+      // The material is the limit only when it is: a run that stopped on its
+      // budget or its round limit must not tell the teacher to upload more.
+      warnings.push(
+        report.stopReason === 'MATERIAL'
+          ? {
+              code: 'NOT_ENOUGH_CONTENT',
+              params: { ...shortfall, supportable: numbered.length },
+              detail: `The uploaded material supports ${numbered.length} of the ${asked.questionCount} questions requested.`,
+            }
+          : {
+              code: 'GENERATION_INCOMPLETE',
+              params: { ...shortfall, reason: report.stopReason ?? 'ROUNDS' },
+              detail:
+                `${numbered.length} of ${asked.questionCount} questions were written ` +
+                `(stopped: ${report.stopReason}); missing ` +
+                `${shortfall.missingMcq} multiple choice, ${shortfall.missingTrueFalse} true/false, ` +
+                `${shortfall.missingWritten} written.`,
+            },
+      );
     }
     for (const dup of findDuplicates(numbered)) {
       const q = numbered.find((x) => x.id === dup.id);
@@ -471,31 +388,43 @@ export class ContentGenerationService {
       sections: [{ title: '', questions: numbered.map(stripGrading) }],
     };
 
-    await this.prisma.paperImport.update({
-      where: { id: record.id },
+    // Guarded: a stop that landed after the last call must still win.
+    const written = await this.prisma.paperImport.updateMany({
+      where: { id: record.id, status: 'PROCESSING', deletedAt: null },
       data: {
         status: numbered.length ? 'REVIEW' : 'FAILED',
         stage: 'READY',
-        error: numbered.length ? null : 'No questions could be written from this material',
+        error: numbered.length
+          ? null
+          : report.stopReason === 'BUDGET'
+            ? 'The generation budget ran out before any question was written'
+            : 'No questions could be written from this material',
         title: draft.title,
         draft: draft as unknown as Prisma.InputJsonValue,
-        // The spec now describes the exam that exists, so confirming works and
-        // "change the settings" opens the real numbers.
         spec: finalSpec as unknown as Prisma.InputJsonValue,
         warnings: warnings as unknown as Prisma.InputJsonValue,
-        generationBatches: batches,
-        escalatedChunks,
-        costCents: { increment: Math.ceil(millicents / 1000) },
+        generationBatches: report.calls,
+        // Slots written on the fallback model — the number that says whether
+        // the cheap-first profile is holding up.
+        escalatedChunks: report.callLog.filter((c) => c.model !== profile.primary.model).length,
+        costCents: { increment: costCents },
         progressDone: numbered.length,
-        progressTotal: Math.max(numbered.length, plan.length),
+        progressTotal: asked.questionCount,
       },
     });
+    if (!written.count) {
+      await this.prisma.paperImport.update({
+        where: { id: record.id },
+        data: { costCents: { increment: costCents } },
+      });
+    }
 
     this.logger.log(
-      `Import ${record.id}: ${numbered.length}/${plan.length} question(s) in ${batches} batch(es), ` +
-        `${escalatedChunks} escalated, ${(millicents / 1000).toFixed(2)}¢`,
+      `Import ${record.id}: ${numbered.length}/${asked.questionCount} question(s) in ` +
+        `${report.calls} call(s) on ${profile.name}, ${(millicents / 1000).toFixed(2)}¢` +
+        (report.complete ? '' : ` — PARTIAL (${report.stopReason})`),
     );
-    return { millicents };
+    return { millicents, report };
   }
 
   /**
@@ -538,7 +467,13 @@ export class ContentGenerationService {
       return { question: null, millicents: result.millicents, error: result.error ?? 'EMPTY' };
     }
 
-    const [graded] = this.acceptable([written], [planned], material, []);
+    const { question: graded } = acceptOne(
+      written,
+      planned,
+      material,
+      all.filter((q) => q.id !== questionId),
+      spec.language === 'AUTO',
+    );
     if (!graded) {
       return { question: null, millicents: result.millicents, error: 'REJECTED' };
     }
@@ -550,158 +485,6 @@ export class ContentGenerationService {
   }
 
   // ── internals ────────────────────────────────────────────────────────────
-
-  /**
-   * Keep the questions from a batch that are actually usable.
-   *
-   * Per question, not per batch: seven good questions and one broken one is
-   * seven questions kept and one asked for again, rather than eight thrown
-   * away and eight paid for twice.
-   */
-  /**
-   * Reach the number that was asked for, without inventing content.
-   *
-   * Runs only when the ordinary generation came up short, and only for as many
-   * rounds as the config allows. Each round asks for exactly what is still
-   * missing and hands the model the questions the material did support, so a
-   * variant has something concrete to vary.
-   *
-   * Everything a variant produces goes through `acceptable` unchanged — the
-   * same grounding check, the same duplicate check at the same threshold. That
-   * is deliberate and is the only reason this is safe: a "variant" that is its
-   * source reworded scores above the duplicate threshold and is dropped, so
-   * the failure mode this invites cannot reach a teacher. It costs a call to
-   * find that out, which is why the rounds are capped at two.
-   *
-   * `accepted` is mutated, because it is the exam being assembled and the
-   * caller carries on using it.
-   */
-  private async fillWithVariants(opts: {
-    importId: string;
-    asked: ExamSpec;
-    accepted: GradedQuestion[];
-    chunks: SourceChunk[];
-    language: ExamSpec['language'];
-  }): Promise<{ made: number; millicents: number; calls: number }> {
-    const { asked, accepted, chunks } = opts;
-    const rounds = this.config.generationVariantRounds;
-    let millicents = 0;
-    let calls = 0;
-    let made = 0;
-
-    if (!rounds || !accepted.length || accepted.length >= asked.questionCount) {
-      return { made, millicents, calls };
-    }
-
-    // The slots still to fill, taken from the plan for what was actually
-    // asked for rather than from the scaled-down one — the type mix a teacher
-    // chose is part of the request, not a casualty of the material being thin.
-    const fullPlan = planQuestions(asked);
-
-    for (let round = 0; round < rounds && accepted.length < asked.questionCount; round++) {
-      const slots = fullPlan.slice(accepted.length, asked.questionCount);
-      if (!slots.length) break;
-
-      const material = selectChunksForBatch(chunks, 0, 1, this.config.generationSourceTokens);
-      const result = await withAiTrace(
-        {
-          stage: 'QUESTION_VARIANTS',
-          attempt: round,
-          meta: { planned: countTypes(slots), stronger: round > 0 },
-        },
-        () =>
-          this.generator.generateVariants({
-            plan: slots,
-            chunks: material,
-            language: opts.language,
-            // The questions the material did support, which is what there is to
-            // vary. Capped: a long list crowds out the material itself.
-            source: accepted
-              .slice(0, 20)
-              .map((q) => ({ text: q.text, modelAnswer: q.modelAnswer })),
-            avoid: accepted.map((q) => q.text),
-            // A second round on the same material got the same answer often
-            // enough to be worth paying for a better reader once.
-            stronger: round > 0,
-          }),
-      );
-      calls += 1;
-      millicents += result.millicents;
-
-      const kept = this.acceptable(result.questions, slots, material, accepted).map((q) => ({
-        ...q,
-        variant: true,
-      }));
-      if (!kept.length) break; // nothing usable came back; another round will not help
-      accepted.push(...kept);
-      made += kept.length;
-
-      await this.prisma.paperImport.update({
-        where: { id: opts.importId },
-        data: { progressDone: accepted.length },
-      });
-    }
-
-    this.logger.log(
-      `Import ${opts.importId}: ${made} variant question(s) in ${calls} call(s) ` +
-        `to reach ${accepted.length}/${asked.questionCount}`,
-    );
-    return { made, millicents, calls };
-  }
-
-  private acceptable(
-    written: GeneratedQuestion[],
-    plan: PlannedQuestion[],
-    material: SourceChunk[],
-    already: GradedQuestion[],
-  ): GradedQuestion[] {
-    const valid = new Set(material.map((c) => c.index));
-    const out: GradedQuestion[] = [];
-
-    written.forEach((w, i) => {
-      const wanted = plan[i] ?? plan[plan.length - 1];
-      const chunk = material.find((c) => c.index === w.chunkIndex);
-      const question: GradedQuestion = {
-        id: nextId(),
-        number: 0,
-        type: (w.type ?? wanted.type) as DraftQuestion['type'],
-        text: (w.text ?? '').trim(),
-        options: (w.options ?? [])
-          .filter((o) => (o?.text ?? '').trim())
-          .map((o) => ({
-            id: nextId(),
-            label: (o.label ?? '').trim(),
-            text: o.text.trim(),
-            correct: !!o.correct,
-          })),
-        modelAnswer: (w.modelAnswer ?? '').trim(),
-        marks: Number.isFinite(w.marks) ? w.marks : wanted.marks,
-        // The page of the uploaded material this came off, so the review
-        // screen can say "biology.pdf — page 8" and mean it.
-        sourcePages: chunk?.page ? [chunk.page] : [],
-        sourceFile: chunk?.sourceFile ?? '',
-        unsupportedKind: '',
-        needsReview: false,
-        chunkIndex: valid.has(w.chunkIndex) ? w.chunkIndex : null,
-      };
-      // One question at a time through the same gate the whole exam faces.
-      const findings = gradeQuestions([{ ...question, number: 1 }], undefined, {
-        requireGrounding: true,
-      });
-      if (findings.length) return;
-      // And not a repeat of anything already accepted.
-      if (
-        findDuplicates(
-          [...already, ...out, question].map((q) => ({ id: q.id, text: q.text })),
-        ).some((d) => d.id === question.id)
-      ) {
-        return;
-      }
-      out.push(question);
-    });
-
-    return out;
-  }
 
   private async chunksOf(importId: string): Promise<SourceChunk[]> {
     const rows = await this.prisma.examSourceChunk.findMany({
@@ -737,12 +520,4 @@ function selectChunksForQuestionOf(chunks: SourceChunk[], question: DraftQuestio
     text: question.text,
     chunkIndex: question.sourceChunk ?? null,
   });
-}
-
-/** How many of each kind a plan asks for — kept with each generation call so
- *  objective and written questions can be costed apart. */
-function countTypes(plan: { type: string }[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const q of plan) out[q.type] = (out[q.type] ?? 0) + 1;
-  return out;
 }

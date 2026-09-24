@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AiClient, AiPrice } from '../academy-site/ai/ai.client';
-import { PaperImportConfig } from './paper-import.config';
+import { AiClient } from '../academy-site/ai/ai.client';
+import { AiJobError } from '../academy-site/ai/ai-job.error';
+import { GenerationTier, PaperImportConfig } from './paper-import.config';
 import { PlannedQuestion, SpecQuestionType } from './exam-spec';
-import { SourceChunk } from './source-text';
+import { estimateTokens, SourceChunk } from './source-text';
+import { worstCaseMillicents } from './generation-budget';
 
 /**
  * Writing exam questions from lecture material.
@@ -56,10 +58,38 @@ export interface GeneratedBatch {
 
 export interface GenerationResult extends GeneratedBatch {
   model: string;
+  effort?: string;
   inputTokens: number;
   outputTokens: number;
+  /** Part of inputTokens / outputTokens, when the provider says. */
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
+  /** Recorded cost, from the provider's usage report at configured prices.
+   *  A call that failed after a response arrived is still counted here. */
   millicents: number;
+  /** True when the call failed without any usage report — it may or may not
+   *  have been billed, and nobody here can say which. */
+  usageUnknown?: boolean;
+  durationMs?: number;
   error: string | null;
+}
+
+/** DISTINCT: new questions from the material. VARIANT: new questions that
+ *  vary ones the material already produced. */
+export type GenerationMode = 'DISTINCT' | 'VARIANT';
+
+export interface GenerationRequest {
+  tier: GenerationTier;
+  mode: GenerationMode;
+  plan: PlannedQuestion[];
+  chunks: SourceChunk[];
+  language: 'AUTO' | 'AR' | 'EN';
+  /** Questions already on the exam that this call could repeat. */
+  avoid: string[];
+  /** VARIANT only: the questions to vary. */
+  source?: { text: string; modelAnswer: string }[];
+  /** Why the previous attempt at this was rejected, when there was one. */
+  reason?: string;
 }
 
 const BATCH_SCHEMA = {
@@ -172,59 +202,32 @@ export class QuestionGeneratorService {
   }
 
   /**
-   * Write one batch.
+   * Write the questions one request asks for, on the model it names.
    *
-   * `stronger` is the escalation: a batch whose first attempt failed the
-   * deterministic checks is written again, and if that fails too the flagship
-   * is asked once. Per batch, never per exam — one bad stretch of a lecture
-   * does not make the whole thing expensive.
+   * Which model is the caller's decision, made from evidence it has and this
+   * does not (which slot failed which check, how often). The only rule here
+   * is the allow-list: a model not on it is refused before anything is sent.
    */
-  async generateBatch(opts: {
-    plan: PlannedQuestion[];
-    chunks: SourceChunk[];
-    language: 'AUTO' | 'AR' | 'EN';
-    /** Questions already written, so the model does not repeat them. */
-    avoid: string[];
-    stronger?: boolean;
-  }): Promise<GenerationResult> {
-    const model = opts.stronger ? this.config.strongModel : this.config.generationModel;
-    const price = opts.stronger ? this.config.strongPrice : this.config.generationPrice;
-    const effort = opts.stronger ? this.config.strongEffort : this.config.generationEffort;
-    return this.call(model, price, effort, this.batchPrompt(opts));
+  async generate(req: GenerationRequest): Promise<GenerationResult> {
+    return this.call(req.tier, this.prompt(req), this.outputCeiling(req.plan.length));
   }
 
   /**
-   * Write the questions the material could not carry a second way.
-   *
-   * The honest position — "this lecture supports thirteen questions, not
-   * twenty" — is the right one about *content*, and the wrong one about a
-   * teacher who needs a twenty-question paper on Sunday. Both can be true, so
-   * the shortfall is filled by varying what the material did support rather
-   * than by inventing what it did not: the same concept with different
-   * numbers, asked from the other end, or about a different facet of it.
-   *
-   * What makes this safe is that nothing new is claimed. A variant is still
-   * grounded in a chunk, still answerable from the uploaded material, and
-   * still has to clear the same duplicate check as everything else — so a
-   * reworded copy of its own source is thrown away rather than counted. That
-   * check is the whole guard against the obvious failure here, which is twenty
-   * questions that are thirteen questions wearing hats.
+   * The most `generate(req)` could cost, before it is sent: the prompt's
+   * estimated size, with a margin because the estimate is characters over a
+   * constant and Arabic tokenises worse than that, plus the whole output
+   * ceiling.
    */
-  async generateVariants(opts: {
-    /** The slots still to fill: type, difficulty and marks for each. */
-    plan: PlannedQuestion[];
-    chunks: SourceChunk[];
-    language: 'AUTO' | 'AR' | 'EN';
-    /** The questions the material did support, to be varied. */
-    source: { text: string; modelAnswer: string }[];
-    /** Everything already on the exam, so a variant is not a repeat. */
-    avoid: string[];
-    stronger?: boolean;
-  }): Promise<GenerationResult> {
-    const model = opts.stronger ? this.config.strongModel : this.config.generationModel;
-    const price = opts.stronger ? this.config.strongPrice : this.config.generationPrice;
-    const effort = opts.stronger ? this.config.strongEffort : this.config.generationEffort;
-    return this.call(model, price, effort, this.variantPrompt(opts));
+  worstCase(req: GenerationRequest): number {
+    const input =
+      estimateTokens(SYSTEM_PROMPT) +
+      estimateTokens(JSON.stringify(BATCH_SCHEMA)) +
+      estimateTokens(this.prompt(req));
+    return worstCaseMillicents(
+      Math.ceil(input * 1.5),
+      this.outputCeiling(req.plan.length),
+      req.tier.price,
+    );
   }
 
   /**
@@ -232,7 +235,9 @@ export class QuestionGeneratorService {
    *
    * The whole point of the review screen's "regenerate" button: a teacher who
    * dislikes question 7 gets question 7 rewritten, from the material it came
-   * from, for the cost of one small call — not a new exam.
+   * from, for the cost of one small call — not a new exam. On the profile's
+   * first model, never its fallback: the teacher is asking for a different
+   * question, not reporting a broken one.
    */
   async regenerateOne(opts: {
     planned: PlannedQuestion;
@@ -243,59 +248,50 @@ export class QuestionGeneratorService {
      *  ours. Sent so the rewrite is not the same question again. */
     reason?: string;
   }): Promise<GenerationResult> {
-    return this.call(
-      this.config.generationModel,
-      this.config.generationPrice,
-      this.config.generationEffort,
-      this.batchPrompt({
-        plan: [opts.planned],
-        chunks: opts.chunks,
-        language: opts.language,
-        avoid: opts.avoid,
-        reason: opts.reason,
-      }),
-    );
+    return this.generate({
+      tier: this.config.generationProfileOf().primary,
+      mode: 'DISTINCT',
+      plan: [opts.planned],
+      chunks: opts.chunks,
+      language: opts.language,
+      avoid: opts.avoid,
+      reason: opts.reason,
+    });
   }
 
   // ── internals ──────────────────────────────────────────────────────────
 
-  private batchPrompt(opts: {
-    plan: PlannedQuestion[];
-    chunks: SourceChunk[];
-    language: 'AUTO' | 'AR' | 'EN';
-    avoid: string[];
-    reason?: string;
-  }): string {
-    const wanted = opts.plan
-      .map((p, i) => `${i + 1}. type=${p.type} difficulty=${p.difficulty} marks=${p.marks}`)
-      .join('\n');
-    const material = opts.chunks
-      .map(
-        (c) => `[chunk ${c.index}] (${c.sourceFile}${c.page ? `, page ${c.page}` : ''})\n${c.text}`,
-      )
-      .join('\n\n');
-    const language =
-      opts.language === 'AR'
-        ? 'Write every question in Arabic.'
-        : opts.language === 'EN'
-          ? 'Write every question in English.'
-          : 'Write in the language of the material.';
+  private outputCeiling(questions: number): number {
+    return Math.min(
+      this.config.maxTokens,
+      this.config.generationOutputBase + this.config.generationOutputPerQuestion * questions,
+    );
+  }
 
+  private prompt(req: GenerationRequest): string {
+    return req.mode === 'VARIANT' ? this.variantPrompt(req) : this.batchPrompt(req);
+  }
+
+  /**
+   * The material goes first and the per-call part after it, so a replacement
+   * call over the same stretch of lecture begins with exactly the text its
+   * first call began with — which is what the provider's prompt cache keys on.
+   */
+  private batchPrompt(opts: GenerationRequest): string {
     return [
-      `Write exactly ${opts.plan.length} question(s), one for each line below, in this order:`,
-      wanted,
-      '',
-      language,
-      opts.reason ? `\nThe previous attempt at this question was rejected: ${opts.reason}` : '',
-      opts.avoid.length
-        ? `\nQuestions already on this exam — do not ask any of these again, in any wording:\n${opts.avoid
-            .map((a) => `- ${a.slice(0, 160)}`)
-            .join('\n')}`
-        : '',
-      '',
       '<<<MATERIAL>>>',
-      material,
+      materialOf(opts.chunks),
       '<<<END MATERIAL>>>',
+      '',
+      `Write exactly ${opts.plan.length} question(s), one for each line below, in this order:`,
+      wantedOf(opts.plan),
+      '',
+      languageOf(opts.language),
+      opts.reason ? `\nThe previous attempt at this question was rejected: ${opts.reason}` : '',
+      avoidOf(
+        opts.avoid,
+        'Questions already on this exam — do not ask any of these again, in any wording:',
+      ),
     ]
       .filter(Boolean)
       .join('\n');
@@ -309,32 +305,15 @@ export class QuestionGeneratorService {
    * reliably answered with the same question in different words — which this
    * pipeline then throws away as a duplicate, having paid for it.
    */
-  private variantPrompt(opts: {
-    plan: PlannedQuestion[];
-    chunks: SourceChunk[];
-    language: 'AUTO' | 'AR' | 'EN';
-    source: { text: string; modelAnswer: string }[];
-    avoid: string[];
-  }): string {
-    const wanted = opts.plan
-      .map((p, i) => `${i + 1}. type=${p.type} difficulty=${p.difficulty} marks=${p.marks}`)
-      .join('\n');
-    const material = opts.chunks
-      .map(
-        (c) => `[chunk ${c.index}] (${c.sourceFile}${c.page ? `, page ${c.page}` : ''})\n${c.text}`,
-      )
-      .join('\n\n');
-    const language =
-      opts.language === 'AR'
-        ? 'Write every question in Arabic.'
-        : opts.language === 'EN'
-          ? 'Write every question in English.'
-          : 'Write in the language of the material.';
-
+  private variantPrompt(opts: GenerationRequest): string {
     return [
-      'This exam is short. The material below has already produced the questions listed under EXISTING, and it has no further distinct content in it.',
+      '<<<MATERIAL>>>',
+      materialOf(opts.chunks),
+      '<<<END MATERIAL>>>',
+      '',
+      'This exam is short. The material above has already produced the questions listed under EXISTING, and it has no further distinct content in it.',
       `Write exactly ${opts.plan.length} more question(s) by VARYING those existing ones, one for each line below, in this order:`,
-      wanted,
+      wantedOf(opts.plan),
       '',
       'A variant tests the same idea as one of the existing questions, and is a different question to sit for. Vary it in at least one of these ways:',
       '- change the numbers, and work the new answer out correctly from the material',
@@ -350,39 +329,51 @@ export class QuestionGeneratorService {
       '- Every answer must be correct. A variant with a wrong answer is worse than a missing question.',
       '- insufficient must be false here: you are not being asked for new content, you are being asked to vary what exists.',
       '',
-      language,
+      languageOf(opts.language),
       '',
       '<<<EXISTING>>>',
-      opts.source
+      (opts.source ?? [])
         .map((q, i) => `${i + 1}. ${q.text}${q.modelAnswer ? `\n   answer: ${q.modelAnswer}` : ''}`)
         .join('\n'),
       '<<<END EXISTING>>>',
-      opts.avoid.length
-        ? `\nDo not ask any of these again, in any wording:\n${opts.avoid
-            .map((a) => `- ${a.slice(0, 160)}`)
-            .join('\n')}`
-        : '',
-      '',
-      '<<<MATERIAL>>>',
-      material,
-      '<<<END MATERIAL>>>',
+      avoidOf(
+        opts.avoid,
+        'Also already on this exam — do not ask any of these again, in any wording:',
+      ),
     ]
       .filter(Boolean)
       .join('\n');
   }
 
   private async call(
-    model: string,
-    price: AiPrice,
-    effort: Parameters<AiClient['completeStructured']>[0]['reasoningEffort'],
+    tier: GenerationTier,
     content: string,
+    maxTokens: number,
   ): Promise<GenerationResult> {
+    const { model, price, effort } = tier;
+    const empty = {
+      questions: [],
+      insufficient: false,
+      supportable: 0,
+      model,
+      effort,
+      inputTokens: 0,
+      outputTokens: 0,
+      millicents: 0,
+    };
+    if (!this.config.generationAllowedModels.includes(model)) {
+      this.logger.error(`Refused to write questions on ${model}: not an allowed generation model`);
+      return { ...empty, error: 'MODEL_NOT_ALLOWED' };
+    }
+    const started = Date.now();
     try {
       const res = await this.ai.completeStructured<GeneratedBatch>({
         model,
         price,
         reasoningEffort: effort,
-        maxTokens: this.config.maxTokens,
+        maxTokens,
+        timeoutMs: this.config.generationCallTimeoutMs,
+        maxRetries: this.config.generationCallRetries,
         system: SYSTEM_PROMPT,
         schemaName: 'generated_exam_questions',
         schema: BATCH_SCHEMA as unknown as Record<string, unknown>,
@@ -393,24 +384,60 @@ export class QuestionGeneratorService {
         insufficient: !!res.data?.insufficient,
         supportable: Number.isFinite(res.data?.supportable) ? res.data.supportable : 0,
         model,
+        effort,
         inputTokens: res.inputTokens,
         outputTokens: res.outputTokens,
+        cachedInputTokens: res.cachedInputTokens,
+        reasoningTokens: res.reasoningTokens,
         millicents: this.ai.costMillicents(res.inputTokens, res.outputTokens, price),
+        durationMs: Date.now() - started,
         error: null,
       };
     } catch (e) {
       const message = (e as Error).message ?? 'AI call failed';
       this.logger.warn(`Generation failed on ${model}: ${message}`);
+      // A response that arrived and was then rejected — cut off, malformed,
+      // refused — was billed in full. Count it.
+      const usage = e instanceof AiJobError ? e.usage : undefined;
       return {
-        questions: [],
-        insufficient: false,
-        supportable: 0,
-        model,
-        inputTokens: 0,
-        outputTokens: 0,
-        millicents: 0,
+        ...empty,
+        inputTokens: usage?.inputTokens ?? 0,
+        outputTokens: usage?.outputTokens ?? 0,
+        millicents: usage
+          ? this.ai.costMillicents(usage.inputTokens, usage.outputTokens, price)
+          : 0,
+        usageUnknown: !usage,
+        durationMs: Date.now() - started,
         error: message.slice(0, 500),
       };
     }
   }
+}
+
+function materialOf(chunks: SourceChunk[]): string {
+  return chunks
+    .map(
+      (c) => `[chunk ${c.index}] (${c.sourceFile}${c.page ? `, page ${c.page}` : ''})\n${c.text}`,
+    )
+    .join('\n\n');
+}
+
+function wantedOf(plan: PlannedQuestion[]): string {
+  return plan
+    .map((p, i) => `${i + 1}. type=${p.type} difficulty=${p.difficulty} marks=${p.marks}`)
+    .join('\n');
+}
+
+function languageOf(language: 'AUTO' | 'AR' | 'EN'): string {
+  return language === 'AR'
+    ? 'Write every question in Arabic.'
+    : language === 'EN'
+      ? 'Write every question in English.'
+      : 'Write in the language of the material.';
+}
+
+/** Compact: the opening of each question is enough to recognise a repeat. */
+function avoidOf(avoid: string[], heading: string): string {
+  if (!avoid.length) return '';
+  return `\n${heading}\n${avoid.map((a) => `- ${a.slice(0, 120)}`).join('\n')}`;
 }

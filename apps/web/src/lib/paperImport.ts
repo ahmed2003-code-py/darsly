@@ -109,6 +109,7 @@ export function warningKey(code: string): string | null {
     'NUMBER_GAP',
     'NO_QUESTIONS',
     'NOT_ENOUGH_CONTENT',
+    'GENERATION_INCOMPLETE',
     'COMPLETED_WITH_VARIANTS',
     'DUPLICATE_QUESTION',
   ];

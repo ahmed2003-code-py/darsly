@@ -31,6 +31,9 @@ export interface AiStructuredResult<T> {
   inputTokens: number;
   outputTokens: number;
   costCents: number;
+  /** Part of inputTokens / outputTokens, reported separately when known. */
+  cachedInputTokens?: number;
+  reasoningTokens?: number;
 }
 
 type ContentPart =
@@ -226,7 +229,11 @@ export class AiClient {
     const refusal = this.extractRefusal(resp);
     if (refusal) {
       mark('refused');
-      throw new AiJobError(`AI refused the request: ${this.redact(refusal)}`, 'TERMINAL');
+      throw new AiJobError(
+        `AI refused the request: ${this.redact(refusal)}`,
+        'TERMINAL',
+        this.usage(resp),
+      );
     }
 
     /**
@@ -246,11 +253,12 @@ export class AiClient {
       throw new AiJobError(
         `AI response was cut off before it finished (${why}); raise max_output_tokens`,
         'RETRYABLE',
+        this.usage(resp),
       );
     }
     if (!text) {
       mark('empty');
-      throw new AiJobError('AI returned empty output', 'RETRYABLE');
+      throw new AiJobError('AI returned empty output', 'RETRYABLE', this.usage(resp));
     }
 
     let data: T;
@@ -268,14 +276,17 @@ export class AiClient {
           `starts ${JSON.stringify(text.slice(0, 24))}, ends ${JSON.stringify(text.slice(-24))}, ` +
           `${(e as Error).message})`,
         'RETRYABLE',
+        this.usage(resp),
       );
     }
-    const { inputTokens, outputTokens } = this.usage(resp);
+    const { inputTokens, outputTokens, cachedInputTokens, reasoningTokens } = this.usage(resp);
     return {
       data,
       inputTokens,
       outputTokens,
       costCents: this.costCents(inputTokens, outputTokens, price),
+      cachedInputTokens,
+      reasoningTokens,
     };
   }
 

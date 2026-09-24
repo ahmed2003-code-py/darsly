@@ -177,3 +177,96 @@ export function questionsNeedingWork(
   const numbers = new Set(findings.map((f) => f.number).filter((n): n is number => n != null));
   return questions.filter((q, i) => numbers.has(q.number || i + 1));
 }
+
+// ── one generated question, before it is accepted ──────────────────────────
+
+/**
+ * Why a generated question was not kept, one code per question.
+ *
+ * The first group is something wrong with the question itself — the only
+ * kind a different model might do better on, and the only kind that counts
+ * towards handing a slot to one. The second is about the material or the
+ * call, and a bigger model does not fix either.
+ */
+export type RejectReason =
+  | 'TYPE_MISMATCH'
+  | 'EMPTY_TEXT'
+  | 'PLACEHOLDER'
+  | 'NO_OPTIONS'
+  | 'BAD_OPTIONS'
+  | 'NO_KEY'
+  | 'MULTIPLE_KEYS'
+  | 'UNGROUNDED'
+  // not the question's fault:
+  | 'DUPLICATE'
+  | 'SURPLUS'
+  | 'NOT_RETURNED'
+  | 'CALL_FAILED';
+
+const NOT_QUALITY: RejectReason[] = ['DUPLICATE', 'SURPLUS', 'NOT_RETURNED', 'CALL_FAILED'];
+
+export function isQualityReason(reason: RejectReason): boolean {
+  return !NOT_QUALITY.includes(reason);
+}
+
+/** A choice question needs this many to be one. Four are asked for. */
+const MCQ_MIN_OPTIONS = 3;
+const MCQ_MAX_OPTIONS = 6;
+
+/**
+ * Everything checkable about one generated question, or null when it passes.
+ *
+ * Stricter than `gradeQuestions`, which also has to accept scanned papers as
+ * they were printed: a generated multiple choice has three to six distinct
+ * options and exactly one of them correct, a true/false has exactly two, a
+ * written question has a model answer, and every question names a chunk it
+ * was given.
+ *
+ * `anchor` is the one check about content rather than form: the question and
+ * its answer share at least one distinctive word with the chunk they claim to
+ * come from. It cannot tell a good question from a bad one; it does catch a
+ * question about something the chunk never mentions. Off when the exam is
+ * written in a different language from the material, where no word would
+ * match.
+ */
+export function questionProblem(
+  q: GradedQuestion,
+  opts: { chunkText?: string | null; anchor?: boolean } = {},
+): RejectReason | null {
+  const text = (q.text ?? '').trim();
+  if (text.length < MIN_QUESTION_CHARS) return 'EMPTY_TEXT';
+  if (looksLikePlaceholder(text)) return 'PLACEHOLDER';
+
+  const options = (q.options ?? []).filter((o) => (o.text ?? '').trim());
+  if (q.type === 'MCQ' || q.type === 'TRUE_FALSE') {
+    const [min, max] = q.type === 'MCQ' ? [MCQ_MIN_OPTIONS, MCQ_MAX_OPTIONS] : [2, 2];
+    if (options.length < Math.min(min, MIN_OPTIONS)) return 'NO_OPTIONS';
+    if (options.length < min || options.length > max) return 'BAD_OPTIONS';
+    const folded = options.map((o) => foldArabic(o.text).trim().toLowerCase());
+    if (new Set(folded).size !== folded.length) return 'BAD_OPTIONS';
+    const keys = options.filter((o) => o.correct).length;
+    if (keys === 0) return 'NO_KEY';
+    if (keys > 1) return 'MULTIPLE_KEYS';
+  } else if (q.type === 'SHORT_ANSWER') {
+    if (!(q.modelAnswer ?? '').trim()) return 'NO_KEY';
+  }
+
+  if (q.chunkIndex == null || q.chunkIndex < 0 || opts.chunkText == null) return 'UNGROUNDED';
+  if (opts.anchor) {
+    const answer = [
+      text,
+      q.modelAnswer ?? '',
+      ...options.filter((o) => o.correct).map((o) => o.text),
+    ].join(' ');
+    const source = keywords(opts.chunkText);
+    let shared = false;
+    for (const word of keywords(answer)) {
+      if (source.has(word)) {
+        shared = true;
+        break;
+      }
+    }
+    if (!shared) return 'UNGROUNDED';
+  }
+  return null;
+}

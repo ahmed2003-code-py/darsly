@@ -1,0 +1,802 @@
+import { AiJobError } from '../academy-site/ai/ai-job.error';
+import { ExamSpec, normalizeSpec } from './exam-spec';
+import { GenerationBudget } from './generation-budget';
+import { GenerationRun } from './generation-run';
+import { PaperImportConfig } from './paper-import.config';
+import {
+  GeneratedQuestion,
+  GenerationRequest,
+  GenerationResult,
+  QuestionGeneratorService,
+} from './question-generator.service';
+import { GradedQuestion, questionProblem } from './question-quality';
+import { SourceChunk } from './source-text';
+
+/**
+ * The generation algorithm, with no provider anywhere near it.
+ *
+ * The generator's `generate` is scripted per test; its prompt building and
+ * worst-case pricing are the real ones, so the budget is exercised against
+ * the numbers production would reserve.
+ */
+
+const LECTURE =
+  'The mitochondria produce ATP through cellular respiration inside the plant cell. ' +
+  'Chloroplasts capture light energy during photosynthesis. The Golgi body packages cellular proteins. ' +
+  'Ribosomes translate messenger RNA. The nucleus regulates gene expression in a eukaryotic cell. ' +
+  'Glucose molecules are broken down during the Krebs cycle. Stomata close during drought conditions. ' +
+  'Active transport differs from passive diffusion across a membrane. Enzymes lower activation energy. ' +
+  'Osmosis moves water across a membrane. Photosynthesis releases oxygen. Mitosis produces two cells. ' +
+  'Meiosis produces gametes. Chlorophyll absorbs light. Diffusion needs no energy. Proteins fold.';
+
+const chunk = (index: number, tokens = 200): SourceChunk => ({
+  index,
+  text: LECTURE,
+  sourceFile: 'biology.pdf',
+  page: index + 1,
+  tokensApprox: tokens,
+});
+
+const TOPICS = [
+  'Which organelle produces ATP inside the plant cell during respiration?',
+  'Explain how chloroplasts capture light energy during photosynthesis.',
+  'What role does the Golgi body play in packaging cellular proteins?',
+  'Describe the function of ribosomes in translating messenger RNA.',
+  'How does the nucleus regulate gene expression inside a eukaryotic cell?',
+  'What happens to glucose molecules during the Krebs cycle?',
+  'Why do stomata close during drought conditions?',
+  'Compare active transport with passive diffusion across a membrane.',
+  'How do enzymes lower activation energy?',
+  'In which direction does osmosis move water across a membrane?',
+  'Which gas does photosynthesis release?',
+  'How many cells does mitosis produce?',
+  'What does meiosis produce?',
+  'What does chlorophyll absorb?',
+  'Does diffusion need energy?',
+  'Why must proteins fold?',
+  'Where inside the cell does respiration produce ATP molecules?',
+  'Which pigment inside chloroplasts absorbs light?',
+  'Which organelle regulates gene expression?',
+  'Which process produces gametes?',
+];
+let topic = 0;
+
+const q = (over: Partial<GeneratedQuestion> = {}): GeneratedQuestion => {
+  const type = over.type ?? 'MCQ';
+  return {
+    type,
+    difficulty: 'MEDIUM',
+    text: TOPICS[topic++ % TOPICS.length],
+    options:
+      type === 'MCQ'
+        ? [
+            { label: 'A', text: 'Mitochondria', correct: true },
+            { label: 'B', text: 'Ribosome', correct: false },
+            { label: 'C', text: 'Golgi body', correct: false },
+            { label: 'D', text: 'Nucleus', correct: false },
+          ]
+        : type === 'TRUE_FALSE'
+          ? [
+              { label: 'A', text: 'True', correct: true },
+              { label: 'B', text: 'False', correct: false },
+            ]
+          : [],
+    modelAnswer: type === 'SHORT_ANSWER' ? 'Through cellular respiration in the mitochondria.' : '',
+    explanation: '',
+    marks: 1,
+    chunkIndex: 0,
+    ...over,
+  };
+};
+
+/** What a batch writes when every question it was asked for is fine. */
+const answer = (
+  req: GenerationRequest,
+  over: (i: number) => Partial<GeneratedQuestion> = () => ({}),
+) =>
+  req.plan.map((p, i) =>
+    q({ type: p.type, difficulty: p.difficulty, chunkIndex: req.chunks[0].index, ...over(i) }),
+  );
+
+const result = (
+  req: GenerationRequest,
+  questions: GeneratedQuestion[],
+  over: Partial<GenerationResult> = {},
+): GenerationResult => ({
+  questions,
+  insufficient: false,
+  supportable: questions.length,
+  model: req.tier.model,
+  effort: req.tier.effort,
+  inputTokens: 3000,
+  cachedInputTokens: 0,
+  outputTokens: 2000,
+  reasoningTokens: 800,
+  // What the call would actually cost at its tier's price.
+  millicents: Math.round(
+    (3000 / 1e6) * req.tier.price.inPerMToken * 1000 +
+      (2000 / 1e6) * req.tier.price.outPerMToken * 1000,
+  ),
+  durationMs: 10,
+  error: null,
+  ...over,
+});
+
+const spec = (
+  types: { MCQ: number; TRUE_FALSE: number; SHORT_ANSWER: number },
+  language: ExamSpec['language'] = 'AUTO',
+): ExamSpec =>
+  normalizeSpec({
+    questionCount: types.MCQ + types.TRUE_FALSE + types.SHORT_ANSWER,
+    types,
+    difficulty: 'MIXED',
+    language,
+  });
+
+function setup(over: Partial<PaperImportConfig> = {}) {
+  const config = Object.assign(new PaperImportConfig(), over) as PaperImportConfig;
+  const generator = new QuestionGeneratorService({} as never, config);
+  const calls: GenerationRequest[] = [];
+  let script: (
+    req: GenerationRequest,
+    n: number,
+  ) => Promise<GenerationResult> | GenerationResult = (req) => result(req, answer(req));
+  jest.spyOn(generator, 'generate').mockImplementation(async (req) => {
+    calls.push(req);
+    return script(req, calls.length - 1);
+  });
+  const run = new GenerationRun(generator, config);
+  return {
+    config,
+    generator,
+    calls,
+    run,
+    respond: (fn: typeof script) => {
+      script = fn;
+    },
+  };
+}
+
+const ALLOWED = ['gpt-6-luna', 'gpt-6-sol'];
+
+beforeEach(() => {
+  topic = 0;
+});
+
+describe('keeping what passed, asking only for what did not', () => {
+  it('keeps seven good questions and asks for the one missing slot alone', async () => {
+    const t = setup();
+    const chunks = [chunk(0, 800), chunk(1, 800)];
+    t.respond((req, n) =>
+      n === 0
+        ? // Eight asked for, one comes back with no correct option.
+          result(
+            req,
+            answer(req, (i) =>
+              i === 3
+                ? {
+                    options: [
+                      { label: 'A', text: 'x one', correct: false },
+                      { label: 'B', text: 'y two', correct: false },
+                      { label: 'C', text: 'z three', correct: false },
+                    ],
+                  }
+                : {},
+            ),
+          )
+        : result(req, answer(req)),
+    );
+
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 8, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+
+    expect(t.calls).toHaveLength(2);
+    expect(t.calls[0].plan).toHaveLength(8);
+    // The replacement is for one question, not the batch.
+    expect(t.calls[1].plan).toHaveLength(1);
+    expect(t.calls[1].plan[0].type).toBe('MCQ');
+    expect(t.calls[1].reason).toMatch(/no correct answer/);
+    expect(out.report.accepted).toBe(8);
+    expect(out.report.complete).toBe(true);
+    // The seven from the first call are the seven that were kept.
+    const firstTexts = TOPICS.slice(0, 8).filter((_, i) => i !== 3);
+    for (const text of firstTexts) expect(out.questions.map((x) => x.text)).toContain(text);
+  });
+
+  it('replaces the exact type that failed, not whatever comes next in the plan', async () => {
+    const t = setup();
+    t.respond((req, n) =>
+      n === 0
+        ? // The true/false comes back with three options.
+          result(
+            req,
+            answer(req, (i) =>
+              req.plan[i].type === 'TRUE_FALSE'
+                ? {
+                    options: [
+                      { label: 'A', text: 'True', correct: true },
+                      { label: 'B', text: 'False', correct: false },
+                      { label: 'C', text: 'Maybe', correct: false },
+                    ],
+                  }
+                : {},
+            ),
+          )
+        : result(req, answer(req)),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 2, SHORT_ANSWER: 2 }),
+      chunks: [chunk(0, 800), chunk(1, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls[1].plan.map((p) => p.type)).toEqual(['TRUE_FALSE', 'TRUE_FALSE']);
+    expect(out.report.acceptedByType).toEqual({ MCQ: 4, TRUE_FALSE: 2, SHORT_ANSWER: 2 });
+    expect(out.report.rejections.BAD_OPTIONS).toBe(2);
+  });
+
+  it('fills slots by type even when the model writes them in a different order', async () => {
+    const t = setup();
+    t.respond((req) => result(req, [...answer(req)].reverse()));
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 2, TRUE_FALSE: 1, SHORT_ANSWER: 1 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls).toHaveLength(1);
+    expect(out.report.complete).toBe(true);
+    // In the order the exam was planned, not the order they were written.
+    expect(out.questions.map((x) => x.type)).toEqual(['MCQ', 'TRUE_FALSE', 'SHORT_ANSWER', 'MCQ']);
+  });
+
+  it('refuses a question of a type nobody asked for', async () => {
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req) =>
+      result(
+        req,
+        answer(req, () => ({
+          type: 'SHORT_ANSWER',
+          options: [],
+          modelAnswer: 'An answer about respiration in the cell.',
+        })),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 2, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(out.report.accepted).toBe(0);
+    expect(out.report.rejections.TYPE_MISMATCH).toBe(2);
+  });
+});
+
+describe('duplicates', () => {
+  it('drops a question that repeats one accepted in another batch', async () => {
+    const t = setup({ generationRounds: 1 } as never);
+    const repeated = TOPICS[0];
+    t.respond((req, n) =>
+      result(
+        req,
+        answer(req, (i) => (n === 1 && i === 0 ? { text: repeated } : {})),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 16, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 900), chunk(1, 900), chunk(2, 900)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(out.questions.filter((x) => x.text === repeated)).toHaveLength(1);
+    expect(out.report.rejections.DUPLICATE).toBe(1);
+  });
+
+  it('does not accept a replacement that repeats an accepted question', async () => {
+    const t = setup();
+    t.respond((req, n) =>
+      n === 0
+        ? result(
+            req,
+            answer(req, (i) => (i === 1 ? { chunkIndex: 99 } : {})),
+          )
+        : result(
+            req,
+            answer(req, () => ({ text: TOPICS[0] })),
+          ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(out.questions.filter((x) => x.text === TOPICS[0])).toHaveLength(1);
+    expect(out.report.accepted).toBe(3);
+  });
+});
+
+describe('what a generated question must be', () => {
+  const graded = (over: Record<string, unknown>) =>
+    ({
+      id: 'x',
+      number: 1,
+      type: 'MCQ',
+      text: 'Which organelle produces ATP in the cell?',
+      options: [
+        { id: '1', label: 'A', text: 'Mitochondria', correct: true },
+        { id: '2', label: 'B', text: 'Ribosome', correct: false },
+        { id: '3', label: 'C', text: 'Nucleus', correct: false },
+        { id: '4', label: 'D', text: 'Golgi body', correct: false },
+      ],
+      modelAnswer: '',
+      marks: 1,
+      sourcePages: [],
+      unsupportedKind: '',
+      needsReview: false,
+      chunkIndex: 0,
+      ...over,
+    }) as GradedQuestion & { options: any[] };
+  const ctx = { chunkText: LECTURE, anchor: true };
+
+  it('passes a well-formed, grounded question', () => {
+    expect(questionProblem(graded({}), ctx)).toBeNull();
+  });
+  it('needs exactly one correct option', () => {
+    const none = graded({}).options.map((o: { correct: boolean }) => ({ ...o, correct: false }));
+    const two = graded({}).options.map((o: { correct: boolean }, i: number) => ({
+      ...o,
+      correct: i < 2,
+    }));
+    expect(questionProblem(graded({ options: none }), ctx)).toBe('NO_KEY');
+    expect(questionProblem(graded({ options: two }), ctx)).toBe('MULTIPLE_KEYS');
+  });
+  it('needs a real set of options', () => {
+    const [a, b] = graded({}).options;
+    expect(questionProblem(graded({ options: [a, b] }), ctx)).toBe('BAD_OPTIONS');
+    const repeated = graded({}).options.map((o: object) => ({
+      ...o,
+      text: 'Same',
+      correct: false,
+    }));
+    repeated[0].correct = true;
+    expect(questionProblem(graded({ options: repeated }), ctx)).toBe('BAD_OPTIONS');
+    expect(questionProblem(graded({ type: 'TRUE_FALSE' }), ctx)).toBe('BAD_OPTIONS');
+  });
+  it('needs a model answer for a written question', () => {
+    expect(
+      questionProblem(graded({ type: 'SHORT_ANSWER', options: [], modelAnswer: '' }), ctx),
+    ).toBe('NO_KEY');
+  });
+  it('must name a chunk it was given, and share words with it', () => {
+    expect(questionProblem(graded({ chunkIndex: null }), ctx)).toBe('UNGROUNDED');
+    expect(questionProblem(graded({}), { chunkText: null, anchor: true })).toBe('UNGROUNDED');
+    const offTopic = graded({
+      text: 'Who won the football championship yesterday evening?',
+      options: [
+        { id: '1', label: 'A', text: 'Zamalek', correct: true },
+        { id: '2', label: 'B', text: 'Ahly', correct: false },
+        { id: '3', label: 'C', text: 'Pyramids', correct: false },
+      ],
+    });
+    expect(questionProblem(offTopic, ctx)).toBe('UNGROUNDED');
+    // Written in another language than the material: no word could match,
+    // so the anchor is not asked for.
+    expect(questionProblem(offTopic, { chunkText: LECTURE, anchor: false })).toBeNull();
+  });
+});
+
+describe('bounded: rounds, calls, budget', () => {
+  it('stops after its rounds when every answer keeps failing', async () => {
+    const t = setup();
+    t.respond((req) =>
+      result(
+        req,
+        answer(req, () => ({ chunkIndex: 99 })),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls.length).toBeLessThanOrEqual(t.config.generationRounds);
+    expect(out.report.complete).toBe(false);
+    expect(out.report.missingByType.MCQ).toBe(4);
+    expect(['ROUNDS', 'NO_PROGRESS']).toContain(out.report.stopReason);
+  });
+
+  it('never makes more calls than the cap', async () => {
+    const t = setup({ generationMaxCalls: 2, generationRounds: 5 } as never);
+    t.respond((req) =>
+      result(
+        req,
+        answer(req, () => ({ chunkIndex: 99 })),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 20, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 900), chunk(1, 900), chunk(2, 900)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 100_000,
+    });
+    expect(t.calls).toHaveLength(2);
+    expect(out.report.stopReason).toBe('CALLS');
+  });
+
+  it('does not start a call whose worst case does not fit, and says so', async () => {
+    const t = setup();
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 8, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      // Half a cent: less than one sol batch could cost.
+      budgetMillicents: 500,
+    });
+    expect(t.calls).toHaveLength(0);
+    expect(out.report.stopReason).toBe('BUDGET');
+    expect(out.report.missingByType.MCQ).toBe(8);
+  });
+
+  it('ends partial on the budget, keeping what it had and naming what is missing', async () => {
+    const t = setup();
+    const chunks = [chunk(0, 900), chunk(1, 900), chunk(2, 900)];
+    const worst = t.generator.worstCase({
+      tier: t.config.generationProfileOf('SOL_FIRST').primary,
+      mode: 'DISTINCT',
+      plan: Array(8).fill({ index: 1, type: 'MCQ', difficulty: 'MEDIUM', marks: 1 }),
+      chunks: chunks.slice(0, 2),
+      language: 'AUTO',
+      avoid: [],
+    });
+    // Room for one batch in flight and a little more: a second batch starts
+    // only once the first has settled below its worst case.
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 14, TRUE_FALSE: 3, SHORT_ANSWER: 3 }),
+      chunks,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: Math.ceil(worst * 1.2),
+    });
+    expect(out.report.stopReason).toBe('BUDGET');
+    expect(out.report.accepted).toBeGreaterThan(0);
+    expect(out.report.accepted).toBeLessThan(20);
+    const missing = Object.values(out.report.missingByType).reduce((a, b) => a + b, 0);
+    expect(missing).toBe(20 - out.report.accepted);
+    // The application's own count never goes past the limit.
+    expect(out.report.chargedMillicents).toBeLessThanOrEqual(out.report.budgetMillicents);
+  });
+
+  it('charges a timed-out call its worst case, since it may have been billed', async () => {
+    const t = setup({ generationRounds: 1 } as never);
+    t.respond((req) =>
+      result(req, [], {
+        error: 'OpenAI request failed: Request timed out.',
+        usageUnknown: true,
+        millicents: 0,
+      }),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(out.report.millicents).toBe(0);
+    expect(out.report.chargedMillicents).toBeGreaterThan(0);
+    expect(out.report.callLog[0].usageUnknown).toBe(true);
+  });
+});
+
+describe('running batches side by side', () => {
+  it('writes independent batches at the same time, and counts every one', async () => {
+    const t = setup();
+    let inflight = 0;
+    let peak = 0;
+    t.respond(async (req) => {
+      inflight += 1;
+      peak = Math.max(peak, inflight);
+      await new Promise((r) => setTimeout(r, 5));
+      inflight -= 1;
+      return result(req, answer(req));
+    });
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 14, TRUE_FALSE: 3, SHORT_ANSWER: 3 }),
+      // Four chunks: six questions a chunk is the most one is asked to carry.
+      chunks: [chunk(0, 900), chunk(1, 900), chunk(2, 900), chunk(3, 900)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls).toHaveLength(3);
+    expect(peak).toBe(3);
+    expect(out.report.complete).toBe(true);
+    const sum = out.report.callLog.reduce((n, c) => n + c.millicents, 0);
+    expect(out.report.millicents).toBe(sum);
+    expect(out.report.callLog.at(-1)!.cumulativeMillicents).toBe(sum);
+  });
+
+  it('holds a batch back when running it alongside the others could break the budget', async () => {
+    const t = setup();
+    let inflight = 0;
+    let peak = 0;
+    t.respond(async (req) => {
+      inflight += 1;
+      peak = Math.max(peak, inflight);
+      await new Promise((r) => setTimeout(r, 5));
+      inflight -= 1;
+      return result(req, answer(req));
+    });
+    const chunks = [chunk(0, 900), chunk(1, 900), chunk(2, 900)];
+    const worst = t.generator.worstCase({
+      tier: t.config.generationProfileOf('SOL_FIRST').primary,
+      mode: 'DISTINCT',
+      plan: Array(8).fill({ index: 1, type: 'MCQ', difficulty: 'MEDIUM', marks: 1 }),
+      chunks: chunks.slice(0, 2),
+      language: 'AUTO',
+      avoid: [],
+    });
+    await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 20, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: Math.ceil(worst * 1.5),
+    });
+    expect(peak).toBe(1);
+  });
+
+  it('keeps budget accounting exact when calls overlap', () => {
+    const b = new GenerationBudget(10_000);
+    const one = b.reserve(6_000)!;
+    expect(b.reserve(6_000)).toBeNull();
+    b.settle(one, 2_500);
+    const two = b.reserve(6_000)!;
+    expect(two).not.toBeNull();
+    b.settle(two, 3_000);
+    expect(b.spentMillicents).toBe(5_500);
+    expect(b.remainingMillicents).toBe(4_500);
+  });
+});
+
+describe('stopping', () => {
+  it('starts nothing more once the session is stopped', async () => {
+    const t = setup();
+    let live = true;
+    t.respond((req, n) => {
+      live = false; // stopped while the first call was out
+      return result(
+        req,
+        answer(req, (i) => (n === 0 && i === 0 ? { chunkIndex: 99 } : {})),
+      );
+    });
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+      isLive: async () => live,
+    });
+    expect(t.calls).toHaveLength(1);
+    expect(out.report.stopReason).toBe('CANCELED');
+    // What came back before the stop is still accounted for.
+    expect(out.report.millicents).toBeGreaterThan(0);
+  });
+});
+
+describe('the profiles, and the flagship', () => {
+  it('never writes on anything but luna or sol, on either profile', async () => {
+    for (const name of ['SOL_FIRST', 'LUNA_FIRST'] as const) {
+      const t = setup();
+      t.respond((req) =>
+        result(
+          req,
+          answer(req, () => ({ chunkIndex: 99 })),
+        ),
+      );
+      await t.run.run({
+        importId: 'imp',
+        asked: spec({ MCQ: 14, TRUE_FALSE: 3, SHORT_ANSWER: 3 }),
+        chunks: [chunk(0, 900), chunk(1, 900), chunk(2, 900)],
+        profile: t.config.generationProfileOf(name),
+        budgetMillicents: 100_000,
+      });
+      for (const c of t.calls) expect(ALLOWED).toContain(c.tier.model);
+      expect(t.calls.some((c) => c.tier.model === t.config.strongModel)).toBe(false);
+    }
+  });
+
+  it('refuses a model outside the allow-list before calling anything', async () => {
+    const config = new PaperImportConfig();
+    const ai = { completeStructured: jest.fn(), costMillicents: jest.fn() };
+    const gen = new QuestionGeneratorService(ai as never, config);
+    const res = await gen.generate({
+      tier: { model: config.strongModel, price: config.strongPrice, effort: 'high' },
+      mode: 'DISTINCT',
+      plan: [{ index: 1, type: 'MCQ', difficulty: 'MEDIUM', marks: 1 }],
+      chunks: [chunk(0)],
+      language: 'AUTO',
+      avoid: [],
+    });
+    expect(res.error).toBe('MODEL_NOT_ALLOWED');
+    expect(ai.completeStructured).not.toHaveBeenCalled();
+  });
+
+  it('SOL_FIRST replaces on sol and has nowhere else to go', async () => {
+    const t = setup();
+    t.respond((req, n) =>
+      result(
+        req,
+        answer(req, (i) => (n < 2 && i === 0 ? { chunkIndex: 99 } : {})),
+      ),
+    );
+    await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls.every((c) => c.tier.model === 'gpt-6-sol')).toBe(true);
+  });
+
+  it('LUNA_FIRST hands one slot to sol only after it failed its checks twice on luna', async () => {
+    const t = setup();
+    // Slot 1 comes back with two correct options every time luna writes it.
+    t.respond((req) =>
+      result(
+        req,
+        answer(req, (i) =>
+          req.tier.model === 'gpt-6-luna' && (req.plan.length === 1 || i === 1)
+            ? {
+                options: [
+                  { label: 'A', text: 'Mitochondria', correct: true },
+                  { label: 'B', text: 'Ribosome', correct: true },
+                  { label: 'C', text: 'Nucleus', correct: false },
+                ],
+              }
+            : {},
+        ),
+      ),
+    );
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls.map((c) => [c.tier.model, c.plan.length])).toEqual([
+      ['gpt-6-luna', 4],
+      ['gpt-6-luna', 1],
+      ['gpt-6-sol', 1],
+    ]);
+    expect(out.report.complete).toBe(true);
+    expect(out.report.callsByModel).toEqual({ 'gpt-6-luna': 2, 'gpt-6-sol': 1 });
+  });
+
+  it('LUNA_FIRST does not escalate for duplicates or missing questions', async () => {
+    const t = setup();
+    t.respond((req) =>
+      result(
+        req,
+        answer(req, () => ({ text: TOPICS[0] })),
+      ),
+    );
+    await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 4, TRUE_FALSE: 0, SHORT_ANSWER: 0 }),
+      chunks: [chunk(0, 800)],
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls.every((c) => c.tier.model === 'gpt-6-luna')).toBe(true);
+  });
+});
+
+describe('thin material — the import that produced 18 of 20', () => {
+  // cmufhs5jl0014966dyg0tdvvn: two photographed pages, 605 tokens between
+  // them, twenty questions asked for. The material carries eight; the other
+  // twelve can only be variants.
+  const thin = [chunk(0, 404), chunk(1, 201)];
+
+  it('asks for the eight it can carry, then exactly the twelve still owed, by type', async () => {
+    const t = setup();
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 18, TRUE_FALSE: 1, SHORT_ANSWER: 1 }),
+      chunks: thin,
+      profile: t.config.generationProfileOf('LUNA_FIRST'),
+      budgetMillicents: 10_000,
+    });
+    expect(t.calls[0].mode).toBe('DISTINCT');
+    expect(t.calls[0].plan).toHaveLength(8);
+    const variantCalls = t.calls.filter((c) => c.mode === 'VARIANT');
+    const owed = variantCalls.flatMap((c) => c.plan.map((p) => p.type));
+    expect(owed).toHaveLength(12);
+    const distinctTypes = t.calls[0].plan.map((p) => p.type);
+    const all = [...distinctTypes, ...owed];
+    expect(all.filter((x) => x === 'MCQ')).toHaveLength(18);
+    expect(all.filter((x) => x === 'TRUE_FALSE')).toHaveLength(1);
+    expect(all.filter((x) => x === 'SHORT_ANSWER')).toHaveLength(1);
+    expect(out.report.accepted).toBe(20);
+    expect(out.report.variants).toBe(12);
+    // No second pass over questions that were already accepted.
+    expect(t.calls).toHaveLength(3);
+  });
+
+  it('gives two variant calls different questions to vary', async () => {
+    const t = setup();
+    await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 18, TRUE_FALSE: 1, SHORT_ANSWER: 1 }),
+      chunks: thin,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    const [a, b] = t.calls.filter((c) => c.mode === 'VARIANT');
+    const overlap = a.source!.filter((x) => b.source!.some((y) => y.text === x.text));
+    expect(overlap).toHaveLength(0);
+  });
+
+  it('with variants off, reports the shortfall as the material and spends nothing on it', async () => {
+    const t = setup({ generationVariantRounds: 0 } as never);
+    const out = await t.run.run({
+      importId: 'imp',
+      asked: spec({ MCQ: 18, TRUE_FALSE: 1, SHORT_ANSWER: 1 }),
+      chunks: thin,
+      profile: t.config.generationProfileOf('SOL_FIRST'),
+      budgetMillicents: 25_000,
+    });
+    expect(t.calls).toHaveLength(1);
+    expect(out.report.stopReason).toBe('MATERIAL');
+    expect(out.report.accepted).toBe(8);
+  });
+});
+
+describe('a billed failure is still a cost', () => {
+  it('counts a truncated answer the provider charged for', async () => {
+    const config = new PaperImportConfig();
+    const ai = {
+      completeStructured: jest
+        .fn()
+        .mockRejectedValue(
+          new AiJobError('AI response was cut off', 'RETRYABLE', {
+            inputTokens: 3000,
+            outputTokens: 5600,
+          }),
+        ),
+      costMillicents: (i: number, o: number, p: { inPerMToken: number; outPerMToken: number }) =>
+        Math.round(((i / 1e6) * p.inPerMToken + (o / 1e6) * p.outPerMToken) * 1000),
+    };
+    const gen = new QuestionGeneratorService(ai as never, config);
+    const res = await gen.generate({
+      tier: config.generationProfileOf('SOL_FIRST').primary,
+      mode: 'DISTINCT',
+      plan: [{ index: 1, type: 'MCQ', difficulty: 'MEDIUM', marks: 1 }],
+      chunks: [chunk(0)],
+      language: 'AUTO',
+      avoid: [],
+    });
+    expect(res.error).toMatch(/cut off/);
+    expect(res.millicents).toBe(6200);
+    expect(res.usageUnknown).toBe(false);
+  });
+});

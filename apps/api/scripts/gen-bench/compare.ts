@@ -1,0 +1,230 @@
+/**
+ * Question generation, LUNA_FIRST against SOL_FIRST, on text already read.
+ *
+ *   # free: the plan, the calls it would make, and each call's worst case
+ *   npx ts-node --transpile-only scripts/gen-bench/compare.ts \
+ *     --source source.json --mcq 14 --tf 3 --written 3
+ *
+ *   # paid — only with explicit approval
+ *   npx ts-node --transpile-only scripts/gen-bench/compare.ts \
+ *     --source source.json --mcq 14 --tf 3 --written 3 --budget 10 --confirm-paid --out <dir>
+ *
+ * The source is export-source.ts's file: no page is uploaded or read again.
+ * Both profiles get the same chunks, the same spec, the same prompts, schema,
+ * validation and limits — GenerationRun and QuestionGeneratorService as
+ * production runs them; only the profile differs. Each run is capped at
+ * --budget cents (default 10), so two runs cannot pass twice that.
+ *
+ * AiCallLog rows go to whatever DATABASE_URL points at — keep it local.
+ */
+import 'dotenv/config';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PrismaClient } from '@prisma/client';
+import { AcademySiteConfig } from '../../src/academy-site/academy-site.config';
+import { AiClient } from '../../src/academy-site/ai/ai.client';
+import { withAiTrace } from '../../src/academy-site/ai/ai-trace';
+import { normalizeSpec } from '../../src/paper-import/exam-spec';
+import { GenerationReport, GenerationRun } from '../../src/paper-import/generation-run';
+import {
+  GenerationProfileName,
+  PaperImportConfig,
+} from '../../src/paper-import/paper-import.config';
+import { QuestionGeneratorService } from '../../src/paper-import/question-generator.service';
+import { GradedQuestion } from '../../src/paper-import/question-quality';
+import { SourceChunk } from '../../src/paper-import/source-text';
+
+const arg = (name: string, fallback?: string) => {
+  const i = process.argv.indexOf(`--${name}`);
+  return i > 0 ? process.argv[i + 1] : fallback;
+};
+const flag = (name: string) => process.argv.includes(`--${name}`);
+
+const cents = (m: number) => `${(m / 1000).toFixed(2)}¢`;
+
+interface Source {
+  record: { id: string };
+  ocrMillicents: number;
+  chunks: SourceChunk[];
+}
+
+async function main() {
+  const source = JSON.parse(readFileSync(arg('source')!, 'utf8')) as Source;
+  const types = {
+    MCQ: Number(arg('mcq', '14')),
+    TRUE_FALSE: Number(arg('tf', '3')),
+    SHORT_ANSWER: Number(arg('written', '3')),
+  };
+  const asked = normalizeSpec({
+    questionCount: types.MCQ + types.TRUE_FALSE + types.SHORT_ANSWER,
+    types,
+    difficulty: 'MIXED',
+    language: 'AUTO',
+  });
+  const budgetCents = Number(arg('budget', '10'));
+  const profiles = arg('profiles', 'LUNA_FIRST,SOL_FIRST')!.split(',') as GenerationProfileName[];
+  const paid = flag('confirm-paid');
+  const out = arg('out', `gen-bench-${Date.now()}`)!;
+  const config = new PaperImportConfig();
+
+  console.log(
+    `source ${source.record.id}: ${source.chunks.length} chunk(s), ` +
+      `${source.chunks.reduce((n, c) => n + c.tokensApprox, 0)} tokens approx; ` +
+      `asked ${asked.questionCount} (${types.MCQ}/${types.TRUE_FALSE}/${types.SHORT_ANSWER}); ` +
+      `budget ${budgetCents}¢ per profile; ${paid ? 'PAID' : 'dry run, nothing is called'}`,
+  );
+
+  if (!paid) {
+    // Every question passes on the first try: the fewest calls a run can
+    // make, and what the budget would reserve for each.
+    for (const name of profiles) {
+      const gen = new QuestionGeneratorService({} as never, config);
+      const plan: string[] = [];
+      gen.generate = async (req) => {
+        plan.push(
+          `  ${req.mode.padEnd(8)} ${req.tier.model}/${req.tier.effort} ` +
+            `${req.plan.length}q  worst case ${cents(gen.worstCase(req))}`,
+        );
+        return {
+          questions: req.plan.map((p, i) => ({
+            type: p.type,
+            difficulty: p.difficulty,
+            // One real word of the chunk, so it is anchored; the rest unique,
+            // so it is not a duplicate. Only the call plan matters here.
+            text: `ما ${anchorWord(req.chunks[0].text)} ${rnd()} ${rnd()} ${rnd()} ${i}؟`,
+            options:
+              p.type === 'SHORT_ANSWER'
+                ? []
+                : (p.type === 'MCQ' ? ['أ', 'ب', 'ج', 'د'] : ['صح', 'خطأ']).map((l, k) => ({
+                    label: l,
+                    text: `${l} ${k}`,
+                    correct: k === 0,
+                  })),
+            modelAnswer: p.type === 'SHORT_ANSWER' ? req.chunks[0].text.slice(0, 40) : '',
+            explanation: '',
+            marks: p.marks,
+            chunkIndex: req.chunks[0].index,
+          })),
+          insufficient: false,
+          supportable: req.plan.length,
+          model: req.tier.model,
+          inputTokens: 0,
+          outputTokens: 0,
+          millicents: 0,
+          error: null,
+        };
+      };
+      await new GenerationRun(gen, config).run({
+        importId: source.record.id,
+        asked,
+        chunks: source.chunks,
+        profile: config.generationProfileOf(name),
+        budgetMillicents: budgetCents * 1000,
+      });
+      console.log(`${name}:\n${plan.join('\n')}`);
+    }
+    console.log('\nNothing was sent. Re-run with --confirm-paid once the comparison is approved.');
+    return;
+  }
+
+  const prisma = new PrismaClient();
+  const ai = new AiClient(new AcademySiteConfig(), prisma as never);
+  const generator = new QuestionGeneratorService(ai, config);
+  mkdirSync(out, { recursive: true });
+  const reports: GenerationReport[] = [];
+
+  for (const name of profiles) {
+    const run = `bench:${source.record.id}:${name}:${Date.now()}`;
+    const { questions, report } = await withAiTrace({ importId: run, phase: 'GENERATE' }, () =>
+      new GenerationRun(generator, config).run({
+        importId: run,
+        asked,
+        chunks: source.chunks,
+        profile: config.generationProfileOf(name),
+        budgetMillicents: budgetCents * 1000,
+      }),
+    );
+    reports.push(report);
+    writeFileSync(join(out, `${name}.report.json`), JSON.stringify(report, null, 2));
+    writeFileSync(join(out, `${name}.questions.json`), JSON.stringify(questions, null, 2));
+    writeFileSync(join(out, `${name}.review.md`), reviewSheet(name, questions, source.chunks));
+    console.log(`${name}: ${report.accepted}/${report.requested}, ${cents(report.millicents)}`);
+  }
+
+  writeFileSync(join(out, 'summary.md'), summary(reports, source.ocrMillicents));
+  console.log(readFileSync(join(out, 'summary.md'), 'utf8'));
+  await prisma.$disconnect();
+}
+
+const rnd = () =>
+  Math.random()
+    .toString(36)
+    .replace(/[^a-z]/g, '')
+    .slice(0, 7) || 'abcdefg';
+const anchorWord = (text: string) =>
+  text.split(/[^\p{L}\p{N}]+/u).find((w) => w.length >= 4) ?? 'material';
+
+function summary(reports: GenerationReport[], ocr: number): string {
+  const row = (label: string, f: (r: GenerationReport) => string) =>
+    `| ${label} | ${reports.map(f).join(' | ')} |`;
+  const missing = (r: GenerationReport) =>
+    Object.entries(r.missingByType)
+      .filter(([, n]) => n)
+      .map(([t, n]) => `${t} ${n}`)
+      .join(', ') || 'none';
+  const count = (r: GenerationReport, m: string) => String(r.callsByModel[m] ?? 0);
+  return [
+    `| Metric | ${reports.map((r) => r.profile).join(' | ')} |`,
+    `|---|${reports.map(() => '---').join('|')}|`,
+    row('Requested questions', (r) => String(r.requested)),
+    row('Accepted questions', (r) => `${r.accepted} (${r.variants} variants)`),
+    row('Missing questions by type', missing),
+    row('Stopped because', (r) => r.stopReason ?? '—'),
+    row('Generation cost [recorded]', (r) => cents(r.millicents)),
+    row('OCR cost [recorded, original import]', () => cents(ocr)),
+    row('Total exam cost [recorded]', (r) => cents(r.millicents + ocr)),
+    row('Generation latency', (r) => `${(r.durationMs / 1000).toFixed(1)} s`),
+    row(
+      'Total end-to-end latency',
+      (r) => `${(r.durationMs / 1000).toFixed(1)} s + OCR (not re-run)`,
+    ),
+    row('Cost per accepted question', (r) => (r.accepted ? cents(r.millicents / r.accepted) : '—')),
+    row('Total AI calls', (r) => String(r.calls)),
+    row('Luna calls', (r) => count(r, 'gpt-6-luna')),
+    row('Sol calls', (r) => count(r, 'gpt-6-sol')),
+    row('Astra calls — expected zero', (r) => count(r, 'gpt-6-astra')),
+    row('Rejections', (r) => JSON.stringify(r.rejections)),
+    '',
+    'Recorded = provider-reported tokens × configured prices (PAPER_IMPORT_*_PRICE_*), cached input not discounted. Not the provider invoice.',
+  ].join('\n');
+}
+
+/** One page per profile for a person to mark: is it right, is it fair, is
+ *  the Arabic natural, is the answer defensible. */
+function reviewSheet(name: string, questions: GradedQuestion[], chunks: SourceChunk[]): string {
+  return [
+    `# ${name} — manual review`,
+    '',
+    'Mark each: correct (Y/N) · difficulty as labelled (Y/N) · Arabic natural (1–5) · answer/distractors defensible (1–5) · notes',
+    '',
+    ...questions.map((q, i) => {
+      const chunk = chunks.find((c) => c.index === q.chunkIndex);
+      return [
+        `## ${i + 1}. ${q.type}${q.variant ? ' (variant)' : ''} — chunk ${q.chunkIndex}, page ${chunk?.page ?? '?'}`,
+        '',
+        q.text,
+        '',
+        ...(q.options ?? []).map((o) => `- ${o.correct ? '**✓**' : '  '} ${o.label} ${o.text}`),
+        q.modelAnswer ? `\nModel answer: ${q.modelAnswer}` : '',
+        '',
+        'correct: _ · difficulty: _ · Arabic: _ · answer: _ · notes:',
+        '',
+      ].join('\n');
+    }),
+  ].join('\n');
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

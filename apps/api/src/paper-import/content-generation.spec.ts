@@ -60,23 +60,25 @@ const ok = (questions: GeneratedQuestion[], over = {}) => ({
 });
 
 /**
- * Writing an exam from lecture material.
+ * Writing an exam from lecture material — the session around the run.
  *
- * Nothing here reaches a provider — the generator is a mock, so the suite runs
- * offline and no test can spend money. What is asserted is the shape of the
- * decisions: how many calls, on which model, from which material, and what
- * happens to a batch that comes back wrong.
+ * Nothing here reaches a provider: `generate` is scripted, and the algorithm
+ * itself (slots, rounds, budget, profiles) has its own suite in
+ * generation-run.spec.ts. What is asserted here is what the teacher ends up
+ * with: the draft, the spec, the warnings, the cost, and what a stop does.
  */
 describe('writing an exam from uploaded lecture material', () => {
   let prisma: any;
-  let generator: {
-    generateBatch: jest.Mock;
-    generateVariants: jest.Mock;
-    regenerateOne: jest.Mock;
-    batchCount: jest.Mock;
-    batchOf: jest.Mock;
-  };
+  let generator: QuestionGeneratorService;
+  let generate: jest.SpyInstance;
   let service: ContentGenerationService;
+
+  const LECTURE =
+    'Mitochondria produce ATP through cellular respiration in the plant cell. Chloroplasts capture ' +
+    'light energy during photosynthesis. The Golgi body plays a role packaging cellular proteins. ' +
+    'Ribosomes function translating messenger RNA. The nucleus regulate gene expression inside a ' +
+    'eukaryotic cell. Glucose molecules in the Krebs cycle in mitochondria. Stomata close during ' +
+    'drought conditions in a leaf. Compare active transport with passive diffusion across a membrane.';
 
   const spec = {
     questionCount: 4,
@@ -102,32 +104,41 @@ describe('writing an exam from uploaded lecture material', () => {
       ...over,
     }) as PaperImport;
 
+  /** Answer every request with what it asked for, one good question a slot. */
+  const fine = (req: {
+    plan: { type: string; difficulty: string }[];
+    chunks: { index: number }[];
+  }) =>
+    ok(
+      req.plan.map((p) =>
+        generated({
+          type: p.type as never,
+          difficulty: p.difficulty as never,
+          chunkIndex: req.chunks[0].index,
+          ...(p.type === 'SHORT_ANSWER'
+            ? { options: [], modelAnswer: 'Cellular respiration.' }
+            : {}),
+        }),
+      ),
+    );
+
   beforeEach(() => {
     subject = 0;
-    const real = new QuestionGeneratorService({} as never, config);
-    generator = {
-      generateBatch: jest.fn(),
-      // Nothing by default: a test that does not set this up is a test about
-      // the ordinary path, and a variant round that silently filled the exam
-      // would make those tests assert the wrong thing.
-      generateVariants: jest.fn().mockResolvedValue(ok([])),
-      regenerateOne: jest.fn(),
-      batchCount: jest.fn((n: number) => real.batchCount(n)),
-      batchOf: jest.fn((plan: never[], i: number) => real.batchOf(plan, i)),
-    };
+    generator = new QuestionGeneratorService({} as never, config);
+    generate = jest.spyOn(generator, 'generate').mockImplementation(async (req) => fine(req));
     prisma = {
-      paperImport: { update: jest.fn().mockResolvedValue({}) },
+      paperImport: {
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        // Still running, unless a test says otherwise.
+        findFirst: jest.fn().mockResolvedValue({ id: 'imp1' }),
+      },
       paperImportPage: {
         update: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([]),
       },
       examSourceChunk: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            chunkRow(0, 'Mitochondria produce ATP through cellular respiration in the cell.'),
-            chunkRow(1, 'Chloroplasts capture light energy during photosynthesis in plants.'),
-          ]),
+        findMany: jest.fn().mockResolvedValue([chunkRow(0, LECTURE), chunkRow(1, LECTURE)]),
         deleteMany: jest.fn(),
         create: jest.fn(),
       },
@@ -137,358 +148,182 @@ describe('writing an exam from uploaded lecture material', () => {
       prisma as PrismaService,
       {} as StorageProvider,
       {} as SourceReaderService,
-      generator as unknown as QuestionGeneratorService,
+      generator,
       config,
     );
   });
 
-  const lastWarnings = (): { code: string; params?: Record<string, number> }[] =>
-    prisma.paperImport.update.mock.calls
-      .map((c: [{ data: { warnings?: unknown } }]) => c[0].data.warnings)
-      .filter(Boolean)
-      .pop() as { code: string; params?: Record<string, number> }[];
-
-  const savedDraft = (): ExamDraft =>
-    prisma.paperImport.update.mock.calls
-      .map((c: [{ data: { draft?: ExamDraft } }]) => c[0].data.draft)
-      .filter(Boolean)
-      .pop() as ExamDraft;
+  /** The final write: the guarded updateMany carrying the draft. */
+  const finalWrite = () =>
+    prisma.paperImport.updateMany.mock.calls
+      .map((c: [{ data: Record<string, any> }]) => c[0].data)
+      .filter((d: Record<string, any>) => d.draft)
+      .pop();
+  const savedDraft = (): ExamDraft => finalWrite().draft;
+  const lastWarnings = (): { code: string; params?: Record<string, any> }[] =>
+    finalWrite().warnings;
 
   it('writes the exam in batches, not one call per question', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated(), generated(), generated()]),
-    );
-
     await service.generate(record());
-
-    // Four questions, one call — not four.
-    expect(generator.generateBatch).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledTimes(1);
     expect(savedDraft().sections[0].questions).toHaveLength(4);
   });
 
-  it('writes on the affordable model, never the flagship, when all goes well', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated(), generated(), generated()]),
-    );
+  it('writes on the configured profile, never the flagship', async () => {
     await service.generate(record());
-    expect(generator.generateBatch.mock.calls[0][0].stronger).toBeFalsy();
+    const models = generate.mock.calls.map((c) => c[0].tier.model);
+    expect(models).not.toContain(config.strongModel);
+    expect(models.every((m: string) => m === config.generationProfileOf().primary.model)).toBe(
+      true,
+    );
+  });
+
+  it('can be run on the other profile without changing the default', async () => {
+    await service.generate(record(), { profile: 'LUNA_FIRST' });
+    expect(generate.mock.calls[0][0].tier.model).toBe('gpt-6-luna');
+    expect(config.generationProfile).toBe('SOL_FIRST');
   });
 
   it('keeps the good questions from a batch and asks again only for the rest', async () => {
-    // Seven good, one broken: the seven are kept, not thrown away and paid
-    // for a second time.
-    const broken = generated({ text: '[unclear]', options: [] });
-    generator.generateBatch
-      .mockResolvedValueOnce(ok([generated(), generated(), generated(), broken]))
-      .mockResolvedValueOnce(ok([generated(), generated(), generated(), generated()]));
+    generate
+      .mockImplementationOnce(async (req) => {
+        const res = fine(req);
+        res.questions[3] = generated({ text: '[unclear]', options: [] });
+        return res;
+      })
+      .mockImplementation(async (req) => fine(req));
 
     await service.generate(record());
 
-    expect(generator.generateBatch).toHaveBeenCalledTimes(2);
-    // The second attempt is the escalation, on the stronger model.
-    expect(generator.generateBatch.mock.calls[1][0].stronger).toBe(true);
-  });
-
-  it('stops asking after the configured number of attempts', async () => {
-    generator.generateBatch.mockResolvedValue(ok([generated({ text: '[unclear]', options: [] })]));
-    await service.generate(record());
-    expect(generator.generateBatch).toHaveBeenCalledTimes(config.generationMaxAttempts);
-  });
-
-  it('tells the teacher the material is short rather than inventing the difference', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated()], { insufficient: true, supportable: 2 }),
-    );
-
-    await service.generate(record());
-
-    const warnings = prisma.paperImport.update.mock.calls
-      .map(
-        (c: [{ data: { warnings?: { code: string; params?: Record<string, number> }[] } }]) =>
-          c[0].data.warnings,
-      )
-      .filter(Boolean)
-      .pop();
-    const short = warnings.find((w: { code: string }) => w.code === 'NOT_ENOUGH_CONTENT');
-    expect(short).toBeTruthy();
-    expect(short.params).toMatchObject({ got: 2, wanted: 4 });
-    expect(savedDraft().sections[0].questions).toHaveLength(2);
-  });
-
-  it('does not ask a better model to re-read a paragraph that is simply short', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated()], { insufficient: true, supportable: 1 }),
-    );
-    await service.generate(record());
-    // One attempt: the material is the limit, and a stronger model does not
-    // lengthen it.
-    expect(generator.generateBatch).toHaveBeenCalledTimes(1);
-  });
-
-  it('refuses a question it cannot attach to the material it was given', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated({ chunkIndex: 99 }), generated(), generated()]),
-    );
-    await service.generate(record());
-    const texts = savedDraft().sections[0].questions.map((q) => q.text);
-    expect(texts).toHaveLength(3);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1][0].plan).toHaveLength(1);
+    expect(savedDraft().sections[0].questions).toHaveLength(4);
   });
 
   it('records where every question came from, by file and page', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated({ chunkIndex: 1 }), generated(), generated(), generated()]),
-    );
+    generate.mockImplementation(async (req) => {
+      const res = fine(req);
+      res.questions[0] = { ...res.questions[0], chunkIndex: 1 };
+      return res;
+    });
     await service.generate(record());
     const q = savedDraft().sections[0].questions.find((x) => x.sourceChunk === 1)!;
     expect(q.sourceFile).toBe('biology.pdf');
     expect(q.sourcePages).toEqual([2]);
   });
 
-  it('drops a question that repeats one already written', async () => {
-    const same = 'Which organelle produces ATP inside the plant cell during respiration?';
-    generator.generateBatch.mockResolvedValue(
-      ok([generated({ text: same }), generated({ text: same }), generated(), generated()]),
-    );
-    await service.generate(record());
-    const texts = savedDraft().sections[0].questions.map((q) => q.text);
-    expect(texts.filter((t) => t === same)).toHaveLength(1);
-  });
-
-  it('counts its own progress as questions land, for the screen to read', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated(), generated(), generated()]),
-    );
-    await service.generate(record());
-    const progress = prisma.paperImport.update.mock.calls
-      .map((c: [{ data: { progressDone?: number } }]) => c[0].data.progressDone)
-      .filter((n: number | undefined) => n != null);
-    expect(progress).toContain(4);
-  });
-
   it('records what the writing cost and how many calls it took', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated(), generated(), generated()]),
-    );
     await service.generate(record());
-    const final = prisma.paperImport.update.mock.calls.pop()[0].data;
+    const final = finalWrite();
     expect(final.generationBatches).toBe(1);
     expect(final.costCents).toEqual({ increment: 2 });
   });
 
-  it('never escalates to the flagship because the material was simply short', async () => {
-    // The ten-minute bug: one page, twenty questions asked for, three batches
-    // over the same paragraph, every repeat dropped as a duplicate, the
-    // shortfall read as a model failure, all three batches escalated. Six
-    // flagship calls to produce what one call had already produced.
-    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
-
-    await service.generate(record());
-
-    // Nothing came back broken, so nothing is worth a better reader.
-    expect(generator.generateBatch.mock.calls.every((c) => !c[0].stronger)).toBe(true);
-  });
-
-  it('stops asking once the material has given what it has', async () => {
-    generator.generateBatch.mockResolvedValue(ok([generated()]));
-
+  it('marks variants and says how many there are', async () => {
+    // Two small chunks carry fewer than twenty questions; the rest are owed
+    // as variants, and only as many as are missing.
+    prisma.examSourceChunk.findMany.mockResolvedValue([
+      { ...chunkRow(0, LECTURE), tokensApprox: 150 },
+      { ...chunkRow(1, LECTURE), tokensApprox: 150 },
+    ]);
     await service.generate(
       record({
-        spec: { ...spec, questionCount: 16, types: { MCQ: 16, TRUE_FALSE: 0, SHORT_ANSWER: 0 } },
+        spec: { ...spec, questionCount: 8, types: { MCQ: 8, TRUE_FALSE: 0, SHORT_ANSWER: 0 } },
       } as never),
     );
-
-    // One short batch ends it: the next batch would be handed the same chunks.
-    expect(generator.generateBatch).toHaveBeenCalledTimes(1);
+    const questions = savedDraft().sections[0].questions;
+    expect(questions).toHaveLength(8);
+    const told = lastWarnings().find((w) => w.code === 'COMPLETED_WITH_VARIANTS');
+    expect(told?.params?.variants).toBe(questions.filter((q) => q.variant).length);
+    expect(told?.params?.variants).toBeGreaterThan(0);
   });
 
-  it('still escalates when a batch comes back broken rather than short', async () => {
-    const broken = generated({ text: '[unclear]', options: [] });
-    generator.generateBatch
-      .mockResolvedValueOnce(ok([generated(), generated(), generated(), broken]))
-      .mockResolvedValueOnce(ok([generated(), generated(), generated(), generated()]));
-
+  it('says the material is short only when the material is why', async () => {
+    const off = Object.assign(new PaperImportConfig(), { generationVariantRounds: 0 });
+    service = new ContentGenerationService(
+      prisma as PrismaService,
+      {} as StorageProvider,
+      {} as SourceReaderService,
+      generator,
+      off,
+    );
+    prisma.examSourceChunk.findMany.mockResolvedValue([
+      { ...chunkRow(0, LECTURE), tokensApprox: 150 },
+    ]);
     await service.generate(record());
-
-    expect(generator.generateBatch).toHaveBeenCalledTimes(2);
-    expect(generator.generateBatch.mock.calls[1][0].stronger).toBe(true);
+    const short = lastWarnings().find((w) => w.code === 'NOT_ENOUGH_CONTENT');
+    expect(short?.params).toMatchObject({ got: 2, wanted: 4, missingMcq: 2 });
+    expect(lastWarnings().some((w) => w.code === 'GENERATION_INCOMPLETE')).toBe(false);
   });
 
-  it('cuts the plan to what the material can carry before spending anything', async () => {
-    // Two 200-token chunks cannot carry fifty questions, and finding that out
-    // by generating seven batches is the expensive way to learn it.
-    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
-
+  it('reports a budget stop as incomplete, with the missing types — never as a finished exam', async () => {
     await service.generate(
       record({
-        spec: { ...spec, questionCount: 50, types: { MCQ: 50, TRUE_FALSE: 0, SHORT_ANSWER: 0 } },
+        spec: { ...spec, questionCount: 4, types: { MCQ: 2, TRUE_FALSE: 1, SHORT_ANSWER: 1 } },
       } as never),
+      { budgetCents: 0.3 },
     );
-
-    const askedFor = generator.generateBatch.mock.calls[0][0].plan.length;
-    expect(askedFor).toBeLessThanOrEqual(8);
-    expect(generator.generateBatch.mock.calls.length).toBeLessThanOrEqual(2);
+    const final = finalWrite();
+    expect(generate).not.toHaveBeenCalled();
+    expect(final.status).toBe('FAILED');
+    expect(final.error).toMatch(/budget/);
+    const told = lastWarnings().find((w) => w.code === 'GENERATION_INCOMPLETE');
+    expect(told?.params).toMatchObject({
+      got: 0,
+      wanted: 4,
+      reason: 'BUDGET',
+      missingMcq: 2,
+      missingTrueFalse: 1,
+      missingWritten: 1,
+    });
   });
 
   it('rewrites the stored specification to match the exam that exists', async () => {
-    // Otherwise the settings form keeps asking for 20 over a draft of 13, and
-    // the teacher has to correct a number they never chose before it will save.
-    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
-
+    // Two good, then nothing that passes however often it is asked.
+    generate
+      .mockImplementationOnce(async (req) => {
+        const res = fine(req);
+        res.questions = res.questions.map((x, i) => (i < 2 ? x : { ...x, chunkIndex: 99 }));
+        return res;
+      })
+      .mockImplementation(async (req) => {
+        const res = fine(req);
+        res.questions = res.questions.map((x) => ({ ...x, chunkIndex: 99 }));
+        return res;
+      });
     await service.generate(record());
-
-    const saved = prisma.paperImport.update.mock.calls
-      .map(
-        (c: [{ data: { spec?: { questionCount: number; types: Record<string, number> } } }]) =>
-          c[0].data.spec,
-      )
-      .filter(Boolean)
-      .pop();
+    const saved = finalWrite().spec;
     expect(saved.questionCount).toBe(2);
-    expect(saved.types.MCQ).toBe(2);
+    expect(saved.types.MCQ).toBe(saved.questionCount);
   });
 
-  it('tells the teacher the new breakdown, not just the shortfall', async () => {
-    generator.generateBatch.mockResolvedValue(ok([generated(), generated()]));
-
+  it('writes nothing over a session that was stopped, but still counts what it spent', async () => {
+    prisma.paperImport.findFirst.mockResolvedValue(null);
     await service.generate(record());
-
-    const warnings = prisma.paperImport.update.mock.calls
-      .map(
-        (c: [{ data: { warnings?: { code: string; params?: Record<string, number> }[] } }]) =>
-          c[0].data.warnings,
-      )
-      .filter(Boolean)
-      .pop();
-    const short = warnings.find((w: { code: string }) => w.code === 'NOT_ENOUGH_CONTENT');
-    expect(short.params).toMatchObject({ got: 2, wanted: 4, mcq: 2, trueFalse: 0, written: 0 });
+    expect(finalWrite()).toBeUndefined();
+    expect(prisma.paperImport.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { costCents: { increment: 0 } } }),
+    );
   });
 
-  // ── reaching the number that was asked for ──────────────────────────────
-  //
-  // Being told "your lecture supports thirteen of the twenty questions you
-  // asked for" is honest and does not give a teacher a twenty-question paper
-  // for Sunday. The shortfall is now filled by varying the questions the
-  // material did support — which is a different thing from inventing content,
-  // and the tests below are about keeping it different.
-
-  it('fills the count by varying what the material did support', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated()], { insufficient: true, supportable: 2 }),
-    );
-    generator.generateVariants.mockResolvedValue(ok([generated(), generated()]));
-
+  it('does not overwrite a stop that lands after the last call', async () => {
+    prisma.paperImport.updateMany.mockResolvedValue({ count: 0 });
     await service.generate(record());
-
-    const draft = savedDraft();
-    expect(draft.sections[0].questions).toHaveLength(4);
-    expect(generator.generateVariants).toHaveBeenCalled();
-  });
-
-  it('marks every question it wrote that way', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated()], { insufficient: true, supportable: 2 }),
+    expect(prisma.paperImport.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { costCents: { increment: 2 } } }),
     );
-    generator.generateVariants.mockResolvedValue(ok([generated(), generated()]));
-
-    await service.generate(record());
-
-    const questions = savedDraft().sections[0].questions;
-    expect(questions.filter((q) => q.variant)).toHaveLength(2);
-    // And leaves the ones that came out of the material alone.
-    expect(questions.filter((q) => !q.variant)).toHaveLength(2);
-  });
-
-  it('tells the teacher how many of their questions are variants', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated()], { insufficient: true, supportable: 2 }),
-    );
-    generator.generateVariants.mockResolvedValue(ok([generated(), generated()]));
-
-    await service.generate(record());
-
-    const warnings = lastWarnings();
-    const told = warnings.find((w) => w.code === 'COMPLETED_WITH_VARIANTS');
-    expect(told?.params).toEqual({ variants: 2, fromMaterial: 2, wanted: 4 });
-    // The exam is the length that was ordered, so the shortfall warning — the
-    // one that asks the teacher to upload more or ask for less — is gone.
-    expect(warnings.some((w) => w.code === 'NOT_ENOUGH_CONTENT')).toBe(false);
-  });
-
-  it('asks only for the questions still missing, in the types still owed', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated(), generated()], { insufficient: true, supportable: 3 }),
-    );
-    generator.generateVariants.mockResolvedValue(ok([generated()]));
-
-    await service.generate(record());
-
-    const asked = generator.generateVariants.mock.calls[0][0];
-    expect(asked.plan).toHaveLength(1);
-    expect(asked.plan[0].type).toBe('MCQ');
-    // And hands over what there is to vary, plus everything to avoid.
-    expect(asked.source).toHaveLength(3);
-    expect(asked.avoid).toHaveLength(3);
-  });
-
-  it('throws away a variant that is its own source reworded', async () => {
-    // The failure this whole idea invites. A variant that would be recognised
-    // as the same question is a duplicate, and it faces the same check as any
-    // other duplicate rather than a softer one.
-    const original = generated({ text: SUBJECTS[0] });
-    generator.generateBatch.mockResolvedValue(
-      ok([original], { insufficient: true, supportable: 1 }),
-    );
-    generator.generateVariants.mockResolvedValue(
-      ok([generated({ text: SUBJECTS[0] }), generated({ text: SUBJECTS[0] })]),
-    );
-
-    await service.generate(record());
-
-    expect(savedDraft().sections[0].questions).toHaveLength(1);
-  });
-
-  it('stops after one empty round rather than paying for another', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated()], { insufficient: true, supportable: 1 }),
-    );
-    generator.generateVariants.mockResolvedValue(ok([]));
-
-    await service.generate(record());
-
-    expect(generator.generateVariants).toHaveBeenCalledTimes(1);
-  });
-
-  it('still says the material was short when variants could not fill it either', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated()], { insufficient: true, supportable: 1 }),
-    );
-    generator.generateVariants.mockResolvedValue(ok([]));
-
-    await service.generate(record());
-
-    expect(lastWarnings().some((w) => w.code === 'NOT_ENOUGH_CONTENT')).toBe(true);
-  });
-
-  it('does not write variants for an exam the material already filled', async () => {
-    generator.generateBatch.mockResolvedValue(
-      ok([generated(), generated(), generated(), generated()]),
-    );
-
-    await service.generate(record());
-
-    expect(generator.generateVariants).not.toHaveBeenCalled();
   });
 
   it('fails honestly when the material produced nothing', async () => {
-    generator.generateBatch.mockResolvedValue(ok([]));
+    generate.mockImplementation(async () => ok([]));
     await service.generate(record());
-    expect(prisma.paperImport.update.mock.calls.pop()[0].data.status).toBe('FAILED');
+    expect(finalWrite().status).toBe('FAILED');
   });
 
   it('refuses to generate from a session with no material at all', async () => {
     prisma.examSourceChunk.findMany.mockResolvedValue([]);
     await service.generate(record());
-    expect(generator.generateBatch).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
     expect(prisma.paperImport.update.mock.calls.pop()[0].data.status).toBe('FAILED');
   });
 });

@@ -480,20 +480,32 @@ function Review({
    * numbers are already reconciled on the server, so saying yes is genuinely
    * nothing: the exam is ready to publish as it stands.
    */
-  const shortfall = record.warnings.find((w) => w.code === 'NOT_ENOUGH_CONTENT');
+  // A run that stopped on its limits is as short as one the material cut
+  // short, and gets the same question — only the reason differs.
+  const shortfall = record.warnings.find(
+    (w) => w.code === 'NOT_ENOUGH_CONTENT' || w.code === 'GENERATION_INCOMPLETE',
+  );
   const asked = useRef(false);
   useEffect(() => {
     if (!shortfall || asked.current) return;
     asked.current = true;
     void (async () => {
       const keep = await askConfirm(
-        t('examStudio.shortfallBody', {
-          got: shortfall.params?.got ?? 0,
-          wanted: shortfall.params?.wanted ?? 0,
-          mcq: shortfall.params?.mcq ?? 0,
-          trueFalse: shortfall.params?.trueFalse ?? 0,
-          written: shortfall.params?.written ?? 0,
-        }),
+        t(
+          shortfall.code === 'GENERATION_INCOMPLETE'
+            ? 'examStudio.shortfallBodyIncomplete'
+            : 'examStudio.shortfallBody',
+          {
+            got: shortfall.params?.got ?? 0,
+            wanted: shortfall.params?.wanted ?? 0,
+            mcq: shortfall.params?.mcq ?? 0,
+            trueFalse: shortfall.params?.trueFalse ?? 0,
+            written: shortfall.params?.written ?? 0,
+            missingMcq: shortfall.params?.missingMcq ?? 0,
+            missingTrueFalse: shortfall.params?.missingTrueFalse ?? 0,
+            missingWritten: shortfall.params?.missingWritten ?? 0,
+          },
+        ),
         {
           title: t('examStudio.shortfallTitle'),
           // With the count — a label whose placeholder is never filled puts

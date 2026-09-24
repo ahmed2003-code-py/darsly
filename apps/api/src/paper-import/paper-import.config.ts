@@ -1,6 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { AiImageDetail, AiPrice, AiReasoningEffort } from '../academy-site/ai/ai.client';
 
+export type GenerationProfileName = 'SOL_FIRST' | 'LUNA_FIRST';
+
+/** One model a question may be written on, with what it costs and how hard
+ *  it thinks. */
+export interface GenerationTier {
+  model: string;
+  price: AiPrice;
+  effort: AiReasoningEffort;
+}
+
+export interface GenerationProfile {
+  name: GenerationProfileName;
+  primary: GenerationTier;
+  /** Where one slot that keeps failing validation may go. Null: nowhere. */
+  fallback: GenerationTier | null;
+}
+
 function num(v: string | undefined, fallback: number): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -157,20 +174,28 @@ export class PaperImportConfig {
   // ── Writing an exam from lecture material ────────────────────────────────
   //
   // Reading a lecture page is the same job as reading an exam page, so it uses
-  // the same two models above and needs no configuration of its own. Writing
+  // the same models above and needs no configuration of its own. Writing
   // questions is a different job, and gets its own.
+  //
+  // Only two models write questions: luna and sol. The flagship above is for
+  // reading a page a teacher asked to have re-read, and is never reached from
+  // here — not on a retry, not for a variant, not for a replacement. The
+  // allow-list below is what enforces that, not a convention.
 
   /**
-   * The model that writes the questions.
+   * Which model writes first, and what — if anything — a question that keeps
+   * failing validation may be handed to.
    *
-   * The middle tier, not the cheap one and not the flagship. Transcribing a
-   * page is copying; writing a fair exam question with a defensible key and
-   * three wrong-but-plausible options is not, and the cheap model's questions
-   * are noticeably thinner. At roughly six cents for a twenty-question exam
-   * this is affordable in a way the flagship (a dollar or so for the same
-   * work) is not, which is why the flagship stays where it is: reserved for a
-   * batch that has already failed, or for a teacher who asked.
+   * SOL_FIRST is what production ran before profiles existed (sol, medium) and
+   * stays the default until a measured comparison says otherwise. LUNA_FIRST
+   * writes on luna and may hand a specific failing slot to sol; see
+   * `generationEscalateAfter`.
    */
+  readonly generationProfile: GenerationProfileName =
+    process.env.PAPER_IMPORT_GENERATION_PROFILE === 'LUNA_FIRST' ? 'LUNA_FIRST' : 'SOL_FIRST';
+
+  /** The middle tier. PAPER_IMPORT_GENERATION_MODEL is kept as its name so a
+   *  deployment that set it before profiles existed still means the same. */
   readonly generationModel = process.env.PAPER_IMPORT_GENERATION_MODEL ?? 'gpt-6-sol';
   readonly generationPrice: AiPrice = {
     inPerMToken: num(process.env.PAPER_IMPORT_GENERATION_PRICE_IN, 200),
@@ -178,6 +203,49 @@ export class PaperImportConfig {
   };
   readonly generationEffort = (process.env.PAPER_IMPORT_GENERATION_EFFORT ??
     'medium') as AiReasoningEffort;
+
+  /** The cheap tier, as a writer. Its price is the same model's price above;
+   *  its effort is its own, because writing is not transcribing. */
+  readonly generationLunaModel = process.env.PAPER_IMPORT_GENERATION_LUNA_MODEL ?? 'gpt-6-luna';
+  readonly generationLunaPrice: AiPrice = {
+    inPerMToken: num(process.env.PAPER_IMPORT_GENERATION_LUNA_PRICE_IN, 10),
+    outPerMToken: num(process.env.PAPER_IMPORT_GENERATION_LUNA_PRICE_OUT, 50),
+  };
+  readonly generationLunaEffort = (process.env.PAPER_IMPORT_GENERATION_LUNA_EFFORT ??
+    'medium') as AiReasoningEffort;
+  /** Sol's effort when it is LUNA_FIRST's fallback for one failing slot. */
+  readonly generationFallbackEffort = (process.env.PAPER_IMPORT_GENERATION_FALLBACK_EFFORT ??
+    'medium') as AiReasoningEffort;
+
+  /** The only models the generator will call. Anything else — the flagship
+   *  set by mistake in an env var — is refused before a request is made. */
+  readonly generationAllowedModels: string[] = (
+    process.env.PAPER_IMPORT_GENERATION_ALLOWED_MODELS ?? 'gpt-6-luna,gpt-6-sol'
+  )
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+
+  /** The two tiers of a profile, resolved. */
+  generationProfileOf(name: GenerationProfileName = this.generationProfile): GenerationProfile {
+    const sol: GenerationTier = {
+      model: this.generationModel,
+      price: this.generationPrice,
+      effort: this.generationEffort,
+    };
+    if (name === 'LUNA_FIRST') {
+      return {
+        name,
+        primary: {
+          model: this.generationLunaModel,
+          price: this.generationLunaPrice,
+          effort: this.generationLunaEffort,
+        },
+        fallback: { ...sol, effort: this.generationFallbackEffort },
+      };
+    }
+    return { name, primary: sol, fallback: null };
+  }
 
   /**
    * How many questions one model call writes.
@@ -200,26 +268,97 @@ export class PaperImportConfig {
     num(process.env.PAPER_IMPORT_BATCH_SOURCE_TOKENS, 6000),
   );
 
-  /** How many times a batch that fails deterministic validation is written
-   *  again before the shortfall is simply reported to the teacher. Two, then
-   *  stop: a third attempt on the same material rarely reads differently and
-   *  the teacher can write the missing question faster than we can. */
-  readonly generationMaxAttempts = Math.max(
+  /**
+   * How many rounds one exam may take: the first writing, then rounds that
+   * ask only for the slots still empty — a rejected question's replacement,
+   * or a variant where the material ran out. Three is the first round and two
+   * of those. Every round after the first asks for less than the one before
+   * or it stops.
+   */
+  readonly generationRounds = Math.max(
     1,
-    Math.min(4, num(process.env.PAPER_IMPORT_GENERATION_ATTEMPTS, 2)),
+    Math.min(5, num(process.env.PAPER_IMPORT_GENERATION_ROUNDS, 3)),
+  );
+
+  /** A ceiling on model calls per exam, whatever the rounds would allow. */
+  readonly generationMaxCalls = Math.max(
+    1,
+    Math.min(40, num(process.env.PAPER_IMPORT_GENERATION_MAX_CALLS, 10)),
   );
 
   /**
-   * How many rounds of variants may be written to reach the requested count.
+   * LUNA_FIRST only: how many times one slot must come back failing a
+   * deterministic check (a missing key, two correct options, no anchor in its
+   * chunk…) on luna before that slot alone is written on sol. Duplicates,
+   * questions not returned and failed calls never count — a bigger model does
+   * not lengthen a short lecture.
+   */
+  readonly generationEscalateAfter = Math.max(
+    1,
+    num(process.env.PAPER_IMPORT_GENERATION_ESCALATE_AFTER, 2),
+  );
+  /** And at most this many such calls per exam. */
+  readonly generationMaxFallbackCalls = Math.max(
+    0,
+    num(process.env.PAPER_IMPORT_GENERATION_MAX_FALLBACK_CALLS, 2),
+  );
+
+  /**
+   * What writing one exam may cost, in cents, OCR not included.
    *
-   * A teacher who asked for twenty questions is asking for a twenty-question
-   * paper, and being handed thirteen with an explanation solves the honesty
-   * problem and not the teacher's. The shortfall is filled by varying what the
-   * material did support — see `QuestionGeneratorService.generateVariants`.
+   * Every call reserves its worst case — its input estimate plus its whole
+   * output ceiling, at its model's price — before it starts, and a call that
+   * could take the run past this is not started. It is a ceiling on what the
+   * application spends by its own accounting, not a guarantee about the
+   * provider's invoice: a timed-out request can be billed without a usage
+   * report, and those are charged at their worst case here for that reason.
    *
-   * Two rounds, because each round is a model call against the same material
-   * and a third almost always returns what the second already did. Set to 0 to
-   * go back to reporting the shortfall and stopping.
+   * 25¢ by default, well above what a twenty-question exam costs on either
+   * profile without escalation, so it catches runaways without cutting real
+   * exams short. The controlled comparison runs at 10.
+   */
+  readonly generationBudgetCents = Math.max(
+    1,
+    num(process.env.PAPER_IMPORT_GENERATION_BUDGET_CENTS, 25),
+  );
+
+  /** How many generation calls run at the same time. Batches over different
+   *  stretches of the material are independent. */
+  readonly generationConcurrency = Math.max(
+    1,
+    Math.min(6, num(process.env.PAPER_IMPORT_GENERATION_CONCURRENCY, 3)),
+  );
+
+  /** Per call. The SDK's own defaults are ten minutes and two retries. */
+  readonly generationCallTimeoutMs = Math.max(
+    15_000,
+    num(process.env.PAPER_IMPORT_GENERATION_CALL_TIMEOUT_MS, 150_000),
+  );
+  readonly generationCallRetries = Math.max(
+    0,
+    Math.min(2, num(process.env.PAPER_IMPORT_GENERATION_CALL_RETRIES, 1)),
+  );
+
+  /**
+   * Output ceiling per call, sized to what the call asks for: room to think,
+   * plus room per question. A replacement for one question used to carry the
+   * same 6,000-token ceiling as a batch of eight — which is also what its
+   * worst case has to be budgeted at. Capped by PAPER_IMPORT_MAX_TOKENS.
+   */
+  readonly generationOutputBase = Math.max(
+    500,
+    num(process.env.PAPER_IMPORT_GENERATION_OUTPUT_BASE, 2000),
+  );
+  readonly generationOutputPerQuestion = Math.max(
+    100,
+    num(process.env.PAPER_IMPORT_GENERATION_OUTPUT_PER_QUESTION, 450),
+  );
+
+  /**
+   * Whether the slots the material cannot carry are written as variants of
+   * what it did carry. Kept under its old name; 0 turns it off and reports
+   * the shortfall instead. Any positive number turns it on — how many calls
+   * it may take is `generationRounds`' business now.
    */
   readonly generationVariantRounds = Math.max(
     0,

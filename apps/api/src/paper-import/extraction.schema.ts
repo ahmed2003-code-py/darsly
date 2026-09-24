@@ -365,6 +365,10 @@ export type DraftWarningCode =
   /// Content path: the material did not support the number of questions asked
   /// for, and we said so rather than inventing the difference.
   | 'NOT_ENOUGH_CONTENT'
+  /// Content path: fewer questions than were ordered, for a reason other than
+  /// the material — the generation budget, the round limit, the call limit.
+  /// Says which, and how many of each type are missing.
+  | 'GENERATION_INCOMPLETE'
   /// Content path: the exam is the length that was asked for, and some of it
   /// was written by varying the questions the material did support. Not a
   /// failure — but the teacher is entitled to know which questions those are

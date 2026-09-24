@@ -10,6 +10,12 @@ export class AiJobError extends Error {
   constructor(
     message: string,
     readonly errorClass: AiErrorClass = 'RETRYABLE',
+    /**
+     * What the provider reported having billed, when a response arrived and
+     * was then rejected — a truncated or malformed answer costs the same as a
+     * good one. Absent when no response came back at all.
+     */
+    readonly usage?: { inputTokens: number; outputTokens: number },
   ) {
     super(message);
     this.name = 'AiJobError';

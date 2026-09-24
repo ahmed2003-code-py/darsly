@@ -183,6 +183,14 @@ export class PaperExtractionService {
   ): Promise<PageExtractionResult> {
     const useAdaptive = this.config.extractionStrategy === 'adaptive' && !!this.adaptive;
     const reader = useAdaptive ? this.adaptive! : this.transcriber;
+    // Which reader ran, and the variable exactly as this process sees it — so
+    // "did the setting take?" is answered by the log, not guessed at. A value
+    // with quotes or a trailing space shows up here as such.
+    this.logger.log(
+      `EXTRACTION_STRATEGY page=${pageNumber} strategy=${useAdaptive ? 'adaptive' : 'current'} ` +
+        `EXAM_EXTRACTION_STRATEGY=${JSON.stringify(process.env.EXAM_EXTRACTION_STRATEGY ?? null)} ` +
+        `batch=${useAdaptive ? this.config.adaptiveBatch : 'n/a'}`,
+    );
     const read = await reader.transcribe(image, {
       pageNumber,
       tier: tier === 'STRONG' ? 'STRONG' : 'AUTO',

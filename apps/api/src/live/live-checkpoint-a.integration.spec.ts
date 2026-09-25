@@ -40,7 +40,7 @@ const aiConfig = (over: Partial<Record<string, unknown>> = {}) =>
 
 const stubs = () => ({
   notifications: { create: jest.fn(async () => ({})) },
-  daily: { deleteRoom: jest.fn(async () => undefined), recording: jest.fn(async () => null) },
+  daily: { closeRoom: jest.fn(async () => 'deleted'), recording: jest.fn(async () => null) },
   realtime: { emitToLive: jest.fn(), emitToUser: jest.fn() },
 });
 
@@ -474,7 +474,7 @@ describe('L8/L9 on Postgres: cancelling keeps the record', () => {
     const att = await prisma.liveAttendance.findFirstOrThrow({ where: { sessionId: w.ls.id } });
     expect(att.durationSeconds).toBe(300);
     expect(att.leftAt).toBeInstanceOf(Date);
-    expect(s.daily.deleteRoom).toHaveBeenCalledWith(w.ls.roomName);
+    expect(s.daily.closeRoom).toHaveBeenCalledWith(w.ls.roomName);
     const audit = await prisma.auditLog.findFirstOrThrow({
       where: { entity: 'LiveSession', entityId: w.ls.id, action: 'live.cancel' },
     });

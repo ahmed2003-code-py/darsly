@@ -2683,7 +2683,13 @@
     "eCancelWindowClosed": "The class has already started, so the booking can no longer be cancelled.",
     "eAiDisabled": "AI features are switched off right now. Try again later.",
     "eAiBudgetReached": "This month's AI budget has been used up. Try next month or contact support.",
-    "eAiJobActive": "A request is already running. Wait for it to finish."
+    "eAiJobActive": "A request is already running. Wait for it to finish.",
+    "eTimingChanged": "The class was already extended from another device.",
+    "eSessionNotLive": "Only a class that is running can be extended.",
+    "eExtensionTooLong": "A class cannot run longer than {{max}} minutes.",
+    "eExtensionTooShort": "That would still end the class in the past. Choose a longer extension.",
+    "eLiveTimingLocked": "The class is running — use “+15 min” inside the classroom instead of editing its time.",
+    "eTeacherConflict": "The teacher has another session at that time."
   },
   "myStudio": {
     "title": "My Studio",
@@ -2884,7 +2890,15 @@
     "startRec": "Start recording",
     "stopRec": "Stop recording",
     "endedTitle": "The session has ended",
-    "endedHint": "The teacher ended the class. The recording and summary will appear in the session details."
+    "endedHint": "The teacher ended the class. The recording and summary will appear in the session details.",
+    "elapsed": "Class time",
+    "remaining": "Left",
+    "overtime": "Overtime",
+    "extend": "+15 min",
+    "extending": "Extending…",
+    "extended": "The class was extended by 15 minutes.",
+    "extendAlready": "The class was already extended from another device — this is the new time.",
+    "extendFailed": "We couldn't extend the class. Try again."
   },
   "summary": {
     "title": "AI lesson summary",

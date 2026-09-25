@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { AcademyService } from '../academy/academy.service';
@@ -11,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { DailyService } from './daily.service';
+import { LIVE_MAX_DURATION_MIN, roomSafetyExpiryMs } from './live-timing';
 import { RealtimeService } from '../realtime/realtime.service';
 import { AiJobService } from '../academy-site/jobs/ai-job.service';
 
@@ -36,6 +38,45 @@ export const PRESENCE_GRACE_SEC = 90;
  * request still being made for one that was lost.
  */
 export const SUMMARY_STALE_MS = 2 * 60_000;
+export { LIVE_MAX_DURATION_MIN } from './live-timing';
+
+/** Why a class ended — the teacher, the clock, or a cancellation. */
+export type LiveEndReason = 'MANUAL' | 'SCHEDULED_END' | 'CANCELLED';
+/**
+ * How long after a class's end its "ended" events are still worth sending.
+ * A backlog of classes nobody ended (before the end sweep existed) is closed
+ * quietly — nobody is sitting in those rooms.
+ */
+const END_ANNOUNCE_WINDOW_MS = 30 * 60_000;
+/**
+ * What counts as having attended, for the LIVE_ATTENDED reward.
+ *
+ * A share of the class, the same idea a recorded lesson uses (90% watched
+ * completes it — see PlaybackService), but capped at an absolute amount: a
+ * two-hour revision session should not ask for an hour before it counts, and a
+ * short class should not be unreachable for someone who joined a minute late.
+ * The threshold is min(LIVE_ATTENDED_MIN_SECONDS, LIVE_ATTENDED_MIN_SHARE ×
+ * the session's current length) — so an extension raises it with the class.
+ * Counted from accumulated heartbeat time, across reconnects.
+ */
+export const LIVE_ATTENDED_MIN_SECONDS = 10 * 60;
+export const LIVE_ATTENDED_MIN_SHARE = 0.5;
+export function liveAttendedThresholdSec(durationMin: number): number {
+  return Math.min(LIVE_ATTENDED_MIN_SECONDS, Math.ceil(durationMin * 60 * LIVE_ATTENDED_MIN_SHARE));
+}
+
+/** What a client needs to draw the clock, always from the server's own time. */
+export interface LiveTiming {
+  sessionId: string;
+  status: LiveSessionStatus;
+  startsAt: Date;
+  /** When the teacher actually opened the room; null before that. */
+  startedAt: Date | null;
+  /** The session's effective end (scheduled end, as extended). */
+  endsAt: Date;
+  /** The server's clock at the moment this was produced — for drift. */
+  serverNow: Date;
+}
 
 export interface UpsertLiveDto {
   title: string;
@@ -66,6 +107,8 @@ export interface LiveScope {
 
 @Injectable()
 export class LiveService {
+  private readonly logger = new Logger(LiveService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
@@ -195,6 +238,18 @@ export class LiveService {
         : existing.groupId;
     const startsAt = dto.startsAt != null ? new Date(dto.startsAt) : existing.startsAt;
     const durationMin = dto.durationMin ?? existing.durationMin;
+    // A class that is running has a room whose expiry was set from its timing.
+    // Editing the timing here would move Darsly's clock and not Daily's — the
+    // room would still eject everyone at the old time. The one way to change a
+    // running class's length is `extend`, which moves both.
+    const timingChanged =
+      startsAt.getTime() !== existing.startsAt.getTime() || durationMin !== existing.durationMin;
+    if (timingChanged && existing.status === 'LIVE' && existing.roomName) {
+      throw new ConflictException({
+        message: 'The class is running — extend it instead of editing its time',
+        code: 'LIVE_TIMING_LOCKED',
+      });
+    }
     if (teacherUserId && (teacher || dto.startsAt != null || dto.durationMin != null)) {
       await this.assertTeacherFree(scope, teacherUserId, startsAt, durationMin, id);
     }
@@ -231,9 +286,17 @@ export class LiveService {
   async remove(scope: LiveScope, id: string, actorUserId?: string, reason?: string) {
     const session = await this.assertOwned(scope, id);
     const now = new Date();
-    const wasLive = session.status === 'LIVE' && !this.pastWindow(session);
+    // A room is open for any LIVE session — including one whose time is up but
+    // the end sweep has not reached yet.
+    const wasLive = session.status === 'LIVE';
     const stillAhead = session.status !== 'ENDED' && !this.pastWindow(session);
     const why = reason?.trim().slice(0, 500) || null;
+
+    // Close the class first, through the same path every end takes: the room
+    // is deleted (everyone in it removed) and attendance closed, or — if the
+    // provider refuses — nothing is written and the cancellation can be tried
+    // again, rather than a cancelled session with a room still running.
+    if (wasLive) await this.endSession(id, 'CANCELLED');
 
     // One write: the stamp, the reason, and the soft delete itself. Setting
     // `deletedAt` here is exactly what the middleware's delete would do, and
@@ -245,15 +308,9 @@ export class LiveService {
         cancelledAt: now,
         cancelReason: why,
         deletedAt: now,
-        ...(wasLive ? { status: 'ENDED' as const, endedAt: now } : {}),
       },
     });
     if (wasLive) {
-      await this.prisma.liveAttendance.updateMany({
-        where: { sessionId: id, leftAt: null },
-        data: { leftAt: now },
-      });
-      if (session.roomName) await this.daily.deleteRoom(session.roomName);
       this.realtime.emitToLive(id, 'live:ended', { sessionId: id, cancelled: true });
     }
 
@@ -481,19 +538,9 @@ export class LiveService {
     const s = booking.session;
     this.assertWindowOpen(s);
 
-    // Attendance, as far as the platform can honestly verify it: this student
-    // booked the session and asked for the link inside the window it was
-    // running. Keyed on the session, so opening the link twice is one
-    // attendance.
-    await this.gamification.record({
-      studentId: student.id,
-      type: 'LIVE_ATTENDED',
-      key: `LIVE_ATTENDED:${student.id}:${sessionId}`,
-      tenantId: s.tenantId,
-      entityType: 'liveSession',
-      entityId: sessionId,
-      meta: { title: s.title },
-    });
+    // No reward here. Being handed a token means being *allowed* in, not having
+    // attended — LIVE_ATTENDED is paid from real heartbeat time (see
+    // `heartbeat`), once the student has actually sat through enough of it.
 
     // A session the teacher pointed at Zoom keeps going to Zoom: this feature
     // did not take the old way away from anyone already using it.
@@ -601,7 +648,9 @@ export class LiveService {
     const roomName = `darsly-${id}`.toLowerCase();
     let room;
     try {
-      room = await this.daily.createRoom(roomName, this.closesAt(session));
+      // A safety TTL past the longest class this could become — never the
+      // way it ends (see live-timing.ts; Darsly closes the room at the end).
+      room = await this.daily.createRoom(roomName, roomSafetyExpiryMs(session.startsAt.getTime()));
     } catch (e) {
       // The provider is the one thing here that can fail for reasons of its
       // own. Put the session back where it was so the button can be pressed
@@ -634,38 +683,237 @@ export class LiveService {
 
   /** The teacher closes the classroom. Everyone still inside is checked out. */
   async end(scope: LiveScope, id: string) {
-    const session = await this.assertOwned(scope, id);
-    const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.liveSession.update({
-        where: { id },
-        data: { status: 'ENDED', endedAt: now },
-      }),
-      this.prisma.liveAttendance.updateMany({
-        where: { sessionId: id, leftAt: null },
-        data: { leftAt: now },
-      }),
-    ]);
-    if (session.roomName) await this.daily.deleteRoom(session.roomName);
+    await this.assertOwned(scope, id);
+    const r = await this.endSession(id, 'MANUAL');
+    return { id, status: 'ENDED' as const, endedAt: r.endedAt };
+  }
 
-    // Tell the room, and tell the class.
-    //
-    // Deleting the Daily room drops everyone's connection, but that is the
-    // video going quiet — it is not an answer to "what happened?". Without
-    // this, a student sat looking at a dead meeting, and the listing behind it
-    // went on saying "live now, waiting for the teacher to start" until they
-    // thought to reload a page they had no reason to reload.
-    this.realtime.emitToLive(id, 'live:ended', { sessionId: id });
-    const booked = await this.prisma.liveBooking.findMany({
-      where: { sessionId: id },
-      select: { student: { select: { userId: true } } },
-    });
-    for (const b of booked) {
-      // Their personal room, which they are in whether or not they were ever
-      // inside the meeting — that is what the upcoming list listens on.
-      this.realtime.emitToUser(b.student.userId, 'live:ended', { sessionId: id });
+  /**
+   * The one way a class ends — the teacher's button, the end sweep at the
+   * class's effective end, and a cancellation all come here.
+   *
+   * Under the session's row lock (so a manual end, the sweep on any replica,
+   * a cancellation and an extension cannot interleave):
+   *  1. already ENDED → nothing to do (idempotent; never ended twice);
+   *  2. for SCHEDULED_END, the class must still be LIVE and its *current* end
+   *     reached. This is what makes a stale trigger harmless: the end moved by
+   *     an extension is read here, not remembered from earlier — 20:00 does
+   *     not end a class that now runs to 20:15;
+   *  3. the Daily room is deleted — which removes everyone in it within a
+   *     couple of seconds (observed) — *before* anything is written. If the
+   *     provider refuses, the transaction rolls back and the class stays LIVE,
+   *     so the sweep (or the teacher) simply tries again; a room already gone
+   *     counts as closed. Never "ENDED" with a meeting still running;
+   *  4. status ENDED, and open attendance closed, at `endedAt` = the class's
+   *     actual end (now, or its scheduled end if that already passed).
+   * Then the room and the class are told — unless this is the quiet close of
+   * an old class nobody ended.
+   */
+  async endSession(
+    id: string,
+    reason: LiveEndReason,
+  ): Promise<{ outcome: 'ended' | 'already-ended' | 'not-due' | 'missing'; endedAt: Date | null }> {
+    const r = await this.prisma.$transaction(
+      async (tx) => {
+        const [s] = await tx.$queryRaw<
+          {
+            id: string;
+            tenantId: string;
+            academyId: string | null;
+            startsAt: Date;
+            durationMin: number;
+            status: LiveSessionStatus;
+            roomName: string | null;
+            deletedAt: Date | null;
+            endedAt: Date | null;
+          }[]
+        >`SELECT id, "tenantId", "academyId", "startsAt", "durationMin", status::text AS status,
+                 "roomName", "deletedAt", "endedAt"
+          FROM "LiveSession" WHERE id = ${id} FOR UPDATE`;
+        if (!s) return { outcome: 'missing' as const, endedAt: null };
+        if (s.status === 'ENDED') return { outcome: 'already-ended' as const, endedAt: s.endedAt };
+        const scheduledEnd = this.closesAt(s);
+        const now = Date.now();
+        if (reason === 'SCHEDULED_END' && (s.status !== 'LIVE' || now < scheduledEnd)) {
+          return { outcome: 'not-due' as const, endedAt: null };
+        }
+        let provider = 'none';
+        if (s.status === 'LIVE' && s.roomName) {
+          provider = await this.daily.closeRoom(s.roomName);
+        }
+        const endedAt = new Date(Math.min(now, scheduledEnd));
+        await tx.liveSession.update({ where: { id }, data: { status: 'ENDED', endedAt } });
+        await tx.liveAttendance.updateMany({
+          where: { sessionId: id, leftAt: null },
+          data: { leftAt: endedAt },
+        });
+        return { outcome: 'ended' as const, endedAt, session: s, provider };
+      },
+      // Long enough for the provider call (10s) inside it.
+      { timeout: 20_000, maxWait: 10_000 },
+    );
+    if (r.outcome !== 'ended' || !('session' in r)) {
+      return { outcome: r.outcome, endedAt: r.endedAt };
     }
-    return { id, status: 'ENDED' as const, endedAt: now };
+    this.logger.log(
+      `live.end liveSession=${id} academy=${r.session.academyId ?? r.session.tenantId} ` +
+        `reason=${reason} endedAt=${r.endedAt.toISOString()} provider=${r.provider}`,
+    );
+
+    const recent = Date.now() - r.endedAt.getTime() <= END_ANNOUNCE_WINDOW_MS;
+    // A cancellation announces itself (with `cancelled`) from `remove`.
+    if (reason !== 'CANCELLED' && recent) {
+      // Tell the room, and tell the class.
+      //
+      // Deleting the Daily room drops everyone's connection, but that is the
+      // video going quiet — it is not an answer to "what happened?". Without
+      // this, a student sat looking at a dead meeting, and the listing behind
+      // it went on saying "live now" until they reloaded.
+      this.realtime.emitToLive(id, 'live:ended', { sessionId: id });
+      const booked = await this.prisma.liveBooking.findMany({
+        where: { sessionId: id },
+        select: { student: { select: { userId: true } } },
+      });
+      for (const b of booked) {
+        // Their personal room, which they are in whether or not they were ever
+        // inside the meeting — that is what the upcoming list listens on.
+        this.realtime.emitToUser(b.student.userId, 'live:ended', { sessionId: id });
+      }
+    }
+    return { outcome: 'ended', endedAt: r.endedAt };
+  }
+
+  /**
+   * LIVE classes whose effective end has passed — what the end sweep closes.
+   *
+   * Bounded and indexed: `("status", "startsAt")` narrows it to LIVE sessions
+   * that have started, which is the handful running now plus any backlog; the
+   * end itself is then compared per row. Oldest first, a batch at a time.
+   */
+  async overdueLiveSessionIds(limit: number): Promise<string[]> {
+    const at = Prisma.sql`(to_timestamp(${Date.now()}::double precision / 1000) AT TIME ZONE 'UTC')`;
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "LiveSession"
+      WHERE status = 'LIVE' AND "deletedAt" IS NULL
+        AND "startsAt" <= ${at}
+        AND "startsAt" + make_interval(mins => "durationMin") <= ${at}
+      ORDER BY "startsAt"
+      LIMIT ${limit}`;
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Make a running class longer.
+   *
+   * Darsly's end is the authority, and the class is ended by closing its room
+   * at that end (`endSession`). The provider's room expiry is a safety TTL set
+   * when the room was created, already past the longest end any class can
+   * reach (LIVE_MAX_DURATION_MIN, enforced below) — so an extension is a
+   * database change, and nothing at Daily has to move. (Moving it would not
+   * help anyway: Daily fixes each participant's ejection time when they join,
+   * and a later change to the room's `exp` does not reach them — observed.)
+   *
+   * Under the row lock, so two extensions, an extension and the end sweep, or
+   * an extension and a manual end run one after another:
+   *  - the class must be LIVE and its current end not yet reached — once it is
+   *    over (by the clock, or ENDED) it is not brought back;
+   *  - `expectedEndsAt` (what the page sends — the end it was showing): if the
+   *    end already moved, TIMING_CHANGED with the current timing rather than
+   *    a second extension the teacher did not ask for twice. Without it, each
+   *    confirmed request adds its minutes: never a lost update;
+   *  - never past LIVE_MAX_DURATION_MIN, nor into the teacher's next session.
+   * Only after the commit is anyone told.
+   */
+  async extend(
+    scope: LiveScope,
+    id: string,
+    minutes: number,
+    opts: { expectedEndsAt?: string; actorUserId?: string } = {},
+  ): Promise<LiveTiming> {
+    // Scope first: a colleague's or another academy's class is a 404, before
+    // any lock is taken.
+    await this.assertOwned(scope, id);
+    const before = { endsAt: 0 };
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const [s] = await tx.$queryRaw<
+        {
+          id: string;
+          tenantId: string;
+          academyId: string | null;
+          teacherUserId: string | null;
+          startsAt: Date;
+          durationMin: number;
+          startedAt: Date | null;
+          status: LiveSessionStatus;
+          roomName: string | null;
+          deletedAt: Date | null;
+        }[]
+      >`SELECT id, "tenantId", "academyId", "teacherUserId", "startsAt", "durationMin",
+                 "startedAt", status::text AS status, "roomName", "deletedAt"
+          FROM "LiveSession" WHERE id = ${id} FOR UPDATE`;
+      if (!s || s.deletedAt) throw new NotFoundException('Session not found');
+      if (s.status !== 'LIVE' || !s.roomName) {
+        throw new BadRequestException({
+          message: 'Only a class that is running can be extended',
+          code: 'SESSION_NOT_LIVE',
+        });
+      }
+      const oldEnd = this.closesAt(s);
+      before.endsAt = oldEnd;
+      // Over is over: at its end the class is closed, and an extension that
+      // arrives after that moment does not reopen it.
+      if (Date.now() >= oldEnd) {
+        throw new BadRequestException({ message: 'انتهت هذه الجلسة', code: 'ENDED' });
+      }
+      if (opts.expectedEndsAt && new Date(opts.expectedEndsAt).getTime() !== oldEnd) {
+        throw new ConflictException({
+          message: 'The class was already extended',
+          code: 'TIMING_CHANGED',
+          timing: this.timingOf(s),
+        });
+      }
+      const durationMin = s.durationMin + minutes;
+      if (durationMin > LIVE_MAX_DURATION_MIN) {
+        throw new BadRequestException({
+          message: `A class cannot run longer than ${LIVE_MAX_DURATION_MIN} minutes`,
+          code: 'EXTENSION_TOO_LONG',
+          params: { max: LIVE_MAX_DURATION_MIN },
+        });
+      }
+      // Still cannot be in two places at once.
+      if (s.teacherUserId) {
+        await this.assertTeacherFree(scope, s.teacherUserId, s.startsAt, durationMin, id);
+      }
+      await tx.liveSession.update({ where: { id }, data: { durationMin } });
+      return { ...s, durationMin };
+    });
+
+    const timing = this.timingOf(updated);
+    this.logger.log(
+      `live.extend liveSession=${id} academy=${updated.academyId ?? updated.tenantId} ` +
+        `teacher=${updated.teacherUserId} +${minutes}m ` +
+        `oldEndsAt=${new Date(before.endsAt).toISOString()} newEndsAt=${timing.endsAt.toISOString()}`,
+    );
+    // Only now — once it is committed — is anyone told. The payload is absolute, so a client that reconnects later and
+    // reads it from anywhere else gets the same answer.
+    this.realtime.emitToLive(id, 'live:timing-updated', timing);
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actorUserId: opts.actorUserId ?? scope.userId,
+          action: 'live.extend',
+          entity: 'LiveSession',
+          entityId: id,
+          academyId: updated.academyId ?? updated.tenantId,
+          meta: {
+            minutes,
+            oldEndsAt: new Date(before.endsAt).toISOString(),
+            newEndsAt: timing.endsAt.toISOString(),
+          } as never,
+        },
+      })
+      .catch(() => undefined);
+    return timing;
   }
 
   /**
@@ -678,22 +926,122 @@ export class LiveService {
    * time in the room rather than time since arriving.
    */
   async heartbeat(userId: string, sessionId: string) {
-    const row = await this.prisma.liveAttendance.findUnique({
-      where: { sessionId_userId: { sessionId, userId } },
-    });
-    if (!row) return { ok: false };
     const now = Date.now();
-    const gapSec = Math.floor((now - row.lastSeenAt.getTime()) / 1000);
-    const credited = gapSec > 0 && gapSec <= PRESENCE_GRACE_SEC ? gapSec : 0;
-    await this.prisma.liveAttendance.update({
-      where: { id: row.id },
-      data: {
-        lastSeenAt: new Date(now),
-        leftAt: null,
-        durationSeconds: { increment: credited },
-      },
-    });
-    return { ok: true };
+    // One statement, so it holds under every way heartbeats can collide.
+    //
+    // The old read-then-write let two requests — two tabs in step, a retried
+    // request, two replicas — read the same `lastSeenAt` and both add the same
+    // gap: sixty seconds of attendance for thirty real ones. Here Postgres
+    // takes the row lock and, for a second UPDATE that waited on it,
+    // re-evaluates the expressions against the row the first one wrote — so
+    // the second sees a gap of ~0 and adds nothing. Works across replicas;
+    // needs no lock of ours.
+    //
+    // The gap rule is unchanged: whole seconds since the last heartbeat, and a
+    // gap longer than PRESENCE_GRACE_SEC is absence, credited as 0. New: the
+    // credit stops at the session's effective end (its scheduled end as
+    // extended, or when the teacher ended it) — a heartbeat after the class is
+    // over counts nothing, never reopens the attendance row, and closes one left
+    // open by a class that simply ran out of time (at the class's end). The clock
+    // is the server's, passed in as epoch-ms so a non-UTC database session
+    // cannot shift it; nothing the client sends is trusted.
+    // The server's clock, as a UTC timestamp, bound as a parameter.
+    const at = Prisma.sql`(to_timestamp(${now}::double precision / 1000) AT TIME ZONE 'UTC')`;
+    // The session's effective end: its scheduled end as extended, or the
+    // moment the teacher ended it if that came first.
+    const effectiveEnd = Prisma.sql`(CASE
+        WHEN s.status = 'ENDED' AND s."endedAt" IS NOT NULL
+          THEN LEAST(s."endedAt", s."startsAt" + make_interval(mins => s."durationMin"))
+        ELSE s."startsAt" + make_interval(mins => s."durationMin")
+      END)`;
+    const rows = await this.prisma.$queryRaw<
+      {
+        role: string;
+        durationSeconds: number;
+        tenantId: string;
+        title: string;
+        startsAt: Date;
+        durationMin: number;
+        startedAt: Date | null;
+        status: LiveSessionStatus;
+      }[]
+    >`
+      UPDATE "LiveAttendance" a
+      SET "durationSeconds" = a."durationSeconds" + (CASE
+            WHEN floor(extract(epoch FROM (${at} - a."lastSeenAt"))) BETWEEN 1 AND ${PRESENCE_GRACE_SEC}
+            THEN GREATEST(0, floor(extract(epoch FROM (LEAST(${at}, ${effectiveEnd}) - a."lastSeenAt"))))::int
+            ELSE 0
+          END),
+          "lastSeenAt" = GREATEST(a."lastSeenAt", ${at}),
+          "leftAt" = CASE
+            WHEN s.status = 'LIVE' AND s."deletedAt" IS NULL AND ${at} < ${effectiveEnd}
+            THEN NULL
+            -- Over: a row still open is closed at the class's end, never later.
+            ELSE COALESCE(a."leftAt", LEAST(${at}, ${effectiveEnd})) END
+      FROM "LiveSession" s
+      WHERE a."sessionId" = ${sessionId} AND a."userId" = ${userId} AND s.id = a."sessionId"
+      RETURNING a.role::text AS role, a."durationSeconds", s."tenantId", s.title,
+        s."startsAt", s."durationMin", s."startedAt", s.status::text AS status
+    `;
+    const row = rows[0];
+    if (!row) return { ok: false };
+    if (row.role === 'STUDENT') {
+      await this.maybeAwardAttendance(userId, sessionId, row);
+    }
+    return { ok: true, timing: this.timingOf({ id: sessionId, ...row }) };
+  }
+
+  /**
+   * Pay LIVE_ATTENDED once the accumulated attendance crosses the threshold.
+   *
+   * Exactly once, by the gamification ledger's own unique key
+   * (`LIVE_ATTENDED:{studentId}:{sessionId}`): two heartbeats crossing the
+   * line together both try, the second collides and pays nothing. Attendance
+   * is never rolled back for this — it was already committed above — and a
+   * failed award is simply tried again by the next heartbeat, because only an
+   * award that actually exists stops the retries.
+   *
+   * Cheap on the hot path: nothing at all below the threshold; above it, one
+   * indexed lookup of the award by its key per heartbeat.
+   */
+  private async maybeAwardAttendance(
+    userId: string,
+    sessionId: string,
+    row: { durationSeconds: number; durationMin: number; tenantId: string; title: string },
+  ) {
+    const threshold = liveAttendedThresholdSec(row.durationMin);
+    if (row.durationSeconds < threshold) return;
+    try {
+      const student = await this.prisma.studentProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!student) return;
+      const key = `LIVE_ATTENDED:${student.id}:${sessionId}`;
+      const paid = await this.prisma.gamificationEvent.findUnique({
+        where: { idempotencyKey: key },
+        select: { id: true },
+      });
+      if (paid) return;
+      const outcome = await this.gamification.recordOrThrow({
+        studentId: student.id,
+        type: 'LIVE_ATTENDED',
+        key,
+        tenantId: row.tenantId,
+        entityType: 'liveSession',
+        entityId: sessionId,
+        meta: { title: row.title, attendedSeconds: row.durationSeconds },
+      });
+      this.logger.log(
+        `LIVE_ATTENDED liveSession=${sessionId} student=${student.id} ` +
+          `seconds=${row.durationSeconds} threshold=${threshold} awarded=${outcome.awarded}`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `LIVE_ATTENDED award failed liveSession=${sessionId} user=${userId} ` +
+          `seconds=${row.durationSeconds} — the next heartbeat will retry: ${(e as Error).message}`,
+      );
+    }
   }
 
   /** An explicit goodbye. Best-effort — `heartbeat` is what the count rests on. */
@@ -1184,6 +1532,7 @@ export class LiveService {
     startsAt: Date;
     durationMin: number;
     status: LiveSessionStatus;
+    startedAt?: Date | null;
   }) {
     return {
       id: s.id,
@@ -1192,6 +1541,30 @@ export class LiveService {
       durationMin: s.durationMin,
       status: this.effectiveStatus(s),
       endsAt: new Date(this.closesAt(s)),
+      // Enough to draw both clocks without trusting the browser's own time:
+      // elapsed from `startedAt`, remaining to `endsAt`, and `serverNow` to
+      // correct for however far the device clock is off.
+      startedAt: s.startedAt ?? null,
+      serverNow: new Date(),
+    };
+  }
+
+  /** The authoritative clock of one session, as every channel reports it. */
+  private timingOf(s: {
+    id: string;
+    startsAt: Date;
+    durationMin: number;
+    status: LiveSessionStatus | string;
+    startedAt?: Date | null;
+  }): LiveTiming {
+    const status = this.effectiveStatus({ ...s, status: s.status as LiveSessionStatus });
+    return {
+      sessionId: s.id,
+      status,
+      startsAt: s.startsAt,
+      startedAt: s.startedAt ?? null,
+      endsAt: new Date(this.closesAt(s)),
+      serverNow: new Date(),
     };
   }
 
@@ -1204,6 +1577,7 @@ export class LiveService {
       startsAt: Date;
       durationMin: number;
       status: LiveSessionStatus;
+      startedAt?: Date | null;
       roomName: string | null;
       roomUrl: string | null;
     },

@@ -84,13 +84,16 @@ function liveWorld(
     },
     academyMembership: { findFirst: jest.fn(async () => null) },
     auditLog: { create: jest.fn(async () => ({})) },
+    // endSession: the row FOR UPDATE, inside an interactive transaction.
+    $queryRaw: jest.fn(async () => [{ ...session }]),
+    $transaction: jest.fn(async (fn: any) => fn(prisma)),
   };
   const jobs = {
     enqueue: over.enqueue ?? jest.fn(async () => ({ id: 'job1' })),
     hasActiveJobFor: jest.fn(async () => !!over.activeJob),
   };
   const daily = {
-    deleteRoom: jest.fn(async () => undefined),
+    closeRoom: jest.fn(async () => 'deleted'),
     recording: jest.fn(async () => null),
   };
   const realtime = { emitToLive: jest.fn(), emitToUser: jest.fn() };
@@ -699,9 +702,12 @@ describe('L9: a cancelled session is recorded, announced and closed', () => {
       session: { status: 'LIVE', startsAt: new Date(Date.now() - 10 * MIN) },
     });
     await service.remove(OWNER, 'ls1');
+    // Ended through the one end path first (room closed, attendance closed)…
+    expect(daily.closeRoom).toHaveBeenCalledWith('darsly-ls1');
     expect(writes[0]).toMatchObject({ status: 'ENDED', endedAt: expect.any(Date) });
     expect(prisma.liveAttendance.updateMany).toHaveBeenCalled();
-    expect(daily.deleteRoom).toHaveBeenCalledWith('darsly-ls1');
+    // …then stamped as cancelled.
+    expect(writes[1]).toMatchObject({ cancelledAt: expect.any(Date), deletedAt: expect.any(Date) });
     expect(realtime.emitToLive).toHaveBeenCalledWith('ls1', 'live:ended', {
       sessionId: 'ls1',
       cancelled: true,

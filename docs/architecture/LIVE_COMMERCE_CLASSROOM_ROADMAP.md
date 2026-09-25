@@ -107,6 +107,140 @@
 - **Daily transcript list:** الـ docs الرسمية بتقول إن items الـ `GET /transcript` فيها `roomId` مش `roomName`، وإن فيه فلتر `room_name` كـ query param. الكود بيفلتر على `item.roomName` (زي ما كان)، وده متأكد منه من سلوك الإنتاج في commits سبتمبر. **الـ order والـ page size مش موثّقين.** محتاج تأكيد على staging قبل ما نعتمد على الفلتر أو نغيّر المطابقة.
 - **ESLint** مش شغال محلياً (`@eslint/js` مش متسطّب). ده موجود من قبل، ومش من التغييرات دي.
 
+## Checkpoint A — production
+
+**IMPLEMENTED ✅** — `b109604`, Railway deployment `4fc07873` SUCCESS، الـ migration اتطبقت، والـ smoke test نضيف. L6 = known non-blocking limitation.
+
+## Checkpoint B — Extension + Attendance + Darsly-owned end — **IMPLEMENTED** (مستني مراجعة، ما اتعملهاش push)
+
+> **الـ revision الأخير (بيغلب على اللي تحت):** Darsly هي اللي بتنهي الفصل. `LiveSession` effective end هو سلطة البيزنس، والـ **end sweep** (`LiveEndWorker`، كل 15 ثانية) بينادي `endSession(SCHEDULED_END)`، وده بيمسح غرفة Daily ويطلّع كل اللي فيها. `exp` غرفة Daily بقى **safety TTL بس** = `startsAt + LIVE_MAX_DURATION_MIN + 30min`، بيتحط مرة واحدة ومش بيتغير خالص. المد بقى **تغيير في الـ DB بس**، من غير أي نداء للـ provider. الأجزاء اللي تحت اللي بتوصف "Daily الأول وبعدين الـ DB" في المد **اتلغت**.
+
+| Bug | الحالة | الملخص |
+|---|---|---|
+| L7 | IMPLEMENTED (**النسخة القديمة من الصف ده اتلغت، شوف الـ revision فوق**) | `POST /teacher/live/:id/extend {minutes, expectedEndsAt?}`: `SELECT … FOR UPDATE`، وبعدين validate، وبعدين **Daily `POST /rooms/:name {properties:{exp}}` الأول**، وبعدين DB، وبعدين commit، وبعدين `live:timing-updated`. حساب واحد للانتهاء: `roomExpiryMs` / `tokenExpiryMs` (end + 30 دقيقة). و `update()` بيرفض تغيير توقيت فصل شغال (`LIVE_TIMING_LOCKED`) |
+| L10 | IMPLEMENTED | الـ reward اتشال من `join()`. الـ heartbeat بقى `UPDATE … FROM "LiveSession"` واحد atomic، والـ credit بيقف عند الـ effective end. الـ reward بـ `recordOrThrow` + lookup بالـ idempotencyKey، وبيتعاد مع الـ heartbeat اللي بعده لو فشل |
+| Timing | IMPLEMENTED | `serverNow` و `startedAt` و `endsAt` في رد الـ join، وفي كل heartbeat (كل 30 ثانية)، وفي الـ socket. الواجهة بتحسب الـ offset وبتتجاهل أي رد أقدم. **مفيش** recording timer (ده Checkpoint C) |
+
+**قرارات (ADR-12 إلى ADR-14، APPROVED بالتنفيذ):**
+- **ADR-12 ترتيب المد:** الـ provider الأول وهو ماسك lock على الـ row، وبعدين الـ DB.
+  - الـ invariant: expiry الـ provider **عمره ما يبقى أقل** من اللي نهاية Darsly بتقتضيه.
+  - Daily فشل: rollback كامل، ومفيش أي حدث بيتبعت.
+  - Daily نجح والـ commit فشل: الغرفة بتعيش أطول (مش ضار)، والـ retry بيبعت نفس القيمة المطلقة.
+  - السياسة لو جه طلبين مع بعض:
+    - `expectedEndsAt` (والواجهة دايماً بتبعته): الطلب التاني ياخد `TIMING_CHANGED` + التوقيت الحالي.
+    - من غيره: الطلبين بيتجمعوا (+15 و+15 = +30)، ومفيش lost update.
+  - المد مسموح طول ما الفصل LIVE وغرفته لسه موجودة، **بما فيها دقايق الـ grace**.
+- **ADR-13 الـ heartbeat الذرّي:** الـ row lock + إعادة الـ evaluation في Postgres (READ COMMITTED EPQ) بيمنعوا العد مرتين في حالات: التابين، والـ duplicates، والطلبات المتزامنة، والـ replicas. **مفيش** تغيير في البروتوكول ولا في الـ schema. قاعدة الـ gap زي ما هي: ثواني صحيحة، و `1 ≤ gap ≤ PRESENCE_GRACE_SEC (90)`. **الجديد:**
+  - الـ credit بيقف عند الـ effective end.
+  - الـ heartbeat بعد النهاية ما بيفتحش الـ row تاني.
+  - أي row لسه مفتوح بيتقفل عند النهاية.
+- **ADR-14 الـ threshold:** `min(LIVE_ATTENDED_MIN_SECONDS = 600, LIVE_ATTENDED_MIN_SHARE = 0.5 × مدة الفصل)`. نفس فكرة النسبة اللي بتستخدمها الدروس المسجلة (90%)، بس بسقف مطلق.
+
+**Validation على Postgres حقيقي (16.14 مؤقت):** `live-checkpoint-b.integration.spec.ts` = 18 test ✅
+- **Mutation test:** رجّعنا الـ heartbeat القديم، ففشلت 5 tests من L10. وشلنا `FOR UPDATE`، ففشل testين من L7 (lost update: +15 بدل +30، والتابين الاتنين "نجحوا").
+
+**لسه مش متأكد منه (DAILY STAGING VALIDATION PENDING):**
+1. إن `POST /rooms/:name` بيقبل تغيير `exp` لغرفة فيها meeting شغال.
+2. إن `eject_at_room_exp` بيحترم الـ exp الجديد ومش القديم.
+3. إن الـ response فيه `config.exp`. الكود بيتحقق منه لو موجود، ولو مش موجود بيعدّي.
+
+الـ tokens بيتعملوا من غير `eject_at_token_exp` (متأكد من الـ docs ومن test)، فمش هيطلّعوا حد.
+
+**تبعات لازم تتعرف:**
+- **الجلسات الخارجية (Zoom/Meet) مبقاش بياخد عليها حد `LIVE_ATTENDED`**، لأن مفيش heartbeat نقيس بيه حضور حقيقي. ده مقصود في L10. الحل المستقبلي هو self check-in (Q13).
+- الـ ASSISTANT والمدرّس اللي مش OWNER يقدروا يمدّوا **جلساتهم هم بس**. ده نفس نطاق `start`/`end` الحالي (`assertOwned`).
+
+### Checkpoint B — final validation pass (2026-09-25)
+
+**Daily: لسه PENDING.**
+- الـ Railway فيه environment واحد بس (`production`)، ومفيش staging.
+- مفتاح Daily الوحيد هو مفتاح الإنتاج. استخدامه، حتى لغرفة disposable، **محتاج موافقة صريحة**، ومتعملش.
+- الـ probe جاهز ومتأكد إنه بيحمّل كل الـ modules الحقيقية، وبيرفض من غير مفتاح أو مع DB مش local. والـ participant الـ headless (Chrome 154 + daily-js 0.87.0) اتأكدنا إنه `supported`.
+- الـ probe بيعمل:
+  - **(A)** غرفة exp = now+90s و `eject_at_room_exp`، وبعدين participant حقيقي، وبعدين update exp لـ +180s وهو جوه، وبعدين يتأكد إنه لسه جوه بعد الـ exp الأصلي، وإنه اتطرد عند الجديد.
+  - **(B)** `LiveService.extend` الحقيقي، وبعدين GET `config.exp` = `roomExpiryMs(newEnd)`، وبعدين `exp` الـ token الجديد = `tokenExpiryMs(newEnd)`.
+  - وبيمسح الغرفتين في `finally`.
+
+**فرع فشل الـ provider (اتأكد منه):** integration test عبر `DailyService` الحقيقي (HTTP mocked):
+- 500 بيرجّع `LIVE_PROVIDER_ERROR`، والـ timeout بيرجّع `LIVE_PROVIDER_UNREACHABLE`.
+- الـ DB ما اتغيرتش، ومفيش emit.
+- وبعدين retry نجح. والتلات محاولات بعتوا نفس الـ `exp` المطلق.
+
+**قرار الـ transaction: KEEP CURRENT LOCKED TRANSACTION.**
+- **البديل** (CAS optimistic): اقرا D، ونادي Daily بـ D+m، وبعدين `UPDATE … WHERE durationMin = D`، ولو فيه تعارض أعد.
+  - ده بيحافظ على الـ lost-update وعلى `TIMING_CHANGED`.
+  - بس **Daily مفيهوش conditional update** (مفيش version ولا ETag على `POST /rooms/:name`).
+  - فكتابتين متزامنتين للـ provider ممكن يوصلوا بالعكس، والقيمة الأقدم الأصغر تكسب، فـ Daily يخلص **قبل** Darsly. ده بيكسر الـ invariant الأساسي.
+  - وقفل الثغرة دي محتاج loop تحقق وإصلاح بعد الكتابة، أو lease منفصل (column جديد، أو advisory lock بيمسك connection برضه). ده distributed-state complexity من غير مكسب حقيقي.
+- **تكلفة التصميم الحالي، متقاسة على Postgres:** وهو ماسك الـ lock لمدة 3 ثواني (provider بطيء):
+  - الـ heartbeat أخد **8ms**، والـ join أخد **16ms**، وقراية الجلسة أخدت **2ms**. **مفيش ولا واحد اتعطل.**
+  - الكتابة التانية على **نفس row الجلسة بس** هي اللي استنت (2.76s).
+  - ده مع connection واحد من الـ pool لمدة ≤ 10 ثواني (timeout الـ provider)، لأكشن نادر بيعمله المدرس.
+
+**Attendance timeline (10 heartbeats متزامنين، Postgres حقيقي):** على مدى 90 ثانية حقيقية وصل **24 heartbeat** (10 + 10 + 3 + 1، كلهم concurrent)، واتحسب **90 ثانية**. التابات الزيادة ما بتصنعش حضور. والوقت كله من ساعة السيرفر.
+
+**Threshold الـ LIVE_ATTENDED: PRODUCT-APPROVED FOR GAMIFICATION** (الـ PO، 2026-09-25). القاعدة `min(600s, 50% من الـ effective duration)` زي ما هي. **للـ gamification بس**، ومينفعش تتستخدم كتعريف لتسليم مالي، ولا تحرير أرباح، ولا refund، ولا شهادة، ولا حضور مدفوع. (النص اللي تحت اتكتب قبل الموافقة.)
+
+**Threshold (نص ما قبل الموافقة):**
+- القاعدة المنفّذة: `min(600s, 0.5 × مدة الفصل)`. يعني:
+  - 5 دقايق = 2.5
+  - 15 = 7.5
+  - 20 = 10
+  - 60 = 10
+  - 120 = 10
+- الـ PO فوّض اختيار قيمة معقولة وقابلة للضبط، **ومعتمدش القيمة دي صراحة**.
+- البدائل:
+  - **(1)** 10 دقايق ثابتة: بسيطة، بس مستحيلة على فصل أقصر.
+  - **(2)** 50% من الفصل: عادلة نسبياً، بس ساعة كاملة لفصل ساعتين.
+  - **(3)** `max(حد أدنى ثابت، نسبة)`: أصعب، ومستحيلة على فصل قصير لو الحد الأدنى كبير.
+  - **(4)** قاعدة configurable لكل أكاديمية أو من الأدمن.
+- **مهم:** `LIVE_ATTENDED` حدث gamification بس. **مش** دليل تسليم مالي، ولا شرط refund، ولا شرط تحرير أرباح، ولا شرط شهادة. المفاهيم دي هيبقى ليها تعريفاتها الخاصة في Checkpoints D/E.
+
+
+### Checkpoint B — الملاحظات على Daily الحقيقي، وقرار "Darsly تملك النهاية"
+
+**سلوك Daily اتقاس على الحساب الحقيقي (`darsly.daily.co`، بغرف disposable، ومن غير أي secrets في التقرير):**
+
+1. **تحديث `exp` لغرفة فيها ناس مش بيأجّل طردهم** (probe 1، 2026-09-25):
+   - كان `exp` الأصلي 12:03:31Z، واتحدّث لـ 12:05:01Z والـ participant جوه. `POST /rooms/:name` رجّع 200، والـ GET بعده رجّع القيمة الجديدة.
+   - **ومع ذلك الـ participant اتطرد عند 12:03:31.233Z بالظبط** (`error: ejected`).
+   - الاستنتاج: `eject_at_room_exp` بيتثبت لكل participant لحظة ما يدخل. **Darsly مينفعش تستخدم `exp` المتغير كآلية للمد.**
+2. **`DELETE /rooms/:name` بيطلّع اللي متصلين فعلاً** (probe 2، مرتين):
+   - الـ participant اتشال بعد **2.5 ثانية** في المرة الأولى، و**1.1 ثانية** في التانية، من رد الـ DELETE (`error: no-room`, "Meeting has ended").
+   - participant جديد بـ token متعمل قبل المسح اترفض ("Meeting has ended").
+   - الـ GET بيرجّع 404.
+   - عمل token لغرفة ممسوحة بيرجّع 200 (مش ضار، لأن الدخول نفسه بيترفض).
+3. الـ presence API بيتأخر (مش مؤشر موثوق).
+
+**ADR-15 (APPROVED بالتنفيذ): Darsly تملك نهاية الفصل.**
+- **مسار واحد للإنهاء:** `LiveService.endSession(id, MANUAL | SCHEDULED_END | CANCELLED)` بيستخدمه زرار المدرس، والـ sweep، والإلغاء. وتحت `SELECT … FOR UPDATE`:
+  - لو ENDED بالفعل، مفيش حاجة تتعمل (idempotent).
+  - لو SCHEDULED_END، بيقرا **النهاية الحالية** ولو لسه موصلتش بيرجّع `not-due`. ده بيحمي من أي trigger قديم، لأن الـ sweep مفيهوش timer لكل فصل أصلاً.
+  - بيعمل `closeRoom` (DELETE، والـ 404 بتتحسب "اتقفلت"، وأي فشل تاني بيعمل throw) **قبل** أي كتابة. فشل الـ provider = rollback، والفصل بيفضل LIVE، والـ sweep اللي بعده بيعيد المحاولة.
+  - بعدين ENDED و `endedAt = min(now, scheduled end)`، وبيقفل الحضور المفتوح عند `endedAt`.
+- **الـ sweep:** `LiveEndWorker` كل 15 ثانية، بـ batch من 25، عن طريق `overdueLiveSessionIds` (index جديد `LiveSession(status, startsAt)`، و EXPLAIN على 5,137 row LIVE = Index Scan، 0.13ms). بيعيش بعد أي restart، لأن الفصل المتأخر بيتلاقي من الداتا بتاعته. وآمن على أكتر من replica (row lock). و `LIVE_END_WORKER_ENABLED=false` بيقفله على replica معينة.
+- **الـ TTL:** `roomSafetyExpiryMs(startsAt) = startsAt + (LIVE_MAX_DURATION_MIN + 30) min`، وده **أكبر من أي نهاية ممكنة** لأن `durationMin ≤ 720` في كل مكان بيتحط فيه.
+- **المد:** DB بس، تحت الـ lock. بيترفض بمجرد ما النهاية الحالية توصل (مفيش resurrection).
+  - **ده بيحل سؤال "مسك الـ transaction أثناء نداء Daily"** لأن المد مبقاش فيه نداء خارجي.
+  - الـ lock بيتمسك بس أثناء `closeRoom` في الإنهاء، وده أكشن نادر.
+- **الإلغاء (Checkpoint A):** الفصل الـ LIVE بيعدّي على `endSession(CANCELLED)` الأول. لو الـ provider فشل، الإلغاء كله بيفشل ويتعاد، ومش بيسيب غرفة شغالة لحد الـ TTL الطويل. ده تعارض مباشر اتصلّح بسبب B.
+- **ADR-12 (المد provider-first) اتلغى، و ADR-15 حلّ محله.**
+
+**Validation على Postgres حقيقي:** `live-checkpoint-b.integration.spec.ts` = 25 test (A + B + lifecycle = 220 test في `src/live`).
+- المد مع الإنهاء القديم متزامنين: المد كسب، والفصل فضل LIVE.
+- الإنهاء كسب الأول: المد اترفض، ومفيش resurrection.
+- زرار المدرس والـ sweep مع بعض: إنهاء واحد، `closeRoom` واحد، و `live:ended` واحد.
+- المد بعد الـ 30 دقيقة القديمة (+60): الإنهاء القديم والقديم+30 مبيعملوش حاجة، وبينتهي عند النهاية الجديدة.
+- فشل الـ provider (500 وبعدين timeout) عبر `DailyService` الحقيقي: الفصل فضل LIVE، وبعدين اتقفل.
+- recovery بعد 20 دقيقة تأخير: replicaين متزامنين قفلوه مرة واحدة، عند نهايته الحقيقية.
+- **Mutation:** شيل التحقق من النهاية الحالية خلّى testين يفشلوا، وشيل `FOR UPDATE` من الإنهاء خلّى 3 tests يفشلوا.
+
+**Migration `20261002100000_live_end_sweep_index`:** index واحد بس (`LiveSession_status_startsAt_idx`)، additive. اتطبقت على DB فيها داتا (fingerprint متطابق، ومفيش drift، وأخدت ~2.5 ثانية بما فيها startup الـ CLI). الـ rollback: نرجّع الكود ونسيب الـ index، ولو حد مسحه مفيش داتا بتضيع.
+
+**تبعات لازم تتعرف عند أول deploy:**
+- **(1)** أي جلسات قديمة فضلت `LIVE` للأبد (محدش نهاها قبل الـ sweep) **هتتقفل تلقائياً**: 25 كل 15 ثانية، `ENDED` عند نهايتها الحقيقية، والحضور المفتوح يتقفل عند النهاية دي، و DELETE لغرف قديمة (404 بتتحسب "اتقفلت")، من غير أي events.
+- **(2)** الفصول اللي شغالة وقت الـ deploy غرفها اتعملت بالطريقة القديمة (`exp` = end + 30 دقيقة). المد فيها بعد 30 دقيقة لسه هيطرد اللي كانوا جوه. ده بيأثر على الفصول اللي كانت شغالة ساعتها بس.
+
 ---
 
 # Deliverable 1 — Current System Audit

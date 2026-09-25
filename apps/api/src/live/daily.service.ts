@@ -1,3 +1,4 @@
+import { tokenExpiryMs } from './live-timing';
 import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 
 /**
@@ -15,10 +16,6 @@ import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@
  */
 
 const API = 'https://api.daily.co/v1';
-/** A class is not a broadcast station; rooms expire rather than linger open. */
-const ROOM_GRACE_MIN = 30;
-/** Long enough to sit through the class, short enough to be worth stealing. */
-const TOKEN_GRACE_MIN = 30;
 /** Account settings change when a human changes them — not by the minute. */
 const DOMAIN_CACHE_MIN = 10;
 /**
@@ -38,6 +35,11 @@ type TranscriptListItem = {
   status?: string;
   roomName?: string;
 };
+
+// The clocks (session end, room safety TTL, token expiry) live in
+// live-timing.ts; re-exported here for callers that already import them from
+// the provider module.
+export { roomSafetyExpiryMs, tokenExpiryMs } from './live-timing';
 
 export interface DailyRoom {
   name: string;
@@ -142,7 +144,11 @@ export class DailyService implements OnModuleInit {
     return !!this.apiKey;
   }
 
-  private async call<T>(path: string, init: RequestInit): Promise<T> {
+  private async call<T>(
+    path: string,
+    init: RequestInit,
+    opts: { notFoundIsNull?: boolean } = {},
+  ): Promise<T> {
     const key = this.apiKey;
     if (!key) {
       // Not an outage — a deployment that was never given a key. Said plainly
@@ -172,6 +178,7 @@ export class DailyService implements OnModuleInit {
         code: 'LIVE_PROVIDER_UNREACHABLE',
       });
     }
+    if (res.status === 404 && opts.notFoundIsNull) return null as T;
     if (!res.ok) {
       // Logged in full for us; never returned, because the body is Daily's
       // account-level detail and not something a student should read.
@@ -194,13 +201,16 @@ export class DailyService implements OnModuleInit {
    * Private is the point: the URL alone opens nothing, so a link forwarded to a
    * friend is a link to a locked door. Entry is the token, which this service
    * only ever mints for someone the caller has already authorised.
+   *
+   * `expiresAtMs` is the provider's safety TTL (roomSafetyExpiryMs), not the
+   * class's end: Darsly ends the class by closing the room (closeRoom).
    */
-  async createRoom(name: string, endsAtMs: number): Promise<DailyRoom> {
+  async createRoom(name: string, expiresAtMs: number): Promise<DailyRoom> {
     // The class is about to start: make sure the account can listen to it.
     // Never fatal — a room without transcription is still a room, and the
     // summary later says plainly why it has nothing to work from.
     await this.ensureTranscriptionProvider();
-    const exp = Math.floor(endsAtMs / 1000) + ROOM_GRACE_MIN * 60;
+    const exp = Math.floor(expiresAtMs / 1000);
     const room = await this.call<{ name: string; url: string }>('/rooms', {
       method: 'POST',
       body: JSON.stringify({
@@ -278,7 +288,7 @@ export class DailyService implements OnModuleInit {
     isOwner: boolean;
     endsAtMs: number;
   }): Promise<string> {
-    const exp = Math.floor(input.endsAtMs / 1000) + TOKEN_GRACE_MIN * 60;
+    const exp = Math.floor(tokenExpiryMs(input.endsAtMs) / 1000);
     const res = await this.call<{ token: string }>('/meeting-tokens', {
       method: 'POST',
       body: JSON.stringify({
@@ -546,17 +556,25 @@ export class DailyService implements OnModuleInit {
   }
 
   /**
-   * Best-effort teardown when a session ends.
+   * End the meeting in a room by deleting the room.
    *
-   * Deliberately swallows its failure: the session is over in Darsly's records
-   * either way, and the room carries its own `exp` so a delete we never managed
-   * to make is a room that closes itself within the hour.
+   * This is how a Darsly class ends — by the teacher, the end sweep, or a
+   * cancellation. Observed against the real account (2026-09-25, twice):
+   * everyone connected is removed within ~1–2.5s of the DELETE answering
+   * (`error: no-room`, "Meeting has ended"), a token minted earlier can no
+   * longer join, and the room reads 404 afterwards.
+   *
+   * Not best-effort any more: the room's own expiry is now a long safety TTL,
+   * so a failed delete would leave a class running for hours. A failure
+   * throws, and the caller keeps the session LIVE so it is retried. A room
+   * that is already gone (404) is what we wanted, and counts as closed.
    */
-  async deleteRoom(name: string): Promise<void> {
-    try {
-      await this.call(`/rooms/${encodeURIComponent(name)}`, { method: 'DELETE' });
-    } catch {
-      this.logger.warn(`Could not delete Daily room ${name}; it will expire on its own`);
-    }
+  async closeRoom(name: string): Promise<'deleted' | 'already-gone'> {
+    const res = await this.call<{ deleted?: boolean } | null>(
+      `/rooms/${encodeURIComponent(name)}`,
+      { method: 'DELETE' },
+      { notFoundIsNull: true },
+    );
+    return res === null ? 'already-gone' : 'deleted';
   }
 }

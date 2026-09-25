@@ -2393,6 +2393,9 @@ model LiveSession {
   @@index([teacherUserId, startsAt])
   @@index([groupId, startsAt])
   @@index([tenantId, status])
+  /// The end sweep: LIVE classes that have started, oldest first
+  /// (LiveService.overdueLiveSessionIds). Bounded to what is running now.
+  @@index([status, startsAt])
 }
 
 /// One shape for the three things that happen to a session after it ends.

@@ -59,8 +59,16 @@ function shape(p: DailyParticipant): Participant {
   };
 }
 
-export function useDailyMeeting(liveSessionId: string) {
+export function useDailyMeeting(
+  liveSessionId: string,
+  opts: {
+    /** Each heartbeat reply carries the server's clock for this session. */
+    onTiming?: (timing: { startedAt: string | null; endsAt: string; serverNow: string }) => void;
+  } = {},
+) {
   const callRef = useRef<DailyCall | null>(null);
+  const onTimingRef = useRef(opts.onTiming);
+  onTimingRef.current = opts.onTiming;
   const [call, setCall] = useState<DailyCall | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [joined, setJoined] = useState(false);
@@ -374,7 +382,14 @@ export function useDailyMeeting(liveSessionId: string) {
   // own "I left" cannot be.
   useEffect(() => {
     if (!joined) return;
-    const beat = () => void api.post(`/live/${liveSessionId}/heartbeat`).catch(() => undefined);
+    // The reply re-anchors the classroom clock — every 30s, at no extra cost.
+    const beat = () =>
+      void api
+        .post(`/live/${liveSessionId}/heartbeat`)
+        .then(({ data }) => {
+          if (data?.timing) onTimingRef.current?.(data.timing);
+        })
+        .catch(() => undefined);
     beat();
     const h = setInterval(beat, HEARTBEAT_MS);
     return () => clearInterval(h);

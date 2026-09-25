@@ -10,7 +10,12 @@ import { useDailyMeeting, type Participant } from '../../lib/useDailyMeeting';
 import { useLiveChat } from '../../lib/useLiveChat';
 import { useAuthStore } from '../../stores/auth';
 import { getSocket } from '../../lib/socket';
+import { resolveError } from '../../lib/errorMessage';
+import { formatClock, useSessionClock, type SessionTiming } from '../../lib/useSessionClock';
 import { Spinner } from '../../components/ui';
+
+/** What one press of the teacher's button adds. */
+const EXTEND_MINUTES = 15;
 
 /**
  * The Darsly classroom.
@@ -158,7 +163,10 @@ export default function MeetingPage() {
   const [showPeople, setShowPeople] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [draft, setDraft] = useState('');
-  const meeting = useDailyMeeting(id);
+  const clock = useSessionClock();
+  const meeting = useDailyMeeting(id, { onTiming: clock.apply });
+  /** A short line under the clock after an extension attempt. */
+  const [extendNote, setExtendNote] = useState<string | null>(null);
   const chat = useLiveChat(id, showChat);
   const feedRef = useRef<HTMLDivElement>(null);
 
@@ -190,6 +198,62 @@ export default function MeetingPage() {
       return (await api.post(`/teacher/live/${id}/recording/stop`)).data;
     },
   });
+
+  /**
+   * "+15 minutes", done by the server.
+   *
+   * The page sends the end it is showing; the server adds the minutes, moves
+   * the room at the provider, and only then answers. Nothing on screen moves
+   * until it has: no optimistic jump forward that a failure would have to
+   * take back. If another tab or device extended first, the answer is the
+   * current timing rather than a second extension.
+   */
+  const extend = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post(`/teacher/live/${id}/extend`, {
+          minutes: EXTEND_MINUTES,
+          ...(clock.ready ? { expectedEndsAt: new Date(clock.endsAt).toISOString() } : {}),
+        })
+      ).data as SessionTiming,
+    onSuccess: (timing) => {
+      clock.apply(timing);
+      setExtendNote(t('meeting.extended'));
+    },
+    onError: (e: any) => {
+      const { code, message } = resolveError(e);
+      if (code === 'TIMING_CHANGED' && e?.response?.data?.timing) {
+        clock.apply(e.response.data.timing);
+        setExtendNote(t('meeting.extendAlready'));
+      } else {
+        setExtendNote(message || t('meeting.extendFailed'));
+      }
+    },
+  });
+  useEffect(() => {
+    if (!extendNote) return;
+    const h = setTimeout(() => setExtendNote(null), 5000);
+    return () => clearTimeout(h);
+  }, [extendNote]);
+
+  // A refresh starts from the join answer, which carries the current timing —
+  // an extension made while this page was closed is already in it.
+  useEffect(() => {
+    if (entry.data?.session) clock.apply(entry.data.session);
+  }, [entry.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Already in the room when the teacher extends: the new end arrives here.
+  useEffect(() => {
+    const sock = getSocket();
+    if (!sock) return;
+    const onTiming = (p: SessionTiming & { sessionId: string }) => {
+      if (p?.sessionId === id) clock.apply(p);
+    };
+    sock.on('live:timing-updated', onTiming);
+    return () => {
+      sock.off('live:timing-updated', onTiming);
+    };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const end = useMutation({
     mutationFn: async () => (await api.post(`/teacher/live/${id}/end`)).data,
@@ -386,6 +450,32 @@ export default function MeetingPage() {
           <span className="text-[11px] font-extrabold text-error">{t('meeting.live')}</span>
         </span>
         <h1 className="min-w-0 flex-1 truncate font-heading text-sm font-bold">{session.title}</h1>
+        {/* The server's clock: how long the class has run, and how long is left. */}
+        {clock.ready && (
+          <span className="flex items-center gap-2 rounded-full bg-surface-container px-2.5 py-1 text-[11px] font-bold tabular-nums">
+            {clock.elapsedMs != null && (
+              <span title={t('meeting.elapsed')}>{formatClock(clock.elapsedMs)}</span>
+            )}
+            <span
+              title={t('meeting.remaining')}
+              className={clock.remainingMs <= 5 * 60_000 ? 'text-error' : 'text-outline'}
+            >
+              {clock.remainingMs > 0
+                ? `${t('meeting.remaining')} ${formatClock(clock.remainingMs)}`
+                : t('meeting.overtime')}
+            </span>
+          </span>
+        )}
+        {amOwner && (
+          <button
+            className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-extrabold text-primary disabled:opacity-60"
+            disabled={extend.isPending}
+            onClick={() => extend.mutate()}
+          >
+            <span className="material-symbols-outlined text-[16px]">more_time</span>
+            {extend.isPending ? t('meeting.extending') : t('meeting.extend')}
+          </button>
+        )}
         {/* Visible to everyone, not only the teacher who started it: being
             recorded is something a class is entitled to know at a glance. */}
         {meeting.recording && (
@@ -448,6 +538,19 @@ export default function MeetingPage() {
           </div>
         )}
       </main>
+
+      <AnimatePresence>
+        {extendNote && (
+          <m.p
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="mx-3 mb-1 rounded-xl bg-on-surface/85 px-3 py-2 text-center text-xs font-bold text-surface"
+          >
+            {extendNote}
+          </m.p>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {meeting.notice && (

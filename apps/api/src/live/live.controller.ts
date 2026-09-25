@@ -14,15 +14,13 @@ import {
 } from 'class-validator';
 import { IsOptionalId, LIMITS } from '../common/validation';
 
-/** A live session is a class, not a broadcast station: 12 hours is the ceiling. */
-const MAX_DURATION_MIN = 720;
 const MAX_CAPACITY = 100_000;
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { LiveScope, LiveService } from './live.service';
+import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
 
 class CreateLiveDto {
   @IsString() @MinLength(2) @MaxLength(160) title: string;
@@ -45,6 +43,17 @@ class RecordingStartedDto {
 
 class SummaryVisibilityDto {
   @IsBoolean() visible: boolean;
+}
+
+class ExtendLiveDto {
+  /** Added to the class's current end, by the server. */
+  @IsInt() @Min(1) @Max(MAX_DURATION_MIN) minutes: number;
+  /**
+   * The end the page was showing when the teacher pressed the button. If the
+   * class was extended since (another tab, another device), the request is
+   * refused with the current timing instead of adding a second extension.
+   */
+  @IsOptional() @IsISO8601() expectedEndsAt?: string;
 }
 
 class CancelLiveDto {
@@ -166,6 +175,26 @@ export class LiveController {
     @CurrentUser() u: JwtPayload,
   ) {
     return this.live.teacherJoin(scopeOf(ctx), id, u.sub);
+  }
+
+  /**
+   * Make a running class longer. The server works out the new end from the
+   * class as it is now, moves the room's expiry at the provider first, and
+   * only then records it — see LiveService.extend.
+   */
+  @Post('teacher/live/:id/extend')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Extend a running class (room expiry moves with it)' })
+  extend(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @CurrentUser() u: JwtPayload,
+    @Body() dto: ExtendLiveDto,
+  ) {
+    return this.live.extend(scopeOf(ctx), id, dto.minutes, {
+      expectedEndsAt: dto.expectedEndsAt,
+      actorUserId: u.sub,
+    });
   }
 
   @Post('teacher/live/:id/end')

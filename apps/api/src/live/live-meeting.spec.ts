@@ -36,6 +36,8 @@ function build(world: {
   booked?: boolean;
   otherLiveCount?: number;
   attendance?: any;
+  /** What the atomic heartbeat UPDATE … RETURNING hands back. */
+  heartbeatRows?: any[];
   dailyFails?: boolean;
 }) {
   const s = world.session && {
@@ -102,6 +104,8 @@ function build(world: {
     },
     user: { findUnique: jest.fn(async () => ({ fullName: 'أ. أحمد' })) },
     teacherProfile: { findUnique: jest.fn(async () => ({ userId: 'tu_1' })) },
+    gamificationEvent: { findUnique: jest.fn(async () => null) },
+    $queryRaw: jest.fn(async () => world.heartbeatRows ?? []),
     $transaction: jest.fn(async (ops: any) =>
       Array.isArray(ops) ? Promise.all(ops) : ops(prisma),
     ),
@@ -115,11 +119,14 @@ function build(world: {
         : { name, url: `https://darsly.daily.co/${name}` },
     ),
     meetingToken: jest.fn(async () => 'tok_abc'),
-    deleteRoom: jest.fn(async () => undefined),
+    closeRoom: jest.fn(async () => 'deleted'),
   } as unknown as DailyService;
 
   const notifications = { create: jest.fn(async () => ({})) } as any;
-  const gamification = { record: jest.fn(async () => ({})) } as any;
+  const gamification = {
+    record: jest.fn(async () => ({})),
+    recordOrThrow: jest.fn(async () => ({ awarded: true })),
+  } as any;
   const realtime = { emitToLive: jest.fn() } as any;
   const jobs = { enqueue: jest.fn(async () => ({ id: 'job_1' })) } as any;
   const service = new LiveService(
@@ -131,7 +138,18 @@ function build(world: {
     jobs,
     {} as any,
   );
-  return { service, prisma, daily, notifications, realtime, jobs, session: s, updated, upserted };
+  return {
+    service,
+    prisma,
+    daily,
+    notifications,
+    realtime,
+    jobs,
+    gamification,
+    session: s,
+    updated,
+    upserted,
+  };
 }
 
 describe('a teacher opens the classroom', () => {
@@ -601,36 +619,41 @@ describe('attendance is what the room saw, not what the browser claimed', () => 
     expect(upserted[1].update).toMatchObject({ leftAt: null });
   });
 
-  it('credits a heartbeat that arrived on time', async () => {
-    const { service, updated } = build({
-      attendance: { id: 'a1', lastSeenAt: new Date(Date.now() - 30_000) },
-    });
-    await service.heartbeat('u', 'ls1');
-    expect(updated[0].durationSeconds).toEqual({ increment: 30 });
+  // The gap arithmetic (on-time credit, the closed-laptop gap, the effective
+  // end, two tabs, concurrent requests) is one SQL statement now, and is
+  // proven where SQL runs: live-checkpoint-b.integration.spec.ts, against
+  // Postgres. PRESENCE_GRACE_SEC is still the rule it applies.
+  const hbRow = (over: Record<string, unknown> = {}) => ({
+    role: 'STUDENT',
+    durationSeconds: 30,
+    tenantId: 't1',
+    title: 'الجبر',
+    startsAt: new Date(Date.now() - 10 * MIN),
+    durationMin: 60,
+    startedAt: new Date(Date.now() - 10 * MIN),
+    status: 'LIVE',
+    ...over,
   });
 
-  it('does not credit the hour a closed laptop was away', async () => {
-    // Duration means time in the room. A gap longer than the grace period is
-    // absence, and counting it would turn one lesson into a whole evening.
-    const { service, updated } = build({
-      attendance: {
-        id: 'a1',
-        lastSeenAt: new Date(Date.now() - (PRESENCE_GRACE_SEC + 600) * 1000),
-      },
-    });
-    await service.heartbeat('u', 'ls1');
-    expect(updated[0].durationSeconds).toEqual({ increment: 0 });
+  it('answers a heartbeat with the authoritative clock', async () => {
+    const { service } = build({ heartbeatRows: [hbRow()] });
+    const res: any = await service.heartbeat('u', 'ls1');
+    expect(res.ok).toBe(true);
+    expect(res.timing).toMatchObject({ sessionId: 'ls1', status: 'LIVE' });
+    expect(res.timing.endsAt.getTime() - res.timing.startsAt.getTime()).toBe(60 * MIN);
+    expect(res.timing.serverNow).toBeInstanceOf(Date);
+    expect(PRESENCE_GRACE_SEC).toBeGreaterThan(30); // comfortably above the 30s beat
   });
 
   it('ignores a heartbeat from someone who never joined', async () => {
-    const { service } = build({ attendance: null });
+    const { service } = build({ heartbeatRows: [] });
     expect(await service.heartbeat('u', 'ls1')).toEqual({ ok: false });
   });
 });
 
 describe('ending the class', () => {
   it('closes the room and checks everyone still inside out', async () => {
-    const { service, daily, updated } = build({
+    const { service, daily, updated, prisma } = build({
       session: {
         id: 'ls1',
         tenantId: 't1',
@@ -641,9 +664,23 @@ describe('ending the class', () => {
         roomUrl: 'https://x/y',
       },
     });
+    // endSession reads the row FOR UPDATE inside its transaction.
+    (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 'ls1',
+        tenantId: 't1',
+        academyId: 't1',
+        startsAt: new Date(Date.now() - 10 * MIN),
+        durationMin: 60,
+        status: 'LIVE',
+        roomName: 'darsly-ls1',
+        deletedAt: null,
+        endedAt: null,
+      },
+    ]);
     const res = await service.end(T1, 'ls1');
     expect(res.status).toBe('ENDED');
-    expect(daily.deleteRoom).toHaveBeenCalledWith('darsly-ls1');
+    expect(daily.closeRoom).toHaveBeenCalledWith('darsly-ls1');
     expect(updated.some((u) => u.leftAt instanceof Date)).toBe(true);
   });
 

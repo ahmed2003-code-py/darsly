@@ -178,6 +178,15 @@ export const RECORDER_PAGE = `<!doctype html>
     // A silent source keeps the audio track alive before anyone speaks.
     const osc = ac.createConstantSource(); osc.offset.value = 0; osc.connect(dest); osc.start();
     pc = new RTCPeerConnection({ iceServers, bundlePolicy: 'max-bundle' });
+    // The recorder's own path to the SFU dying is not a reason to record a
+    // black screen: stop this attempt; the worker takes over on a new
+    // connection, in a new piece.
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') {
+        window.__lost && window.__lost('sfu-connection-failed');
+        finish('sfu-connection-failed');
+      }
+    };
     pc.ontrack = (e) => {
       const mid = e.transceiver && e.transceiver.mid;
       if (!mid) return;

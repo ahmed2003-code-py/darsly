@@ -455,6 +455,29 @@ describe('B.6 Cloudflare classroom on Postgres: raise hand', () => {
     expect(await rtc.hand(w.s[0].id, w.ls.id, 'raise')).toEqual({ state: 'HAND_RAISED' });
   });
 
+  it('a push racing a revoke is refused even before the revoke has torn anything down', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const { rtc } = build();
+    await rtc.hand(w.s[0].id, w.ls.id, 'raise');
+    await rtc.hand(w.teacher.id, w.ls.id, 'approve', w.s[0].id);
+    const send = await rtc.openConnection(w.s[0].id, w.ls.id, 'SEND');
+    // The revoke's state change has landed; its SFU teardown has not run yet.
+    await prisma.liveHand.update({
+      where: { sessionId_userId: { sessionId: w.ls.id, userId: w.s[0].id } },
+      data: { state: 'RELEASED' },
+    });
+    expect(
+      await code(
+        rtc.publish(w.s[0].id, w.ls.id, send.connectionId, {
+          offer: OFFER,
+          tracks: [{ mid: '0', kind: 'AUDIO' }],
+        }),
+      ),
+    ).toBe('NOT_ALLOWED_TO_SPEAK');
+    expect(await prisma.liveRtcTrack.count({ where: { connectionId: send.connectionId } })).toBe(0);
+  });
+
   it('refuses steps that do not follow the drawn edges', async () => {
     if (!guard()) return;
     const w = await world();
@@ -588,6 +611,14 @@ describe('B.6 Cloudflare classroom on Postgres: the end', () => {
     expect(
       await prisma.liveRtcConnection.count({ where: { sessionId: w.ls.id, closedAt: null } }),
     ).toBe(0);
+    // What the run used is kept on the class, once.
+    const usage = (await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } }))
+      .usage as Record<string, any>;
+    expect(usage[row.roomName!]).toMatchObject({
+      provider: 'CLOUDFLARE',
+      connections: 2,
+      peakReceivers: 1,
+    });
     // Ending again changes nothing (idempotent), and never reopens.
     expect((await svc.endSession(w.ls.id, 'MANUAL')).outcome).toBe('already-ended');
   });

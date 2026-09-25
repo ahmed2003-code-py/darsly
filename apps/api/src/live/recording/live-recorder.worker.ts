@@ -295,6 +295,10 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
       this.uploadSegment(job, dir, closed);
     });
     await page.exposeFunction('__state', () => this.pageState(job));
+    await page.exposeFunction('__lost', (why: string) => {
+      this.logger.warn(`live.rec.page-lost recording=${job.rec.id} reason=${why}`);
+      job.lost = true;
+    });
     await page.exposeFunction('__cf', (op: string, args: any) => this.pageCf(job, op, args));
     await page.setContent(RECORDER_PAGE);
     return page;

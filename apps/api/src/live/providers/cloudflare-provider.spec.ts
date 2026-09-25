@@ -328,3 +328,31 @@ describe('raise hand state machine', () => {
     }
   });
 });
+
+describe('usage capture (cost tracking)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { usageOf, EST_GB_PER_RECEIVER_HOUR } = require('./live-usage');
+  const T = Date.UTC(2026, 8, 25, 10, 0, 0);
+  const at = (min: number) => new Date(T + min * 60_000);
+
+  it('adds minutes by role, clips at the end, and finds the peak', () => {
+    const u = usageOf(
+      [
+        { role: 'TEACHER', purpose: 'SEND', createdAt: at(0), closedAt: at(60) },
+        { role: 'STUDENT', purpose: 'RECEIVE', createdAt: at(0), closedAt: at(60) },
+        { role: 'STUDENT', purpose: 'RECEIVE', createdAt: at(10), closedAt: at(30) },
+        // Still open when the class ended: counted to the end, not beyond.
+        { role: 'STUDENT', purpose: 'RECEIVE', createdAt: at(20), closedAt: null },
+        { role: 'RECORDER', purpose: 'RECEIVE', createdAt: at(5), closedAt: at(95) },
+      ],
+      { endedAt: at(60), recordedSec: 55 * 60, now: at(61) },
+    );
+    expect(u.sendMinutes).toEqual({ teacher: 60, student: 0 });
+    expect(u.receiveMinutes).toEqual({ teacher: 0, student: 60 + 20 + 40, recorder: 55 });
+    expect(u.peakReceivers).toBe(4); // 20–30: three students and the recorder
+    expect(u.recordedMinutes).toBe(55);
+    const hours = (120 + 55) / 60;
+    expect(u.estimate.egressGb).toBeCloseTo(hours * EST_GB_PER_RECEIVER_HOUR, 2);
+    expect(u.estimate.basis).toMatch(/^ESTIMATED/);
+  });
+});

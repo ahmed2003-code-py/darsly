@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CloudflareRealtimeClient } from './cloudflare-realtime.client';
+import { usageOf } from './live-usage';
 import {
   LiveProvider,
   LiveRoom,
@@ -80,7 +81,51 @@ export class CloudflareLiveProvider implements LiveProvider {
     this.logger.log(
       `live.cleanup liveSession=${input.sessionId} connections=${open.length} closed=${done.closed} pending=${done.pending}`,
     );
+    if (done.pending === 0)
+      await this.captureUsage(input).catch((e) => {
+        this.logger.warn(
+          `live.usage capture failed liveSession=${input.sessionId}: ${(e as Error).message}`,
+        );
+      });
     return done.pending === 0;
+  }
+
+  /**
+   * The run's usage, kept on the class once its connections are all closed
+   * (see live-usage.ts). Keyed by run, so a class reopened inside its window
+   * keeps each run's figures; written once per run.
+   */
+  async captureUsage(input: { sessionId: string; roomName: string }): Promise<void> {
+    const s = await this.prisma.liveSession.findUnique({
+      where: { id: input.sessionId },
+      select: { usage: true, endedAt: true, status: true },
+    });
+    if (!s || s.status !== 'ENDED') return;
+    const prior = (s.usage ?? {}) as Record<string, unknown>;
+    if (prior[input.roomName]) return;
+    const [conns, rec] = await Promise.all([
+      this.prisma.liveRtcConnection.findMany({
+        where: { sessionId: input.sessionId, roomName: input.roomName },
+        select: { role: true, purpose: true, createdAt: true, closedAt: true },
+      }),
+      this.prisma.liveRecording.aggregate({
+        where: { sessionId: input.sessionId, roomName: input.roomName },
+        _sum: { durationSec: true },
+      }),
+    ]);
+    const usage = usageOf(conns, {
+      endedAt: s.endedAt ?? new Date(),
+      recordedSec: rec._sum.durationSec ?? 0,
+    });
+    await this.prisma.liveSession.update({
+      where: { id: input.sessionId },
+      data: { usage: { ...prior, [input.roomName]: usage } as any },
+    });
+    this.logger.log(
+      `live.usage liveSession=${input.sessionId} connections=${usage.connections} ` +
+        `receiveMin=${usage.receiveMinutes.student + usage.receiveMinutes.teacher} peak=${usage.peakReceivers} ` +
+        `recordedMin=${usage.recordedMinutes} estEgressGb=${usage.estimate.egressGb}`,
+    );
   }
 
   /**

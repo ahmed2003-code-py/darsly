@@ -2344,6 +2344,10 @@ model LiveSession {
   /// the configured provider moves new classes only. Rows from before the
   /// column existed ran on Daily, and say so.
   provider      LiveProviderKind  @default(DAILY)
+  /// What a Darsly-hosted (Cloudflare) class used, per run: connection minutes,
+  /// peak receivers, recorded minutes and an egress *estimate* (see
+  /// live-usage.ts). Captured once teardown completes; cost tracking, not a bill.
+  usage         Json?
   /// The Daily room backing this session. Created when the teacher starts it,
   /// not when they schedule it — a room booked weeks ahead is a room sitting
   /// open weeks ahead, and the session may never run at all.

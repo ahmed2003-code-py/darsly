@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
-import { Spinner } from '../../components/ui';
+import { ErrorNote, Spinner } from '../../components/ui';
 
 /**
  * What the lesson came to, after it happened.
@@ -231,6 +231,10 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
         ) : (
           <p className="py-4 text-sm text-outline">{t('summary.notShared')}</p>
         ))}
+
+      {/* Why a press did nothing — AI switched off, the month's budget spent —
+          instead of a button that silently stays where it was. */}
+      {isTeacher && <ErrorNote error={generate.error} />}
 
       {status === 'READY' && data && (
         <div dir="auto">

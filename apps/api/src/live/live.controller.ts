@@ -47,6 +47,11 @@ class SummaryVisibilityDto {
   @IsBoolean() visible: boolean;
 }
 
+class CancelLiveDto {
+  /** Shown to the students who booked, and kept with the cancellation. */
+  @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
 class ChatMessageDto {
   @IsString() @MinLength(1) @MaxLength(2000) body: string;
 }
@@ -107,9 +112,16 @@ export class LiveController {
 
   @Delete('teacher/live/:id')
   @AcademyStaff('live.manage')
-  @ApiOperation({ summary: '[academy] Cancel (soft-delete) a live session' })
-  remove(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
-    return this.live.remove(scopeOf(ctx), id);
+  @ApiOperation({
+    summary: '[academy] Cancel a live session (soft delete; booked students are notified)',
+  })
+  remove(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @CurrentUser() u: JwtPayload,
+    @Body() dto: CancelLiveDto,
+  ) {
+    return this.live.remove(scopeOf(ctx), id, u.sub, dto?.reason);
   }
 
   @Get('teacher/live/:id/bookings')

@@ -440,6 +440,8 @@ export class AiClient {
             priceOutPerMToken: price.outPerMToken,
             costMillicents: this.costMillicents(u.inputTokens, u.outputTokens, price),
             ...(trace.meta ? { meta: trace.meta as object } : {}),
+            liveSessionId: trace.liveSessionId ?? null,
+            aiJobId: trace.aiJobId ?? null,
           },
         })
         .catch((e: Error) => this.logger.warn(`Could not record an AI call: ${e.message}`));

@@ -91,6 +91,9 @@ export default function LiveSessionsPage() {
             const over = s.status === 'ENDED';
             const soon = new Date(s.joinOpensAt).getTime() <= Date.now();
             const full = s.seatsLeft === 0 && !s.booked;
+            // Once the class has begun the booking is its record, and the
+            // server refuses to cancel it — so the button is not offered.
+            const started = live || new Date(s.startsAt).getTime() <= Date.now();
             return (
               <div key={s.id} className="card flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-3">
@@ -172,18 +175,20 @@ export default function LiveSessionsPage() {
                             ? t('live.waitingTeacher')
                             : t('live.joinOpensSoon')}
                       </button>
-                      <button
-                        className="btn-ghost px-4 py-2.5 text-sm"
-                        disabled={cancel.isPending}
-                        onClick={async () =>
-                          (await confirmDelete({
-                            kind: 'cancel',
-                            message: t('live.cancelBookingConfirm', { title: s.title }),
-                          })) && cancel.mutate(s.id)
-                        }
-                      >
-                        {t('live.cancel')}
-                      </button>
+                      {!started && (
+                        <button
+                          className="btn-ghost px-4 py-2.5 text-sm"
+                          disabled={cancel.isPending}
+                          onClick={async () =>
+                            (await confirmDelete({
+                              kind: 'cancel',
+                              message: t('live.cancelBookingConfirm', { title: s.title }),
+                            })) && cancel.mutate(s.id)
+                          }
+                        >
+                          {t('live.cancel')}
+                        </button>
+                      )}
                     </>
                   ) : (
                     <button

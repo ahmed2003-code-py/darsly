@@ -2346,6 +2346,12 @@ model LiveSession {
   roomUrl       String?
   startedAt     DateTime?
   endedAt       DateTime?
+  /// When and why the teacher called it off. Set alongside `deletedAt` (which
+  /// is what hides it): the timestamp and the reason are what a booked student,
+  /// an audit and — later — a refund need to read back, and a soft delete
+  /// alone says only that the row is gone.
+  cancelledAt   DateTime?
+  cancelReason  String?
 
   /// Recording, transcript and summary: three stages of the same pipeline, so
   /// each carries its own state rather than one flag trying to describe all of
@@ -3598,8 +3604,16 @@ model AiCallLog {
   /// because no cached price is configured; the raw counts are here to do it.
   costMillicents    Int      @default(0)
   meta              Json?
+  /// The live session a call summarised, so one lesson's AI cost can be read
+  /// back by session (and by its academy through it).
+  liveSessionId     String?
+  /// The AiJob the call ran under — every attempt of one job, failed ones
+  /// included, since a failed call is billed too.
+  aiJobId           String?
   createdAt         DateTime @default(now())
 
   @@index([importId, startedAt])
   @@index([createdAt])
+  @@index([liveSessionId])
+  @@index([aiJobId])
 }

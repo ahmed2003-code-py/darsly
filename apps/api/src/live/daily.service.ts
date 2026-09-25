@@ -21,6 +21,23 @@ const ROOM_GRACE_MIN = 30;
 const TOKEN_GRACE_MIN = 30;
 /** Account settings change when a human changes them — not by the minute. */
 const DOMAIN_CACHE_MIN = 10;
+/**
+ * How far one transcript lookup will page through the account's transcripts.
+ *
+ * `GET /transcript` lists every transcript on the domain, not one room's, so a
+ * busy account outgrows the first page and a lesson's transcript can sit on a
+ * later one. Bounded both ways — pages and wall-clock — because this runs
+ * inside a summary job that is itself waiting, and a lookup must end.
+ */
+const TRANSCRIPT_MAX_PAGES = 10;
+const TRANSCRIPT_LOOKUP_BUDGET_MS = 30_000;
+
+type TranscriptListItem = {
+  transcriptId?: string;
+  id?: string;
+  status?: string;
+  roomName?: string;
+};
 
 export interface DailyRoom {
   name: string;
@@ -436,10 +453,7 @@ export class DailyService implements OnModuleInit {
       // `roomName` query outright ("roomName is not allowed"), and the 400 it
       // answers with was being swallowed as "this lesson has no transcript" —
       // which is how every summary came to fail.
-      const list = await this.call<{
-        data?: { transcriptId?: string; id?: string; status?: string; roomName?: string }[];
-      }>('/transcript', { method: 'GET' });
-      const mine = (list.data ?? []).filter((t) => t.roomName === roomName);
+      const mine = (await this.listTranscripts()).filter((t) => t.roomName === roomName);
       if (!mine.length) return { state: 'none' };
       // Daily prefixes these ("t_in_progress", "t_finished"), and has changed
       // the spelling before. Matching on the word rather than the exact string
@@ -471,6 +485,64 @@ export class DailyService implements OnModuleInit {
       );
       return { state: 'error' };
     }
+  }
+
+  /**
+   * Every transcript on the account, one page after another.
+   *
+   * The pagination Daily documents for this endpoint is cursor-based
+   * (`starting_after` = the last id of the previous page) with a `total_count`
+   * beside `data`. Its order and page size are not documented, so nothing here
+   * depends on them:
+   *  - another page is asked for only while `total_count` says there are more
+   *    than we have seen. A response without it is read as the one page it
+   *    was — exactly what this did before pagination existed;
+   *  - a page that adds nothing new ends the walk. If the cursor ever meant
+   *    something other than "after", this reads the first page and stops,
+   *    rather than looping — and says so in the log;
+   *  - both a page cap and a time budget bound it.
+   *
+   * A failed page fails the lookup (the caller answers "error", which is
+   * retried), because "not on the pages we managed to read" is not "none".
+   */
+  private async listTranscripts(): Promise<TranscriptListItem[]> {
+    const out: TranscriptListItem[] = [];
+    const seen = new Set<string>();
+    const deadline = Date.now() + TRANSCRIPT_LOOKUP_BUDGET_MS;
+    let cursor: string | undefined;
+    let total: number | undefined;
+    for (let page = 0; page < TRANSCRIPT_MAX_PAGES; page++) {
+      const path = cursor
+        ? `/transcript?starting_after=${encodeURIComponent(cursor)}`
+        : '/transcript';
+      const res = await this.call<{ total_count?: number; data?: TranscriptListItem[] }>(path, {
+        method: 'GET',
+      });
+      const items = res.data ?? [];
+      if (typeof res.total_count === 'number') total = res.total_count;
+      let fresh = 0;
+      for (const t of items) {
+        const id = t.transcriptId ?? t.id;
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        out.push(t);
+        fresh++;
+      }
+      if (fresh === 0 || total == null || out.length >= total) break;
+      const last = items[items.length - 1];
+      cursor = last.transcriptId ?? last.id ?? undefined;
+      if (!cursor) break;
+      if (Date.now() > deadline) {
+        this.logger.warn(`Transcript listing stopped at its time budget (${out.length}/${total})`);
+        break;
+      }
+    }
+    if (total != null && out.length < total) {
+      this.logger.warn(
+        `Read ${out.length} of ${total} transcripts on the account; a lesson's transcript may be beyond what was read`,
+      );
+    }
+    return out;
   }
 
   /**

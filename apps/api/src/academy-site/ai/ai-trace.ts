@@ -23,6 +23,10 @@ export interface AiTrace {
   region?: string;
   /** Which batch of questions, for generation. */
   batch?: number;
+  /** LiveSession.id — the lesson a summary call was about. */
+  liveSessionId?: string;
+  /** AiJob.id — ties every attempt of one queued job to its calls. */
+  aiJobId?: string;
   /** 0 for the first try at this unit of work, 1 for the next, … */
   attempt?: number;
   /** Anything else worth keeping with the call — small and JSON-safe. */

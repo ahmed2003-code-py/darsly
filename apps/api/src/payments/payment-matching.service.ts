@@ -600,9 +600,17 @@ export class PaymentMatchingService {
     if (!payment) throw new NotFoundException('Payment not found');
     // A transfer is proof of exactly the amount it carried, not of any payment
     // an admin points it at.
-    if (event.amountCents !== payment.amountCents) {
+    //
+    // "The amount" is what the transfer had to cover: a payment with a wallet
+    // contribution is waiting on `amountCents - walletCents`, the rest having
+    // been reserved from the balance at submit time. The automatic matcher has
+    // always compared against that (see `ingest`); comparing the admin's match
+    // against the full total instead made every mixed payment impossible to
+    // resolve by hand — the one path left once auto-matching gave up on it.
+    const dueCents = payment.amountCents - (payment.walletCents ?? 0);
+    if (event.amountCents !== dueCents) {
       throw new BadRequestException({
-        message: `Transfer is ${event.amountCents} but the payment is ${payment.amountCents}`,
+        message: `Transfer is ${event.amountCents} but the payment is waiting on ${dueCents}`,
         code: 'AMOUNT_MISMATCH',
       });
     }

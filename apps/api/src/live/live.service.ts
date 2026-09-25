@@ -28,6 +28,14 @@ const ARABIC_LESSON = 'ar-EG';
  * request does not cost a student the minutes they were actually sitting there.
  */
 export const PRESENCE_GRACE_SEC = 90;
+/**
+ * How long a summary may say PROCESSING with no job behind it before it counts
+ * as abandoned — a worker that died on its last attempt, or a process killed
+ * between claiming the summary and queueing it. Far longer than the moment
+ * between those two steps, so a second press of the button never mistakes a
+ * request still being made for one that was lost.
+ */
+export const SUMMARY_STALE_MS = 2 * 60_000;
 
 export interface UpsertLiveDto {
   title: string;
@@ -206,10 +214,92 @@ export class LiveService {
     });
   }
 
-  async remove(scope: LiveScope, id: string) {
-    await this.assertOwned(scope, id);
-    await this.prisma.liveSession.delete({ where: { id } }); // soft delete via middleware
-    return { id, deleted: true };
+  /**
+   * The teacher calls a session off.
+   *
+   * Still a soft delete — the row, its bookings and its attendance all stay,
+   * because they are the record of who was promised what. What changed is
+   * everything around it: the cancellation is stamped with its time and
+   * reason, the students who booked are told (they used to find out by the
+   * session silently vanishing from their list), a class that was running is
+   * closed properly instead of left with an open room until it expired, and
+   * the act is written to the audit log.
+   *
+   * A session whose time has already passed is just tidied away: nobody is
+   * waiting for it, so nobody is notified.
+   */
+  async remove(scope: LiveScope, id: string, actorUserId?: string, reason?: string) {
+    const session = await this.assertOwned(scope, id);
+    const now = new Date();
+    const wasLive = session.status === 'LIVE' && !this.pastWindow(session);
+    const stillAhead = session.status !== 'ENDED' && !this.pastWindow(session);
+    const why = reason?.trim().slice(0, 500) || null;
+
+    // One write: the stamp, the reason, and the soft delete itself. Setting
+    // `deletedAt` here is exactly what the middleware's delete would do, and
+    // doing it in the same statement means there is no moment where a session
+    // is cancelled but still listed, or listed as deleted with no reason.
+    await this.prisma.liveSession.update({
+      where: { id },
+      data: {
+        cancelledAt: now,
+        cancelReason: why,
+        deletedAt: now,
+        ...(wasLive ? { status: 'ENDED' as const, endedAt: now } : {}),
+      },
+    });
+    if (wasLive) {
+      await this.prisma.liveAttendance.updateMany({
+        where: { sessionId: id, leftAt: null },
+        data: { leftAt: now },
+      });
+      if (session.roomName) await this.daily.deleteRoom(session.roomName);
+      this.realtime.emitToLive(id, 'live:ended', { sessionId: id, cancelled: true });
+    }
+
+    const booked = stillAhead
+      ? await this.prisma.liveBooking.findMany({
+          where: { sessionId: id },
+          select: { student: { select: { userId: true } } },
+        })
+      : [];
+    for (const b of booked) {
+      // The same event the list already listens on, so it drops the card
+      // without a reload. `cancelled` lets a page tell the two apart.
+      this.realtime.emitToUser(b.student.userId, 'live:ended', { sessionId: id, cancelled: true });
+    }
+    await Promise.all(
+      booked.map((b) =>
+        this.notifications.create({
+          userId: b.student.userId,
+          type: 'LIVE_SESSION_REMINDER',
+          title: 'الجلسة المباشرة اتلغت ❌',
+          body: why
+            ? `«${session.title}» اتلغت. السبب: ${why}`
+            : `«${session.title}» اتلغت من المدرّس.`,
+          meta: { sessionId: id, cancelled: true },
+        }),
+      ),
+    );
+
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actorUserId: actorUserId ?? scope.userId,
+          action: 'live.cancel',
+          entity: 'LiveSession',
+          entityId: id,
+          academyId: session.academyId ?? session.tenantId,
+          meta: {
+            reason: why,
+            wasLive,
+            notified: booked.length,
+            startsAt: session.startsAt.toISOString(),
+          } as never,
+        },
+      })
+      .catch(() => undefined);
+    return { id, deleted: true, cancelledAt: now, notified: booked.length };
   }
 
   async listForTeacher(scope: LiveScope) {
@@ -339,9 +429,36 @@ export class LiveService {
     return { ok: true };
   }
 
+  /**
+   * A student gives their seat back.
+   *
+   * Only while the session is still ahead of them. Once the class has begun —
+   * the teacher opened the room, or the scheduled time arrived — the booking is
+   * no longer a reservation but the record the attendance, the recording's
+   * audience and any later refund are read from, and deleting it would erase
+   * that history. Before then it is released exactly as it always was, so the
+   * seat goes back to the pool.
+   */
   async cancel(userId: string, sessionId: string) {
     const student = await this.studentOf(userId);
-    await this.prisma.liveBooking.deleteMany({ where: { sessionId, studentId: student.id } });
+    const booking = await this.prisma.liveBooking.findUnique({
+      where: { sessionId_studentId: { sessionId, studentId: student.id } },
+      include: { session: { select: { startsAt: true, status: true, deletedAt: true } } },
+    });
+    if (!booking) return { ok: true };
+    // The teacher already called it off: the booking stays as the record of
+    // that, and there is nothing left for the student to cancel.
+    if (booking.session.deletedAt) return { ok: true };
+    if (
+      booking.session.status !== 'SCHEDULED' ||
+      Date.now() >= booking.session.startsAt.getTime()
+    ) {
+      throw new ConflictException({
+        message: 'لا يمكن إلغاء الحجز بعد بدء الحصة',
+        code: 'CANCEL_WINDOW_CLOSED',
+      });
+    }
+    await this.prisma.liveBooking.deleteMany({ where: { id: booking.id } });
     return { ok: true };
   }
 
@@ -418,7 +535,11 @@ export class LiveService {
    * never runs never books a room, and the room's own expiry can be set from a
    * start time that is now known rather than guessed at weeks out.
    *
-   * One live session per academy at a time. Note this is deliberately *not*
+   * One LIVE session per *teacher* at a time — counted on `tenantId`, the
+   * teacher's own profile, not on the academy: two teachers in one Center can
+   * each run a class at once, and one teacher cannot be live in two academies
+   * at once. (This comment used to say "per academy"; the code has always
+   * counted per teacher, and that is the rule.) Note this is deliberately *not*
    * `maxConcurrentSessions`, which despite the name governs how many devices a
    * student may be signed in from — borrowing it here would tie a teacher's
    * classroom to an anti-account-sharing setting that has nothing to do with it.
@@ -746,17 +867,96 @@ export class LiveService {
    *
    * Idempotent on purpose: pressing the button twice, or a webhook arriving
    * twice, must not spend two model calls on one lesson.
+   *
+   * The order matters, and it used to be wrong. The session was marked
+   * PROCESSING and *then* the job was queued — so any refusal from the queue
+   * (AI switched off, the month's budget spent, or another academy job the
+   * old academy-wide lock counted as a clash) left the lesson reading
+   * "processing" forever, and the button refused to try again because
+   * PROCESSING is what it returns early on.
+   *
+   * Now: claim the summary with a compare-and-set from the state we read (two
+   * presses cannot both queue a job), queue it, and if queueing is refused put
+   * the state back exactly as it was and say why. A PROCESSING that has no job
+   * behind it and has not moved for SUMMARY_STALE_MS is treated as lost and
+   * may be claimed again — which also frees any lesson already stuck by the
+   * old order.
+   *
+   * The job is billed to the session's own academy (a Center's summary is the
+   * Center's spend, not the teacher's personal workspace's), and it only
+   * clashes with another summary of the same lesson.
    */
   async requestSummary(scope: LiveScope, id: string) {
     const session = await this.assertOwned(scope, id);
-    if (session.summaryStatus === 'PROCESSING') return { status: 'PROCESSING' as const };
     if (session.summaryStatus === 'READY') return { status: 'READY' as const };
-    await this.prisma.liveSession.update({
-      where: { id },
+
+    // A job for this lesson is already queued or running — typically the
+    // queue's own retry after a failed attempt marked the lesson FAILED. That
+    // job is the answer to this press too: say so, rather than queueing a
+    // second one or refusing.
+    if (await this.jobs.hasActiveJobFor('LIVE_SUMMARY', 'liveSessionId', id)) {
+      await this.prisma.liveSession.updateMany({
+        where: { id, summaryStatus: { not: 'READY' } },
+        data: { summaryStatus: 'PROCESSING', summaryError: null },
+      });
+      return { status: 'PROCESSING' as const };
+    }
+
+    const previous = { status: session.summaryStatus, error: session.summaryError };
+    let claimWhere: Prisma.LiveSessionWhereInput;
+    if (session.summaryStatus === 'PROCESSING') {
+      // Set a moment ago by a press whose job is still being queued.
+      if (Date.now() - session.updatedAt.getTime() < SUMMARY_STALE_MS) {
+        return { status: 'PROCESSING' as const };
+      }
+      claimWhere = {
+        id,
+        summaryStatus: 'PROCESSING',
+        updatedAt: { lt: new Date(Date.now() - SUMMARY_STALE_MS) },
+      };
+    } else {
+      claimWhere = { id, summaryStatus: session.summaryStatus };
+    }
+
+    const claimed = await this.prisma.liveSession.updateMany({
+      where: claimWhere,
       data: { summaryStatus: 'PROCESSING', summaryError: null },
     });
-    await this.jobs.enqueue(session.tenantId, 'LIVE_SUMMARY', { liveSessionId: id });
+    // Somebody else's press got there first; theirs is the one in flight.
+    if (claimed.count === 0) return { status: 'PROCESSING' as const };
+
+    try {
+      await this.jobs.enqueue(
+        session.academyId ?? session.tenantId,
+        'LIVE_SUMMARY',
+        { liveSessionId: id },
+        { sameInput: { path: 'liveSessionId', equals: id } },
+      );
+    } catch (e) {
+      // Put it back. A lesson that was never summarised goes back to "not
+      // started"; one recovered from a lost PROCESSING becomes a plain failure
+      // the teacher can retry, rather than a fresh-looking PROCESSING.
+      const restore =
+        previous.status === 'PROCESSING'
+          ? { summaryStatus: 'FAILED' as const, summaryError: 'ENQUEUE_FAILED' }
+          : { summaryStatus: previous.status, summaryError: previous.error };
+      await this.prisma.liveSession.updateMany({
+        where: { id, summaryStatus: 'PROCESSING' },
+        data: restore,
+      });
+      throw e;
+    }
     return { status: 'PROCESSING' as const };
+  }
+
+  /**
+   * Whether a PROCESSING summary is really being worked on: a job for this
+   * lesson is queued or running, or the status was set too recently for its
+   * job to have been queued yet.
+   */
+  private async summaryInFlight(sessionId: string, updatedAt: Date): Promise<boolean> {
+    if (Date.now() - updatedAt.getTime() < SUMMARY_STALE_MS) return true;
+    return this.jobs.hasActiveJobFor('LIVE_SUMMARY', 'liveSessionId', sessionId);
   }
 
   /** The teacher decides whether the class gets to keep the notes. */
@@ -844,10 +1044,19 @@ export class LiveService {
         summaryError: true,
         summaryForStudents: true,
         transcriptStatus: true,
+        updatedAt: true,
       },
     });
     const recordingStatus = await this.refreshRecording(s);
     const canSeeSummary = role === 'TEACHER' || s.summaryForStudents;
+    // A PROCESSING with nothing behind it is shown as the failure it is, so the
+    // page offers "try again" instead of a spinner that never stops.
+    let summaryStatus = s.summaryStatus;
+    let summaryError = s.summaryError;
+    if (summaryStatus === 'PROCESSING' && !(await this.summaryInFlight(s.id, s.updatedAt))) {
+      summaryStatus = 'FAILED';
+      summaryError = summaryError ?? 'STALLED';
+    }
     return {
       id: s.id,
       title: s.title,
@@ -862,12 +1071,12 @@ export class LiveService {
         available: recordingStatus === 'READY' && (role === 'TEACHER' || s.summaryForStudents),
       },
       summary: {
-        status: canSeeSummary ? s.summaryStatus : 'NOT_STARTED',
-        data: canSeeSummary && s.summaryStatus === 'READY' ? s.summary : null,
+        status: canSeeSummary ? summaryStatus : 'NOT_STARTED',
+        data: canSeeSummary && summaryStatus === 'READY' ? s.summary : null,
         sharedWithStudents: s.summaryForStudents,
         // Only the teacher is told why, and only they can act on it.
         ...(role === 'TEACHER'
-          ? { transcriptStatus: s.transcriptStatus, error: s.summaryError }
+          ? { transcriptStatus: s.transcriptStatus, error: summaryError }
           : {}),
       },
     };
@@ -1176,7 +1385,14 @@ export class LiveService {
           distinct: ['studentId'],
         })
       : await this.prisma.enrollment.findMany({
-          where: { academyId: session.academyId ?? session.tenantId, status: 'ACTIVE' },
+          // The same "active" every other live path uses (booking, the upcoming
+          // list): an expired monthly subscription is still status ACTIVE, and
+          // announcing a session to someone who can no longer book it is a
+          // notification they cannot act on.
+          where: {
+            academyId: session.academyId ?? session.tenantId,
+            ...this.activeEnrollmentWhere(),
+          },
           select: { student: { select: { userId: true } } },
           distinct: ['studentId'],
         });

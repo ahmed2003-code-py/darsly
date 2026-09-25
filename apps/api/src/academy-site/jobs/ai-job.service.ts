@@ -35,18 +35,36 @@ export class AiJobService {
    * else was regenerating the academy's site, and vice versa. A caller that
    * passes its own type gets a lock over that type alone; passing nothing
    * keeps the academy-wide behaviour every existing caller relies on.
+   *
+   * `sameInput` narrows it further, to one piece of work: a job of this type
+   * whose `input[path]` equals `equals`. A live-lesson summary is about one
+   * session — two teachers in one Center summarising two different lessons
+   * are not in each other's way, and neither is anybody's site or exam. When
+   * it is given, the academy-wide check is not made at all.
+   *
+   * Every refusal carries a `code`, so a caller (and the page behind it) can
+   * say which of the three it was instead of one generic "unavailable".
    */
   async enqueue(
     academyId: string,
     type: AiJobType,
     input: Prisma.InputJsonValue = {},
-    opts: { conflictsWith?: AiJobType[] } = {},
+    opts: { conflictsWith?: AiJobType[]; sameInput?: { path: string; equals: string } } = {},
   ): Promise<AiJob> {
     if (!this.config.enabled) {
-      throw new ServiceUnavailableException('AI features are currently disabled');
+      throw new ServiceUnavailableException({
+        message: 'AI features are currently disabled',
+        code: 'AI_DISABLED',
+      });
     }
-    if (await this.hasActiveJob(academyId, opts.conflictsWith)) {
-      throw new ConflictException('A generation job is already in progress for this academy');
+    const busy = opts.sameInput
+      ? await this.hasActiveJobFor(type, opts.sameInput.path, opts.sameInput.equals)
+      : await this.hasActiveJob(academyId, opts.conflictsWith);
+    if (busy) {
+      throw new ConflictException({
+        message: 'A generation job is already in progress for this academy',
+        code: 'AI_JOB_ACTIVE',
+      });
     }
     await this.assertWithinBudget();
     return this.prisma.aiJob.create({ data: { academyId, type, input, status: 'QUEUED' } });
@@ -55,6 +73,19 @@ export class AiJobService {
   /** Fetch a job scoped to an academy (status polling); null if not theirs. */
   getForAcademy(academyId: string, jobId: string): Promise<AiJob | null> {
     return this.prisma.aiJob.findFirst({ where: { id: jobId, academyId } });
+  }
+
+  /** An active job of `type` about one particular thing — see `sameInput`. */
+  hasActiveJobFor(type: AiJobType, path: string, equals: string): Promise<boolean> {
+    return this.prisma.aiJob
+      .count({
+        where: {
+          type,
+          status: { in: ['QUEUED', 'RUNNING'] },
+          input: { path: [path], equals },
+        },
+      })
+      .then((n) => n > 0);
   }
 
   hasActiveJob(academyId: string, types?: AiJobType[]): Promise<boolean> {
@@ -82,7 +113,10 @@ export class AiJobService {
     });
     const spent = agg._sum.costCents ?? 0;
     if (spent >= cap) {
-      throw new ServiceUnavailableException('Monthly AI budget reached — try again next month');
+      throw new ServiceUnavailableException({
+        message: 'Monthly AI budget reached — try again next month',
+        code: 'AI_BUDGET_REACHED',
+      });
     }
   }
 

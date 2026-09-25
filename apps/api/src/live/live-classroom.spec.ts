@@ -44,6 +44,7 @@ function world(
     summaryForStudents: false,
     transcriptStatus: 'NOT_STARTED',
     transcriptText: null,
+    updatedAt: new Date(),
     teacher: { userId: over.teacherUserId ?? 'u_teacher' },
     ...over.session,
   };
@@ -63,6 +64,16 @@ function world(
         Object.assign(session, data);
         updated.push(data);
         return { ...session };
+      }),
+      // A compare-and-set: applies only when the row still matches.
+      updateMany: jest.fn(async ({ where, data }: any) => {
+        const status = where.summaryStatus;
+        if (typeof status === 'string' && session.summaryStatus !== status) return { count: 0 };
+        if (status?.not && session.summaryStatus === status.not) return { count: 0 };
+        if (where.updatedAt?.lt && !(session.updatedAt < where.updatedAt.lt)) return { count: 0 };
+        Object.assign(session, data, { updatedAt: new Date() });
+        updated.push(data);
+        return { count: 1 };
       }),
     },
     academyMembership: { findFirst: jest.fn(async () => (over.staff ? { id: 'm1' } : null)) },
@@ -96,7 +107,10 @@ function world(
     transcriptFor: jest.fn(async () => ({ state: 'none' })),
   } as unknown as DailyService;
   const realtime = { emitToLive: jest.fn() } as any;
-  const jobs = { enqueue: jest.fn(async () => ({ id: 'j1' })) } as any;
+  const jobs = {
+    enqueue: jest.fn(async () => ({ id: 'j1' })),
+    hasActiveJobFor: jest.fn(async () => false),
+  } as any;
   const notifications = { create: jest.fn(async () => ({})) } as unknown as NotificationsService;
   const service = new LiveService(
     prisma,
@@ -216,7 +230,12 @@ describe('asking for a summary', () => {
   it('queues the job on the existing worker', async () => {
     const { service, jobs } = world();
     expect(await service.requestSummary(T1, 'ls1')).toEqual({ status: 'PROCESSING' });
-    expect(jobs.enqueue).toHaveBeenCalledWith('t1', 'LIVE_SUMMARY', { liveSessionId: 'ls1' });
+    expect(jobs.enqueue).toHaveBeenCalledWith(
+      't1',
+      'LIVE_SUMMARY',
+      { liveSessionId: 'ls1' },
+      { sameInput: { path: 'liveSessionId', equals: 'ls1' } },
+    );
   });
 
   it('does not queue a second one while the first is running', async () => {
@@ -374,11 +393,16 @@ describe('the summary is written only from the transcript', () => {
           return {};
         }),
       },
+      aiCallLog: { aggregate: jest.fn(async () => ({ _sum: { costMillicents: 0 } })) },
+      aiJob: { update: jest.fn(async () => ({})) },
     } as unknown as PrismaService;
     const ai = (over.ai ?? {
       completeStructured: jest.fn(async () => ({
         data: { summary: 's', topics: [], keyPoints: [], questionsAndAnswers: [], actionItems: [] },
+        inputTokens: 0,
+        outputTokens: 0,
       })),
+      costMillicents: jest.fn(() => 0),
     }) as unknown as AiClient;
     const daily = {
       transcriptFor: over.lookup ?? jest.fn(async () => ({ state: 'none' })),

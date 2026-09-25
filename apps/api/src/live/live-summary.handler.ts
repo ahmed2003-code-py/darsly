@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AiJob, AiJobType } from '@prisma/client';
 import { AiClient } from '../academy-site/ai/ai.client';
 import { AiJobError } from '../academy-site/ai/ai-job.error';
+import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { AiJobHandler, AiJobResult } from '../academy-site/jobs/ai-job.handler';
 import { MAX_ATTEMPTS } from '../academy-site/jobs/ai-job.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -105,7 +106,15 @@ export class LiveSummaryHandler implements AiJobHandler {
   async handle(job: AiJob): Promise<AiJobResult | void> {
     const liveSessionId = (job.input as { liveSessionId?: string })?.liveSessionId;
     if (!liveSessionId) throw new AiJobError('No liveSessionId on job', 'TERMINAL');
+    // Every model call below is recorded (AiCallLog) against this lesson and
+    // this job, so the lesson's AI cost can be read back by session, and every
+    // attempt of the job — failed ones too — can be added up.
+    return withAiTrace({ liveSessionId, aiJobId: job.id, stage: 'LIVE_SUMMARY' }, () =>
+      this.run(job, liveSessionId),
+    );
+  }
 
+  private async run(job: AiJob, liveSessionId: string): Promise<AiJobResult | void> {
     const session = await this.prisma.liveSession.findUnique({
       where: { id: liveSessionId },
       select: {
@@ -150,7 +159,21 @@ export class LiveSummaryHandler implements AiJobHandler {
       throw new AiJobError(`No transcript available for this session (${reason})`, 'TERMINAL');
     }
 
+    // What earlier attempts of this job already spent. Read BEFORE this
+    // attempt's call, whose own log row is written in the background and is
+    // added from the response below instead — so nothing is counted twice.
+    //
+    // Two records of the same spend, and the larger one wins: the call log
+    // (exact, but written fire-and-forget, so a row can in principle still be
+    // in flight when the retry starts) and what earlier attempts already
+    // charged onto the job itself (always written before that attempt threw,
+    // but rounded up to a cent). The job's own figure makes sure a slow log
+    // write never loses an earlier attempt's cost; the max means it is never
+    // added on top of the log that describes the same calls.
+    const priorMillicents = Math.max(await this.spentByJob(job.id), (job.costCents ?? 0) * 1000);
+
     let data: LiveSummary;
+    let callMillicents = 0;
     try {
       const res = await this.ai.completeStructured<LiveSummary>({
         system: [
@@ -177,7 +200,19 @@ export class LiveSummaryHandler implements AiJobHandler {
         schema: SUMMARY_SCHEMA as unknown as Record<string, unknown>,
       });
       data = res.data;
+      callMillicents = this.ai.costMillicents(res.inputTokens, res.outputTokens);
+      // Charged now, not only in the result: if a write below fails, the job
+      // is retried or failed with no result — and this call was still billed.
+      await this.chargeJob(job.id, priorMillicents + callMillicents);
     } catch (e) {
+      // A rejected answer (cut off, refused, malformed) was still billed. The
+      // job is charged now, because a throw returns no result for the worker
+      // to record — and a failed job's spend still counts against the budget.
+      const usage = e instanceof AiJobError ? e.usage : undefined;
+      const failedMillicents = usage
+        ? this.ai.costMillicents(usage.inputTokens, usage.outputTokens)
+        : 0;
+      await this.chargeJob(job.id, priorMillicents + failedMillicents);
       await this.prisma.liveSession.update({
         where: { id: liveSessionId },
         data: { summaryStatus: 'FAILED', summaryError: 'AI_FAILED' },
@@ -205,7 +240,42 @@ export class LiveSummaryHandler implements AiJobHandler {
       body: `ملخّص «${session.title}» اتولّد. راجعه قبل ما تشاركه مع الطلبة.`,
       meta: { sessionId: liveSessionId, summary: true },
     });
-    this.logger.log(`Summarised live session ${liveSessionId}`);
+    const costCents = Math.ceil((priorMillicents + callMillicents) / 1000);
+    this.logger.log(
+      `Summarised live session ${liveSessionId} (job ${job.id}, academy ${job.academyId}, ${costCents}¢)`,
+    );
+    // The worker writes this onto AiJob.costCents, which is what the monthly
+    // AI budget adds up.
+    return { costCents };
+  }
+
+  /**
+   * Millicents already recorded against this job by earlier attempts.
+   *
+   * Cost accounting must never be why a lesson goes unsummarised, so a failure
+   * to read it is logged and counted as zero rather than thrown.
+   */
+  private async spentByJob(aiJobId: string): Promise<number> {
+    try {
+      const agg = await this.prisma.aiCallLog.aggregate({
+        where: { aiJobId },
+        _sum: { costMillicents: true },
+      });
+      return agg._sum.costMillicents ?? 0;
+    } catch (e) {
+      this.logger.warn(`Could not read prior AI spend for job ${aiJobId}: ${(e as Error).message}`);
+      return 0;
+    }
+  }
+
+  /** Record a failed attempt's spend on the job itself (see the call site). */
+  private async chargeJob(aiJobId: string, millicents: number): Promise<void> {
+    if (millicents <= 0) return;
+    await this.prisma.aiJob
+      .update({ where: { id: aiJobId }, data: { costCents: Math.ceil(millicents / 1000) } })
+      .catch((e: Error) =>
+        this.logger.warn(`Could not record AI spend on job ${aiJobId}: ${e.message}`),
+      );
   }
 
   /**

@@ -2679,7 +2679,11 @@
     "eTeacherNotApproved": "This account belongs to a teacher who is not approved yet. Approve them under “Teacher approval” first, or use another account.",
     "eIdentityNotEligible": "This account (a student account, for example) can’t be assigned here. Use another email.",
     "eImportInProgress": "Your other exam is still being prepared — exams are prepared one at a time. Open it and carry on, or wait for it to finish and start the new one.",
-    "eImportInProgressOther": "Another exam is being prepared in this academy right now — exams are prepared one at a time. Try again in a few minutes."
+    "eImportInProgressOther": "Another exam is being prepared in this academy right now — exams are prepared one at a time. Try again in a few minutes.",
+    "eCancelWindowClosed": "The class has already started, so the booking can no longer be cancelled.",
+    "eAiDisabled": "AI features are switched off right now. Try again later.",
+    "eAiBudgetReached": "This month's AI budget has been used up. Try next month or contact support.",
+    "eAiJobActive": "A request is already running. Wait for it to finish."
   },
   "myStudio": {
     "title": "My Studio",

@@ -1242,6 +1242,15 @@ export class LiveService {
       },
     });
     if (full) full.recordingStatus = await this.refreshRecording(full);
+    if (full?.provider === 'CLOUDFLARE') {
+      // Darsly's own recording: packaged as encrypted HLS by the video
+      // pipeline. Watching it goes through the lesson player, which is where
+      // it will be published (Checkpoint C) — there is no provider link.
+      throw new ConflictException({
+        message: 'التسجيل اتحفظ وهيتاح للمشاهدة من خلال الكورس',
+        code: 'RECORDING_PLAYBACK_PENDING',
+      });
+    }
     if (!full?.recordingId || full.recordingStatus !== 'READY') {
       throw new BadRequestException({ message: 'التسجيل مش جاهز', code: 'RECORDING_NOT_READY' });
     }
@@ -1470,7 +1479,10 @@ export class LiveService {
         status: recordingStatus,
         durationSeconds: s.recordingDuration,
         // A student is told there is a recording only once it is theirs to see.
-        available: recordingStatus === 'READY' && (role === 'TEACHER' || s.summaryForStudents),
+        available:
+          recordingStatus === 'READY' &&
+          s.provider !== 'CLOUDFLARE' &&
+          (role === 'TEACHER' || s.summaryForStudents),
       },
       summary: {
         status: canSeeSummary ? summaryStatus : 'NOT_STARTED',
@@ -1739,6 +1751,11 @@ export class LiveService {
   }
 
   /** Organisation scope first, then (for a non-owner) authorship — a foreign or colleague's stream 404s. */
+  /** The session, if this scope may manage it — the same check every teacher route makes. */
+  ownedSession(scope: LiveScope, id: string) {
+    return this.assertOwned(scope, id);
+  }
+
   private async assertOwned(scope: LiveScope, id: string) {
     const s = await this.prisma.liveSession.findFirst({ where: { id, ...this.scopeWhere(scope) } });
     if (!s) throw new NotFoundException('Session not found');

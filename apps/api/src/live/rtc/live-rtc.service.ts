@@ -60,6 +60,8 @@ export interface RtcState {
   serverNow: string;
   me: { userId: string; role: Role; hand: LiveHandState; canPublish: boolean };
   maxSpeakers: number;
+  /** A recording of this run is being made (the REC badge). */
+  recording: boolean;
   participants: {
     userId: string;
     name: string;
@@ -540,7 +542,7 @@ export class LiveRtcService {
     const g = await this.gate(userId, sessionId);
     const run = g.s.roomName;
     const since = new Date(Date.now() - PRESENCE_GRACE_SEC * 1000);
-    const [tracks, present, hands] = await Promise.all([
+    const [tracks, present, hands, recording] = await Promise.all([
       this.prisma.liveRtcTrack.findMany({
         where: {
           sessionId,
@@ -558,6 +560,15 @@ export class LiveRtcService {
       this.prisma.liveHand.findMany({
         where: { sessionId, roomName: run, state: { not: 'IDLE' } },
         select: { userId: true, state: true, raisedAt: true },
+      }),
+      // Everyone in the room is shown that it is being recorded.
+      this.prisma.liveRecording.count({
+        where: {
+          sessionId,
+          roomName: run,
+          status: { in: ['REQUESTED', 'RECORDING', 'STOPPING'] },
+          stopRequestedAt: null,
+        },
       }),
     ]);
     const roleOf = new Map<string, Role>();
@@ -586,6 +597,7 @@ export class LiveRtcService {
         canPublish: g.role === 'TEACHER' || canSpeak(myHand),
       },
       maxSpeakers: maxSpeakers(),
+      recording: recording > 0,
       participants: [...roleOf.entries()].map(([uid, role]) => ({
         userId: uid,
         name: nameOf.get(uid) ?? '',

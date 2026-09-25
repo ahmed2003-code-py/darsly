@@ -22,6 +22,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
 import { LiveRtcService } from './rtc/live-rtc.service';
+import { LiveRecordingService } from './recording/live-recording.service';
 
 class CreateLiveDto {
   @IsString() @MinLength(2) @MaxLength(160) title: string;
@@ -94,6 +95,7 @@ export class LiveController {
   constructor(
     private readonly live: LiveService,
     private readonly rtc: LiveRtcService,
+    private readonly recordings: LiveRecordingService,
   ) {}
 
   // ── Teacher ──────────────────────────────────────────────────────────────
@@ -252,18 +254,25 @@ export class LiveController {
   @Post('teacher/live/:id/recording/start')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Mark the session as recording' })
-  startRecording(
+  async startRecording(
     @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
     @Body() dto: RecordingStartedDto,
   ) {
+    const s = await this.live.ownedSession(scopeOf(ctx), id);
+    // A Darsly-hosted class is recorded by Darsly's recorder; a Daily class by
+    // Daily's cloud, started in the browser and only noted here.
+    if (s.provider === 'CLOUDFLARE') return this.recordings.start(scopeOf(ctx), id, u.sub);
     return this.live.markRecording(scopeOf(ctx), id, dto.recordingId ?? null);
   }
 
   @Post('teacher/live/:id/recording/stop')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Mark recording as stopped (still processing)' })
-  stopRecording(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  async stopRecording(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    const s = await this.live.ownedSession(scopeOf(ctx), id);
+    if (s.provider === 'CLOUDFLARE') return this.recordings.stop(scopeOf(ctx), id);
     return this.live.stopRecording(scopeOf(ctx), id);
   }
 

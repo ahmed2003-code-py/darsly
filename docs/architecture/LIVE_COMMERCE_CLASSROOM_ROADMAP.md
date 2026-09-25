@@ -111,7 +111,7 @@
 
 **IMPLEMENTED ✅** — `b109604`, Railway deployment `4fc07873` SUCCESS، الـ migration اتطبقت، والـ smoke test نضيف. L6 = known non-blocking limitation.
 
-## Checkpoint B — Extension + Attendance + Darsly-owned end — **IMPLEMENTED** (مستني مراجعة، ما اتعملهاش push)
+## Checkpoint B — Extension + Attendance + Darsly-owned end — **COMPLETE ✅** (`b8db84c`، Railway `1bff8766`، production smoke 22/22)
 
 > **الـ revision الأخير (بيغلب على اللي تحت):** Darsly هي اللي بتنهي الفصل. `LiveSession` effective end هو سلطة البيزنس، والـ **end sweep** (`LiveEndWorker`، كل 15 ثانية) بينادي `endSession(SCHEDULED_END)`، وده بيمسح غرفة Daily ويطلّع كل اللي فيها. `exp` غرفة Daily بقى **safety TTL بس** = `startsAt + LIVE_MAX_DURATION_MIN + 30min`، بيتحط مرة واحدة ومش بيتغير خالص. المد بقى **تغيير في الـ DB بس**، من غير أي نداء للـ provider. الأجزاء اللي تحت اللي بتوصف "Daily الأول وبعدين الـ DB" في المد **اتلغت**.
 
@@ -240,6 +240,62 @@
 **تبعات لازم تتعرف عند أول deploy:**
 - **(1)** أي جلسات قديمة فضلت `LIVE` للأبد (محدش نهاها قبل الـ sweep) **هتتقفل تلقائياً**: 25 كل 15 ثانية، `ENDED` عند نهايتها الحقيقية، والحضور المفتوح يتقفل عند النهاية دي، و DELETE لغرف قديمة (404 بتتحسب "اتقفلت")، من غير أي events.
 - **(2)** الفصول اللي شغالة وقت الـ deploy غرفها اتعملت بالطريقة القديمة (`exp` = end + 30 دقيقة). المد فيها بعد 30 دقيقة لسه هيطرد اللي كانوا جوه. ده بيأثر على الفصول اللي كانت شغالة ساعتها بس.
+
+
+### Checkpoint B — production validation (2026-09-25)
+
+- **الـ push:** `b109604..b8db84c`، وبعدين Railway **`1bff8766` → SUCCESS**. `20261002100000_live_end_sweep_index` اتطبقت (95 migrations). وظهر `AI job worker started` و **`live end worker started (every 15s)`** و Redis متوصل، والـ health: DB/Redis/storage = ok. وعدد الـ ERROR/WARN من ساعة الـ deploy = 0.
+- **الـ smoke test على الإنتاج (حسابات disposable باسم SMOKE-TEST، واتنضف بعدها): 22/22 PASS.**
+  - `exp` الغرفة = `startsAt + 750min` بالظبط (safety TTL)، و `eject_at_room_exp=true`.
+  - الـ token لوحده ما اداش LIVE_ATTENDED.
+  - الـ heartbeat زوّد 30 ثانية بالظبط، والـ duplicates زوّدت 0.
+  - المد +45 (بعد الـ 30 القديمة): `exp` ما اتغيرش، والـ refresh رجّع النهاية الجديدة، والـ participant فضل متصل، و `TIMING_CHANGED` اشتغل.
+  - الـ End اليدوي طلّع الـ participant (`no-room`) والغرفة بقت 404.
+  - **الإنهاء التلقائي من الـ worker من غير End:** النهاية كانت 13:42:41.085Z، والـ worker عمل `live.end reason=SCHEDULED_END provider=deleted` عند 13:42:48.5 (**7.4 ثانية**)، والـ `live:ended` وصل للطالب بعد **7.4 ثانية**، والـ participant اتطرد بعد **9.6 ثانية**.
+  - `endedAt` = النهاية بالظبط، و `leftAt` = النهاية، والـ heartbeats بعد النهاية زوّدت 0.
+  - LIVE_ATTENDED اتدى مرة واحدة عند 151s (threshold 150s لفصل 5 دقايق).
+  - الـ sweeps اللي بعده: مفيش إنهاء تاني.
+
+### Checkpoint B.5 — Cloudflare Realtime (تحقيق، مش migration) — **CLOUDFLARE POC PROMISING — PROCEED TO MIGRATION DESIGN**
+
+- **درسلي بتستخدم إيه من Cloudflare:** **R2 بس** (`STORAGE_DRIVER=s3`، و endpoint `r2.cloudflarestorage.com`) للفيديو والـ HLS والإيصالات والميديا. **مفيش Stream ولا Realtime.** كل اللي عندنا مفاتيح R2 S3 (مش API token)، ومفيش wrangler login. **فالـ POC الحي على Cloudflare مستني إن الـ PO يعمل Realtime SFU app.**
+- **الأسعار الرسمية (اتأكد منها 2026-09-25):**
+  - Realtime SFU: أول **1,000 GB/شهر مجاناً (مشتركة بين SFU و TURN)**، وبعدها **$0.05/GB egress**، والـ ingress ببلاش. (developers.cloudflare.com/realtime/sfu/pricing، اتحدثت 2026-09-22)
+  - RealtimeKit: $0.002/دقيقة للمشارك A/V، و $0.0005 audio-only، و recording $0.010/دقيقة. (…/realtimekit/pricing)
+  - Stream: $5 لكل 1000 دقيقة تخزين، و $1 لكل 1000 دقيقة تسليم.
+  - Daily: $0.004/participant-min (standard)، و 10k دقيقة مجاناً، و recording $0.01349/دقيقة، و post-call transcription $0.0043/دقيقة. (daily.co/pricing/video-sdk)
+  - OpenAI: gpt-4o-mini-transcribe $0.003/دقيقة، و gpt-4o-transcribe(-diarize) $0.006.
+  - Deepgram Nova-3: pre-recorded $0.0052، و streaming $0.0058.
+- **الـ bandwidth (MEASURED، loopback WebRTC في Chrome، مصدر synthetic، من غير provider)، لكل طالب:**
+  - كاميرا المدرس 720p = 683 kbps (0.307 GB/h).
+  - مع شاشة 1080p5 = 809 kbps (0.364 GB/h).
+  - مع طالب بيتكلم 360p = 1,203 kbps (0.541 GB/h).
+  - مع 4 tiles صغيرة 180p = 1,426 kbps (0.642 GB/h).
+- **الاقتصاديات (بالـ marginal بعد الـ free tiers، 60 دقيقة، 50 طالب):**
+  - Daily RTC = **$12.24**.
+  - Realtime SFU (education mode) = **~$0.97** (ولو كاميرا حقيقية عند الـ cap، ~$1.95).
+  - RealtimeKit = $6.12.
+  - **يعني الـ SFU أرخص في الـ RTC بـ ~6 لـ 12 مرة.**
+- **العائق الحقيقي:**
+  - **الـ SFU الخام مفيهوش cloud recording.** محتاج recorder bot (headless Chrome بيعمل composite، وبعدين R2، وبعدين الـ VideoJob الحالي)، أو WHIP لـ Stream.
+  - ده **أصعب بكتير من Daily**، ومحتاج POC.
+  - RealtimeKit عنده composite recording managed (bot، و webhook، و 7 أيام retention)، بس الـ SDK بتاعه مختلف، والعلاقة بين أسعاره وأسعار الـ SFU egress غير واضحة.
+- **POC حي على Cloudflare Realtime SFU (2026-09-25، credentials محلية بس، ومحتاج rotation):**
+  - مدرس و 6 طلاب، كل واحد في browser context معزول.
+  - نشر المدرس ~0.6–0.8 ثانية، وأول frame عند الطالب ~1.0–1.5 ثانية.
+  - **صفر freezes وصفر فقد packets**، و RTT ~50ms.
+  - Reconnect أول frame بعد 1.7 ثانية.
+  - 71 API call من غير ولا خطأ (median 200ms).
+  - Egress لكل طالب مقاس على Cloudflare: A=693 kbps (0.312 GB/h)، B=765 (0.344)، C=1,088 (0.49)، D=1,496 (0.673). مطابق لقياس الـ loopback.
+  - **Recording feasibility اتأكدت:** bot سحب تراكات المدرس من الـ SFU، وعمل composite 1280×720 (شاشة + كاميرا PiP + صوت)، والناتج webm 30 ثانية (~346 kbps) بيتقرا. ده ينفع للـ `VideoJob` الحالي.
+  - **اكتشاف:** نشر طالب على نفس اتصال الاستقبال اترفض عند إعادة التفاوض (Chrome, mid 4). **الحل:** اتصال إرسال منفصل (session منفصلة) عند رفع الإيد.
+  - **لسه مش متاختبر:** الموبايل، و TURN (محتاج TURN key منفصل)، والشبكات الضعيفة، و simulcast في الفصول الكبيرة، و `getDisplayMedia` الحقيقي.
+- **القرار:** مفيش migration دلوقتي. الخطوة الجاية:
+  - **(1)** PO يعمل SFU app.
+  - **(2)** POC جودة/شبكة/موبايل/TURN.
+  - **(3)** POC recording bot.
+  - **(4)** مقارنة مع RealtimeKit.
+  - وبعدها قرار. التقرير الكامل (الجداول والـ abstraction والـ guardrails) موجود في رد الـ checkpoint.
 
 ---
 

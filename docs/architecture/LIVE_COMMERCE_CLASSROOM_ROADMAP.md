@@ -297,6 +297,79 @@
   - **(4)** مقارنة مع RealtimeKit.
   - وبعدها قرار. التقرير الكامل (الجداول والـ abstraction والـ guardrails) موجود في رد الـ checkpoint.
 
+### Checkpoint B.6 — Cloudflare Realtime بقى الـ provider الأساسي، و Daily fallback — **IMPLEMENTED محلياً، مش متعمله push**
+
+> commits محلية: `a11c2fc` ← `e3a9afb` ← `d521264` ← `5b1884c`. **مفيش push ولا deploy.** الـ secret اللي اتبعت في المحادثة **لازم يتعمله rotation** قبل أي production.
+
+**المعمارية (IMPLEMENTED):**
+- `LiveProvider` interface فيه openRoom و participantAccess و closeRoom و cleanup و sweepPending، و recordings و transcripts اختياريين. عليه `DailyLiveProvider` (نفس سلوك Daily بالظبط) و `CloudflareLiveProvider`.
+- `LIVE_PROVIDER=cloudflare` (الافتراضي) أو `daily`. لو اخترت cloudflare من غير credentials، **الـ API مش بيقوم أصلاً**، ومفيش fallback صامت.
+- `LiveSession.provider` بيتكتب مرة واحدة وقت إنشاء الجلسة. تغيير الـ config بيأثر على الجلسات الجديدة بس. الصفوف القديمة = DAILY.
+- **الـ registry بتاع الفصل ملك درسلي** (Postgres، مش memory، عشان كذا replica و restart):
+  - `LiveRtcConnection`: connection لكل browser. الـ browser بيشاور عليها بالـ id بتاعنا، ومبيشوفش الـ CF session id أبداً.
+  - `LiveRtcTrack`: التراكات المنشورة.
+  - `LiveHand`: رفع الإيد.
+  - `roomName` بقى مفتاح للـ run (`cf-<id>-<ts>`)، فلو الفصل اتفتح تاني جوه الـ window بيبقى run جديد.
+- **الـ connections:**
+  - كل واحد ليه RECEIVE، وبيتفتح lazily (Cloudflare بيقفل session فاضية سايبة).
+  - SEND للمدرس دايماً، وللطالب بس وهو مسموحله يتكلم، و**اتصال منفصل**.
+  - كل push و pull بيعدّي على endpoints بتاعة درسلي (`/live/:id/rtc/...`) اللي بتتأكد من الصلاحية الأول. الـ secret على السيرفر بس.
+- **Education mode:** الطالب بيدخل يسمع ويتفرج بس، ومفيش إذن مايك أو كاميرا بيتطلب منه.
+  - رفع الإيد server-authoritative: IDLE ← HAND_RAISED ← APPROVED_TO_SPEAK ← ACTIVE_SPEAKER ← RELEASED.
+  - حد أقصى للمتكلمين (`LIVE_MAX_SPEAKERS`، الافتراضي 3) تحت advisory lock.
+  - الـ revoke بيقفل التراكات عند الـ SFU بـ force، مهما الـ browser عمل.
+- **Simulcast:** كاميرا المدرس بتطلع طبقتين: h = 720p، و l = 180p.
+  - الطالب بينزل للطبقة الصغيرة لما يلاقي loss أو freezes أو estimate قليل، وبيطلع تاني بعد استقرار مع backoff.
+  - اتأكد على الـ SFU الحقيقي إن التبديل بيحصل من غير renegotiation.
+- **النهاية:** تحت الـ row lock الفصل بيبقى ENDED على طول (`cleanup-pending`)، فمحدش يقدر يعمل push أو pull بعدها. التراكات بتتقفل عند الـ SFU بعد الـ commit، والـ end sweep بيعيد المحاولة، ومفيش إحياء للفصل.
+- **Reconnect:** connection بيقع (`failed`) بيتبني من جديد (session جديدة، وسحب من الأول). و 410 من Cloudflare بيرجع `RTC_SESSION_EXPIRED` والصفحة بتعيد البناء لوحدها.
+- **الـ Recorder بتاع درسلي:**
+  - worker بـ lease و heartbeat (UTC صريح).
+  - headless Chromium بيدخل الفصل receive-only، ويعمل composite (شاشة + كاميرا المدرس PiP + المتكلمين + صوت ممزوج).
+  - قطع كل 10 دقايق، وكل قطعة بتترفع على الـ storage أول ما تتقفل.
+  - لو حصل crash، recorder تاني بيكمّل في قطعة جديدة.
+  - في الآخر: ffmpeg ← R2 ← `VideoAsset` + `VideoJob` في transaction واحدة ← encrypted HLS الموجود.
+  - فشل التسجيل **عمره ما بيقفل الفصل**.
+  - ليه service لوحده (`Dockerfile.recorder`).
+- **Usage capture (مش ledger):** `LiveSession.usage` لكل run فيه:
+  - دقايق الاتصال حسب الدور.
+  - أعلى عدد مستقبلين في نفس الوقت.
+  - دقايق التسجيل.
+  - egress **ESTIMATED** ومكتوب معاه الأساس اللي اتحسب منه.
+
+**اللي اتقاس (MEASURED، Cloudflare حقيقي + الـ API والصفحة الحقيقيين محلياً، 2026-09-25):**
+
+| الاختبار | النتيجة |
+|---|---|
+| E2E (مدرس + 3 طلاب) | **26/26**: الدخول، والصوت، و education mode، والـ simulcast (h: 1280، و l: 320، ورجوع h)، ورفع الإيد ← السماح ← الكلام ← الـ revoke (السيرفر رفض SEND بعدها)، والشاشة، والـ reload، والـ extend، والإنهاء للكل (~30ms)، والـ teardown كامل، و 0 تسريب للـ secret |
+| النهاية المجدولة | **16/16**: الـ extension لغى النهاية القديمة. الـ sweep أنهى الفصل خلال ≤15 ثانية من النهاية الجديدة، و `endedAt` = النهاية بالظبط. إلغاء فصل LIVE ← ENDED + teardown، ومبيرجعش |
+| الشبكة | **8/8**: connection الاستقبال `failed` ← اتبنى تاني والفيديو رجع في ~6 ثواني. **الـ API وقع 20 ثانية وسط الحصة: الميديا ما اتأثرتش (301 مقابل 301 frame)**، وبعد ما رجع الصفحة لحقت الشاشة الجديدة |
+| موبايل (Pixel 5 emulated، عربي RTL) | **7/7**: من غير horizontal scroll، والأزرار ≥44px، والدخول 1.5 ثانية، ورفع الإيد باللمس، والمدرس سمع الموبايل |
+| Daily fallback | **11/11**: الـ API مبيقومش لو cloudflare من غير creds. `daily` بيقوم من غير CF creds. الجلسة الجديدة = DAILY، والـ room والتوكنات والـ DELETE وصلوا لـ Daily، والصفحة استخدمت الـ Daily adapter (0 RTC calls). جلسة CF قديمة فضلت CF، ولما مفيش creds قالت `LIVE_NOT_CONFIGURED` ومرجعتش لـ Daily |
+| الـ Recorder | **17/17**: اتلقط في ثانيتين، وطلعت REC عند الطلاب، والقطع اتلفّت، و**قتل الـ process وسط التسجيل ← recorder جديد كمّل بعد ~23 ثانية**. اتقفل مع الفصل، ثم ffmpeg ثم upload ثم VideoJob ثم **HLS مشفّر READY (360/480/720p)**. التمن: ~25–30 ثانية تسجيل ضاعوا في الـ crash |
+| Stress 10 | **10 صفحات حقيقية**: 10/10، وأول frame p50 = 1.3s و p95 = 2.5s، وصفر freezes أو loss، ورفع الإيد اتسمع في 1.6s |
+| Stress 30 | 5 صفحات + 25 client خفيف بنفس الـ endpoints: 30/30 من غير أخطاء signalling. **~786 kbps للطالب = 0.354 GB/ساعة** (مطابق لتقدير B.5). الـ loss (~13%) سببه **خط البيت** (24 من 28 Mbps)، مش Cloudflare |
+| Stress 50 | signalling-scale، الـ clients الخفيفة صوت بس: **50/50، و 0 أخطاء**، وأول frame p50 = 1.8s و p95 = 3.6s، وكل الـ endpoints p95 < 600ms، ورفع الإيد 1.6s، والإنهاء 57ms، و 53/53 connection اتقفلوا |
+| Security | 0 fragment من الـ secret أو الـ app id في web dist (116 ملف) أو api dist أو السورس أو الـ docs أو **الـ git history كله**. **9/9 mutations** على guards الصلاحيات اتقتلوا |
+| Suites | API **2431** test (منهم integration على Postgres حقيقي؛ 1 flake معروف في `password-reset` تحت الحِمل، بيعدّي لوحده 3/3 ومش متأثر بـ B.6) + web **80** + typecheck + route check. E2E النهائي: **85/85** |
+
+**مش متاختبر / يدوي:**
+- **ABLE TO MEASURE ONLY FROM ONE HOST:** جودة الوسائط لكل طالب عند 30 و 50. خط التست 28 Mbps ومبيشيلش 50 × 0.79 Mbps. **محتاج اختبار موزّع (أجهزة وشبكات مختلفة).**
+- **MANUAL — TURN:** محتاج TURN key منفصل (`CF_TURN_KEY_ID` و `CF_TURN_KEY_API_TOKEN`). من غيره STUN بس، والشبكات اللي بتقفل UDP مش هتدخل.
+- **MANUAL — موبايل حقيقي:** Android و **iOS Safari** على أجهزة حقيقية وبيانات موبايل.
+- **NOT TESTED:** الشبكة الضعيفة بـ packet shaper (CDP مبيأثرش على WebRTC). منطق الـ simulcast متاختبر unit + switch حقيقي، بس مش تحت loss حقيقي.
+- **NOT TESTED end-to-end:** سقوط connection الـ recorder نفسه بالـ SFU (المسار موجود ومشترك مع مسار الـ crash اللي اتاختبر).
+- **ARABIC BENCHMARK PENDING INPUT:** `apps/api/scripts/transcription-bench/bench.mjs` جاهز. محتاج صوت حصص مصري مع transcript مرجعي، وموافقة على الصرف.
+- **مشاهدة تسجيل Cloudflare جوه التطبيق = Checkpoint C.** الـ asset جاهز HLS مشفّر، بس التشغيل بيعدّي على Lesson.
+
+**قبل production (MANUAL ACTION REQUIRED):**
+1. **Rotate** الـ Realtime app secret، وحط الجديد في Railway secrets.
+2. TURN key (موصى بيه).
+3. service جديد للـ recorder من `Dockerfile.recorder`، بنفس الـ DB و R2 و CF vars، و `LIVE_END_WORKER_ENABLED=false`، و `WORKER_ENABLED=false`، ومن غير domain.
+4. `LIVE_PROVIDER=cloudflare` على الـ API.
+
+**الـ Rollback:** `LIVE_PROVIDER=daily` بيأثر على الجلسات الجديدة بس. الجلسات اللي اتعملت على Cloudflare بتفضل عليه، **فمتشيلش الـ CF credentials وقت الـ rollback.**
+
 ---
 
 # Deliverable 1 — Current System Audit

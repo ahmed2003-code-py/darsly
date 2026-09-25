@@ -27,7 +27,7 @@ import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { LIMITS } from '../../common/validation';
-import { LiveRtcService } from './live-rtc.service';
+import { LiveRtcService, SIMULCAST_RIDS, SimulcastRid } from './live-rtc.service';
 
 /** An SDP is a few KB; a hundred tracks' worth is still well under this. */
 const SDP_MAX = 128 * 1024;
@@ -66,6 +66,12 @@ class SubscribeDto {
   trackIds: string[];
   /** A simulcast layer, when the publisher sends several. */
   @IsOptional() @IsString() @MaxLength(8) @Matches(/^[a-z0-9]+$/) preferredRid?: string;
+}
+
+class LayerDto {
+  @IsString() @MaxLength(LIMITS.ID) trackId: string;
+  @IsString() @MaxLength(16) @Matches(/^[0-9a-zA-Z_-]+$/) mid: string;
+  @IsIn(SIMULCAST_RIDS as unknown as string[]) rid: SimulcastRid;
 }
 
 class RenegotiateDto {
@@ -167,6 +173,19 @@ export class LiveRtcController {
   ) {
     limit(u.sub);
     return this.rtc.subscribe(u.sub, id, cid, dto);
+  }
+
+  @Post('live/:id/rtc/connections/:cid/layer')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'Receive a different simulcast layer of a video' })
+  layer(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('cid') cid: string,
+    @Body() dto: LayerDto,
+  ) {
+    limit(u.sub);
+    return this.rtc.selectLayer(u.sub, id, cid, dto);
   }
 
   @Put('live/:id/rtc/connections/:cid/renegotiate')

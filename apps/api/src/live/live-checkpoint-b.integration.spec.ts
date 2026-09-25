@@ -563,9 +563,15 @@ describe('L7 on Postgres: Darsly ends the class', () => {
     expect(overdue).not.toContain(notYet.ls.id);
     expect(overdue).not.toContain(extended.ls.id);
 
-    // Two replicas sweeping at once close it once.
-    const [r1, r2] = await Promise.all([worker.sweep(), new LiveEndWorker(svc).sweep()]);
-    expect(r1.ended + r2.ended).toBeGreaterThanOrEqual(1);
+    // Two replicas sweeping at once close it once. (Oldest first, a batch at
+    // a time: on a shared test database older overdue classes may come first,
+    // so both replicas keep sweeping until this one's turn.)
+    let ended = 0;
+    for (let i = 0; i < 40 && (await row(w.ls.id)).status !== 'ENDED'; i++) {
+      const [r1, r2] = await Promise.all([worker.sweep(), new LiveEndWorker(svc).sweep()]);
+      ended += r1.ended + r2.ended;
+    }
+    expect(ended).toBeGreaterThanOrEqual(1);
     expect(daily.closeRoom.mock.calls.filter((c: any) => c[0] === w.ls.roomName)).toHaveLength(1);
     const s = await row(w.ls.id);
     expect(s.status).toBe('ENDED');

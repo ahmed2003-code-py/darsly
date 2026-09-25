@@ -83,6 +83,7 @@ function fakeSfu() {
       };
     }),
     renegotiate: jest.fn(async () => ({})),
+    selectLayer: jest.fn(async () => ({ requiresImmediateRenegotiation: false })),
     closeTracks: jest.fn(async (sid: string, mids: string[]) => {
       if (failClose.remaining > 0) {
         failClose.remaining--;
@@ -337,6 +338,61 @@ describe('B.6 Cloudflare classroom on Postgres: sending and receiving', () => {
   });
 });
 
+describe('B.6 Cloudflare classroom on Postgres: simulcast layers', () => {
+  it("a student picks the layer of the teacher's camera they receive — and nothing else", async () => {
+    if (!guard()) return;
+    const w = await world();
+    const { rtc, sfu } = build();
+    await teacherLive(rtc, w);
+    const { connectionId } = await rtc.openConnection(w.s[0].id, w.ls.id, 'RECEIVE');
+    const st = await rtc.state(w.s[0].id, w.ls.id);
+    const cam = st.tracks.find((t) => t.kind === 'VIDEO')!;
+    const voice = st.tracks.find((t) => t.kind === 'AUDIO')!;
+    await rtc.subscribe(w.s[0].id, w.ls.id, connectionId, {
+      trackIds: st.tracks.map((t) => t.id),
+      preferredRid: 'h',
+    });
+    // Only the teacher's camera was asked for in a layer.
+    const asked = sfu.client.pullTracks.mock.calls[0][1] as { preferredRid?: string }[];
+    expect(asked.filter((x) => x.preferredRid === 'h')).toHaveLength(1);
+
+    await expect(
+      rtc.selectLayer(w.s[0].id, w.ls.id, connectionId, { trackId: cam.id, mid: '100', rid: 'l' }),
+    ).resolves.toEqual({ rid: 'l' });
+    const teacherCf = (
+      await prisma.liveRtcConnection.findFirstOrThrow({
+        where: { sessionId: w.ls.id, userId: w.teacher.id },
+      })
+    ).cfSessionId;
+    expect(sfu.client.selectLayer).toHaveBeenCalledWith(expect.any(String), {
+      sessionId: teacherCf,
+      trackName: expect.stringMatching(/^video-/),
+      mid: '100',
+      preferredRid: 'l',
+    });
+    // Not a video, not in this class, not your connection: refused.
+    expect(
+      await code(
+        rtc.selectLayer(w.s[0].id, w.ls.id, connectionId, {
+          trackId: voice.id,
+          mid: '1',
+          rid: 'l',
+        }),
+      ),
+    ).toBe('RTC_TRACKS_GONE');
+    const other = await rtc.openConnection(w.s[1].id, w.ls.id, 'RECEIVE');
+    expect(
+      await code(
+        rtc.selectLayer(w.s[0].id, w.ls.id, other.connectionId, {
+          trackId: cam.id,
+          mid: '1',
+          rid: 'l',
+        }),
+      ),
+    ).toBe('RTC_CONNECTION_GONE');
+  });
+});
+
 describe('B.6 Cloudflare classroom on Postgres: raise hand', () => {
   it('raise → approve → speak → revoke, and the revoke holds at the SFU', async () => {
     if (!guard()) return;
@@ -569,9 +625,14 @@ describe('B.6 Cloudflare classroom on Postgres: the end', () => {
     const w = await world({ startsAt: new Date(Date.now() - 61 * MIN) });
     const { svc } = build();
     const worker = new LiveEndWorker(svc);
-    // Only this class: the sweep is global, so check this one's outcome.
-    await worker.sweep();
-    const row = await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } });
+    // The sweep is global and oldest-first, a batch at a time: on a shared
+    // test database other overdue classes may be ahead of this one, so it runs
+    // until this class's turn comes (as it would on consecutive ticks).
+    let row = await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } });
+    for (let i = 0; i < 40 && row.status !== 'ENDED'; i++) {
+      await worker.sweep();
+      row = await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } });
+    }
     expect(row.status).toBe('ENDED');
     expect(row.endedAt!.getTime()).toBe(w.ls.startsAt.getTime() + 60 * MIN);
   });

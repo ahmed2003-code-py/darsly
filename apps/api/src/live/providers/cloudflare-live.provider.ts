@@ -16,6 +16,8 @@ import {
  * the class is already closed on Darsly's side, so nothing can rejoin it.
  */
 const CLEANUP_MAX_ATTEMPTS = 5;
+/** SFU teardown calls in flight at once (Cloudflare allows 50 req/s per session). */
+const CLOSE_CONCURRENCY = 5;
 
 /**
  * Cloudflare Realtime SFU as a Darsly classroom — the primary provider.
@@ -137,50 +139,74 @@ export class CloudflareLiveProvider implements LiveProvider {
         tracks: { where: { closedAt: null }, select: { mid: true } },
       },
     });
-    let closed = 0;
+    // Nothing published: nothing to close at the SFU — all of them in one
+    // statement, so a class of fifty listeners is not fifty round trips
+    // queued behind one slow teardown.
+    const quiet = conns.filter((c) => !c.tracks.length).map((c) => c.id);
+    if (quiet.length) {
+      await this.prisma.liveRtcConnection.updateMany({
+        where: { id: { in: quiet }, closedAt: null },
+        data: { closedAt: new Date() },
+      });
+    }
+    let closed = quiet.length;
     let pending = 0;
-    for (const c of conns) {
-      let ok = true;
-      if (c.tracks.length) {
-        try {
-          await this.client.closeTracks(
-            c.cfSessionId,
-            c.tracks.map((t) => t.mid),
-            { force: true },
-          );
-        } catch (e) {
-          // A session or track Cloudflare no longer knows has nothing left
-          // to close; anything else is retried.
-          const status = (e as { status?: number | null }).status ?? null;
-          ok = status === 404 || status === 410 || status === 400;
-          if (!ok) this.logger.warn(`close tracks failed: ${(e as Error).message}`);
-        }
-      }
-      const giveUp = !ok && c.cleanupAttempts + 1 >= CLEANUP_MAX_ATTEMPTS;
-      if (ok || giveUp) {
-        const now = new Date();
-        await this.prisma.$transaction([
-          this.prisma.liveRtcTrack.updateMany({
-            where: { connectionId: c.id, closedAt: null },
-            data: { closedAt: now },
-          }),
-          this.prisma.liveRtcConnection.updateMany({
-            where: { id: c.id, closedAt: null },
-            data: {
-              closedAt: now,
-              ...(giveUp ? { closeReason: `${c.closeReason ?? reason}:cleanup-abandoned` } : {}),
-            },
-          }),
-        ]);
-        closed++;
-      } else {
-        await this.prisma.liveRtcConnection.update({
-          where: { id: c.id },
-          data: { cleanupAttempts: { increment: 1 } },
-        });
-        pending++;
-      }
+    // Publishers: the SFU calls in parallel, a few at a time.
+    const publishers = conns.filter((c) => c.tracks.length);
+    for (let i = 0; i < publishers.length; i += CLOSE_CONCURRENCY) {
+      const batch = publishers.slice(i, i + CLOSE_CONCURRENCY);
+      const done = await Promise.all(batch.map((c) => this.closeOne(c, reason)));
+      for (const d of done) d ? closed++ : pending++;
     }
     return { closed, pending };
+  }
+
+  private async closeOne(
+    c: {
+      id: string;
+      cfSessionId: string;
+      closeReason: string | null;
+      cleanupAttempts: number;
+      tracks: { mid: string }[];
+    },
+    reason: string,
+  ): Promise<boolean> {
+    let ok = true;
+    try {
+      await this.client.closeTracks(
+        c.cfSessionId,
+        c.tracks.map((t) => t.mid),
+        { force: true },
+      );
+    } catch (e) {
+      // A session or track Cloudflare no longer knows has nothing left to
+      // close; anything else is retried.
+      const status = (e as { status?: number | null }).status ?? null;
+      ok = status === 404 || status === 410 || status === 400;
+      if (!ok) this.logger.warn(`close tracks failed: ${(e as Error).message}`);
+    }
+    const giveUp = !ok && c.cleanupAttempts + 1 >= CLEANUP_MAX_ATTEMPTS;
+    if (!ok && !giveUp) {
+      await this.prisma.liveRtcConnection.update({
+        where: { id: c.id },
+        data: { cleanupAttempts: { increment: 1 } },
+      });
+      return false;
+    }
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.liveRtcTrack.updateMany({
+        where: { connectionId: c.id, closedAt: null },
+        data: { closedAt: now },
+      }),
+      this.prisma.liveRtcConnection.updateMany({
+        where: { id: c.id, closedAt: null },
+        data: {
+          closedAt: now,
+          ...(giveUp ? { closeReason: `${c.closeReason ?? reason}:cleanup-abandoned` } : {}),
+        },
+      }),
+    ]);
+    return true;
   }
 }

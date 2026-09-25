@@ -29,6 +29,14 @@ export function maxSpeakers(env: NodeJS.ProcessEnv = process.env): number {
 const TEACHER_KINDS: readonly LiveTrackKind[] = ['AUDIO', 'VIDEO', 'SCREEN', 'SCREEN_AUDIO'];
 const STUDENT_KINDS: readonly LiveTrackKind[] = ['AUDIO', 'VIDEO'];
 
+/**
+ * The teacher's camera goes out in two layers: `h` (720p, up to 1.2 Mbps) and
+ * `l` (a quarter of the size, up to 150 kbps). Each student receives one, and
+ * their page moves between them with the link.
+ */
+export const SIMULCAST_RIDS = ['h', 'l'] as const;
+export type SimulcastRid = (typeof SIMULCAST_RIDS)[number];
+
 /** Coalesce a burst of changes (a class joining at once) into one event. */
 const BROADCAST_COALESCE_MS = 250;
 
@@ -399,7 +407,7 @@ export class LiveRtcService {
         id: true,
         kind: true,
         trackName: true,
-        connection: { select: { cfSessionId: true } },
+        connection: { select: { cfSessionId: true, role: true } },
       },
     });
     if (tracks.length !== ids.length) {
@@ -416,7 +424,10 @@ export class LiveRtcService {
         tracks.map((t) => ({
           sessionId: t.connection.cfSessionId,
           trackName: t.trackName,
-          ...(input.preferredRid && t.kind === 'VIDEO' ? { preferredRid: input.preferredRid } : {}),
+          // Only the teacher's camera is sent in layers.
+          ...(input.preferredRid && t.kind === 'VIDEO' && t.connection.role === 'TEACHER'
+            ? { preferredRid: input.preferredRid }
+            : {}),
         })),
       ),
     );
@@ -436,6 +447,51 @@ export class LiveRtcService {
       sessionDescription: res.sessionDescription ?? null,
       tracks: out,
     };
+  }
+
+  /**
+   * Pick the simulcast layer of a video this connection receives — the page
+   * steps down on a weak link and back up when it recovers. The track must be
+   * one this person may receive; the SFU session it comes from is read here.
+   */
+  async selectLayer(
+    userId: string,
+    sessionId: string,
+    connectionId: string,
+    input: { trackId: string; mid: string; rid: SimulcastRid },
+  ) {
+    const g = await this.gate(userId, sessionId);
+    const c = await this.connection(g, userId, connectionId, 'RECEIVE');
+    const t = await this.prisma.liveRtcTrack.findFirst({
+      where: {
+        id: input.trackId,
+        sessionId,
+        roomName: g.s.roomName,
+        kind: 'VIDEO',
+        closedAt: null,
+        userId: { not: userId },
+        connection: { closedAt: null, closeReason: null },
+      },
+      select: { trackName: true, connection: { select: { cfSessionId: true } } },
+    });
+    if (!t) {
+      throw new ConflictException({
+        message: 'Track is no longer available',
+        code: 'RTC_TRACKS_GONE',
+      });
+    }
+    await this.cf(
+      this.client.selectLayer(c.cfSessionId, {
+        sessionId: t.connection.cfSessionId,
+        trackName: t.trackName,
+        mid: input.mid,
+        preferredRid: input.rid,
+      }),
+    );
+    // Kept in the log: how often classes step down is the quality signal
+    // worth watching in production.
+    this.logger.log(`live.rtc.layer liveSession=${sessionId} user=${userId} rid=${input.rid}`);
+    return { rid: input.rid };
   }
 
   async renegotiate(

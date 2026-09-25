@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { getSocket } from './socket';
 import type { Participant } from './useDailyMeeting';
+import { initialLayer, nextLayer, type LayerState } from './simulcast';
 
 /**
  * The Darsly classroom over Cloudflare Realtime.
@@ -81,7 +82,12 @@ interface Pulled {
   kind: Kind;
   userId: string;
   track: MediaStreamTrack | null;
+  /** The teacher's camera comes in layers; this is the one being received. */
+  layer: LayerState | null;
 }
+
+/** How often a student's page looks at what is arriving (see simulcast.ts). */
+const LAYER_CHECK_MS = 4_000;
 
 const errCode = (e: any): string | undefined => e?.response?.data?.code;
 
@@ -216,22 +222,30 @@ export function useCloudflareMeeting(
       do {
         again.current = false;
         const s = stateRef.current;
-        const c = recv.current;
-        if (!s || !c || c.closed || !joinedRef.current) return;
+        if (!s || !joinedRef.current) return;
         const me = s.me.userId;
         const want = new Map(s.tracks.filter((t) => t.userId !== me).map((t) => [t.id, t]));
         const add = [...want.keys()].filter((id) => !pulled.current.has(id));
         const drop = [...pulled.current.keys()].filter((id) => !want.has(id));
+        // Opened when there is first something to receive, not at entry:
+        // Cloudflare ends an SFU session that sits unconnected, and a teacher
+        // waiting for the first student to speak would come back to a dead one.
+        let c = recv.current;
+        if (!c || c.closed) {
+          if (!add.length) return;
+          c = await openRecv();
+        }
+        const conn = c;
 
         if (drop.length) {
-          await c.run(async () => {
+          await conn.run(async () => {
             const mids: string[] = [];
             for (const id of drop) {
               const p = pulled.current.get(id)!;
               pulled.current.delete(id);
               dropAudio(id);
               mids.push(p.mid);
-              const tr = c.pc.getTransceivers().find((x) => x.mid === p.mid);
+              const tr = conn.pc.getTransceivers().find((x) => x.mid === p.mid);
               try {
                 tr?.stop();
               } catch {
@@ -239,15 +253,15 @@ export function useCloudflareMeeting(
               }
             }
             try {
-              const offer = await c.pc.createOffer();
-              await c.pc.setLocalDescription(offer);
+              const offer = await conn.pc.createOffer();
+              await conn.pc.setLocalDescription(offer);
               const r = (
-                await api.post(`${base}/connections/${c.id}/close-tracks`, {
+                await api.post(`${base}/connections/${conn.id}/close-tracks`, {
                   mids,
                   offer: { type: 'offer', sdp: offer.sdp },
                 })
               ).data;
-              if (r.sessionDescription) await c.pc.setRemoteDescription(r.sessionDescription);
+              if (r.sessionDescription) await conn.pc.setRemoteDescription(r.sessionDescription);
             } catch {
               // The publisher is gone already; the SFU has nothing to close.
             }
@@ -256,14 +270,37 @@ export function useCloudflareMeeting(
         }
 
         if (add.length) {
-          await c.run(async () => {
+          await conn.run(async () => {
             let r: any;
             try {
-              r = (await api.post(`${base}/connections/${c.id}/subscribe`, { trackIds: add })).data;
+              r = (
+                await api.post(`${base}/connections/${conn.id}/subscribe`, {
+                  trackIds: add,
+                  preferredRid: 'h',
+                })
+              ).data;
             } catch (e) {
-              if (errCode(e) === 'RTC_TRACKS_GONE') {
+              const code = errCode(e);
+              if (code === 'RTC_TRACKS_GONE') {
                 again.current = true;
                 await fetchState();
+                return;
+              }
+              if (code === 'RTC_SESSION_EXPIRED' || code === 'RTC_CONNECTION_GONE') {
+                // The connection is no longer usable: drop it; the next pass
+                // opens a new one (which also closes the old one server-side)
+                // and pulls everything again.
+                conn.closed = true;
+                try {
+                  conn.pc.close();
+                } catch {
+                  /* closed */
+                }
+                if (recv.current === conn) recv.current = null;
+                for (const id of [...pulled.current.keys()]) dropAudio(id);
+                pulled.current.clear();
+                byMid.current.clear();
+                again.current = true;
                 return;
               }
               throw e;
@@ -275,14 +312,23 @@ export function useCloudflareMeeting(
             }[]) {
               const info = want.get(t.trackId);
               if (!t.mid || t.error || !info) continue;
-              const p: Pulled = { mid: t.mid, kind: info.kind, userId: info.userId, track: null };
+              const p: Pulled = {
+                mid: t.mid,
+                kind: info.kind,
+                userId: info.userId,
+                track: null,
+                layer:
+                  info.kind === 'VIDEO' && info.role === 'TEACHER'
+                    ? initialLayer(Date.now())
+                    : null,
+              };
               pulled.current.set(t.trackId, p);
             }
             if (r.requiresImmediateRenegotiation && r.sessionDescription) {
-              await c.pc.setRemoteDescription(r.sessionDescription);
-              const answer = await c.pc.createAnswer();
-              await c.pc.setLocalDescription(answer);
-              await api.put(`${base}/connections/${c.id}/renegotiate`, {
+              await conn.pc.setRemoteDescription(r.sessionDescription);
+              const answer = await conn.pc.createAnswer();
+              await conn.pc.setLocalDescription(answer);
+              await api.put(`${base}/connections/${conn.id}/renegotiate`, {
                 answer: { type: 'answer', sdp: answer.sdp },
               });
             }
@@ -331,13 +377,20 @@ export function useCloudflareMeeting(
   );
 
   /** Send one kind of track (a new one replaces the last of that kind). */
-  const publish = useCallback(
-    async (kind: Kind, track: MediaStreamTrack) => {
-      const c = send.current ?? (await openSend());
+  /** One push on a sending connection. */
+  const pushOn = useCallback(
+    async (c: Conn, kind: Kind, track: MediaStreamTrack) => {
       await c.run(async () => {
+        // The teacher's camera goes out in two layers (simulcast): 720p and a
+        // quarter of it. Each student receives the one their link can carry.
         const encodings: RTCRtpEncodingParameters[] | undefined =
           kind === 'VIDEO'
-            ? [{ maxBitrate: stateRef.current?.me.role === 'TEACHER' ? 1_200_000 : 350_000 }]
+            ? stateRef.current?.me.role === 'TEACHER'
+              ? [
+                  { rid: 'h', maxBitrate: 1_200_000 },
+                  { rid: 'l', scaleResolutionDownBy: 4, maxBitrate: 150_000 },
+                ]
+              : [{ maxBitrate: 350_000 }]
             : kind === 'SCREEN'
               ? [{ maxBitrate: 1_000_000, maxFramerate: 8 }]
               : undefined;
@@ -356,9 +409,41 @@ export function useCloudflareMeeting(
         if (prev && prev.track !== track) prev.track.stop();
         local.current.set(kind, { track, mid: tr.mid });
       });
+    },
+    [base],
+  );
+
+  /**
+   * Send one kind of track (a new one replaces the last of that kind). If the
+   * sending connection has expired at the SFU, a new one is opened and
+   * everything this browser was sending goes out on it again.
+   */
+  const publish = useCallback(
+    async (kind: Kind, track: MediaStreamTrack) => {
+      const c = send.current ?? (await openSend());
+      try {
+        await pushOn(c, kind, track);
+      } catch (e) {
+        const code = errCode(e);
+        if (code !== 'RTC_SESSION_EXPIRED' && code !== 'RTC_CONNECTION_GONE') throw e;
+        const others = [...local.current.entries()].filter(([k]) => k !== kind);
+        c.closed = true;
+        try {
+          c.pc.close();
+        } catch {
+          /* closed */
+        }
+        if (send.current === c) send.current = null;
+        local.current.clear();
+        const fresh = await openSend();
+        for (const [k, l] of others) {
+          if (l.track.readyState === 'live') await pushOn(fresh, k, l.track);
+        }
+        await pushOn(fresh, kind, track);
+      }
       bump();
     },
-    [base, openSend, bump],
+    [openSend, pushOn, bump],
   );
 
   /** Stop sending one kind: the device is released, the SFU is told. */
@@ -442,7 +527,6 @@ export function useCloudflareMeeting(
       leaving.current = false;
       ice.current = access.iceServers ?? [];
       try {
-        await openRecv();
         joinedRef.current = true;
         setJoined(true);
         const s = await fetchState();
@@ -506,7 +590,9 @@ export function useCloudflareMeeting(
     if (r && r.downSince && Date.now() - r.downSince > RECONNECT_AFTER_MS) {
       await closeConn(recv).catch(() => undefined);
       for (const id of [...audioEls.current.keys()]) dropAudio(id);
-      await openRecv().catch(() => undefined);
+      pulled.current.clear();
+      byMid.current.clear();
+      // The next reconcile opens a fresh connection and pulls everything.
       await fetchState();
       await reconcile().catch(() => undefined);
       setNotice('RECONNECTED');
@@ -590,6 +676,72 @@ export function useCloudflareMeeting(
       if (h) clearTimeout(h);
     };
   }, [enabled, joined, liveSessionId, fetchState, reconcile, teardown, stopSending, reconnect]);
+
+  // The teacher's camera layer: down on a weak link, back up when it recovers.
+  useEffect(() => {
+    if (!enabled || !joined) return;
+    const last = new Map<string, { lost: number; recv: number; freezes: number }>();
+    const h = setInterval(async () => {
+      const c = recv.current;
+      if (!c || c.closed) return;
+      const layered = [...pulled.current.entries()].filter(([, p]) => p.layer);
+      if (!layered.length) return;
+      let stats: RTCStatsReport;
+      try {
+        stats = await c.pc.getStats();
+      } catch {
+        return;
+      }
+      let incomingKbps: number | null = null;
+      const byMidStats = new Map<string, { lost: number; recv: number; freezes: number }>();
+      stats.forEach((x: any) => {
+        if (x.type === 'candidate-pair' && x.nominated && x.availableIncomingBitrate) {
+          incomingKbps = x.availableIncomingBitrate / 1000;
+        }
+        if (x.type === 'inbound-rtp' && x.kind === 'video' && x.mid != null) {
+          byMidStats.set(String(x.mid), {
+            lost: x.packetsLost ?? 0,
+            recv: x.packetsReceived ?? 0,
+            freezes: x.freezeCount ?? 0,
+          });
+        }
+      });
+      const now = Date.now();
+      for (const [trackId, p] of layered) {
+        const cur = byMidStats.get(p.mid);
+        if (!cur) continue;
+        const prev = last.get(trackId);
+        last.set(trackId, cur);
+        if (!prev) continue;
+        const lost = Math.max(0, cur.lost - prev.lost);
+        const got = Math.max(0, cur.recv - prev.recv);
+        const next = nextLayer(
+          p.layer!,
+          {
+            lossPct: lost + got ? (100 * lost) / (lost + got) : 0,
+            freezes: Math.max(0, cur.freezes - prev.freezes),
+            incomingKbps,
+          },
+          now,
+        );
+        if (next.rid !== p.layer!.rid) {
+          try {
+            await api.post(`${base}/connections/${c.id}/layer`, {
+              trackId,
+              mid: p.mid,
+              rid: next.rid,
+            });
+            p.layer = next;
+          } catch {
+            // Not switched; asked again on the next look.
+          }
+        } else {
+          p.layer = next;
+        }
+      }
+    }, LAYER_CHECK_MS);
+    return () => clearInterval(h);
+  }, [enabled, joined, base]);
 
   // Presence — the same heartbeat attendance has always been counted from.
   useEffect(() => {

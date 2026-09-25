@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   HttpException,
   Injectable,
   Logger,
@@ -228,6 +229,27 @@ export class CloudflareRealtimeClient {
     });
   }
 
+  /**
+   * Change what a pulled track receives — the simulcast layer. Takes effect
+   * without renegotiation (verified against the real SFU: 320×180 ⇄ 1280×720).
+   */
+  selectLayer(
+    sessionId: string,
+    track: { sessionId: string; trackName: string; mid: string; preferredRid: string },
+  ): Promise<CfTracksResponse> {
+    return this.call('PUT', `/sessions/${sessionId}/tracks/update`, {
+      tracks: [
+        {
+          location: 'remote',
+          sessionId: track.sessionId,
+          trackName: track.trackName,
+          mid: track.mid,
+          simulcast: { preferredRid: track.preferredRid },
+        },
+      ],
+    });
+  }
+
   renegotiate(sessionId: string, answer: CfSessionDescription): Promise<CfTracksResponse> {
     return this.call('PUT', `/sessions/${sessionId}/renegotiate`, { sessionDescription: answer });
   }
@@ -326,6 +348,14 @@ export function toHttpError(e: unknown): HttpException {
         code: 'LIVE_PROVIDER_UNREACHABLE',
       });
     case 'rejected':
+      // The SFU session behind this connection is gone (Cloudflare ends one
+      // that sat unconnected): the page opens a new connection and retries.
+      if (e.status === 410) {
+        return new ConflictException({
+          message: 'The connection expired; reconnecting',
+          code: 'RTC_SESSION_EXPIRED',
+        });
+      }
       // A bad offer, a track that no longer exists: the browser's request,
       // not an outage. Retrying the same thing will fail the same way.
       return new BadRequestException({

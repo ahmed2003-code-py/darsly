@@ -209,6 +209,9 @@ describe('CloudflareRealtimeClient', () => {
       'LIVE_PROVIDER_UNREACHABLE',
     );
     expect((toHttpError(err('auth', 401)).getResponse() as any).code).toBe('LIVE_PROVIDER_ERROR');
+    const gone = toHttpError(err('rejected', 410));
+    expect(gone.getStatus()).toBe(409);
+    expect((gone.getResponse() as any).code).toBe('RTC_SESSION_EXPIRED');
     const rej = toHttpError(err('rejected', 400));
     expect(rej.getStatus()).toBe(400);
     expect((rej.getResponse() as any).code).toBe('LIVE_RTC_REJECTED');

@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { DailyService } from './daily.service';
 import { JOIN_OPENS_MIN, LiveScope, LiveService, PRESENCE_GRACE_SEC } from './live.service';
+import { dailyProviders } from './providers/testing';
 
 /**
  * Who gets into the classroom, and what the room remembers about it.
@@ -133,7 +134,7 @@ function build(world: {
     prisma,
     notifications,
     gamification,
-    daily,
+    dailyProviders(daily),
     realtime,
     jobs,
     {} as any,
@@ -165,8 +166,11 @@ describe('a teacher opens the classroom', () => {
     const res = await service.start(T1, 'ls1', 'u_teacher');
     expect(daily.createRoom).toHaveBeenCalledWith('darsly-ls1', expect.any(Number));
     expect(res.participant.role).toBe('TEACHER');
-    expect(res.meeting?.url).toContain('darsly.daily.co');
-    expect(res.meeting?.token).toBe('tok_abc');
+    expect(res.meeting).toMatchObject({
+      provider: 'daily',
+      url: expect.stringContaining('darsly.daily.co'),
+    });
+    expect(res.meeting).toMatchObject({ token: 'tok_abc' });
     // Owner is decided here, never asked for — it is what allows moderation.
     expect((daily.meetingToken as jest.Mock).mock.calls[0][0].isOwner).toBe(true);
   });
@@ -540,7 +544,7 @@ describe('a student enters the classroom', () => {
     const { service, daily } = build({ session: live(), booked: true });
     const res = await service.join('u_student', 'ls1');
     expect(res.participant.role).toBe('STUDENT');
-    expect(res.meeting?.token).toBe('tok_abc');
+    expect(res.meeting).toMatchObject({ token: 'tok_abc' });
     // A student is never an owner: that is what would let them mute the class.
     expect((daily.meetingToken as jest.Mock).mock.calls[0][0].isOwner).toBe(false);
   });

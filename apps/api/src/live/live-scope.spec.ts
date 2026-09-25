@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { LiveScope, LiveService } from './live.service';
 import { AcademyService } from '../academy/academy.service';
+import { dailyProviders } from './providers/testing';
 
 function makePrisma() {
   return {
@@ -29,7 +30,7 @@ const svc = (prisma: any, academy = academyMock()) =>
     prisma,
     { create: jest.fn() } as any,
     {} as any,
-    {} as any,
+    dailyProviders({}),
     {} as any,
     {} as any,
     academy,

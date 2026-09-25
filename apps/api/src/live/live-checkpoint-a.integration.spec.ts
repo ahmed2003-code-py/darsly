@@ -9,6 +9,7 @@ import { PaymentMatchingService } from '../payments/payment-matching.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LiveSummaryHandler } from './live-summary.handler';
 import { LiveScope, LiveService, SUMMARY_STALE_MS } from './live.service';
+import { dailyProviders } from './providers/testing';
 
 /**
  * Checkpoint A against a real PostgreSQL.
@@ -49,7 +50,7 @@ function liveService(jobs: AiJobService, s = stubs()) {
     prisma,
     s.notifications as any,
     {} as any,
-    s.daily as any,
+    dailyProviders(s.daily),
     s.realtime as any,
     jobs,
     {} as any,
@@ -321,7 +322,7 @@ describe('L3 on Postgres: AI call → AiCallLog → AiJob → monthly budget', (
     const handler = new LiveSummaryHandler(
       prisma,
       ai,
-      { transcriptFor: jest.fn(), transcriptionAvailable: jest.fn() } as any,
+      dailyProviders({ transcriptFor: jest.fn(), transcriptionAvailable: jest.fn() }),
       { create: jest.fn(async () => ({})) } as any,
     );
     const worker = new AiJobWorker(config, jobs, [handler]);
@@ -405,7 +406,7 @@ describe('L1 on Postgres: a worker that fails every attempt', () => {
     const handler = new LiveSummaryHandler(
       prisma,
       ai,
-      { transcriptFor: jest.fn(), transcriptionAvailable: jest.fn() } as any,
+      dailyProviders({ transcriptFor: jest.fn(), transcriptionAvailable: jest.fn() }),
       { create: jest.fn(async () => ({})) } as any,
     );
     const worker = new AiJobWorker(config, jobs, [handler]);

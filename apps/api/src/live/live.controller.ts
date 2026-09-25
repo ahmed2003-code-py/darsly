@@ -21,6 +21,7 @@ import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
+import { LiveRtcService } from './rtc/live-rtc.service';
 
 class CreateLiveDto {
   @IsString() @MinLength(2) @MaxLength(160) title: string;
@@ -90,7 +91,10 @@ const scopeOf = (ctx: AcademyContext): LiveScope => ({
 @ApiBearerAuth()
 @Controller()
 export class LiveController {
-  constructor(private readonly live: LiveService) {}
+  constructor(
+    private readonly live: LiveService,
+    private readonly rtc: LiveRtcService,
+  ) {}
 
   // ── Teacher ──────────────────────────────────────────────────────────────
 
@@ -333,7 +337,10 @@ export class LiveController {
   @Post('live/:id/leave')
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Left the room (best effort — heartbeats are the record)' })
-  leave(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+  async leave(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    // A Cloudflare class also closes this person's connections now, rather
+    // than when the SFU notices they went quiet.
+    await this.rtc.leave(u.sub, id);
     return this.live.leave(u.sub, id);
   }
 }

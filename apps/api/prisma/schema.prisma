@@ -2339,6 +2339,11 @@ model LiveSession {
   /// and no room of its own keeps sending students there.
   joinUrl       String?
   status        LiveSessionStatus @default(SCHEDULED)
+  /// Which video provider carries this class. Written once, when the session
+  /// is created, from LIVE_PROVIDER — and never changed after, so switching
+  /// the configured provider moves new classes only. Rows from before the
+  /// column existed ran on Daily, and say so.
+  provider      LiveProviderKind  @default(DAILY)
   /// The Daily room backing this session. Created when the teacher starts it,
   /// not when they schedule it — a room booked weeks ahead is a room sitting
   /// open weeks ahead, and the session may never run at all.
@@ -2384,9 +2389,13 @@ model LiveSession {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  bookings   LiveBooking[]
-  attendance LiveAttendance[]
-  messages   LiveChatMessage[]
+  bookings       LiveBooking[]
+  attendance     LiveAttendance[]
+  messages       LiveChatMessage[]
+  rtcConnections LiveRtcConnection[]
+  rtcTracks      LiveRtcTrack[]
+  hands          LiveHand[]
+  recordings     LiveRecording[]
 
   @@index([tenantId, startsAt])
   @@index([academyId, startsAt])
@@ -2396,6 +2405,161 @@ model LiveSession {
   /// The end sweep: LIVE classes that have started, oldest first
   /// (LiveService.overdueLiveSessionIds). Bounded to what is running now.
   @@index([status, startsAt])
+}
+
+enum LiveProviderKind {
+  DAILY
+  CLOUDFLARE
+}
+
+/// Cloudflare Realtime: one row per browser (or recorder) WebRTC connection.
+///
+/// Cloudflare's SFU has no rooms and no participants — only sessions, one per
+/// peer connection, each able to push and pull tracks. Which connections make
+/// up a classroom, whose they are, and what each may send is Darsly's to know,
+/// so it is kept here rather than in memory: several API replicas answer the
+/// same classroom, and a restart must not forget who is in it.
+///
+/// `roomName` is the classroom run (LiveSession.roomName when it was opened):
+/// a class ended and reopened inside its window is a new run, and the old
+/// run's rows are cleaned up without touching the new one's.
+model LiveRtcConnection {
+  id              String         @id @default(cuid())
+  sessionId       String
+  session         LiveSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName        String
+  userId          String
+  role            LiveRtcRole
+  /// RECEIVE pulls; SEND pushes. A student's SEND exists only while they are
+  /// allowed to speak — separate from RECEIVE so revoking it never touches
+  /// what they are watching.
+  purpose         LiveRtcPurpose
+  /// Cloudflare's id for the SFU session. Never trusted from a client: the
+  /// browser addresses its connection by `id`, and the server maps it.
+  cfSessionId     String         @unique
+  createdAt       DateTime       @default(now())
+  lastSeenAt      DateTime       @default(now())
+  closedAt        DateTime?
+  closeReason     String?
+  /// Provider-side teardown attempts after close (bounded; see cleanup).
+  cleanupAttempts Int            @default(0)
+  tracks          LiveRtcTrack[]
+
+  @@index([sessionId, roomName, closedAt])
+  @@index([closedAt, createdAt])
+}
+
+enum LiveRtcRole {
+  TEACHER
+  STUDENT
+  RECORDER
+}
+
+enum LiveRtcPurpose {
+  RECEIVE
+  SEND
+}
+
+/// A track someone pushed to the SFU. Only tracks listed here (open, in the
+/// current run, from someone allowed to send them) can be pulled — the server
+/// checks every subscription against this table.
+model LiveRtcTrack {
+  id           String            @id @default(cuid())
+  connectionId String
+  connection   LiveRtcConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  sessionId    String
+  session      LiveSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName     String
+  userId       String
+  kind         LiveTrackKind
+  /// Server-assigned; unique inside its SFU session.
+  trackName    String
+  mid          String
+  createdAt    DateTime          @default(now())
+  closedAt     DateTime?
+
+  @@unique([connectionId, trackName])
+  @@index([sessionId, roomName, closedAt])
+}
+
+enum LiveTrackKind {
+  AUDIO
+  VIDEO
+  SCREEN
+  SCREEN_AUDIO
+}
+
+/// A student's place in the raise-hand flow. Server-authoritative: the
+/// browser shows it, never decides it, and a student can push audio or video
+/// only while this says APPROVED_TO_SPEAK or ACTIVE_SPEAKER for the current run.
+model LiveHand {
+  sessionId String
+  session   LiveSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  roomName  String
+  state     LiveHandState @default(IDLE)
+  raisedAt  DateTime?
+  decidedAt DateTime?
+  decidedBy String?
+  updatedAt DateTime      @updatedAt
+
+  @@id([sessionId, userId])
+}
+
+enum LiveHandState {
+  IDLE
+  HAND_RAISED
+  APPROVED_TO_SPEAK
+  ACTIVE_SPEAKER
+  RELEASED
+}
+
+/// One recording of a Darsly-hosted (Cloudflare) class, made by Darsly's own
+/// recorder and handed to the existing video pipeline (VideoAsset → VideoJob →
+/// encrypted HLS).
+///
+/// Its own row and its own state machine, deliberately apart from
+/// LiveSession.status: a recording that fails never ends a class, and a class
+/// that ends does not make a recording "done" — the upload and packaging run
+/// long after. Leased like VideoJob, so a recorder that dies is noticed and
+/// another can take over what is left.
+model LiveRecording {
+  id              String              @id @default(cuid())
+  sessionId       String
+  session         LiveSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName        String
+  tenantId        String
+  status          LiveRecordingStatus @default(REQUESTED)
+  requestedBy     String
+  /// Which recorder process holds it, and until when (renewed by heartbeat).
+  leaseOwner      String?
+  leaseUntil      DateTime?
+  heartbeatAt     DateTime?
+  attempts        Int                 @default(0)
+  startedAt       DateTime?
+  stopRequestedAt DateTime?
+  stoppedAt       DateTime?
+  /// Pieces written so far; a recorder restart continues with a new one.
+  segments        Int                 @default(0)
+  sizeBytes       BigInt              @default(0)
+  durationSec     Int                 @default(0)
+  videoAssetId    String?             @unique
+  error           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([status, leaseUntil])
+  @@index([sessionId, createdAt])
+}
+
+enum LiveRecordingStatus {
+  REQUESTED
+  RECORDING
+  STOPPING
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
 }
 
 /// One shape for the three things that happen to a session after it ends.

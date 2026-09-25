@@ -71,6 +71,17 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
       if (ended || failed) this.logger.log(`live end sweep: ${ended} ended, ${failed} retrying`);
     } catch (e) {
       this.logger.error(`live end sweep error: ${(e as Error).message}`);
+    }
+    try {
+      // Provider teardown still owed — a Cloudflare class's tracks after it
+      // ended, a revoked speaker whose close did not reach the SFU. Retried
+      // here, from the data, like the ends themselves.
+      const c = await this.live.sweepProviderCleanups(LIVE_END_BATCH);
+      if (c.closed || c.pending) {
+        this.logger.log(`live cleanup sweep: ${c.closed} closed, ${c.pending} retrying`);
+      }
+    } catch (e) {
+      this.logger.error(`live cleanup sweep error: ${(e as Error).message}`);
     } finally {
       this.running = false;
     }

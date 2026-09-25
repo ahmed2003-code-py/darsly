@@ -6,6 +6,7 @@ import { PaymentMatchingService } from '../payments/payment-matching.service';
 import { DailyService } from './daily.service';
 import { LiveSummaryHandler } from './live-summary.handler';
 import { LiveScope, LiveService, SUMMARY_STALE_MS } from './live.service';
+import { dailyProviders } from './providers/testing';
 
 /**
  * Checkpoint A — the Live bugs found in the architecture audit
@@ -102,7 +103,7 @@ function liveWorld(
     prisma,
     notifications as any,
     {} as any,
-    daily as any,
+    dailyProviders(daily),
     realtime as any,
     jobs as any,
     {} as any,
@@ -360,7 +361,7 @@ describe('L3: a summary costs what its calls cost, and says so', () => {
     const handler = new LiveSummaryHandler(
       prisma,
       ai,
-      { transcriptFor: jest.fn(), transcriptionAvailable: jest.fn() } as any,
+      dailyProviders({ transcriptFor: jest.fn(), transcriptionAvailable: jest.fn() }),
       { create: jest.fn(async () => ({})) } as any,
     );
     return { handler, prisma, logged };
@@ -482,7 +483,7 @@ describe('L4: announcements go to students whose access is still active', () => 
       prisma,
       { create: jest.fn(async () => ({})) } as any,
       {} as any,
-      {} as any,
+      dailyProviders({}),
       {} as any,
       {} as any,
       academy as any,

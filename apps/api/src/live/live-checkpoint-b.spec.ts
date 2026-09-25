@@ -21,6 +21,7 @@ import {
   LiveService,
   liveAttendedThresholdSec,
 } from './live.service';
+import { dailyProviders } from './providers/testing';
 
 /**
  * Checkpoint B — L7 (Darsly owns the end of a class) and L10 (attendance earns
@@ -111,7 +112,7 @@ function world(
     prisma,
     { create: jest.fn(async () => ({})) } as any,
     gamification as any,
-    daily as any,
+    dailyProviders(daily),
     realtime as any,
     {} as any,
     {} as any,

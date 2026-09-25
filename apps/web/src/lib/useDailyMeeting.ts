@@ -64,8 +64,14 @@ export function useDailyMeeting(
   opts: {
     /** Each heartbeat reply carries the server's clock for this session. */
     onTiming?: (timing: { startedAt: string | null; endsAt: string; serverNow: string }) => void;
+    /**
+     * false: this class is not on Daily — no call object is made at all (it
+     * would claim the page's one Daily slot and load nothing useful).
+     */
+    enabled?: boolean;
   } = {},
 ) {
+  const enabled = opts.enabled ?? true;
   const callRef = useRef<DailyCall | null>(null);
   const onTimingRef = useRef(opts.onTiming);
   onTimingRef.current = opts.onTiming;
@@ -95,6 +101,7 @@ export function useDailyMeeting(
   // Built in an effect rather than during render, and only once the previous
   // page's teardown has finished.
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     void (async () => {
       if (teardown) await teardown.catch(() => undefined);
@@ -126,7 +133,7 @@ export function useDailyMeeting(
           });
       }
     };
-  }, [liveSessionId]);
+  }, [liveSessionId, enabled]);
 
   useEffect(() => {
     const c = call;
@@ -404,6 +411,7 @@ export function useDailyMeeting(
   }, [notice]);
 
   return {
+    provider: 'daily' as const,
     participants,
     joined,
     ended,

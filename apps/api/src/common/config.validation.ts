@@ -101,6 +101,31 @@ export function validateConfig(env: NodeJS.ProcessEnv = process.env): void {
     );
   }
 
+  // ── Live classrooms ───────────────────────────────────────────────────────
+  // LIVE_PROVIDER picks the provider for new classes: cloudflare (default) or
+  // daily. Cloudflare without its credentials is fatal in every environment
+  // (LiveProvidersModule refuses to boot); reported here too, in production,
+  // alongside the other problems rather than on its own.
+  const liveProvider = (env.LIVE_PROVIDER ?? '').trim().toLowerCase() || 'cloudflare';
+  if (!['cloudflare', 'daily'].includes(liveProvider)) {
+    record('LIVE_PROVIDER', 'must be "cloudflare" or "daily"');
+  } else if (
+    liveProvider === 'cloudflare' &&
+    (!env.CF_REALTIME_APP_ID?.trim() || !env.CF_REALTIME_APP_SECRET?.trim())
+  ) {
+    record(
+      'CF_REALTIME_APP_ID / CF_REALTIME_APP_SECRET',
+      'required when LIVE_PROVIDER is cloudflare (the default); or set LIVE_PROVIDER=daily',
+    );
+  }
+  // Anything VITE_* is compiled into the browser bundle. A provider secret
+  // there is a secret published to every visitor.
+  for (const key of Object.keys(env)) {
+    if (/^VITE_.*(SECRET|TOKEN|CF_REALTIME|TURN_KEY|DAILY_API|DEEPGRAM)/i.test(key)) {
+      record(key, 'looks like a provider secret in a VITE_ variable, which ships to every browser');
+    }
+  }
+
   // ── Academy Studio (AI site) ──────────────────────────────────────────────
   // The feature is a kill-switch (AI_ACADEMY_ENABLED). All of the strict checks
   // below only apply when it is ON, so a prod deploy with the flag OFF (the

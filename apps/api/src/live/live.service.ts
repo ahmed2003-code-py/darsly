@@ -11,8 +11,9 @@ import { LivePipelineStatus, LiveSessionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
-import { DailyService } from './daily.service';
-import { LIVE_MAX_DURATION_MIN, roomSafetyExpiryMs } from './live-timing';
+import { LIVE_MAX_DURATION_MIN } from './live-timing';
+import { LiveProviders } from './providers/live-providers';
+import type { LiveProviderKind, RoomCloseResult } from './providers/live-provider';
 import { RealtimeService } from '../realtime/realtime.service';
 import { AiJobService } from '../academy-site/jobs/ai-job.service';
 
@@ -113,7 +114,7 @@ export class LiveService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly gamification: GamificationService,
-    private readonly daily: DailyService,
+    private readonly providers: LiveProviders,
     private readonly realtime: RealtimeService,
     private readonly jobs: AiJobService,
     private readonly academy: AcademyService,
@@ -145,6 +146,9 @@ export class LiveService {
         capacity: dto.capacity ?? null,
         courseId: dto.courseId ?? null,
         joinUrl: dto.joinUrl ?? null,
+        // Fixed here, for the life of the class: a later change to
+        // LIVE_PROVIDER moves new classes, never this one.
+        provider: this.providers.defaultKind,
       },
     });
     await this.announceToStudents(session, session.title, session.startsAt);
@@ -555,20 +559,20 @@ export class LiveService {
       throw new BadRequestException({ message: 'المدرّس لم يبدأ الفصل بعد', code: 'NOT_STARTED' });
     }
 
-    const token = await this.daily.meetingToken({
-      roomName: s.roomName,
+    const meeting = await this.providers.forSession(s).participantAccess({
+      session: { id: s.id, roomName: s.roomName, roomUrl: s.roomUrl },
       userName: student.user.fullName,
       userId,
       // The student is never an owner: that is what would let them mute and
       // remove the class, and it is decided here rather than asked for.
-      isOwner: false,
+      role: 'STUDENT',
       endsAtMs: this.closesAt(s),
     });
     await this.markPresent(sessionId, userId, 'STUDENT');
     return {
       session: this.meetingSession(s),
       externalUrl: null,
-      meeting: { provider: 'daily' as const, url: s.roomUrl!, token },
+      meeting,
       participant: { role: 'STUDENT' as const },
     };
   }
@@ -643,14 +647,13 @@ export class LiveService {
       });
     }
 
-    // The room name is derived, not random: it makes the Daily dashboard
-    // readable and it is unique per session by construction.
-    const roomName = `darsly-${id}`.toLowerCase();
     let room;
     try {
-      // A safety TTL past the longest class this could become — never the
-      // way it ends (see live-timing.ts; Darsly closes the room at the end).
-      room = await this.daily.createRoom(roomName, roomSafetyExpiryMs(session.startsAt.getTime()));
+      // The session's own provider — fixed when it was created, never the
+      // one configured today (see LiveProviders).
+      room = await this.providers
+        .forSession(session)
+        .openRoom({ sessionId: id, startsAtMs: session.startsAt.getTime() });
     } catch (e) {
       // The provider is the one thing here that can fail for reasons of its
       // own. Put the session back where it was so the button can be pressed
@@ -724,11 +727,12 @@ export class LiveService {
             durationMin: number;
             status: LiveSessionStatus;
             roomName: string | null;
+            provider: LiveProviderKind;
             deletedAt: Date | null;
             endedAt: Date | null;
           }[]
         >`SELECT id, "tenantId", "academyId", "startsAt", "durationMin", status::text AS status,
-                 "roomName", "deletedAt", "endedAt"
+                 "roomName", provider::text AS provider, "deletedAt", "endedAt"
           FROM "LiveSession" WHERE id = ${id} FOR UPDATE`;
         if (!s) return { outcome: 'missing' as const, endedAt: null };
         if (s.status === 'ENDED') return { outcome: 'already-ended' as const, endedAt: s.endedAt };
@@ -737,9 +741,11 @@ export class LiveService {
         if (reason === 'SCHEDULED_END' && (s.status !== 'LIVE' || now < scheduledEnd)) {
           return { outcome: 'not-due' as const, endedAt: null };
         }
-        let provider = 'none';
+        let provider: RoomCloseResult | 'none' = 'none';
         if (s.status === 'LIVE' && s.roomName) {
-          provider = await this.daily.closeRoom(s.roomName);
+          provider = await this.providers
+            .forSession(s)
+            .closeRoom({ sessionId: id, roomName: s.roomName });
         }
         const endedAt = new Date(Math.min(now, scheduledEnd));
         await tx.liveSession.update({ where: { id }, data: { status: 'ENDED', endedAt } });
@@ -754,6 +760,12 @@ export class LiveService {
     );
     if (r.outcome !== 'ended' || !('session' in r)) {
       return { outcome: r.outcome, endedAt: r.endedAt };
+    }
+    if (r.provider === 'cleanup-pending' && r.session.roomName) {
+      // Closed on our side already — nobody can join, push or pull. The
+      // provider's own teardown runs now, outside the lock, and the end sweep
+      // retries whatever this one does not finish.
+      void this.cleanupRoom(r.session, r.session.roomName);
     }
     this.logger.log(
       `live.end liveSession=${id} academy=${r.session.academyId ?? r.session.tenantId} ` +
@@ -800,6 +812,40 @@ export class LiveService {
       ORDER BY "startsAt"
       LIMIT ${limit}`;
     return rows.map((r) => r.id);
+  }
+
+  /**
+   * The provider's own teardown after a class closed with `cleanup-pending`.
+   *
+   * Outside the row lock and never able to reopen anything: the class is
+   * already ENDED, and every way in checks that first. Failures are logged and
+   * left for the end sweep, which asks each provider what is still pending.
+   */
+  async cleanupRoom(
+    s: { id: string; provider?: LiveProviderKind | string | null },
+    roomName: string,
+  ): Promise<boolean> {
+    const provider = this.providers.forSession(s);
+    if (!provider.cleanup) return true;
+    try {
+      return await provider.cleanup({ sessionId: s.id, roomName });
+    } catch (e) {
+      this.logger.warn(`live.cleanup liveSession=${s.id} failed: ${(e as Error).message}`);
+      return false;
+    }
+  }
+
+  /** One pass of every provider's owed teardown (see LiveEndWorker). */
+  async sweepProviderCleanups(limit: number): Promise<{ closed: number; pending: number }> {
+    let closed = 0;
+    let pending = 0;
+    for (const p of this.providers.all()) {
+      if (!p.sweepPending) continue;
+      const r = await p.sweepPending(limit);
+      closed += r.closed;
+      pending += r.pending;
+    }
+    return { closed, pending };
   }
 
   /**
@@ -1187,7 +1233,13 @@ export class LiveService {
     const { session, role } = await this.assertInSession(userId, sessionId);
     const full = await this.prisma.liveSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, recordingId: true, recordingStatus: true, summaryForStudents: true },
+      select: {
+        id: true,
+        provider: true,
+        recordingId: true,
+        recordingStatus: true,
+        summaryForStudents: true,
+      },
     });
     if (full) full.recordingStatus = await this.refreshRecording(full);
     if (!full?.recordingId || full.recordingStatus !== 'READY') {
@@ -1201,7 +1253,7 @@ export class LiveService {
         code: 'RECORDING_NOT_SHARED',
       });
     }
-    const link = await this.daily.recordingLink(full.recordingId);
+    const link = await this.providers.forSession(full).recordings?.link(full.recordingId);
     if (!link)
       throw new BadRequestException({ message: 'التسجيل مش جاهز', code: 'RECORDING_NOT_READY' });
     void session;
@@ -1351,12 +1403,13 @@ export class LiveService {
    */
   private async refreshRecording(session: {
     id: string;
+    provider: LiveProviderKind;
     recordingId: string | null;
     recordingStatus: LivePipelineStatus;
   }) {
     if (session.recordingStatus !== 'PROCESSING' || !session.recordingId)
       return session.recordingStatus;
-    const remote = await this.daily.recording(session.recordingId);
+    const remote = await this.providers.forSession(session).recordings?.status(session.recordingId);
     if (!remote) return session.recordingStatus;
     // Daily's own vocabulary; anything else means it is still working.
     const done = /finish|complete/i.test(remote.status);
@@ -1384,6 +1437,7 @@ export class LiveService {
         startsAt: true,
         durationMin: true,
         status: true,
+        provider: true,
         recordingStatus: true,
         recordingId: true,
         recordingDuration: true,
@@ -1580,10 +1634,11 @@ export class LiveService {
       startedAt?: Date | null;
       roomName: string | null;
       roomUrl: string | null;
+      provider?: LiveProviderKind | string | null;
     },
     actorUserId: string,
   ) {
-    if (!s.roomName || !s.roomUrl) {
+    if (!s.roomName) {
       throw new BadRequestException({ message: 'لم يبدأ الفصل بعد', code: 'NOT_STARTED' });
     }
     // The name shown in the room comes from the account, not the request: a
@@ -1592,27 +1647,23 @@ export class LiveService {
       where: { id: actorUserId },
       select: { fullName: true },
     });
-    const token = await this.daily.meetingToken({
-      roomName: s.roomName,
+    const meeting = await this.providers.forSession(s).participantAccess({
+      session: { id: s.id, roomName: s.roomName, roomUrl: s.roomUrl },
       userName: actor?.fullName ?? 'المدرّس',
       userId: actorUserId,
-      isOwner: true,
+      role: 'TEACHER',
       endsAtMs: this.closesAt(s),
+      // What language to listen for. Transcription was starting with no
+      // language at all, so the provider assumed English and heard nothing
+      // in an Arabic lesson — which is how a class that was taught came to
+      // report that nobody spoke in it.
+      language: await this.lessonLanguage(s.tenantId),
     });
     await this.markPresent(s.id, actorUserId, 'TEACHER');
     return {
       session: this.meetingSession(s),
       externalUrl: null,
-      meeting: {
-        provider: 'daily' as const,
-        url: s.roomUrl,
-        token,
-        // What language to listen for. Transcription was starting with no
-        // language at all, so the provider assumed English and heard nothing
-        // in an Arabic lesson — which is how a class that was taught came to
-        // report that nobody spoke in it.
-        language: await this.lessonLanguage(s.tenantId),
-      },
+      meeting,
       participant: { role: 'TEACHER' as const },
     };
   }

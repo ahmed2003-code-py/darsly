@@ -1,18 +1,21 @@
 import { Module } from '@nestjs/common';
 import { AcademyModule } from '../academy/academy.module';
 import { AcademySiteModule } from '../academy-site/academy-site.module';
-import { DailyModule } from './daily.module';
+import { LiveProvidersModule } from './providers/live-providers.module';
 import { LiveController } from './live.controller';
 import { LiveEndWorker } from './live-end.worker';
 import { LiveService } from './live.service';
+import { LiveRtcController } from './rtc/live-rtc.controller';
+import { LiveRtcService } from './rtc/live-rtc.service';
 
 @Module({
   // AcademySiteModule for the AI job queue the summary runs on — the one this
   // project already has, rather than a second queue beside it.
-  imports: [AcademyModule, AcademySiteModule, DailyModule],
-  controllers: [LiveController],
+  imports: [AcademyModule, AcademySiteModule, LiveProvidersModule],
+  controllers: [LiveController, LiveRtcController],
   // LiveEndWorker: the server ends classes at their effective end.
-  providers: [LiveService, LiveEndWorker],
+  // LiveRtcService: the Cloudflare classroom's signalling and permissions.
+  providers: [LiveService, LiveEndWorker, LiveRtcService],
   // The gateway asks it who is allowed into a classroom's socket room.
   exports: [LiveService],
 })

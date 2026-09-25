@@ -2872,7 +2872,8 @@
       "LIVE_NOT_CONFIGURED": "Live classrooms are not enabled on the platform.",
       "LIVE_PROVIDER_UNREACHABLE": "Could not reach the video service. Try again shortly.",
       "LIVE_PROVIDER_ERROR": "Could not prepare the meeting room. Try again shortly.",
-      "GENERIC": "Could not enter the meeting. Check your booking and try again."
+      "GENERIC": "Could not enter the meeting. Check your booking and try again.",
+      "LIVE_RTC_REJECTED": "Could not connect to the class. Try again."
     },
     "shareUnsupported": "Screen sharing is not available on mobile",
     "waitingStudents": "Waiting for students to join…",
@@ -2881,7 +2882,16 @@
       "SHARE_UNSUPPORTED": "Mobile browsers cannot share a screen. Open the class on a computer to share yours.",
       "SHARE_FAILED": "Could not start screen sharing. Try again.",
       "RECORDING_FAILED": "Could not start recording. Try again.",
-      "TRANSCRIPTION_FAILED": "Transcription is unavailable, so this lesson cannot be summarised."
+      "TRANSCRIPTION_FAILED": "Transcription is unavailable, so this lesson cannot be summarised.",
+      "HAND_APPROVED": "The teacher has let you speak. Turn on your microphone.",
+      "HAND_RELEASED": "The teacher closed your microphone.",
+      "NOT_ALLOWED_TO_SPEAK": "Raise your hand first; the teacher will let you speak.",
+      "MIC_FAILED": "Could not start the microphone. Check the browser permission.",
+      "CAM_FAILED": "Could not start the camera. Check the browser permission.",
+      "SPEAKER_LIMIT": "The maximum number of students are already speaking. Close someone's mic first.",
+      "HAND_FAILED": "That did not go through. Try again.",
+      "REMOVE_FAILED": "Could not remove the participant. Try again.",
+      "RECONNECTED": "Reconnected to the class."
     },
     "chat": "Chat",
     "chatEmpty": "No messages yet",
@@ -2898,7 +2908,20 @@
     "extending": "Extending…",
     "extended": "The class was extended by 15 minutes.",
     "extendAlready": "The class was already extended from another device — this is the new time.",
-    "extendFailed": "We couldn't extend the class. Try again."
+    "extendFailed": "We couldn't extend the class. Try again.",
+    "raiseHand": "Raise hand",
+    "lowerHand": "Lower hand",
+    "stopSpeaking": "Done speaking",
+    "handRaisedYou": "Hand raised — waiting for the teacher",
+    "youCanSpeak": "The teacher has let you speak. Turn on your microphone.",
+    "listenOnlyHint": "You will join watching and listening. Raise your hand to speak and the teacher will let you in.",
+    "hands": "Raised hands",
+    "approve": "Allow",
+    "reject": "Decline",
+    "revoke": "Close mic",
+    "speaking": "Speaking",
+    "handUp": "Hand raised",
+    "enableSound": "Tap to turn on sound"
   },
   "summary": {
     "title": "AI lesson summary",

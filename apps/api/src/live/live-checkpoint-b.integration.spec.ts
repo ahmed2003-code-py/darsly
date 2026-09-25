@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DailyService } from './daily.service';
 import { LiveEndWorker } from './live-end.worker';
 import { LiveScope, LiveService } from './live.service';
+import { dailyProviders } from './providers/testing';
 
 /**
  * Checkpoint B against a real PostgreSQL: the parts a mock cannot prove.
@@ -68,7 +69,7 @@ function service(closeRoom: jest.Mock = jest.fn(async () => 'deleted'), g: any =
     prisma,
     { create: jest.fn(async () => ({})) } as any,
     g,
-    daily as any,
+    dailyProviders(daily),
     realtime as any,
     {} as any,
     {} as any,

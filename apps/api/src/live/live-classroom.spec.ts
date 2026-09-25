@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { DailyService, plainTextFromVtt } from './daily.service';
 import { LiveScope, LiveService } from './live.service';
 import { LiveSummaryHandler } from './live-summary.handler';
+import { dailyProviders } from './providers/testing';
 
 /**
  * The classroom's memory: who may read it, and what it is allowed to say.
@@ -116,7 +117,7 @@ function world(
     prisma,
     notifications,
     {} as any,
-    daily,
+    dailyProviders(daily),
     realtime,
     jobs,
     {} as any,
@@ -410,7 +411,7 @@ describe('the summary is written only from the transcript', () => {
     } as unknown as DailyService;
     const notifications = { create: jest.fn(async () => ({})) } as unknown as NotificationsService;
     return {
-      handler: new LiveSummaryHandler(prisma, ai, daily, notifications),
+      handler: new LiveSummaryHandler(prisma, ai, dailyProviders(daily), notifications),
       ai,
       updated,
       notifications,

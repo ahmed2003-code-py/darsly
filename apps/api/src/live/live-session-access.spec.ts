@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { LiveService } from './live.service';
+import { dailyProviders } from './providers/testing';
 
 function makePrisma() {
   return {
@@ -10,7 +11,15 @@ function makePrisma() {
   } as any;
 }
 const svc = (prisma: any) =>
-  new LiveService(prisma, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+  new LiveService(
+    prisma,
+    {} as any,
+    {} as any,
+    dailyProviders({}),
+    {} as any,
+    {} as any,
+    {} as any,
+  );
 const session = { id: 's1', tenantId: 'a1', deletedAt: null, teacher: { userId: 'author' } };
 
 describe('LiveService.assertInSession — staff means a staff role', () => {

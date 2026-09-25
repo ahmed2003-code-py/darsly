@@ -6,7 +6,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
 import { api } from '../../lib/api';
 import { askConfirm } from '../../lib/confirm';
-import { useDailyMeeting, type Participant } from '../../lib/useDailyMeeting';
+import { type Participant } from '../../lib/useDailyMeeting';
+import { useLiveMeeting, type LiveProvider } from '../../lib/useLiveMeeting';
 import { useLiveChat } from '../../lib/useLiveChat';
 import { useAuthStore } from '../../stores/auth';
 import { getSocket } from '../../lib/socket';
@@ -164,7 +165,6 @@ export default function MeetingPage() {
   const [showChat, setShowChat] = useState(false);
   const [draft, setDraft] = useState('');
   const clock = useSessionClock();
-  const meeting = useDailyMeeting(id, { onTiming: clock.apply });
   /** A short line under the clock after an extension attempt. */
   const [extendNote, setExtendNote] = useState<string | null>(null);
   const chat = useLiveChat(id, showChat);
@@ -172,7 +172,7 @@ export default function MeetingPage() {
 
   /**
    * The server decides everything: whether this person may enter, which room,
-   * and with what powers. The page only asks.
+   * which provider carries it, and with what powers. The page only asks.
    */
   const entry = useQuery({
     queryKey: ['live-entry', id, isTeacher],
@@ -180,6 +180,12 @@ export default function MeetingPage() {
       (await api.get(isTeacher ? `/teacher/live/${id}/join` : `/live/${id}/join`)).data,
     retry: false,
   });
+  const provider: LiveProvider | null = entry.data?.meeting?.provider ?? null;
+  const meeting = useLiveMeeting(id, provider, { onTiming: clock.apply });
+  const cf = meeting.provider === 'cloudflare' ? meeting : null;
+  const setEnded = meeting.setEnded;
+  /** A Cloudflare student enters listening: no preview, no devices asked for. */
+  const listenOnly = !!cf && entry.data?.participant?.role !== 'TEACHER';
 
   /**
    * Recording starts in the browser, because that is where Daily's owner token
@@ -261,8 +267,8 @@ export default function MeetingPage() {
   });
 
   useEffect(() => {
-    if (entry.data && meeting.ready && !ready) void meeting.startPreview();
-  }, [entry.data, meeting.ready, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (entry.data && meeting.ready && !ready && !listenOnly) void meeting.startPreview();
+  }, [entry.data, meeting.ready, ready, listenOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A session pointed at Zoom is not a Darsly classroom; send them there and
   // leave, rather than showing an empty room.
@@ -288,13 +294,16 @@ export default function MeetingPage() {
     const sock = getSocket();
     if (!sock) return;
     const onEnded = (p: { sessionId: string }) => {
-      if (p?.sessionId === id) meeting.setEnded(true);
+      if (p?.sessionId === id) setEnded(true);
     };
     sock.on('live:ended', onEnded);
     return () => {
       sock.off('live:ended', onEnded);
     };
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Re-bound when the provider is known: before the join answer arrives the
+    // page holds the inert adapter, and a listener bound to it would mark the
+    // wrong one ended.
+  }, [id, setEnded]);
 
   const leaveAndGo = async () => {
     await meeting.leave();
@@ -359,6 +368,7 @@ export default function MeetingPage() {
 
   const session = entry.data.session;
   const amOwner = entry.data.participant.role === 'TEACHER';
+  const myHand = cf?.rtc?.me.hand ?? 'IDLE';
   const teacherId = amOwner ? (user?.id ?? null) : null;
 
   // ── Pre-join ──────────────────────────────────────────────────────────────
@@ -376,43 +386,56 @@ export default function MeetingPage() {
           </p>
           <h1 className="mb-5 text-center font-heading text-2xl font-extrabold">{session.title}</h1>
 
-          <div className="relative mb-5 aspect-video overflow-hidden rounded-2xl bg-surface-container ring-1 ring-outline-variant/40">
-            {wantCam && me?.track ? (
-              <Video track={me.track} muted mirror />
-            ) : (
-              <div className="grid h-full w-full place-items-center">
-                <span className="material-symbols-outlined text-4xl text-outline">
-                  videocam_off
-                </span>
+          {listenOnly ? (
+            <p className="mb-5 rounded-2xl bg-surface-container px-4 py-3 text-center text-sm text-on-surface-variant">
+              {t('meeting.listenOnlyHint')}
+            </p>
+          ) : (
+            <>
+              <div className="relative mb-5 aspect-video overflow-hidden rounded-2xl bg-surface-container ring-1 ring-outline-variant/40">
+                {wantCam && me?.track ? (
+                  <Video track={me.track} muted mirror />
+                ) : (
+                  <div className="grid h-full w-full place-items-center">
+                    <span className="material-symbols-outlined text-4xl text-outline">
+                      videocam_off
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <div className="mb-5 flex justify-center gap-3">
-            <Ctl
-              icon={wantMic ? 'mic' : 'mic_off'}
-              off={!wantMic}
-              label={t('meeting.mic')}
-              onClick={() => setWantMic((v) => !v)}
-            />
-            <Ctl
-              icon={wantCam ? 'videocam' : 'videocam_off'}
-              off={!wantCam}
-              label={t('meeting.cam')}
-              onClick={() => setWantCam((v) => !v)}
-            />
-          </div>
+              <div className="mb-5 flex justify-center gap-3">
+                <Ctl
+                  icon={wantMic ? 'mic' : 'mic_off'}
+                  off={!wantMic}
+                  label={t('meeting.mic')}
+                  onClick={() => setWantMic((v) => !v)}
+                />
+                <Ctl
+                  icon={wantCam ? 'videocam' : 'videocam_off'}
+                  off={!wantCam}
+                  label={t('meeting.cam')}
+                  onClick={() => setWantCam((v) => !v)}
+                />
+              </div>
+            </>
+          )}
 
           <button
             className="btn-primary w-full py-3"
             disabled={!meeting.ready}
             onClick={async () => {
-              await meeting.join(entry.data.meeting.url, entry.data.meeting.token, {
-                mic: wantMic,
-                cam: wantCam,
-                owner: entry.data.participant.role === 'TEACHER',
-                language: entry.data.meeting.language,
-              });
+              const owner = entry.data.participant.role === 'TEACHER';
+              if (meeting.provider === 'cloudflare') {
+                await meeting.join(entry.data.meeting, { mic: wantMic, cam: wantCam, owner });
+              } else {
+                await meeting.join(entry.data.meeting.url, entry.data.meeting.token, {
+                  mic: wantMic,
+                  cam: wantCam,
+                  owner,
+                  language: entry.data.meeting.language,
+                });
+              }
               setReady(true);
             }}
           >
@@ -565,29 +588,114 @@ export default function MeetingPage() {
         )}
       </AnimatePresence>
 
+      {/* Phones may refuse to play sound until they are tapped. */}
+      {cf?.audioBlocked && (
+        <button
+          className="mx-3 mb-1 rounded-xl bg-primary px-3 py-2 text-center text-xs font-bold text-on-primary"
+          onClick={cf.resumeAudio}
+        >
+          {t('meeting.enableSound')}
+        </button>
+      )}
+
+      {/* The student's side of raise hand: told when they may speak. */}
+      {cf && !amOwner && myHand === 'APPROVED_TO_SPEAK' && !meeting.micOn && (
+        <p className="mx-3 mb-1 rounded-xl bg-primary/15 px-3 py-2 text-center text-xs font-bold text-primary">
+          {t('meeting.youCanSpeak')}
+        </p>
+      )}
+      {cf && !amOwner && myHand === 'HAND_RAISED' && (
+        <p className="mx-3 mb-1 rounded-xl bg-surface-container px-3 py-2 text-center text-xs font-bold">
+          {t('meeting.handRaisedYou')}
+        </p>
+      )}
+
+      {/* The teacher's side: who is asking, and who has the floor. */}
+      {cf && amOwner && cf.hands.length > 0 && (
+        <div className="mx-3 mb-1 max-h-40 overflow-y-auto rounded-2xl bg-surface-container px-3 py-2">
+          <p className="mb-1 text-[11px] font-extrabold text-outline">{t('meeting.hands')}</p>
+          <ul className="space-y-1">
+            {cf.hands.map((h) => (
+              <li key={h.userId} className="flex items-center gap-2 text-sm">
+                <span className="material-symbols-outlined text-[18px] text-primary">
+                  {h.hand === 'HAND_RAISED' ? 'back_hand' : 'record_voice_over'}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-bold">{h.name}</span>
+                {h.hand === 'HAND_RAISED' ? (
+                  <>
+                    <button
+                      className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold text-on-primary"
+                      onClick={() => void cf.decideHand(h.userId, 'approve')}
+                    >
+                      {t('meeting.approve')}
+                    </button>
+                    <button
+                      className="rounded-full px-2 py-1 text-[11px] font-bold text-outline"
+                      onClick={() => void cf.decideHand(h.userId, 'reject')}
+                    >
+                      {t('meeting.reject')}
+                    </button>
+                  </>
+                ) : h.hand === 'APPROVED_TO_SPEAK' || h.hand === 'ACTIVE_SPEAKER' ? (
+                  <button
+                    className="rounded-full bg-error-container px-2.5 py-1 text-[11px] font-extrabold text-on-error-container"
+                    onClick={() => void cf.decideHand(h.userId, 'revoke')}
+                  >
+                    {t('meeting.revoke')}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Controls sit above the home indicator, always reachable with a thumb. */}
       <footer className="flex flex-wrap items-center justify-center gap-2.5 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1">
-        <Ctl
-          icon={meeting.micOn ? 'mic' : 'mic_off'}
-          off={!meeting.micOn}
-          label={t('meeting.mic')}
-          onClick={meeting.toggleMic}
-        />
-        <Ctl
-          icon={meeting.camOn ? 'videocam' : 'videocam_off'}
-          off={!meeting.camOn}
-          label={t('meeting.cam')}
-          onClick={meeting.toggleCam}
-        />
+        {/* A Cloudflare student has a voice only when the teacher gives one. */}
+        {(!cf || amOwner || cf.rtc?.me.canPublish) && (
+          <>
+            <Ctl
+              icon={meeting.micOn ? 'mic' : 'mic_off'}
+              off={!meeting.micOn}
+              label={t('meeting.mic')}
+              onClick={meeting.toggleMic}
+            />
+            <Ctl
+              icon={meeting.camOn ? 'videocam' : 'videocam_off'}
+              off={!meeting.camOn}
+              label={t('meeting.cam')}
+              onClick={meeting.toggleCam}
+            />
+          </>
+        )}
+        {cf && !amOwner && (
+          <Ctl
+            icon="back_hand"
+            active={myHand !== 'IDLE' && myHand !== 'RELEASED'}
+            label={
+              myHand === 'IDLE' || myHand === 'RELEASED'
+                ? t('meeting.raiseHand')
+                : myHand === 'HAND_RAISED'
+                  ? t('meeting.lowerHand')
+                  : t('meeting.stopSpeaking')
+            }
+            onClick={() =>
+              void (myHand === 'IDLE' || myHand === 'RELEASED' ? cf.raiseHand() : cf.lowerHand())
+            }
+          />
+        )}
         {/* Dimmed rather than hidden on a phone: a teacher who expects to share
             should be told their device cannot, not left hunting for a button. */}
-        <Ctl
-          icon={meeting.sharing ? 'cancel_presentation' : 'present_to_all'}
-          active={meeting.sharing}
-          dim={!meeting.canShare}
-          label={meeting.canShare ? t('meeting.share') : t('meeting.shareUnsupported')}
-          onClick={meeting.toggleShare}
-        />
+        {(!cf || amOwner) && (
+          <Ctl
+            icon={meeting.sharing ? 'cancel_presentation' : 'present_to_all'}
+            active={meeting.sharing}
+            dim={!meeting.canShare}
+            label={meeting.canShare ? t('meeting.share') : t('meeting.shareUnsupported')}
+            onClick={meeting.toggleShare}
+          />
+        )}
         <div className="relative">
           <Ctl icon="chat" label={t('meeting.chat')} onClick={() => setShowChat((v) => !v)} />
           {chat.unread > 0 && !showChat && (
@@ -744,6 +852,15 @@ export default function MeetingPage() {
                     <span className="min-w-0 flex-1 truncate text-sm font-bold">
                       {p.local ? t('meeting.you') : p.name}
                     </span>
+                    {cf &&
+                      cf.hands.some((h) => h.userId === p.userId && h.hand === 'HAND_RAISED') && (
+                        <span
+                          className="material-symbols-outlined text-[18px] text-primary"
+                          title={t('meeting.handUp')}
+                        >
+                          back_hand
+                        </span>
+                      )}
                     {!p.audio && (
                       <span className="material-symbols-outlined text-[18px] text-outline">
                         mic_off

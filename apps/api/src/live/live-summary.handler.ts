@@ -7,7 +7,7 @@ import { AiJobHandler, AiJobResult } from '../academy-site/jobs/ai-job.handler';
 import { MAX_ATTEMPTS } from '../academy-site/jobs/ai-job.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { DailyService } from './daily.service';
+import { LiveProviders } from './providers/live-providers';
 
 /**
  * The lesson, written up from what was actually said in it.
@@ -99,7 +99,7 @@ export class LiveSummaryHandler implements AiJobHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiClient,
-    private readonly daily: DailyService,
+    private readonly providers: LiveProviders,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -122,6 +122,7 @@ export class LiveSummaryHandler implements AiJobHandler {
         tenantId: true,
         title: true,
         roomName: true,
+        provider: true,
         transcriptText: true,
         summaryStatus: true,
         transcriptStatus: true,
@@ -143,7 +144,7 @@ export class LiveSummaryHandler implements AiJobHandler {
       // platform was never able to listen.
       const reason =
         session.transcriptStatus === 'FAILED' ||
-        (await this.daily.transcriptionAvailable()) === false
+        (await this.providers.forSession(session).transcripts?.available()) === false
           ? 'TRANSCRIPTION_UNAVAILABLE'
           : 'NO_TRANSCRIPT';
       // Not a failure of ours, and not retryable: the words were never
@@ -288,15 +289,24 @@ export class LiveSummaryHandler implements AiJobHandler {
    * spins forever.
    */
   private async transcriptFor(
-    session: { id: string; transcriptText: string | null; roomName: string | null },
+    session: {
+      id: string;
+      transcriptText: string | null;
+      roomName: string | null;
+      provider?: string | null;
+    },
     attempt: number,
   ): Promise<string | null> {
     const own = session.transcriptText?.trim();
     if (own && own.length >= MIN_TRANSCRIPT_CHARS) return own;
-    if (!session.roomName) return null;
+    // A provider that keeps no transcript of its own (Cloudflare Realtime
+    // carries media only) has nothing to fetch: the words come from Darsly's
+    // own transcript of the recording, or not at all.
+    const transcripts = this.providers.forSession(session).transcripts;
+    if (!session.roomName || !transcripts) return null;
     const deadline = Date.now() + TRANSCRIPT_WAIT.maxMs;
     for (;;) {
-      const found = await this.daily.transcriptFor(session.roomName);
+      const found = await transcripts.find(session.roomName);
       if (found.state === 'ready')
         return found.text.length >= MIN_TRANSCRIPT_CHARS ? found.text : null;
       if (found.state === 'none') return null;

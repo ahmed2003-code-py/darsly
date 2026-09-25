@@ -20,7 +20,7 @@ import { AcademySiteController } from './site/academy-site.controller';
 import { AcademySiteService } from './site/academy-site.service';
 import { AiClient } from './ai/ai.client';
 import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
-import { DailyModule } from '../live/daily.module';
+import { LiveProvidersModule } from '../live/providers/live-providers.module';
 import { LiveSummaryHandler } from '../live/live-summary.handler';
 import { AiJobService } from './jobs/ai-job.service';
 import { AiJobWorker } from './jobs/ai-job.worker';
@@ -45,7 +45,7 @@ import { AdaptiveReaderService } from '../paper-import/ocr/adaptive-reader.servi
  * facts/editor APIs, renderer and public page. PrismaService is global.
  */
 @Module({
-  imports: [AcademyModule, DailyModule, PaperImportCoreModule],
+  imports: [AcademyModule, LiveProvidersModule, PaperImportCoreModule],
   controllers: [
     AcademyMediaController,
     AcademyFactsController,

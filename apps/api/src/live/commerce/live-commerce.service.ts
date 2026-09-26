@@ -27,6 +27,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { CommercialTermsService, pricingRefusal, toSnapshot } from '../../commerce/commercial-terms.service';
 import { PriceBreakdown, priceLiveSeat, PricingError } from '../../commerce/pricing';
 import { LIVE_REFUND_WINDOW_HOURS } from '@darsly/shared-types';
+import { livePendingEarnings } from './pending-earnings';
 
 type Tx = Prisma.TransactionClient;
 
@@ -37,6 +38,43 @@ const PROOF_MAX_BYTES = 1_200 * 1024;
 export function holdMinutes(): number {
   const n = Number(process.env.LIVE_HOLD_MINUTES ?? 30);
   return Number.isFinite(n) ? Math.min(240, Math.max(5, Math.round(n))) : 30;
+}
+
+/**
+ * The share of its scheduled length a class must actually have run (from the
+ * teacher opening the room to its end) to count as delivered. Server-side and
+ * configurable; conservative by default. A class that ran less is not paid
+ * out by itself — it waits for a person (NEEDS_REVIEW).
+ */
+export function deliveryMinRatio(): number {
+  const n = Number(process.env.LIVE_DELIVERY_MIN_RATIO ?? 0.5);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0.1, n)) : 0.5;
+}
+/** How long after its scheduled end a class nobody started is treated as a no-show. */
+export const NO_SHOW_GRACE_MS = 60 * 60_000;
+
+/**
+ * Was this class delivered? Only the server's own record answers: it was
+ * opened (startedAt), it was ended through endSession (status ENDED with an
+ * endedAt — the teacher's end or the end sweep), it was not called off, and
+ * it ran for at least the minimum share of its length. A browser pressing
+ * "end" after two minutes produces a record that fails the last test.
+ */
+export function deliveryVerdict(s: {
+  status: string;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  cancelledAt: Date | null;
+  deletedAt: Date | null;
+  durationMin: number;
+}): { delivered: true } | { delivered: false; reason: string } {
+  if (s.cancelledAt || s.deletedAt) return { delivered: false, reason: 'cancelled' };
+  if (s.status !== 'ENDED' || !s.endedAt) return { delivered: false, reason: 'not ended' };
+  if (!s.startedAt) return { delivered: false, reason: 'never started' };
+  const ranMs = s.endedAt.getTime() - s.startedAt.getTime();
+  if (ranMs < deliveryMinRatio() * s.durationMin * 60_000)
+    return { delivered: false, reason: `ran ${Math.max(0, Math.round(ranMs / 60_000))} of ${s.durationMin} minutes` };
+  return { delivered: true };
 }
 
 /** The states that hold a seat while unexpired. */
@@ -756,6 +794,155 @@ export class LiveCommerceService implements OnModuleInit {
       },
     });
     return refund;
+  }
+
+  // ── Delivery: held money becomes earnings, exactly once ─────────────────
+
+  /** The account a Center's share is credited to (null for a PERSONAL academy). */
+  private async centerAccountFor(tx: Tx, academyId: string) {
+    const a = await tx.academy.findUnique({ where: { id: academyId }, select: { kind: true } });
+    return a?.kind === 'CENTER' ? `academy:${academyId}:balance` : null;
+  }
+
+  /**
+   * Release one purchase's remaining held money under its frozen snapshot.
+   * Called with the session and purchase locked. Idempotent: releasedAt is
+   * the guard here, and the ledger key the guard beneath it.
+   */
+  private async releaseInTx(tx: Tx, p: LivePurchase, now: Date) {
+    if (p.releasedAt) return false;
+    const parts = await this.remainingParts(tx, p);
+    await this.ledger.releaseLivePurchase(
+      {
+        purchaseId: p.id,
+        tenantId: p.tenantId,
+        academyId: p.academyId,
+        centerAccount: await this.centerAccountFor(tx, p.academyId),
+        parts,
+      },
+      tx,
+    );
+    await tx.livePurchase.update({
+      where: { id: p.id },
+      data: {
+        releasedAt: now,
+        ...(p.status === 'CONFIRMED' || p.status === 'NEEDS_REVIEW'
+          ? { status: 'DELIVERED' as const, deliveredAt: now }
+          : {}),
+      },
+    });
+    return true;
+  }
+
+  /**
+   * The sweep after classes end. For each purchase whose class is over:
+   * delivered → its money is released (seat buyers, and the part a student
+   * who cancelled late did not get back); not delivered → NEEDS_REVIEW, and
+   * nothing moves until finance decides. Also flags classes nobody ever
+   * started. Every decision is re-made under the locks, so retries and
+   * replicas are harmless.
+   */
+  async releaseDelivered(limit = 50): Promise<{ released: number; review: number }> {
+    const now = new Date();
+    const candidates = await this.prisma.livePurchase.findMany({
+      where: {
+        releasedAt: null,
+        payment: { status: 'PAID' },
+        OR: [
+          { status: 'CONFIRMED', session: { status: 'ENDED' } },
+          { status: 'CANCELLED_BY_STUDENT', session: { status: 'ENDED' } },
+          // Never started, and well past its end: a no-show to be reviewed.
+          {
+            status: 'CONFIRMED',
+            session: { status: 'SCHEDULED', startedAt: null, startsAt: { lt: new Date(now.getTime() - NO_SHOW_GRACE_MS) } },
+          },
+        ],
+      },
+      select: { id: true, sessionId: true },
+      take: limit,
+      orderBy: { createdAt: 'asc' },
+    });
+    let released = 0;
+    let review = 0;
+    for (const c of candidates) {
+      const r = await this.prisma.$transaction(async (tx) => {
+        const s = await lockSession(tx, c.sessionId);
+        const p = await lockPurchase(tx, c.id);
+        if (!s || !p || p.releasedAt) return null;
+        if (s.status === 'SCHEDULED' && !s.startedAt) {
+          if (p.status !== 'CONFIRMED' || closesAtMs(s) + NO_SHOW_GRACE_MS > now.getTime()) return null;
+          assertTransition(p.status, 'NEEDS_REVIEW');
+          await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'NEEDS_REVIEW', reviewReason: 'never started' } });
+          return 'review' as const;
+        }
+        const verdict = deliveryVerdict(s);
+        if (verdict.delivered) {
+          if (p.status !== 'CONFIRMED' && p.status !== 'CANCELLED_BY_STUDENT') return null;
+          return (await this.releaseInTx(tx, p, now)) ? ('released' as const) : null;
+        }
+        if (p.status === 'CONFIRMED') {
+          assertTransition(p.status, 'NEEDS_REVIEW');
+          await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'NEEDS_REVIEW', reviewReason: verdict.reason } });
+          return 'review' as const;
+        }
+        return null;
+      });
+      if (r === 'released') released++;
+      if (r === 'review') review++;
+    }
+    return { released, review };
+  }
+
+  /** Finance decides a reviewed purchase was delivered after all: release it. */
+  async adminRelease(purchaseId: string, adminId: string) {
+    const pre = await this.prisma.livePurchase.findUnique({ where: { id: purchaseId } });
+    if (!pre) throw new NotFoundException('Purchase not found');
+    await this.prisma.$transaction(async (tx) => {
+      await lockSession(tx, pre.sessionId);
+      const p = await lockPurchase(tx, purchaseId);
+      if (!p) throw new NotFoundException('Purchase not found');
+      if (p.releasedAt) return;
+      if (p.status !== 'NEEDS_REVIEW')
+        throw new ConflictException({ message: 'Only a purchase under review is released by hand', code: 'PURCHASE_STATE_CONFLICT' });
+      await this.releaseInTx(tx, p, new Date());
+    });
+    await this.audit(adminId, 'live.purchase.release', purchaseId, {});
+    return this.byId(purchaseId);
+  }
+
+  /**
+   * Finance refunds a purchase in full (a class that did not really happen, a
+   * no-show, a complaint upheld). The seat and access go; nothing is released.
+   */
+  async adminRefund(purchaseId: string, adminId: string, reason: 'ADMIN' | 'NO_SHOW' = 'ADMIN') {
+    const pre = await this.prisma.livePurchase.findUnique({ where: { id: purchaseId } });
+    if (!pre) throw new NotFoundException('Purchase not found');
+    await this.prisma.$transaction(async (tx) => {
+      await lockSession(tx, pre.sessionId);
+      const p = await lockPurchase(tx, purchaseId);
+      if (!p) throw new NotFoundException('Purchase not found');
+      if (p.status === 'REFUNDED' || p.status === 'REFUND_PENDING') return;
+      if (p.releasedAt)
+        throw new ConflictException({ message: 'Earnings were already released for this purchase', code: 'ALREADY_RELEASED' });
+      if (p.status !== 'NEEDS_REVIEW' && p.status !== 'CONFIRMED')
+        throw new ConflictException({ message: 'This purchase cannot be refunded by hand', code: 'PURCHASE_STATE_CONFLICT' });
+      await tx.liveBooking.deleteMany({ where: { purchaseId: p.id } });
+      assertTransition(p.status, 'REFUNDED');
+      await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'REFUNDED', cancelledAt: new Date(), cancelReason: reason } });
+      await this.fullRefund(tx, p.id, reason, adminId);
+    });
+    await this.audit(adminId, 'live.purchase.refund', purchaseId, { reason });
+    return this.byId(purchaseId);
+  }
+
+  pendingEarnings(where: { academyId: string; tenantId?: string }, side: 'teacher' | 'center') {
+    return livePendingEarnings(this.prisma, where, side);
+  }
+
+  private async audit(actorUserId: string, action: string, entityId: string, meta: Record<string, unknown>) {
+    await this.prisma.auditLog
+      .create({ data: { actorUserId, action, entity: 'LivePurchase', entityId, meta: meta as never } })
+      .catch(() => undefined);
   }
 
   // ── Holds that lapse ─────────────────────────────────────────────────────

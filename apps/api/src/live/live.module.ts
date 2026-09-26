@@ -13,6 +13,7 @@ import { VideoModule } from '../video/video.module';
 import { LiveReplayService } from './replay/live-replay.service';
 import { LiveRetentionService } from './retention/live-retention.service';
 import { LiveCommerceController } from './commerce/live-commerce.controller';
+import { AdminLiveCommerceController } from './commerce/admin-live-commerce.controller';
 import { LiveCommerceService } from './commerce/live-commerce.service';
 import { LiveCommerceWorker } from './commerce/live-commerce.worker';
 
@@ -20,7 +21,7 @@ import { LiveCommerceWorker } from './commerce/live-commerce.worker';
   // AcademySiteModule for the AI job queue the summary runs on — the one this
   // project already has, rather than a second queue beside it.
   imports: [AcademyModule, AcademySiteModule, LiveProvidersModule, VideoModule],
-  controllers: [LiveController, LiveRtcController, LiveCommerceController],
+  controllers: [LiveController, LiveRtcController, LiveCommerceController, AdminLiveCommerceController],
   // LiveEndWorker: the server ends classes at their effective end.
   // LiveRtcService: the Cloudflare classroom's signalling and permissions.
   // LiveRecordingService/LiveRecorderWorker: Darsly's own recorder for

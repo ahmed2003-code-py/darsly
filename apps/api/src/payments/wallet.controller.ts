@@ -6,6 +6,7 @@ import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from './ledger.service';
+import { livePendingEarnings } from '../live/commerce/pending-earnings';
 
 /**
  * The workspace wallet (Phase 7: organisation-aware).
@@ -117,6 +118,13 @@ export class WalletController {
       }),
       this.prisma.platformSetting.findUnique({ where: { key: 'payout.minimumCents' } }),
     ]);
+    // Live seats sold but not yet delivered: owed, not withdrawable. The
+    // organisation's own side (a Center's share, or a PERSONAL teacher's).
+    const livePending = await livePendingEarnings(
+      this.prisma,
+      { academyId },
+      academy.kind === 'CENTER' ? 'center' : 'teacher',
+    );
 
     return {
       scope: 'ORGANISATION' as const,
@@ -140,6 +148,8 @@ export class WalletController {
           }
         : {}),
       payoutMinimumCents: Number((minSetting?.value as number) ?? 50000),
+      livePendingCents: livePending.pendingCents,
+      livePendingSeats: livePending.pendingSeats,
       recentPayments: payments.map((p) => ({
         id: p.id,
         // The academy's earning, not the total the student paid — the difference
@@ -176,6 +186,8 @@ export class WalletController {
         earnedHereCents: 0,
         pendingCashCents: 0,
         pendingCashCount: 0,
+        livePendingCents: 0,
+        livePendingSeats: 0,
         recentPayments: [],
         payouts: [],
       };
@@ -241,6 +253,8 @@ export class WalletController {
       select: { amountCents: true, transaction: { select: { paymentId: true } } },
     });
     const shareOf = new Map(mine.map((e) => [e.transaction.paymentId, e.amountCents]));
+    // Their share of Live seats sold here and not yet delivered.
+    const livePending = await livePendingEarnings(this.prisma, { academyId: academy.id, tenantId }, 'teacher');
     return {
       scope: 'MEMBER' as const,
       kind: academy.kind,
@@ -251,6 +265,8 @@ export class WalletController {
       earnedHereCents: earnedHere._sum.amountCents ?? 0,
       pendingCashCents: pendingCash._sum.amountCents ?? 0,
       pendingCashCount: pendingCash._count._all,
+      livePendingCents: livePending.pendingCents,
+      livePendingSeats: livePending.pendingSeats,
       recentPayments: payments.map((p) => ({
         id: p.id,
         amountCents: shareOf.get(p.id) ?? 0,

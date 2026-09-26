@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { LiveCommerceService } from './live-commerce.service';
 
-/** How often lapsed holds are given back. */
+/** How often lapsed holds are given back and delivered classes paid out. */
 export const LIVE_COMMERCE_SWEEP_MS = 30_000;
 
 /**
@@ -33,18 +33,26 @@ export class LiveCommerceWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   /** One pass. Public so a test (or an operator) can run it on demand. */
-  async sweep(): Promise<{ expired: number }> {
-    if (this.running) return { expired: 0 };
+  async sweep(): Promise<{ expired: number; released: number; review: number }> {
+    const out = { expired: 0, released: 0, review: 0 };
+    if (this.running) return out;
     this.running = true;
-    let expired = 0;
     try {
-      expired = await this.commerce.expireHolds();
-      if (expired) this.logger.log(`live commerce sweep: ${expired} holds expired`);
+      out.expired = await this.commerce.expireHolds();
+      // Held money becomes earnings once a class is delivered — or waits for
+      // a person when it was not. Keyed in the ledger, so a retry moves nothing.
+      const r = await this.commerce.releaseDelivered();
+      out.released = r.released;
+      out.review = r.review;
+      if (out.expired || out.released || out.review)
+        this.logger.log(
+          `live commerce sweep: ${out.expired} holds expired, ${out.released} released, ${out.review} to review`,
+        );
     } catch (e) {
       this.logger.error(`live commerce sweep error: ${(e as Error).message}`);
     } finally {
       this.running = false;
     }
-    return { expired };
+    return out;
   }
 }

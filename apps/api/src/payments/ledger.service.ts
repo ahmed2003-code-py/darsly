@@ -610,6 +610,64 @@ export class LedgerService {
     return txn.id;
   }
 
+  /**
+   * The class was delivered: what is still held for this purchase becomes
+   * earnings — Darsly's fee to platform:commission, the teacher's share to
+   * their withdrawable balance, a Center's share to the Center's. The parts
+   * are the purchase's frozen ones less anything already refunded; the
+   * current terms are never consulted.
+   *
+   * Keyed `live-release:<purchaseId>`: a retried sweep, a second replica or an
+   * admin pressing twice gets the first transaction back and moves nothing.
+   * Refused if the holding account holds less than the parts claim.
+   */
+  async releaseLivePurchase(
+    r: {
+      purchaseId: string;
+      tenantId: string;
+      academyId: string;
+      /** The academy's kind: a CENTER's share has its own account. */
+      centerAccount: string | null;
+      parts: { fee: number; teacher: number; center: number };
+    },
+    db: Db,
+  ): Promise<string | null> {
+    const key = `live-release:${r.purchaseId}`;
+    const prior = await db.ledgerTransaction.findUnique({ where: { idempotencyKey: key } });
+    if (prior) return prior.id;
+    const { fee, teacher, center } = r.parts;
+    if (![fee, teacher, center].every((x) => Number.isSafeInteger(x) && x >= 0)) {
+      throw new Error('releaseLivePurchase: parts must be non-negative integers');
+    }
+    const amount = fee + teacher + center;
+    if (amount === 0) return null;
+    if (center > 0 && !r.centerAccount) throw new Error('releaseLivePurchase: a center share needs a center account');
+    const held = await this.heldBalance(r.purchaseId, db);
+    if (held < amount) {
+      throw new BadRequestException({
+        message: 'Less is held for this purchase than its release claims',
+        code: 'RELEASE_EXCEEDS_HELD',
+        heldCents: held,
+        releaseCents: amount,
+      });
+    }
+    const scope = { tenantId: r.tenantId, academyId: r.academyId };
+    const credits: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
+    if (fee > 0) credits.push({ account: 'platform:commission', direction: 'CREDIT', amountCents: fee, ...scope });
+    if (teacher > 0) credits.push({ account: this.teacherAccount(r.tenantId), direction: 'CREDIT', amountCents: teacher, ...scope });
+    if (center > 0) credits.push({ account: r.centerAccount as string, direction: 'CREDIT', amountCents: center, ...scope });
+    const txn = await db.ledgerTransaction.create({
+      data: {
+        description: `live seat delivered ${r.purchaseId}`,
+        idempotencyKey: key,
+        entries: {
+          create: [{ account: this.heldAccount(r.purchaseId), direction: 'DEBIT', amountCents: amount, ...scope }, ...credits],
+        },
+      },
+    });
+    return txn.id;
+  }
+
   /** What is still sitting in a purchase's holding account (credits − debits). */
   heldBalance(livePurchaseId: string, db: Db = this.prisma): Promise<number> {
     return this.balanceOf(this.heldAccount(livePurchaseId), db);

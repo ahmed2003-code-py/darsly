@@ -1,4 +1,4 @@
-import { pickAudioMime, uploadWithRetry } from './lessonAudio';
+import { nextSeq, pickAudioMime, uploadWithRetry } from './lessonAudio';
 
 describe('lesson audio capture', () => {
   it('records WebM/Opus where it can, MP4 on Safari, nothing where neither exists', () => {
@@ -32,5 +32,14 @@ describe('lesson audio capture', () => {
       false,
     );
     expect(refused).toHaveBeenCalledTimes(1);
+  });
+
+  it('numbers pieces by the second they start, never twice', () => {
+    const t = 1_790_000_000_000;
+    const a = nextSeq(t);
+    expect(a).toBe(1_790_000_000);
+    // Off and on again within the same second: the next number, not the same one.
+    expect(nextSeq(t + 200)).toBe(a + 1);
+    expect(nextSeq(t + 5_000)).toBe(a + 5);
   });
 });

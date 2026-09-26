@@ -11,7 +11,12 @@
  * Nothing leaves the page when nobody spoke: a piece with no voice in it is
  * not uploaded (and not paid for). Only when the server says so
  * (`access.transcribe`), and only for the teacher.
+ *
+ * The piece being recorded is kept in the browser as it grows (a chunk every
+ * few seconds, lessonAudioStore.ts), so a reload or a crash does not lose it:
+ * the page uploads what is left of it when it comes back (`recover`).
  */
+import type { PieceStore } from './lessonAudioStore';
 
 /** How long one piece runs. */
 export const PIECE_MS = 3 * 60_000;
@@ -20,8 +25,22 @@ const VOICE_LEVEL = 0.012;
 const LEVEL_EVERY_MS = 400;
 /** A piece smaller than this holds no speech worth sending. */
 const MIN_PIECE_BYTES = 2_000;
+/** The recorder hands over (and the store keeps) a chunk this often. */
+const CHUNK_MS = 5_000;
 
-export type UploadPiece = (seq: number, blob: Blob) => Promise<void>;
+export type UploadPiece = (seq: number, blob: Blob, durationMs?: number) => Promise<void>;
+
+/**
+ * The last piece number handed out on this page. A piece is numbered by the
+ * second it started; capture switched off and on within one second would
+ * otherwise start two pieces with the same number (and the second would be
+ * taken for a retry of the first).
+ */
+let lastSeq = 0;
+export function nextSeq(nowMs = Date.now()): number {
+  lastSeq = Math.max(Math.floor(nowMs / 1000), lastSeq + 1);
+  return lastSeq;
+}
 
 /** The recorder format this browser can make: WebM/Opus, or MP4 (Safari). */
 export function pickAudioMime(
@@ -68,11 +87,35 @@ export class LessonAudio {
   private stopped = false;
   private readonly mime: string | null;
 
+  private currentId: string | null = null;
+
   constructor(
     private readonly upload: UploadPiece,
     private readonly pieceMs = PIECE_MS,
+    /** Where the piece being recorded is kept until it is uploaded (null: memory only). */
+    private readonly store: PieceStore | null = null,
+    /** The class, so leftovers go to the right one. */
+    private readonly session = '',
   ) {
     this.mime = pickAudioMime();
+  }
+
+  /**
+   * Upload what an earlier page of this class left behind (a reload, a
+   * crash): pieces recorded but never sent. Silent ones are just dropped.
+   */
+  async recover(): Promise<number> {
+    if (!this.store) return 0;
+    const left = await this.store.leftovers(this.session, this.currentId ? [this.currentId] : []);
+    let sent = 0;
+    for (const { meta, blob } of left) {
+      if (meta.voiced && blob.size >= MIN_PIECE_BYTES) {
+        const ms = Math.max(0, meta.lastAt - meta.startedAt) + CHUNK_MS;
+        if (await uploadWithRetry((s, b) => this.upload(s, b, ms), meta.seq, blob)) sent++;
+      }
+      await this.store.remove(meta.id);
+    }
+    return sent;
   }
 
   /** False when this browser cannot record audio at all. */
@@ -142,9 +185,22 @@ export class LessonAudio {
       mimeType: this.mime,
       audioBitsPerSecond: 32_000,
     });
-    const seq = Math.floor(Date.now() / 1000);
+    const seq = nextSeq();
+    const startedAt = Date.now();
     const chunks: Blob[] = [];
     let voiced = false;
+    const id = `${this.session}:${seq}`;
+    this.currentId = id;
+    const store = this.store;
+    void store?.begin({
+      id,
+      session: this.session,
+      seq,
+      mime: this.mime,
+      startedAt,
+      lastAt: startedAt,
+      voiced: false,
+    });
     if (this.meter) clearInterval(this.meter);
     const buf = new Float32Array(this.analyser!.fftSize);
     this.meter = setInterval(() => {
@@ -155,19 +211,28 @@ export class LessonAudio {
       if (Math.sqrt(sum / buf.length) > VOICE_LEVEL) voiced = true;
     }, LEVEL_EVERY_MS);
     rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.push(e.data);
+      if (!e.data.size) return;
+      chunks.push(e.data);
+      // Kept as it arrives: this is what survives a reload.
+      void store?.append(id, e.data, Date.now(), voiced);
     };
     const done = new Promise<void>((resolve) => {
       rec.onstop = () => {
         const blob = new Blob(chunks, { type: this.mime ?? 'audio/webm' });
         if (voiced && blob.size >= MIN_PIECE_BYTES) {
-          const p = uploadWithRetry(this.upload, seq, blob).finally(() => this.pending.delete(p));
+          const ms = Date.now() - startedAt;
+          const p = uploadWithRetry((s, b) => this.upload(s, b, ms), seq, blob)
+            // Sent, or refused for good: either way it is no longer owed.
+            .then(() => store?.remove(id))
+            .finally(() => this.pending.delete(p));
           this.pending.add(p);
+        } else {
+          void store?.remove(id);
         }
         resolve();
       };
     });
-    rec.start();
+    rec.start(CHUNK_MS);
     this.rec = { rec, done };
   }
 

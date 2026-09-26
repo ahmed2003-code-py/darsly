@@ -618,6 +618,16 @@ export default function Classroom(props: ClassroomProps) {
                     onClick={recording.toggle}
                   />
                 )}
+                {amOwner && cf?.transcription?.available && cf.transcription.mode === 'MANUAL' && (
+                  // MANUAL mode only: the teacher decides when the words are kept
+                  // (AUTO follows the record button; OFF shows nothing).
+                  <Ctl
+                    icon={meeting.transcribing ? 'subtitles_off' : 'subtitles'}
+                    active={meeting.transcribing}
+                    label={meeting.transcribing ? t('meeting.transcriptStop') : t('meeting.transcriptStart')}
+                    onClick={() => void cf.setTranscriptCapture(!meeting.transcribing)}
+                  />
+                )}
               </div>
             )}
 

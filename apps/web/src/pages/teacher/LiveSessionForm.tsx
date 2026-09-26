@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
@@ -23,6 +23,8 @@ import {
   type LiveFormValues,
 } from '../../lib/liveSessionForm';
 import { Field } from '../../components/ui';
+
+type TranscriptionMode = 'OFF' | 'MANUAL' | 'AUTO_WHEN_RECORDING';
 
 const DURATIONS = [30, 45, 60, 90, 120];
 
@@ -97,6 +99,18 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
   const [customLen, setCustomLen] = useState(false);
   const [limited, setLimited] = useState(false);
   const [joinUrl, setJoinUrl] = useState('');
+  // Offered only when the platform transcribes at all.
+  const features = useQuery({
+    queryKey: ['live-features'],
+    queryFn: async () =>
+      (await api.get('/teacher/live-features')).data as {
+        transcription: boolean;
+        defaultTranscriptionMode: TranscriptionMode;
+      },
+    staleTime: 5 * 60_000,
+  });
+  const [mode, setMode] = useState<TranscriptionMode | null>(null);
+  const transcriptionMode = mode ?? features.data?.defaultTranscriptionMode ?? null;
   const refs = useRef<Partial<Record<LiveFormField, HTMLElement | null>>>({});
 
   const { date, time } = splitStart(v.startsAt);
@@ -134,7 +148,12 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
 
   const create = useMutation({
     mutationFn: async () =>
-      (await api.post('/teacher/live', toPayload({ ...v, capacity: limited ? v.capacity : '' }, joinUrl))).data,
+      (
+        await api.post('/teacher/live', {
+          ...toPayload({ ...v, capacity: limited ? v.capacity : '' }, joinUrl),
+          ...(features.data?.transcription && transcriptionMode ? { transcriptionMode } : {}),
+        })
+      ).data,
     onSuccess: () => {
       setV(fresh());
       setTouched({});
@@ -344,6 +363,23 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
           {t('live.form.advanced')}
         </summary>
         <div className="mt-3 space-y-2">
+          {features.data?.transcription && transcriptionMode && (
+            <Field label={t('live.form.transcription')} id="live-transcription" className="mb-3">
+              <select
+                id="live-transcription"
+                className="input"
+                value={transcriptionMode}
+                onChange={(e) => setMode(e.target.value as TranscriptionMode)}
+              >
+                {(['AUTO_WHEN_RECORDING', 'MANUAL', 'OFF'] as const).map((m) => (
+                  <option key={m} value={m}>
+                    {t(`record.transcript.mode.${m}`)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs leading-relaxed text-outline">{t('live.form.transcriptionHint')}</p>
+            </Field>
+          )}
           <p className="text-xs leading-relaxed text-outline">{t('live.builtInHint')}</p>
           <Field label={t('live.useExternal')} id="live-joinUrl" className="mb-0">
             <input

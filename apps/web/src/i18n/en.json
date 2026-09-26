@@ -1249,7 +1249,8 @@
     "full": "Full",
     "join": "Join now",
     "joinOpensSoon": "Opens 15 min before",
-    "minutes": "{{count}} min",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
     "seatsLeft": "{{count}} seats left",
     "liveNow": "Live now",
     "inDays": "in {{count}}d",
@@ -1311,7 +1312,9 @@
       "durationMinutes": "Length in minutes",
       "limit": "Limit",
       "maxStudents": "Maximum students",
-      "advanced": "Advanced options"
+      "advanced": "Advanced options",
+      "transcription": "Class transcript",
+      "transcriptionHint": "What is said is turned into text after the class, for the summary. The audio is deleted once transcribed."
     },
     "v": {
       "TITLE_REQUIRED": "Enter a title for the session.",
@@ -2932,7 +2935,8 @@
       "SPEAKER_LIMIT": "The maximum number of students are already speaking. Close someone's mic first.",
       "HAND_FAILED": "That did not go through. Try again.",
       "REMOVE_FAILED": "Could not remove the participant. Try again.",
-      "RECONNECTED": "Reconnected to the class."
+      "RECONNECTED": "Reconnected to the class.",
+      "TRANSCRIPT_FAILED": "The transcript could not be switched"
     },
     "chat": "Chat",
     "chatEmpty": "No messages yet",
@@ -3052,7 +3056,9 @@
       "off": "Mute sounds"
     },
     "transcriptOn": "Transcript on",
-    "transcriptOnHint": "What is said in this class is turned into text after it ends, for the summary. The audio itself is deleted once transcribed."
+    "transcriptOnHint": "What is said in this class is turned into text after it ends, for the summary. The audio itself is deleted once transcribed.",
+    "transcriptStart": "Start transcript",
+    "transcriptStop": "Stop transcript"
   },
   "summary": {
     "title": "AI lesson summary",
@@ -3677,7 +3683,7 @@
       "FINALIZING": "Finishing the recording",
       "PROCESSING": "Preparing the video",
       "READY": "Recording ready",
-      "FAILED": "The recording couldn't be prepared",
+      "FAILED": "The class recording could not be prepared",
       "readyHint": "The video is saved and prepared securely.",
       "processingHint": "Preparing the video can take a few minutes.",
       "openFailed": "Couldn't open the recording. Try again.",
@@ -3685,27 +3691,54 @@
         "NOT_STARTED": "Recording didn't start — the recording service wasn't available at the time.",
         "NOTHING_RECORDED": "Nothing was recorded in this class.",
         "PROCESSING_FAILED": "Something went wrong while preparing the recording."
-      }
+      },
+      "watch": "Watch the recording",
+      "loadingPlayer": "Preparing the player…",
+      "playerError": "The recording could not be played. Try again.",
+      "quality": "Quality",
+      "auto": "Auto",
+      "notShared": "The recording is not available to you."
     },
     "transcript": {
       "title": "Transcript",
       "WAITING_FOR_RECORDING": "Waiting for the recording",
       "TRANSCRIBING": "Transcribing the class",
       "READY": "Transcript ready",
-      "FAILED": "The transcript couldn't be created",
+      "FAILED": "The transcript could not be created",
       "AT_PROVIDER": "Speech was captured; the transcript is prepared with the summary",
       "UNAVAILABLE": "No transcript for this class",
       "reason": {
         "NO_RECORDING": "The transcript comes from the recording, and this class wasn't recorded.",
         "NO_TRANSCRIPTION": "Transcribing recordings isn't switched on yet.",
-        "TRANSCRIPTION_OFF": "Transcription wasn't running during the class.",
-        "NOTHING_SAID": "Not enough speech was captured."
+        "TRANSCRIPTION_OFF": "Transcription was not on for this class.",
+        "NOTHING_SAID": "Not enough speech was captured.",
+        "NOTHING_CAPTURED": "No speech was captured to transcribe in this class."
+      },
+      "WAITING_FOR_CLASS_END": "Waiting for the class to end",
+      "OFF": "Transcript is off",
+      "partial": "Some parts of the class could not be transcribed; the rest is shown here.",
+      "search": "Search the transcript",
+      "copy": "Copy transcript",
+      "copied": "Copied",
+      "noMatches": "No matches",
+      "showAll": "Show the full transcript",
+      "showLess": "Show less",
+      "matches_zero": "No matches",
+      "matches_one": "1 match",
+      "matches_two": "2 matches",
+      "matches_few": "{{count}} matches",
+      "matches_many": "{{count}} matches",
+      "matches_other": "{{count}} matches",
+      "mode": {
+        "OFF": "Off",
+        "MANUAL": "Manual (from the classroom)",
+        "AUTO_WHEN_RECORDING": "Automatic while recording"
       }
     },
     "summary": {
       "WAITING_FOR_TRANSCRIPT": "The summary will be written once the transcript is ready",
       "GENERATING": "Writing the summary",
-      "FAILED": "The summary couldn't be created",
+      "FAILED": "The class summary could not be created",
       "UNAVAILABLE": "A summary can't be written without a transcript"
     },
     "chat": {
@@ -3715,6 +3748,20 @@
       "count_other": "{{count}} messages",
       "showAll_one": "Show the message",
       "showAll_other": "Show all {{count}} messages"
-    }
+    },
+    "visibility": {
+      "label": "Who can see it",
+      "PRIVATE": "Teacher only",
+      "STUDENTS": "Students in this class"
+    },
+    "nav": {
+      "overview": "Overview",
+      "recording": "Recording",
+      "transcript": "Transcript",
+      "summary": "Summary",
+      "attendance": "Attendance",
+      "chat": "Chat"
+    },
+    "actualDuration": "Ran {{duration}}"
   }
 }

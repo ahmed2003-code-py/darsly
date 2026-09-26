@@ -289,15 +289,23 @@ export function Field({
   children,
   hint,
   error,
+  id,
+  className = 'mb-4',
 }: {
   label: string;
   children: ReactNode;
   hint?: ReactNode;
   /** Marks the field (red edge, via `.field-invalid` in index.css) and says why, under it. */
   error?: ReactNode;
+  /**
+   * The control's id. When given, the error and hint get `${id}-error` /
+   * `${id}-hint`, so the control can point `aria-describedby` at them.
+   */
+  id?: string;
+  className?: string;
 }) {
   return (
-    <label className={`mb-4 block ${error ? 'field-invalid' : ''}`}>
+    <label className={`block ${className} ${error ? 'field-invalid' : ''}`} htmlFor={id}>
       <span
         className={`mb-1.5 block text-sm font-semibold ${error ? 'text-error' : 'text-on-surface-variant'}`}
       >
@@ -305,12 +313,22 @@ export function Field({
       </span>
       {children}
       {error && (
-        <span role="alert" className="mt-1.5 flex items-start gap-1 text-sm text-error">
-          <span className="material-symbols-outlined mt-px text-[18px]">error</span>
+        <span
+          id={id ? `${id}-error` : undefined}
+          role="alert"
+          className="mt-1.5 flex items-start gap-1 text-sm text-error"
+        >
+          <span aria-hidden className="material-symbols-outlined mt-px text-[18px]">
+            error
+          </span>
           <span className="min-w-0">{error}</span>
         </span>
       )}
-      {hint && <span className="mt-1 block text-sm text-outline">{hint}</span>}
+      {hint && !error && (
+        <span id={id ? `${id}-hint` : undefined} className="mt-1 block text-sm text-outline">
+          {hint}
+        </span>
+      )}
     </label>
   );
 }

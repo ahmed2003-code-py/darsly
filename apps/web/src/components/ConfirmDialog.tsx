@@ -31,15 +31,22 @@ export function ConfirmDialog() {
     >
       <p className="whitespace-pre-line text-on-surface-variant">{current?.message}</p>
       <div className="mt-6 flex justify-end gap-2">
-        <button type="button" className="btn-ghost" onClick={() => answer(false)}>
+        <button
+          type="button"
+          className="btn-ghost"
+          // A destructive question starts on the way back: Enter must not end a
+          // class or delete a lesson by reflex.
+          autoFocus={!!current?.danger}
+          onClick={() => answer(false)}
+        >
           {current?.cancelLabel ?? t('common.cancel')}
         </button>
         <button
           type="button"
-          // Autofocused so Enter answers the question the dialog is asking.
-          // Safe because the focus trap has already moved focus into the panel
-          // and the reader has read the title by the time they can press it.
-          autoFocus
+          // Otherwise autofocused so Enter answers the question the dialog is
+          // asking — safe because the focus trap has already moved focus into
+          // the panel and the reader has read the title by then.
+          autoFocus={!current?.danger}
           className={current?.danger ? 'btn-primary bg-error text-on-error' : 'btn-primary'}
           onClick={() => answer(true)}
         >

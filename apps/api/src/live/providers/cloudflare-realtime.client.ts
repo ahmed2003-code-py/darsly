@@ -163,7 +163,9 @@ export class CloudflareRealtimeClient {
       // Whatever it says, it never carries our secret into a log.
       const desc =
         typeof json?.errorDescription === 'string'
-          ? json.errorDescription.split(secret).join('[redacted]').slice(0, 200)
+          ? redactPath(
+              json.errorDescription.split(secret).join('[redacted]').split(appId).join('<app>'),
+            ).slice(0, 200)
           : '';
       const failure: CfFailure =
         res.status === 401 || res.status === 403

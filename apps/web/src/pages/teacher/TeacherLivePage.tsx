@@ -10,11 +10,11 @@ import {
   CardGridSkeleton,
   EmptyState,
   ErrorNote,
-  Field,
   Modal,
   PageHeader,
 } from '../../components/ui';
 import SessionSummary from '../live/SessionSummary';
+import LiveSessionForm from './LiveSessionForm';
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', {
@@ -32,48 +32,11 @@ export default function TeacherLivePage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [bookingsFor, setBookingsFor] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    startsAt: '',
-    durationMin: '60',
-    capacity: '',
-    joinUrl: '',
-  });
-  // Off by default: the built-in classroom is what a new session gets.
-  const [useExternal, setUseExternal] = useState(false);
-
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-live'],
     queryFn: async () => (await api.get('/teacher/live')).data,
   });
 
-  const create = useMutation({
-    mutationFn: async () =>
-      (
-        await api.post('/teacher/live', {
-          title: form.title.trim(),
-          description: form.description.trim() || undefined,
-          startsAt: new Date(form.startsAt).toISOString(),
-          durationMin: Number(form.durationMin) || 60,
-          capacity: form.capacity ? Number(form.capacity) : null,
-          joinUrl: form.joinUrl.trim() || null,
-        })
-      ).data,
-    onSuccess: () => {
-      setOpen(false);
-      setUseExternal(false);
-      setForm({
-        title: '',
-        description: '',
-        startsAt: '',
-        durationMin: '60',
-        capacity: '',
-        joinUrl: '',
-      });
-      qc.invalidateQueries({ queryKey: ['teacher-live'] });
-    },
-  });
   const remove = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/teacher/live/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['teacher-live'] }),
@@ -209,138 +172,22 @@ export default function TeacherLivePage() {
         </div>
       )}
 
-      {/* Create modal */}
-      <Modal open={open} onClose={() => setOpen(false)} title={t('live.schedule')}>
-        <Field label={t('live.fTitle')}>
-          <input
-            className="input"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder={t('live.fTitlePh')}
+      {/* Create */}
+      <Modal open={open} onClose={() => setOpen(false)} title={t('live.newSession')}>
+        {open && (
+          <LiveSessionForm
+            onCancel={() => setOpen(false)}
+            onCreated={() => {
+              setOpen(false);
+              qc.invalidateQueries({ queryKey: ['teacher-live'] });
+            }}
           />
-        </Field>
-        <Field label={t('live.fDescription')}>
-          <textarea
-            className="input min-h-20"
-            dir="auto"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('live.fStartsAt')}>
-            <input
-              className="input"
-              type="datetime-local"
-              value={form.startsAt}
-              onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
-            />
-          </Field>
-          <Field label={t('live.fDuration')}>
-            <input
-              className="input"
-              inputMode="numeric"
-              value={form.durationMin}
-              onChange={(e) => setForm({ ...form, durationMin: e.target.value.replace(/\D/g, '') })}
-            />
-          </Field>
-        </div>
-        <Field label={t('live.fCapacity')} hint={t('live.fCapacityHint')}>
-          <input
-            className="input"
-            inputMode="numeric"
-            value={form.capacity}
-            onChange={(e) => setForm({ ...form, capacity: e.target.value.replace(/\D/g, '') })}
-          />
-        </Field>
-
-        {/* The classroom is Darsly's now, so the form says so instead of asking
-            for a link. The external field stays reachable but folded away: a
-            teacher who has a paid Zoom they would rather use is a real case,
-            and it is the wrong default rather than a wrong answer. */}
-        <div className="mt-1 rounded-xl bg-primary-fixed/40 px-3.5 py-3">
-          <p className="flex items-center gap-2 text-sm font-bold text-on-primary-fixed">
-            <span className="material-symbols-outlined text-[18px]">videocam</span>
-            {t('live.builtInTitle')}
-          </p>
-          <p className="mt-0.5 text-xs text-on-primary-fixed/80">{t('live.builtInHint')}</p>
-          {!useExternal ? (
-            <button
-              type="button"
-              className="mt-2 text-xs font-bold text-primary underline underline-offset-2"
-              onClick={() => setUseExternal(true)}
-            >
-              {t('live.useExternal')}
-            </button>
-          ) : (
-            // The way back has to look like a control. As a line of bold text
-            // it read as a caption, so the field could be opened and not shut.
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                className="input flex-1"
-                dir="ltr"
-                value={form.joinUrl}
-                onChange={(e) => setForm({ ...form, joinUrl: e.target.value })}
-                placeholder="https://meet…"
-              />
-              <button
-                type="button"
-                aria-label={t('live.useBuiltIn')}
-                title={t('live.useBuiltIn')}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface-container-highest text-on-surface-variant transition active:scale-95"
-                onClick={() => {
-                  setUseExternal(false);
-                  setForm({ ...form, joinUrl: '' });
-                }}
-              >
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
-          )}
-        </div>
-        <ErrorNote error={create.error} />
-        <button
-          className="btn-primary mt-2 w-full"
-          disabled={create.isPending || !form.title.trim() || !form.startsAt}
-          onClick={() => create.mutate()}
-        >
-          {create.isPending ? t('common.saving') : t('live.publish')}
-        </button>
+        )}
       </Modal>
 
       {/* What a finished lesson left behind. */}
-      <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={t('live.sessionRecord')}>
-        {detailFor && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="mb-2 font-heading text-base font-bold">{t('live.attendance')}</h3>
-              {!attendance?.length ? (
-                <p className="py-3 text-center text-sm text-outline">{t('live.noAttendance')}</p>
-              ) : (
-                <ul className="divide-y divide-outline-variant/40">
-                  {attendance.map((a: any) => (
-                    <li key={a.id} className="flex items-center gap-2 py-2">
-                      <span className="min-w-0 flex-1 truncate text-sm font-bold">
-                        {a.fullName}
-                      </span>
-                      {a.role === 'TEACHER' && (
-                        <span className="rounded-full bg-primary-fixed px-2 py-0.5 text-[10px] font-bold text-on-primary-fixed">
-                          {t('meeting.teacherBadge')}
-                        </span>
-                      )}
-                      <span className="shrink-0 text-xs text-outline">
-                        {t('live.minutes', {
-                          count: Math.max(1, Math.round(a.durationSeconds / 60)),
-                        })}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <SessionSummary sessionId={detailFor} />
-          </div>
-        )}
+      <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={t('live.sessionRecord')} wide>
+        {detailFor && <SessionSummary sessionId={detailFor} attendance={attendance ?? []} />}
       </Modal>
 
       {/* Bookings modal */}

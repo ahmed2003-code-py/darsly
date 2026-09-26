@@ -1,16 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
-import { ErrorNote, Spinner } from '../../components/ui';
+import { ErrorNote, Skeleton } from '../../components/ui';
 
 /**
- * What the lesson came to, after it happened.
+ * What a lesson left behind: its recording, its words, its summary, and who
+ * came — each its own section with its own state, because they are separate
+ * processes. A summary waiting on a transcript is waiting, not failed; a
+ * recording being packaged says which stage it is in, never a raw status.
  *
- * The same component serves both sides of the class, because the server has
- * already decided what each of them may read: a student whose teacher has not
- * shared the summary is simply told there is nothing yet, rather than being
- * shown a locked door they can rattle.
+ * The same component serves both sides of the class; the server has already
+ * decided what each may read.
  */
 
 interface Summary {
@@ -21,11 +22,69 @@ interface Summary {
   actionItems: string[];
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+type RecStage = 'REQUESTED' | 'CAPTURING' | 'FINALIZING' | 'PROCESSING' | 'READY' | 'FAILED';
+type Attendee = { id: string; fullName: string; role: string; durationSeconds: number };
+
+const IN_PROGRESS_REC: RecStage[] = ['REQUESTED', 'CAPTURING', 'FINALIZING', 'PROCESSING'];
+
+function Block({
+  icon,
+  title,
+  aside,
+  children,
+}: {
+  icon: string;
+  title: string;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="mb-4 last:mb-0">
-      <h4 className="mb-1.5 font-heading text-sm font-extrabold text-primary">{title}</h4>
-      {children}
+    <section className="py-4 first:pt-0 last:pb-0">
+      <div className="mb-2 flex items-center gap-2">
+        <span aria-hidden className="material-symbols-outlined text-[20px] text-on-surface-variant">
+          {icon}
+        </span>
+        <h3 className="flex-1 font-heading text-base font-bold">{title}</h3>
+        {aside}
+      </div>
+      <div className="ps-7">{children}</div>
+    </section>
+  );
+}
+
+/** One state line: an icon, what is happening, and optionally why. */
+function Status({
+  tone = 'neutral',
+  busy,
+  title,
+  hint,
+}: {
+  tone?: 'neutral' | 'good' | 'bad';
+  busy?: boolean;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-start gap-2" role={busy ? 'status' : undefined}>
+      {busy ? (
+        <span
+          aria-hidden
+          className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-primary/25 border-t-primary motion-safe:animate-spin"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className={`material-symbols-outlined mt-px text-[18px] ${
+            tone === 'good' ? 'text-emerald-600' : tone === 'bad' ? 'text-error' : 'text-outline'
+          }`}
+        >
+          {tone === 'good' ? 'check_circle' : tone === 'bad' ? 'error' : 'info'}
+        </span>
+      )}
+      <div className="min-w-0">
+        <p className="text-sm font-semibold">{title}</p>
+        {hint && <p className="mt-0.5 text-sm text-outline">{hint}</p>}
+      </div>
     </div>
   );
 }
@@ -35,8 +94,8 @@ function Bullets({ items, empty }: { items: string[]; empty: string }) {
   return (
     <ul className="space-y-1">
       {items.map((it, i) => (
-        <li key={i} className="flex gap-2 text-sm" dir="auto">
-          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
+        <li key={i} className="flex gap-2 text-sm leading-relaxed" dir="auto">
+          <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
           <span>{it}</span>
         </li>
       ))}
@@ -44,25 +103,23 @@ function Bullets({ items, empty }: { items: string[]; empty: string }) {
   );
 }
 
-/** Minutes, except when there are none — "0 minutes" is not a length. */
-function lengthOf(totalSeconds: number, t: (k: string, o?: any) => string) {
+function minutesOf(totalSeconds: number, t: (k: string, o?: any) => string) {
   const m = Math.round(totalSeconds / 60);
   return m < 1 ? t('summary.underMinute') : t('live.minutes', { count: m });
 }
 
-/**
- * Watching the lesson back.
- *
- * The link is asked for on the tap, not when the page loads: it expires on the
- * provider's own schedule, so fetching it early only means fetching a link that
- * has died by the time anyone presses play.
- */
-function RecordingBlock({
+function RecordingSection({
   sessionId,
   recording,
 }: {
   sessionId: string;
-  recording: { status: string; available: boolean; durationSeconds?: number | null };
+  recording: {
+    status: string;
+    stage: RecStage | null;
+    failure: 'NOT_STARTED' | 'NOTHING_RECORDED' | 'PROCESSING_FAILED' | null;
+    available: boolean;
+    durationSeconds?: number | null;
+  };
 }) {
   const { t } = useTranslation();
   const [url, setUrl] = useState<string | null>(null);
@@ -70,55 +127,78 @@ function RecordingBlock({
     mutationFn: async () => (await api.get(`/live/${sessionId}/recording`)).data,
     onSuccess: (d) => setUrl(d.url),
   });
+  const stage = recording.stage;
+  const length = recording.durationSeconds ? minutesOf(recording.durationSeconds, t) : null;
 
-  if (recording.status === 'NOT_STARTED') return null;
-
-  return (
-    <div className="mb-4 rounded-xl bg-surface-container-low p-3">
-      <div className="flex items-center gap-2">
-        <span className="material-symbols-outlined text-[20px] text-primary">smart_display</span>
-        <span className="flex-1 text-sm font-bold">{t('summary.recording')}</span>
-        {recording.durationSeconds ? (
-          <span className="text-xs text-outline">{lengthOf(recording.durationSeconds, t)}</span>
-        ) : null}
-      </div>
-
-      {recording.status === 'PROCESSING' && (
-        <p className="mt-1 text-xs text-outline">{t('summary.recProcessing')}</p>
-      )}
-      {recording.status === 'FAILED' && (
-        <p className="mt-1 text-xs text-outline">{t('summary.recFailed')}</p>
-      )}
-      {recording.status === 'READY' && !recording.available && (
-        <p className="mt-1 text-xs text-outline">{t('summary.recNotShared')}</p>
-      )}
-
-      {recording.available && !url && (
-        <button
-          className="btn-primary mt-2 w-full py-2 text-sm"
-          disabled={open.isPending}
-          onClick={() => open.mutate()}
-        >
-          <span className="material-symbols-outlined text-base">play_arrow</span>
+  let body: ReactNode;
+  if (!stage) body = <p className="text-sm text-outline">{t('record.rec.none')}</p>;
+  else if (stage === 'READY')
+    body = recording.available ? (
+      url ? (
+        <video src={url} controls playsInline className="w-full rounded-xl bg-black" />
+      ) : (
+        <button className="btn-primary" disabled={open.isPending} onClick={() => open.mutate()}>
+          <span aria-hidden className="material-symbols-outlined text-[20px]">play_arrow</span>
           {open.isPending ? t('common.loading') : t('summary.watch')}
         </button>
-      )}
-      {open.isError && <p className="mt-1 text-xs text-error">{t('summary.recFailed')}</p>}
-      {url && <video src={url} controls playsInline className="mt-2 w-full rounded-lg bg-black" />}
-    </div>
+      )
+    ) : (
+      <Status tone="good" title={t('record.rec.READY')} hint={t('record.rec.readyHint')} />
+    );
+  else if (stage === 'FAILED')
+    body = (
+      <Status
+        tone="bad"
+        title={t('record.rec.FAILED')}
+        hint={t(`record.rec.failure.${recording.failure ?? 'PROCESSING_FAILED'}`)}
+      />
+    );
+  else
+    body = (
+      <Status
+        busy
+        title={t(`record.rec.${stage}`)}
+        hint={stage === 'PROCESSING' || stage === 'FINALIZING' ? t('record.rec.processingHint') : undefined}
+      />
+    );
+
+  return (
+    <Block
+      icon="smart_display"
+      title={t('summary.recording')}
+      aside={length ? <span className="text-xs text-outline">{length}</span> : null}
+    >
+      {body}
+      {open.isError && <p className="mt-2 text-sm text-error">{t('record.rec.openFailed')}</p>}
+    </Block>
   );
 }
 
-export default function SessionSummary({ sessionId }: { sessionId: string }) {
-  const { t } = useTranslation();
+export default function SessionSummary({
+  sessionId,
+  attendance,
+}: {
+  sessionId: string;
+  /** The teacher's view passes who came; a student's does not. */
+  attendance?: Attendee[];
+}) {
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
 
   const detail = useQuery({
     queryKey: ['live-detail', sessionId],
     queryFn: async () => (await api.get(`/live/${sessionId}/detail`)).data,
-    // While the job runs, the page catches up on its own rather than asking the
-    // teacher to refresh a thing they cannot influence.
-    refetchInterval: (q) => (q.state.data?.summary?.status === 'PROCESSING' ? 5000 : false),
+    // While anything is still moving, the record catches up on its own.
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return false;
+      const moving =
+        IN_PROGRESS_REC.includes(d.recording?.stage) ||
+        d.summary?.stage === 'GENERATING' ||
+        d.transcript?.stage === 'TRANSCRIBING' ||
+        d.transcript?.stage === 'WAITING_FOR_RECORDING';
+      return moving ? 5000 : false;
+    },
   });
 
   const generate = useMutation({
@@ -133,153 +213,178 @@ export default function SessionSummary({ sessionId }: { sessionId: string }) {
 
   if (detail.isLoading)
     return (
-      <div className="py-6 text-center">
-        <Spinner />
+      <div className="space-y-4" aria-busy>
+        <Skeleton className="h-5 w-1/2" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
       </div>
     );
-  if (detail.isError) return null;
+  if (detail.isError) return <ErrorNote error={detail.error} />;
 
   const d = detail.data;
   const isTeacher = d.role === 'TEACHER';
-  const status: string = d.summary.status;
+  const sStage: string = d.summary.stage ?? d.summary.status;
   const data: Summary | null = d.summary.data;
+  const students = attendance?.filter((a) => a.role !== 'TEACHER') ?? [];
 
   return (
-    <div className="card">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="font-heading text-base font-bold">{t('summary.title')}</h3>
-        {isTeacher && status === 'READY' && (
-          <label className="flex items-center gap-2 text-xs font-bold">
-            <input
-              type="checkbox"
-              className="accent-primary"
-              checked={d.summary.sharedWithStudents}
-              onChange={(e) => share.mutate(e.target.checked)}
-            />
-            {t('summary.share')}
-          </label>
+    <div className="divide-y divide-outline-variant/60">
+      {/* Overview */}
+      <div className="flex flex-wrap gap-x-6 gap-y-2 pb-4 text-sm">
+        <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
+          <span aria-hidden className="material-symbols-outlined text-[18px]">event</span>
+          {new Date(d.startsAt).toLocaleString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
+          <span aria-hidden className="material-symbols-outlined text-[18px]">timer</span>
+          {t('live.minutes', { count: d.durationMin })}
+        </span>
+        {attendance && (
+          <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
+            <span aria-hidden className="material-symbols-outlined text-[18px]">group</span>
+            {t('record.attendedCount', { count: students.length })}
+          </span>
         )}
       </div>
 
-      {/* The recording, where someone would actually look for it: on the record
-          of the lesson it belongs to, beside the notes. */}
-      <RecordingBlock sessionId={sessionId} recording={d.recording} />
+      <RecordingSection sessionId={sessionId} recording={d.recording} />
 
-      {status === 'PROCESSING' && (
-        <p className="flex items-center gap-2 py-4 text-sm text-outline">
-          <Spinner />
-          {t('summary.processing')}
-        </p>
+      {isTeacher && d.transcript && (
+        <Block icon="subject" title={t('record.transcript.title')}>
+          {d.transcript.stage === 'READY' ? (
+            <Status tone="good" title={t('record.transcript.READY')} />
+          ) : d.transcript.stage === 'UNAVAILABLE' ? (
+            <Status title={t('record.transcript.UNAVAILABLE')} hint={t(`record.transcript.reason.${d.transcript.reason}`)} />
+          ) : d.transcript.stage === 'FAILED' ? (
+            <Status tone="bad" title={t('record.transcript.FAILED')} />
+          ) : d.transcript.stage === 'AT_PROVIDER' ? (
+            <Status title={t('record.transcript.AT_PROVIDER')} />
+          ) : (
+            <Status busy title={t(`record.transcript.${d.transcript.stage}`)} />
+          )}
+        </Block>
       )}
 
-      {status === 'FAILED' &&
-        // Why it failed decides what to offer. "No transcript" is not something
-        // trying again can fix — the words were never captured — so offering a
-        // retry button there is offering a button that cannot work.
-        (d.summary.error === 'TRANSCRIPTION_UNAVAILABLE' ? (
-          <div className="py-2">
-            <p className="text-sm text-outline">{t('summary.transcriptionOff')}</p>
+      <Block
+        icon="auto_awesome"
+        title={t('summary.title')}
+        aside={
+          isTeacher && sStage === 'READY' ? (
+            <label className="flex items-center gap-2 text-xs font-semibold">
+              <input
+                type="checkbox"
+                className="accent-primary"
+                checked={d.summary.sharedWithStudents}
+                onChange={(e) => share.mutate(e.target.checked)}
+              />
+              {t('summary.share')}
+            </label>
+          ) : null
+        }
+      >
+        {sStage === 'READY' && data ? (
+          <div dir="auto" className="space-y-4">
+            <p className="text-sm leading-relaxed">{data.summary}</p>
+            {data.topics.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {data.topics.map((tp, i) => (
+                  <span key={i} className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed">
+                    {tp}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div>
+              <h4 className="mb-1 text-sm font-bold">{t('summary.keyPoints')}</h4>
+              <Bullets items={data.keyPoints} empty={t('summary.noneKeyPoints')} />
+            </div>
+            <div>
+              <h4 className="mb-1 text-sm font-bold">{t('summary.qa')}</h4>
+              {data.questionsAndAnswers.length ? (
+                <dl className="space-y-2">
+                  {data.questionsAndAnswers.map((qa, i) => (
+                    <div key={i}>
+                      <dt className="text-sm font-semibold">{qa.question}</dt>
+                      <dd className="text-sm text-on-surface-variant">{qa.answer}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-sm text-outline">{t('summary.noneQa')}</p>
+              )}
+            </div>
+            <div>
+              <h4 className="mb-1 text-sm font-bold">{t('summary.homework')}</h4>
+              <Bullets items={data.actionItems} empty={t('summary.noneHomework')} />
+            </div>
           </div>
-        ) : d.summary.error === 'NO_TRANSCRIPT' ? (
-          <div className="py-2">
-            <p className="text-sm text-outline">{t('summary.noTranscript')}</p>
-          </div>
-        ) : d.summary.error === 'TRANSCRIPT_PENDING' ||
-          d.summary.error === 'PROVIDER_UNREACHABLE' ? (
-          // The words exist, or may well: the provider had not finished with
-          // them, or could not be asked. Trying again is exactly right here.
-          <div className="py-2">
-            <p className="mb-2 text-sm text-outline">{t('summary.transcriptPending')}</p>
-            {isTeacher && (
-              <button
-                className="btn-ghost text-sm"
-                disabled={generate.isPending}
-                onClick={() => generate.mutate()}
-              >
+        ) : sStage === 'GENERATING' || sStage === 'PROCESSING' ? (
+          <Status busy title={t('record.summary.GENERATING')} />
+        ) : sStage === 'WAITING_FOR_TRANSCRIPT' ? (
+          <Status title={t('record.summary.WAITING_FOR_TRANSCRIPT')} />
+        ) : sStage === 'UNAVAILABLE' ? (
+          <Status title={t('record.summary.UNAVAILABLE')} />
+        ) : sStage === 'FAILED' ? (
+          <div className="space-y-2">
+            <Status
+              tone="bad"
+              title={t('record.summary.FAILED')}
+              hint={
+                d.summary.error === 'TRANSCRIPT_PENDING' || d.summary.error === 'PROVIDER_UNREACHABLE'
+                  ? t('summary.transcriptPending')
+                  : undefined
+              }
+            />
+            {isTeacher && d.summary.canGenerate && (
+              <button className="btn-secondary" disabled={generate.isPending} onClick={() => generate.mutate()}>
                 {t('summary.retry')}
               </button>
             )}
           </div>
-        ) : (
-          <div className="py-2">
-            <p className="mb-2 text-sm text-outline">{t('summary.failed')}</p>
-            {isTeacher && (
-              <button
-                className="btn-ghost text-sm"
-                disabled={generate.isPending}
-                onClick={() => generate.mutate()}
-              >
-                {t('summary.retry')}
-              </button>
-            )}
-          </div>
-        ))}
-
-      {status === 'NOT_STARTED' &&
-        (isTeacher ? (
-          <div className="py-2">
-            <p className="mb-2 text-sm text-outline">{t('summary.notYetHint')}</p>
-            <button
-              className="btn-primary text-sm"
-              disabled={generate.isPending}
-              onClick={() => generate.mutate()}
-            >
-              <span className="material-symbols-outlined text-base">auto_awesome</span>
+        ) : isTeacher ? (
+          <div className="space-y-2">
+            <p className="text-sm text-outline">{t('summary.notYetHint')}</p>
+            <button className="btn-primary" disabled={generate.isPending || !d.summary.canGenerate} onClick={() => generate.mutate()}>
+              <span aria-hidden className="material-symbols-outlined text-[18px]">auto_awesome</span>
               {generate.isPending ? t('common.saving') : t('summary.generate')}
             </button>
           </div>
         ) : (
-          <p className="py-4 text-sm text-outline">{t('summary.notShared')}</p>
-        ))}
+          <p className="text-sm text-outline">{t('summary.notShared')}</p>
+        )}
+        {isTeacher && <ErrorNote error={generate.error} />}
+      </Block>
 
-      {/* Why a press did nothing — AI switched off, the month's budget spent —
-          instead of a button that silently stays where it was. */}
-      {isTeacher && <ErrorNote error={generate.error} />}
-
-      {status === 'READY' && data && (
-        <div dir="auto">
-          <Section title={t('summary.lesson')}>
-            <p className="text-sm leading-relaxed">{data.summary}</p>
-          </Section>
-          <Section title={t('summary.topics')}>
-            <div className="flex flex-wrap gap-1.5">
-              {data.topics.length ? (
-                data.topics.map((tp, i) => (
-                  <span
-                    key={i}
-                    className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed"
-                  >
-                    {tp}
+      {attendance && (
+        <Block icon="how_to_reg" title={t('live.attendance')}>
+          {!attendance.length ? (
+            <p className="text-sm text-outline">{t('live.noAttendance')}</p>
+          ) : (
+            <ul className="divide-y divide-outline-variant/40">
+              {attendance.map((a) => (
+                <li key={a.id} className="flex items-center gap-2 py-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold" dir="auto">
+                    {a.fullName}
                   </span>
-                ))
-              ) : (
-                <p className="text-sm text-outline">{t('summary.noneTopics')}</p>
-              )}
-            </div>
-          </Section>
-          <Section title={t('summary.keyPoints')}>
-            <Bullets items={data.keyPoints} empty={t('summary.noneKeyPoints')} />
-          </Section>
-          <Section title={t('summary.qa')}>
-            {data.questionsAndAnswers.length ? (
-              <ul className="space-y-2">
-                {data.questionsAndAnswers.map((qa, i) => (
-                  <li key={i} className="rounded-xl bg-surface-container-low p-2.5">
-                    <p className="text-sm font-bold">{qa.question}</p>
-                    <p className="mt-0.5 text-sm text-on-surface-variant">{qa.answer}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-outline">{t('summary.noneQa')}</p>
-            )}
-          </Section>
-          <Section title={t('summary.homework')}>
-            {/* Said explicitly rather than left blank: "nothing was set" is an
-                answer a student needs, and an empty space is not one. */}
-            <Bullets items={data.actionItems} empty={t('summary.noneHomework')} />
-          </Section>
-        </div>
+                  {a.role === 'TEACHER' && (
+                    <span className="rounded-full bg-primary-fixed px-2 py-0.5 text-[10px] font-bold text-on-primary-fixed">
+                      {t('meeting.teacherBadge')}
+                    </span>
+                  )}
+                  <span className="shrink-0 text-xs tabular-nums text-outline">
+                    {t('live.minutes', { count: Math.max(1, Math.round(a.durationSeconds / 60)) })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Block>
       )}
     </div>
   );

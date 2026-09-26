@@ -1287,7 +1287,35 @@
     "sessionRecord": "Session record",
     "attendance": "Attendance",
     "noAttendance": "Nobody attended this session",
-    "cancelBookingConfirm": "Cancel your booking for “{{title}}”?"
+    "cancelBookingConfirm": "Cancel your booking for “{{title}}”?",
+    "newSession": "New session",
+    "form": {
+      "basics": "Basics",
+      "schedule": "Timing",
+      "access": "Attendance",
+      "liveSettings": "Streaming",
+      "descriptionPh": "Briefly, what the class will cover (optional)",
+      "minutesUnit": "min",
+      "capacityHint": "Leave empty for no limit on students.",
+      "unlimited": "No limit",
+      "duration": "Length"
+    },
+    "v": {
+      "TITLE_REQUIRED": "Enter a title for the session.",
+      "TITLE_TOO_SHORT": "The title is too short.",
+      "TITLE_TOO_LONG": "The title is too long (at most {{max}} characters).",
+      "DESCRIPTION_TOO_LONG": "The description is too long (at most {{max}} characters).",
+      "STARTS_AT_REQUIRED": "Pick when the session starts.",
+      "STARTS_AT_INVALID": "Pick a valid date and time.",
+      "STARTS_AT_PAST": "A session cannot be scheduled in the past.",
+      "DURATION_INVALID": "Enter the length in minutes.",
+      "DURATION_TOO_SHORT": "A session must be at least {{min}} minutes long.",
+      "DURATION_TOO_LONG": "A session can be at most {{max}} minutes long.",
+      "CAPACITY_INVALID": "Enter a whole number of students.",
+      "CAPACITY_TOO_SMALL": "Capacity must be at least one student.",
+      "CAPACITY_TOO_LARGE": "Capacity can be at most {{max}} students.",
+      "INVALID": "Check this field."
+    }
   },
   "analytics": {
     "title": "Analytics",
@@ -2858,7 +2886,7 @@
     "leave": "Leave",
     "enter": "Join meeting",
     "back": "Back",
-    "endForAll": "End for all",
+    "endForAll": "End class",
     "endConfirm": "This ends the meeting for everyone. Are you sure?",
     "sharingScreen": "{{name}} is sharing their screen",
     "peopleCount": "Participants ({{count}})",
@@ -2918,10 +2946,85 @@
     "hands": "Raised hands",
     "approve": "Allow",
     "reject": "Decline",
-    "revoke": "Close mic",
+    "revoke": "Stop speaking",
     "speaking": "Speaking",
     "handUp": "Hand raised",
-    "enableSound": "Tap to turn on sound"
+    "enableSound": "Tap to turn on sound",
+    "micOff": "Microphone off",
+    "pinned": "Pinned",
+    "pin": "Pin to the stage",
+    "unpin": "Unpin",
+    "muteMic": "Mute microphone",
+    "unmuteMic": "Unmute microphone",
+    "camOff": "Turn camera off",
+    "camOn": "Turn camera on",
+    "joining": "Entering the class…",
+    "preparing": "Preparing the class…",
+    "listenerTitle": "You'll join as a listener",
+    "listenerHint": "You'll see and hear the teacher — we won't ask for your camera or microphone.",
+    "raiseTitle": "Want to speak?",
+    "raiseHint": "Raise your hand in the class and the teacher can let you speak.",
+    "dev": {
+      "checking": "Checking the camera…",
+      "noPreview": "No camera preview",
+      "camOffPreview": "Camera is off",
+      "camera": "Camera",
+      "microphone": "Microphone",
+      "on": "On",
+      "off": "Off",
+      "muted": "Muted",
+      "unavailable": "Unavailable",
+      "chooseCamera": "Choose camera",
+      "chooseMic": "Choose microphone",
+      "default": "Default",
+      "studentSendHint": "You can turn your camera and microphone on or off inside the class.",
+      "cam": {
+        "denied": "We couldn't access the camera. Allow the browser to use it and try again.",
+        "missing": "No camera was found on this device.",
+        "busy": "The camera is in use by another app. Close it and try again.",
+        "unsupported": "This browser doesn't support the camera. Try a recent Chrome, Edge or Safari.",
+        "failed": "The camera couldn't start. Try again."
+      },
+      "mic": {
+        "denied": "We couldn't access the microphone. Allow the browser to use it and try again.",
+        "missing": "No microphone was found on this device.",
+        "busy": "The microphone is in use by another app. Close it and try again.",
+        "unsupported": "This browser doesn't support the microphone. Try a recent Chrome, Edge or Safari.",
+        "failed": "The microphone couldn't start. Try again."
+      }
+    },
+    "left": "left",
+    "recordingBadge": "Recording",
+    "youAreSharing": "You're sharing your screen",
+    "youAreSharingHint": "Students can see your screen now.",
+    "stopSharing": "Stop sharing",
+    "readyTitle": "The class is ready",
+    "waitingTeacherTitle": "You're in the class",
+    "viewAll": "View all",
+    "reconnecting": "Connection lost for a moment — reconnecting",
+    "endConfirmTitle": "End the class?",
+    "endConfirmBody": "The session will end for every student and they won't be able to come back to it.",
+    "keepTeaching": "Back",
+    "layout": {
+      "title": "Layout",
+      "auto": "Automatic",
+      "autoHint": "Shared screen first, otherwise the speaker",
+      "focus": "Focus",
+      "focusHint": "One large, the rest below",
+      "gallery": "Grid",
+      "galleryHint": "Everyone the same size"
+    },
+    "speakingNow": "Speaking now",
+    "allowedToSpeak": "Allowed to speak",
+    "noStudentsYet": "No students have joined yet",
+    "andOthers_one": "and 1 other",
+    "andOthers_other": "and {{count}} others",
+    "requests_one": "Request to speak",
+    "requests_other": "Requests to speak ({{count}})",
+    "inClass_one": "In class (1)",
+    "inClass_other": "In class ({{count}})",
+    "listening_one": "1 student listening",
+    "listening_other": "{{count}} students listening"
   },
   "summary": {
     "title": "AI lesson summary",
@@ -3535,5 +3638,47 @@
       "CONTENT": "Exam from material"
     },
     "startedAgo": "started {{ago}}"
+  },
+  "record": {
+    "attendedCount_one": "1 student attended",
+    "attendedCount_other": "{{count}} students attended",
+    "rec": {
+      "none": "This class was not recorded.",
+      "REQUESTED": "Recording requested",
+      "CAPTURING": "Recording the class",
+      "FINALIZING": "Finishing the recording",
+      "PROCESSING": "Preparing the video",
+      "READY": "Recording ready",
+      "FAILED": "The recording couldn't be prepared",
+      "readyHint": "The video is saved and prepared securely.",
+      "processingHint": "Preparing the video can take a few minutes.",
+      "openFailed": "Couldn't open the recording. Try again.",
+      "failure": {
+        "NOT_STARTED": "Recording didn't start — the recording service wasn't available at the time.",
+        "NOTHING_RECORDED": "Nothing was recorded in this class.",
+        "PROCESSING_FAILED": "Something went wrong while preparing the recording."
+      }
+    },
+    "transcript": {
+      "title": "Transcript",
+      "WAITING_FOR_RECORDING": "Waiting for the recording",
+      "TRANSCRIBING": "Transcribing the class",
+      "READY": "Transcript ready",
+      "FAILED": "The transcript couldn't be created",
+      "AT_PROVIDER": "Speech was captured; the transcript is prepared with the summary",
+      "UNAVAILABLE": "No transcript for this class",
+      "reason": {
+        "NO_RECORDING": "The transcript comes from the recording, and this class wasn't recorded.",
+        "NO_TRANSCRIPTION": "Transcribing recordings isn't switched on yet.",
+        "TRANSCRIPTION_OFF": "Transcription wasn't running during the class.",
+        "NOTHING_SAID": "Not enough speech was captured."
+      }
+    },
+    "summary": {
+      "WAITING_FOR_TRANSCRIPT": "The summary will be written once the transcript is ready",
+      "GENERATING": "Writing the summary",
+      "FAILED": "The summary couldn't be created",
+      "UNAVAILABLE": "A summary can't be written without a transcript"
+    }
   }
 }

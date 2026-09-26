@@ -2,7 +2,8 @@
 /**
  * Arabic lesson transcription benchmark — Checkpoint B.6 harness.
  *
- * STATUS: ARABIC BENCHMARK PENDING INPUT. Nothing has been run: it needs real
+ * STATUS: ARABIC BENCHMARK PENDING INPUT (B.6 harness, extended in B.7 with
+ * English-term, number, Arabic-word and punctuation scores; see metrics.mjs). Nothing has been run: it needs real
  * Egyptian-Arabic lesson audio with human reference transcripts, and every
  * run is paid (OpenAI and Deepgram bill per audio minute). It refuses to run
  * without both an input directory and --confirm-paid.
@@ -26,6 +27,9 @@
  *   OPENAI_API_KEY=... DEEPGRAM_API_KEY=... \
  *   node scripts/transcription-bench/bench.mjs --in ./bench-audio --confirm-paid [--only deepgram:nova-3]
  *
+ * Each file may also have <name>.notes.txt (speaker count, dialect, topic)
+ * for the write-up; it is not scored.
+ *
  * Output: a table per file and overall — WER and CER against the reference
  * (Arabic-normalised: diacritics, tatweel and alef/yaa/taa-marbuta forms
  * folded), wall-clock time, and cost from each provider's published per-minute
@@ -36,6 +40,7 @@
 import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { scoreAll } from './metrics.mjs';
 
 /** USD per audio minute — OFFICIAL list prices at the time of writing; verify before relying on them. */
 const PRICES = {
@@ -59,43 +64,6 @@ if (!dir || !args.includes('--confirm-paid')) {
   process.exit(2);
 }
 
-// ── Arabic-aware text normalisation and error rates ─────────────────────────
-export function normalizeArabic(s) {
-  return s
-    .normalize('NFKC')
-    .replace(/[ً-ْٰـ]/g, '') // harakat, dagger alef, tatweel
-    .replace(/[آأإٱ]/g, 'ا') // alef forms → ا
-    .replace(/ى/g, 'ي') // ى → ي
-    .replace(/ة/g, 'ه') // ة → ه
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-export function editDistance(a, b) {
-  const m = a.length;
-  const n = b.length;
-  let prev = Array.from({ length: n + 1 }, (_, j) => j);
-  for (let i = 1; i <= m; i++) {
-    const cur = [i];
-    for (let j = 1; j <= n; j++) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-    prev = cur;
-  }
-  return prev[n];
-}
-export function wer(ref, hyp) {
-  const r = normalizeArabic(ref).split(' ').filter(Boolean);
-  const h = normalizeArabic(hyp).split(' ').filter(Boolean);
-  return r.length ? editDistance(r, h) / r.length : 0;
-}
-export function cer(ref, hyp) {
-  const r = [...normalizeArabic(ref).replace(/ /g, '')];
-  const h = [...normalizeArabic(hyp).replace(/ /g, '')];
-  return r.length ? editDistance(r, h) / r.length : 0;
-}
-
 // ── Providers ────────────────────────────────────────────────────────────────
 async function openai(model, file) {
   const key = process.env.OPENAI_API_KEY;
@@ -117,7 +85,7 @@ async function openai(model, file) {
   const j = await r.json();
   const text = j.text ?? (j.segments ?? []).map((s) => s.text).join(' ');
   const speakers = j.segments ? new Set(j.segments.map((s) => s.speaker)).size : null;
-  return { text, speakers };
+  return { text, speakers, timestamps: Array.isArray(j.segments) && j.segments.some((s) => s.start != null) };
 }
 async function deepgram(file) {
   const key = process.env.DEEPGRAM_API_KEY;
@@ -134,7 +102,7 @@ async function deepgram(file) {
   const j = await r.json();
   const alt = j.results?.channels?.[0]?.alternatives?.[0] ?? {};
   const speakers = alt.words ? new Set(alt.words.map((w) => w.speaker)).size : null;
-  return { text: alt.transcript ?? '', speakers };
+  return { text: alt.transcript ?? '', speakers, timestamps: !!alt.words?.some((w) => w.start != null) };
 }
 const CANDIDATES = {
   'openai:gpt-4o-mini-transcribe': (f) => openai('gpt-4o-mini-transcribe', f),
@@ -179,11 +147,13 @@ for (const a of audio) {
         file: a,
         provider: name,
         minutes: mins,
-        wer: +wer(ref, out.text).toFixed(4),
-        cer: +cer(ref, out.text).toFixed(4),
+        ...scoreAll(ref, out.text),
         speakers: out.speakers,
+        timestamps: out.timestamps,
         seconds: (Date.now() - t0) / 1000,
         usd: mins != null ? +(mins * PRICES[name]).toFixed(5) : null,
+        usdPerHour: +(PRICES[name] * 60).toFixed(3),
+        realtimeFactor: mins ? +((Date.now() - t0) / 1000 / (mins * 60)).toFixed(3) : null,
       };
       results.push(row);
       console.log(JSON.stringify(row));
@@ -199,7 +169,18 @@ const summary = Object.fromEntries(
   Object.entries(byProvider).map(([p, rs]) => {
     const mins = rs.reduce((n, r) => n + (r.minutes ?? 0), 0);
     const w = (k) => rs.reduce((n, r) => n + r[k] * (r.minutes ?? 1), 0) / Math.max(1e-9, mins || rs.length);
-    return [p, { files: rs.length, minutes: +mins.toFixed(2), wer: +w('wer').toFixed(4), cer: +w('cer').toFixed(4), usd: +rs.reduce((n, r) => n + (r.usd ?? 0), 0).toFixed(4) }];
+    const avg = (k) => {
+      const xs = rs.map((r) => r[k]).filter((x) => x != null);
+      return xs.length ? +(xs.reduce((n, x) => n + x, 0) / xs.length).toFixed(4) : null;
+    };
+    return [p, {
+      files: rs.length, minutes: +mins.toFixed(2),
+      wer: +w('wer').toFixed(4), cer: +w('cer').toFixed(4),
+      arabicWordRecall: avg('arabicWordRecall'), englishTermRecall: avg('englishTermRecall'),
+      numberRecall: avg('numberRecall'), punctuationRatio: avg('punctuationRatio'),
+      realtimeFactor: avg('realtimeFactor'), usdPerHour: rs[0].usdPerHour,
+      usd: +rs.reduce((n, r) => n + (r.usd ?? 0), 0).toFixed(4),
+    }];
   }),
 );
 console.table(summary);

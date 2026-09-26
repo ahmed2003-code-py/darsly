@@ -553,10 +553,33 @@ export class LiveRtcService {
         select: { id: true, userId: true, kind: true, connection: { select: { role: true } } },
         orderBy: { createdAt: 'asc' },
       }),
-      this.prisma.liveAttendance.findMany({
-        where: { sessionId, leftAt: null, lastSeenAt: { gte: since } },
-        select: { userId: true, role: true },
-      }),
+      // In the room = connected to it in this run (a lobby that fetched the
+      // join answer is not in the room yet), and still heard from.
+      this.prisma.liveRtcConnection
+        .findMany({
+          where: {
+            sessionId,
+            roomName: run,
+            closedAt: null,
+            closeReason: null,
+            role: { not: 'RECORDER' },
+          },
+          select: { userId: true, role: true },
+          distinct: ['userId'],
+        })
+        .then(async (conns) => {
+          const fresh = await this.prisma.liveAttendance.findMany({
+            where: {
+              sessionId,
+              userId: { in: conns.map((c) => c.userId) },
+              leftAt: null,
+              lastSeenAt: { gte: since },
+            },
+            select: { userId: true },
+          });
+          const alive = new Set(fresh.map((a) => a.userId));
+          return conns.filter((c) => alive.has(c.userId));
+        }),
       this.prisma.liveHand.findMany({
         where: { sessionId, roomName: run, state: { not: 'IDLE' } },
         select: { userId: true, state: true, raisedAt: true },

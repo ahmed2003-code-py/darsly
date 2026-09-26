@@ -772,3 +772,24 @@ describe('B.7 on Postgres: rules, and what a finished lesson shows', () => {
     expect(ds.transcript).toBeNull();
   });
 });
+
+describe('B.7 on Postgres: who is in the room', () => {
+  it('counts people connected to the room, not a lobby that only fetched the join answer', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const { rtc, svc } = build();
+    await teacherLive(rtc, w);
+    // Student 0 opens the lobby (join answer marks attendance) but never connects.
+    await svc.join(w.s[0].id, w.ls.id);
+    await svc.join(w.s[1].id, w.ls.id);
+    await rtc.openConnection(w.s[1].id, w.ls.id, 'RECEIVE');
+    await prisma.liveAttendance.upsert({
+      where: { sessionId_userId: { sessionId: w.ls.id, userId: w.teacher.id } },
+      create: { sessionId: w.ls.id, userId: w.teacher.id, role: 'TEACHER' },
+      update: { leftAt: null, lastSeenAt: new Date() },
+    });
+    const st = await rtc.state(w.teacher.id, w.ls.id);
+    const ids = st.participants.map((p) => p.userId).sort();
+    expect(ids).toEqual([w.teacher.id, w.s[1].id].sort());
+  });
+});

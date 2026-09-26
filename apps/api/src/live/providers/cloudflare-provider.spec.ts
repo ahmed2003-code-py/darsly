@@ -60,7 +60,7 @@ describe('CloudflareRealtimeClient', () => {
       const calls: { url: string; init: RequestInit }[] = [];
       c.fetchImpl = jest.fn(async (url: any, init: any) => {
         calls.push({ url: String(url), init });
-        return reply(500, { errorCode: 'X', errorDescription: `boom ${SECRET}` });
+        return reply(500, { errorCode: 'X', errorDescription: `boom ${SECRET} app ${APP}` });
       }) as any;
       await expect(c.newSession()).rejects.toBeInstanceOf(CloudflareRealtimeError);
       expect(calls[0].url).toBe(`https://rtc.live.cloudflare.com/v1/apps/${APP}/sessions/new`);

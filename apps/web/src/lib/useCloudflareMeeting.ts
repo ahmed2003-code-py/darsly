@@ -3,6 +3,7 @@ import { api } from './api';
 import { getSocket } from './socket';
 import type { Participant } from './useDailyMeeting';
 import { initialLayer, nextLayer, type LayerState } from './simulcast';
+import { audioConstraint, videoConstraint } from './liveDevices';
 
 /**
  * The Darsly classroom over Cloudflare Realtime.
@@ -112,6 +113,7 @@ export function useCloudflareMeeting(
   const [camOn, setCamOn] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [connection, setConnection] = useState<'connected' | 'reconnecting'>('connected');
   /** Bumped whenever a remote or local track appears or goes, to re-render tiles. */
   const [, setTick] = useState(0);
   const bump = useCallback(() => setTick((n) => n + 1), []);
@@ -493,14 +495,17 @@ export function useCloudflareMeeting(
 
   const getMic = () =>
     navigator.mediaDevices
-      .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      .getUserMedia({ audio: audioConstraint({ echoCancellation: true, noiseSuppression: true }) })
       .then((s) => s.getAudioTracks()[0]);
   const getCam = (teacher: boolean) =>
     navigator.mediaDevices
       .getUserMedia({
-        video: teacher
-          ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24 } }
-          : { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } },
+        // The camera chosen in the lobby, when there is one.
+        video: videoConstraint(
+          teacher
+            ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24 } }
+            : { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15 } },
+        ),
       })
       .then((s) => s.getVideoTracks()[0]);
 
@@ -665,7 +670,14 @@ export function useCloudflareMeeting(
     sock?.on('live:removed', onRemoved);
     sock?.on('connect', refresh);
     const poll = setInterval(refresh, STATE_POLL_MS);
-    const net = setInterval(() => void reconnect(), 2_000);
+    const net = setInterval(() => {
+      // Said out loud (aria-live on the page) while a connection is down.
+      const down = [recv.current, send.current].some(
+        (c) => c && !c.closed && c.downSince != null,
+      );
+      setConnection(down ? 'reconnecting' : 'connected');
+      void reconnect();
+    }, 2_000);
     return () => {
       sock?.off('live:rtc-state', onState);
       sock?.off('live:hand', onHand);
@@ -978,5 +990,6 @@ export function useCloudflareMeeting(
     decideHand,
     audioBlocked,
     resumeAudio,
+    connection,
   };
 }

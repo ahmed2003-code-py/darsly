@@ -98,3 +98,32 @@ export function formatClock(msValue: number): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
+
+/**
+ * The anchor alone — for the page that receives timing (join answer,
+ * heartbeats, extensions). It changes only when the server says something new,
+ * so the page holding it does not re-render every second; the tick lives in
+ * `useClockTick`, inside the small component that draws the time.
+ */
+export function useClockAnchor() {
+  const [anchor, setAnchor] = useState<ClockAnchor | null>(null);
+  const ref = useRef<ClockAnchor | null>(null);
+  const apply = useCallback((t: SessionTiming | null | undefined) => {
+    const next = nextAnchor(ref.current, t, Date.now());
+    if (next === ref.current) return;
+    ref.current = next;
+    setAnchor(next);
+  }, []);
+  return { anchor, apply };
+}
+
+/** Elapsed / remaining, re-read once a second — local to its component. */
+export function useClockTick(anchor: ClockAnchor | null) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!anchor) return;
+    const h = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(h);
+  }, [anchor]);
+  return anchor ? readClock(anchor, Date.now()) : null;
+}

@@ -1727,6 +1727,13 @@ model WalletTopup {
   @@index([studentId, createdAt])
 }
 
+/// What a coupon may discount.
+enum CouponScope {
+  COURSE
+  LIVE
+  ALL
+}
+
 model Coupon {
   id       String         @id @default(cuid())
   tenantId String
@@ -1734,18 +1741,28 @@ model Coupon {
   courseId String?
   course   Course?        @relation(fields: [courseId], references: [id])
 
-  code           String
-  percentOff     Int? // 1–100
-  amountOffCents Int?
-  maxUses        Int?
-  usedCount      Int       @default(0)
-  expiresAt      DateTime?
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
+  /// What the coupon can discount. Every coupon made before Live commerce is
+  /// COURSE, so none of them silently applies to a live seat.
+  scope             CouponScope  @default(COURSE)
+  /// LIVE only, optionally: the one session it is for (null = any of this
+  /// teacher's paid sessions).
+  liveSessionId     String?
+  liveSession       LiveSession? @relation(fields: [liveSessionId], references: [id], onDelete: Restrict)
+  /// How many times one student may use it (Live purchases; null = no limit).
+  maxUsesPerStudent Int?
+  code              String
+  percentOff        Int? // 1–100
+  amountOffCents    Int?
+  maxUses           Int?
+  usedCount         Int          @default(0)
+  expiresAt         DateTime?
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
   // Soft delete: rows with deletedAt set are hidden from all reads.
-  deletedAt      DateTime?
+  deletedAt         DateTime?
 
-  payments Payment[]
+  payments      Payment[]
+  livePurchases LivePurchase[]
 
   @@unique([tenantId, code])
 }
@@ -2537,6 +2554,7 @@ model LiveSession {
 
   bookings       LiveBooking[]
   purchases      LivePurchase[]
+  coupons        Coupon[]
   attendance     LiveAttendance[]
   messages       LiveChatMessage[]
   rtcConnections LiveRtcConnection[]
@@ -2937,6 +2955,7 @@ model LivePurchase {
   basePriceCents               Int
   discountCents                Int               @default(0)
   couponId                     String?
+  coupon                       Coupon?           @relation(fields: [couponId], references: [id], onDelete: Restrict)
   feeType                      FeeType
   feeMode                      CommercialFeeMode
   feeBps                       Int?

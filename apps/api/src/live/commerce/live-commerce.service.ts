@@ -31,6 +31,8 @@ import { CommercialTermsService, pricingRefusal, toSnapshot } from '../../commer
 import { PriceBreakdown, priceLiveSeat, PricingError } from '../../commerce/pricing';
 import { LIVE_REFUND_WINDOW_HOURS } from '@darsly/shared-types';
 import { livePendingEarnings } from './pending-earnings';
+import { releaseCouponUse, reserveCouponUse } from '../../payments/coupon-use';
+import { mulDivRoundHalfUp } from '../../commerce/pricing';
 
 type Tx = Prisma.TransactionClient;
 
@@ -252,11 +254,60 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /**
+   * A coupon for this seat, checked in full: it is this teacher's, made for
+   * live seats (LIVE or ALL — a COURSE coupon never applies), for this session
+   * if it names one, active, unexpired, not used up, and within its
+   * per-student limit. The discount comes off the seller's price. A code that
+   * fails any of it is refused with a reason, never silently ignored.
+   */
+  private async resolveLiveCoupon(db: Tx | PrismaService, s: LockedSession, code: string, studentId: string | null) {
+    const coupon = await db.coupon.findFirst({
+      where: { tenantId: s.tenantId, code: code.trim().toUpperCase(), deletedAt: null },
+    });
+    const refuse = (message: string, why: string) => {
+      throw new BadRequestException({ message, code: 'COUPON_INVALID', reason: why });
+    };
+    if (!coupon || !coupon.isActive || coupon.scope === 'COURSE' || coupon.courseId) refuse('This code is not valid for this session', 'not-found');
+    if (coupon!.liveSessionId && coupon!.liveSessionId !== s.id) refuse('This code is for another session', 'other-session');
+    if (coupon!.expiresAt && coupon!.expiresAt <= new Date()) refuse('This code has expired', 'expired');
+    if (coupon!.maxUses != null && coupon!.usedCount >= coupon!.maxUses) refuse('This code has been used up', 'used-up');
+    if (coupon!.maxUsesPerStudent != null && studentId) {
+      const mine = await db.livePurchase.count({
+        where: { couponId: coupon!.id, studentId, status: { in: ACTIVE } },
+      });
+      if (mine >= coupon!.maxUsesPerStudent) refuse('You have already used this code', 'per-student');
+    }
+    const base = s.priceCents as number;
+    const discountCents = coupon!.percentOff
+      ? mulDivRoundHalfUp(base, coupon!.percentOff, 100)
+      : Math.min(coupon!.amountOffCents ?? 0, base);
+    return { couponId: coupon!.id, maxUses: coupon!.maxUses, discountCents };
+  }
+
+  /** Price with a coupon, where a coupon that breaks the terms is the coupon's fault. */
+  private async priceWithCoupon(db: Tx | PrismaService, s: LockedSession, code: string | undefined, studentId: string | null) {
+    if (!code?.trim()) return { ...(await this.price(s, db)), coupon: null };
+    const coupon = await this.resolveLiveCoupon(db, s, code, studentId);
+    try {
+      return { ...(await this.price(s, db, coupon.discountCents)), coupon };
+    } catch (e) {
+      if ((e as { response?: { code?: string } })?.response?.code === 'FEE_EXCEEDS_PRICE') {
+        throw new BadRequestException({
+          message: 'This code cannot be used on this session',
+          code: 'COUPON_INVALID',
+          reason: 'below-fee',
+        });
+      }
+      throw e;
+    }
+  }
+
+  /**
    * What a buyer sees before buying: the one number they pay, the seats left,
    * the refund and replay rules. Never the split — that is between Darsly and
    * the seller.
    */
-  async quote(sessionId: string, studentUserId: string | null) {
+  async quote(sessionId: string, studentUserId: string | null, couponCode?: string) {
     const session = await (async () => {
       const [s] = await this.prisma.$queryRaw<LockedSession[]>`
         SELECT id, "tenantId", "academyId", "groupId", title, status::text AS status, "startsAt",
@@ -295,7 +346,19 @@ export class LiveCommerceService implements OnModuleInit {
     }
     if (session.accessMode !== 'PAID') return { ...base, studentPaysCents: 0, purchase: mine };
     const { breakdown } = await this.price(session, this.prisma);
-    return { ...base, studentPaysCents: breakdown.studentPaysCents, purchase: mine };
+    if (!couponCode?.trim()) return { ...base, studentPaysCents: breakdown.studentPaysCents, purchase: mine };
+    // A preview only: the code is checked, nothing is reserved.
+    const studentId = studentUserId
+      ? (await this.prisma.studentProfile.findUnique({ where: { userId: studentUserId }, select: { id: true } }))?.id ?? null
+      : null;
+    const withCoupon = await this.priceWithCoupon(this.prisma, session, couponCode, studentId);
+    return {
+      ...base,
+      studentPaysCents: withCoupon.breakdown.studentPaysCents,
+      fullPriceCents: breakdown.studentPaysCents,
+      discountCents: withCoupon.breakdown.discountCents,
+      purchase: mine,
+    };
   }
 
   // ── Buying ──────────────────────────────────────────────────────────────
@@ -367,6 +430,45 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /**
+   * Write a new purchase: HELD for a while (or until `holdUntilMs`), with its
+   * coupon's use taken in the same transaction — or, when the coupon makes
+   * the seat cost nothing, CONFIRMED at once with its seat. A 100%-off seat
+   * of a PAID session is still a PAID purchase: no payment, no ledger, no
+   * refund owed, and nothing to release.
+   */
+  private async createPurchase(
+    tx: Tx,
+    s: LockedSession,
+    breakdown: PriceBreakdown,
+    feeRefundable: boolean,
+    coupon: { couponId: string; maxUses: number | null } | null,
+    buyer: { studentId: string } | { guestBuyerId: string },
+    now: Date,
+    holdUntilMs?: number,
+    extra: { accessTokenHash?: string } = {},
+  ) {
+    if (coupon) await reserveCouponUse(tx, coupon.couponId, coupon.maxUses);
+    const free = breakdown.studentPaysCents === 0;
+    const p = await tx.livePurchase.create({
+      data: {
+        ...this.purchaseData(s, breakdown, feeRefundable, buyer),
+        couponId: coupon?.couponId ?? null,
+        ...extra,
+        ...(free
+          ? { status: 'CONFIRMED' as const, confirmedAt: now, holdExpiresAt: null }
+          : {
+              status: 'HELD' as const,
+              holdExpiresAt: new Date(Math.min(holdUntilMs ?? now.getTime() + holdMinutes() * 60_000, closesAtMs(s))),
+            }),
+      },
+    });
+    if (free && 'studentId' in buyer) {
+      await tx.liveBooking.create({ data: { sessionId: s.id, studentId: buyer.studentId, purchaseId: p.id } });
+    }
+    return p;
+  }
+
+  /**
    * Reserve a seat to pay for by transfer.
    *
    * Idempotent per student and session: a second press, a second tab or a
@@ -375,7 +477,7 @@ export class LiveCommerceService implements OnModuleInit {
    * held for `holdMinutes()` of server time — long enough to make a transfer,
    * short enough that an abandoned checkout gives the seat back.
    */
-  async hold(userId: string, sessionId: string) {
+  async hold(userId: string, sessionId: string, couponCode?: string) {
     const student = await this.studentOf(userId);
     const now = new Date();
     try {
@@ -387,15 +489,8 @@ export class LiveCommerceService implements OnModuleInit {
         if (existing) return existing;
         await this.assertBuyable(tx, s, student.id, now);
         await this.assertSeatFree(tx, s!, now);
-        const { breakdown, feeRefundable } = await this.price(s!, tx);
-        const hold = new Date(Math.min(now.getTime() + holdMinutes() * 60_000, closesAtMs(s!)));
-        return tx.livePurchase.create({
-          data: {
-            ...this.purchaseData(s!, breakdown, feeRefundable, { studentId: student.id }),
-            status: 'HELD',
-            holdExpiresAt: hold,
-          },
-        });
+        const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(tx, s!, couponCode, student.id);
+        return this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { studentId: student.id }, now);
       });
       return this.byId(purchase.id);
     } catch (e) {
@@ -540,7 +635,7 @@ export class LiveCommerceService implements OnModuleInit {
    * uses (see ManualPaymentsService.SERIALIZABLE), so a course purchase and a
    * seat purchase cannot both spend the same money.
    */
-  async payWithWallet(userId: string, sessionId: string) {
+  async payWithWallet(userId: string, sessionId: string, couponCode?: string) {
     const student = await this.studentOf(userId);
     for (let attempt = 0; ; attempt++) {
       try {
@@ -563,14 +658,10 @@ export class LiveCommerceService implements OnModuleInit {
               if (!p.holdExpiresAt || p.holdExpiresAt <= now) await this.assertSeatFree(tx, s!, now, p.id);
             } else {
               await this.assertSeatFree(tx, s!, now);
-              const { breakdown, feeRefundable } = await this.price(s!, tx);
-              p = await tx.livePurchase.create({
-                data: {
-                  ...this.purchaseData(s!, breakdown, feeRefundable, { studentId: student.id }),
-                  status: 'HELD',
-                  holdExpiresAt: new Date(closesAtMs(s!)),
-                },
-              });
+              const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(tx, s!, couponCode, student.id);
+              p = await this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { studentId: student.id }, now, closesAtMs(s!));
+              // A 100%-off seat is already confirmed: nothing to pay.
+              if (p.status === 'CONFIRMED') return { purchaseId: p.id, already: false };
             }
             const balance = await this.ledger.walletBalance(student.id, tx);
             if (balance < p.studentPaysCents) {
@@ -661,6 +752,7 @@ export class LiveCommerceService implements OnModuleInit {
         where: { id: p.id },
         data: { status: 'OVERSOLD', holdExpiresAt: null, reviewReason: over ? 'class already over' : 'class full' },
       });
+      await releaseCouponUse(tx, p.couponId);
       await this.fullRefund(tx, p.id, 'OVERSOLD', verifierId);
       return 'OVERSOLD';
     }
@@ -721,6 +813,7 @@ export class LiveCommerceService implements OnModuleInit {
           where: { id: p.id },
           data: { status: 'PAYMENT_REJECTED', holdExpiresAt: null, reviewReason: reason?.trim() || null },
         });
+        await releaseCouponUse(tx, p.couponId);
       }
       return p?.studentId ?? null;
     });
@@ -1070,6 +1163,7 @@ export class LiveCommerceService implements OnModuleInit {
         where: { id: p.id },
         data: { status: 'CANCELLED_BY_STUDENT', cancelledAt: now, holdExpiresAt: null, cancelReason: 'student' },
       });
+      if (p.status === 'HELD') await releaseCouponUse(tx, p.couponId);
       if (p.status === 'CONFIRMED') {
         const remaining = await this.remainingParts(tx, p);
         const parts = this.studentRefundParts(p, remaining, s.startsAt, now);
@@ -1110,6 +1204,7 @@ export class LiveCommerceService implements OnModuleInit {
             where: { id: p.id },
             data: { status: 'CANCELLED_BY_TEACHER', cancelledAt: now, holdExpiresAt: null, cancelReason: 'session cancelled' },
           });
+          await releaseCouponUse(tx, p.couponId);
           return false;
         }
         if (p.status === 'CONFIRMED' || p.status === 'NEEDS_REVIEW') {
@@ -1172,6 +1267,8 @@ export class LiveCommerceService implements OnModuleInit {
         const p = await lockPurchase(tx, d.id);
         if (!p || p.status !== 'HELD' || !p.holdExpiresAt || p.holdExpiresAt > new Date()) return false;
         await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'EXPIRED', holdExpiresAt: null } });
+        // The seat was never paid for: its coupon use goes back.
+        await releaseCouponUse(tx, p.couponId);
         return true;
       });
       if (done) expired++;
@@ -1236,7 +1333,7 @@ export class LiveCommerceService implements OnModuleInit {
    * student's is. The access secret is 256 random bits, returned once and
    * stored only as its SHA-256.
    */
-  async guestHold(sessionId: string, displayName: string) {
+  async guestHold(sessionId: string, displayName: string, couponCode?: string) {
     const name = (displayName ?? '').replace(/\s+/g, ' ').trim();
     if (name.length < 2 || name.length > 60) {
       throw new BadRequestException({ message: 'Enter your name (2–60 characters)', code: 'GUEST_NAME_INVALID' });
@@ -1249,17 +1346,11 @@ export class LiveCommerceService implements OnModuleInit {
       await this.assertBuyable(tx, s, null, now);
       if (s!.groupId) throw new NotFoundException('Session not found');
       await this.assertSeatFree(tx, s!, now);
-      const { breakdown, feeRefundable } = await this.price(s!, tx);
+      const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(tx, s!, couponCode, null);
       const user = await tx.user.create({ data: { role: 'GUEST', fullName: name } });
       const guest = await tx.guestBuyer.create({ data: { userId: user.id, displayName: name } });
-      const hold = new Date(Math.min(now.getTime() + holdMinutes() * 60_000, closesAtMs(s!)));
-      return tx.livePurchase.create({
-        data: {
-          ...this.purchaseData(s!, breakdown, feeRefundable, { guestBuyerId: guest.id }),
-          status: 'HELD',
-          holdExpiresAt: hold,
-          accessTokenHash: LiveCommerceService.hashToken(raw),
-        },
+      return this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { guestBuyerId: guest.id }, now, undefined, {
+        accessTokenHash: LiveCommerceService.hashToken(raw),
       });
     });
     return { accessToken: raw, purchase: await this.byId(purchase.id) };
@@ -1412,6 +1503,7 @@ export class LiveCommerceService implements OnModuleInit {
         data: { status: 'CANCELLED_BY_STUDENT', cancelledAt: now, holdExpiresAt: null, cancelReason: 'guest' },
       });
       await this.revokeGuestAccess(tx, p);
+      if (p.status === 'HELD') await releaseCouponUse(tx, p.couponId);
       if (p.status === 'CONFIRMED') await this.refundParts(tx, p, 'STUDENT_CANCEL', parts, null, destination);
     });
     return this.guestStatus(raw);

@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -25,6 +26,9 @@ class CreateCouponDto {
   @IsOptionalId() courseId?: string;
   @IsOptional() @IsInt() @Min(1) @Max(1_000_000) maxUses?: number;
   @IsOptional() @IsISO8601() expiresAt?: string;
+  @IsOptional() @IsIn(['COURSE', 'LIVE', 'ALL']) scope?: 'COURSE' | 'LIVE' | 'ALL';
+  @IsOptionalId() liveSessionId?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(1_000) maxUsesPerStudent?: number;
 }
 
 class UpdateCouponDto {

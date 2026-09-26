@@ -84,7 +84,8 @@ export class EnrollmentsService {
     const coupon = await this.prisma.coupon.findFirst({
       where: { tenantId: course.tenantId, code: code.trim().toUpperCase(), deletedAt: null },
     });
-    if (!coupon || !coupon.isActive) throw new BadRequestException('Invalid coupon');
+    // A coupon made for live seats (scope LIVE) is not a course coupon.
+    if (!coupon || !coupon.isActive || coupon.scope === 'LIVE') throw new BadRequestException('Invalid coupon');
     if (coupon.expiresAt && coupon.expiresAt < new Date()) {
       throw new BadRequestException('Coupon expired');
     }

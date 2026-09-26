@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { JwtPayload, Role } from '@darsly/shared-types';
@@ -20,6 +20,10 @@ class TransferDto {
   @IsOptional() @IsString() @MaxLength(3_000_000) proofImageUrl?: string;
 }
 
+class CouponDto {
+  @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
+}
+
 /** Buying a seat on a PAID live session (registered students). */
 @ApiTags('live')
 @ApiBearerAuth()
@@ -30,24 +34,24 @@ export class LiveCommerceController {
   @Get('live/:id/offer')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] What a seat costs, seats left, the rules — and my purchase if any' })
-  offer(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.commerce.quote(id, u.sub);
+  offer(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Query('coupon') coupon?: string) {
+    return this.commerce.quote(id, u.sub, coupon?.slice(0, 24));
   }
 
   @Post('live/:id/purchase')
   @Roles(Role.STUDENT)
   @HttpCode(200)
   @ApiOperation({ summary: '[student] Hold a seat to pay for by transfer (idempotent)' })
-  hold(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.commerce.hold(u.sub, id);
+  hold(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: CouponDto) {
+    return this.commerce.hold(u.sub, id, dto?.couponCode);
   }
 
   @Post('live/:id/purchase/wallet')
   @Roles(Role.STUDENT)
   @HttpCode(200)
   @ApiOperation({ summary: '[student] Buy a seat from the Darsly Wallet — reserved, paid and confirmed at once' })
-  payWithWallet(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.commerce.payWithWallet(u.sub, id);
+  payWithWallet(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: CouponDto) {
+    return this.commerce.payWithWallet(u.sub, id, dto?.couponCode);
   }
 
   @Post('live/purchases/:purchaseId/transfer')

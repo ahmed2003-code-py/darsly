@@ -1206,6 +1206,8 @@ export class ManualPaymentsService {
           code: couponCode.trim().toUpperCase(),
           isActive: true,
           deletedAt: null,
+          // Course checkout: a coupon made for live seats does not apply here.
+          scope: { in: ['COURSE', 'ALL'] },
         },
       });
       if (

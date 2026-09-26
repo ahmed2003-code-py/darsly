@@ -9,6 +9,10 @@ export interface CouponFields {
   courseId?: string;
   maxUses?: number;
   expiresAt?: string;
+  /** COURSE (default), LIVE or ALL. A course target implies COURSE; a live target, LIVE. */
+  scope?: 'COURSE' | 'LIVE' | 'ALL';
+  liveSessionId?: string;
+  maxUsesPerStudent?: number;
 }
 
 export interface CouponPatch {
@@ -38,7 +42,10 @@ export class CouponsService {
   list(academyId: string) {
     return this.prisma.coupon.findMany({
       where: { tenantId: academyId },
-      include: { course: { select: { id: true, title: true } } },
+      include: {
+        course: { select: { id: true, title: true } },
+        liveSession: { select: { id: true, title: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -67,6 +74,23 @@ export class CouponsService {
       // rather than a coupon quietly attached to a course they do not own.
       if (!course) throw new NotFoundException('Course not found');
     }
+    if (dto.courseId && dto.liveSessionId) {
+      throw new BadRequestException('A coupon is for a course or for a live session, not both');
+    }
+    if (dto.liveSessionId) {
+      // The teacher's own PAID session — the same ownership rule as a course.
+      const s = await this.prisma.liveSession.findFirst({
+        where: { id: dto.liveSessionId, tenantId: academyId, accessMode: 'PAID' },
+        select: { id: true },
+      });
+      if (!s) throw new NotFoundException('Live session not found');
+    }
+    // What it can discount. Unchanged by default: a coupon with no scope is a
+    // COURSE coupon, as every coupon was before live seats could be sold.
+    const scope = dto.liveSessionId ? 'LIVE' : dto.courseId ? 'COURSE' : dto.scope ?? 'COURSE';
+    if ((dto.courseId && dto.scope && dto.scope !== 'COURSE') || (dto.liveSessionId && dto.scope && dto.scope !== 'LIVE')) {
+      throw new BadRequestException('The coupon scope does not match what it targets');
+    }
 
     const code = dto.code.trim().toUpperCase();
     // findUnique deliberately bypasses the soft-delete filter (see
@@ -84,6 +108,9 @@ export class CouponsService {
       courseId: dto.courseId ?? null,
       maxUses: dto.maxUses ?? null,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      scope,
+      liveSessionId: dto.liveSessionId ?? null,
+      maxUsesPerStudent: dto.maxUsesPerStudent ?? null,
     };
 
     return existing

@@ -10,6 +10,7 @@ const REFUND_METHODS = ['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER'] as const;
 
 class GuestHoldDto {
   @IsString() @MaxLength(80) displayName: string;
+  @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
 }
 
 class GuestTransferDto {
@@ -53,7 +54,7 @@ export class PublicLiveController {
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @ApiOperation({ summary: '[public] Hold a seat as a guest; returns the access secret ONCE' })
   hold(@Param('id') id: string, @Body() dto: GuestHoldDto) {
-    return this.commerce.guestHold(id, dto.displayName);
+    return this.commerce.guestHold(id, dto.displayName, dto.couponCode);
   }
 
   @Get('access/:token')

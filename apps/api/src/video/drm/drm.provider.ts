@@ -46,6 +46,14 @@ export interface LicenseContext {
   watermarkId: string;
   /** teacher/admin preview (no persisted PlaybackSession to re-check) */
   preview?: boolean;
+  /**
+   * What is being watched. Absent = a course lesson (PlaybackSession);
+   * LIVE_RECORDING = a live lesson's recording (LiveReplaySession) — the same
+   * encrypted HLS, re-checked against its own row at the key endpoint.
+   */
+  resource?: 'LIVE_RECORDING';
+  /** Token lifetime override (a replay lasts as long as its recording). */
+  ttlSec?: number;
 }
 
 export interface PlaybackCredentials {

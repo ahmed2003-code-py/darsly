@@ -2,13 +2,21 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { AcademyService } from '../academy/academy.service';
-import { LivePipelineStatus, LiveSessionStatus, Prisma } from '@prisma/client';
+import {
+  LivePipelineStatus,
+  LiveSessionStatus,
+  LiveTranscriptionMode,
+  LiveVisibility,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
@@ -22,12 +30,17 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { AiJobService } from '../academy-site/jobs/ai-job.service';
 import { StorageProvider } from '../storage/storage.provider';
 import {
-  audioExt,
+  acceptableAudioMime,
+  AUDIO_PIECES_PER_MINUTE,
+  AUDIO_SEGMENT_MIN_BYTES,
   audioKey,
+  CAPTURE_OFF_GRACE_MS,
   LAST_PIECE_GRACE_MS,
+  sniffAudio,
   transcriptionConfig,
   validPieceSeq,
 } from './transcription/lesson-transcription';
+import { transcriptCaptureState } from './transcription/capture-state';
 
 /** How long before the scheduled time the doors open. */
 export const JOIN_OPENS_MIN = 15;
@@ -103,6 +116,8 @@ export interface UpsertLiveDto {
   teacherUserId?: string | null;
   /** Restricts the audience to one group of the academy. */
   groupId?: string | null;
+  /** OFF / MANUAL / AUTO_WHEN_RECORDING; the platform default when absent. */
+  transcriptionMode?: LiveTranscriptionMode;
 }
 
 /**
@@ -192,6 +207,9 @@ export class LiveService {
         // Fixed here, for the life of the class: a later change to
         // LIVE_PROVIDER moves new classes, never this one.
         provider: this.providers.defaultKind,
+        // The platform's default; the teacher may change it before or during
+        // the class. Nothing is captured while the global switch is off.
+        transcriptionMode: dto.transcriptionMode ?? transcriptionConfig().defaultMode,
       },
     });
     await this.announceToStudents(session, session.title, session.startsAt);
@@ -861,7 +879,9 @@ export class LiveService {
     s: { id: string; tenantId: string; academyId: string | null },
     roomName: string,
   ) {
-    if (!transcriptionConfig().enabled) return;
+    const capture = await transcriptCaptureState(this.prisma, s.id, roomName);
+    // OFF, or never switched on in this class: nothing to transcribe, nothing queued.
+    if (!capture.available || !(capture.active || capture.everOn)) return;
     const claimed = await this.prisma.liveSession.updateMany({
       where: { id: s.id, transcriptStatus: { in: ['NOT_STARTED', 'FAILED'] } },
       data: { transcriptStatus: 'PROCESSING' },
@@ -874,26 +894,41 @@ export class LiveService {
         { liveSessionId: s.id, roomName },
         { sameInput: { path: 'liveSessionId', equals: s.id } },
       );
+      this.logger.log(`live.transcript.requested liveSession=${s.id} mode=${capture.mode}`);
     } catch (e) {
+      // Words were captured but cannot be turned into text (the AI queue is
+      // off, or the month's budget is spent): that is a failed transcript,
+      // not "nothing was said". The audio waits for the retention sweep.
       await this.prisma.liveSession.updateMany({
         where: { id: s.id, transcriptStatus: 'PROCESSING' },
-        data: { transcriptStatus: 'NOT_STARTED' },
+        data: { transcriptStatus: 'FAILED' },
       });
+      this.logger.warn(`live.transcript.failed liveSession=${s.id} reason=ENQUEUE_REFUSED`);
       throw e;
     }
   }
 
   /**
    * Stores one piece of a class's audio, uploaded by its teacher's page while
-   * the class runs. Only the owning teacher, only a live Darsly-hosted class,
-   * only with transcription switched on. A piece sent twice (a retried upload)
-   * replaces itself.
+   * its words are being captured.
+   *
+   * Refused unless: transcription is available for this class; the caller is
+   * its teacher (or staff who may manage it); it is a live Darsly-hosted
+   * class (or ended a moment ago — the last piece is flushed on the way out);
+   * capture is on, or went off a moment ago; the number is a plausible second
+   * of this class; the file really is WebM or MP4 audio of a sane size; and
+   * the class is not sending pieces faster than any classroom would.
+   *
+   * Idempotent by (class, run, second): a retried upload of a piece already
+   * stored is a no-op — and a piece that has already been transcribed is
+   * never replaced, so a retry can never make the job pay for it twice.
    */
   async storeAudioPiece(
     scope: LiveScope,
     id: string,
     seq: number,
     file: { buffer: Buffer; size: number; mimetype?: string } | undefined,
+    durationMs?: number,
   ) {
     if (!transcriptionConfig().enabled) {
       throw new ConflictException({ message: 'Transcription is off', code: 'TRANSCRIPTION_OFF' });
@@ -903,31 +938,171 @@ export class LiveService {
       throw new ConflictException({ message: 'Not a Darsly-hosted class', code: 'NOT_CLOUDFLARE' });
     }
     // Just after the end is fine: that is the last piece, flushed on the way out.
-    const late =
+    const now = Date.now();
+    const justEnded =
       session.status === 'ENDED' &&
-      (!session.endedAt || Date.now() - session.endedAt.getTime() > LAST_PIECE_GRACE_MS);
-    if (session.status !== 'LIVE' && (session.status !== 'ENDED' || late)) {
+      !!session.endedAt &&
+      now - session.endedAt.getTime() <= LAST_PIECE_GRACE_MS;
+    if (session.status !== 'LIVE' && !justEnded) {
       throw new ConflictException({ message: 'The class is not running', code: 'NOT_LIVE' });
     }
-    if (!validPieceSeq(seq)) {
+    const capture = await transcriptCaptureState(this.prisma, id, session.roomName);
+    const recentlyOff = !!capture.lastOffAt && now - capture.lastOffAt.getTime() <= CAPTURE_OFF_GRACE_MS;
+    if (!capture.available || !(capture.active || recentlyOff || (justEnded && capture.everOn))) {
+      throw new ConflictException({ message: 'Transcript capture is off', code: 'CAPTURE_OFF' });
+    }
+    if (!validPieceSeq(seq, now)) {
       throw new BadRequestException({ message: 'Bad piece number', code: 'BAD_SEQ' });
     }
-    if (!file?.buffer?.length) {
+    if (!file?.buffer?.length || file.size < AUDIO_SEGMENT_MIN_BYTES) {
       throw new BadRequestException({ message: 'Empty audio', code: 'EMPTY_AUDIO' });
     }
+    const kind = sniffAudio(file.buffer);
+    if (!kind || !acceptableAudioMime(file.mimetype)) {
+      throw new HttpException(
+        { message: 'Not an audio piece', code: 'BAD_AUDIO' },
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      );
+    }
     const roomName = session.roomName;
-    const ext = audioExt(file.mimetype);
-    const key = audioKey(id, roomName, seq, ext);
+    const existing = await this.prisma.liveAudioSegment.findUnique({
+      where: { sessionId_roomName_seq: { sessionId: id, roomName, seq } },
+    });
+    if (existing && (existing.text !== null || existing.sizeBytes === file.size)) {
+      // The same piece again (a retry whose first answer was lost).
+      return { ok: true as const, seq, duplicate: true };
+    }
+    if (!existing) {
+      const recent = await this.prisma.liveAudioSegment.count({
+        where: { sessionId: id, createdAt: { gte: new Date(now - 60_000) } },
+      });
+      if (recent >= AUDIO_PIECES_PER_MINUTE) {
+        throw new HttpException(
+          { message: 'Too many audio pieces', code: 'AUDIO_RATE' },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+    // The file's own header decides the extension (the transcriber reads it).
+    const key = audioKey(id, roomName, seq, kind);
     if (!this.storage) throw new Error('Storage is not configured');
     await this.storage.put(key, file.buffer, {
-      contentType: ext === 'm4a' ? 'audio/mp4' : 'audio/webm',
+      contentType: kind === 'm4a' ? 'audio/mp4' : 'audio/webm',
     });
+    const ms =
+      Number.isFinite(durationMs) && durationMs! > 0 && durationMs! < 30 * 60_000
+        ? Math.round(durationMs!)
+        : null;
     await this.prisma.liveAudioSegment.upsert({
       where: { sessionId_roomName_seq: { sessionId: id, roomName, seq } },
-      create: { sessionId: id, roomName, seq, key, sizeBytes: file.size },
-      update: { key, sizeBytes: file.size, text: null },
+      create: { sessionId: id, roomName, seq, key, sizeBytes: file.size, durationMs: ms },
+      // Only an untranscribed piece is ever replaced (see above).
+      update: { key, sizeBytes: file.size, durationMs: ms },
     });
+    this.logger.log(
+      `live.transcript.segment-uploaded liveSession=${id} seq=${seq} bytes=${file.size} kind=${kind}${existing ? ' replaced' : ''}`,
+    );
     return { ok: true as const, seq };
+  }
+
+  /**
+   * The teacher's transcription choices for one class: the mode (before the
+   * class ends), and — in MANUAL mode, while it runs — capture on or off.
+   */
+  async setTranscription(
+    scope: LiveScope,
+    id: string,
+    dto: { mode?: LiveTranscriptionMode; capture?: boolean },
+  ) {
+    const s = await this.assertOwned(scope, id);
+    if (s.status === 'ENDED') {
+      throw new ConflictException({ message: 'The class has ended', code: 'ENDED' });
+    }
+    const data: Prisma.LiveSessionUpdateInput = {};
+    if (dto.mode) data.transcriptionMode = dto.mode;
+    const mode = dto.mode ?? s.transcriptionMode;
+    if (dto.capture !== undefined) {
+      if (!transcriptionConfig().enabled) {
+        throw new ConflictException({ message: 'Transcription is off', code: 'TRANSCRIPTION_OFF' });
+      }
+      if (mode !== 'MANUAL' || s.status !== 'LIVE') {
+        throw new ConflictException({
+          message: 'Capture is switched by hand only in a running MANUAL class',
+          code: 'NOT_MANUAL',
+        });
+      }
+      if (dto.capture) data.transcriptCaptureOnAt = new Date();
+      else data.transcriptCaptureOffAt = new Date();
+    }
+    await this.prisma.liveSession.update({ where: { id }, data });
+    const capture = await transcriptCaptureState(this.prisma, id, s.roomName);
+    this.logger.log(
+      `live.transcript.mode liveSession=${id} mode=${capture.mode} capturing=${capture.active}`,
+    );
+    // The classroom reads it from its state; tell it to look.
+    this.realtime.emitToLive(id, 'live:rtc-state', { sessionId: id });
+    return { mode: capture.mode, available: capture.available, capturing: capture.active };
+  }
+
+  /**
+   * Who may see the recording, the transcript and the summary — three
+   * separate choices. `summaryForStudents` (the old single switch) is kept in
+   * step with the summary's.
+   */
+  async setVisibility(
+    scope: LiveScope,
+    id: string,
+    dto: { recording?: LiveVisibility; transcript?: LiveVisibility; summary?: LiveVisibility },
+  ) {
+    const before = await this.assertOwned(scope, id);
+    const updated = await this.prisma.liveSession.update({
+      where: { id },
+      data: {
+        ...(dto.recording ? { recordingVisibility: dto.recording } : {}),
+        ...(dto.transcript ? { transcriptVisibility: dto.transcript } : {}),
+        ...(dto.summary
+          ? { summaryVisibility: dto.summary, summaryForStudents: dto.summary === 'STUDENTS' }
+          : {}),
+      },
+      select: {
+        id: true,
+        title: true,
+        recordingVisibility: true,
+        transcriptVisibility: true,
+        summaryVisibility: true,
+        summaryStatus: true,
+      },
+    });
+    const newlyShared =
+      dto.summary === 'STUDENTS' &&
+      before.summaryVisibility !== 'STUDENTS' &&
+      updated.summaryStatus === 'READY';
+    if (newlyShared) {
+      const booked = await this.prisma.liveBooking.findMany({
+        where: { sessionId: id },
+        select: { student: { select: { userId: true } } },
+      });
+      await Promise.all(
+        booked.map((b) =>
+          this.notifications.create({
+            userId: b.student.userId,
+            type: 'LIVE_SESSION_REMINDER',
+            title: 'ملخّص الحصة جاهز 📝',
+            body: `ملخّص «${updated.title}» بقى متاح ليك.`,
+            meta: { sessionId: id, summary: true },
+          }),
+        ),
+      );
+    }
+    this.logger.log(
+      `live.visibility liveSession=${id} recording=${updated.recordingVisibility} transcript=${updated.transcriptVisibility} summary=${updated.summaryVisibility}`,
+    );
+    return {
+      id,
+      recording: updated.recordingVisibility,
+      transcript: updated.transcriptVisibility,
+      summary: updated.summaryVisibility,
+    };
   }
 
   /**
@@ -1373,25 +1548,24 @@ export class LiveService {
         provider: true,
         recordingId: true,
         recordingStatus: true,
-        summaryForStudents: true,
+        recordingVisibility: true,
       },
     });
     if (full) full.recordingStatus = await this.refreshRecording(full);
     if (full?.provider === 'CLOUDFLARE') {
-      // Darsly's own recording: packaged as encrypted HLS by the video
-      // pipeline. Watching it goes through the lesson player, which is where
-      // it will be published (Checkpoint C) — there is no provider link.
+      // Darsly's own recording is encrypted HLS, watched inside Darsly
+      // through a replay session (POST /live/:id/replay) — never a link.
       throw new ConflictException({
-        message: 'التسجيل اتحفظ وهيتاح للمشاهدة من خلال الكورس',
-        code: 'RECORDING_PLAYBACK_PENDING',
+        message: 'Watch this recording in the Darsly player',
+        code: 'RECORDING_USE_REPLAY',
       });
     }
     if (!full?.recordingId || full.recordingStatus !== 'READY') {
       throw new BadRequestException({ message: 'التسجيل مش جاهز', code: 'RECORDING_NOT_READY' });
     }
-    // A student sees the recording on the same permission that shows them the
-    // summary: the teacher decided this lesson is theirs to keep.
-    if (role === 'STUDENT' && !full.summaryForStudents) {
+    // A student sees the recording only once the teacher shared the recording
+    // itself (not the summary — they are separate choices).
+    if (role === 'STUDENT' && full.recordingVisibility !== 'STUDENTS') {
       throw new ForbiddenException({
         message: 'التسجيل غير متاح للطلبة',
         code: 'RECORDING_NOT_SHARED',
@@ -1477,6 +1651,7 @@ export class LiveService {
     });
     // Somebody else's press got there first; theirs is the one in flight.
     if (claimed.count === 0) return { status: 'PROCESSING' as const };
+    this.logger.log(`live.summary.requested liveSession=${id}`);
 
     try {
       await this.jobs.enqueue(
@@ -1512,38 +1687,10 @@ export class LiveService {
     return this.jobs.hasActiveJobFor('LIVE_SUMMARY', 'liveSessionId', sessionId);
   }
 
-  /** The teacher decides whether the class gets to keep the notes. */
+  /** The old single switch: now the summary's own visibility (see setVisibility). */
   async setSummaryVisibility(scope: LiveScope, id: string, visible: boolean) {
-    await this.assertOwned(scope, id);
-    const updated = await this.prisma.liveSession.update({
-      where: { id },
-      data: { summaryForStudents: visible },
-      select: {
-        id: true,
-        summaryForStudents: true,
-        summaryStatus: true,
-        title: true,
-        tenantId: true,
-      },
-    });
-    if (visible && updated.summaryStatus === 'READY') {
-      const booked = await this.prisma.liveBooking.findMany({
-        where: { sessionId: id },
-        select: { student: { select: { userId: true } } },
-      });
-      await Promise.all(
-        booked.map((b) =>
-          this.notifications.create({
-            userId: b.student.userId,
-            type: 'LIVE_SESSION_REMINDER',
-            title: 'ملخّص الحصة جاهز 📝',
-            body: `ملخّص «${updated.title}» بقى متاح ليك.`,
-            meta: { sessionId: id, summary: true },
-          }),
-        ),
-      );
-    }
-    return updated;
+    const r = await this.setVisibility(scope, id, { summary: visible ? 'STUDENTS' : 'PRIVATE' });
+    return { id, summaryForStudents: r.summary === 'STUDENTS' };
   }
 
   /**
@@ -1579,7 +1726,13 @@ export class LiveService {
     return next;
   }
 
-  /** What a viewer is allowed to read about a finished session. */
+  /**
+   * What a viewer is allowed to read about a session — the recording, the
+   * transcript and the summary each on its own visibility. The teacher side
+   * (the teacher, or the academy's staff) sees everything and the reasons;
+   * a booked student sees what was shared with them, and no processing
+   * details.
+   */
   async sessionDetail(userId: string, sessionId: string) {
     const { role } = await this.assertInSession(userId, sessionId);
     const s = await this.prisma.liveSession.findUniqueOrThrow({
@@ -1589,8 +1742,11 @@ export class LiveService {
         title: true,
         startsAt: true,
         durationMin: true,
+        startedAt: true,
+        endedAt: true,
         status: true,
         provider: true,
+        roomName: true,
         recordingStatus: true,
         recordingId: true,
         recordingDuration: true,
@@ -1598,11 +1754,18 @@ export class LiveService {
         summary: true,
         summaryError: true,
         summaryForStudents: true,
+        recordingVisibility: true,
+        transcriptVisibility: true,
+        summaryVisibility: true,
+        transcriptionMode: true,
         transcriptStatus: true,
         transcriptText: true,
+        transcriptSegments: true,
+        transcriptMeta: true,
         updatedAt: true,
       },
     });
+    const teacher = role === 'TEACHER';
     const recordingStatus = await this.refreshRecording(s);
     // Darsly's own recording (Cloudflare): its stage, not a bare status.
     const rec =
@@ -1613,7 +1776,17 @@ export class LiveService {
           })
         : null;
     const recStage = rec ? recordingStage(rec) : null;
-    const canSeeSummary = role === 'TEACHER' || s.summaryForStudents;
+    const job =
+      teacher && rec?.videoAssetId
+        ? await this.prisma.videoJob.findFirst({
+            where: { videoAssetId: rec.videoAssetId },
+            orderBy: { createdAt: 'asc' },
+            select: { startedAt: true, createdAt: true },
+          })
+        : null;
+    const canSeeRecording = teacher || s.recordingVisibility === 'STUDENTS';
+    const canSeeTranscript = teacher || s.transcriptVisibility === 'STUDENTS';
+    const canSeeSummary = teacher || s.summaryVisibility === 'STUDENTS';
     // A PROCESSING with nothing behind it is shown as the failure it is, so the
     // page offers "try again" instead of a spinner that never stops.
     let summaryStatus = s.summaryStatus;
@@ -1622,6 +1795,8 @@ export class LiveService {
       summaryStatus = 'FAILED';
       summaryError = summaryError ?? 'STALLED';
     }
+    const cfg = transcriptionConfig();
+    const effective = this.effectiveStatus(s);
     const stages = pipelineStages({
       provider: s.provider,
       transcriptStatus: s.transcriptStatus,
@@ -1629,47 +1804,96 @@ export class LiveService {
       summaryStatus,
       summaryError,
       recordingStage: recStage?.stage ?? null,
+      transcriptionOn: cfg.enabled && s.transcriptionMode !== 'OFF',
+      classRunning: effective === 'LIVE' || effective === 'SCHEDULED',
     });
+    const recStageShown =
+      recStage?.stage ??
+      (recordingStatus === 'PROCESSING'
+        ? 'PROCESSING'
+        : recordingStatus === 'READY'
+          ? 'READY'
+          : recordingStatus === 'FAILED'
+            ? 'FAILED'
+            : null);
+    const meta = (s.transcriptMeta ?? null) as { partial?: boolean } | null;
+    const transcriptReady = stages.transcript.stage === 'READY';
+    const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
     return {
       id: s.id,
       title: s.title,
       startsAt: s.startsAt,
       durationMin: s.durationMin,
-      status: this.effectiveStatus(s),
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      // How long the class really ran (not how long it was booked for).
+      actualDurationSec:
+        s.startedAt && s.endedAt
+          ? Math.max(0, Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 1000))
+          : null,
+      status: effective,
       role,
       provider: s.provider,
       recording: {
-        status: recordingStatus,
+        status: canSeeRecording ? recordingStatus : 'NOT_STARTED',
         // What the page shows: REQUESTED → CAPTURING → FINALIZING →
         // PROCESSING → READY / FAILED (with a reason a teacher can read).
-        stage:
-          recStage?.stage ??
-          (recordingStatus === 'PROCESSING'
-            ? 'PROCESSING'
-            : recordingStatus === 'READY'
-              ? 'READY'
-              : recordingStatus === 'FAILED'
-                ? 'FAILED'
-                : null),
-        failure: recStage?.failure ?? (recordingStatus === 'FAILED' ? 'PROCESSING_FAILED' : null),
-        durationSeconds: s.recordingDuration ?? (rec?.durationSec || null),
-        // A student is told there is a recording only once it is theirs to see.
+        // A student is told nothing until it is ready and theirs to watch.
+        stage: teacher ? recStageShown : canSeeRecording && recStageShown === 'READY' ? 'READY' : null,
+        failure: teacher
+          ? (recStage?.failure ?? (recordingStatus === 'FAILED' ? 'PROCESSING_FAILED' : null))
+          : null,
+        durationSeconds: canSeeRecording ? (s.recordingDuration ?? (rec?.durationSec || null)) : null,
+        visibility: teacher ? s.recordingVisibility : undefined,
+        // Daily: a provider link, fetched fresh (GET /live/:id/recording).
         available:
-          recordingStatus === 'READY' &&
-          s.provider !== 'CLOUDFLARE' &&
-          (role === 'TEACHER' || s.summaryForStudents),
+          recordingStatus === 'READY' && s.provider !== 'CLOUDFLARE' && canSeeRecording,
+        // Darsly's own: encrypted HLS in the Darsly player (POST /live/:id/replay).
+        playable:
+          s.provider === 'CLOUDFLARE' &&
+          recStage?.stage === 'READY' &&
+          !!rec?.videoAssetId &&
+          canSeeRecording,
+        // How long each stage took — the teacher's view only.
+        timeline:
+          teacher && rec
+            ? {
+                requestedAt: iso(rec.createdAt),
+                claimedAt: iso(rec.claimedAt),
+                captureStartedAt: iso(rec.captureStartedAt),
+                captureEndedAt: iso(rec.stoppedAt),
+                finalizeStartedAt: iso(rec.finalizeStartedAt),
+                handedAt: iso(rec.handedAt),
+                processingStartedAt: iso(job?.startedAt),
+                readyAt: iso(rec.readyAt),
+                failedAt: iso(rec.failedAt),
+              }
+            : undefined,
       },
-      transcript: role === 'TEACHER' ? stages.transcript : null,
+      transcript:
+        teacher || (canSeeTranscript && transcriptReady)
+          ? {
+              ...stages.transcript,
+              reason: teacher ? stages.transcript.reason : null,
+              partial: !!meta?.partial,
+              visibility: teacher ? s.transcriptVisibility : undefined,
+              mode: teacher ? s.transcriptionMode : undefined,
+              segments:
+                transcriptReady && canSeeTranscript
+                  ? ((s.transcriptSegments as unknown[] | null) ??
+                    (s.transcriptText ? [{ startSec: null, durationSec: null, text: s.transcriptText }] : []))
+                  : undefined,
+            }
+          : null,
       summary: {
         stage: canSeeSummary ? stages.summary.stage : 'NOT_STARTED',
-        canGenerate: role === 'TEACHER' && stages.summary.canGenerate,
+        canGenerate: teacher && stages.summary.canGenerate,
         status: canSeeSummary ? summaryStatus : 'NOT_STARTED',
         data: canSeeSummary && summaryStatus === 'READY' ? s.summary : null,
-        sharedWithStudents: s.summaryForStudents,
+        sharedWithStudents: s.summaryVisibility === 'STUDENTS',
+        visibility: teacher ? s.summaryVisibility : undefined,
         // Only the teacher is told why, and only they can act on it.
-        ...(role === 'TEACHER'
-          ? { transcriptStatus: s.transcriptStatus, error: summaryError }
-          : {}),
+        ...(teacher ? { transcriptStatus: s.transcriptStatus, error: summaryError } : {}),
       },
     };
   }

@@ -10,6 +10,8 @@ import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveRecorderWorker } from './recording/live-recorder.worker';
 import { VideoModule } from '../video/video.module';
+import { LiveReplayService } from './replay/live-replay.service';
+import { LiveRetentionService } from './retention/live-retention.service';
 
 @Module({
   // AcademySiteModule for the AI job queue the summary runs on — the one this
@@ -20,7 +22,16 @@ import { VideoModule } from '../video/video.module';
   // LiveRtcService: the Cloudflare classroom's signalling and permissions.
   // LiveRecordingService/LiveRecorderWorker: Darsly's own recorder for
   // Cloudflare classes (the worker runs only with LIVE_RECORDER_ENABLED=true).
-  providers: [LiveService, LiveEndWorker, LiveRtcService, LiveRecordingService, LiveRecorderWorker],
+  // LiveReplayService: watching a recording inside Darsly (encrypted HLS).
+  providers: [
+    LiveService,
+    LiveEndWorker,
+    LiveRtcService,
+    LiveRecordingService,
+    LiveRecorderWorker,
+    LiveReplayService,
+    LiveRetentionService,
+  ],
   // The gateway asks it who is allowed into a classroom's socket room.
   exports: [LiveService],
 })

@@ -88,23 +88,33 @@ describe('transcript and summary are separate stages', () => {
     recordingStage: null,
   } as const;
 
-  it('Cloudflare: the summary waits while the recording it would come from is being made', () => {
-    const s = pipelineStages({ ...base, provider: 'CLOUDFLARE', recordingStage: 'PROCESSING' });
-    expect(s.transcript.stage).toBe('WAITING_FOR_RECORDING');
-    expect(s.summary).toEqual({ stage: 'WAITING_FOR_TRANSCRIPT', canGenerate: false });
+  it('Cloudflare: the transcript does not wait for the recording (Checkpoint C)', () => {
+    // It comes from the lesson's own audio: a recording still packaging says
+    // nothing about the words.
+    const on = { ...base, provider: 'CLOUDFLARE' as const, transcriptionOn: true };
+    expect(pipelineStages({ ...on, recordingStage: 'PROCESSING', classRunning: true }).transcript).toEqual({
+      stage: 'WAITING_FOR_CLASS_END',
+      reason: null,
+    });
+    const busy = pipelineStages({ ...on, recordingStage: 'PROCESSING', transcriptStatus: 'PROCESSING' });
+    expect(busy.transcript.stage).toBe('TRANSCRIBING');
+    expect(busy.summary).toEqual({ stage: 'WAITING_FOR_TRANSCRIPT', canGenerate: false });
   });
 
-  it('Cloudflare: a failed NO_TRANSCRIPT job is not shown as a failure — there was nothing to summarise', () => {
-    const s = pipelineStages({
+  it('Cloudflare: off is "off", and on-but-nothing-captured is said as such — neither a failure', () => {
+    const off = pipelineStages({
       ...base,
       provider: 'CLOUDFLARE',
       summaryStatus: 'FAILED',
       summaryError: 'NO_TRANSCRIPT',
     });
-    expect(s.transcript).toEqual({ stage: 'UNAVAILABLE', reason: 'NO_RECORDING' });
-    expect(s.summary).toEqual({ stage: 'UNAVAILABLE', canGenerate: false });
-    const withRec = pipelineStages({ ...base, provider: 'CLOUDFLARE', recordingStage: 'READY' });
-    expect(withRec.transcript.reason).toBe('NO_TRANSCRIPTION');
+    expect(off.transcript).toEqual({ stage: 'UNAVAILABLE', reason: 'TRANSCRIPTION_OFF' });
+    expect(off.summary).toEqual({ stage: 'UNAVAILABLE', canGenerate: false });
+    const none = pipelineStages({ ...base, provider: 'CLOUDFLARE', transcriptionOn: true, recordingStage: 'READY' });
+    expect(none.transcript).toEqual({ stage: 'UNAVAILABLE', reason: 'NOTHING_CAPTURED' });
+    const failed = pipelineStages({ ...base, provider: 'CLOUDFLARE', transcriptionOn: true, transcriptStatus: 'FAILED' });
+    expect(failed.transcript.stage).toBe('FAILED');
+    expect(failed.summary.stage).toBe('UNAVAILABLE');
   });
 
   it('Cloudflare: with a transcript the summary can be asked for, then generates, then is ready', () => {

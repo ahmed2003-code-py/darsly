@@ -14,6 +14,11 @@ export interface PlaybackClaims {
   wm: string;
   /** 1 for teacher/admin preview (no DB PlaybackSession row to re-check) */
   pv?: 1;
+  /**
+   * Resource type. Absent = a course lesson (sid is a PlaybackSession);
+   * 'L' = a live lesson's recording (sid is a LiveReplaySession).
+   */
+  rt?: 'L';
   /** expiry, epoch seconds */
   exp: number;
 }

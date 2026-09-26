@@ -27,6 +27,7 @@ import { StorageProvider } from '../storage/storage.provider';
 import { PlaybackService } from './playback.service';
 import { KEY_URI_PLACEHOLDER } from '../video/transcode.service';
 import { SignedUrlService } from './signed-url.service';
+import { assertLiveReplayKey } from './live-replay-access';
 
 class StartSessionDto {
   @IsId() lessonId: string;
@@ -201,9 +202,14 @@ export class PlaybackController {
     this.assertReferer(referer);
     const claims = this.signer.verify(token);
 
-    // Students: the PlaybackSession must still be live (not ended) and its
-    // device session not revoked. Preview tokens (pv=1) skip this.
-    if (!claims.pv) {
+    // A live lesson's recording: its LiveReplaySession must still be open, and
+    // the viewer must still be allowed to watch (shared, still booked, still
+    // staff) — asked again here, not only when the replay started.
+    if (claims.rt === 'L') {
+      await assertLiveReplayKey(this.prisma, claims);
+    } else if (!claims.pv) {
+      // Students: the PlaybackSession must still be live (not ended) and its
+      // device session not revoked. Preview tokens (pv=1) skip this.
       const session = await this.prisma.playbackSession.findUnique({
         where: { id: claims.sid },
         include: { deviceSession: { select: { revokedAt: true } } },

@@ -764,12 +764,23 @@ describe('B.7 on Postgres: rules, and what a finished lesson shows', () => {
       },
     });
     const d: any = await svc.sessionDetail(w.teacher.id, w.ls.id);
-    expect(d.recording).toMatchObject({ stage: 'PROCESSING', failure: null });
-    expect(d.transcript).toEqual({ stage: 'WAITING_FOR_RECORDING', reason: null });
-    expect(d.summary).toMatchObject({ stage: 'WAITING_FOR_TRANSCRIPT', canGenerate: false });
-    // A student is not shown the pipeline.
+    expect(d.recording).toMatchObject({ stage: 'PROCESSING', failure: null, playable: false });
+    // Checkpoint C: the transcript comes from the lesson's own audio, not from
+    // the recording — with transcription switched off it says so, whatever
+    // the recording is doing.
+    expect(d.transcript).toMatchObject({ stage: 'UNAVAILABLE', reason: 'TRANSCRIPTION_OFF' });
+    expect(d.summary).toMatchObject({ stage: 'UNAVAILABLE', canGenerate: false });
+    // Being transcribed: TRANSCRIBING, and the summary waits for it — while
+    // the recording is still packaging.
+    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { transcriptStatus: 'PROCESSING' } });
+    const d2: any = await svc.sessionDetail(w.teacher.id, w.ls.id);
+    expect(d2.transcript).toMatchObject({ stage: 'TRANSCRIBING' });
+    expect(d2.summary).toMatchObject({ stage: 'WAITING_FOR_TRANSCRIPT', canGenerate: false });
+    // A student is not shown the pipeline, nor a recording not yet shared.
     const ds: any = await svc.sessionDetail(w.s[0].id, w.ls.id);
     expect(ds.transcript).toBeNull();
+    expect(ds.recording).toMatchObject({ stage: null, failure: null, playable: false });
+    expect(ds.recording.timeline).toBeUndefined();
   });
 });
 

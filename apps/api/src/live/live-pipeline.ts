@@ -10,10 +10,13 @@ import type { RecordingStage } from './recording/recording-stage';
  * job fetches those words itself, so a Daily summary may be asked for at any
  * time. Cloudflare carries media only: a Cloudflare lesson's words come from
  * the audio Darsly captured during the class (LIVE_TRANSCRIBE, when switched
- * on), so its summary waits for a transcript that exists.
+ * on) — not from its recording, which is a separate thing — so its summary
+ * waits for a transcript that exists.
  */
 export type TranscriptStage =
-  /** The recording it would come from is still being made or packaged. */
+  /** The class is still running; its words are turned into text after it ends. */
+  | 'WAITING_FOR_CLASS_END'
+  /** Kept for older clients; no longer produced (the transcript does not wait for the recording). */
   | 'WAITING_FOR_RECORDING'
   /** Being fetched or produced now. */
   | 'TRANSCRIBING'
@@ -25,7 +28,12 @@ export type TranscriptStage =
   | 'UNAVAILABLE';
 
 export type TranscriptUnavailable =
-  'NO_RECORDING' | 'NO_TRANSCRIPTION' | 'TRANSCRIPTION_OFF' | 'NOTHING_SAID';
+  | 'NO_RECORDING'
+  | 'NO_TRANSCRIPTION'
+  | 'TRANSCRIPTION_OFF'
+  | 'NOTHING_SAID'
+  /** Transcription was on, but nothing was captured (never switched on, or silence). */
+  | 'NOTHING_CAPTURED';
 
 export type SummaryStage =
   'WAITING_FOR_TRANSCRIPT' | 'NOT_STARTED' | 'GENERATING' | 'READY' | 'FAILED' | 'UNAVAILABLE';
@@ -38,6 +46,10 @@ export interface PipelineInput {
   summaryError: string | null;
   /** The latest recording's stage (Cloudflare), or null when there is none. */
   recordingStage: RecordingStage | null;
+  /** Cloudflare: transcription may run for this class (global switch on, mode not OFF). */
+  transcriptionOn?: boolean;
+  /** The class has not ended yet. */
+  classRunning?: boolean;
 }
 
 export function pipelineStages(x: PipelineInput): {
@@ -61,21 +73,14 @@ export function pipelineStages(x: PipelineInput): {
     // The lesson's own audio (captured in the teacher's browser) is being
     // transcribed — it does not wait for the recording.
     transcript = { stage: 'TRANSCRIBING', reason: null };
-  } else if (
-    x.recordingStage &&
-    ['REQUESTED', 'CAPTURING', 'FINALIZING', 'PROCESSING'].includes(x.recordingStage)
-  ) {
-    transcript = { stage: 'WAITING_FOR_RECORDING', reason: null };
   } else if (x.transcriptStatus === 'FAILED') {
     transcript = { stage: 'FAILED', reason: null };
+  } else if (!x.transcriptionOn) {
+    transcript = { stage: 'UNAVAILABLE', reason: 'TRANSCRIPTION_OFF' };
+  } else if (x.classRunning) {
+    transcript = { stage: 'WAITING_FOR_CLASS_END', reason: null };
   } else {
-    // A Cloudflare lesson with no recording has no words to work from; with
-    // one, transcription of recordings is not switched on yet (the provider
-    // is chosen by benchmark, not assumed).
-    transcript = {
-      stage: 'UNAVAILABLE',
-      reason: x.recordingStage === 'READY' ? 'NO_TRANSCRIPTION' : 'NO_RECORDING',
-    };
+    transcript = { stage: 'UNAVAILABLE', reason: 'NOTHING_CAPTURED' };
   }
 
   let summary: { stage: SummaryStage; canGenerate: boolean };

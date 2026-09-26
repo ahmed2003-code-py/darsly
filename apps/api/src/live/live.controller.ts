@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  Req,
   Delete,
   Get,
   Param,
@@ -11,9 +13,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import type { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -34,7 +38,8 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
 import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveRecordingService } from './recording/live-recording.service';
-import { AUDIO_SEGMENT_MAX_BYTES } from './transcription/lesson-transcription';
+import { LiveReplayService } from './replay/live-replay.service';
+import { AUDIO_SEGMENT_MAX_BYTES, transcriptionConfig } from './transcription/lesson-transcription';
 
 /**
  * Shapes and abuse caps only. The product's rules (title length, minimum and
@@ -42,6 +47,9 @@ import { AUDIO_SEGMENT_MAX_BYTES } from './transcription/lesson-transcription';
  * in LiveService so a refusal names its field with a code the form can put
  * under that field — a class-validator sentence cannot be shown to a teacher.
  */
+const TRANSCRIPTION_MODES = ['OFF', 'MANUAL', 'AUTO_WHEN_RECORDING'] as const;
+const VISIBILITIES = ['PRIVATE', 'STUDENTS'] as const;
+
 class CreateLiveDto {
   @IsString() @MaxLength(2000) title: string;
   @IsOptional() @IsString() @MaxLength(20_000) description?: string;
@@ -54,6 +62,24 @@ class CreateLiveDto {
     string | null;
   @IsOptionalId() teacherUserId?: string | null;
   @IsOptionalId() groupId?: string | null;
+  @IsOptional() @IsIn(TRANSCRIPTION_MODES) transcriptionMode?: (typeof TRANSCRIPTION_MODES)[number];
+}
+
+class TranscriptionDto {
+  @IsOptional() @IsIn(TRANSCRIPTION_MODES) mode?: (typeof TRANSCRIPTION_MODES)[number];
+  /** MANUAL mode, while the class runs: capture on / off. */
+  @IsOptional() @IsBoolean() capture?: boolean;
+}
+
+class VisibilityDto {
+  @IsOptional() @IsIn(VISIBILITIES) recording?: (typeof VISIBILITIES)[number];
+  @IsOptional() @IsIn(VISIBILITIES) transcript?: (typeof VISIBILITIES)[number];
+  @IsOptional() @IsIn(VISIBILITIES) summary?: (typeof VISIBILITIES)[number];
+}
+
+class AudioPieceDto {
+  /** The piece's length as the page measured it (for cost), in ms. */
+  @IsOptional() @IsString() @MaxLength(12) durationMs?: string;
 }
 
 class RecordingStartedDto {
@@ -114,9 +140,19 @@ export class LiveController {
     private readonly live: LiveService,
     private readonly rtc: LiveRtcService,
     private readonly recordings: LiveRecordingService,
+    private readonly replays: LiveReplayService,
   ) {}
 
   // ── Teacher ──────────────────────────────────────────────────────────────
+
+  /** What the platform offers for new classes (the form shows only what exists). */
+  @Get('teacher/live-features')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Live features available on this platform' })
+  features() {
+    const cfg = transcriptionConfig();
+    return { transcription: cfg.enabled, defaultTranscriptionMode: cfg.defaultMode };
+  }
 
   @Get('teacher/live')
   @AcademyStaff('live.manage')
@@ -320,9 +356,32 @@ export class LiveController {
     @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Param('seq') seq: string,
+    @Body() dto: AudioPieceDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.live.storeAudioPiece(scopeOf(ctx), id, Number(seq), file);
+    return this.live.storeAudioPiece(scopeOf(ctx), id, Number(seq), file, Number(dto?.durationMs));
+  }
+
+  @Patch('teacher/live/:id/transcription')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Transcription mode, and MANUAL capture on/off' })
+  transcription(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: TranscriptionDto,
+  ) {
+    return this.live.setTranscription(scopeOf(ctx), id, dto);
+  }
+
+  @Patch('teacher/live/:id/visibility')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Who may see the recording, the transcript and the summary' })
+  visibility(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Body() dto: VisibilityDto,
+  ) {
+    return this.live.setVisibility(scopeOf(ctx), id, dto);
   }
 
   @Post('teacher/live/:id/summary')
@@ -373,6 +432,34 @@ export class LiveController {
   @ApiOperation({ summary: 'A short-lived link to watch the recording' })
   recording(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     return this.live.recordingLink(u.sub, id);
+  }
+
+  /**
+   * Watch a Darsly recording (Cloudflare classes) inside Darsly: a replay
+   * session and a signed, expiring encrypted-HLS URL. Who may: the teacher
+   * side, or a booked student once the recording is shared.
+   */
+  @Post('live/:id/replay')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Start watching the class recording (encrypted HLS)' })
+  replay(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Req() req: Request) {
+    return this.replays.start(u, id, {
+      ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+  }
+
+  @Post('live/:id/replay/:replayId/end')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Stop watching (the content key is refused from now on)' })
+  endReplay(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('replayId') replayId: string,
+  ) {
+    return this.replays.end(u.sub, id, replayId);
   }
 
   // ── Presence (either side of the classroom) ──────────────────────────────

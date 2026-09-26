@@ -81,14 +81,18 @@ export class NativeAesDrmProvider implements IDrmProvider {
    * endpoint for this asset, bound to the session + watermark, short-lived.
    */
   async issueCredentials(ctx: LicenseContext): Promise<PlaybackCredentials> {
-    const token = this.signer.sign({
-      sid: ctx.sessionId,
-      uid: ctx.studentId,
-      aid: ctx.assetId,
-      lid: '', // not needed for URL scoping
-      wm: ctx.watermarkId,
-      ...(ctx.preview ? { pv: 1 as const } : {}),
-    });
+    const token = this.signer.sign(
+      {
+        sid: ctx.sessionId,
+        uid: ctx.studentId,
+        aid: ctx.assetId,
+        lid: '', // not needed for URL scoping
+        wm: ctx.watermarkId,
+        ...(ctx.preview ? { pv: 1 as const } : {}),
+        ...(ctx.resource === 'LIVE_RECORDING' ? { rt: 'L' as const } : {}),
+      },
+      ctx.ttlSec,
+    );
     return {
       scheme: this.scheme,
       masterUrl: `/api/v1/playback/hls/${token}/master.m3u8`,

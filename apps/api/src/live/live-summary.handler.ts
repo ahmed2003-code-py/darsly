@@ -135,8 +135,11 @@ export class LiveSummaryHandler implements AiJobHandler {
     // button again while this was queued, must not spend a second model call.
     if (session.summaryStatus === 'READY') return;
 
+    const t0 = Date.now();
+    this.logger.log(`live.summary.started liveSession=${liveSessionId} job=${job.id} attempt=${job.attempts}`);
     const transcript = await this.transcriptFor(session, job.attempts);
     if (!transcript) {
+      this.logger.warn(`live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=NO_TRANSCRIPT`);
       // Two different failures wear the same empty transcript, and the teacher
       // can only act on one of them. The browser reports the first one it sees
       // mid-lesson, but a teacher who closed the tab reports nothing — so the
@@ -218,6 +221,7 @@ export class LiveSummaryHandler implements AiJobHandler {
         where: { id: liveSessionId },
         data: { summaryStatus: 'FAILED', summaryError: 'AI_FAILED' },
       });
+      this.logger.warn(`live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=AI_FAILED`);
       // Retryable: a provider that timed out today may answer tomorrow, and the
       // transcript is still on file to try again from.
       throw new AiJobError(`Summary generation failed: ${(e as Error).message}`, 'RETRYABLE');
@@ -243,7 +247,7 @@ export class LiveSummaryHandler implements AiJobHandler {
     });
     const costCents = Math.ceil((priorMillicents + callMillicents) / 1000);
     this.logger.log(
-      `Summarised live session ${liveSessionId} (job ${job.id}, academy ${job.academyId}, ${costCents}¢)`,
+      `live.summary.ready liveSession=${liveSessionId} job=${job.id} academy=${job.academyId} costCents=${costCents} ms=${Date.now() - t0}`,
     );
     // The worker writes this onto AiJob.costCents, which is what the monthly
     // AI budget adds up.

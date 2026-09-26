@@ -8,6 +8,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { LiveScope, LiveService } from '../live.service';
 import { dailyProviders } from '../providers/testing';
 import { LiveRecordingService } from './live-recording.service';
+import { LiveRetentionService } from '../retention/live-retention.service';
+import { FINALIZE_MAX_ATTEMPTS } from './live-recorder.worker';
 import { LiveRecorderWorker, finalKey, segmentKey } from './live-recorder.worker';
 
 /**
@@ -544,5 +546,161 @@ describe('B.7 nothing stays "processing" with nobody working on it', () => {
     const ready = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
     expect(ready.readyAt).toBeInstanceOf(Date);
     expect(ready.readyAt!.getTime()).toBeGreaterThanOrEqual(handed.handedAt!.getTime());
+  });
+});
+
+describe('Checkpoint C: every recording ends READY or FAILED, with its times', () => {
+  it('a finalize that keeps failing stops at the cap and says FAILED — never processing forever', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await recorded(b, w, [{ uploaded: true }]);
+    b.storage.fail.put = 1000; // R2 down for good
+    const worker = b.worker(await tmp());
+    for (let i = 0; i < FINALIZE_MAX_ATTEMPTS; i++) {
+      await worker.finalize(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } }));
+    }
+    const row = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
+    expect(row).toMatchObject({ status: 'FAILED', finalizeAttempts: FINALIZE_MAX_ATTEMPTS });
+    expect(row.error).toMatch(/^FINALIZE_GAVE_UP/);
+    expect(row.failedAt).toBeInstanceOf(Date);
+    expect(await prisma.videoAsset.count({ where: { originalKey: finalKey(r.id) } })).toBe(0);
+    expect((await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } })).recordingStatus).toBe('FAILED');
+    // The teacher reads a reason they can act on, not the technical one.
+    expect((await b.recordings.latestView(w.ls.id))?.failure).toBe('PROCESSING_FAILED');
+  });
+
+  it('the first finalize claim stamps when finalizing began; a later claim keeps it', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await recorded(b, w, [{ uploaded: true }]);
+    const worker = b.worker(await tmp());
+    let mine = null;
+    for (let i = 0; i < 1000 && !mine; i++) {
+      const c = await worker.claimFinalize();
+      if (!c) break;
+      if (c.id === r.id) mine = c;
+      else await prisma.liveRecording.update({ where: { id: c.id }, data: { leaseUntil: new Date(Date.now() + 3600_000) } });
+    }
+    expect(mine?.finalizeStartedAt).toBeInstanceOf(Date);
+    const first = mine!.finalizeStartedAt!.getTime();
+    await prisma.liveRecording.update({ where: { id: r.id }, data: { leaseUntil: new Date(0) } });
+    let again = null;
+    for (let i = 0; i < 1000 && !again; i++) {
+      const c = await worker.claimFinalize();
+      if (!c) break;
+      if (c.id === r.id) again = c;
+    }
+    expect(again!.finalizeStartedAt!.getTime()).toBe(first);
+  });
+
+  it('packaging that has not finished six hours after hand-over is a failure, not a spinner', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await recorded(b, w, [{ uploaded: true }]);
+    await b.worker(await tmp()).finalize(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } }));
+    // Still packaging (no worker ever ran it): an hour in, it is left alone…
+    await prisma.liveRecording.update({ where: { id: r.id }, data: { handedAt: new Date(Date.now() - 3600_000) } });
+    for (let i = 0; i < 1000; i++) if (!(await b.recordings.syncProcessing(100))) break;
+    expect((await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('PROCESSING');
+    // …seven hours in, it has stalled.
+    await prisma.liveRecording.update({ where: { id: r.id }, data: { handedAt: new Date(Date.now() - 7 * 3600_000) } });
+    for (let i = 0; i < 1000; i++) if (!(await b.recordings.syncProcessing(100))) break;
+    const row = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
+    expect(row).toMatchObject({ status: 'FAILED', error: 'PROCESSING_STALLED' });
+    expect(row.failedAt).toBeInstanceOf(Date);
+  });
+
+  it('a request never claimed fails with its failure time', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await b.recordings.start(w.scope, w.ls.id, w.teacher.id);
+    await prisma.liveRecording.update({ where: { id: r.id }, data: { createdAt: new Date(Date.now() - 3 * 60_000) } });
+    await b.recordings.sweepStale();
+    const row = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
+    expect(row.failedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('Checkpoint C: temporary media is temporary', () => {
+  function retention() {
+    const deleted: string[] = [];
+    const prefixes: string[] = [];
+    const storage = {
+      delete: jest.fn(async (k: string) => void deleted.push(k)),
+      deletePrefix: jest.fn(async (k: string) => void prefixes.push(k)),
+    };
+    return { svc: new LiveRetentionService(prisma, storage as any), deleted, prefixes };
+  }
+  const HOUR = 3600_000;
+
+  it('audio that never became a transcript is deleted after its window; fresh or in-work audio is kept', async () => {
+    if (!guard()) return;
+    const w = await world();
+    await prisma.liveSession.update({
+      where: { id: w.ls.id },
+      data: { status: 'ENDED', endedAt: new Date(Date.now() - 30 * HOUR), transcriptionMode: 'AUTO_WHEN_RECORDING' },
+    });
+    const mk = (seq: number, ageH: number) =>
+      prisma.liveAudioSegment.create({
+        data: {
+          sessionId: w.ls.id,
+          roomName: w.ls.roomName!,
+          seq,
+          key: `source/live-audio/${w.ls.id}/${w.ls.roomName}/${seq}.webm`,
+          sizeBytes: 1000,
+          createdAt: new Date(Date.now() - ageH * HOUR),
+        },
+      });
+    const old = await mk(1, 30);
+    const fresh = await mk(2, 1);
+    const r = retention();
+    for (let i = 0; i < 200; i++) {
+      await r.svc.sweep();
+      if (!(await prisma.liveAudioSegment.findUnique({ where: { id: old.id } }))) break;
+    }
+    expect(await prisma.liveAudioSegment.findUnique({ where: { id: old.id } })).toBeNull();
+    expect(r.deleted).toContain(old.key);
+    expect(await prisma.liveAudioSegment.findUnique({ where: { id: fresh.id } })).not.toBeNull();
+
+    // While its transcript is being made, even old audio stays.
+    const w2 = await world();
+    await prisma.liveSession.update({ where: { id: w2.ls.id }, data: { transcriptStatus: 'PROCESSING' } });
+    const busy = await prisma.liveAudioSegment.create({
+      data: {
+        sessionId: w2.ls.id,
+        roomName: w2.ls.roomName!,
+        seq: 1,
+        key: `source/live-audio/${w2.ls.id}/x/1.webm`,
+        sizeBytes: 1,
+        createdAt: new Date(Date.now() - 48 * HOUR),
+      },
+    });
+    for (let i = 0; i < 20; i++) await r.svc.sweep();
+    expect(await prisma.liveAudioSegment.findUnique({ where: { id: busy.id } })).not.toBeNull();
+  });
+
+  it("a failed recording's raw pieces are deleted after 72 hours; the final recording asset is never touched", async () => {
+    if (!guard()) return;
+    const w = await world();
+    const rec = await prisma.liveRecording.create({
+      data: {
+        sessionId: w.ls.id,
+        roomName: w.ls.roomName!,
+        tenantId: w.tp.id,
+        requestedBy: w.teacher.id,
+        status: 'FAILED',
+        error: 'FINALIZE_GAVE_UP',
+        failedAt: new Date(Date.now() - 80 * HOUR),
+      },
+    });
+    const r = retention();
+    for (let i = 0; i < 200 && !r.prefixes.includes(`source/live-rec/${rec.id}/`); i++) await r.svc.sweep();
+    expect(r.prefixes).toContain(`source/live-rec/${rec.id}/`);
+    expect(r.prefixes.every((p) => p.startsWith('source/'))).toBe(true);
+    expect(r.deleted.some((k) => k.startsWith('hls/'))).toBe(false);
   });
 });

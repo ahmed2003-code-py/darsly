@@ -114,6 +114,7 @@ export class VideoJobService {
       SET status = 'RUNNING'::"VideoJobStatus",
           "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') + ${leaseMs} * interval '1 millisecond',
           attempts = attempts + 1,
+          "startedAt" = COALESCE("startedAt", (now() AT TIME ZONE 'UTC')),
           "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE id = (
         SELECT id FROM "VideoJob"

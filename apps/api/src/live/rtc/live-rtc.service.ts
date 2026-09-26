@@ -14,7 +14,7 @@ import { LiveService, PRESENCE_GRACE_SEC } from '../live.service';
 import { CloudflareLiveProvider } from '../providers/cloudflare-live.provider';
 import { CfSessionDescription, toHttpError } from '../providers/cloudflare-realtime.client';
 import { canSpeak, HandAction, nextHandState, STUDENT_ACTIONS, TEACHER_ACTIONS } from './live-hand';
-import { transcriptionConfig } from '../transcription/lesson-transcription';
+import { transcriptCaptureState } from '../transcription/capture-state';
 
 /**
  * How many students may speak at once. A class is a teacher and an audience;
@@ -65,6 +65,8 @@ export interface RtcState {
   recording: boolean;
   /** The lesson's words are being kept for its transcript (everyone is told). */
   transcribing: boolean;
+  /** The teacher's view only: the lesson's transcription mode (for the MANUAL switch). */
+  transcription?: { mode: string; available: boolean };
   participants: {
     userId: string;
     name: string;
@@ -545,7 +547,7 @@ export class LiveRtcService {
     const g = await this.gate(userId, sessionId);
     const run = g.s.roomName;
     const since = new Date(Date.now() - PRESENCE_GRACE_SEC * 1000);
-    const [tracks, present, hands, recording] = await Promise.all([
+    const [tracks, present, hands, recording, capture] = await Promise.all([
       this.prisma.liveRtcTrack.findMany({
         where: {
           sessionId,
@@ -596,6 +598,9 @@ export class LiveRtcService {
           stopRequestedAt: null,
         },
       }),
+      // …and that its words are being kept, when they are (OFF / MANUAL /
+      // AUTO_WHEN_RECORDING, decided in one place).
+      transcriptCaptureState(this.prisma, sessionId, run),
     ]);
     const roleOf = new Map<string, Role>();
     for (const p of present) roleOf.set(p.userId, p.role === 'STUDENT' ? 'STUDENT' : 'TEACHER');
@@ -624,7 +629,8 @@ export class LiveRtcService {
       },
       maxSpeakers: maxSpeakers(),
       recording: recording > 0,
-      transcribing: transcriptionConfig().enabled,
+      transcribing: capture.active,
+      transcription: g.role === 'TEACHER' ? { mode: capture.mode, available: capture.available } : undefined,
       participants: [...roleOf.entries()].map(([uid, role]) => ({
         userId: uid,
         name: nameOf.get(uid) ?? '',

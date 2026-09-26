@@ -285,9 +285,16 @@ describe('what each side is allowed to read', () => {
   });
 
   it('gives the student the summary once it is shared', async () => {
+    // Checkpoint C: the summary's own visibility decides (summaryForStudents is
+    // the old single switch, kept in step by setVisibility).
     const { service } = world({
       booked: true,
-      session: { summaryStatus: 'READY', summary: { summary: 'x' }, summaryForStudents: true },
+      session: {
+        summaryStatus: 'READY',
+        summary: { summary: 'x' },
+        summaryForStudents: true,
+        summaryVisibility: 'STUDENTS',
+      },
     });
     const d = await service.sessionDetail('u_student', 'ls1');
     expect(d.summary.data).toEqual({ summary: 'x' });

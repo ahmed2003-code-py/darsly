@@ -1,6 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveService } from './live.service';
+import { LiveRetentionService } from './retention/live-retention.service';
+
+/** Temporary media is swept this often (it is hours old by the time it matters). */
+export const LIVE_RETENTION_EVERY_MS = 30 * 60_000;
 
 /** How often the sweep looks for classes whose time is up. */
 export const LIVE_END_SWEEP_MS = 15_000;
@@ -35,7 +39,9 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly live: LiveService,
     @Optional() private readonly recordings?: LiveRecordingService,
+    @Optional() private readonly retention?: LiveRetentionService,
   ) {}
+  private lastRetention = 0;
 
   onModuleInit(): void {
     if ((process.env.LIVE_END_WORKER_ENABLED ?? 'true') !== 'true') {
@@ -92,6 +98,15 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
       await this.recordings?.sweepStale();
     } catch (e) {
       this.logger.error(`live recording sweep error: ${(e as Error).message}`);
+    }
+    try {
+      // Transcription audio and failed recordings' pieces past their window.
+      if (this.retention && Date.now() - this.lastRetention >= LIVE_RETENTION_EVERY_MS) {
+        this.lastRetention = Date.now();
+        await this.retention.sweep();
+      }
+    } catch (e) {
+      this.logger.error(`live retention sweep error: ${(e as Error).message}`);
     } finally {
       this.running = false;
     }

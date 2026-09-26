@@ -1156,6 +1156,8 @@ model VideoJob {
   leaseExpiresAt DateTime?
   errorClass     String? // RETRYABLE | TERMINAL
   error          String?
+  /// When a worker first picked it up — queue wait vs encode time.
+  startedAt      DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -2389,6 +2391,33 @@ model LiveSession {
   /// published to a class before they have read it.
   summaryForStudents Boolean            @default(false)
 
+  /// Who may see each thing the lesson left behind — three separate choices,
+  /// because they are three separate things: a teacher may share the notes
+  /// and keep the recording, or share the recording and keep the raw words.
+  /// Staff of the academy always see all three; STUDENTS means the students
+  /// booked on this session. `summaryForStudents` above is the old single
+  /// switch (it covered summary AND recording): kept in step with
+  /// summaryVisibility for older readers, and to be dropped later.
+  recordingVisibility  LiveVisibility @default(PRIVATE)
+  transcriptVisibility LiveVisibility @default(PRIVATE)
+  summaryVisibility    LiveVisibility @default(PRIVATE)
+
+  /// Whether this lesson's words are captured (Cloudflare classes; the global
+  /// LIVE_TRANSCRIPTION_ENABLED switch still has to be on). Separate from
+  /// recording on purpose: a lesson can be recorded and not transcribed, or
+  /// transcribed and not recorded.
+  transcriptionMode     LiveTranscriptionMode @default(OFF)
+  /// MANUAL mode: when the teacher last switched capture on / off.
+  transcriptCaptureOnAt  DateTime?
+  transcriptCaptureOffAt DateTime?
+  /// The transcript in the order it was spoken, one entry per captured piece:
+  /// [{ startSec, durationSec, text }] with startSec from the class's start.
+  /// transcriptText is the same words joined, for the summary.
+  transcriptSegments     Json?
+  /// Facts about how the transcript was made: pieces, failed pieces, audio
+  /// seconds, model, estimated cost, timings. Never any of the words.
+  transcriptMeta         Json?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -2401,6 +2430,7 @@ model LiveSession {
   hands          LiveHand[]
   recordings     LiveRecording[]
   audioSegments  LiveAudioSegment[]
+  replays        LiveReplaySession[]
 
   @@index([tenantId, startsAt])
   @@index([academyId, startsAt])
@@ -2427,6 +2457,12 @@ model LiveAudioSegment {
   sizeBytes Int
   /// This piece's words, once transcribed — a retry does not pay for it again.
   text      String?
+  /// Length of the piece as the teacher's page measured it (for cost).
+  durationMs    Int?
+  /// Set when this one piece could not be transcribed for good (the rest of
+  /// the lesson still is: the transcript is then marked partial).
+  error         String?
+  transcribedAt DateTime?
   createdAt DateTime    @default(now())
 
   @@unique([sessionId, roomName, seq])
@@ -2578,11 +2614,60 @@ model LiveRecording {
   captureStartedAt DateTime?
   handedAt         DateTime?
   readyAt          DateTime?
+  /// When joining the pieces first began, and when the recording was given up
+  /// on — the two ends of the timeline B.7 could not measure.
+  finalizeStartedAt DateTime?
+  failedAt          DateTime?
+  /// Finalize attempts alone (`attempts` also counts recorder takeovers): a
+  /// finalize that keeps failing stops at a cap instead of retrying forever.
+  finalizeAttempts  Int                @default(0)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
   @@index([status, leaseUntil])
   @@index([sessionId, createdAt])
+}
+
+/// Who may see one of a lesson's artefacts (recording, transcript, summary).
+enum LiveVisibility {
+  /// The teacher and the academy's staff only.
+  PRIVATE
+  /// Also the students booked on the session.
+  STUDENTS
+}
+
+enum LiveTranscriptionMode {
+  OFF
+  /// The teacher switches capture on and off in the classroom.
+  MANUAL
+  /// Capture runs whenever the class is being recorded.
+  AUTO_WHEN_RECORDING
+}
+
+/// One viewing of a live lesson's recording — the replay's counterpart of
+/// PlaybackSession (which belongs to course lessons). The signed HLS token
+/// carries this row's id; the key endpoint re-checks it, and re-checks that
+/// the viewer may still watch, before it releases the content key.
+model LiveReplaySession {
+  id              String      @id @default(cuid())
+  watermarkId     String      @unique
+  liveSessionId   String
+  liveSession     LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Cascade)
+  recordingId     String
+  videoAssetId    String
+  userId          String
+  /// TEACHER (the teacher or academy staff) or STUDENT, as decided at start.
+  role            String
+  tenantId        String
+  deviceSessionId String?
+  ip              String?
+  userAgent       String?
+  startedAt       DateTime    @default(now())
+  expiresAt       DateTime
+  endedAt         DateTime?
+
+  @@index([liveSessionId, startedAt])
+  @@index([userId, startedAt])
 }
 
 enum LiveRecordingStatus {

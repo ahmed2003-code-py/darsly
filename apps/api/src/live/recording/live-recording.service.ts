@@ -18,6 +18,8 @@ export const ACTIVE_RECORDING = ['REQUESTED', 'RECORDING', 'STOPPING'] as const;
 export const UNCLAIMED_AFTER_MS = 2 * 60_000;
 /** A recorder silent this long after its class ended is not coming back. */
 export const RECORDER_LOST_AFTER_MS = 5 * 60_000;
+/** Packaging still not done this long after hand-over has stalled for good. */
+export const PROCESSING_STALL_MS = 6 * 3600_000;
 
 /**
  * The teacher's "record" button, for a class Darsly hosts (Cloudflare).
@@ -74,7 +76,7 @@ export class LiveRecordingService {
     });
     if (r.created) {
       this.logger.log(
-        `live.rec.requested liveSession=${id} recording=${r.rec.id} actor=${actorUserId}`,
+        `live.recording.requested liveSession=${id} recording=${r.rec.id} actor=${actorUserId}`,
       );
       this.rtc.changed(id);
     }
@@ -93,7 +95,7 @@ export class LiveRecordingService {
         // Never started: nothing was recorded, so there is nothing to keep.
         await this.prisma.liveRecording.updateMany({
           where: { id: rec.id, status: 'REQUESTED' },
-          data: { stopRequestedAt: now, status: 'FAILED', error: 'STOPPED_BEFORE_START' },
+          data: { stopRequestedAt: now, status: 'FAILED', error: 'STOPPED_BEFORE_START', failedAt: now },
         });
       } else {
         await this.prisma.liveRecording.updateMany({
@@ -103,7 +105,7 @@ export class LiveRecordingService {
       }
     }
     if (active.length) {
-      this.logger.log(`live.rec.stop-requested liveSession=${id} recordings=${active.length}`);
+      this.logger.log(`live.recording.stop_requested liveSession=${id} recordings=${active.length}`);
       this.rtc.changed(id);
     }
     return { id, stopping: active.length };
@@ -139,11 +141,15 @@ export class LiveRecordingService {
         where: { id: r.videoAssetId! },
         select: { status: true, durationSec: true },
       });
+      // Still packaging after this long is not coming back (the video worker
+      // is off everywhere, say): it fails rather than processing forever.
+      const stalled =
+        !!r.handedAt && Date.now() - r.handedAt.getTime() > PROCESSING_STALL_MS;
       const next = !asset
         ? 'FAILED'
         : asset.status === 'READY'
           ? 'READY'
-          : asset.status === 'FAILED'
+          : asset.status === 'FAILED' || stalled
             ? 'FAILED'
             : null;
       if (!next) continue;
@@ -153,7 +159,16 @@ export class LiveRecordingService {
           data: {
             status: next,
             ...(next === 'READY' ? { readyAt: new Date() } : {}),
-            ...(next === 'FAILED' ? { error: asset ? 'PACKAGING_FAILED' : 'ASSET_MISSING' } : {}),
+            ...(next === 'FAILED'
+              ? {
+                  failedAt: new Date(),
+                  error: !asset
+                    ? 'ASSET_MISSING'
+                    : asset.status === 'FAILED'
+                      ? 'PACKAGING_FAILED'
+                      : 'PROCESSING_STALLED',
+                }
+              : {}),
             ...(asset?.durationSec ? { durationSec: asset.durationSec } : {}),
           },
         }),
@@ -168,7 +183,9 @@ export class LiveRecordingService {
         }),
       ]);
       this.logger.log(
-        `live.rec.${next.toLowerCase()} liveSession=${r.sessionId} recording=${r.id}`,
+        `live.recording.${next.toLowerCase()} liveSession=${r.sessionId} recording=${r.id}` +
+          (r.handedAt ? ` processingMs=${Date.now() - r.handedAt.getTime()}` : '') +
+          ` sinceRequestMs=${Date.now() - r.createdAt.getTime()}`,
       );
       changed++;
     }
@@ -225,6 +242,7 @@ export class LiveRecordingService {
           status: 'FAILED',
           error: r.createdAt.getTime() < now - UNCLAIMED_AFTER_MS ? 'NOT_CLAIMED' : 'NEVER_STARTED',
           stopRequestedAt: new Date(now),
+          failedAt: new Date(now),
         },
       });
       if (done.count) {
@@ -232,7 +250,7 @@ export class LiveRecordingService {
         await this.mirror(r.id);
         this.rtc.changed(r.sessionId);
         this.logger.warn(
-          `live.rec.not-started recording=${r.id} liveSession=${r.sessionId} waitedMs=${now - r.createdAt.getTime()}`,
+          `live.recording.failed recording=${r.id} liveSession=${r.sessionId} reason=NOT_STARTED waitedMs=${now - r.createdAt.getTime()}`,
         );
       }
     }
@@ -260,7 +278,7 @@ export class LiveRecordingService {
       if (done.count) {
         recovered++;
         this.logger.warn(
-          `live.rec.recorder-lost recording=${r.id} liveSession=${r.sessionId} → finalize`,
+          `live.recording.recorder_lost recording=${r.id} liveSession=${r.sessionId} → finalize`,
         );
       }
     }

@@ -23,6 +23,12 @@ const HEARTBEAT_MS = 10_000;
 const TICK_MS = 3_000;
 /** A recording restarted more than this many times is given up on. */
 export const RECORDER_MAX_ATTEMPTS = 6;
+/**
+ * Joining the pieces is retried with backoff (15s, 30s, … 10 min), and given
+ * up on after this many failures — "processing" must end, one way or the
+ * other. The pieces stay in storage for the failed-media retention window.
+ */
+export const FINALIZE_MAX_ATTEMPTS = 6;
 
 export function recorderConfig(env: NodeJS.ProcessEnv = process.env) {
   const segMin = Number(env.LIVE_RECORDER_SEGMENT_MIN);
@@ -242,7 +248,8 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
       job.page = page;
       job.hb = setInterval(() => void this.heartbeat(job), HEARTBEAT_MS);
       this.logger.log(
-        `live.rec.recording liveSession=${rec.sessionId} recording=${rec.id} worker=${this.workerId} segment=${job.seg} attempt=${rec.attempts}`,
+        `live.recording.claimed liveSession=${rec.sessionId} recording=${rec.id} worker=${this.workerId} segment=${job.seg} attempt=${rec.attempts}` +
+          (rec.claimedAt ? ` waitMs=${rec.claimedAt.getTime() - rec.createdAt.getTime()}` : ''),
       );
       await page.evaluate((a) => (window as any).__start(a), {
         iceServers: [CF_STUN],
@@ -277,7 +284,9 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
       });
       return;
     }
-    this.logger.log(`live.rec.stopped recording=${rec.id} reason=${reason}`);
+    this.logger.log(
+      `live.recording.capture_ended liveSession=${rec.sessionId} recording=${rec.id} reason=${reason} bytes=${job.bytes}`,
+    );
     await this.toFinalize(rec.id, null);
   }
 
@@ -297,6 +306,12 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
           .updateMany({
             where: { id: job.rec.id, captureStartedAt: null },
             data: { captureStartedAt: new Date() },
+          })
+          .then((r) => {
+            if (r.count)
+              this.logger.log(
+                `live.recording.capture_started liveSession=${job.rec.sessionId} recording=${job.rec.id}`,
+              );
           })
           .catch(() => undefined);
       }
@@ -459,8 +474,12 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   private async fail(id: string, error: string) {
-    await this.prisma.liveRecording.update({ where: { id }, data: { status: 'FAILED', error } });
+    await this.prisma.liveRecording.update({
+      where: { id },
+      data: { status: 'FAILED', error, failedAt: new Date(), leaseOwner: null, leaseUntil: null },
+    });
     await this.mirror(id);
+    this.logger.warn(`live.recording.failed recording=${id} reason=${error}`);
   }
 
   /** A recording waiting to be joined and handed over — claimed like a recording. */
@@ -469,6 +488,7 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
       UPDATE "LiveRecording" r SET
         "leaseOwner" = ${this.workerId},
         "leaseUntil" = ${UTC_NOW} + make_interval(secs => 300),
+        "finalizeStartedAt" = COALESCE(r."finalizeStartedAt", ${UTC_NOW}),
         "updatedAt" = ${UTC_NOW}
       WHERE r.id = (
         SELECT id FROM "LiveRecording"
@@ -487,6 +507,10 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
    */
   async finalize(rec: LiveRecording): Promise<void> {
     const dir = path.join(this.cfg.dir, rec.id);
+    const t0 = Date.now();
+    this.logger.log(
+      `live.recording.finalize_started liveSession=${rec.sessionId} recording=${rec.id} segments=${rec.segments} attempt=${rec.finalizeAttempts + 1}`,
+    );
     try {
       await fs.mkdir(dir, { recursive: true });
       // Pieces recorded elsewhere (another recorder, a replaced container)
@@ -542,7 +566,7 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
         return asset.id;
       });
       this.logger.log(
-        `live.rec.handed recording=${rec.id} asset=${handed} bytes=${out.sizeBytes} duration=${out.durationSec}s segments=${rec.segments} lost=${missing.length}`,
+        `live.recording.asset_created liveSession=${rec.sessionId} recording=${rec.id} asset=${handed} bytes=${out.sizeBytes} duration=${out.durationSec}s segments=${rec.segments} lost=${missing.length} finalizeMs=${Date.now() - t0}`,
       );
       // The pieces are in the joined file now.
       for (let n = 0; n < rec.segments; n++) {
@@ -551,16 +575,36 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
       await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
     } catch (e) {
       if (e instanceof AlreadyHanded) return;
-      this.logger.warn(`live.rec.finalize-failed recording=${rec.id}: ${(e as Error).message}`);
+      const tries = rec.finalizeAttempts + 1;
+      this.logger.warn(
+        `live.recording.finalize_failed recording=${rec.id} attempt=${tries}/${FINALIZE_MAX_ATTEMPTS}: ${(e as Error).message}`,
+      );
+      if (tries >= FINALIZE_MAX_ATTEMPTS) {
+        // Given up: the recording says FAILED rather than "processing" forever.
+        const r = await this.prisma.liveRecording.updateMany({
+          where: { id: rec.id, status: 'UPLOADING' },
+          data: {
+            status: 'FAILED',
+            error: `FINALIZE_GAVE_UP: ${(e as Error).message.slice(0, 280)}`,
+            finalizeAttempts: tries,
+            failedAt: new Date(),
+            leaseOwner: null,
+            leaseUntil: null,
+          },
+        });
+        if (r.count) {
+          await this.mirror(rec.id);
+          this.logger.error(`live.recording.failed recording=${rec.id} reason=FINALIZE_GAVE_UP`);
+        }
+        return;
+      }
       await this.prisma.liveRecording.updateMany({
         where: { id: rec.id, status: 'UPLOADING' },
         data: {
           error: `FINALIZE: ${(e as Error).message.slice(0, 300)}`,
-          attempts: { increment: 1 },
+          finalizeAttempts: tries,
           // Back off before the next try.
-          leaseUntil: new Date(
-            Date.now() + Math.min(10 * 60_000, 15_000 * 2 ** Math.min(rec.attempts, 6)),
-          ),
+          leaseUntil: new Date(Date.now() + Math.min(10 * 60_000, 15_000 * 2 ** Math.min(tries - 1, 6))),
           leaseOwner: null,
         },
       });

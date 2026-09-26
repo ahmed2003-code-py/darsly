@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DRM_PROVIDER, IDrmProvider } from '../../video/drm/drm.provider';
 import { LiveService } from '../live.service';
+import { paidReplayVerdict } from '../commerce/replay-entitlement';
 
 /** However long the recording, a replay token is never good for longer than this. */
 export const REPLAY_MAX_TTL_SEC = 4 * 3600;
@@ -64,6 +65,24 @@ export class LiveReplayService {
     }
     if (role === 'STUDENT' && s.recordingVisibility !== 'STUDENTS') {
       throw new ForbiddenException({ message: 'Recording not shared', code: 'RECORDING_NOT_SHARED' });
+    }
+    if (role === 'STUDENT') {
+      // A paid seat carries its own replay rights, frozen at purchase.
+      const booking = await this.prisma.liveBooking.findFirst({
+        where: { sessionId: liveSessionId, student: { userId: user.sub } },
+        select: {
+          purchase: { select: { status: true, replayPolicy: true, replayDays: true } },
+          session: { select: { startsAt: true, durationMin: true, endedAt: true } },
+        },
+      });
+      const verdict = booking ? paidReplayVerdict(booking.purchase ?? null, booking.session) : { ok: true as const };
+      if (!verdict.ok) {
+        throw new ForbiddenException({
+          message: 'Your seat does not include watching the recording',
+          code: 'REPLAY_NOT_INCLUDED',
+          reason: verdict.reason,
+        });
+      }
     }
     // The latest recording that finished — a later one that failed does not
     // hide one that is ready.

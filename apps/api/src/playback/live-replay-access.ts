@@ -1,6 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import type { PrismaClient } from '@prisma/client';
 import type { PlaybackClaims } from './signed-url.service';
+import { paidReplayVerdict } from '../live/commerce/replay-entitlement';
 
 type Db = Pick<
   PrismaClient,
@@ -36,6 +37,9 @@ export async function assertLiveReplayKey(db: Db, claims: PlaybackClaims): Promi
           recordingVisibility: true,
           academyId: true,
           tenantId: true,
+          startsAt: true,
+          durationMin: true,
+          endedAt: true,
           teacher: { select: { userId: true } },
         },
       },
@@ -78,7 +82,14 @@ export async function assertLiveReplayKey(db: Db, claims: PlaybackClaims): Promi
     student &&
     (await db.liveBooking.findUnique({
       where: { sessionId_studentId: { sessionId: s.id, studentId: student.id } },
-      select: { id: true },
+      select: {
+        id: true,
+        purchase: { select: { status: true, replayPolicy: true, replayDays: true } },
+      },
     }));
   if (!booked) return deny('Not in this session');
+  // A paid seat watches only what it bought, and only for as long: asked on
+  // every key, so a refund or a lapsed window stops a replay mid-way.
+  const verdict = paidReplayVerdict(booked.purchase ?? null, s);
+  if (!verdict.ok) return deny(`Replay not included: ${verdict.reason}`);
 }

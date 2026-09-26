@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -28,9 +29,17 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { IsOptionalId, LIMITS } from '../common/validation';
 
-import { JwtPayload, Role } from '@darsly/shared-types';
+import {
+  JwtPayload,
+  LIVE_REFUND_POLICIES,
+  LIVE_REPLAY_POLICIES,
+  LiveRefundPolicy,
+  LiveReplayPolicy,
+  Role,
+} from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -63,6 +72,12 @@ class CreateLiveDto {
   @IsOptionalId() teacherUserId?: string | null;
   @IsOptionalId() groupId?: string | null;
   @IsOptional() @IsIn(TRANSCRIPTION_MODES) transcriptionMode?: (typeof TRANSCRIPTION_MODES)[number];
+  @IsOptional() @IsIn(['FREE', 'PAID']) accessMode?: 'FREE' | 'PAID';
+  // Piasters. Bounds are the product's (LiveService), so a refusal names its field.
+  @IsOptional() @IsInt() @Min(-1_000_000_000) @Max(1_000_000_000) priceCents?: number | null;
+  @IsOptional() @IsIn(LIVE_REFUND_POLICIES) refundPolicy?: LiveRefundPolicy;
+  @IsOptional() @IsIn(LIVE_REPLAY_POLICIES) replayPolicy?: LiveReplayPolicy;
+  @IsOptional() @IsInt() @Min(-1_000_000) @Max(1_000_000) replayDays?: number | null;
 }
 
 class TranscriptionDto {
@@ -122,6 +137,17 @@ class UpdateLiveDto {
     string | null;
   @IsOptionalId() teacherUserId?: string | null;
   @IsOptionalId() groupId?: string | null;
+  @IsOptional() @IsIn(['FREE', 'PAID']) accessMode?: 'FREE' | 'PAID';
+  // Piasters. Bounds are the product's (LiveService), so a refusal names its field.
+  @IsOptional() @IsInt() @Min(-1_000_000_000) @Max(1_000_000_000) priceCents?: number | null;
+  @IsOptional() @IsIn(LIVE_REFUND_POLICIES) refundPolicy?: LiveRefundPolicy;
+  @IsOptional() @IsIn(LIVE_REPLAY_POLICIES) replayPolicy?: LiveReplayPolicy;
+  @IsOptional() @IsInt() @Min(-1_000_000) @Max(1_000_000) replayDays?: number | null;
+}
+
+class PricePreviewQuery {
+  @Type(() => Number) @IsInt() @Min(1) @Max(1_000_000_000) priceCents: number;
+  @IsOptionalId() teacherUserId?: string | null;
 }
 
 /** Organisation + authorship scope from the validated context; the body never decides either. */
@@ -158,6 +184,19 @@ export class LiveController {
       defaultTranscriptionMode: cfg.defaultMode,
       serverNow: new Date().toISOString(),
     };
+  }
+
+  /**
+   * What a PAID price means, worked out by the server under the terms in force
+   * for this academy — what the student pays, Darsly's fee, and (in a Center)
+   * each side's share. A preview only: nothing is stored, and the terms
+   * themselves are not editable from here.
+   */
+  @Get('teacher/live/price-preview')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Server-side price breakdown for a PAID session' })
+  pricePreview(@CurrentAcademy() ctx: AcademyContext, @Query() q: PricePreviewQuery) {
+    return this.live.pricePreview(scopeOf(ctx), Number(q.priceCents), q.teacherUserId ?? null);
   }
 
   @Get('teacher/live')

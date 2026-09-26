@@ -11,7 +11,10 @@ import {
 } from '@nestjs/common';
 import { AcademyService } from '../academy/academy.service';
 import {
+  LiveAccessMode,
   LivePipelineStatus,
+  LiveRefundPolicy,
+  LiveReplayPolicy,
   LiveSessionStatus,
   LiveTranscriptionMode,
   LiveVisibility,
@@ -21,7 +24,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { LIVE_MAX_DURATION_MIN } from './live-timing';
-import { validateLiveSession } from '@darsly/shared-types';
+import {
+  LIVE_PRICE_MAX_CENTS,
+  LIVE_PRICE_MIN_CENTS,
+  LIVE_REPLAY_DAYS_MAX,
+  validateLiveSession,
+} from '@darsly/shared-types';
+import { CommercialTermsService, pricingRefusal, toSnapshot } from '../commerce/commercial-terms.service';
+import { priceLiveSeat, PricingError } from '../commerce/pricing';
 import { pipelineStages } from './live-pipeline';
 import { recordingStage } from './recording/recording-stage';
 import { LiveProviders } from './providers/live-providers';
@@ -118,7 +128,17 @@ export interface UpsertLiveDto {
   groupId?: string | null;
   /** OFF / MANUAL / AUTO_WHEN_RECORDING; the platform default when absent. */
   transcriptionMode?: LiveTranscriptionMode;
+  /** FREE (default) or PAID — explicit, never inferred from a price. */
+  accessMode?: LiveAccessMode;
+  /** PAID only: the seller's price in piasters. */
+  priceCents?: number | null;
+  refundPolicy?: LiveRefundPolicy;
+  replayPolicy?: LiveReplayPolicy;
+  replayDays?: number | null;
 }
+
+/** A field-level refusal in the same shape LIVE_SESSION_RULES produces. */
+type CommerceFieldError = { field: string; code: string; params?: Record<string, number> };
 
 /**
  * Who is acting on live sessions and where. Built by the controller from the
@@ -147,7 +167,88 @@ export class LiveService {
     private readonly academy: AcademyService,
     /** Only the lesson-audio upload writes to it. */
     @Optional() private readonly storage?: StorageProvider,
+    /** Prices a PAID session; a FREE one never needs it. */
+    @Optional() private readonly terms?: CommercialTermsService,
   ) {}
+
+  /**
+   * FREE or PAID, and what PAID needs: a price inside the bounds, a known
+   * refund and replay policy, and no external meeting link — a paid seat is
+   * enforced by Darsly's own classroom, and a Zoom link handed to a booked
+   * student is a link anyone can be forwarded.
+   *
+   * `existing` is the stored session on an edit: the fields not being changed
+   * are read from it, so a partial edit is judged as the whole it produces.
+   */
+  private commerceFieldErrors(
+    dto: Partial<UpsertLiveDto>,
+    existing?: {
+      accessMode: LiveAccessMode;
+      priceCents: number | null;
+      replayPolicy: LiveReplayPolicy;
+      replayDays: number | null;
+      joinUrl: string | null;
+    },
+  ): CommerceFieldError[] {
+    const out: CommerceFieldError[] = [];
+    const mode = dto.accessMode ?? existing?.accessMode ?? 'FREE';
+    if (mode !== 'FREE' && mode !== 'PAID') out.push({ field: 'accessMode', code: 'ACCESS_MODE_INVALID' });
+    const price = dto.priceCents !== undefined ? dto.priceCents : existing?.priceCents ?? null;
+    if (mode === 'PAID') {
+      if (price == null) out.push({ field: 'priceCents', code: 'PRICE_REQUIRED' });
+      else if (!Number.isSafeInteger(price)) out.push({ field: 'priceCents', code: 'PRICE_INVALID' });
+      else if (price < LIVE_PRICE_MIN_CENTS)
+        out.push({ field: 'priceCents', code: 'PRICE_TOO_LOW', params: { min: LIVE_PRICE_MIN_CENTS } });
+      else if (price > LIVE_PRICE_MAX_CENTS)
+        out.push({ field: 'priceCents', code: 'PRICE_TOO_HIGH', params: { max: LIVE_PRICE_MAX_CENTS } });
+      const joinUrl = dto.joinUrl !== undefined ? dto.joinUrl : existing?.joinUrl ?? null;
+      if (joinUrl) out.push({ field: 'joinUrl', code: 'PAID_NEEDS_DARSLY_CLASSROOM' });
+    } else if (dto.priceCents != null) {
+      out.push({ field: 'priceCents', code: 'PRICE_ON_FREE_SESSION' });
+    }
+    const replay = dto.replayPolicy ?? existing?.replayPolicy ?? 'INCLUDED_FOREVER';
+    const days = dto.replayDays !== undefined ? dto.replayDays : dto.replayPolicy ? null : existing?.replayDays ?? null;
+    if (replay === 'INCLUDED_DAYS') {
+      if (days == null || !Number.isSafeInteger(days) || days < 1 || days > LIVE_REPLAY_DAYS_MAX)
+        out.push({ field: 'replayDays', code: 'REPLAY_DAYS_INVALID', params: { max: LIVE_REPLAY_DAYS_MAX } });
+    } else if (dto.replayDays != null) {
+      out.push({ field: 'replayDays', code: 'REPLAY_DAYS_UNUSED' });
+    }
+    return out;
+  }
+
+  /** The commerce columns an accepted DTO writes (FREE clears the price). */
+  private commerceData(dto: Partial<UpsertLiveDto>, existing?: { accessMode: LiveAccessMode }) {
+    const mode = dto.accessMode ?? existing?.accessMode;
+    return {
+      ...(dto.accessMode !== undefined ? { accessMode: dto.accessMode } : {}),
+      ...(mode === 'FREE' ? { priceCents: null } : dto.priceCents !== undefined ? { priceCents: dto.priceCents } : {}),
+      ...(dto.refundPolicy !== undefined ? { refundPolicy: dto.refundPolicy } : {}),
+      ...(dto.replayPolicy !== undefined
+        ? { replayPolicy: dto.replayPolicy, replayDays: dto.replayPolicy === 'INCLUDED_DAYS' ? dto.replayDays ?? null : null }
+        : dto.replayDays !== undefined
+          ? { replayDays: dto.replayDays }
+          : {}),
+    };
+  }
+
+  /**
+   * Price a PAID session under the terms in force for its academy, with the
+   * split agreed for its teacher. Refuses a price the terms cannot sell (a
+   * deducted fixed fee as large as the price) and a Center with no agreed
+   * split — both before anyone could buy a seat.
+   */
+  async priceSession(academyId: string, tenantId: string, priceCents: number, discountCents = 0) {
+    if (!this.terms) throw new Error('CommercialTermsService is not available');
+    const terms = await this.terms.effectiveFor(academyId);
+    const split = await this.terms.splitFor(academyId, tenantId);
+    try {
+      return priceLiveSeat({ basePriceCents: priceCents, discountCents, terms: toSnapshot(terms), split });
+    } catch (e) {
+      if (e instanceof PricingError) pricingRefusal(e);
+      throw e;
+    }
+  }
 
   // ── Teacher ────────────────────────────────────────────────────────────────
 
@@ -159,8 +260,9 @@ export class LiveService {
   private assertValidSession(
     dto: Partial<UpsertLiveDto>,
     opts: { creating: boolean; checkPast: boolean },
+    existing?: Parameters<LiveService['commerceFieldErrors']>[1],
   ) {
-    const errors = validateLiveSession(
+    const errors: CommerceFieldError[] = validateLiveSession(
       {
         title: dto.title ?? (opts.creating ? '' : 'xx'),
         description: dto.description ?? '',
@@ -170,6 +272,7 @@ export class LiveService {
       },
       opts.checkPast ? Date.now() : -Infinity,
     );
+    errors.push(...this.commerceFieldErrors(dto, existing));
     if (errors.length) {
       throw new BadRequestException({
         message: 'Some fields are invalid',
@@ -188,6 +291,11 @@ export class LiveService {
       dto.teacherUserId ?? scope.userId,
     );
     const groupId = await this.resolveGroup(scope, dto.groupId ?? null, teacher.userId);
+    // A paid seat must be sellable before it is offered: the academy's terms
+    // and (in a Center) the teacher's split are checked now, not at checkout.
+    if (dto.accessMode === 'PAID') {
+      await this.priceSession(scope.academyId, teacher.teacherProfileId, dto.priceCents as number);
+    }
     const startsAt = new Date(dto.startsAt);
     const durationMin = dto.durationMin ?? 60;
     // The overlap check and the insert are one step, one teacher at a time: a
@@ -217,11 +325,36 @@ export class LiveService {
           // The platform's default; the teacher may change it before or during
           // the class. Nothing is captured while the global switch is off.
           transcriptionMode: dto.transcriptionMode ?? transcriptionConfig().defaultMode,
+          ...this.commerceData(dto),
         },
       });
     });
     await this.announceToStudents(session, session.title, session.startsAt);
     return session;
+  }
+
+  /** The teacher-facing breakdown of a PAID price (see LiveController.pricePreview). */
+  async pricePreview(scope: LiveScope, priceCents: number, teacherUserId: string | null) {
+    const errors = this.commerceFieldErrors({ accessMode: 'PAID', priceCents });
+    if (errors.length)
+      throw new BadRequestException({ message: 'Invalid price', code: 'LIVE_SESSION_INVALID', fields: errors });
+    const teacher = await this.academy.assertAssignableTeacher(scope.academyId, teacherUserId ?? scope.userId);
+    const p = await this.priceSession(scope.academyId, teacher.teacherProfileId, priceCents);
+    const academy = await this.prisma.academy.findUnique({
+      where: { id: scope.academyId },
+      select: { kind: true },
+    });
+    return {
+      kind: academy?.kind ?? 'PERSONAL',
+      currency: 'EGP',
+      priceCents: p.basePriceCents,
+      feeCents: p.feeCents,
+      feeMode: p.feeMode,
+      studentPaysCents: p.studentPaysCents,
+      teacherCents: p.teacherCents,
+      centerCents: p.centerCents,
+      teacherSharePercent: p.teacherSharePercent,
+    };
   }
 
   /** A group must be offered in this academy, and the teacher must be assigned to it (an OWNER may take their own group unassigned). */
@@ -303,11 +436,16 @@ export class LiveService {
     const existing = await this.assertOwned(scope, id);
     // A start time is only refused for being in the past when it is the thing
     // being changed: renaming yesterday's class is not rescheduling it.
-    this.assertValidSession(dto, {
-      creating: false,
-      checkPast:
-        dto.startsAt != null && new Date(dto.startsAt).getTime() !== existing.startsAt.getTime(),
-    });
+    this.assertValidSession(
+      dto,
+      {
+        creating: false,
+        checkPast:
+          dto.startsAt != null && new Date(dto.startsAt).getTime() !== existing.startsAt.getTime(),
+      },
+      existing,
+    );
+    await this.assertCommerceEditable(existing, dto);
     let teacher: { userId: string; teacherProfileId: string } | null = null;
     if (dto.teacherUserId != null && dto.teacherUserId !== existing.teacherUserId) {
       teacher = await this.academy.assertAssignableTeacher(scope.academyId, dto.teacherUserId);
@@ -346,8 +484,43 @@ export class LiveService {
         ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
         ...(dto.courseId !== undefined ? { courseId: dto.courseId } : {}),
         ...(dto.joinUrl !== undefined ? { joinUrl: dto.joinUrl } : {}),
+        ...this.commerceData(dto, existing),
       },
     });
+  }
+
+  /**
+   * What an edit may not change once people have committed to the session.
+   *
+   * FREE ↔ PAID is fixed from the first booking: flipping it would either
+   * charge people who booked for free or give away seats others paid for. A
+   * new price is allowed — every purchase already made keeps the price it was
+   * made at — but it is still checked against the terms, like a new session.
+   */
+  private async assertCommerceEditable(
+    existing: {
+      id: string;
+      academyId: string | null;
+      tenantId: string;
+      accessMode: LiveAccessMode;
+      priceCents: number | null;
+    },
+    dto: Partial<UpsertLiveDto>,
+  ) {
+    const modeChanges = dto.accessMode !== undefined && dto.accessMode !== existing.accessMode;
+    if (modeChanges) {
+      const committed = await this.prisma.liveBooking.count({ where: { sessionId: existing.id } });
+      if (committed > 0)
+        throw new ConflictException({
+          message: 'Students have already booked — a session cannot switch between free and paid now',
+          code: 'ACCESS_MODE_LOCKED',
+        });
+    }
+    const mode = dto.accessMode ?? existing.accessMode;
+    const price = dto.priceCents !== undefined ? dto.priceCents : existing.priceCents;
+    if (mode === 'PAID' && (modeChanges || dto.priceCents !== undefined) && price != null) {
+      await this.priceSession(existing.academyId ?? existing.tenantId, existing.tenantId, price);
+    }
   }
 
   /**

@@ -113,6 +113,55 @@ enum FeeType {
   FIXED
 }
 
+/// How Darsly's fee meets the seller's price (CommercialTerms only; courses
+/// are always ADDITIVE through Academy.feeType/feeValue).
+///  ADDITIVE: the student pays price + fee; the seller keeps the price.
+///  DEDUCTED: the student pays the price; the fee comes out of it.
+enum CommercialFeeMode {
+  ADDITIVE
+  DEDUCTED
+}
+
+/// Darsly's commercial agreement with an academy — for LIVE sales.
+///
+/// Append-only: a change is a new row, never an edit (a database trigger
+/// refuses UPDATE), and every LivePurchase names the row it was priced under,
+/// so tomorrow's terms can never reprice yesterday's sale. The row in force for
+/// an academy is its latest with `effectiveFrom <= now`; an academy with none
+/// falls back to the latest platform default (academyId = null). A solo
+/// teacher is their PERSONAL academy, so one shape covers teachers and Centers.
+///
+/// Course pricing is deliberately NOT moved here yet: courses keep reading
+/// Academy.feeType/feeValue, unchanged.
+///
+/// Money is integers only: a percentage is basis points (100 = 1%, 750 =
+/// 7.5%), a fixed fee is piasters. CHECK constraints (migration
+/// 20261012100000) refuse a row that is not exactly one of the two, and a
+/// DEDUCTED percentage of 100% or more, which would leave the seller nothing.
+model CommercialTerms {
+  id                           String            @id @default(cuid())
+  /// null = the platform default.
+  academyId                    String?
+  academy                      Academy?          @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  feeType                      FeeType
+  /// PERCENT only: basis points, 0–10000.
+  feeBps                       Int?
+  /// FIXED only: piasters, >= 0.
+  feeFixedCents                Int?
+  feeMode                      CommercialFeeMode
+  /// Whether a student who cancels in time also gets Darsly's fee back. A
+  /// teacher's cancellation, or a class that filled before the payment was
+  /// verified, always refunds everything regardless.
+  feeRefundableOnStudentCancel Boolean           @default(false)
+  effectiveFrom                DateTime          @default(now())
+  /// The platform admin who created this version (null for seeded rows).
+  createdById                  String?
+  note                         String?
+  createdAt                    DateTime          @default(now())
+
+  @@index([academyId, effectiveFrom])
+}
+
 // SaaS Evolution Phase 5 — governs the free-course self-enroll path only.
 // AUTOMATIC (default): today's behavior, unchanged — instant ACTIVE.
 // MANUAL: a free-course request becomes PENDING_APPROVAL; staff approve/reject.
@@ -195,6 +244,8 @@ model Academy {
 
   activationTokens AcademyActivationToken[]
   invitationLinks  AcademyInvitationLink[]
+  /// Darsly's versioned commercial agreement with this academy (Live sales).
+  commercialTerms  CommercialTerms[]
   courses          Course[]
   subjects         AcademySubject[]
 
@@ -2314,6 +2365,35 @@ enum LiveSessionStatus {
   ENDED
 }
 
+/// Whether a seat costs money. Authoritative on its own — a PAID session is
+/// never inferred from a price, and a 100%-off coupon on a PAID session keeps
+/// it PAID (the purchase just costs nothing).
+enum LiveAccessMode {
+  FREE
+  PAID
+}
+
+/// What a student gets back if THEY cancel a paid seat (a teacher's
+/// cancellation always refunds in full). Copied onto each LivePurchase.
+///  FLEXIBLE:  full refund until 1 hour before the start
+///  STANDARD:  full refund until 24 hours before the start
+///  STRICT:    full refund until 7 days before the start
+///  NO_REFUND: no refund on the student's own cancellation
+enum LiveRefundPolicy {
+  FLEXIBLE
+  STANDARD
+  STRICT
+  NO_REFUND
+}
+
+/// Whether a paid seat includes watching the recording afterwards (only ever
+/// once the teacher has shared it — recordingVisibility still decides that).
+enum LiveReplayPolicy {
+  NONE
+  INCLUDED_FOREVER
+  INCLUDED_DAYS
+}
+
 model LiveSession {
   id            String            @id @default(cuid())
   // Authorship: the teacher whose stream this is. Never the organisation.
@@ -2336,6 +2416,16 @@ model LiveSession {
   durationMin   Int               @default(60)
   // null = unlimited seats
   capacity      Int?
+  /// FREE or PAID. Every session that existed before commerce is FREE.
+  accessMode    LiveAccessMode    @default(FREE)
+  /// PAID only: the seller's price in piasters (> 0); null for FREE. What the
+  /// student pays is derived from it and the academy's CommercialTerms.
+  priceCents    Int?
+  currency      String            @default("EGP")
+  refundPolicy  LiveRefundPolicy  @default(STANDARD)
+  replayPolicy  LiveReplayPolicy  @default(INCLUDED_FOREVER)
+  /// INCLUDED_DAYS only: days of replay after the class ends.
+  replayDays    Int?
   /// An external meeting link (Zoom, Meet) the teacher pasted in themselves.
   /// Predates the built-in classroom and still works: a session that has one
   /// and no room of its own keeps sending students there.
@@ -2406,7 +2496,7 @@ model LiveSession {
   /// LIVE_TRANSCRIPTION_ENABLED switch still has to be on). Separate from
   /// recording on purpose: a lesson can be recorded and not transcribed, or
   /// transcribed and not recorded.
-  transcriptionMode     LiveTranscriptionMode @default(OFF)
+  transcriptionMode      LiveTranscriptionMode @default(OFF)
   /// MANUAL mode: when the teacher last switched capture on / off.
   transcriptCaptureOnAt  DateTime?
   transcriptCaptureOffAt DateTime?
@@ -2448,22 +2538,22 @@ model LiveSession {
 /// not recorded. Each piece stands alone (its own WebM header). Deleted once
 /// the transcript is made: the words are kept, the audio is not.
 model LiveAudioSegment {
-  id        String      @id @default(cuid())
-  sessionId String
-  session   LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  roomName  String
-  seq       Int
-  key       String
-  sizeBytes Int
+  id            String      @id @default(cuid())
+  sessionId     String
+  session       LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName      String
+  seq           Int
+  key           String
+  sizeBytes     Int
   /// This piece's words, once transcribed — a retry does not pay for it again.
-  text      String?
+  text          String?
   /// Length of the piece as the teacher's page measured it (for cost).
   durationMs    Int?
   /// Set when this one piece could not be transcribed for good (the rest of
   /// the lesson still is: the transcript is then marked partial).
   error         String?
   transcribedAt DateTime?
-  createdAt DateTime    @default(now())
+  createdAt     DateTime    @default(now())
 
   @@unique([sessionId, roomName, seq])
   @@index([sessionId, createdAt])
@@ -2586,43 +2676,43 @@ enum LiveHandState {
 /// long after. Leased like VideoJob, so a recorder that dies is noticed and
 /// another can take over what is left.
 model LiveRecording {
-  id               String              @id @default(cuid())
-  sessionId        String
-  session          LiveSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  roomName         String
-  tenantId         String
-  status           LiveRecordingStatus @default(REQUESTED)
-  requestedBy      String
+  id                String              @id @default(cuid())
+  sessionId         String
+  session           LiveSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName          String
+  tenantId          String
+  status            LiveRecordingStatus @default(REQUESTED)
+  requestedBy       String
   /// Which recorder process holds it, and until when (renewed by heartbeat).
-  leaseOwner       String?
-  leaseUntil       DateTime?
-  heartbeatAt      DateTime?
-  attempts         Int                 @default(0)
-  startedAt        DateTime?
-  stopRequestedAt  DateTime?
-  stoppedAt        DateTime?
+  leaseOwner        String?
+  leaseUntil        DateTime?
+  heartbeatAt       DateTime?
+  attempts          Int                 @default(0)
+  startedAt         DateTime?
+  stopRequestedAt   DateTime?
+  stoppedAt         DateTime?
   /// Pieces written so far; a recorder restart continues with a new one.
-  segments         Int                 @default(0)
-  sizeBytes        BigInt              @default(0)
-  durationSec      Int                 @default(0)
-  videoAssetId     String?             @unique
-  error            String?
+  segments          Int                 @default(0)
+  sizeBytes         BigInt              @default(0)
+  durationSec       Int                 @default(0)
+  videoAssetId      String?             @unique
+  error             String?
   /// Stage times, so "processing for five minutes" can be traced to a stage:
   /// a recorder took it, the first media arrived, it was handed to the video
   /// pipeline (VideoAsset + VideoJob), and the encrypted HLS became ready.
-  claimedAt        DateTime?
-  captureStartedAt DateTime?
-  handedAt         DateTime?
-  readyAt          DateTime?
+  claimedAt         DateTime?
+  captureStartedAt  DateTime?
+  handedAt          DateTime?
+  readyAt           DateTime?
   /// When joining the pieces first began, and when the recording was given up
   /// on — the two ends of the timeline B.7 could not measure.
   finalizeStartedAt DateTime?
   failedAt          DateTime?
   /// Finalize attempts alone (`attempts` also counts recorder takeovers): a
   /// finalize that keeps failing stops at a cap instead of retrying forever.
-  finalizeAttempts  Int                @default(0)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  finalizeAttempts  Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@index([status, leaseUntil])
   @@index([sessionId, createdAt])

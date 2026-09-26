@@ -24,6 +24,7 @@ import { HealthController } from './health/health.controller';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentsModule } from './payments/payments.module';
+import { CommerceModule } from './commerce/commerce.module';
 import { ProofReaderModule } from './payments/proof-reader.module';
 import { WalletModule } from './wallet/wallet.module';
 import { PayoutsModule } from './payouts/payouts.module';
@@ -114,6 +115,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     GamificationModule,
     StudioModule,
     PaymentsModule,
+    CommerceModule,
     ProofReaderModule,
     WalletModule,
     PayoutsModule,

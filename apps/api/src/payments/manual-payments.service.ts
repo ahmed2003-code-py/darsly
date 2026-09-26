@@ -1120,10 +1120,10 @@ export class ManualPaymentsService {
   }
 
   /**
-   * The fee split and coupon for a course. Public because the card-payment route
-   * has to price a course identically — two routes that price differently is how
-   * a card payment and a bank transfer end up crediting a teacher different
-   * amounts for the same course.
+   * The fee split and coupon for a course. The one pricing for every route a
+   * course is paid through — two routes that price differently is how a wallet
+   * purchase and a bank transfer end up crediting a teacher different amounts
+   * for the same course.
    */
   async quote(
     course: { id: string; priceCents: number; tenantId: string; academyId?: string | null },

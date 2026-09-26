@@ -188,7 +188,7 @@ the exact student and session.
 | 6 | Quizzes (MCQ/true-false/short-answer, auto + manual grading), assignments (submit + grade), course reviews, completion certificates (serial + public verify + printable view) | ✅ done & verified |
 | — | Live sessions + booking, teacher analytics, wishlist + badges, central soft-delete, route-level code-splitting | ✅ done & verified |
 | — | Multi-tenant academies, AI academy-site studio, whitelabel branding, team & permissions | ✅ done & verified |
-| — | Real card payments via XPay (a verified online payment lands on the same path a verified bank transfer does) | ✅ done & verified |
+| — | Card payments via XPay — **removed** (Darsly takes Wallet and verified transfers only; historical rows stay readable) | ➖ removed |
 | — | Gamification engine: XP, coins, levels, achievements, missions, leaderboards, Learning Centre | ✅ done & verified |
 | — | Student Studio: per-student theming on top of academy branding, server-derived colour, a cosmetics economy | ✅ done & verified |
 | — | Chat rework: teacher-initiated, replies, voice notes, one thread per pair, per-side clearing, a teacher opt-out switch | ✅ done & verified |

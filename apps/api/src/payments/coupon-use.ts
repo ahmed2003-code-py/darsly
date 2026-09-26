@@ -9,8 +9,8 @@ import { Prisma } from '@prisma/client';
  * the DB serialises the increments and the loser matches zero rows. Throws
  * COUPON_LIMIT_REACHED so the caller's whole transaction rolls back.
  *
- * Every route that grants a discount goes through here — bank transfer, card
- * checkout, and a coupon that makes a course free — so a "one use" coupon
+ * Every route that grants a discount goes through here — bank transfer, the
+ * wallet, and a coupon that makes a course free — so a "one use" coupon
  * means one use however it is redeemed.
  */
 export async function reserveCouponUse(

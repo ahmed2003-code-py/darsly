@@ -166,7 +166,7 @@ teacher:<tenantId>:balance  — رصيد المدرّس القابل للسحب
 auth, branding, catalog, chat, common, courses, device, enrollments, gamification,
 health, live, mail, notifications, payments, payouts, playback, prisma, profile,
 progress, realtime, reviews, security, storage, student, studio, teachers,
-uploads, video, wallet, xpay`.
+uploads, video, wallet`.
 
 **الحجم النهاردة**: 32 كنترولر / 242 راوت، 79 موديل Prisma، 52 ميجريشن،
 684 اختبار وحدة في 39 ملف.

@@ -9,9 +9,9 @@ function seconds(value: string | undefined, fallback: number): number {
  * Every environment value the auth and token paths depend on, in one place.
  *
  * `@nestjs/config` is registered globally but `ConfigService` is never
- * injected anywhere: all ~138 env reads are bare `process.env`. Two per-feature
- * config classes already exist (`academy-site.config.ts`, `xpay.config.ts`) and
- * they are the better pattern — typed, discoverable, and defaulted once. This
+ * injected anywhere: all ~138 env reads are bare `process.env`. A per-feature
+ * config class already exists (`academy-site.config.ts`) and it is the better
+ * pattern — typed, discoverable, and defaulted once. This
  * extends it to the cluster where being wrong matters most.
  *
  * `JWT_ACCESS_SECRET` alone was read in eight files. A typo in any of them does

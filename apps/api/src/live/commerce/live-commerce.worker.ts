@@ -39,6 +39,9 @@ export class LiveCommerceWorker implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       out.expired = await this.commerce.expireHolds();
+      // A cancellation whose refunds did not all land (a crash, a restart)
+      // is finished here; each refund is unique per purchase and reason.
+      await this.commerce.sweepCancelled();
       // Held money becomes earnings once a class is delivered — or waits for
       // a person when it was not. Keyed in the ledger, so a retry moves nothing.
       const r = await this.commerce.releaseDelivered();

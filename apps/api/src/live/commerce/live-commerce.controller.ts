@@ -58,6 +58,14 @@ export class LiveCommerceController {
     return this.commerce.submitTransfer(u.sub, purchaseId, dto);
   }
 
+  @Post('live/purchases/:purchaseId/cancel')
+  @Roles(Role.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({ summary: '[student] Give a seat back; the refund follows the policy stored with the purchase' })
+  cancel(@CurrentUser() u: JwtPayload, @Param('purchaseId') purchaseId: string) {
+    return this.commerce.cancelByStudent(u.sub, purchaseId);
+  }
+
   @Get('live/purchases/mine')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] My live-session purchases' })

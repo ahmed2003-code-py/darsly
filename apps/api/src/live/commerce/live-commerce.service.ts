@@ -849,8 +849,8 @@ export class LiveCommerceService implements OnModuleInit {
         releasedAt: null,
         payment: { status: 'PAID' },
         OR: [
-          { status: 'CONFIRMED', session: { status: 'ENDED' } },
-          { status: 'CANCELLED_BY_STUDENT', session: { status: 'ENDED' } },
+          { status: 'CONFIRMED', session: { status: 'ENDED', cancelledAt: null } },
+          { status: 'CANCELLED_BY_STUDENT', session: { status: 'ENDED', cancelledAt: null } },
           // Never started, and well past its end: a no-show to be reviewed.
           {
             status: 'CONFIRMED',
@@ -869,6 +869,8 @@ export class LiveCommerceService implements OnModuleInit {
         const s = await lockSession(tx, c.sessionId);
         const p = await lockPurchase(tx, c.id);
         if (!s || !p || p.releasedAt) return null;
+        // A cancelled class is never paid out: its refunds are the cancellation's.
+        if (s.cancelledAt || s.deletedAt) return null;
         if (s.status === 'SCHEDULED' && !s.startedAt) {
           if (p.status !== 'CONFIRMED' || closesAtMs(s) + NO_SHOW_GRACE_MS > now.getTime()) return null;
           assertTransition(p.status, 'NEEDS_REVIEW');
@@ -943,6 +945,141 @@ export class LiveCommerceService implements OnModuleInit {
     await this.prisma.auditLog
       .create({ data: { actorUserId, action, entity: 'LivePurchase', entityId, meta: meta as never } })
       .catch(() => undefined);
+  }
+
+  // ── Cancellation ────────────────────────────────────────────────────────
+
+  /**
+   * How much of a purchase a STUDENT's own cancellation returns, from the
+   * policy frozen at purchase time and the server's clock. Inside the window:
+   * everything, except Darsly's fee when the terms said it is kept. Outside
+   * it (or NO_REFUND): nothing — the seat is still released.
+   */
+  studentRefundParts(
+    p: Pick<LivePurchase, 'refundPolicy' | 'feeRefundableOnStudentCancel'>,
+    remaining: { fee: number; teacher: number; center: number },
+    startsAt: Date,
+    now: Date,
+  ) {
+    const hours = LIVE_REFUND_WINDOW_HOURS[p.refundPolicy];
+    const inWindow = hours != null && now.getTime() <= startsAt.getTime() - hours * 3600_000;
+    if (!inWindow) return { fee: 0, teacher: 0, center: 0, inWindow };
+    return {
+      fee: p.feeRefundableOnStudentCancel ? remaining.fee : 0,
+      teacher: remaining.teacher,
+      center: remaining.center,
+      inWindow,
+    };
+  }
+
+  /**
+   * A student gives their seat back. Only before the class starts; a payment
+   * still being verified cannot be cancelled from under the verifier. The
+   * seat and the access go at once (the booking is deleted); what comes back
+   * is the stored policy's answer, to the wallet, in the same transaction.
+   * A second press finds the purchase already cancelled and changes nothing.
+   */
+  async cancelByStudent(userId: string, purchaseId: string) {
+    const student = await this.studentOf(userId);
+    const pre = await this.prisma.livePurchase.findUnique({ where: { id: purchaseId } });
+    if (!pre || pre.studentId !== student.id) throw new NotFoundException('Purchase not found');
+    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const s = await lockSession(tx, pre.sessionId);
+      await lockPurchase(tx, purchaseId);
+      const p = await tx.livePurchase.findUniqueOrThrow({ where: { id: purchaseId }, include: { payment: true } });
+      if (p.status === 'CANCELLED_BY_STUDENT') return;
+      if (p.status === 'PAYMENT_PENDING')
+        throw new ConflictException({ message: 'Your payment is being verified — it cannot be cancelled now', code: 'PAYMENT_UNDER_REVIEW' });
+      if (p.status !== 'HELD' && p.status !== 'CONFIRMED')
+        throw new ConflictException({ message: 'This purchase cannot be cancelled', code: 'PURCHASE_STATE_CONFLICT', status: p.status });
+      if (!s) throw new NotFoundException('Session not found');
+      if (p.status === 'CONFIRMED' && (s.status !== 'SCHEDULED' || now.getTime() >= s.startsAt.getTime())) {
+        throw new ConflictException({ message: 'لا يمكن إلغاء الحجز بعد بدء الحصة', code: 'CANCEL_WINDOW_CLOSED' });
+      }
+      assertTransition(p.status, 'CANCELLED_BY_STUDENT');
+      await tx.liveBooking.deleteMany({ where: { purchaseId: p.id } });
+      await tx.livePurchase.update({
+        where: { id: p.id },
+        data: { status: 'CANCELLED_BY_STUDENT', cancelledAt: now, holdExpiresAt: null, cancelReason: 'student' },
+      });
+      if (p.status === 'CONFIRMED') {
+        const remaining = await this.remainingParts(tx, p);
+        const parts = this.studentRefundParts(p, remaining, s.startsAt, now);
+        await this.refundParts(tx, p, 'STUDENT_CANCEL', parts, userId);
+      }
+    });
+    await this.audit(userId, 'live.purchase.cancel.student', purchaseId, {});
+    return this.byId(purchaseId);
+  }
+
+  /**
+   * The teacher (or the academy) called the class off: every buyer gets back
+   * everything they still have in it — a confirmed seat in full, a student
+   * who had cancelled late the part they had not got back — and nobody is
+   * paid. Held seats are simply released. Each purchase in its own
+   * transaction under the locks; the refund is unique per purchase and
+   * reason, so running this again (a retry, the sweep) changes nothing.
+   */
+  async onSessionCancelled(sessionId: string, actorId: string | null): Promise<{ refunded: number }> {
+    const rows = await this.prisma.livePurchase.findMany({
+      where: {
+        sessionId,
+        releasedAt: null,
+        status: { in: ['HELD', 'CONFIRMED', 'NEEDS_REVIEW', 'CANCELLED_BY_STUDENT'] },
+      },
+      select: { id: true },
+    });
+    let refunded = 0;
+    for (const r of rows) {
+      const did = await this.prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const s = await lockSession(tx, sessionId);
+        if (!s || !(s.cancelledAt || s.deletedAt)) return false;
+        const p = await lockPurchase(tx, r.id);
+        if (!p || p.releasedAt) return false;
+        if (p.status === 'HELD') {
+          await tx.livePurchase.update({
+            where: { id: p.id },
+            data: { status: 'CANCELLED_BY_TEACHER', cancelledAt: now, holdExpiresAt: null, cancelReason: 'session cancelled' },
+          });
+          return false;
+        }
+        if (p.status === 'CONFIRMED' || p.status === 'NEEDS_REVIEW') {
+          await tx.liveBooking.deleteMany({ where: { purchaseId: p.id } });
+          await tx.livePurchase.update({
+            where: { id: p.id },
+            data: { status: 'CANCELLED_BY_TEACHER', cancelledAt: now, cancelReason: 'session cancelled' },
+          });
+        } else if (p.status !== 'CANCELLED_BY_STUDENT') {
+          return false;
+        }
+        const refund = await this.fullRefund(tx, p.id, 'TEACHER_CANCEL', actorId);
+        return !!refund;
+      });
+      if (did) {
+        refunded++;
+        await this.afterRefunded(r.id, 'CANCELLED_BY_TEACHER');
+      }
+    }
+    return { refunded };
+  }
+
+  /** Cancelled classes whose refunds are not all booked yet (a crash mid-way): finished here. */
+  async sweepCancelled(limit = 20): Promise<number> {
+    const sessions = await this.prisma.livePurchase.findMany({
+      where: {
+        releasedAt: null,
+        status: { in: ['HELD', 'CONFIRMED', 'NEEDS_REVIEW'] },
+        session: { cancelledAt: { not: null } },
+      },
+      select: { sessionId: true },
+      distinct: ['sessionId'],
+      take: limit,
+    });
+    let n = 0;
+    for (const s of sessions) n += (await this.onSessionCancelled(s.sessionId, null)).refunded;
+    return n;
   }
 
   // ── Holds that lapse ─────────────────────────────────────────────────────

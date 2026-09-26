@@ -32,7 +32,7 @@ import {
 } from '@darsly/shared-types';
 import { CommercialTermsService, pricingRefusal, toSnapshot } from '../commerce/commercial-terms.service';
 import { priceLiveSeat, PricingError } from '../commerce/pricing';
-import { lockSession, seatsTaken } from './commerce/live-commerce.service';
+import { LiveCommerceService, lockSession, seatsTaken } from './commerce/live-commerce.service';
 import { pipelineStages } from './live-pipeline';
 import { recordingStage } from './recording/recording-stage';
 import { LiveProviders } from './providers/live-providers';
@@ -170,6 +170,8 @@ export class LiveService {
     @Optional() private readonly storage?: StorageProvider,
     /** Prices a PAID session; a FREE one never needs it. */
     @Optional() private readonly terms?: CommercialTermsService,
+    /** Refunds a PAID session's buyers when it is called off. */
+    @Optional() private readonly commerce?: LiveCommerceService,
   ) {}
 
   /**
@@ -568,6 +570,19 @@ export class LiveService {
     if (wasLive) {
       this.realtime.emitToLive(id, 'live:ended', { sessionId: id, cancelled: true });
     }
+    // Paid seats: everyone who paid gets it all back, and nobody is paid out.
+    // A failure here is retried by the commerce sweep; it never undoes the
+    // cancellation itself.
+    let refunded = 0;
+    if (session.accessMode === 'PAID' && this.commerce) {
+      refunded = await this.commerce
+        .onSessionCancelled(id, actorUserId ?? scope.userId)
+        .then((r) => r.refunded)
+        .catch((e) => {
+          this.logger.error(`live.cancel refunds liveSession=${id} failed, sweep will retry: ${(e as Error).message}`);
+          return 0;
+        });
+    }
 
     const booked = stillAhead
       ? await this.prisma.liveBooking.findMany({
@@ -606,6 +621,7 @@ export class LiveService {
             reason: why,
             wasLive,
             notified: booked.length,
+            refunded,
             startsAt: session.startsAt.toISOString(),
           } as never,
         },

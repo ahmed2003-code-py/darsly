@@ -56,6 +56,7 @@ export function commerceStack(prisma: PrismaService) {
     academyStub as any,
     undefined,
     terms,
+    commerce,
   );
   return { ledger, targets, manual, wallet, matching, terms, commerce, live };
 }

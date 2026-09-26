@@ -190,27 +190,35 @@ export class LiveService {
     const groupId = await this.resolveGroup(scope, dto.groupId ?? null, teacher.userId);
     const startsAt = new Date(dto.startsAt);
     const durationMin = dto.durationMin ?? 60;
-    await this.assertTeacherFree(scope, teacher.userId, startsAt, durationMin);
-    const session = await this.prisma.liveSession.create({
-      data: {
-        tenantId: teacher.teacherProfileId,
-        academyId: scope.academyId,
-        teacherUserId: teacher.userId,
-        groupId,
-        title: dto.title.trim(),
-        description: dto.description ?? '',
-        startsAt,
-        durationMin,
-        capacity: dto.capacity ?? null,
-        courseId: dto.courseId ?? null,
-        joinUrl: dto.joinUrl ?? null,
-        // Fixed here, for the life of the class: a later change to
-        // LIVE_PROVIDER moves new classes, never this one.
-        provider: this.providers.defaultKind,
-        // The platform's default; the teacher may change it before or during
-        // the class. Nothing is captured while the global switch is off.
-        transcriptionMode: dto.transcriptionMode ?? transcriptionConfig().defaultMode,
-      },
+    // The overlap check and the insert are one step, one teacher at a time: a
+    // double-clicked "create" (or two tabs) sends two requests a few ms apart,
+    // and without the lock both could pass the check before either inserted —
+    // two identical classes. The second now waits, then finds the first and
+    // is refused as a clash.
+    const session = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`live-teacher:${teacher.userId}`}))`;
+      await this.assertTeacherFree(scope, teacher.userId, startsAt, durationMin, undefined, tx);
+      return tx.liveSession.create({
+        data: {
+          tenantId: teacher.teacherProfileId,
+          academyId: scope.academyId,
+          teacherUserId: teacher.userId,
+          groupId,
+          title: dto.title.trim(),
+          description: dto.description ?? '',
+          startsAt,
+          durationMin,
+          capacity: dto.capacity ?? null,
+          courseId: dto.courseId ?? null,
+          joinUrl: dto.joinUrl ?? null,
+          // Fixed here, for the life of the class: a later change to
+          // LIVE_PROVIDER moves new classes, never this one.
+          provider: this.providers.defaultKind,
+          // The platform's default; the teacher may change it before or during
+          // the class. Nothing is captured while the global switch is off.
+          transcriptionMode: dto.transcriptionMode ?? transcriptionConfig().defaultMode,
+        },
+      });
     });
     await this.announceToStudents(session, session.title, session.startsAt);
     return session;
@@ -251,9 +259,10 @@ export class LiveService {
     startsAt: Date,
     durationMin: number,
     excludeId?: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
     const endsAt = new Date(startsAt.getTime() + durationMin * 60_000);
-    const group = await this.prisma.groupSession.findFirst({
+    const group = await db.groupSession.findFirst({
       where: {
         teacherUserId,
         status: { not: 'CANCELLED' },
@@ -269,7 +278,7 @@ export class LiveService {
         conflictingSessionId: group.academyId === scope.academyId ? group.id : undefined,
       });
     }
-    const others = await this.prisma.liveSession.findMany({
+    const others = await db.liveSession.findMany({
       where: {
         teacherUserId,
         status: { not: 'ENDED' },

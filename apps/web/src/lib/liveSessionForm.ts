@@ -33,7 +33,8 @@ export interface LiveFormValues {
 }
 
 export interface FieldProblem {
-  code: LiveSessionFieldCode | 'INVALID';
+  /** CAPACITY_REQUIRED is the form's own: "limit" chosen but no number typed. */
+  code: LiveSessionFieldCode | 'CAPACITY_REQUIRED' | 'INVALID';
   params: Record<string, number>;
 }
 export type LiveFormErrors = Partial<Record<LiveFormField, FieldProblem>>;
@@ -50,8 +51,19 @@ function toMap(errors: LiveSessionFieldError[]): LiveFormErrors {
   return out;
 }
 
-export function clientErrors(v: LiveFormValues, now = Date.now()): LiveFormErrors {
-  return toMap(
+/**
+ * The form is stricter about the past than the server: the server forgives a
+ * few minutes (a slow submit, a clock a little behind), but a teacher picking a
+ * time must not be offered one that has already gone — anything before the
+ * current minute is refused. `now` should be server time (see `clockSkew`).
+ */
+export function clientErrors(
+  v: LiveFormValues,
+  now = Date.now(),
+  opts: { capacityRequired?: boolean } = {},
+): LiveFormErrors {
+  const minuteStart = now - (now % 60_000);
+  const out = toMap(
     validateLiveSession(
       {
         title: v.title,
@@ -60,9 +72,34 @@ export function clientErrors(v: LiveFormValues, now = Date.now()): LiveFormError
         durationMin: v.durationMin,
         capacity: v.capacity,
       },
-      now,
+      minuteStart + LIVE_SESSION_RULES.pastGraceMin * 60_000,
     ),
   );
+  if (opts.capacityRequired && !v.capacity.trim()) out.capacity ??= { code: 'CAPACITY_REQUIRED', params: {} };
+  return out;
+}
+
+/** Arabic-Indic / Persian digits → ASCII, so "٧٠" means 70. Nothing else is touched. */
+export const asciiDigits = (s: string) =>
+  s.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (c) => String(c.charCodeAt(0) & 0xf));
+
+/** How far the device clock is behind the server's (ms): add it to Date.now(). */
+export function clockSkew(serverNowIso: string | undefined, receivedAt: number): number {
+  const server = serverNowIso ? new Date(serverNowIso).getTime() : NaN;
+  if (!Number.isFinite(server)) return 0;
+  const skew = server - receivedAt;
+  // Under a minute is network noise, not a wrong clock.
+  return Math.abs(skew) < 60_000 ? 0 : skew;
+}
+
+type T = (key: string, opts?: Record<string, unknown>) => string;
+/** 70 → "ساعة و10 دقائق" / "1 hour 10 min"; 45 → "45 دقيقة"; 120 → "ساعتين". */
+export function formatDuration(min: number, t: T): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (!h) return t('live.minutes', { count: m });
+  const hours = t('live.dur.hours', { count: h });
+  return m ? t('live.dur.join', { h: hours, m: t('live.minutes', { count: m }) }) : hours;
 }
 
 /**
@@ -112,21 +149,10 @@ export function nextSlot(now: number, stepMin = 30): number {
   const step = stepMin * 60_000;
   return Math.ceil((now + 60_000) / step) * step;
 }
-/** "Start now": a few minutes ahead, rounded to 5, so it is not already past. */
-export function startNowSlot(now: number): number {
-  return Math.ceil((now + 60_000) / (5 * 60_000)) * 5 * 60_000;
-}
 export const combine = (date: string, time: string) => (date && time ? `${date}T${time}` : '');
 export function splitStart(startsAt: string): { date: string; time: string } {
   const [date = '', time = ''] = startsAt.split('T');
   return { date, time: time.slice(0, 5) };
-}
-/** Times of day every `stepMin`, plus `extra` (a chosen time off the grid). */
-export function timeSlots(stepMin = 15, extra?: string): string[] {
-  const out: string[] = [];
-  for (let m = 0; m < 24 * 60; m += stepMin) out.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
-  if (extra && !out.includes(extra)) out.push(extra);
-  return out.sort();
 }
 /** "19:30" → "7:30 م" / "7:30 PM". */
 export function formatTime12(time: string, lang: string): string {
@@ -141,6 +167,8 @@ export function toPayload(v: LiveFormValues, joinUrl: string) {
   return {
     title: v.title.trim(),
     description: v.description.trim() || undefined,
+    // `startsAt` is local wall-clock ("2026-09-26T21:37", no zone), which
+    // `new Date` reads as local time: one conversion, to UTC, here and only here.
     startsAt: new Date(v.startsAt).toISOString(),
     durationMin: Number(v.durationMin),
     capacity: v.capacity.trim() ? Number(v.capacity) : null,

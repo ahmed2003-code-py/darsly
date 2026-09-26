@@ -151,7 +151,13 @@ export class LiveController {
   @ApiOperation({ summary: '[academy] Live features available on this platform' })
   features() {
     const cfg = transcriptionConfig();
-    return { transcription: cfg.enabled, defaultTranscriptionMode: cfg.defaultMode };
+    // serverNow lets the form correct a wrong device clock, so "start now"
+    // is never refused as being in the past.
+    return {
+      transcription: cfg.enabled,
+      defaultTranscriptionMode: cfg.defaultMode,
+      serverNow: new Date().toISOString(),
+    };
   }
 
   @Get('teacher/live')

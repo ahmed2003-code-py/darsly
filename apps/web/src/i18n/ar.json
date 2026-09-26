@@ -1307,14 +1307,13 @@
       "schedule": "التوقيت",
       "access": "الحضور",
       "liveSettings": "البث",
-      "descriptionPh": "اكتب باختصار ما ستشرحه في الحصة (اختياري)",
+      "descriptionPh": "اكتب باختصار ما ستشرحه في الحصة",
       "minutesUnit": "دقيقة",
       "capacityHint": "اتركها فارغة إذا لم يكن هناك حد لعدد الطلاب.",
       "unlimited": "بدون حد",
       "duration": "المدة",
       "when": "امتى؟",
       "now": "دلوقتي",
-      "today": "النهارده",
       "tomorrow": "بكرة",
       "date": "التاريخ",
       "time": "الساعة",
@@ -1323,10 +1322,14 @@
       "custom": "مخصص",
       "durationMinutes": "المدة بالدقائق",
       "limit": "حد أقصى",
-      "maxStudents": "أقصى عدد للطلاب",
+      "maxStudents": "الحد الأقصى للطلاب",
       "advanced": "خيارات متقدمة",
       "transcription": "التفريغ النصي للحصة",
-      "transcriptionHint": "يُحوَّل كلام الحصة إلى نص بعد انتهائها لإعداد الملخص، ويُحذف الصوت بعد التفريغ."
+      "transcriptionHint": "يُحوَّل كلام الحصة إلى نص بعد انتهائها لإعداد الملخص، ويُحذف الصوت بعد التفريغ.",
+      "nowHint": "هتبدأ أول ما تنشئها",
+      "create": "إنشاء الجلسة",
+      "creating": "جارٍ إنشاء الجلسة…",
+      "startsNow": "فور الإنشاء"
     },
     "v": {
       "TITLE_REQUIRED": "أدخل عنوان الجلسة.",
@@ -1335,14 +1338,24 @@
       "DESCRIPTION_TOO_LONG": "الوصف طويل جدًا (الحد الأقصى {{max}} حرف).",
       "STARTS_AT_REQUIRED": "اختر موعد الجلسة.",
       "STARTS_AT_INVALID": "اختر موعدًا صحيحًا للجلسة.",
-      "STARTS_AT_PAST": "لا يمكن تحديد جلسة في موعد مضى.",
-      "DURATION_INVALID": "أدخل مدة الجلسة بالدقائق.",
+      "STARTS_AT_PAST": "هذا الموعد مضى. اختر وقتًا لاحقًا أو اضغط «دلوقتي».",
+      "DURATION_INVALID": "أدخل مدة الجلسة بعدد صحيح من الدقائق.",
       "DURATION_TOO_SHORT": "مدة الجلسة يجب ألا تقل عن {{min}} دقائق.",
       "DURATION_TOO_LONG": "مدة الجلسة يجب ألا تزيد عن {{max}} دقيقة.",
-      "CAPACITY_INVALID": "أدخل عددًا صحيحًا للطلاب.",
+      "CAPACITY_INVALID": "أدخل عددًا صحيحًا موجبًا للطلاب.",
       "CAPACITY_TOO_SMALL": "السعة يجب أن تكون طالبًا واحدًا على الأقل.",
       "CAPACITY_TOO_LARGE": "السعة لا يمكن أن تزيد عن {{max}} طالب.",
-      "INVALID": "راجع قيمة هذا الحقل."
+      "INVALID": "راجع قيمة هذا الحقل.",
+      "CAPACITY_REQUIRED": "أدخل الحد الأقصى لعدد الطلاب."
+    },
+    "dur": {
+      "hours_zero": "{{count}} ساعة",
+      "hours_one": "ساعة",
+      "hours_two": "ساعتين",
+      "hours_few": "{{count}} ساعات",
+      "hours_many": "{{count}} ساعة",
+      "hours_other": "{{count}} ساعة",
+      "join": "{{h}} و{{m}}"
     }
   },
   "analytics": {

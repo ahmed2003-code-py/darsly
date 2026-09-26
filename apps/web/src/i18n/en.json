@@ -1295,14 +1295,13 @@
       "schedule": "Timing",
       "access": "Attendance",
       "liveSettings": "Streaming",
-      "descriptionPh": "Briefly, what the class will cover (optional)",
+      "descriptionPh": "Briefly, what the class will cover",
       "minutesUnit": "min",
       "capacityHint": "Leave empty for no limit on students.",
       "unlimited": "No limit",
       "duration": "Length",
       "when": "When?",
       "now": "Now",
-      "today": "Today",
       "tomorrow": "Tomorrow",
       "date": "Date",
       "time": "Time",
@@ -1314,7 +1313,11 @@
       "maxStudents": "Maximum students",
       "advanced": "Advanced options",
       "transcription": "Class transcript",
-      "transcriptionHint": "What is said is turned into text after the class, for the summary. The audio is deleted once transcribed."
+      "transcriptionHint": "What is said is turned into text after the class, for the summary. The audio is deleted once transcribed.",
+      "nowHint": "Starts as soon as you create it",
+      "create": "Create session",
+      "creating": "Creating session…",
+      "startsNow": "As soon as it is created"
     },
     "v": {
       "TITLE_REQUIRED": "Enter a title for the session.",
@@ -1323,14 +1326,20 @@
       "DESCRIPTION_TOO_LONG": "The description is too long (at most {{max}} characters).",
       "STARTS_AT_REQUIRED": "Pick when the session starts.",
       "STARTS_AT_INVALID": "Pick a valid date and time.",
-      "STARTS_AT_PAST": "A session cannot be scheduled in the past.",
-      "DURATION_INVALID": "Enter the length in minutes.",
+      "STARTS_AT_PAST": "That time has passed. Pick a later time or choose “Now”.",
+      "DURATION_INVALID": "Enter the length as a whole number of minutes.",
       "DURATION_TOO_SHORT": "A session must be at least {{min}} minutes long.",
       "DURATION_TOO_LONG": "A session can be at most {{max}} minutes long.",
-      "CAPACITY_INVALID": "Enter a whole number of students.",
+      "CAPACITY_INVALID": "Enter a whole, positive number of students.",
       "CAPACITY_TOO_SMALL": "Capacity must be at least one student.",
       "CAPACITY_TOO_LARGE": "Capacity can be at most {{max}} students.",
-      "INVALID": "Check this field."
+      "INVALID": "Check this field.",
+      "CAPACITY_REQUIRED": "Enter the maximum number of students."
+    },
+    "dur": {
+      "hours_one": "1 hour",
+      "hours_other": "{{count}} hours",
+      "join": "{{h}} {{m}}"
     }
   },
   "analytics": {

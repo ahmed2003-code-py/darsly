@@ -15,6 +15,7 @@ import {
 } from '../../components/ui';
 import SessionSummary from '../live/SessionSummary';
 import LiveSessionForm from './LiveSessionForm';
+import { formatDuration } from '../../lib/liveSessionForm';
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', {
@@ -116,7 +117,7 @@ export default function TeacherLivePage() {
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">schedule</span>
-                    {t('live.minutes', { count: s.durationMin })}
+                    {formatDuration(s.durationMin, t)}
                   </span>
                 </div>
                 <div className="mt-2 flex items-center justify-between">

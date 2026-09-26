@@ -472,7 +472,9 @@ describe('L4: announcements go to students whose access is still active', () => 
         create: jest.fn(async ({ data }: any) => ({ id: 'ls1', ...data })),
       },
       enrollment: { findMany: enrollmentFindMany },
+      $executeRaw: jest.fn(async () => 0),
     };
+    prisma.$transaction = jest.fn(async (fn: any) => fn(prisma));
     const academy = {
       assertAssignableTeacher: jest.fn(async () => ({
         userId: 'u_teacher',

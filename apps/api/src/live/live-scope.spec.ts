@@ -4,7 +4,7 @@ import { AcademyService } from '../academy/academy.service';
 import { dailyProviders } from './providers/testing';
 
 function makePrisma() {
-  return {
+  const p = {
     liveSession: {
       create: jest.fn(async ({ data }: any) => ({ id: 'ls', ...data })),
       findFirst: jest.fn().mockResolvedValue(null),
@@ -17,6 +17,10 @@ function makePrisma() {
     groupMembership: { findMany: jest.fn().mockResolvedValue([]) },
     enrollment: { findMany: jest.fn().mockResolvedValue([]) },
   } as any;
+  // create() runs its overlap check + insert in one transaction (per-teacher lock).
+  p.$transaction = jest.fn(async (fn: any) => fn(p));
+  p.$executeRaw = jest.fn(async () => 0);
+  return p;
 }
 const academyMock = () =>
   ({

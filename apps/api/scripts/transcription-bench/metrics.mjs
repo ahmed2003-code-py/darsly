@@ -78,6 +78,21 @@ export const englishRecall = (ref, hyp) => recall(words(ref).filter(isLatin), wo
 /** Numbers, digits normalised (٣ = 3). */
 export const numberRecall = (ref, hyp) => recall(words(ref).filter(isNumber), words(hyp).filter(isNumber));
 
+/**
+ * Egyptian-dialect words kept as dialect. A model that "corrects" دلوقتي to
+ * الآن or إزاي to كيف has changed what the teacher said; this is the share of
+ * the reference's dialect markers (normalised) that survive.
+ */
+export const EGYPTIAN_MARKERS = [
+  'دلوقتي', 'ازاي', 'عشان', 'علشان', 'كده', 'كدا', 'مش', 'بتاع', 'بتاعه', 'بتاعت', 'ليه', 'ايه',
+  'النهارده', 'بكره', 'امبارح', 'يعني', 'اهو', 'خلاص', 'اوي', 'فين', 'امتي', 'هنعمل', 'هنشوف',
+  'عايز', 'عاوز', 'عايزين', 'ماشي', 'بس', 'برضه', 'لسه', 'حاجه', 'زي', 'دي', 'ده', 'اللي',
+].map((w) => normalizeArabic(w));
+export const dialectRecall = (ref, hyp) => {
+  const set = new Set(EGYPTIAN_MARKERS);
+  return recall(words(ref).filter((w) => set.has(w)), words(hyp).filter((w) => set.has(w)));
+};
+
 /** Punctuation the provider put in, relative to the reference (1 = as much). */
 export function punctuationRatio(ref, hyp) {
   const count = (s) => (s.match(/[.,،؛؟?!:]/g) ?? []).length;
@@ -92,6 +107,7 @@ export function scoreAll(ref, hyp) {
     arabicWordRecall: round(arabicRecall(ref, hyp)),
     englishTermRecall: round(englishRecall(ref, hyp)),
     numberRecall: round(numberRecall(ref, hyp)),
+    dialectRecall: round(dialectRecall(ref, hyp)),
     punctuationRatio: punctuationRatio(ref, hyp),
   };
 }

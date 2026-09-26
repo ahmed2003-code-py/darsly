@@ -33,3 +33,12 @@ test('Arabic-Indic digits in the output count as the same number', () => {
   assert.equal(s.numberRecall, 1);
   assert.equal(s.wer, 0);
 });
+
+test('Egyptian dialect is scored as dialect: "corrected" to MSA is a miss', () => {
+  const ref = 'دلوقتي هنشوف ازاي الـ function بتشتغل عشان كده';
+  assert.equal(scoreAll(ref, ref).dialectRecall, 1);
+  const msa = scoreAll(ref, 'الآن سنرى كيف تعمل الـ function لذلك');
+  assert.ok(msa.dialectRecall < 0.3, String(msa.dialectRecall));
+  // No dialect in the reference: not scored.
+  assert.equal(scoreAll('الدالة تعمل', 'الدالة تعمل').dialectRecall, null);
+});

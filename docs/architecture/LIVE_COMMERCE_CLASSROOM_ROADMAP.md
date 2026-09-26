@@ -453,6 +453,92 @@
 - اختيار الموديل بـ benchmark على عينة صوت حقيقية من حصة.
 - تشغيل الفلاج على production بعد الموافقة.
 
+### Checkpoint C — التسجيل، والمشاهدة الآمنة، والتفريغ النصي، والملخص — **IMPLEMENTED محلياً، مش متعمله push**
+
+> B.8 (`cc50c60`) موجود على `origin/main`. الـ C كله commits محلية فوقه.
+
+**التسجيل (IMPLEMENTED + TESTED + MEASURED):**
+- نفس معمارية B.6 من غير إعادة كتابة: recorder ← قطع ← finalize (ffmpeg) ← `VideoAsset` + `VideoJob` في transaction واحدة ← HLS مشفّر.
+- **كان ناقص وخلص:**
+  - الـ finalize اللي بيفشل على طول بقى ليه حد (`FINALIZE_MAX_ATTEMPTS = 6`، مع backoff) وبعده FAILED `FINALIZE_GAVE_UP`. قبل كده كان بيحاول للأبد.
+  - التجهيز اللي معداش عليه 6 ساعات من التسليم بقى FAILED `PROCESSING_STALLED`، ودي حالة إن الـ video worker مقفول في كل مكان.
+- أوقات جديدة: `finalizeStartedAt`، و`failedAt`، و`finalizeAttempts`، و`VideoJob.startedAt`.
+  - نهاية الـ capture = `stoppedAt` الموجود أصلاً.
+  - الـ timeline بيظهر للمدرس بس في الـ API.
+- الـ logs بقت: `live.recording.requested` ← `claimed` ← `capture_started` ← `capture_ended` ← `finalize_started` ← `asset_created` ← `ready` / `failed`، ومعاها الـ ids والمدد.
+- **MEASURED (E2E حقيقي، حصة ~1.5 دقيقة تسجيل، app الـ Cloudflare الحقيقي، ffmpeg محلي):**
+  - الطلب ← الاستلام **2.8 ث**.
+  - الاستلام ← أول ميديا **11.7 ث** (تشغيل Chrome والاتصال).
+  - نهاية الـ capture ← بداية الـ finalize **0.8 ث**.
+  - الـ finalize ← الـ asset **0.3 ث**.
+  - الـ asset ← استلام الـ VideoJob **2.7 ث**.
+  - الـ transcode لـ HLS **20.2 ث**.
+  - الـ sync ← READY **0.8 ث**.
+  - **الإجمالي: من نهاية الحصة لحد READY 26.7 ث.** الـ bottleneck هو الـ transcode نفسه (renditions متعددة). مفيش انتظار ثابت يستاهل يتشال.
+  - مشكلة "بياخد دقايق" في B.7 كانت إن مفيش recorder service، مش الـ pipeline.
+
+**المشاهدة جوه درسلي (IMPLEMENTED + TESTED):**
+- جدول جديد `LiveReplaySession`، وهو نسخة الـ replay من `PlaybackSession`. **مفيش Lesson أو Course وهمي.**
+  - نفس الـ token الموقّع ونفس HLS، والـ token فيه `rt: 'L'`.
+  - الـ key endpoint بيعيد يتأكد من صف الـ replay ومن الصلاحية نفسها كل مرة.
+- **مين يشوف:**
+  - المدرس أو staff الأكاديمية: دايماً.
+  - الطالب الحاجز: لو `recordingVisibility = STUDENTS` بس.
+- الـ token عمره مدة التسجيل + 30 دقيقة، بحد أقصى 4 ساعات.
+- إلغاء المشاركة، أو شيل الحجز، أو إنهاء الـ replay، أو إلغاء الجهاز = الـ key بيترفض فوراً.
+- التحويل لكورس بعدين (E/G) = Lesson جديد بيشاور على نفس الـ `VideoAsset`، **من غير نسخ ميديا**.
+- ⚠️ `removeLessonVideo` بيمسح الـ asset. لازم يتعالج قبل ما asset تسجيل يتربط بـ Lesson.
+- **Daily (fallback):** زي ما هو، لينك مزوّد قصير العمر (L11 لسه قائم للـ Daily بس). **PRODUCT DECISION REQUIRED.**
+
+**Visibility مستقلة (IMPLEMENTED + TESTED):**
+- `recordingVisibility` و`transcriptVisibility` و`summaryVisibility`، وكل واحدة `PRIVATE | STUDENTS`.
+- الـ migration بتنقل `summaryForStudents = true` لـ summary + recording، لأن ده كان سلوك المفتاح القديم. الـ transcript بيفضل private.
+- `summaryForStudents` باقي ومتزامن مع الملخص، ويتشال بعدين.
+
+**التفريغ النصي (IMPLEMENTED + TESTED، الـ STT المدفوع NOT TESTED):**
+- **المودات:** `OFF` / `MANUAL` / `AUTO_WHEN_RECORDING` لكل حصة.
+  - الـ default بييجي من `LIVE_TRANSCRIPTION_DEFAULT_MODE`.
+  - فوقهم كلهم الفلاج العام `LIVE_TRANSCRIPTION_ENABLED` (مقفول).
+  - قرار "بنلتقط دلوقتي؟" في مكان واحد (`transcriptCaptureState`)، ومنه بياخدوا: الـ badge، وصفحة المدرس، والـ upload.
+- **الـ upload:** بيتأكد من المدرس، والحصة، والـ mode، ونافذة الالتقاط (90 ث بعد الإيقاف و45 ث بعد النهاية).
+  - الملف لازم يكون WebM/MP4 فعلاً (magic bytes)، وحجمه معقول، ومش أكتر من 8 قطع في الدقيقة.
+  - **القطعة اللي اتفرّغت عمرها ما تتبدل** (retry = no-op، فمفيش دفع مرتين).
+- **الـ reload:** القطعة اللي بتتسجل بتتحفظ في IndexedDB كل 5 ث، وبترتفع لما الصفحة ترجع.
+  - في أول تشغيل للـ E2E ده كان بيضيّع لحد 3 دقايق من الكلام.
+- **الـ job:**
+  - القطعة المرفوضة نهائياً بتتعلّم وبنكمّل، والنص بيطلع **partial**.
+  - آخر محاولة للـ queue بتتنازل عن الباقي بدل "processing" للأبد.
+  - التجميع deterministic بترتيب ثانية البداية، ومع timestamps (`transcriptSegments`).
+  - كل call بيتسجّل في `AiCallLog` (مرتبط بالجلسة والـ job) من غير الكلام نفسه.
+  - الـ lesson title بيتبعت `prompt` للموديل.
+- **فشل الـ enqueue** (الـ queue مقفول أو الميزانية خلصت) = transcript **FAILED**، مش "مفيش كلام".
+- **الاحتفاظ بالبيانات:**
+  - الصوت بيتمسح أول ما النص يتعمل، حتى لو فشل.
+  - الصوت اللي مبقاش نص بيتمسح بعد `LIVE_AUDIO_RETENTION_HOURS` (24).
+  - قطع التسجيل الفاشل بتتمسح بعد `LIVE_RECORDING_FAILED_RETENTION_HOURS` (72).
+  - **التسجيل النهائي (VideoAsset) مبيتمسحش أبداً.**
+- **الملخص:** زي ما هو (A/B) وبيستنى نص READY. مفيش enqueue متكرر، والتكلفة متسجّلة. الـ logs بقت `live.summary.*`.
+
+**الواجهة (IMPLEMENTED + TESTED بصور):**
+- سجل الحصة بقى: chips تنقّل، والمدة الفعلية، والتسجيل بمشغّل HLS جوه الصفحة (مع watermark وجودة).
+- النص: timestamps، وبحث، ونسخ، و"partial".
+- الملخص بحالاته، واختيار visibility لكل قسم للمدرس.
+- زرار تشغيل/إيقاف التفريغ في الفصل للـ MANUAL.
+- اختيار المود في "خيارات متقدمة" في الفورم، ويظهر بس لو التفريغ متاح.
+
+**الـ migration:** `20261010100000_live_replay_media`.
+- additive بالكامل: 2 enums، وأعمدة nullable أو ليها default، وجدول واحد.
+- اتطبقت على Postgres حقيقي فيه صفوف، وعلى قاعدة جديدة فيها صفوف B.8 قديمة: الـ backfill اتأكد.
+- `migrate diff`: مفيش drift.
+- **الرجوع:** الكود القديم بيتجاهل الأعمدة الجديدة، فالرجوع للـ release اللي قبله آمن من غير down migration.
+
+**BLOCKED — PRODUCT DECISION REQUIRED:**
+- **ARABIC BENCHMARK NOT EXECUTED.** الـ harness (`apps/api/scripts/transcription-bench`) بقى بيقلّد الـ production (قطع 3 دقايق Opus 32k + prompt)، وفيه `--dry-run` مجاني ومقياس لهجة مصرية.
+  - محتاج: تسجيل حصة مصرية حقيقية 5–10 دقايق + نص مرجعي بشري + موافقة على التكلفة (~$0.03–$0.06 للعيّنة).
+- تشغيل `LIVE_TRANSCRIPTION_ENABLED` على production: بعد الـ benchmark وقرار الموديل والتكلفة.
+- recorder service على Railway: لسه مش متعمل (MANUAL ACTION).
+- Daily: لينك download (L11).
+
 ---
 
 # Deliverable 1 — Current System Audit

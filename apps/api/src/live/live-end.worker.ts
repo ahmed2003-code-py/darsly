@@ -1,4 +1,5 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveService } from './live.service';
 
 /** How often the sweep looks for classes whose time is up. */
@@ -31,7 +32,10 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
-  constructor(private readonly live: LiveService) {}
+  constructor(
+    private readonly live: LiveService,
+    @Optional() private readonly recordings?: LiveRecordingService,
+  ) {}
 
   onModuleInit(): void {
     if ((process.env.LIVE_END_WORKER_ENABLED ?? 'true') !== 'true') {
@@ -82,6 +86,12 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
       }
     } catch (e) {
       this.logger.error(`live cleanup sweep error: ${(e as Error).message}`);
+    }
+    try {
+      // Recordings nobody is working on: never started, or recorder gone.
+      await this.recordings?.sweepStale();
+    } catch (e) {
+      this.logger.error(`live recording sweep error: ${(e as Error).message}`);
     } finally {
       this.running = false;
     }

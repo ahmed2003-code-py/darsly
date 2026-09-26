@@ -14,7 +14,6 @@ import {
 } from 'class-validator';
 import { IsOptionalId, LIMITS } from '../common/validation';
 
-const MAX_CAPACITY = 100_000;
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
@@ -24,12 +23,18 @@ import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } fro
 import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 
+/**
+ * Shapes and abuse caps only. The product's rules (title length, minimum and
+ * maximum duration, capacity, no past start) are LIVE_SESSION_RULES, checked
+ * in LiveService so a refusal names its field with a code the form can put
+ * under that field — a class-validator sentence cannot be shown to a teacher.
+ */
 class CreateLiveDto {
-  @IsString() @MinLength(2) @MaxLength(160) title: string;
-  @IsOptional() @IsString() @MaxLength(1000) description?: string;
+  @IsString() @MaxLength(2000) title: string;
+  @IsOptional() @IsString() @MaxLength(20_000) description?: string;
   @IsISO8601() startsAt: string;
-  @IsOptional() @IsInt() @Min(5) @Max(MAX_DURATION_MIN) durationMin?: number;
-  @IsOptional() @IsInt() @Min(1) @Max(MAX_CAPACITY) capacity?: number | null;
+  @IsOptional() @IsInt() @Min(-1_000_000) @Max(1_000_000) durationMin?: number;
+  @IsOptional() @IsInt() @Min(-1_000_000_000) @Max(1_000_000_000) capacity?: number | null;
   @IsOptionalId() courseId?: string | null;
   // Rendered as a link students click — anything but a real URL is a trap.
   @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?:
@@ -68,11 +73,11 @@ class ChatMessageDto {
 }
 
 class UpdateLiveDto {
-  @IsOptional() @IsString() @MinLength(2) @MaxLength(160) title?: string;
-  @IsOptional() @IsString() @MaxLength(1000) description?: string;
+  @IsOptional() @IsString() @MaxLength(2000) title?: string;
+  @IsOptional() @IsString() @MaxLength(20_000) description?: string;
   @IsOptional() @IsISO8601() startsAt?: string;
-  @IsOptional() @IsInt() @Min(5) @Max(MAX_DURATION_MIN) durationMin?: number;
-  @IsOptional() @IsInt() @Min(1) @Max(MAX_CAPACITY) capacity?: number | null;
+  @IsOptional() @IsInt() @Min(-1_000_000) @Max(1_000_000) durationMin?: number;
+  @IsOptional() @IsInt() @Min(-1_000_000_000) @Max(1_000_000_000) capacity?: number | null;
   @IsOptionalId() courseId?: string | null;
   @IsOptional() @IsUrl({ protocols: ['http', 'https'] }) @MaxLength(LIMITS.URL) joinUrl?:
     string | null;

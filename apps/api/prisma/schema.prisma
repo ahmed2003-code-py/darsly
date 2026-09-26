@@ -2528,29 +2528,36 @@ enum LiveHandState {
 /// long after. Leased like VideoJob, so a recorder that dies is noticed and
 /// another can take over what is left.
 model LiveRecording {
-  id              String              @id @default(cuid())
-  sessionId       String
-  session         LiveSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  roomName        String
-  tenantId        String
-  status          LiveRecordingStatus @default(REQUESTED)
-  requestedBy     String
+  id               String              @id @default(cuid())
+  sessionId        String
+  session          LiveSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName         String
+  tenantId         String
+  status           LiveRecordingStatus @default(REQUESTED)
+  requestedBy      String
   /// Which recorder process holds it, and until when (renewed by heartbeat).
-  leaseOwner      String?
-  leaseUntil      DateTime?
-  heartbeatAt     DateTime?
-  attempts        Int                 @default(0)
-  startedAt       DateTime?
-  stopRequestedAt DateTime?
-  stoppedAt       DateTime?
+  leaseOwner       String?
+  leaseUntil       DateTime?
+  heartbeatAt      DateTime?
+  attempts         Int                 @default(0)
+  startedAt        DateTime?
+  stopRequestedAt  DateTime?
+  stoppedAt        DateTime?
   /// Pieces written so far; a recorder restart continues with a new one.
-  segments        Int                 @default(0)
-  sizeBytes       BigInt              @default(0)
-  durationSec     Int                 @default(0)
-  videoAssetId    String?             @unique
-  error           String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  segments         Int                 @default(0)
+  sizeBytes        BigInt              @default(0)
+  durationSec      Int                 @default(0)
+  videoAssetId     String?             @unique
+  error            String?
+  /// Stage times, so "processing for five minutes" can be traced to a stage:
+  /// a recorder took it, the first media arrived, it was handed to the video
+  /// pipeline (VideoAsset + VideoJob), and the encrypted HLS became ready.
+  claimedAt        DateTime?
+  captureStartedAt DateTime?
+  handedAt         DateTime?
+  readyAt          DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([status, leaseUntil])
   @@index([sessionId, createdAt])

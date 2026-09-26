@@ -3,9 +3,21 @@ import { LiveRecording } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LiveScope, LiveService } from '../live.service';
 import { LiveRtcService } from '../rtc/live-rtc.service';
+import { recordingStage } from './recording-stage';
+export { recordingStage } from './recording-stage';
+export type { RecordingFailure, RecordingStage } from './recording-stage';
 
 /** A recording in these states is being made, or is about to be. */
 export const ACTIVE_RECORDING = ['REQUESTED', 'RECORDING', 'STOPPING'] as const;
+
+/**
+ * How long a request may wait for a recorder before it is closed as never
+ * started — "processing" with nobody recording is the one state that must not
+ * last. Generous next to the recorder's 3s tick.
+ */
+export const UNCLAIMED_AFTER_MS = 2 * 60_000;
+/** A recorder silent this long after its class ended is not coming back. */
+export const RECORDER_LOST_AFTER_MS = 5 * 60_000;
 
 /**
  * The teacher's "record" button, for a class Darsly hosts (Cloudflare).
@@ -140,6 +152,7 @@ export class LiveRecordingService {
           where: { id: r.id },
           data: {
             status: next,
+            ...(next === 'READY' ? { readyAt: new Date() } : {}),
             ...(next === 'FAILED' ? { error: asset ? 'PACKAGING_FAILED' : 'ASSET_MISSING' } : {}),
             ...(asset?.durationSec ? { durationSec: asset.durationSec } : {}),
           },
@@ -167,9 +180,109 @@ export class LiveRecordingService {
       id: r.id,
       sessionId: r.sessionId,
       status: r.status,
+      ...recordingStage(r),
       startedAt: r.startedAt,
       stopRequestedAt: r.stopRequestedAt,
       durationSec: r.durationSec,
     };
+  }
+
+  /** The latest recording of a class, as the session page shows it. */
+  async latestView(sessionId: string) {
+    const r = await this.prisma.liveRecording.findFirst({
+      where: { sessionId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return r ? this.view(r) : null;
+  }
+
+  /**
+   * Nothing may stay "processing" with nobody working on it. Run by the end
+   * sweep on every API instance:
+   *  - a request no recorder has taken within UNCLAIMED_AFTER_MS, or whose
+   *    class has ended before any recorder took it, closes as never started
+   *    (nothing was recorded, so there is nothing to wait for);
+   *  - a recording whose recorder went silent after its class ended goes to
+   *    finalize with whatever pieces reached storage (none → NO_MEDIA).
+   */
+  async sweepStale(now = Date.now()): Promise<{ notStarted: number; recovered: number }> {
+    const unclaimed = await this.prisma.liveRecording.findMany({
+      where: {
+        status: 'REQUESTED',
+        OR: [
+          { createdAt: { lt: new Date(now - UNCLAIMED_AFTER_MS) } },
+          { session: { OR: [{ status: { not: 'LIVE' } }, { deletedAt: { not: null } }] } },
+        ],
+      },
+      select: { id: true, sessionId: true, createdAt: true },
+      take: 50,
+    });
+    let notStarted = 0;
+    for (const r of unclaimed) {
+      const done = await this.prisma.liveRecording.updateMany({
+        where: { id: r.id, status: 'REQUESTED' },
+        data: {
+          status: 'FAILED',
+          error: r.createdAt.getTime() < now - UNCLAIMED_AFTER_MS ? 'NOT_CLAIMED' : 'NEVER_STARTED',
+          stopRequestedAt: new Date(now),
+        },
+      });
+      if (done.count) {
+        notStarted++;
+        await this.mirror(r.id);
+        this.rtc.changed(r.sessionId);
+        this.logger.warn(
+          `live.rec.not-started recording=${r.id} liveSession=${r.sessionId} waitedMs=${now - r.createdAt.getTime()}`,
+        );
+      }
+    }
+    const lost = await this.prisma.liveRecording.findMany({
+      where: {
+        status: { in: ['RECORDING', 'STOPPING'] },
+        leaseUntil: { lt: new Date(now - RECORDER_LOST_AFTER_MS) },
+        session: { OR: [{ status: { not: 'LIVE' } }, { deletedAt: { not: null } }] },
+      },
+      select: { id: true, sessionId: true },
+      take: 50,
+    });
+    let recovered = 0;
+    for (const r of lost) {
+      const done = await this.prisma.liveRecording.updateMany({
+        where: { id: r.id, status: { in: ['RECORDING', 'STOPPING'] } },
+        data: {
+          status: 'UPLOADING',
+          stoppedAt: new Date(now),
+          leaseOwner: null,
+          leaseUntil: null,
+          error: 'RECORDER_LOST',
+        },
+      });
+      if (done.count) {
+        recovered++;
+        this.logger.warn(
+          `live.rec.recorder-lost recording=${r.id} liveSession=${r.sessionId} → finalize`,
+        );
+      }
+    }
+    return { notStarted, recovered };
+  }
+
+  /** The class's recordingStatus follows its latest recording. */
+  async mirror(id: string) {
+    const r = await this.prisma.liveRecording.findUnique({ where: { id } });
+    if (!r) return;
+    const latest = await this.prisma.liveRecording.findFirst({
+      where: { sessionId: r.sessionId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (latest?.id !== id) return;
+    await this.prisma.liveSession.update({
+      where: { id: r.sessionId },
+      data: {
+        recordingStatus:
+          r.status === 'READY' ? 'READY' : r.status === 'FAILED' ? 'FAILED' : 'PROCESSING',
+      },
+    });
   }
 }

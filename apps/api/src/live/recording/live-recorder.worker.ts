@@ -100,20 +100,28 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
     private readonly recordings: LiveRecordingService,
   ) {}
 
+  /** Whether this instance records (needs Chrome); finishing work runs anyway. */
+  private capture = false;
+
   onModuleInit() {
-    if (!this.cfg.enabled) {
-      this.logger.log('recorder disabled (LIVE_RECORDER_ENABLED is not true)');
-      return;
+    // Joining pieces, uploading and following the video pipeline need ffmpeg
+    // and storage, not a browser — so every instance does that part, and a
+    // finished recording never waits for the recorder service to be up.
+    // LIVE_RECORDING_FINALIZE_ENABLED=false opts an instance out.
+    const finalize = (process.env.LIVE_RECORDING_FINALIZE_ENABLED ?? 'true') === 'true';
+    this.capture = this.cfg.enabled && !!this.cfg.chromePath;
+    if (this.cfg.enabled && !this.cfg.chromePath) {
+      this.logger.error('LIVE_RECORDER_ENABLED=true but CHROME_PATH is not set — not capturing');
     }
-    if (!this.cfg.chromePath) {
-      this.logger.error(
-        'LIVE_RECORDER_ENABLED=true but CHROME_PATH is not set — recorder not started',
-      );
+    if (!this.capture && !finalize) {
+      this.logger.log('recorder off (capture and finalize disabled)');
       return;
     }
     this.timer = setInterval(() => void this.tick(), TICK_MS);
     this.logger.log(
-      `recorder started worker=${this.workerId} concurrency=${this.cfg.concurrency} segment=${this.cfg.segmentMs / 60000}min`,
+      this.capture
+        ? `recorder started worker=${this.workerId} concurrency=${this.cfg.concurrency} segment=${this.cfg.segmentMs / 60000}min`
+        : `recording finalizer started worker=${this.workerId} (capture off)`,
     );
   }
 
@@ -130,7 +138,7 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      while (this.jobs.size < this.cfg.concurrency) {
+      while (this.capture && this.jobs.size < this.cfg.concurrency) {
         const rec = await this.claim();
         if (!rec) break;
         if (this.jobs.has(rec.id)) break; // never twice in one worker
@@ -161,6 +169,7 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
         "heartbeatAt" = ${UTC_NOW},
         attempts = r.attempts + 1,
         "startedAt" = COALESCE(r."startedAt", ${UTC_NOW}),
+        "claimedAt" = COALESCE(r."claimedAt", ${UTC_NOW}),
         "updatedAt" = ${UTC_NOW}
       WHERE r.id = (
         SELECT id FROM "LiveRecording"
@@ -281,6 +290,16 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
       this.logger.debug?.(`recorder[${job.rec.id}]: ${m}`),
     );
     await page.exposeFunction('__chunk', async (b64: string) => {
+      if (!job.bytes) {
+        // The first media: when capture really began (a takeover keeps the
+        // first recorder's time).
+        await this.prisma.liveRecording
+          .updateMany({
+            where: { id: job.rec.id, captureStartedAt: null },
+            data: { captureStartedAt: new Date() },
+          })
+          .catch(() => undefined);
+      }
       const buf = Buffer.from(b64, 'base64');
       await fs.appendFile(path.join(dir, `seg-${job.seg}.webm`), buf);
       job.bytes += buf.length;
@@ -509,6 +528,7 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
           data: {
             status: 'PROCESSING',
             videoAssetId: asset.id,
+            handedAt: new Date(),
             sizeBytes: BigInt(out.sizeBytes),
             durationSec: out.durationSec,
             leaseOwner: null,

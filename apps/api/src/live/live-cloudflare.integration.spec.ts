@@ -713,3 +713,62 @@ describe('B.6 Cloudflare classroom on Postgres: start, entry, removal', () => {
     ).toBe(0);
   });
 });
+
+describe('B.7 on Postgres: rules, and what a finished lesson shows', () => {
+  it('create refuses with the field and the code, not a sentence', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const { svc } = build();
+    const err = await svc
+      .create(w.scope, {
+        title: 'x',
+        startsAt: new Date(Date.now() - 60 * MIN).toISOString(),
+        durationMin: 2,
+        capacity: 0,
+      } as any)
+      .catch((e) => e.response);
+    expect(err.code).toBe('LIVE_SESSION_INVALID');
+    expect(err.fields.map((f: any) => `${f.field}:${f.code}`)).toEqual([
+      'title:TITLE_TOO_SHORT',
+      'startsAt:STARTS_AT_PAST',
+      'durationMin:DURATION_TOO_SHORT',
+      'capacity:CAPACITY_TOO_SMALL',
+    ]);
+  });
+
+  it('a Cloudflare summary is refused before any job while there is no transcript', async () => {
+    if (!guard()) return;
+    const w = await world({ status: 'ENDED', endedAt: new Date() });
+    const { svc } = build();
+    const before = await prisma.aiJob.count({
+      where: { input: { path: ['liveSessionId'], equals: w.ls.id } },
+    });
+    expect(await code(svc.requestSummary(w.scope, w.ls.id))).toBe('TRANSCRIPT_NOT_READY');
+    const after = await prisma.aiJob.count({
+      where: { input: { path: ['liveSessionId'], equals: w.ls.id } },
+    });
+    expect(after).toBe(before);
+  });
+
+  it('the session record shows recording, transcript and summary as separate stages', async () => {
+    if (!guard()) return;
+    const w = await world({ status: 'ENDED', endedAt: new Date() });
+    const { svc } = build();
+    await prisma.liveRecording.create({
+      data: {
+        sessionId: w.ls.id,
+        roomName: w.ls.roomName!,
+        tenantId: w.ls.tenantId,
+        requestedBy: w.teacher.id,
+        status: 'PROCESSING',
+      },
+    });
+    const d: any = await svc.sessionDetail(w.teacher.id, w.ls.id);
+    expect(d.recording).toMatchObject({ stage: 'PROCESSING', failure: null });
+    expect(d.transcript).toEqual({ stage: 'WAITING_FOR_RECORDING', reason: null });
+    expect(d.summary).toMatchObject({ stage: 'WAITING_FOR_TRANSCRIPT', canGenerate: false });
+    // A student is not shown the pipeline.
+    const ds: any = await svc.sessionDetail(w.s[0].id, w.ls.id);
+    expect(ds.transcript).toBeNull();
+  });
+});

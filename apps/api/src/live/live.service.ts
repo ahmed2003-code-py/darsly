@@ -12,6 +12,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { LIVE_MAX_DURATION_MIN } from './live-timing';
+import { validateLiveSession } from '@darsly/shared-types';
+import { pipelineStages } from './live-pipeline';
+import { recordingStage } from './recording/recording-stage';
 import { LiveProviders } from './providers/live-providers';
 import type { LiveProviderKind, RoomCloseResult } from './providers/live-provider';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -122,7 +125,36 @@ export class LiveService {
 
   // ── Teacher ────────────────────────────────────────────────────────────────
 
+  /**
+   * The product's rules for a session (LIVE_SESSION_RULES, shared with the
+   * form). Every broken rule is returned at once, each naming its field and a
+   * code the form turns into a sentence under that field.
+   */
+  private assertValidSession(
+    dto: Partial<UpsertLiveDto>,
+    opts: { creating: boolean; checkPast: boolean },
+  ) {
+    const errors = validateLiveSession(
+      {
+        title: dto.title ?? (opts.creating ? '' : 'xx'),
+        description: dto.description ?? '',
+        startsAt: dto.startsAt ?? (opts.creating ? null : new Date().toISOString()),
+        durationMin: dto.durationMin ?? 60,
+        capacity: dto.capacity ?? null,
+      },
+      opts.checkPast ? Date.now() : -Infinity,
+    );
+    if (errors.length) {
+      throw new BadRequestException({
+        message: 'Some fields are invalid',
+        code: 'LIVE_SESSION_INVALID',
+        fields: errors,
+      });
+    }
+  }
+
   async create(scope: LiveScope, dto: UpsertLiveDto) {
+    this.assertValidSession(dto, { creating: true, checkPast: true });
     // The stream's teacher: named explicitly, or the caller when they are a
     // teacher themselves. STAFF must name one — they can schedule, never teach.
     const teacher = await this.academy.assertAssignableTeacher(
@@ -231,6 +263,13 @@ export class LiveService {
 
   async update(scope: LiveScope, id: string, dto: Partial<UpsertLiveDto>) {
     const existing = await this.assertOwned(scope, id);
+    // A start time is only refused for being in the past when it is the thing
+    // being changed: renaming yesterday's class is not rescheduling it.
+    this.assertValidSession(dto, {
+      creating: false,
+      checkPast:
+        dto.startsAt != null && new Date(dto.startsAt).getTime() !== existing.startsAt.getTime(),
+    });
     let teacher: { userId: string; teacherProfileId: string } | null = null;
     if (dto.teacherUserId != null && dto.teacherUserId !== existing.teacherUserId) {
       teacher = await this.academy.assertAssignableTeacher(scope.academyId, dto.teacherUserId);
@@ -1298,6 +1337,15 @@ export class LiveService {
   async requestSummary(scope: LiveScope, id: string) {
     const session = await this.assertOwned(scope, id);
     if (session.summaryStatus === 'READY') return { status: 'READY' as const };
+    // A Cloudflare lesson's words come from Darsly's own transcript of its
+    // recording. Without one there is nothing to summarise — refused here,
+    // before a job is queued to fail with NO_TRANSCRIPT and spend a retry.
+    if (session.provider === 'CLOUDFLARE' && !session.transcriptText?.trim()) {
+      throw new ConflictException({
+        message: 'The lesson transcript is not ready',
+        code: 'TRANSCRIPT_NOT_READY',
+      });
+    }
 
     // A job for this lesson is already queued or running — typically the
     // queue's own retry after a failed attempt marked the lesson FAILED. That
@@ -1455,10 +1503,20 @@ export class LiveService {
         summaryError: true,
         summaryForStudents: true,
         transcriptStatus: true,
+        transcriptText: true,
         updatedAt: true,
       },
     });
     const recordingStatus = await this.refreshRecording(s);
+    // Darsly's own recording (Cloudflare): its stage, not a bare status.
+    const rec =
+      s.provider === 'CLOUDFLARE'
+        ? await this.prisma.liveRecording.findFirst({
+            where: { sessionId },
+            orderBy: { createdAt: 'desc' },
+          })
+        : null;
+    const recStage = rec ? recordingStage(rec) : null;
     const canSeeSummary = role === 'TEACHER' || s.summaryForStudents;
     // A PROCESSING with nothing behind it is shown as the failure it is, so the
     // page offers "try again" instead of a spinner that never stops.
@@ -1468,6 +1526,14 @@ export class LiveService {
       summaryStatus = 'FAILED';
       summaryError = summaryError ?? 'STALLED';
     }
+    const stages = pipelineStages({
+      provider: s.provider,
+      transcriptStatus: s.transcriptStatus,
+      hasTranscriptText: !!s.transcriptText?.trim(),
+      summaryStatus,
+      summaryError,
+      recordingStage: recStage?.stage ?? null,
+    });
     return {
       id: s.id,
       title: s.title,
@@ -1475,16 +1541,32 @@ export class LiveService {
       durationMin: s.durationMin,
       status: this.effectiveStatus(s),
       role,
+      provider: s.provider,
       recording: {
         status: recordingStatus,
-        durationSeconds: s.recordingDuration,
+        // What the page shows: REQUESTED → CAPTURING → FINALIZING →
+        // PROCESSING → READY / FAILED (with a reason a teacher can read).
+        stage:
+          recStage?.stage ??
+          (recordingStatus === 'PROCESSING'
+            ? 'PROCESSING'
+            : recordingStatus === 'READY'
+              ? 'READY'
+              : recordingStatus === 'FAILED'
+                ? 'FAILED'
+                : null),
+        failure: recStage?.failure ?? (recordingStatus === 'FAILED' ? 'PROCESSING_FAILED' : null),
+        durationSeconds: s.recordingDuration ?? (rec?.durationSec || null),
         // A student is told there is a recording only once it is theirs to see.
         available:
           recordingStatus === 'READY' &&
           s.provider !== 'CLOUDFLARE' &&
           (role === 'TEACHER' || s.summaryForStudents),
       },
+      transcript: role === 'TEACHER' ? stages.transcript : null,
       summary: {
+        stage: canSeeSummary ? stages.summary.stage : 'NOT_STARTED',
+        canGenerate: role === 'TEACHER' && stages.summary.canGenerate,
         status: canSeeSummary ? summaryStatus : 'NOT_STARTED',
         data: canSeeSummary && summaryStatus === 'READY' ? s.summary : null,
         sharedWithStudents: s.summaryForStudents,

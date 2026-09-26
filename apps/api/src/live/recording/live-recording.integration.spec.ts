@@ -26,7 +26,21 @@ beforeAll(async () => {
   if (!available) return;
   await prisma.onModuleInit();
 }, 30_000);
+// Recordings this spec leaves active would be claimed by its next run (they
+// come back when their lease runs out), so each run closes what it opened.
+const opened: string[] = [];
 afterAll(async () => {
+  if (available && opened.length) {
+    await prisma.liveRecording
+      .updateMany({
+        where: {
+          sessionId: { in: opened },
+          status: { in: ['REQUESTED', 'RECORDING', 'STOPPING'] },
+        },
+        data: { status: 'FAILED', error: 'TEST_CLEANUP' },
+      })
+      .catch(() => undefined);
+  }
   await prisma.$disconnect().catch(() => undefined);
 });
 const guard = () => {
@@ -137,6 +151,7 @@ async function world() {
     },
   });
   const scope: LiveScope = { academyId: tp.id, userId: teacher.id, manageAll: true, role: 'OWNER' };
+  opened.push(ls.id);
   return { k, teacher, tp, ls, scope };
 }
 
@@ -205,7 +220,7 @@ describe('B.6 recorder on Postgres: ownership and crashes', () => {
     // Everything else REQUESTED on the shared test database is claimed too;
     // what matters is that this one is claimed exactly once.
     const claims: string[] = [];
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 1000; i++) {
       const got = await Promise.all([x.claim(), y.claim()]);
       for (const g of got) if (g) claims.push(g.id);
       if (!got[0] && !got[1]) break;
@@ -226,7 +241,7 @@ describe('B.6 recorder on Postgres: ownership and crashes', () => {
     const holder = b.worker(dir);
     const other = b.worker(dir);
     let mine = null;
-    for (let i = 0; i < 20 && !mine; i++) {
+    for (let i = 0; i < 1000 && !mine; i++) {
       const c = await holder.claim();
       if (!c) break;
       if (c.id === r.id) mine = c;
@@ -239,7 +254,7 @@ describe('B.6 recorder on Postgres: ownership and crashes', () => {
     // Nobody else may take it while the lease holds — the bug this guards
     // against made every heartbeat look expired on a non-UTC database.
     const grabbed: string[] = [];
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 1000; i++) {
       const c = await other.claim();
       if (!c) break;
       grabbed.push(c.id);
@@ -264,7 +279,7 @@ describe('B.6 recorder on Postgres: ownership and crashes', () => {
     const next = b.worker(dir);
     // Claim it as the first recorder (draining any other REQUESTED rows).
     let mine = null;
-    for (let i = 0; i < 20 && !mine; i++) {
+    for (let i = 0; i < 1000 && !mine; i++) {
       const c = await dead.claim();
       if (!c) break;
       if (c.id === r.id) mine = c;
@@ -276,7 +291,7 @@ describe('B.6 recorder on Postgres: ownership and crashes', () => {
       data: { leaseUntil: new Date(Date.now() - 1000), segments: 2 },
     });
     let taken = null;
-    for (let i = 0; i < 20 && !taken; i++) {
+    for (let i = 0; i < 1000 && !taken; i++) {
       const c = await next.claim();
       if (!c) break;
       if (c.id === r.id) taken = c;
@@ -287,7 +302,7 @@ describe('B.6 recorder on Postgres: ownership and crashes', () => {
       where: { id: r.id },
       data: { leaseUntil: new Date(Date.now() - 1000), attempts: 6 },
     });
-    for (let i = 0; i < 20; i++) if (!(await next.claim())) break;
+    for (let i = 0; i < 1000; i++) if (!(await next.claim())) break;
     const row = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
     expect(row).toMatchObject({ status: 'UPLOADING', error: 'RECORDER_GAVE_UP' });
   });
@@ -417,7 +432,7 @@ describe('B.6 recorder on Postgres: handing over to the video pipeline', () => {
       where: { id: a1 },
       data: { status: 'READY', durationSec: 42 },
     });
-    for (let i = 0; i < 20; i++) if (!(await b.recordings.syncProcessing(100))) break;
+    for (let i = 0; i < 1000; i++) if (!(await b.recordings.syncProcessing(100))) break;
     expect(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r1.id } })).toMatchObject({
       status: 'READY',
       durationSec: 42,
@@ -434,10 +449,100 @@ describe('B.6 recorder on Postgres: handing over to the video pipeline', () => {
     const a2 = (await prisma.liveRecording.findUniqueOrThrow({ where: { id: r2.id } }))
       .videoAssetId!;
     await prisma.videoAsset.update({ where: { id: a2 }, data: { status: 'FAILED' } });
-    for (let i = 0; i < 20; i++) if (!(await b.recordings.syncProcessing(100))) break;
+    for (let i = 0; i < 1000; i++) if (!(await b.recordings.syncProcessing(100))) break;
     expect(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r2.id } })).toMatchObject({
       status: 'FAILED',
       error: 'PACKAGING_FAILED',
     });
+  });
+});
+
+describe('B.7 nothing stays "processing" with nobody working on it', () => {
+  it('a request no recorder takes within two minutes closes as never started', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await b.recordings.start(w.scope, w.ls.id, w.teacher.id);
+    // Nobody claims it (no recorder service): two minutes later…
+    await prisma.liveRecording.update({
+      where: { id: r.id },
+      data: { createdAt: new Date(Date.now() - 3 * 60_000) },
+    });
+    await b.recordings.sweepStale();
+    const row = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
+    expect(row).toMatchObject({ status: 'FAILED', error: 'NOT_CLAIMED' });
+    expect((await b.recordings.latestView(w.ls.id))?.failure).toBe('NOT_STARTED');
+    expect(
+      (await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } })).recordingStatus,
+    ).toBe('FAILED');
+    // The room is told, so the REC badge goes away.
+    expect(b.rtc.changed).toHaveBeenCalledWith(w.ls.id);
+  });
+
+  it('a request still waiting when the class ends closes at once', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await b.recordings.start(w.scope, w.ls.id, w.teacher.id);
+    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { status: 'ENDED' } });
+    await b.recordings.sweepStale();
+    expect(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({
+      status: 'FAILED',
+      error: 'NEVER_STARTED',
+    });
+  });
+
+  it('a recording whose recorder vanished after the class ended goes to finalize, not limbo', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await b.recordings.start(w.scope, w.ls.id, w.teacher.id);
+    await prisma.liveRecording.update({
+      where: { id: r.id },
+      data: { status: 'RECORDING', leaseUntil: new Date(Date.now() - 10 * 60_000), segments: 1 },
+    });
+    // Still live: a silent recorder is left to the lease takeover.
+    await b.recordings.sweepStale();
+    expect((await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } })).status).toBe(
+      'RECORDING',
+    );
+    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { status: 'ENDED' } });
+    await b.recordings.sweepStale();
+    expect(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({
+      status: 'UPLOADING',
+      error: 'RECORDER_LOST',
+    });
+    expect((await b.recordings.latestView(w.ls.id))?.stage).toBe('FINALIZING');
+  });
+
+  it('stage times are kept: claimed, handed to the pipeline, ready', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const b = build();
+    const r = await b.recordings.start(w.scope, w.ls.id, w.teacher.id);
+    const worker = b.worker(await tmp());
+    let mine = null;
+    for (let i = 0; i < 1000 && !mine; i++) {
+      const c = await worker.claim();
+      if (!c) break;
+      if (c.id === r.id) mine = c;
+    }
+    expect(mine?.claimedAt).toBeInstanceOf(Date);
+    b.storage.objects.set(segmentKey(r.id, 0), Buffer.from('x'));
+    await prisma.liveRecording.update({
+      where: { id: r.id },
+      data: { status: 'UPLOADING', segments: 1 },
+    });
+    await worker.finalize(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } }));
+    const handed = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
+    expect(handed.handedAt).toBeInstanceOf(Date);
+    await prisma.videoAsset.update({
+      where: { id: handed.videoAssetId! },
+      data: { status: 'READY' },
+    });
+    for (let i = 0; i < 20; i++) if (!(await b.recordings.syncProcessing(100))) break;
+    const ready = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
+    expect(ready.readyAt).toBeInstanceOf(Date);
+    expect(ready.readyAt!.getTime()).toBeGreaterThanOrEqual(handed.handedAt!.getTime());
   });
 });

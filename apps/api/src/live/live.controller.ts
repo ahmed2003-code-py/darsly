@@ -44,6 +44,7 @@ import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { GuestAllowed } from '../common/decorators/guest-allowed.decorator';
 import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
 import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveRecordingService } from './recording/live-recording.service';
@@ -341,6 +342,7 @@ export class LiveController {
    * by the caller.
    */
   @Get('live/:id/join')
+  @GuestAllowed()
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] Enter the meeting (booked + started + within window)' })
   join(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
@@ -451,6 +453,7 @@ export class LiveController {
 
   /** What a viewer may read about a session: recording and summary, by role. */
   @Get('live/:id/detail')
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Session detail (recording + summary, filtered by role)' })
   detail(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
@@ -458,6 +461,8 @@ export class LiveController {
   }
 
   @Get('live/:id/chat')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Messages sent inside the classroom' })
   chat(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
@@ -465,6 +470,8 @@ export class LiveController {
   }
 
   @Post('live/:id/chat')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Send a message to the classroom' })
   sendChat(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ChatMessageDto) {
@@ -473,6 +480,7 @@ export class LiveController {
 
   /** A short-lived link to the recording, minted per request. */
   @Get('live/:id/recording')
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'A short-lived link to watch the recording' })
   recording(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
@@ -485,6 +493,7 @@ export class LiveController {
    * side, or a booked student once the recording is shared.
    */
   @Post('live/:id/replay')
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @HttpCode(200)
   @ApiOperation({ summary: 'Start watching the class recording (encrypted HLS)' })
@@ -496,6 +505,8 @@ export class LiveController {
   }
 
   @Post('live/:id/replay/:replayId/end')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @HttpCode(200)
   @ApiOperation({ summary: 'Stop watching (the content key is refused from now on)' })
@@ -510,6 +521,8 @@ export class LiveController {
   // ── Presence (either side of the classroom) ──────────────────────────────
 
   @Post('live/:id/heartbeat')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Still in the room — what attendance time is counted from' })
   heartbeat(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
@@ -517,6 +530,8 @@ export class LiveController {
   }
 
   @Post('live/:id/leave')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Left the room (best effort — heartbeats are the record)' })
   async leave(@CurrentUser() u: JwtPayload, @Param('id') id: string) {

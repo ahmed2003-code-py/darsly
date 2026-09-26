@@ -81,6 +81,7 @@ function world(
     studentProfile: {
       findUnique: jest.fn(async () => ({ id: 'st_1', user: { fullName: 'طالب' } })),
     },
+    guestBuyer: { findUnique: jest.fn(async () => null) },
     liveBooking: {
       findUnique: jest.fn(async () => (over.booked ? { id: 'b1' } : null)),
       findMany: jest.fn(async () => [{ student: { userId: 'su_1' } }]),

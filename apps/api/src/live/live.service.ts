@@ -865,15 +865,47 @@ export class LiveService {
    * before that there is no room to enter, and a "join" button that leads
    * nowhere is worse than one that says what it is waiting for.
    */
-  async join(userId: string, sessionId: string) {
-    const student = await this.studentOf(userId);
-    const booking = await this.prisma.liveBooking.findUnique({
-      where: { sessionId_studentId: { sessionId, studentId: student.id } },
-      include: { session: true },
+  /**
+   * A guest's confirmed seat on this session, if they are a guest and have
+   * one. `forJoin` narrows it to CONFIRMED: entering a class needs a seat for
+   * that class, where reading its chat or replay afterwards may also follow a
+   * delivered (or reviewed) purchase.
+   */
+  async guestSeat(userId: string, sessionId: string, forJoin = false) {
+    const guest = await this.prisma.guestBuyer.findUnique({ where: { userId }, select: { id: true, displayName: true } });
+    if (!guest) return null;
+    const purchase = await this.prisma.livePurchase.findFirst({
+      where: {
+        sessionId,
+        guestBuyerId: guest.id,
+        status: { in: forJoin ? ['CONFIRMED'] : ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'] },
+      },
+      select: { id: true, replayPolicy: true, replayDays: true, status: true },
     });
-    if (!booking || booking.session.deletedAt)
-      throw new ForbiddenException('You have not booked this session');
-    const s = booking.session;
+    return purchase ? { guest, purchase } : null;
+  }
+
+  async join(userId: string, sessionId: string) {
+    // A guest enters on their confirmed seat; a student on their booking.
+    const guest = await this.guestSeat(userId, sessionId, true);
+    let s: Prisma.LiveSessionGetPayload<object>;
+    let displayName: string;
+    if (guest) {
+      const found = await this.prisma.liveSession.findUnique({ where: { id: sessionId } });
+      if (!found || found.deletedAt) throw new ForbiddenException('You have not booked this session');
+      s = found;
+      displayName = guest.guest.displayName;
+    } else {
+      const student = await this.studentOf(userId);
+      const booking = await this.prisma.liveBooking.findUnique({
+        where: { sessionId_studentId: { sessionId, studentId: student.id } },
+        include: { session: true },
+      });
+      if (!booking || booking.session.deletedAt)
+        throw new ForbiddenException('You have not booked this session');
+      s = booking.session;
+      displayName = student.user.fullName;
+    }
     this.assertWindowOpen(s);
 
     // No reward here. Being handed a token means being *allowed* in, not having
@@ -895,7 +927,7 @@ export class LiveService {
 
     const meeting = await this.providers.forSession(s).participantAccess({
       session: { id: s.id, roomName: s.roomName, roomUrl: s.roomUrl },
-      userName: student.user.fullName,
+      userName: displayName,
       userId,
       // The student is never an owner: that is what would let them mute and
       // remove the class, and it is decided here rather than asked for.
@@ -1710,6 +1742,10 @@ export class LiveService {
       select: { id: true },
     });
     if (staff) return { session, role: 'TEACHER' as const };
+    // A guest's only way in is a confirmed seat of their own on THIS session
+    // (the token they hold is bound to it as well). Refunded, cancelled or
+    // pending: not in the room.
+    if (await this.guestSeat(userId, sessionId)) return { session, role: 'STUDENT' as const };
     const student = await this.prisma.studentProfile.findUnique({
       where: { userId },
       select: { id: true },

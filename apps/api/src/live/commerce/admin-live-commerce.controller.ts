@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsIn, IsOptional } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { LivePurchaseStatus } from '@prisma/client';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -12,6 +12,14 @@ const STATUSES = new Set<string>(Object.values(LivePurchaseStatus));
 
 class AdminRefundDto {
   @IsOptional() @IsIn(['ADMIN', 'NO_SHOW']) reason?: 'ADMIN' | 'NO_SHOW';
+}
+
+class CompleteRefundDto {
+  @IsString() @MaxLength(120) transferReference: string;
+}
+
+class RejectRefundDto {
+  @IsString() @MaxLength(500) reason: string;
 }
 
 /**
@@ -98,6 +106,54 @@ export class AdminLiveCommerceController {
   @ApiOperation({ summary: '[admin] Release a reviewed purchase’s earnings (once)' })
   release(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     return this.commerce.adminRelease(id, u.sub);
+  }
+
+  @Get('refunds')
+  @ApiOperation({ summary: '[admin] Refunds (manual ones carry the destination the buyer gave)' })
+  async refunds(@Query('status') status?: string) {
+    const rows = await this.prisma.refund.findMany({
+      where: status && ['REQUESTED', 'APPROVED', 'COMPLETED', 'REJECTED'].includes(status) ? { status: status as never } : {},
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        livePurchase: {
+          select: {
+            id: true,
+            status: true,
+            sessionId: true,
+            session: { select: { title: true, startsAt: true } },
+            student: { select: { user: { select: { fullName: true, phone: true } } } },
+            guestBuyer: { select: { displayName: true } },
+          },
+        },
+      },
+    });
+    return rows.map((r) => ({
+      ...r,
+      buyerName: r.livePurchase.student?.user.fullName ?? r.livePurchase.guestBuyer?.displayName ?? null,
+      guest: !!r.livePurchase.guestBuyer,
+    }));
+  }
+
+  @Post('refunds/:id/approve')
+  @HttpCode(200)
+  @ApiOperation({ summary: '[admin] Approve a manual refund (it must have a destination)' })
+  approve(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.commerce.approveRefund(id, u.sub);
+  }
+
+  @Post('refunds/:id/complete')
+  @HttpCode(200)
+  @ApiOperation({ summary: '[admin] Mark an approved manual refund as transferred (books the ledger, once)' })
+  complete(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: CompleteRefundDto) {
+    return this.commerce.completeRefund(id, u.sub, dto.transferReference);
+  }
+
+  @Post('refunds/:id/reject')
+  @HttpCode(200)
+  @ApiOperation({ summary: '[admin] Refuse a manual refund, with the reason' })
+  reject(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: RejectRefundDto) {
+    return this.commerce.rejectRefund(id, u.sub, dto.reason);
   }
 
   @Post('purchases/:id/refund')

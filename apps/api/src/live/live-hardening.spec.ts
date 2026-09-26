@@ -74,6 +74,7 @@ function liveWorld(
         return { count: 1 };
       }),
     },
+    guestBuyer: { findUnique: jest.fn(async () => null) },
     liveBooking: {
       findUnique: jest.fn(async () => over.booking ?? null),
       findMany: jest.fn(async () => over.booked ?? []),
@@ -346,6 +347,7 @@ describe('L3: a summary costs what its calls cost, and says so', () => {
           teacher: { userId: 'u_teacher' },
         })),
         update: jest.fn(async () => ({})),
+        updateMany: jest.fn(async () => ({ count: 1 })),
       },
       aiCallLog: {
         create: jest.fn(async ({ data }: any) => {
@@ -735,6 +737,7 @@ describe('P6: a manual match compares the transfer with what the transfer had to
       paymentEvent: {
         findUnique: jest.fn(async () => ({ id: 'e1', status: 'UNMATCHED', amountCents: event })),
         update: jest.fn(async () => ({})),
+        updateMany: jest.fn(async () => ({ count: 1 })),
       },
       payment: {
         findUnique: jest.fn(async () => ({

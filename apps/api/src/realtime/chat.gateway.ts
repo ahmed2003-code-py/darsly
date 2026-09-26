@@ -9,7 +9,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { JwtPayload, RealtimeEvents, SendMessagePayload } from '@darsly/shared-types';
+import { Role, JwtPayload, RealtimeEvents, SendMessagePayload } from '@darsly/shared-types';
 import type { Server, Socket } from 'socket.io';
 import { ChatService } from '../chat/chat.service';
 import { RealtimeService } from './realtime.service';
@@ -92,9 +92,19 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
     return payload;
   }
 
+  /**
+   * The same, for everything that is not a live classroom: a guest's token
+   * (one purchased seat) has no conversations, notifications or threads, so
+   * those events simply do nothing for it.
+   */
+  private member(client: Socket): JwtPayload | null {
+    const user = this.user(client);
+    return user && user.role !== Role.GUEST ? user : null;
+  }
+
   @SubscribeMessage(RealtimeEvents.JOIN_THREAD)
   async joinThread(@ConnectedSocket() client: Socket, @MessageBody() threadId: string) {
-    const user = this.user(client);
+    const user = this.member(client);
     if (!user || !(await this.chat.canAccessThread(user, threadId))) return;
     client.join(`thread:${threadId}`);
     await this.chat.markThreadRead(user, threadId);
@@ -107,7 +117,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
 
   @SubscribeMessage(RealtimeEvents.SEND_MESSAGE)
   async sendMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: SendMessagePayload) {
-    const user = this.user(client);
+    const user = this.member(client);
     if (!user || !payload?.body?.trim()) return;
     // ChatService persists, emits chat:message to the thread room + a
     // notification to the recipient, and returns the message.
@@ -118,7 +128,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
 
   @SubscribeMessage(RealtimeEvents.TYPING)
   async typing(@ConnectedSocket() client: Socket, @MessageBody() threadId: string) {
-    const user = this.user(client);
+    const user = this.member(client);
     // Gate on thread access — otherwise anyone who guesses a thread id could
     // spray typing echoes into (and leak their identity to) that room.
     if (!user || !(await this.chat.canAccessThread(user, threadId))) return;
@@ -138,6 +148,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
   async joinLive(@ConnectedSocket() client: Socket, @MessageBody() sessionId: string) {
     const user = this.user(client);
     if (!user || !sessionId) return;
+    // A guest's token is bound to one session's classroom.
+    if (user.role === Role.GUEST && user.liveSessionId !== sessionId) return;
     try {
       await this.live.assertInSession(user.sub, sessionId);
     } catch {
@@ -175,7 +187,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
 
   @SubscribeMessage(RealtimeEvents.MARK_READ)
   async markRead(@ConnectedSocket() client: Socket, @MessageBody() threadId: string) {
-    const user = this.user(client);
+    const user = this.member(client);
     if (user) await this.chat.markThreadRead(user, threadId);
   }
 }

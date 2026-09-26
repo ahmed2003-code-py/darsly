@@ -262,6 +262,11 @@ export class LedgerService {
     if (!payment || payment.status !== 'PAID' || payment.amountCents <= 0) return;
     if (payment.ledgerTransaction) return; // already recorded
     if (payment.livePurchaseId) return this.recordLivePayment(payment, db);
+    // A course payment always has its student (CHECK on Payment); only the
+    // wallet legs below actually need it, and they refuse without one.
+    const studentId = payment.studentId as string;
+    const needsStudent = payment.method === 'WALLET' || (payment.walletCents ?? 0) > 0;
+    if (needsStudent && !studentId) throw new Error(`Payment ${paymentId} draws on a wallet but has no student`);
 
     // Additive-fee model: amountCents (paid) = platform fee + academy net. The
     // fee/net are frozen on the Payment at submit time; fall back to the legacy
@@ -321,7 +326,7 @@ export class LedgerService {
       // simply could not afford a second course was shown "Internal server
       // error", and a payments endpoint reported server failures for a
       // condition that is not one. Seen as `201, 500, 409` in a three-way race.
-      const balance = await this.walletBalance(payment.studentId, db);
+      const balance = await this.walletBalance(studentId, db);
       if (balance < payment.amountCents) {
         throw new BadRequestException({
           message: 'Wallet balance is not enough',
@@ -336,7 +341,7 @@ export class LedgerService {
     const debitEntries: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
     if (paidFully) {
       debitEntries.push({
-        account: this.walletAccount(payment.studentId),
+        account: this.walletAccount(studentId),
         direction: 'DEBIT',
         amountCents: payment.amountCents,
       });
@@ -447,7 +452,7 @@ export class LedgerService {
     if (walletPortionSpent > 0) {
       await db.walletTransaction.create({
         data: {
-          studentId: payment.studentId,
+          studentId,
           kind: 'PURCHASE',
           amountCents: -walletPortionSpent,
           description: 'شراء دورة',
@@ -478,7 +483,8 @@ export class LedgerService {
     payment: {
       id: string;
       livePurchaseId: string | null;
-      studentId: string;
+      /** Null for a guest's seat — who then cannot pay from a wallet. */
+      studentId: string | null;
       tenantId: string;
       academyId: string | null;
       amountCents: number;
@@ -495,8 +501,12 @@ export class LedgerService {
     }
     const paidFully = payment.method === 'WALLET';
     const walletCents = payment.walletCents ?? 0;
+    const studentId = payment.studentId;
+    if ((paidFully || walletCents > 0) && !studentId) {
+      throw new BadRequestException({ message: 'A guest has no wallet', code: 'GUEST_NO_WALLET' });
+    }
     if (paidFully) {
-      const balance = await this.walletBalance(payment.studentId, db);
+      const balance = await this.walletBalance(studentId as string, db);
       if (balance < payment.amountCents) {
         throw new BadRequestException({
           message: 'Wallet balance is not enough',
@@ -509,7 +519,7 @@ export class LedgerService {
     const academyId = payment.academyId ?? payment.tenantId;
     const debits: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
     if (paidFully) {
-      debits.push({ account: this.walletAccount(payment.studentId), direction: 'DEBIT', amountCents: payment.amountCents });
+      debits.push({ account: this.walletAccount(studentId as string), direction: 'DEBIT', amountCents: payment.amountCents });
     } else {
       if (walletCents > 0)
         debits.push({ account: this.paymentEscrowAccount(payment.id), direction: 'DEBIT', amountCents: walletCents });
@@ -539,7 +549,7 @@ export class LedgerService {
     if (walletSpent > 0) {
       await db.walletTransaction.create({
         data: {
-          studentId: payment.studentId,
+          studentId: studentId as string,
           kind: 'PURCHASE',
           amountCents: -walletSpent,
           description: 'حجز جلسة مباشرة',

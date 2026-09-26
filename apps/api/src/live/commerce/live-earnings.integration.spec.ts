@@ -27,6 +27,23 @@ const guard = () => {
   return available;
 };
 
+/**
+ * Run the sweep until it has nothing left to do. The sweep takes a batch of
+ * the oldest work across the whole database, and other specs leave work in a
+ * shared test database — one pass need not reach this test's purchases.
+ */
+async function drain() {
+  let released = 0;
+  let review = 0;
+  for (let i = 0; i < 50; i++) {
+    const r = await S.commerce.releaseDelivered();
+    released += r.released;
+    review += r.review;
+    if (r.released === 0 && r.review === 0) break;
+  }
+  return { released, review };
+}
+
 /** A class that started `ranMin` minutes ago, with `n` wallet-bought seats. */
 async function runningClass(opts: { ranMin: number; seats?: number; center?: { teacherSharePercent: number } | null }) {
   const w = await commerceWorld(prisma, {
@@ -57,9 +74,8 @@ describe('Commerce C on Postgres: delivery and release', () => {
 
     // Ended through the server's own path (the teacher's end), not a flag.
     expect((await S.live.endSession(w.session.id, 'MANUAL')).outcome).toBe('ended');
-    const [a, b] = await Promise.all([S.commerce.releaseDelivered(), S.commerce.releaseDelivered()]);
-    expect(a.released + b.released).toBe(2);
-    await S.commerce.releaseDelivered();
+    await Promise.all([drain(), drain()]);
+    await drain();
 
     for (const p of purchases) {
       expect((await S.commerce.byId(p.id)).status).toBe('DELIVERED');
@@ -88,7 +104,7 @@ describe('Commerce C on Postgres: delivery and release', () => {
     if (!guard()) return;
     const { w, purchases } = await runningClass({ ranMin: 5 });
     await S.live.endSession(w.session.id, 'MANUAL');
-    const r = await S.commerce.releaseDelivered();
+    const r = await drain();
     expect(r.review).toBeGreaterThanOrEqual(1);
     const p = await prisma.livePurchase.findUniqueOrThrow({ where: { id: purchases[0].id } });
     expect(p.status).toBe('NEEDS_REVIEW');
@@ -107,7 +123,7 @@ describe('Commerce C on Postgres: delivery and release', () => {
     if (!guard()) return;
     const { w, purchases } = await runningClass({ ranMin: 5 });
     await S.live.endSession(w.session.id, 'MANUAL');
-    await S.commerce.releaseDelivered();
+    await drain();
     const id = purchases[0].id;
     await Promise.allSettled([S.commerce.adminRefund(id, 'admin'), S.commerce.adminRefund(id, 'admin')]);
     expect((await S.commerce.byId(id)).status).toBe('REFUNDED');
@@ -116,7 +132,7 @@ describe('Commerce C on Postgres: delivery and release', () => {
     expect(await prisma.liveBooking.count({ where: { purchaseId: id } })).toBe(0);
     expect(await accountBalance(prisma, `purchase:${id}:held`)).toBe(0);
     await expect(S.commerce.adminRelease(id, 'admin')).rejects.toMatchObject({ response: { code: 'PURCHASE_STATE_CONFLICT' } });
-    await S.commerce.releaseDelivered();
+    await drain();
     expect(await accountBalance(prisma, `teacher:${w.tp.id}:balance`)).toBe(0);
   });
 
@@ -127,7 +143,7 @@ describe('Commerce C on Postgres: delivery and release', () => {
     await S.terms.createVersion(w.academyId, { feeType: 'PERCENT', feeBps: 5000, feeMode: 'DEDUCTED' }, w.teacher.id);
     await prisma.academy.update({ where: { id: w.academyId }, data: { teacherSharePercent: 10 } });
     await S.live.endSession(w.session.id, 'MANUAL');
-    await S.commerce.releaseDelivered();
+    await drain();
     const p = purchases[0];
     // 100 EGP at the platform default 20% additive: the student paid 120;
     // Darsly 20; net 100 split 70/30.
@@ -149,7 +165,7 @@ describe('Commerce C on Postgres: delivery and release', () => {
     const p = await S.commerce.payWithWallet(w.students[0].user.id, w.session.id);
     // Move the class into the past (it never started).
     await prisma.liveSession.update({ where: { id: w.session.id }, data: { startsAt: new Date(Date.now() - 3 * 3600_000) } });
-    await S.commerce.releaseDelivered();
+    await drain();
     const after = await prisma.livePurchase.findUniqueOrThrow({ where: { id: p.id } });
     expect(after).toMatchObject({ status: 'NEEDS_REVIEW', reviewReason: 'never started' });
     expect(await accountBalance(prisma, `purchase:${p.id}:held`)).toBe(12_000);

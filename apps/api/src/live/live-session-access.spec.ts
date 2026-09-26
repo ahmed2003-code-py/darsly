@@ -7,6 +7,7 @@ function makePrisma() {
     liveSession: { findUnique: jest.fn() },
     academyMembership: { findFirst: jest.fn() },
     studentProfile: { findUnique: jest.fn() },
+    guestBuyer: { findUnique: jest.fn(async () => null) },
     liveBooking: { findUnique: jest.fn() },
   } as any;
 }

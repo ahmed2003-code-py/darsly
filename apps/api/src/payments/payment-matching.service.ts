@@ -197,6 +197,8 @@ export class PaymentMatchingService {
           // Who the platform thinks is paying, to weigh against who the provider
           // says actually sent the money.
           student: { select: { user: { select: { fullName: true } } } },
+          // A guest's seat has no student: the name they gave is who owes it.
+          livePurchase: { select: { guestBuyer: { select: { displayName: true } } } },
         },
       })
     ).filter((p) => p.amountCents - p.walletCents === dto.amountCents);
@@ -241,7 +243,7 @@ export class PaymentMatchingService {
         id: p.id,
         reference: p.reference,
         status: p.status,
-        owner: p.student?.user?.fullName ?? '',
+        owner: p.student?.user?.fullName ?? p.livePurchase?.guestBuyer?.displayName ?? '',
         reading: (p.proofReading as ProofReading | null) ?? null,
       })),
       ...topups.map((t) => ({
@@ -439,14 +441,19 @@ export class PaymentMatchingService {
     if (hits.length > 1) return { status: 'AMBIGUOUS' as const };
 
     const event = hits[0];
-    await this.prisma.paymentEvent.update({
-      where: { id: event.id },
+    // Claim the transfer with a compare-and-swap: two payments reconciling at
+    // the same instant (same sender, same amount) both read this event as
+    // UNMATCHED, and an unconditional update let both claim it — one real SMS
+    // verifying two payments. Only the claim that flips it wins.
+    const claim = await this.prisma.paymentEvent.updateMany({
+      where: { id: event.id, status: 'UNMATCHED', matchedPaymentId: null, matchedTopupId: null },
       data: {
         status: 'MATCHED',
         matchedPaymentId: payment.id,
         note: 'reconciled when the payment was submitted (transfer arrived first)',
       },
     });
+    if (claim.count === 0) return { status: 'UNMATCHED' as const };
     await this.manual.systemVerify(payment.id);
     return { status: 'MATCHED' as const, eventId: event.id };
   }
@@ -524,14 +531,16 @@ export class PaymentMatchingService {
     if (hits.length > 1) return { status: 'AMBIGUOUS' as const };
 
     const event = hits[0];
-    await this.prisma.paymentEvent.update({
-      where: { id: event.id },
+    // The same compare-and-swap as reconcilePayment: one transfer, one top-up.
+    const claim = await this.prisma.paymentEvent.updateMany({
+      where: { id: event.id, status: 'UNMATCHED', matchedPaymentId: null, matchedTopupId: null },
       data: {
         status: 'MATCHED',
         matchedTopupId: topup.id,
         note: 'reconciled when the top-up was submitted (transfer arrived first)',
       },
     });
+    if (claim.count === 0) return { status: 'UNMATCHED' as const };
     await this.wallet.approveTopup(null, topup.id);
     return { status: 'MATCHED' as const, eventId: event.id };
   }
@@ -614,21 +623,32 @@ export class PaymentMatchingService {
         code: 'AMOUNT_MISMATCH',
       });
     }
-    // Same as an automatic match: a pending payment is verified and settled;
-    // one a teacher already self-verified is settled — that is the whole point
-    // of a real transfer turning up for it.
-    if (payment.status === 'PENDING') await this.manual.systemVerify(paymentId);
-    else if (payment.status === 'PAID' && !payment.settledAt)
-      await this.manual.settle(paymentId, actorId);
-    else
+    if (!(payment.status === 'PENDING' || (payment.status === 'PAID' && !payment.settledAt)))
       throw new BadRequestException({
         message: 'Payment is neither pending nor awaiting settlement',
         code: 'NOT_MATCHABLE',
       });
-    await this.prisma.paymentEvent.update({
-      where: { id: eventId },
+    // Claim the transfer first, with a compare-and-swap, so two admins (or an
+    // admin and the matcher) cannot spend one transfer on two payments.
+    const claim = await this.prisma.paymentEvent.updateMany({
+      where: { id: eventId, status: { in: ['UNMATCHED', 'AMBIGUOUS'] }, matchedPaymentId: null, matchedTopupId: null },
       data: { status: 'MATCHED', matchedPaymentId: paymentId, note: `manual match by ${actorId}` },
     });
+    if (claim.count === 0) throw new BadRequestException('Event already matched');
+    try {
+      // Same as an automatic match: a pending payment is verified and settled;
+      // one a teacher already self-verified is settled — that is the whole
+      // point of a real transfer turning up for it.
+      if (payment.status === 'PENDING') await this.manual.systemVerify(paymentId);
+      else await this.manual.settle(paymentId, actorId);
+    } catch (e) {
+      // The payment was not verified: the transfer is not spent.
+      await this.prisma.paymentEvent.updateMany({
+        where: { id: eventId, matchedPaymentId: paymentId },
+        data: { status: event.status, matchedPaymentId: null, note: event.note },
+      });
+      throw e;
+    }
     return { ok: true };
   }
 }

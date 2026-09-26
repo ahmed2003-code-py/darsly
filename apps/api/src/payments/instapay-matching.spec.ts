@@ -261,6 +261,7 @@ describe('the transfer arrives before the form is finished', () => {
           return events;
         }),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn(async () => ({ count: 1 })),
       },
     };
     const wallet: any = { approveTopup: jest.fn().mockResolvedValue({}) };

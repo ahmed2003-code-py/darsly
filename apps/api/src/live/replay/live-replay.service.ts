@@ -75,7 +75,17 @@ export class LiveReplayService {
           session: { select: { startsAt: true, durationMin: true, endedAt: true } },
         },
       });
-      const verdict = booking ? paidReplayVerdict(booking.purchase ?? null, booking.session) : { ok: true as const };
+      // No booking: a guest, whose seat is the purchase itself.
+      const guest = booking ? null : await this.live.guestSeat(user.sub, liveSessionId);
+      const session = await this.prisma.liveSession.findUniqueOrThrow({
+        where: { id: liveSessionId },
+        select: { startsAt: true, durationMin: true, endedAt: true },
+      });
+      const verdict = booking
+        ? paidReplayVerdict(booking.purchase ?? null, booking.session)
+        : guest
+          ? paidReplayVerdict(guest.purchase, session)
+          : { ok: false as const, reason: 'not in this session' };
       if (!verdict.ok) {
         throw new ForbiddenException({
           message: 'Your seat does not include watching the recording',

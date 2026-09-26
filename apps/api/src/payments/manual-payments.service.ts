@@ -782,7 +782,8 @@ export class ManualPaymentsService {
       /** Set for a Live seat: handed to the Live handler, never priced or enrolled here. */
       livePurchaseId?: string | null;
       enrollmentId: string | null;
-      studentId: string;
+      /** Always set for a course payment (CHECK on Payment); null only for a guest's Live seat. */
+      studentId: string | null;
       couponId: string | null;
       amountCents: number;
       walletCents: number;
@@ -804,8 +805,9 @@ export class ManualPaymentsService {
       return this.live().verify(payment.id, verifierId);
     }
     const courseId = payment.courseId;
-    // The CHECK on Payment makes this unreachable; refusing beats guessing.
-    if (!courseId) throw new Error(`Payment ${payment.id} has no target`);
+    const studentId = payment.studentId;
+    // The CHECKs on Payment make these unreachable; refusing beats guessing.
+    if (!courseId || !studentId) throw new Error(`Payment ${payment.id} has no course or student`);
     if (payment.status !== 'PENDING') {
       // Fast path; the authoritative guard is the conditional update below.
       if (auto) return { ok: true, alreadyHandled: true };
@@ -883,14 +885,14 @@ export class ManualPaymentsService {
         // from: there is no moment where the money has left the payment and not
         // yet arrived in the wallet.
         const ledgerTxnId = await this.ledger.creditWallet(
-          payment.studentId,
+          studentId,
           overpaid,
           `price dropped after payment ${payment.id}`,
           tx,
         );
         await tx.walletTransaction.create({
           data: {
-            studentId: payment.studentId,
+            studentId: studentId,
             kind: 'REFUND',
             amountCents: overpaid,
             description: 'فرق سعر الدورة',
@@ -905,7 +907,7 @@ export class ManualPaymentsService {
           data: { status: 'ACTIVE', approvedAt: new Date(), expiresAt },
         });
         // A bundle is only worth what it unlocks.
-        if (course) await activateBundleChildren(tx, course, payment.studentId, expiresAt);
+        if (course) await activateBundleChildren(tx, course, studentId, expiresAt);
       }
       if (settle) await this.ledger.recordPayment(payment.id, tx);
       return true;
@@ -918,7 +920,7 @@ export class ManualPaymentsService {
 
     if (adjust) {
       await this.notifyStudent(
-        payment.studentId,
+        studentId,
         'ENROLLMENT_APPROVED',
         'رجّعنالك فرق السعر 💰',
         `سعر «${course?.title ?? 'الدورة'}» نزل قبل ما نأكّد تحويلك، ف${(overpaid / 100).toFixed(2)} ج.م رجعت لمحفظتك.`,
@@ -934,7 +936,7 @@ export class ManualPaymentsService {
               paidCents: payment.amountCents,
               nowCents: now?.totalCents ?? null,
               refundedCents: overpaid,
-              studentId: payment.studentId,
+              studentId: studentId,
             } as never,
           },
         })
@@ -944,7 +946,7 @@ export class ManualPaymentsService {
     // Non-critical follow-ups (a failure here never un-credits the teacher).
     await this.ledger.ensureInvoice(payment.id);
     await this.notifyStudent(
-      payment.studentId,
+      studentId,
       'ENROLLMENT_APPROVED',
       auto ? 'تم تأكيد دفعتك تلقائياً ✅' : 'تم تأكيد دفعتك ✅',
       `تم تفعيل اشتراكك في «${course?.title ?? 'الدورة'}». مذاكرة سعيدة!`,
@@ -1041,7 +1043,7 @@ export class ManualPaymentsService {
       // rather than leaving it stuck in this payment's escrow account.
       if (payment.walletCents > 0) {
         await this.ledger.releaseWalletReservation(
-          payment.studentId,
+          payment.studentId as string,
           payment.id,
           payment.walletCents,
           tx,
@@ -1055,7 +1057,7 @@ export class ManualPaymentsService {
       }
     });
     await this.notifyStudent(
-      payment.studentId,
+      payment.studentId as string,
       'ANNOUNCEMENT',
       'لم يتم تأكيد الدفعة ❌',
       reason?.trim()
@@ -1114,7 +1116,9 @@ export class ManualPaymentsService {
       include: {
         student: { select: { user: { select: { fullName: true, phone: true } } } },
         course: { select: { title: true } },
-        livePurchase: { select: { session: { select: { title: true } } } },
+        livePurchase: {
+          select: { session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } },
+        },
       },
     });
     return rows.map((p) => ({
@@ -1131,8 +1135,8 @@ export class ManualPaymentsService {
       cashOrigin: p.cashOrigin,
       cashReceiver: p.cashReceiver,
       note: p.note,
-      studentName: p.student.user.fullName,
-      studentPhone: p.student.user.phone,
+      studentName: p.student?.user.fullName ?? p.livePurchase?.guestBuyer?.displayName ?? '—',
+      studentPhone: p.student?.user.phone ?? null,
       courseId: p.courseId,
       courseTitle: p.course?.title ?? p.livePurchase?.session.title ?? '—',
       livePurchaseId: p.livePurchaseId,

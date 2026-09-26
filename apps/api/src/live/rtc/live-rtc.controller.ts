@@ -26,6 +26,7 @@ import {
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { GuestAllowed } from '../../common/decorators/guest-allowed.decorator';
 import { LIMITS } from '../../common/validation';
 import { LiveRtcService, SIMULCAST_RIDS, SimulcastRid } from './live-rtc.service';
 
@@ -134,6 +135,8 @@ export class LiveRtcController {
   constructor(private readonly rtc: LiveRtcService) {}
 
   @Get('live/:id/rtc/state')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Who is in the classroom, what is published, who may speak' })
   state(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
@@ -142,6 +145,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Open a WebRTC connection to the classroom' })
   open(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: OpenConnectionDto) {
@@ -150,6 +155,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/publish')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Send tracks (checked against what this person may send)' })
   publish(
@@ -163,6 +170,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/subscribe')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Receive published tracks' })
   subscribe(
@@ -176,6 +185,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/layer')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Receive a different simulcast layer of a video' })
   layer(
@@ -189,6 +200,8 @@ export class LiveRtcController {
   }
 
   @Put('live/:id/rtc/connections/:cid/renegotiate')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   renegotiate(
     @CurrentUser() u: JwtPayload,
@@ -201,6 +214,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/close-tracks')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   closeTracks(
     @CurrentUser() u: JwtPayload,
@@ -213,6 +228,8 @@ export class LiveRtcController {
   }
 
   @Delete('live/:id/rtc/connections/:cid')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   close(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('cid') cid: string) {
     limit(u.sub);
@@ -220,6 +237,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/hand')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Raise or lower your hand' })
   hand(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: HandDto) {
@@ -228,6 +247,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/hand/:userId')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: "The teacher approves, rejects or revokes a student's hand" })
   decide(
@@ -241,6 +262,8 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/remove/:userId')
+
+  @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'The teacher removes someone from the classroom' })
   remove(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('userId') userId: string) {

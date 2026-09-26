@@ -79,6 +79,7 @@ function build(world: {
       }),
       count: jest.fn(async () => world.otherLiveCount ?? 0),
     },
+    guestBuyer: { findUnique: jest.fn(async () => null) },
     liveBooking: {
       findUnique: jest.fn(async () => (world.booked ? { id: 'b1', session: { ...s } } : null)),
       // Who gets told the class has started.

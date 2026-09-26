@@ -1,8 +1,15 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { JwtPayload } from '@darsly/shared-types';
+import { JwtPayload, Role } from '@darsly/shared-types';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { GUEST_ALLOWED_KEY } from '../decorators/guest-allowed.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -54,7 +61,9 @@ export class JwtAuthGuard implements CanActivate {
             secret: process.env.JWT_ACCESS_SECRET,
             algorithms: ['HS256'],
           });
-          if (await this.sessionIsLive(payload)) request.user = payload;
+          // A guest token is for one classroom, not for being "someone" on
+          // public pages: it is treated as anonymous there.
+          if (payload.role !== Role.GUEST && (await this.sessionIsLive(payload))) request.user = payload;
         } catch {
           /* anonymous */
         }
@@ -87,8 +96,27 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Account disabled');
     }
 
+    if (payload.role === Role.GUEST) this.assertGuestScope(context, request, payload);
+
     request.user = payload;
     return true;
+  }
+
+  /**
+   * A guest token opens one session's classroom and nothing else: the route
+   * must be marked @GuestAllowed, and the session in its URL must be the one
+   * the token was issued for. Everything else is refused before any handler
+   * runs, whatever that handler's own checks would have said.
+   */
+  private assertGuestScope(context: ExecutionContext, request: { params?: Record<string, string> }, payload: JwtPayload) {
+    const allowed = this.reflector.getAllAndOverride<boolean>(GUEST_ALLOWED_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    const target = request.params?.id;
+    if (!allowed || !payload.liveSessionId || !target || target !== payload.liveSessionId) {
+      throw new ForbiddenException({ message: 'Not available to a guest', code: 'GUEST_SCOPE' });
+    }
   }
 
   /** Whether this token's device session is still usable — the same question

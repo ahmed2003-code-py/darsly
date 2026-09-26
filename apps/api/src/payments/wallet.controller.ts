@@ -106,7 +106,9 @@ export class WalletController {
         take: 10,
         include: {
           course: { select: { title: true } },
-          livePurchase: { select: { session: { select: { title: true } } } },
+          livePurchase: {
+            select: { session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } },
+          },
           student: { include: { user: { select: { fullName: true } } } },
           invoice: { select: { serial: true } },
         },
@@ -160,7 +162,7 @@ export class WalletController {
         // What the money bought: a course, or a seat on a live session.
         courseTitle: p.course?.title ?? p.livePurchase?.session.title ?? '—',
         liveSessionTitle: p.livePurchase?.session.title ?? null,
-        studentName: p.student.user.fullName,
+        studentName: p.student?.user.fullName ?? p.livePurchase?.guestBuyer?.displayName ?? '—',
         invoiceSerial: p.invoice?.serial ?? null,
         paidAt: p.paidAt,
       })),
@@ -237,7 +239,9 @@ export class WalletController {
           take: 10,
           include: {
             course: { select: { title: true } },
-          livePurchase: { select: { session: { select: { title: true } } } },
+          livePurchase: {
+            select: { session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } },
+          },
             student: { include: { user: { select: { fullName: true } } } },
           },
         }),
@@ -275,7 +279,7 @@ export class WalletController {
         // What the money bought: a course, or a seat on a live session.
         courseTitle: p.course?.title ?? p.livePurchase?.session.title ?? '—',
         liveSessionTitle: p.livePurchase?.session.title ?? null,
-        studentName: p.student.user.fullName,
+        studentName: p.student?.user.fullName ?? p.livePurchase?.guestBuyer?.displayName ?? '—',
         paidAt: p.paidAt,
       })),
       payouts: [],

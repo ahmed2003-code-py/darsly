@@ -6,7 +6,8 @@ import { paidReplayVerdict } from '../live/commerce/replay-entitlement';
 type Db = Pick<
   PrismaClient,
   'liveReplaySession' | 'deviceSession' | 'academyMembership' | 'studentProfile' | 'liveBooking'
->;
+> &
+  Partial<Pick<PrismaClient, 'guestBuyer' | 'livePurchase'>>;
 
 /**
  * The key endpoint's check for a live lesson's recording (token rt='L').
@@ -74,6 +75,20 @@ export async function assertLiveReplayKey(db: Db, claims: PlaybackClaims): Promi
     return;
   }
   if (s.recordingVisibility !== 'STUDENTS') return deny('Recording not shared');
+  // A guest's seat is its purchase (no booking): judged by its own frozen
+  // replay rights, like any paid seat.
+  const guest = db.guestBuyer ? await db.guestBuyer.findUnique({ where: { userId: r.userId }, select: { id: true } }) : null;
+  if (guest && db.livePurchase) {
+    const p = await db.livePurchase.findFirst({
+      where: { sessionId: s.id, guestBuyerId: guest.id },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true, replayPolicy: true, replayDays: true },
+    });
+    if (!p) return deny('Not in this session');
+    const verdict = paidReplayVerdict(p, s);
+    if (!verdict.ok) return deny(`Replay not included: ${verdict.reason}`);
+    return;
+  }
   const student = await db.studentProfile.findUnique({
     where: { userId: r.userId },
     select: { id: true },

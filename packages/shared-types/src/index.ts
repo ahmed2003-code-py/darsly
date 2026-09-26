@@ -12,6 +12,11 @@ export enum Role {
   STUDENT = 'STUDENT',
   /** Non-teaching, non-learning account; authority is membership-only. */
   STAFF = 'STAFF',
+  /**
+   * A guest who bought one live seat without an account. Its token is bound
+   * to that one session and refused on every route not marked @GuestAllowed.
+   */
+  GUEST = 'GUEST',
 }
 
 export enum TeacherStatus {
@@ -34,6 +39,8 @@ export interface JwtPayload {
   tenantId?: string;
   /** device session id — lets us kill exactly one device */
   sessionId: string;
+  /** GUEST only: the one live session this token may act on. */
+  liveSessionId?: string;
 }
 
 export interface RequestOtpDto {

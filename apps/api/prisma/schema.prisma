@@ -22,6 +22,11 @@ enum Role {
   // AcademyMembership (a Center Admin who does not teach). No TeacherProfile,
   // no StudentProfile, no tenantId.
   STAFF
+  // Someone who bought one live seat without an account (GuestBuyer). Has no
+  // email, phone, username or password, so it can never sign in; its only
+  // credential is the purchase's access secret, and the short-lived token that
+  // secret buys is refused everywhere except that one session's classroom.
+  GUEST
 }
 
 model User {
@@ -70,6 +75,7 @@ model User {
   groupAssignments   GroupAssignment[]
   taughtSessions     GroupSession[]
   taughtLiveSessions LiveSession[]       @relation("liveSessionTeacher")
+  guestBuyer         GuestBuyer?
 }
 
 // ─────────────────────────── Academy (Workspace) ───────────────────────────
@@ -1467,18 +1473,21 @@ enum CashReceiver {
 }
 
 model Payment {
-  id             String         @id @default(cuid())
-  studentId      String
-  student        StudentProfile @relation(fields: [studentId], references: [id])
+  id             String          @id @default(cuid())
+  /// The student who paid. Null only for a guest's Live seat (the buyer is the
+  /// purchase's GuestBuyer); a course payment always has one (CHECK in
+  /// migration 20261012120000).
+  studentId      String?
+  student        StudentProfile? @relation(fields: [studentId], references: [id], onDelete: Restrict)
   /// What the money buys: exactly one of a course or a Live seat (a CHECK in
   /// migration 20261012110000 enforces it). Every row before Live commerce
   /// is a course payment, and stays one.
   courseId       String?
-  course         Course?        @relation(fields: [courseId], references: [id], onDelete: Restrict)
-  livePurchaseId String?        @unique
-  livePurchase   LivePurchase?  @relation(fields: [livePurchaseId], references: [id], onDelete: Restrict)
+  course         Course?         @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  livePurchaseId String?         @unique
+  livePurchase   LivePurchase?   @relation(fields: [livePurchaseId], references: [id], onDelete: Restrict)
   enrollmentId   String?
-  enrollment     Enrollment?    @relation(fields: [enrollmentId], references: [id])
+  enrollment     Enrollment?     @relation(fields: [enrollmentId], references: [id])
   tenantId       String // author scope (== course.tenantId)
   academyId      String? // organisation scope (== course.academyId)
 
@@ -2903,14 +2912,21 @@ enum LivePurchaseStatus {
 /// balance (studentPays = fee + teacher + center), none is negative, and a
 /// student has at most one live purchase per session at a time.
 model LivePurchase {
-  id            String             @id @default(cuid())
-  sessionId     String
-  session       LiveSession        @relation(fields: [sessionId], references: [id], onDelete: Restrict)
-  studentId     String?
-  student       StudentProfile?    @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  status        LivePurchaseStatus
+  id              String             @id @default(cuid())
+  sessionId       String
+  session         LiveSession        @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  studentId       String?
+  student         StudentProfile?    @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  /// A guest buyer instead of a student (exactly one of the two).
+  guestBuyerId    String?
+  guestBuyer      GuestBuyer?        @relation(fields: [guestBuyerId], references: [id], onDelete: Restrict)
+  /// A guest's access secret: SHA-256 of 32 random bytes, the raw value shown
+  /// to them once and never stored. It opens the purchase's status page, and —
+  /// only while the seat is confirmed — a token for this one classroom.
+  accessTokenHash String?            @unique
+  status          LivePurchaseStatus
   /// While HELD or PAYMENT_PENDING: the seat counts as taken until then.
-  holdExpiresAt DateTime?
+  holdExpiresAt   DateTime?
 
   /// Where the sale happens (the session's academy) and whose class it is.
   academyId String
@@ -3023,6 +3039,19 @@ model Refund {
 
   @@unique([livePurchaseId, reason])
   @@index([status, createdAt])
+}
+
+/// Someone who bought a live seat without a Darsly account: a display name,
+/// and a GUEST User row so the classroom (attendance, chat, realtime) can name
+/// them. Nothing else is collected; a refund destination is asked for only
+/// when a refund is owed.
+model GuestBuyer {
+  id          String         @id @default(cuid())
+  userId      String         @unique
+  user        User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  displayName String
+  createdAt   DateTime       @default(now())
+  purchases   LivePurchase[]
 }
 
 model Certificate {

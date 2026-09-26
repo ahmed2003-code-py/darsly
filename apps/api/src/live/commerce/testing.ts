@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LedgerService } from '../../payments/ledger.service';
 import { ManualPaymentsService } from '../../payments/manual-payments.service';
@@ -38,6 +39,7 @@ export function commerceStack(prisma: PrismaService) {
     notifications,
     proofs,
     proofReader,
+    new JwtService({}),
   );
   commerce.onModuleInit();
   const academyStub = {

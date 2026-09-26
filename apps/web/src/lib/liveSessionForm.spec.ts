@@ -5,6 +5,13 @@ import {
   messageKey,
   serverErrors,
   toPayload,
+  combine,
+  formatTime12,
+  localTime,
+  nextSlot,
+  splitStart,
+  startNowSlot,
+  timeSlots,
   type LiveFormValues,
 } from './liveSessionForm';
 
@@ -83,6 +90,17 @@ describe('the new-session form', () => {
   it('leaves errors that belong to no field to the banner', () => {
     expect(serverErrors({ response: { data: { code: 'TEACHER_CONFLICT', message: 'x' } } })).toEqual({});
     expect(serverErrors(new Error('Network Error'))).toEqual({});
+  });
+
+  it('offers sensible times: the next half hour, "start now", a 12-hour clock', () => {
+    const at = new Date(2026, 8, 26, 19, 7).getTime(); // 19:07 local
+    expect(localTime(nextSlot(at))).toBe('19:30');
+    expect(localTime(startNowSlot(at))).toBe('19:10');
+    expect(splitStart(combine('2026-09-26', '19:30'))).toEqual({ date: '2026-09-26', time: '19:30' });
+    expect(formatTime12('19:30', 'ar')).toBe('7:30 م');
+    expect(formatTime12('00:15', 'en')).toBe('12:15 AM');
+    expect(timeSlots(15)).toHaveLength(96);
+    expect(timeSlots(15, '19:10')).toContain('19:10');
   });
 
   it('sends numbers, trims text, and null for no capacity', () => {

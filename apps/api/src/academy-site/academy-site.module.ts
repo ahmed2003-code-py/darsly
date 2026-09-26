@@ -22,6 +22,9 @@ import { AiClient } from './ai/ai.client';
 import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
 import { LiveProvidersModule } from '../live/providers/live-providers.module';
 import { LiveSummaryHandler } from '../live/live-summary.handler';
+import { LiveTranscribeHandler } from '../live/transcription/live-transcribe.handler';
+import { PrismaService } from '../prisma/prisma.service';
+import { StorageProvider } from '../storage/storage.provider';
 import { AiJobService } from './jobs/ai-job.service';
 import { AiJobWorker } from './jobs/ai-job.worker';
 import { AcademyMediaController } from './media/academy-media.controller';
@@ -62,6 +65,13 @@ import { AdaptiveReaderService } from '../paper-import/ocr/adaptive-reader.servi
     AiJobService,
     AiJobWorker,
     LiveSummaryHandler,
+    {
+      // Built by hand: its speech-to-text call is a plain argument (a fake in tests).
+      provide: LiveTranscribeHandler,
+      useFactory: (prisma: PrismaService, storage: StorageProvider) =>
+        new LiveTranscribeHandler(prisma, storage),
+      inject: [PrismaService, StorageProvider],
+    },
     ImageVariantsService,
     TranscriberService,
     AdaptiveReaderService,
@@ -93,8 +103,9 @@ import { AdaptiveReaderService } from '../paper-import/ocr/adaptive-reader.servi
         siteGenerate: SiteGenerateHandler,
         liveSummary: LiveSummaryHandler,
         paperImport: PaperImportHandler,
-      ) => [siteGenerate, liveSummary, paperImport],
-      inject: [SiteGenerateHandler, LiveSummaryHandler, PaperImportHandler],
+        liveTranscribe: LiveTranscribeHandler,
+      ) => [siteGenerate, liveSummary, paperImport, liveTranscribe],
+      inject: [SiteGenerateHandler, LiveSummaryHandler, PaperImportHandler, LiveTranscribeHandler],
     },
   ],
   exports: [

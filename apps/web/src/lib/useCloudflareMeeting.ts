@@ -4,6 +4,7 @@ import { getSocket } from './socket';
 import type { Participant } from './useDailyMeeting';
 import { initialLayer, nextLayer, type LayerState } from './simulcast';
 import { audioConstraint, videoConstraint } from './liveDevices';
+import { LessonAudio } from './lessonAudio';
 
 /**
  * The Darsly classroom over Cloudflare Realtime.
@@ -42,6 +43,7 @@ export interface RtcState {
   me: { userId: string; role: 'TEACHER' | 'STUDENT'; hand: HandState; canPublish: boolean };
   maxSpeakers: number;
   recording?: boolean;
+  transcribing?: boolean;
   participants: {
     userId: string;
     name: string;
@@ -58,6 +60,8 @@ export interface CloudflareAccess {
   provider: 'cloudflare';
   iceServers: RTCIceServer[];
   rtcPath: string;
+  /** Capture the lesson's audio for its transcript (the teacher, when switched on). */
+  transcribe?: boolean;
 }
 
 /** Runs async steps one after another: a PeerConnection negotiates one change at a time. */
@@ -114,6 +118,9 @@ export function useCloudflareMeeting(
   const [sharing, setSharing] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [connection, setConnection] = useState<'connected' | 'reconnecting'>('connected');
+  /** This page is capturing the lesson's audio for its transcript. */
+  const [capturing, setCapturing] = useState(false);
+  const lessonAudio = useRef<LessonAudio | null>(null);
   /** Bumped whenever a remote or local track appears or goes, to re-render tiles. */
   const [, setTick] = useState(0);
   const bump = useCallback(() => setTick((n) => n + 1), []);
@@ -552,6 +559,17 @@ export function useCloudflareMeeting(
               setMicOn(true);
             } else setNotice('MIC_FAILED');
           }
+          if (access.transcribe && !lessonAudio.current) {
+            const la = new LessonAudio((seq, blob) => {
+              const form = new FormData();
+              form.append('file', blob, blob.type.includes('mp4') ? 'piece.m4a' : 'piece.webm');
+              return api.post(`/teacher/live/${liveSessionId}/audio/${seq}`, form).then(() => undefined);
+            });
+            if (la.start()) {
+              lessonAudio.current = la;
+              setCapturing(true);
+            }
+          }
         } else {
           // Education mode: a student enters listening. Nothing was asked of
           // their camera or microphone, and nothing is sent.
@@ -567,11 +585,21 @@ export function useCloudflareMeeting(
         setError(code ?? 'meeting');
       }
     },
-    [openRecv, fetchState, reconcile, publish],
+    [openRecv, fetchState, reconcile, publish, liveSessionId],
   );
+
+  /** The last piece of the lesson's audio is sent; capture stops. */
+  const stopCapture = useCallback(() => {
+    const la = lessonAudio.current;
+    lessonAudio.current = null;
+    setCapturing(false);
+    // Not awaited: the upload finishes in the background while the page moves on.
+    if (la) void la.stop();
+  }, []);
 
   const teardown = useCallback(async () => {
     joinedRef.current = false;
+    stopCapture();
     for (const [, l] of local.current) l.track.stop();
     local.current.clear();
     previewRef.current?.stop();
@@ -580,7 +608,7 @@ export function useCloudflareMeeting(
     pulled.current.clear();
     await Promise.all([closeConn(send), closeConn(recv)]);
     setJoined(false);
-  }, [closeConn, dropAudio]);
+  }, [closeConn, dropAudio, stopCapture]);
 
   const leave = useCallback(async () => {
     leaving.current = true;
@@ -769,6 +797,27 @@ export function useCloudflareMeeting(
     const h = setInterval(beat, HEARTBEAT_MS);
     return () => clearInterval(h);
   }, [enabled, joined, liveSessionId]);
+
+  // The lesson's audio: whatever is being said now — the teacher's microphone
+  // and every voice pulled in — follows mutes, speakers granted and revoked.
+  useEffect(() => {
+    if (!capturing) return;
+    const sync = () => {
+      const tracks: MediaStreamTrack[] = [];
+      const mic = local.current.get('AUDIO')?.track;
+      if (mic) tracks.push(mic);
+      for (const p of pulled.current.values()) if (p.kind === 'AUDIO' && p.track) tracks.push(p.track);
+      lessonAudio.current?.setTracks(tracks);
+    };
+    sync();
+    const h = setInterval(sync, 1_500);
+    return () => clearInterval(h);
+  }, [capturing]);
+
+  // The class ended: the last piece goes up now, inside the server's grace.
+  useEffect(() => {
+    if (ended) stopCapture();
+  }, [ended, stopCapture]);
 
   useEffect(() => {
     if (!notice) return;
@@ -974,7 +1023,8 @@ export function useCloudflareMeeting(
     toggleCam,
     toggleShare,
     recording: !!state?.recording,
-    transcribing: false,
+    // Everyone sees it; the teacher's page is the one capturing.
+    transcribing: capturing || !!state?.transcribing,
     // Darsly's recorder runs on the server (the page asks for it through the
     // recording endpoint); there is nothing to start in the browser.
     startRecording: async (): Promise<string | null> => null,

@@ -7,6 +7,8 @@ import type { LiveMeeting } from '../../../lib/useLiveMeeting';
 import { useLiveChat } from '../../../lib/useLiveChat';
 import { formatClock, useClockTick, type ClockAnchor } from '../../../lib/useSessionClock';
 import { NameTag, Tile, Video, Initial } from './media';
+import { getSocket } from '../../../lib/socket';
+import { playLiveSound, setSoundsMuted, soundsMuted } from '../../../lib/liveSounds';
 
 type Cf = Extract<LiveMeeting, { provider: 'cloudflare' }>;
 type Panel = 'people' | 'chat' | null;
@@ -28,6 +30,7 @@ function Ctl({
   badge,
   tone,
   showLabel,
+  labelLg,
 }: {
   icon: string;
   label: string;
@@ -38,6 +41,8 @@ function Ctl({
   badge?: number | 'dot';
   tone?: 'danger';
   showLabel?: boolean;
+  /** Icon-only on small screens, icon and word from `lg` up. */
+  labelLg?: boolean;
 }) {
   const color =
     tone === 'danger'
@@ -56,13 +61,14 @@ function Ctl({
         aria-label={label}
         aria-pressed={active ?? (off !== undefined ? !off : undefined)}
         className={`relative inline-flex h-11 items-center justify-center gap-2 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:opacity-40 ${
-          showLabel ? 'px-4' : 'w-11'
+          showLabel ? 'px-4' : labelLg ? 'w-11 lg:w-auto lg:px-4' : 'w-11'
         } ${color}`}
       >
         <span aria-hidden className="material-symbols-outlined text-[22px]">
           {icon}
         </span>
         {showLabel && <span className="text-sm font-semibold">{label}</span>}
+        {labelLg && <span className="hidden text-sm font-semibold lg:inline">{label}</span>}
         {badge !== undefined && badge !== 0 && (
           <span
             aria-hidden
@@ -77,7 +83,7 @@ function Ctl({
       {!showLabel && (
         <span
           aria-hidden
-          className="pointer-events-none absolute bottom-full start-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 shadow-lg group-hover:block group-focus-within:block rtl:translate-x-1/2"
+          className={`pointer-events-none absolute bottom-full start-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 shadow-lg group-hover:block group-focus-within:block rtl:translate-x-1/2 ${labelLg ? 'lg:!hidden' : ''}`}
         >
           {label}
         </span>
@@ -154,6 +160,55 @@ export default function Classroom(props: ClassroomProps) {
   const [pinned, setPinned] = useState<string | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const chat = useLiveChat(sessionId, panel === 'chat');
+  const [reactMenu, setReactMenu] = useState(false);
+  const [muted, setMuted] = useState(soundsMuted);
+  const [floating, setFloating] = useState<{ id: number; emoji: string; name: string; x: number }[]>([]);
+  const namesRef = useRef(new Map<string, string>());
+  namesRef.current = new Map(meeting.participants.map((p) => [p.userId ?? p.sessionId, p.local ? t('meeting.you') : p.name]));
+
+  // Reactions: sent to the room; everyone (the sender too) sees them float up.
+  const sendReaction = useCallback(
+    (emoji: string) => getSocket()?.emit('live:react', { sessionId, emoji }),
+    [sessionId],
+  );
+  useEffect(() => {
+    const sock = getSocket();
+    if (!sock) return;
+    let n = 0;
+    const onReaction = (p: { sessionId: string; userId: string; emoji: string }) => {
+      if (p?.sessionId !== sessionId) return;
+      const id = ++n + Date.now();
+      const item = { id, emoji: p.emoji, name: namesRef.current.get(p.userId) ?? '', x: Math.random() * 60 };
+      // Never more than a dozen on screen: a burst stays readable.
+      setFloating((cur) => [...cur.slice(-11), item]);
+      setTimeout(() => setFloating((cur) => cur.filter((f) => f.id !== id)), 2800);
+    };
+    sock.on('live:reaction', onReaction);
+    return () => {
+      sock.off('live:reaction', onReaction);
+    };
+  }, [sessionId]);
+
+  // Sounds: someone arrived or left, a hand went up (the teacher), a message
+  // from someone else. Compared with the previous render, never on the first.
+  const prev = useRef<{ people: number; hands: number; msgs: number } | null>(null);
+  const peopleNow = meeting.participants.length;
+  const handsNow = (meeting.provider === 'cloudflare' ? (meeting as Cf).hands : []).filter(
+    (h) => h.hand === 'HAND_RAISED',
+  ).length;
+  const msgsNow = chat.messages.length;
+  useEffect(() => {
+    const was = prev.current;
+    prev.current = { people: peopleNow, hands: handsNow, msgs: msgsNow };
+    if (!was) return;
+    if (amOwner && handsNow > was.hands) playLiveSound('hand');
+    else if (peopleNow > was.people) playLiveSound('join');
+    else if (peopleNow < was.people) playLiveSound('leave');
+    if (msgsNow > was.msgs) {
+      const last = chat.messages[chat.messages.length - 1];
+      if (last && last.senderId !== props.userId) playLiveSound('message');
+    }
+  }, [peopleNow, handsNow, msgsNow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const participants = meeting.participants;
   const me = participants.find((p) => p.local) ?? null;
@@ -353,6 +408,16 @@ export default function Classroom(props: ClassroomProps) {
                 {t('meeting.recordingBadge')}
               </span>
             )}
+            {meeting.provider === 'cloudflare' && meeting.transcribing && (
+              <span
+                className="hidden items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-zinc-300 sm:inline-flex"
+                role="status"
+                title={t('meeting.transcriptOnHint')}
+              >
+                <span aria-hidden className="material-symbols-outlined text-[14px]">subtitles</span>
+                {t('meeting.transcriptOn')}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => toggle('people')}
@@ -423,6 +488,28 @@ export default function Classroom(props: ClassroomProps) {
                 {t('meeting.enableSound')}
               </button>
             )}
+
+            {/* Reactions rise from the bottom corner and fade. Decorative for
+                screen readers: the room would be read a stream of emoji. */}
+            <div aria-hidden className="pointer-events-none absolute bottom-6 end-6 h-2/3 w-40 overflow-hidden">
+              {floating.map((f) => (
+                <m.div
+                  key={f.id}
+                  initial={{ opacity: 0, y: 0, scale: 0.6 }}
+                  animate={{ opacity: [0, 1, 1, 0], y: -260, scale: 1 }}
+                  transition={{ duration: 2.6, ease: 'easeOut' }}
+                  className="absolute bottom-0 flex flex-col items-center"
+                  style={{ insetInlineEnd: `${f.x}%` }}
+                >
+                  <span className="text-3xl">{f.emoji}</span>
+                  {f.name && (
+                    <span className="mt-0.5 max-w-[7rem] truncate rounded-full bg-black/60 px-2 text-[10px] font-semibold text-white">
+                      {f.name}
+                    </span>
+                  )}
+                </m.div>
+              ))}
+            </div>
 
             <div aria-live="polite" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4">
               <AnimatePresence>
@@ -540,6 +627,7 @@ export default function Classroom(props: ClassroomProps) {
                 active={panel === 'people'}
                 badge={amOwner ? raised.length : undefined}
                 label={t('meeting.people')}
+                labelLg
                 onClick={() => toggle('people')}
               />
               <Ctl
@@ -547,7 +635,34 @@ export default function Classroom(props: ClassroomProps) {
                 active={panel === 'chat'}
                 badge={panel !== 'chat' ? chat.unread : undefined}
                 label={t('meeting.chat')}
+                labelLg
                 onClick={() => toggle('chat')}
+              />
+              <span className="relative">
+                <Ctl
+                  icon="add_reaction"
+                  active={reactMenu}
+                  label={t('meeting.react.title')}
+                  onClick={() => setReactMenu((v) => !v)}
+                />
+                {reactMenu && (
+                  <ReactionPicker
+                    onPick={(e) => {
+                      sendReaction(e);
+                      setReactMenu(false);
+                    }}
+                    onClose={() => setReactMenu(false)}
+                  />
+                )}
+              </span>
+              <Ctl
+                icon={muted ? 'volume_off' : 'notifications_active'}
+                off={muted}
+                label={muted ? t('meeting.sounds.on') : t('meeting.sounds.off')}
+                onClick={() => {
+                  setSoundsMuted(!muted);
+                  setMuted(!muted);
+                }}
               />
               <span className="relative">
                 <Ctl
@@ -604,6 +719,47 @@ export default function Classroom(props: ClassroomProps) {
         </footer>
       </div>
     </MotionConfig>
+  );
+}
+
+/* ── Reactions ───────────────────────────────────────────────────────────── */
+
+const REACTIONS = ['👍', '👏', '❤️', '😂', '🎉', '🤔'];
+
+function ReactionPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    ref.current?.querySelector<HTMLElement>('button')?.focus();
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label={t('meeting.react.title')}
+      className="absolute bottom-full start-1/2 z-20 mb-2 flex -translate-x-1/2 gap-1 rounded-full bg-zinc-800 p-1.5 shadow-xl ring-1 ring-white/10 rtl:translate-x-1/2"
+    >
+      {REACTIONS.map((e) => (
+        <button
+          key={e}
+          type="button"
+          role="menuitem"
+          aria-label={t(`meeting.react.${REACTIONS.indexOf(e)}`)}
+          onClick={() => onPick(e)}
+          className="grid h-10 w-10 place-items-center rounded-full text-2xl transition-transform duration-150 hover:scale-110 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:hover:scale-100"
+        >
+          {e}
+        </button>
+      ))}
+    </div>
   );
 }
 

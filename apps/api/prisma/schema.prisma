@@ -2400,6 +2400,7 @@ model LiveSession {
   rtcTracks      LiveRtcTrack[]
   hands          LiveHand[]
   recordings     LiveRecording[]
+  audioSegments  LiveAudioSegment[]
 
   @@index([tenantId, startsAt])
   @@index([academyId, startsAt])
@@ -2409,6 +2410,27 @@ model LiveSession {
   /// The end sweep: LIVE classes that have started, oldest first
   /// (LiveService.overdueLiveSessionIds). Bounded to what is running now.
   @@index([status, startsAt])
+}
+
+/// A piece of a live class's audio, captured in the teacher's browser (their
+/// microphone and the students allowed to speak) and uploaded while the class
+/// runs, so a Darsly-hosted class has words to transcribe even when it was
+/// not recorded. Each piece stands alone (its own WebM header). Deleted once
+/// the transcript is made: the words are kept, the audio is not.
+model LiveAudioSegment {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName  String
+  seq       Int
+  key       String
+  sizeBytes Int
+  /// This piece's words, once transcribed — a retry does not pay for it again.
+  text      String?
+  createdAt DateTime    @default(now())
+
+  @@unique([sessionId, roomName, seq])
+  @@index([sessionId, createdAt])
 }
 
 enum LiveProviderKind {
@@ -2702,6 +2724,8 @@ enum AiJobType {
   LIVE_SUMMARY
   /// Read a scanned paper exam and turn it into a draft question set.
   PAPER_IMPORT
+  /// Turn a finished live class's captured audio into its transcript.
+  LIVE_TRANSCRIBE
 }
 
 enum AiJobStatus {

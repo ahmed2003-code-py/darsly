@@ -14,6 +14,7 @@ import { LiveService, PRESENCE_GRACE_SEC } from '../live.service';
 import { CloudflareLiveProvider } from '../providers/cloudflare-live.provider';
 import { CfSessionDescription, toHttpError } from '../providers/cloudflare-realtime.client';
 import { canSpeak, HandAction, nextHandState, STUDENT_ACTIONS, TEACHER_ACTIONS } from './live-hand';
+import { transcriptionConfig } from '../transcription/lesson-transcription';
 
 /**
  * How many students may speak at once. A class is a teacher and an audience;
@@ -62,6 +63,8 @@ export interface RtcState {
   maxSpeakers: number;
   /** A recording of this run is being made (the REC badge). */
   recording: boolean;
+  /** The lesson's words are being kept for its transcript (everyone is told). */
+  transcribing: boolean;
   participants: {
     userId: string;
     name: string;
@@ -621,6 +624,7 @@ export class LiveRtcService {
       },
       maxSpeakers: maxSpeakers(),
       recording: recording > 0,
+      transcribing: transcriptionConfig().enabled,
       participants: [...roleOf.entries()].map(([uid, role]) => ({
         userId: uid,
         name: nameOf.get(uid) ?? '',

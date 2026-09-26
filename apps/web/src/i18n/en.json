@@ -1298,7 +1298,20 @@
       "minutesUnit": "min",
       "capacityHint": "Leave empty for no limit on students.",
       "unlimited": "No limit",
-      "duration": "Length"
+      "duration": "Length",
+      "when": "When?",
+      "now": "Now",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "date": "Date",
+      "time": "Time",
+      "hour": "1 hour",
+      "twoHours": "2 hours",
+      "custom": "Custom",
+      "durationMinutes": "Length in minutes",
+      "limit": "Limit",
+      "maxStudents": "Maximum students",
+      "advanced": "Advanced options"
     },
     "v": {
       "TITLE_REQUIRED": "Enter a title for the session.",
@@ -3024,7 +3037,22 @@
     "inClass_one": "In class (1)",
     "inClass_other": "In class ({{count}})",
     "listening_one": "1 student listening",
-    "listening_other": "{{count}} students listening"
+    "listening_other": "{{count}} students listening",
+    "react": {
+      "title": "React",
+      "0": "Thumbs up",
+      "1": "Applause",
+      "2": "Heart",
+      "3": "Laugh",
+      "4": "Celebrate",
+      "5": "Thinking"
+    },
+    "sounds": {
+      "on": "Turn sounds on",
+      "off": "Mute sounds"
+    },
+    "transcriptOn": "Transcript on",
+    "transcriptOnHint": "What is said in this class is turned into text after it ends, for the summary. The audio itself is deleted once transcribed."
   },
   "summary": {
     "title": "AI lesson summary",
@@ -3679,6 +3707,14 @@
       "GENERATING": "Writing the summary",
       "FAILED": "The summary couldn't be created",
       "UNAVAILABLE": "A summary can't be written without a transcript"
+    },
+    "chat": {
+      "title": "Class chat",
+      "empty": "No messages were sent in this class.",
+      "count_one": "1 message",
+      "count_other": "{{count}} messages",
+      "showAll_one": "Show the message",
+      "showAll_other": "Show all {{count}} messages"
     }
   }
 }

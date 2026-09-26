@@ -8,8 +8,9 @@ import type { RecordingStage } from './recording/recording-stage';
  *
  * Daily transcribed during the class (Deepgram, through Daily) and the summary
  * job fetches those words itself, so a Daily summary may be asked for at any
- * time. Cloudflare carries media only: a Cloudflare lesson's words can only
- * come from its recording, so its summary waits for a transcript that exists.
+ * time. Cloudflare carries media only: a Cloudflare lesson's words come from
+ * the audio Darsly captured during the class (LIVE_TRANSCRIBE, when switched
+ * on), so its summary waits for a transcript that exists.
  */
 export type TranscriptStage =
   /** The recording it would come from is still being made or packaged. */
@@ -56,13 +57,15 @@ export function pipelineStages(x: PipelineInput): {
     } else {
       transcript = { stage: 'AT_PROVIDER', reason: null };
     }
+  } else if (x.transcriptStatus === 'PROCESSING') {
+    // The lesson's own audio (captured in the teacher's browser) is being
+    // transcribed — it does not wait for the recording.
+    transcript = { stage: 'TRANSCRIBING', reason: null };
   } else if (
     x.recordingStage &&
     ['REQUESTED', 'CAPTURING', 'FINALIZING', 'PROCESSING'].includes(x.recordingStage)
   ) {
     transcript = { stage: 'WAITING_FOR_RECORDING', reason: null };
-  } else if (x.transcriptStatus === 'PROCESSING') {
-    transcript = { stage: 'TRANSCRIBING', reason: null };
   } else if (x.transcriptStatus === 'FAILED') {
     transcript = { stage: 'FAILED', reason: null };
   } else {

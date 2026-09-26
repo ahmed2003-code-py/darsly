@@ -14,6 +14,7 @@ import type { Server, Socket } from 'socket.io';
 import { ChatService } from '../chat/chat.service';
 import { RealtimeService } from './realtime.service';
 import { LiveService } from '../live/live.service';
+import { isReaction, ReactionLimiter } from '../live/live-reactions';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
   .split(',')
@@ -148,6 +149,28 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
   @SubscribeMessage('live:leave')
   leaveLive(@ConnectedSocket() client: Socket, @MessageBody() sessionId: string) {
     client.leave(`live:${sessionId}`);
+  }
+
+  private readonly reactions = new ReactionLimiter();
+
+  /**
+   * A reaction, passed straight to the classroom. Only from a socket already
+   * in the room (`live:join` checked membership), only an emoji the page
+   * offers, and never a stream of them. Nothing is stored.
+   */
+  @SubscribeMessage('live:react')
+  react(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { sessionId?: string; emoji?: string },
+  ) {
+    const user = this.user(client);
+    const sessionId = body?.sessionId;
+    if (!user || !sessionId || !isReaction(body.emoji)) return;
+    if (!client.rooms.has(`live:${sessionId}`)) return;
+    if (!this.reactions.allow(user.sub)) return;
+    this.server
+      .to(`live:${sessionId}`)
+      .emit('live:reaction', { sessionId, userId: user.sub, emoji: body.emoji });
   }
 
   @SubscribeMessage(RealtimeEvents.MARK_READ)

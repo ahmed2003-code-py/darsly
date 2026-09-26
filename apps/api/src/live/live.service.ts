@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { AcademyService } from '../academy/academy.service';
 import { LivePipelineStatus, LiveSessionStatus, Prisma } from '@prisma/client';
@@ -19,6 +20,14 @@ import { LiveProviders } from './providers/live-providers';
 import type { LiveProviderKind, RoomCloseResult } from './providers/live-provider';
 import { RealtimeService } from '../realtime/realtime.service';
 import { AiJobService } from '../academy-site/jobs/ai-job.service';
+import { StorageProvider } from '../storage/storage.provider';
+import {
+  audioExt,
+  audioKey,
+  LAST_PIECE_GRACE_MS,
+  transcriptionConfig,
+  validPieceSeq,
+} from './transcription/lesson-transcription';
 
 /** How long before the scheduled time the doors open. */
 export const JOIN_OPENS_MIN = 15;
@@ -121,6 +130,8 @@ export class LiveService {
     private readonly realtime: RealtimeService,
     private readonly jobs: AiJobService,
     private readonly academy: AcademyService,
+    /** Only the lesson-audio upload writes to it. */
+    @Optional() private readonly storage?: StorageProvider,
   ) {}
 
   // ── Teacher ────────────────────────────────────────────────────────────────
@@ -810,6 +821,11 @@ export class LiveService {
       `live.end liveSession=${id} academy=${r.session.academyId ?? r.session.tenantId} ` +
         `reason=${reason} endedAt=${r.endedAt.toISOString()} provider=${r.provider}`,
     );
+    if (r.session.provider === 'CLOUDFLARE' && r.session.roomName && reason !== 'CANCELLED') {
+      await this.queueTranscript(r.session, r.session.roomName).catch((e) =>
+        this.logger.warn(`live.transcribe.enqueue liveSession=${id} failed: ${(e as Error).message}`),
+      );
+    }
 
     const recent = Date.now() - r.endedAt.getTime() <= END_ANNOUNCE_WINDOW_MS;
     // A cancellation announces itself (with `cancelled`) from `remove`.
@@ -832,6 +848,86 @@ export class LiveService {
       }
     }
     return { outcome: 'ended', endedAt: r.endedAt };
+  }
+
+  /**
+   * A Darsly-hosted class just ended: turn the audio its teacher's page
+   * captured into the lesson's transcript (LIVE_TRANSCRIBE). Only when
+   * transcription is switched on — every run is a paid call. Queued even if no
+   * piece has arrived yet: the last one is flushed as the class ends, and the
+   * job waits for it; a class with no audio at all costs nothing.
+   */
+  private async queueTranscript(
+    s: { id: string; tenantId: string; academyId: string | null },
+    roomName: string,
+  ) {
+    if (!transcriptionConfig().enabled) return;
+    const claimed = await this.prisma.liveSession.updateMany({
+      where: { id: s.id, transcriptStatus: { in: ['NOT_STARTED', 'FAILED'] } },
+      data: { transcriptStatus: 'PROCESSING' },
+    });
+    if (claimed.count === 0) return;
+    try {
+      await this.jobs.enqueue(
+        s.academyId ?? s.tenantId,
+        'LIVE_TRANSCRIBE',
+        { liveSessionId: s.id, roomName },
+        { sameInput: { path: 'liveSessionId', equals: s.id } },
+      );
+    } catch (e) {
+      await this.prisma.liveSession.updateMany({
+        where: { id: s.id, transcriptStatus: 'PROCESSING' },
+        data: { transcriptStatus: 'NOT_STARTED' },
+      });
+      throw e;
+    }
+  }
+
+  /**
+   * Stores one piece of a class's audio, uploaded by its teacher's page while
+   * the class runs. Only the owning teacher, only a live Darsly-hosted class,
+   * only with transcription switched on. A piece sent twice (a retried upload)
+   * replaces itself.
+   */
+  async storeAudioPiece(
+    scope: LiveScope,
+    id: string,
+    seq: number,
+    file: { buffer: Buffer; size: number; mimetype?: string } | undefined,
+  ) {
+    if (!transcriptionConfig().enabled) {
+      throw new ConflictException({ message: 'Transcription is off', code: 'TRANSCRIPTION_OFF' });
+    }
+    const session = await this.assertOwned(scope, id);
+    if (session.provider !== 'CLOUDFLARE' || !session.roomName) {
+      throw new ConflictException({ message: 'Not a Darsly-hosted class', code: 'NOT_CLOUDFLARE' });
+    }
+    // Just after the end is fine: that is the last piece, flushed on the way out.
+    const late =
+      session.status === 'ENDED' &&
+      (!session.endedAt || Date.now() - session.endedAt.getTime() > LAST_PIECE_GRACE_MS);
+    if (session.status !== 'LIVE' && (session.status !== 'ENDED' || late)) {
+      throw new ConflictException({ message: 'The class is not running', code: 'NOT_LIVE' });
+    }
+    if (!validPieceSeq(seq)) {
+      throw new BadRequestException({ message: 'Bad piece number', code: 'BAD_SEQ' });
+    }
+    if (!file?.buffer?.length) {
+      throw new BadRequestException({ message: 'Empty audio', code: 'EMPTY_AUDIO' });
+    }
+    const roomName = session.roomName;
+    const ext = audioExt(file.mimetype);
+    const key = audioKey(id, roomName, seq, ext);
+    if (!this.storage) throw new Error('Storage is not configured');
+    await this.storage.put(key, file.buffer, {
+      contentType: ext === 'm4a' ? 'audio/mp4' : 'audio/webm',
+    });
+    await this.prisma.liveAudioSegment.upsert({
+      where: { sessionId_roomName_seq: { sessionId: id, roomName, seq } },
+      create: { sessionId: id, roomName, seq, key, sizeBytes: file.size },
+      update: { key, sizeBytes: file.size, text: null },
+    });
+    return { ok: true as const, seq };
   }
 
   /**

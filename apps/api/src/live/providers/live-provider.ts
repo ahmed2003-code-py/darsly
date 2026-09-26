@@ -51,6 +51,12 @@ export type MeetingAccess =
       iceServers: IceServer[];
       /** Darsly's own RTC endpoints for this session — the browser never talks to the SFU API. */
       rtcPath: string;
+      /**
+       * The teacher's page captures the lesson's audio for its transcript
+       * (uploaded to `/teacher/live/:id/audio/:seq`). Only when transcription
+       * is switched on, and only for the teacher.
+       */
+      transcribe?: boolean;
     };
 
 /**

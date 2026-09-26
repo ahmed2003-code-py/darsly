@@ -1306,7 +1306,20 @@
       "minutesUnit": "دقيقة",
       "capacityHint": "اتركها فارغة إذا لم يكن هناك حد لعدد الطلاب.",
       "unlimited": "بدون حد",
-      "duration": "المدة"
+      "duration": "المدة",
+      "when": "امتى؟",
+      "now": "دلوقتي",
+      "today": "النهارده",
+      "tomorrow": "بكرة",
+      "date": "التاريخ",
+      "time": "الساعة",
+      "hour": "ساعة",
+      "twoHours": "ساعتين",
+      "custom": "مخصص",
+      "durationMinutes": "المدة بالدقائق",
+      "limit": "حد أقصى",
+      "maxStudents": "أقصى عدد للطلاب",
+      "advanced": "خيارات متقدمة"
     },
     "v": {
       "TITLE_REQUIRED": "أدخل عنوان الجلسة.",
@@ -3052,7 +3065,22 @@
     "listening_two": "طالبان يستمعان",
     "listening_few": "{{count}} طلاب يستمعون",
     "listening_many": "{{count}} طالبًا يستمعون",
-    "listening_other": "{{count}} طالب يستمعون"
+    "listening_other": "{{count}} طالب يستمعون",
+    "react": {
+      "title": "تفاعل",
+      "0": "إعجاب",
+      "1": "تصفيق",
+      "2": "قلب",
+      "3": "ضحك",
+      "4": "احتفال",
+      "5": "تفكير"
+    },
+    "sounds": {
+      "on": "تشغيل الأصوات",
+      "off": "كتم الأصوات"
+    },
+    "transcriptOn": "التفريغ النصي مفعّل",
+    "transcriptOnHint": "يُحوَّل كلام الحصة إلى نص بعد انتهائها لإعداد الملخص، ويُحذف الصوت نفسه بعد التفريغ."
   },
   "summary": {
     "title": "ملخّص الحصة بالذكاء الاصطناعي",
@@ -3719,6 +3747,22 @@
       "GENERATING": "جارٍ إنشاء ملخص الحصة",
       "FAILED": "تعذر إنشاء الملخص",
       "UNAVAILABLE": "لا يمكن إنشاء ملخص بدون نص للحصة"
+    },
+    "chat": {
+      "title": "محادثة الحصة",
+      "empty": "لم تُكتب رسائل في هذه الحصة.",
+      "count_zero": "لا توجد رسائل",
+      "count_one": "رسالة واحدة",
+      "count_two": "رسالتان",
+      "count_few": "{{count}} رسائل",
+      "count_many": "{{count}} رسالة",
+      "count_other": "{{count}} رسالة",
+      "showAll_zero": "عرض الكل",
+      "showAll_one": "عرض الرسالة",
+      "showAll_two": "عرض الرسالتين",
+      "showAll_few": "عرض الـ {{count}} رسائل",
+      "showAll_many": "عرض الـ {{count}} رسالة",
+      "showAll_other": "عرض الـ {{count}} رسالة"
     }
   }
 }

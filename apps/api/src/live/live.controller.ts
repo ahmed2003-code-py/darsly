@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   IsBoolean,
@@ -22,6 +34,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
 import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveRecordingService } from './recording/live-recording.service';
+import { AUDIO_SEGMENT_MAX_BYTES } from './transcription/lesson-transcription';
 
 /**
  * Shapes and abuse caps only. The product's rules (title length, minimum and
@@ -287,6 +300,29 @@ export class LiveController {
   @ApiOperation({ summary: '[academy] Record that transcription could not start' })
   transcriptionFailed(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
     return this.live.reportTranscriptionFailure(scopeOf(ctx), id);
+  }
+
+  /**
+   * One piece of the lesson's audio from the teacher's page (Darsly-hosted
+   * classes, transcription switched on). Transcribed after the class, then
+   * deleted.
+   */
+  @Post('teacher/live/:id/audio/:seq')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Upload a piece of the lesson audio for its transcript' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: AUDIO_SEGMENT_MAX_BYTES },
+    }),
+  )
+  audioPiece(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+    @Param('seq') seq: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.live.storeAudioPiece(scopeOf(ctx), id, Number(seq), file);
   }
 
   @Post('teacher/live/:id/summary')

@@ -10,6 +10,7 @@ import {
   ParticipantAccessInput,
   RoomCloseResult,
 } from './live-provider';
+import { transcriptionConfig } from '../transcription/lesson-transcription';
 
 /**
  * After this many failed teardown attempts a connection is marked closed
@@ -60,6 +61,7 @@ export class CloudflareLiveProvider implements LiveProvider {
       provider: 'cloudflare',
       iceServers: await this.client.iceServers(),
       rtcPath: `/live/${input.session.id}/rtc`,
+      ...(input.role === 'TEACHER' && transcriptionConfig().enabled ? { transcribe: true } : {}),
     };
   }
 

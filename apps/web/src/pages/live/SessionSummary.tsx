@@ -174,6 +174,68 @@ function RecordingSection({
   );
 }
 
+/**
+ * What was said in the class chat — kept for everyone who was in it, the
+ * teacher and the students alike, so a link or a question asked in passing is
+ * still there after the class.
+ */
+function ChatSection({ sessionId }: { sessionId: string }) {
+  const { t, i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const chat = useQuery({
+    queryKey: ['live-chat-record', sessionId],
+    queryFn: async () =>
+      (await api.get(`/live/${sessionId}/chat`)).data as {
+        id: string;
+        body: string;
+        senderName: string;
+        senderRole: string;
+        createdAt: string;
+      }[],
+  });
+  const msgs = chat.data ?? [];
+  const shown = open ? msgs : msgs.slice(-5);
+  return (
+    <Block
+      icon="forum"
+      title={t('record.chat.title')}
+      aside={msgs.length ? <span className="text-xs text-outline">{t('record.chat.count', { count: msgs.length })}</span> : null}
+    >
+      {chat.isLoading ? (
+        <Skeleton className="h-10 w-full" />
+      ) : !msgs.length ? (
+        <p className="text-sm text-outline">{t('record.chat.empty')}</p>
+      ) : (
+        <>
+          {!open && msgs.length > 5 && (
+            <button className="mb-2 text-xs font-semibold text-primary-text hover:underline" onClick={() => setOpen(true)}>
+              {t('record.chat.showAll', { count: msgs.length })}
+            </button>
+          )}
+          <ul className="space-y-2.5">
+            {shown.map((m) => (
+              <li key={m.id}>
+                <p className="text-xs text-outline">
+                  <span className="font-semibold text-on-surface-variant">{m.senderName}</span>
+                  {m.senderRole === 'TEACHER' && ` · ${t('meeting.teacherBadge')}`}
+                  {' · '}
+                  {new Date(m.createdAt).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+                <p className="whitespace-pre-wrap break-words text-sm" dir="auto">
+                  {m.body}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Block>
+  );
+}
+
 export default function SessionSummary({
   sessionId,
   attendance,
@@ -360,6 +422,8 @@ export default function SessionSummary({
         )}
         {isTeacher && <ErrorNote error={generate.error} />}
       </Block>
+
+      <ChatSection sessionId={sessionId} />
 
       {attendance && (
         <Block icon="how_to_reg" title={t('live.attendance')}>

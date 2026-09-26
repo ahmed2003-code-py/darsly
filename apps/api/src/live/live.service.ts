@@ -32,6 +32,7 @@ import {
 } from '@darsly/shared-types';
 import { CommercialTermsService, pricingRefusal, toSnapshot } from '../commerce/commercial-terms.service';
 import { priceLiveSeat, PricingError } from '../commerce/pricing';
+import { lockSession, seatsTaken } from './commerce/live-commerce.service';
 import { pipelineStages } from './live-pipeline';
 import { recordingStage } from './recording/recording-stage';
 import { LiveProviders } from './providers/live-providers';
@@ -647,7 +648,15 @@ export class LiveService {
   async upcomingForStudent(userId: string) {
     const student = await this.studentOf(userId);
     const academyIds = await this.enrolledAcademyIds(student.id);
-    if (!academyIds.length) return [];
+    // Paid seats stand alone: a session the student bought (or is buying)
+    // is theirs to see whether or not they are enrolled with that academy.
+    const purchased = (
+      await this.prisma.livePurchase.findMany({
+        where: { studentId: student.id },
+        select: { sessionId: true },
+      })
+    ).map((p) => p.sessionId);
+    if (!academyIds.length && !purchased.length) return [];
     const groupIds = (
       await this.prisma.groupMembership.findMany({
         where: { studentId: student.id },
@@ -657,18 +666,72 @@ export class LiveService {
 
     const sessions = await this.prisma.liveSession.findMany({
       where: {
-        academyId: { in: academyIds },
-        OR: [{ groupId: null }, { groupId: { in: groupIds } }],
         startsAt: { gte: new Date(Date.now() - 2 * 3600_000) },
+        OR: [
+          {
+            academyId: { in: academyIds },
+            OR: [{ groupId: null }, { groupId: { in: groupIds } }],
+          },
+          { id: { in: purchased } },
+        ],
       },
       orderBy: { startsAt: 'asc' },
       include: {
         teacher: { select: { slug: true, user: { select: { fullName: true } } } },
         _count: { select: { bookings: true } },
         bookings: { where: { studentId: student.id }, select: { id: true } },
+        purchases: {
+          where: { studentId: student.id },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, status: true, holdExpiresAt: true, studentPaysCents: true },
+        },
       },
     });
-    return sessions.map((s) => this.studentView(s, s.bookings.length > 0));
+    return Promise.all(
+      sessions.map(async (s) => ({
+        ...this.studentView(s, s.bookings.length > 0),
+        ...(await this.commerceView(s, s.purchases[0] ?? null)),
+      })),
+    );
+  }
+
+  /**
+   * What a card needs to say about money: FREE, or the one price the student
+   * pays (never the split), their purchase if any, and the rules they would
+   * buy under. A seat that cannot be sold right now (a Center with no agreed
+   * split) says so instead of showing a price.
+   */
+  private async commerceView(
+    s: {
+      accessMode: LiveAccessMode;
+      priceCents: number | null;
+      academyId: string | null;
+      tenantId: string;
+      currency: string;
+      refundPolicy: LiveRefundPolicy;
+      replayPolicy: LiveReplayPolicy;
+      replayDays: number | null;
+    },
+    purchase: { id: string; status: string; holdExpiresAt: Date | null; studentPaysCents: number } | null,
+  ) {
+    const base = {
+      accessMode: s.accessMode,
+      currency: s.currency,
+      refundPolicy: s.refundPolicy,
+      replayPolicy: s.replayPolicy,
+      replayDays: s.replayDays,
+      purchase,
+    };
+    if (s.accessMode !== 'PAID' || s.priceCents == null) return { ...base, studentPaysCents: 0, purchasable: false };
+    // A buyer's own frozen price wins over today's: it is what they pay.
+    if (purchase) return { ...base, studentPaysCents: purchase.studentPaysCents, purchasable: true };
+    try {
+      const p = await this.priceSession(s.academyId ?? s.tenantId, s.tenantId, s.priceCents);
+      return { ...base, studentPaysCents: p.studentPaysCents, purchasable: true };
+    } catch {
+      return { ...base, studentPaysCents: null, purchasable: false };
+    }
   }
 
   async book(userId: string, sessionId: string) {
@@ -678,6 +741,14 @@ export class LiveService {
       include: { _count: { select: { bookings: true } } },
     });
     if (!session || session.deletedAt) throw new NotFoundException('Session not found');
+    // A paid seat is bought, never booked: this path would otherwise hand out
+    // the seat without the payment. The check is on the server's own row.
+    if (session.accessMode === 'PAID') {
+      throw new ForbiddenException({
+        message: 'This session is paid — buy a seat instead',
+        code: 'PAID_SESSION_NEEDS_PURCHASE',
+      });
+    }
     await this.assertEnrolledWith(student.id, session);
 
     const already = await this.prisma.liveBooking.findUnique({
@@ -685,42 +756,30 @@ export class LiveService {
     });
     if (already) return { ok: true, alreadyBooked: true };
 
-    // Capacity must be enforced atomically — a plain count-then-insert lets two
-    // concurrent bookings both pass the check and overbook. Serializable makes
-    // Postgres abort one of two conflicting count+insert pairs; we retry, and by
-    // then the count reflects the other booking so capacity holds.
-    const capacity = session.capacity;
-    let inserted = false;
-    for (let attempt = 0; attempt < 4 && !inserted; attempt++) {
-      try {
-        await this.prisma.$transaction(
-          async (tx) => {
-            if (capacity != null) {
-              const count = await tx.liveBooking.count({ where: { sessionId } });
-              if (count >= capacity) {
-                throw new BadRequestException({ message: 'Session is full', code: 'SESSION_FULL' });
-              }
-            }
-            await tx.liveBooking.create({ data: { sessionId, studentId: student.id } });
-          },
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-        );
-        inserted = true;
-      } catch (e) {
-        // A unique-violation means this student already booked in a race → done.
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          return { ok: true, alreadyBooked: true };
+    // Capacity is enforced under the session's row lock — the same lock every
+    // seat-changing path takes first — so two concurrent bookings cannot both
+    // see the last seat, and seats held by paid purchases are counted too.
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const s = await lockSession(tx, sessionId);
+        if (!s || s.deletedAt) throw new NotFoundException('Session not found');
+        if (s.accessMode === 'PAID') {
+          throw new ForbiddenException({
+            message: 'This session is paid — buy a seat instead',
+            code: 'PAID_SESSION_NEEDS_PURCHASE',
+          });
         }
-        // Serialization conflict → retry; on the last attempt, surface as busy.
-        if (
-          e instanceof Prisma.PrismaClientKnownRequestError &&
-          e.code === 'P2034' &&
-          attempt < 3
-        ) {
-          continue;
+        if (s.capacity != null && (await seatsTaken(tx, sessionId, new Date())) >= s.capacity) {
+          throw new BadRequestException({ message: 'Session is full', code: 'SESSION_FULL' });
         }
-        throw e;
+        await tx.liveBooking.create({ data: { sessionId, studentId: student.id } });
+      });
+    } catch (e) {
+      // A unique-violation means this student already booked in a race → done.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return { ok: true, alreadyBooked: true };
       }
+      throw e;
     }
 
     // Notify the teacher.
@@ -760,6 +819,15 @@ export class LiveService {
     // The teacher already called it off: the booking stays as the record of
     // that, and there is nothing left for the student to cancel.
     if (booking.session.deletedAt) return { ok: true };
+    // A paid seat is given back through its purchase, which decides the
+    // refund — deleting the booking here would take the seat and keep the money.
+    if (booking.purchaseId) {
+      throw new ConflictException({
+        message: 'A paid seat is cancelled from its purchase',
+        code: 'PAID_CANCEL_VIA_PURCHASE',
+        purchaseId: booking.purchaseId,
+      });
+    }
     if (
       booking.session.status !== 'SCHEDULED' ||
       Date.now() >= booking.session.startsAt.getTime()

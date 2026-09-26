@@ -1009,7 +1009,8 @@ export class AnalyticsService {
       this.ledger.orgEarnings(academy),
       this.prisma.payment.groupBy({
         by: ['courseId'],
-        where: { academyId, status: 'PAID' },
+        // Course sales only: a Live seat is not a course, and is reported with Live.
+        where: { academyId, status: 'PAID', courseId: { not: null } },
         _sum: { netCents: true, amountCents: true },
         _count: { _all: true },
       }),
@@ -1018,7 +1019,7 @@ export class AnalyticsService {
       string,
       number
     >;
-    const courseIds = byCourse.map((r) => r.courseId);
+    const courseIds = byCourse.map((r) => r.courseId).filter((id): id is string => id != null);
     const courses = courseIds.length
       ? await this.prisma.course.findMany({
           where: { id: { in: courseIds } },
@@ -1037,7 +1038,7 @@ export class AnalyticsService {
       revenueByCourse: byCourse
         .map((r) => ({
           courseId: r.courseId,
-          title: titleById.get(r.courseId) ?? '—',
+          title: (r.courseId && titleById.get(r.courseId)) || '—',
           netCents: r._sum.netCents ?? r._sum.amountCents ?? 0,
           transactions: r._count._all,
         }))

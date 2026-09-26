@@ -12,12 +12,15 @@ import { LiveRecorderWorker } from './recording/live-recorder.worker';
 import { VideoModule } from '../video/video.module';
 import { LiveReplayService } from './replay/live-replay.service';
 import { LiveRetentionService } from './retention/live-retention.service';
+import { LiveCommerceController } from './commerce/live-commerce.controller';
+import { LiveCommerceService } from './commerce/live-commerce.service';
+import { LiveCommerceWorker } from './commerce/live-commerce.worker';
 
 @Module({
   // AcademySiteModule for the AI job queue the summary runs on — the one this
   // project already has, rather than a second queue beside it.
   imports: [AcademyModule, AcademySiteModule, LiveProvidersModule, VideoModule],
-  controllers: [LiveController, LiveRtcController],
+  controllers: [LiveController, LiveRtcController, LiveCommerceController],
   // LiveEndWorker: the server ends classes at their effective end.
   // LiveRtcService: the Cloudflare classroom's signalling and permissions.
   // LiveRecordingService/LiveRecorderWorker: Darsly's own recorder for
@@ -31,8 +34,11 @@ import { LiveRetentionService } from './retention/live-retention.service';
     LiveRecorderWorker,
     LiveReplayService,
     LiveRetentionService,
+    // Buying seats on PAID sessions, and giving lapsed holds back.
+    LiveCommerceService,
+    LiveCommerceWorker,
   ],
   // The gateway asks it who is allowed into a classroom's socket room.
-  exports: [LiveService],
+  exports: [LiveService, LiveCommerceService],
 })
 export class LiveModule {}

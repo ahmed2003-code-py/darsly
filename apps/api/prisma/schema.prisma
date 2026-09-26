@@ -158,6 +158,7 @@ model CommercialTerms {
   createdById                  String?
   note                         String?
   createdAt                    DateTime          @default(now())
+  livePurchases                LivePurchase[]
 
   @@index([academyId, effectiveFrom])
 }
@@ -757,6 +758,7 @@ model StudentProfile {
   securityEvents    SecurityEvent[]
   chatThreads       ChatThread[]
   liveBookings      LiveBooking[]
+  livePurchases     LivePurchase[]
   savedCourses      SavedCourse[]
   walletTxns        WalletTransaction[]
   walletTopups      WalletTopup[]
@@ -1465,15 +1467,20 @@ enum CashReceiver {
 }
 
 model Payment {
-  id           String         @id @default(cuid())
-  studentId    String
-  student      StudentProfile @relation(fields: [studentId], references: [id])
-  courseId     String
-  course       Course         @relation(fields: [courseId], references: [id])
-  enrollmentId String?
-  enrollment   Enrollment?    @relation(fields: [enrollmentId], references: [id])
-  tenantId     String // author scope (== course.tenantId)
-  academyId    String? // organisation scope (== course.academyId)
+  id             String         @id @default(cuid())
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id])
+  /// What the money buys: exactly one of a course or a Live seat (a CHECK in
+  /// migration 20261012110000 enforces it). Every row before Live commerce
+  /// is a course payment, and stays one.
+  courseId       String?
+  course         Course?        @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  livePurchaseId String?        @unique
+  livePurchase   LivePurchase?  @relation(fields: [livePurchaseId], references: [id], onDelete: Restrict)
+  enrollmentId   String?
+  enrollment     Enrollment?    @relation(fields: [enrollmentId], references: [id])
+  tenantId       String // author scope (== course.tenantId)
+  academyId      String? // organisation scope (== course.academyId)
 
   // amountCents is the TOTAL the student paid. In the additive-fee model that is
   // netCents (academy earning) + feeCents (platform service fee). Nullable for
@@ -1520,6 +1527,7 @@ model Payment {
 
   ledgerTransaction LedgerTransaction?
   invoice           Invoice?
+  refunds           Refund[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt         DateTime?
 
@@ -1591,13 +1599,19 @@ model PlatformPaymentAccount {
 // Double-entry ledger: every financial fact is a balanced transaction.
 // Entries are immutable — corrections are new ADJUSTMENT transactions.
 model LedgerTransaction {
-  id          String         @id @default(cuid())
-  description String
-  paymentId   String?        @unique
-  payment     Payment?       @relation(fields: [paymentId], references: [id])
-  payoutId    String?        @unique
-  payout      PayoutRequest? @relation(fields: [payoutId], references: [id])
-  createdAt   DateTime       @default(now())
+  id             String         @id @default(cuid())
+  description    String
+  /// A stable name for the fact this transaction records, for the ones not
+  /// keyed by a payment or payout — `live-release:<purchaseId>`,
+  /// `refund:<refundId>` — so a retried worker or a double click collides on
+  /// the unique index instead of booking the money twice. Null on every row
+  /// written before it existed; those are never reinterpreted.
+  idempotencyKey String?        @unique
+  paymentId      String?        @unique
+  payment        Payment?       @relation(fields: [paymentId], references: [id])
+  payoutId       String?        @unique
+  payout         PayoutRequest? @relation(fields: [payoutId], references: [id])
+  createdAt      DateTime       @default(now())
 
   entries   LedgerEntry[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.
@@ -2513,6 +2527,7 @@ model LiveSession {
   deletedAt DateTime?
 
   bookings       LiveBooking[]
+  purchases      LivePurchase[]
   attendance     LiveAttendance[]
   messages       LiveChatMessage[]
   rtcConnections LiveRtcConnection[]
@@ -2827,17 +2842,187 @@ model LiveAttendance {
   @@index([userId])
 }
 
-// A student's seat reservation for a live session.
+// A student's CONFIRMED seat on a live session — and the only thing that lets
+// them in: join, chat and replay all read it. A FREE booking is one directly;
+// a PAID seat exists only once its LivePurchase is confirmed (purchaseId), and
+// is deleted again if that purchase is cancelled or refunded. A pending
+// payment never creates one.
 model LiveBooking {
-  id        String         @id @default(cuid())
-  sessionId String
-  session   LiveSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  studentId String
-  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  createdAt DateTime       @default(now())
+  id         String         @id @default(cuid())
+  sessionId  String
+  session    LiveSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  purchaseId String?        @unique
+  purchase   LivePurchase?  @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  createdAt  DateTime       @default(now())
 
   @@unique([sessionId, studentId])
   @@index([studentId])
+}
+
+/// Where a paid seat is in its life. Access comes only from CONFIRMED (the
+/// LiveBooking it creates); every other state is a record of how the money
+/// and the seat were handled.
+enum LivePurchaseStatus {
+  /// A seat is held while the buyer pays (holdExpiresAt); no money yet.
+  HELD
+  /// A payment was submitted and awaits trusted verification.
+  PAYMENT_PENDING
+  /// Paid and verified; the seat is theirs (a LiveBooking exists).
+  CONFIRMED
+  /// The class was delivered and the earnings released.
+  DELIVERED
+  /// The hold lapsed with no payment.
+  EXPIRED
+  /// The payment was rejected; the seat went back.
+  PAYMENT_REJECTED
+  CANCELLED_BY_STUDENT
+  CANCELLED_BY_TEACHER
+  /// Money is owed back and is being returned by hand (a guest).
+  REFUND_PENDING
+  REFUNDED
+  /// The payment was verified after the class had filled (or ended): no seat
+  /// could be given, so the money goes back in full.
+  OVERSOLD
+  /// Something only a person should decide (a class that barely ran, a
+  /// teacher who never started it). Nothing is released or refunded by itself.
+  NEEDS_REVIEW
+}
+
+/// One purchase of a seat on a PAID live session.
+///
+/// It is the commercial record: the hold on a seat while the buyer pays, the
+/// link to the Payment (the cash), and a frozen copy of everything the price
+/// was made of — the terms version, the fee, the split, the refund and replay
+/// policy — so nothing changed later (terms, split, the session's price or
+/// policy) can reprice or re-rule a sale already made. The Ledger holds the
+/// money; this holds what was promised.
+///
+/// Invariants the database enforces (migration 20261012110000): the amounts
+/// balance (studentPays = fee + teacher + center), none is negative, and a
+/// student has at most one live purchase per session at a time.
+model LivePurchase {
+  id            String             @id @default(cuid())
+  sessionId     String
+  session       LiveSession        @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  studentId     String?
+  student       StudentProfile?    @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  status        LivePurchaseStatus
+  /// While HELD or PAYMENT_PENDING: the seat counts as taken until then.
+  holdExpiresAt DateTime?
+
+  /// Where the sale happens (the session's academy) and whose class it is.
+  academyId String
+  tenantId  String
+
+  // ── The price, frozen at purchase ──
+  currency                     String
+  basePriceCents               Int
+  discountCents                Int               @default(0)
+  couponId                     String?
+  feeType                      FeeType
+  feeMode                      CommercialFeeMode
+  feeBps                       Int?
+  feeFixedCents                Int?
+  feeCents                     Int
+  studentPaysCents             Int
+  teacherCents                 Int
+  centerCents                  Int
+  teacherSharePercent          Int?
+  termsVersionId               String
+  termsVersion                 CommercialTerms   @relation(fields: [termsVersionId], references: [id], onDelete: Restrict)
+  feeRefundableOnStudentCancel Boolean
+  refundPolicy                 LiveRefundPolicy
+  replayPolicy                 LiveReplayPolicy
+  replayDays                   Int?
+
+  // ── What happened ──
+  confirmedAt  DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+  deliveredAt  DateTime?
+  /// When the held money was released to the seller side (exactly once).
+  releasedAt   DateTime?
+  reviewReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  payment Payment?
+  booking LiveBooking?
+  refunds Refund[]
+
+  @@index([sessionId, status])
+  @@index([studentId, status])
+  @@index([status, holdExpiresAt])
+}
+
+enum RefundStatus {
+  /// Owed; waiting on a finance decision (and, for a guest, a destination).
+  REQUESTED
+  /// Approved by finance; the manual transfer is still to be made.
+  APPROVED
+  /// The money has left: credited to the wallet, or transferred by hand.
+  COMPLETED
+  REJECTED
+}
+
+enum RefundDestination {
+  /// A registered student's Darsly Wallet — instant, through the ledger.
+  WALLET
+  /// Sent by Darsly finance to an account the buyer names (a guest).
+  MANUAL_TRANSFER
+}
+
+enum RefundReason {
+  STUDENT_CANCEL
+  TEACHER_CANCEL
+  OVERSOLD
+  NO_SHOW
+  ADMIN
+}
+
+/// Money going back for a Live purchase. Its own record, never an edit of the
+/// Payment (which stays the evidence that the money arrived): the ledger books
+/// it as a compensating transaction keyed `refund:<id>`, and the amounts say
+/// exactly which parts of the held money it returns.
+///
+/// At most one refund per purchase per reason (the unique index is the
+/// idempotency anchor for a double click, a retry or a second worker), and the
+/// parts always add up (CHECK in migration 20261012110000).
+model Refund {
+  id             String            @id @default(cuid())
+  livePurchaseId String
+  livePurchase   LivePurchase      @relation(fields: [livePurchaseId], references: [id], onDelete: Restrict)
+  paymentId      String?
+  payment        Payment?          @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  reason         RefundReason
+  destination    RefundDestination
+  status         RefundStatus
+
+  amountCents        Int
+  feeRefundCents     Int
+  teacherRefundCents Int
+  centerRefundCents  Int
+
+  /// MANUAL_TRANSFER only: how and where to send it, given by the buyer.
+  destinationMethod  PayoutMethod?
+  destinationDetails Json?
+
+  requestedById     String?
+  decidedById       String?
+  decidedAt         DateTime?
+  completedAt       DateTime?
+  /// The transfer's own reference, recorded by finance when it was sent.
+  transferReference String?
+  rejectedReason    String?
+  note              String?
+  ledgerTxnId       String?   @unique
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([livePurchaseId, reason])
+  @@index([status, createdAt])
 }
 
 model Certificate {

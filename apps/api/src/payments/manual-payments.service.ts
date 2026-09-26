@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Role } from '@darsly/shared-types';
@@ -20,6 +21,7 @@ import { activateBundleChildren } from '../enrollments/bundle';
 import { releaseCouponUse, reserveCouponUse } from './coupon-use';
 import { computeServiceFee } from './fee.util';
 import { LedgerService } from './ledger.service';
+import { PaymentTargets } from './payment-targets';
 import { assertSplitConfigured } from './revenue-split';
 import type { AcademyContext } from '../academy/academy-context';
 
@@ -66,7 +68,15 @@ export class ManualPaymentsService {
     private readonly notifications: NotificationsService,
     private readonly proofs: ProofStorageService,
     private readonly proofReader: ProofReaderService,
+    /** Where a payment for a Live seat is handed once verified or rejected. */
+    @Optional() private readonly targets?: PaymentTargets,
   ) {}
+
+  /** The Live handler — a Live payment is never allowed to fall into the course path. */
+  private live() {
+    if (!this.targets) throw new Error('Live payments are not wired in this context');
+    return this.targets.liveHandler();
+  }
 
   // ── Student: submit a proof of payment ──────────────────────────────────────
 
@@ -615,6 +625,15 @@ export class ManualPaymentsService {
 
   async verify(user: { sub: string; role: string; tenantId?: string }, paymentId: string) {
     const payment = await this.authorizePayment(user, paymentId);
+    // A paid Live seat is verified only by a source that cannot be the seller:
+    // the listener's match, the wallet, or Darsly finance. A teacher marking
+    // their own student as paid would manufacture both access and revenue.
+    if (payment.livePurchaseId && user.role !== Role.SUPER_ADMIN) {
+      throw new ForbiddenException({
+        message: 'Only Darsly verifies a payment for a live session',
+        code: 'LIVE_PAYMENT_ADMIN_ONLY',
+      });
+    }
     // Separation of duties: an admin is an independent party, so their verify
     // settles the earning immediately. A teacher/owner verifying their OWN
     // academy's payment activates the enrolment but leaves the earning pending
@@ -643,6 +662,7 @@ export class ManualPaymentsService {
    * more than they were quoted.
    */
   private async priceNowFor(payment: { courseId: string; couponId: string | null }) {
+    // (Course payments only — a Live seat's price is the purchase's frozen snapshot.)
     const course = await this.prisma.course.findUnique({
       where: { id: payment.courseId },
       select: { priceCents: true, tenantId: true, academyId: true },
@@ -758,7 +778,9 @@ export class ManualPaymentsService {
     payment: {
       id: string;
       status: string;
-      courseId: string;
+      courseId: string | null;
+      /** Set for a Live seat: handed to the Live handler, never priced or enrolled here. */
+      livePurchaseId?: string | null;
       enrollmentId: string | null;
       studentId: string;
       couponId: string | null;
@@ -771,13 +793,26 @@ export class ManualPaymentsService {
     auto: boolean,
     settle: boolean,
   ) {
+    if (payment.livePurchaseId) {
+      // The same trusted verification, a different thing bought: the Live
+      // handler settles the money into the purchase's holding account and
+      // gives the seat (or refunds, if there is no seat to give).
+      if (payment.status !== 'PENDING') {
+        if (auto) return { ok: true, alreadyHandled: true };
+        throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
+      }
+      return this.live().verify(payment.id, verifierId);
+    }
+    const courseId = payment.courseId;
+    // The CHECK on Payment makes this unreachable; refusing beats guessing.
+    if (!courseId) throw new Error(`Payment ${payment.id} has no target`);
     if (payment.status !== 'PENDING') {
       // Fast path; the authoritative guard is the conditional update below.
       if (auto) return { ok: true, alreadyHandled: true };
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
     const course = await this.prisma.course.findUnique({
-      where: { id: payment.courseId },
+      where: { id: courseId },
       select: { id: true, tenantId: true, pricingModel: true, title: true },
     });
     const expiresAt =
@@ -805,7 +840,7 @@ export class ManualPaymentsService {
      * exact total, and rewriting the total underneath it is escrow surgery — it
      * is left alone and flagged for a human instead of guessed at.
      */
-    const now = await this.priceNowFor(payment);
+    const now = await this.priceNowFor({ courseId, couponId: payment.couponId });
     const overpaid = now ? payment.amountCents - now.totalCents : 0;
     const adjust = !!now && overpaid > 0 && payment.walletCents === 0;
     if (now && overpaid > 0 && payment.walletCents > 0) {
@@ -927,6 +962,15 @@ export class ManualPaymentsService {
   async settle(paymentId: string, actorId: string) {
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('Payment not found');
+    // A Live payment is settled in the same step that verifies it — there is
+    // no "verified by the teacher, settled later" for a Live seat.
+    if (payment.livePurchaseId) {
+      if (payment.settledAt) return { ok: true, alreadySettled: true };
+      throw new BadRequestException({
+        message: 'A live-session payment settles when it is verified',
+        code: 'LIVE_PAYMENT_SETTLES_ON_VERIFY',
+      });
+    }
     if (payment.status !== 'PAID') {
       throw new BadRequestException({
         message: 'Only a verified payment can be settled',
@@ -959,6 +1003,17 @@ export class ManualPaymentsService {
     const payment = preAuthorized
       ? await this.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } })
       : await this.authorizePayment(user, paymentId);
+    if (payment.livePurchaseId) {
+      // Refusing a Live payment releases a seat someone may have paid for —
+      // Darsly's call, never the seller's.
+      if (user.role !== Role.SUPER_ADMIN && user.sub !== 'system') {
+        throw new ForbiddenException({
+          message: 'Only Darsly reviews a payment for a live session',
+          code: 'LIVE_PAYMENT_ADMIN_ONLY',
+        });
+      }
+      return this.live().reject(paymentId, user.sub, reason);
+    }
     if (payment.status !== 'PENDING') {
       throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
     }
@@ -1029,6 +1084,9 @@ export class ManualPaymentsService {
       status,
       method,
       tenantId: wholeOrg ? undefined : (authorTenantId ?? '__none__'),
+      // Live-seat payments are Darsly's to review; they never sit in a
+      // seller's queue with buttons that would be refused.
+      coursesOnly: true,
     });
   }
   adminQueue(status = 'PENDING') {
@@ -1040,6 +1098,7 @@ export class ManualPaymentsService {
     status?: string;
     method?: string;
     tenantId?: string;
+    coursesOnly?: boolean;
   }) {
     const rows = await this.prisma.payment.findMany({
       where: {
@@ -1047,6 +1106,7 @@ export class ManualPaymentsService {
         ...(where.tenantId ? { tenantId: where.tenantId } : {}),
         ...(where.status ? { status: where.status as any } : {}),
         ...(where.method ? { method: where.method as any } : {}),
+        ...(where.coursesOnly ? { livePurchaseId: null } : {}),
         gateway: 'manual',
       },
       orderBy: { createdAt: 'desc' },
@@ -1054,6 +1114,7 @@ export class ManualPaymentsService {
       include: {
         student: { select: { user: { select: { fullName: true, phone: true } } } },
         course: { select: { title: true } },
+        livePurchase: { select: { session: { select: { title: true } } } },
       },
     });
     return rows.map((p) => ({
@@ -1073,7 +1134,8 @@ export class ManualPaymentsService {
       studentName: p.student.user.fullName,
       studentPhone: p.student.user.phone,
       courseId: p.courseId,
-      courseTitle: p.course.title,
+      courseTitle: p.course?.title ?? p.livePurchase?.session.title ?? '—',
+      livePurchaseId: p.livePurchaseId,
     }));
   }
 
@@ -1082,7 +1144,7 @@ export class ManualPaymentsService {
     const rows = await this.prisma.payment.findMany({
       where: { studentId: student.id, gateway: 'manual' },
       orderBy: { createdAt: 'desc' },
-      include: { course: { select: { title: true } } },
+      include: { course: { select: { title: true } }, livePurchase: { select: { session: { select: { title: true } } } }, },
     });
     return rows.map((p) => ({
       id: p.id,
@@ -1094,7 +1156,8 @@ export class ManualPaymentsService {
       paidAt: p.paidAt,
       cashReceiver: p.cashReceiver,
       courseId: p.courseId,
-      courseTitle: p.course.title,
+      courseTitle: p.course?.title ?? p.livePurchase?.session.title ?? '—',
+      livePurchaseId: p.livePurchaseId,
     }));
   }
 

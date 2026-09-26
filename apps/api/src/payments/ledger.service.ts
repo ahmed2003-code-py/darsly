@@ -261,6 +261,7 @@ export class LedgerService {
     });
     if (!payment || payment.status !== 'PAID' || payment.amountCents <= 0) return;
     if (payment.ledgerTransaction) return; // already recorded
+    if (payment.livePurchaseId) return this.recordLivePayment(payment, db);
 
     // Additive-fee model: amountCents (paid) = platform fee + academy net. The
     // fee/net are frozen on the Payment at submit time; fall back to the legacy
@@ -456,6 +457,162 @@ export class LedgerService {
         },
       });
     }
+  }
+
+  /** Where a Live purchase's money waits between settlement and delivery (or refund). */
+  heldAccount(livePurchaseId: string) {
+    return `purchase:${livePurchaseId}:held`;
+  }
+
+  /**
+   * Settle a payment for a Live seat: the money is in, but nobody has earned it
+   * yet — the class has not happened. So the WHOLE amount goes to the
+   * purchase's own holding account, not to anyone's withdrawable :balance and
+   * not yet to Darsly's commission. It leaves that account exactly once, by
+   * `releaseLivePurchase` after the class is delivered, or by a refund —
+   * both keyed, so a retry can never move it twice. Where the money comes
+   * FROM is the same rule as a course: the wallet (paid in full from it), or
+   * platform cash for a transfer (less any wallet portion already in escrow).
+   */
+  private async recordLivePayment(
+    payment: {
+      id: string;
+      livePurchaseId: string | null;
+      studentId: string;
+      tenantId: string;
+      academyId: string | null;
+      amountCents: number;
+      walletCents: number;
+      method: string | null;
+    },
+    db: Db,
+  ): Promise<void> {
+    const purchaseId = payment.livePurchaseId as string;
+    if (payment.method === 'CASH') {
+      // Cash never reaches Darsly, so it cannot be held for a class — refused
+      // rather than booked as money the platform does not have.
+      throw new BadRequestException({ message: 'Cash cannot pay for a live seat', code: 'LIVE_NO_CASH' });
+    }
+    const paidFully = payment.method === 'WALLET';
+    const walletCents = payment.walletCents ?? 0;
+    if (paidFully) {
+      const balance = await this.walletBalance(payment.studentId, db);
+      if (balance < payment.amountCents) {
+        throw new BadRequestException({
+          message: 'Wallet balance is not enough',
+          code: 'INSUFFICIENT_BALANCE',
+          balanceCents: balance,
+          requiredCents: payment.amountCents,
+        });
+      }
+    }
+    const academyId = payment.academyId ?? payment.tenantId;
+    const debits: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
+    if (paidFully) {
+      debits.push({ account: this.walletAccount(payment.studentId), direction: 'DEBIT', amountCents: payment.amountCents });
+    } else {
+      if (walletCents > 0)
+        debits.push({ account: this.paymentEscrowAccount(payment.id), direction: 'DEBIT', amountCents: walletCents });
+      const cash = payment.amountCents - walletCents;
+      if (cash > 0) debits.push({ account: 'platform:cash', direction: 'DEBIT', amountCents: cash });
+    }
+    const txn = await db.ledgerTransaction.create({
+      data: {
+        description: `live seat payment ${payment.id}`,
+        paymentId: payment.id,
+        idempotencyKey: `live-settle:${purchaseId}`,
+        entries: {
+          create: [
+            ...debits,
+            {
+              account: this.heldAccount(purchaseId),
+              direction: 'CREDIT',
+              amountCents: payment.amountCents,
+              tenantId: payment.tenantId,
+              academyId,
+            },
+          ],
+        },
+      },
+    });
+    const walletSpent = paidFully ? payment.amountCents : walletCents;
+    if (walletSpent > 0) {
+      await db.walletTransaction.create({
+        data: {
+          studentId: payment.studentId,
+          kind: 'PURCHASE',
+          amountCents: -walletSpent,
+          description: 'حجز جلسة مباشرة',
+          paymentId: payment.id,
+          ledgerTxnId: txn.id,
+        },
+      });
+    }
+  }
+
+  /**
+   * Money going back to the buyer of a Live seat, out of the purchase's
+   * holding account: into their wallet (a registered student — instant), or
+   * out of platform cash (a manual transfer finance has made to a guest).
+   *
+   * Keyed `refund:<refundId>`, so booking the same refund twice returns the
+   * first transaction instead of paying twice; and refused outright if the
+   * holding account does not hold that much — money released or refunded
+   * already cannot be refunded again. The caller holds the session lock, so
+   * two refunds of one purchase cannot both pass that check.
+   */
+  async bookLiveRefund(
+    r: {
+      refundId: string;
+      purchaseId: string;
+      amountCents: number;
+      destination: { wallet: string } | { transferredOut: true };
+      tenantId?: string | null;
+      academyId?: string | null;
+    },
+    db: Db,
+  ): Promise<string> {
+    const key = `refund:${r.refundId}`;
+    const prior = await db.ledgerTransaction.findUnique({ where: { idempotencyKey: key } });
+    if (prior) return prior.id;
+    if (!Number.isSafeInteger(r.amountCents) || r.amountCents <= 0) throw new Error('bookLiveRefund: amount must be positive');
+    const held = await this.heldBalance(r.purchaseId, db);
+    if (held < r.amountCents) {
+      throw new BadRequestException({
+        message: 'Not enough is held for this purchase to refund that much',
+        code: 'REFUND_EXCEEDS_HELD',
+        heldCents: held,
+        requestedCents: r.amountCents,
+      });
+    }
+    const credit =
+      'wallet' in r.destination
+        ? { account: this.walletAccount(r.destination.wallet), direction: 'CREDIT' as const, amountCents: r.amountCents }
+        : { account: 'platform:cash', direction: 'CREDIT' as const, amountCents: r.amountCents };
+    const txn = await db.ledgerTransaction.create({
+      data: {
+        description: `live refund ${r.refundId}`,
+        idempotencyKey: key,
+        entries: {
+          create: [
+            {
+              account: this.heldAccount(r.purchaseId),
+              direction: 'DEBIT',
+              amountCents: r.amountCents,
+              tenantId: r.tenantId ?? null,
+              academyId: r.academyId ?? null,
+            },
+            credit,
+          ],
+        },
+      },
+    });
+    return txn.id;
+  }
+
+  /** What is still sitting in a purchase's holding account (credits − debits). */
+  heldBalance(livePurchaseId: string, db: Db = this.prisma): Promise<number> {
+    return this.balanceOf(this.heldAccount(livePurchaseId), db);
   }
 
   /** Money leaves the teacher's balance back to platform cash on payout completion. */

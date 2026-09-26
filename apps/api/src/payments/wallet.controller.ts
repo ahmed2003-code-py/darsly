@@ -105,6 +105,7 @@ export class WalletController {
         take: 10,
         include: {
           course: { select: { title: true } },
+          livePurchase: { select: { session: { select: { title: true } } } },
           student: { include: { user: { select: { fullName: true } } } },
           invoice: { select: { serial: true } },
         },
@@ -146,7 +147,9 @@ export class WalletController {
         amountCents: p.netCents ?? p.amountCents,
         method: p.method,
         cashReceiver: p.cashReceiver,
-        courseTitle: p.course.title,
+        // What the money bought: a course, or a seat on a live session.
+        courseTitle: p.course?.title ?? p.livePurchase?.session.title ?? '—',
+        liveSessionTitle: p.livePurchase?.session.title ?? null,
         studentName: p.student.user.fullName,
         invoiceSerial: p.invoice?.serial ?? null,
         paidAt: p.paidAt,
@@ -222,6 +225,7 @@ export class WalletController {
           take: 10,
           include: {
             course: { select: { title: true } },
+          livePurchase: { select: { session: { select: { title: true } } } },
             student: { include: { user: { select: { fullName: true } } } },
           },
         }),
@@ -252,7 +256,9 @@ export class WalletController {
         amountCents: shareOf.get(p.id) ?? 0,
         method: p.method,
         cashReceiver: p.cashReceiver,
-        courseTitle: p.course.title,
+        // What the money bought: a course, or a seat on a live session.
+        courseTitle: p.course?.title ?? p.livePurchase?.session.title ?? '—',
+        liveSessionTitle: p.livePurchase?.session.title ?? null,
         studentName: p.student.user.fullName,
         paidAt: p.paidAt,
       })),

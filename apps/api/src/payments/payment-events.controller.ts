@@ -142,6 +142,20 @@ export class PaymentEventsController {
     return this.matching.manualMatch(id, paymentId, u.sub, dto?.reason);
   }
 
+  @Post('admin/payment-events/:id/match-topup/:topupId')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Tie an unmatched transfer to a pending wallet top-up (re-validated) and credit it once' })
+  manualMatchTopup(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('topupId') topupId: string,
+    @Body() dto: MatchReasonDto,
+  ) {
+    return this.matching.manualMatchTopup(id, topupId, u.sub, dto?.reason);
+  }
+
   @Post('admin/payment-events/:id/link/:paymentId')
   @HttpCode(200)
   @ApiBearerAuth()

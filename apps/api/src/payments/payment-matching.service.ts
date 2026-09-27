@@ -127,6 +127,7 @@ export class PaymentMatchingService {
         id: true,
         reference: true,
         proofReading: true,
+        payerName: true,
         student: { select: { user: { select: { fullName: true } } } },
       },
     });
@@ -146,7 +147,7 @@ export class PaymentMatchingService {
         kind: 'topup' as const,
         id: t.id,
         reference: t.reference,
-        declaredPayerName: null,
+        declaredPayerName: t.payerName ?? null,
         ownerName: t.student?.user?.fullName ?? '',
         receipt: (t.proofReading as ProofReading | null) ?? null,
       })),
@@ -471,6 +472,55 @@ export class PaymentMatchingService {
           entityId: eventId,
           meta: { paymentId, reason: why } as never,
         },
+      })
+      .catch(() => undefined);
+    return { ok: true };
+  }
+
+  /**
+   * An admin says this transfer is this student's wallet top-up. Re-checked
+   * like a payment match (unclaimed, same rail, exact amount, still pending,
+   * no other transfer tied to it), claimed by compare-and-swap, then credited
+   * through the ordinary approval — whose own status flip is what makes a
+   * second credit impossible, whoever (listener or admin) gets there second.
+   */
+  async manualMatchTopup(eventId: string, topupId: string, actorId: string, reason?: string) {
+    const event = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+    if (event.status === 'RETURNED') throw new BadRequestException({ message: 'This transfer is being returned', code: 'EVENT_RETURNED' });
+    if (!['UNMATCHED', 'AMBIGUOUS'].includes(event.status) || event.matchedPaymentId || event.matchedTopupId) {
+      throw new BadRequestException({ message: 'Event already matched', code: 'EVENT_ALREADY_CLAIMED' });
+    }
+    const topup = await this.prisma.walletTopup.findUnique({ where: { id: topupId } });
+    if (!topup) throw new NotFoundException('Top-up not found');
+    if (!methodsFor(event.provider).includes(topup.method)) {
+      throw new BadRequestException({ message: `The transfer arrived by ${event.provider}, the top-up is ${topup.method}`, code: 'METHOD_MISMATCH' });
+    }
+    if (event.amountCents !== topup.amountCents) {
+      throw new BadRequestException({ message: `Transfer is ${event.amountCents} but the top-up is ${topup.amountCents}`, code: 'AMOUNT_MISMATCH' });
+    }
+    if (topup.status !== 'PENDING') throw new BadRequestException({ message: 'Top-up is not pending', code: 'NOT_MATCHABLE' });
+    if (await this.prisma.paymentEvent.findFirst({ where: { matchedTopupId: topupId }, select: { id: true } })) {
+      throw new BadRequestException({ message: 'Another transfer already paid for this top-up', code: 'PAYMENT_ALREADY_HAS_TRANSFER' });
+    }
+    const why = (reason ?? '').trim().slice(0, 300);
+    const claim = await this.prisma.paymentEvent.updateMany({
+      where: { id: eventId, status: { in: ['UNMATCHED', 'AMBIGUOUS'] }, matchedPaymentId: null, matchedTopupId: null },
+      data: { status: 'MATCHED', matchedTopupId: topupId, note: `manual match by ${actorId}${why ? `: ${why}` : ''}` },
+    });
+    if (claim.count === 0) throw new BadRequestException({ message: 'Event already matched', code: 'EVENT_ALREADY_CLAIMED' });
+    try {
+      await this.wallet.approveTopup(actorId, topupId);
+    } catch (e) {
+      await this.prisma.paymentEvent.updateMany({
+        where: { id: eventId, matchedTopupId: topupId },
+        data: { status: event.status, matchedTopupId: null, note: event.note },
+      });
+      throw e;
+    }
+    await this.prisma.auditLog
+      .create({
+        data: { actorUserId: actorId, action: 'payment.event.match', entity: 'PaymentEvent', entityId: eventId, meta: { topupId, reason: why || null } as never },
       })
       .catch(() => undefined);
     return { ok: true };

@@ -206,6 +206,44 @@ export class UnmatchedTransfersService {
       }));
   }
 
+  /**
+   * Pending wallet top-ups this transfer could be: same rail, exactly this
+   * amount, no transfer tied to them yet — shown as WALLET_TOPUP targets
+   * beside the Live and course payments, in the one queue.
+   */
+  async topupCandidates(eventId: string) {
+    const e = await this.event(eventId);
+    const rows = await this.prisma.walletTopup.findMany({
+      where: { status: 'PENDING', amountCents: e.amountCents, method: { in: methodsFor(e.provider) as any[] } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { student: { select: { user: { select: { fullName: true } } } } },
+    });
+    const taken = new Set(
+      (
+        await this.prisma.paymentEvent.findMany({
+          where: { matchedTopupId: { in: rows.map((t) => t.id) } },
+          select: { matchedTopupId: true },
+        })
+      ).map((x) => x.matchedTopupId),
+    );
+    return rows
+      .filter((t) => !taken.has(t.id))
+      .map((t) => ({
+        topupId: t.id,
+        kind: 'topup' as const,
+        buyerName: t.student?.user.fullName ?? null,
+        expectedCents: t.amountCents,
+        method: t.method,
+        transferSource: t.transferSource,
+        payerName: t.payerName,
+        referenceMasked: maskTail(t.reference),
+        claimed: !!t.claimedAt,
+        hasProof: !!t.proofImageUrl,
+        createdAt: t.createdAt,
+      }));
+  }
+
   async event(eventId: string) {
     const e = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
     if (!e) throw new NotFoundException('Event not found');

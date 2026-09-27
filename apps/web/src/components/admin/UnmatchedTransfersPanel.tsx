@@ -14,6 +14,7 @@ const RETURN_METHODS = ['VODAFONE_CASH', 'INSTAPAY', 'BANK_TRANSFER'] as const;
 type Choice =
   | { kind: 'payment'; id: string; row: any }
   | { kind: 'purchase'; id: string; row: any }
+  | { kind: 'topup'; id: string; row: any }
   | { kind: 'verified'; id: string; row: any };
 
 /**
@@ -247,7 +248,17 @@ function CancelReturn({ pending, onCancel }: { pending: boolean; onCancel: (reas
   );
 }
 
-/** Choose a pending payment or a Live purchase for this transfer, then confirm. */
+/** What a transfer would pay for — the same money, three kinds of target. */
+function TargetBadge({ target }: { target: 'LIVE' | 'COURSE' | 'WALLET_TOPUP' }) {
+  const { t } = useTranslation();
+  return (
+    <span className="ms-2 rounded-full border border-outline-variant px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+      {t(`transfers.target.${target}`)}
+    </span>
+  );
+}
+
+/** Choose a pending payment, a Live purchase or a wallet top-up for this transfer, then confirm. */
 function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => void; onDone: () => void }) {
   const { t } = useTranslation();
   const [choice, setChoice] = useState<Choice | null>(null);
@@ -262,6 +273,7 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
     mutationFn: async () => {
       const body = { reason: reason.trim() };
       if (choice!.kind === 'payment') return (await api.post(`/admin/payment-events/${event.id}/match/${choice!.id}`, body)).data;
+      if (choice!.kind === 'topup') return (await api.post(`/admin/payment-events/${event.id}/match-topup/${choice!.id}`, body)).data;
       if (choice!.kind === 'verified') return (await api.post(`/admin/payment-events/${event.id}/link/${choice!.id}`, body)).data;
       return (await api.post(`/admin/live-commerce/transfers/${event.id}/attach/${choice!.id}`, body)).data;
     },
@@ -273,6 +285,7 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
   const payments: any[] = candidates.data?.payments ?? [];
   const purchases: any[] = candidates.data?.purchases ?? [];
   const verified: any[] = candidates.data?.verified ?? [];
+  const topups: any[] = candidates.data?.topups ?? [];
   const row = choice?.row;
 
   return (
@@ -285,7 +298,7 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
         <Spinner />
       ) : !confirming ? (
         <div className="space-y-4">
-          {!payments.length && !purchases.length && !verified.length && (
+          {!payments.length && !purchases.length && !verified.length && !topups.length && (
             <p className="text-sm text-outline">{t('transfers.noCandidates')}</p>
           )}
           {!!payments.length && (
@@ -302,7 +315,10 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
                       onChange={() => setChoice({ kind: 'payment', id: p.paymentId, row: p })}
                     />
                     <span className="min-w-0">
-                      <span className="block font-bold">{p.title ?? '—'}</span>
+                      <span className="block font-bold">
+                        {p.title ?? '—'}
+                        <TargetBadge target={p.kind === 'live' ? 'LIVE' : 'COURSE'} />
+                      </span>
                       <span className="block text-on-surface-variant">
                         {p.buyerName ?? '—'} · {t('transfers.expected')}: {egp(p.expectedCents)}
                       </span>
@@ -337,7 +353,10 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
                       onChange={() => setChoice({ kind: 'purchase', id: p.purchaseId, row: p })}
                     />
                     <span className="min-w-0">
-                      <span className="block font-bold">{p.session.title}</span>
+                      <span className="block font-bold">
+                        {p.session.title}
+                        <TargetBadge target="LIVE" />
+                      </span>
                       <span className="block text-on-surface-variant">
                         {p.buyerName ?? '—'}
                         {p.guest && ` (${t('transfers.guest')})`} · {new Date(p.session.startsAt).toLocaleString('ar-EG')}
@@ -346,6 +365,44 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
                         {t(`adminLive.status.${p.status}`)} · {t('transfers.expected')}: {egp(p.studentPaysCents)}
                       </span>
                       {p.session.over && <span className="block text-xs text-error">{t('transfers.classOver')}</span>}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          {!!topups.length && (
+            <fieldset>
+              <legend className="mb-2 text-sm font-bold">{t('transfers.topupsHeading')}</legend>
+              <div className="space-y-2">
+                {topups.map((p) => (
+                  <label key={p.topupId} className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.topupId ? 'border-primary' : 'border-outline-variant/60'}`}>
+                    <input
+                      type="radio"
+                      name="transfer-target"
+                      className="mt-1 accent-primary"
+                      checked={choice?.id === p.topupId}
+                      onChange={() => setChoice({ kind: 'topup', id: p.topupId, row: p })}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-bold">
+                        {t('transfers.topupTitle')}
+                        <TargetBadge target="WALLET_TOPUP" />
+                      </span>
+                      <span className="block text-on-surface-variant">
+                        {p.buyerName ?? '—'} · {t('transfers.expected')}: {egp(p.expectedCents)}
+                      </span>
+                      <span className="block text-xs text-outline">
+                        {p.transferSource === 'WALLET' && p.referenceMasked
+                          ? t('apay.fromWallet', { number: p.referenceMasked })
+                          : p.transferSource === 'BANK'
+                            ? t('apay.fromBank', { name: p.payerName ?? '—' })
+                            : t('apay.noSource')}
+                        {' · '}
+                        {p.claimed ? t('apay.claimed') : t('apay.notClaimed')}
+                        {' · '}
+                        {p.hasProof ? t('apay.proofYes') : t('apay.proofNo')}
+                      </span>
                     </span>
                   </label>
                 ))}
@@ -395,10 +452,16 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
             <dt className="text-outline">{t('transfers.buyer')}</dt>
             <dd>{row?.buyerName ?? '—'}</dd>
             <dt className="text-outline">{t('apay.item')}</dt>
-            <dd>{choice!.kind === 'purchase' ? row?.session.title : (row?.title ?? '—')}</dd>
+            <dd>
+              {choice!.kind === 'purchase'
+                ? row?.session.title
+                : choice!.kind === 'topup'
+                  ? t('transfers.topupTitle')
+                  : (row?.title ?? '—')}
+            </dd>
             <dt className="text-outline">{t('transfers.expected')}</dt>
             <dd className="tabular-nums">
-              {egp(choice!.kind === 'payment' ? row?.expectedCents : choice!.kind === 'verified' ? row?.amountCents : row?.studentPaysCents)}
+              {egp(choice!.kind === 'payment' || choice!.kind === 'topup' ? row?.expectedCents : choice!.kind === 'verified' ? row?.amountCents : row?.studentPaysCents)}
             </dd>
             <dt className="text-outline">{t('transfers.incoming')}</dt>
             <dd className="tabular-nums">{egp(event.amountCents)}</dd>
@@ -406,7 +469,7 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
             <dd dir="auto">{event.payerName ?? '—'}</dd>
             <dt className="text-outline">{t('transfers.state')}</dt>
             <dd>
-              {choice!.kind === 'payment'
+              {choice!.kind === 'payment' || choice!.kind === 'topup'
                 ? row?.claimed
                   ? t('apay.claimed')
                   : t('apay.notClaimed')
@@ -417,7 +480,9 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
           </dl>
           {choice!.kind === 'purchase' && row?.session.over && <p className="text-error">{t('transfers.classOver')}</p>}
           <p className="rounded-xl bg-error-container/50 p-3 text-on-error-container">
-            {choice!.kind === 'payment'
+            {choice!.kind === 'topup'
+              ? t('transfers.confirmTopup')
+              : choice!.kind === 'payment'
               ? t('transfers.confirmMatch')
               : choice!.kind === 'verified'
                 ? t('transfers.confirmLink')

@@ -417,6 +417,65 @@ export class PaymentMatchingService {
 
   // ── Admin ────────────────────────────────────────────────────────────────
 
+  /**
+   * A transfer whose payment was already confirmed by hand (an admin verified
+   * it before the transfer was tied to it — the 27 Sep "test the money" case).
+   * Nothing is verified and no money moves: the transfer is only marked as
+   * spent by that payment, so it can never also be matched, attached or
+   * returned. The payment must be PAID for exactly this amount and not
+   * already tied to another transfer; the rail may differ (the admin already
+   * judged the money), which is why a reason is required and audited.
+   */
+  async linkToVerified(eventId: string, paymentId: string, actorId: string, reason: string) {
+    const why = (reason ?? '').trim().slice(0, 300);
+    if (why.length < 3) throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
+    const event = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+    if (event.status === 'RETURNED') {
+      throw new BadRequestException({ message: 'This transfer is being returned', code: 'EVENT_RETURNED' });
+    }
+    if (!['UNMATCHED', 'AMBIGUOUS'].includes(event.status) || event.matchedPaymentId || event.matchedTopupId) {
+      throw new BadRequestException({ message: 'Event already matched', code: 'EVENT_ALREADY_CLAIMED' });
+    }
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status !== 'PAID') {
+      throw new BadRequestException({ message: 'Only a payment already confirmed can be linked', code: 'PAYMENT_NOT_VERIFIED' });
+    }
+    const dueCents = payment.amountCents - (payment.walletCents ?? 0);
+    if (event.amountCents !== dueCents) {
+      throw new BadRequestException({
+        message: `Transfer is ${event.amountCents} but the payment was ${dueCents}`,
+        code: 'AMOUNT_MISMATCH',
+      });
+    }
+    const already = await this.prisma.paymentEvent.findFirst({ where: { matchedPaymentId: paymentId }, select: { id: true } });
+    if (already) {
+      throw new BadRequestException({ message: 'Another transfer already paid for this payment', code: 'PAYMENT_ALREADY_HAS_TRANSFER' });
+    }
+    const claim = await this.prisma.paymentEvent.updateMany({
+      where: { id: eventId, status: { in: ['UNMATCHED', 'AMBIGUOUS'] }, matchedPaymentId: null, matchedTopupId: null },
+      data: {
+        status: 'MATCHED',
+        matchedPaymentId: paymentId,
+        note: `linked by admin ${actorId} to an already-verified payment: ${why}`.slice(0, 500),
+      },
+    });
+    if (claim.count === 0) throw new BadRequestException({ message: 'Event already matched', code: 'EVENT_ALREADY_CLAIMED' });
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actorUserId: actorId,
+          action: 'payment.event.link',
+          entity: 'PaymentEvent',
+          entityId: eventId,
+          meta: { paymentId, reason: why } as never,
+        },
+      })
+      .catch(() => undefined);
+    return { ok: true };
+  }
+
   /** The ordinary admin verification, for a payment finance tied to a transfer. */
   verifyByAdmin(adminId: string, paymentId: string) {
     return this.manual.verifyByAdmin(adminId, paymentId);

@@ -11,7 +11,10 @@ import TransferEventNote from './TransferEventNote';
 type Filter = 'OPEN' | 'RETURNED' | 'MATCHED' | 'ALL';
 const RETURN_METHODS = ['VODAFONE_CASH', 'INSTAPAY', 'BANK_TRANSFER'] as const;
 
-type Choice = { kind: 'payment'; id: string; row: any } | { kind: 'purchase'; id: string; row: any };
+type Choice =
+  | { kind: 'payment'; id: string; row: any }
+  | { kind: 'purchase'; id: string; row: any }
+  | { kind: 'verified'; id: string; row: any };
 
 /**
  * Money that reached Darsly and matched nothing — and the three things finance
@@ -256,10 +259,12 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
     queryFn: async () => (await api.get(`/admin/live-commerce/transfers/${event.id}/candidates`)).data,
   });
   const submit = useMutation({
-    mutationFn: async () =>
-      choice!.kind === 'payment'
-        ? (await api.post(`/admin/payment-events/${event.id}/match/${choice!.id}`, { reason: reason.trim() })).data
-        : (await api.post(`/admin/live-commerce/transfers/${event.id}/attach/${choice!.id}`, { reason: reason.trim() })).data,
+    mutationFn: async () => {
+      const body = { reason: reason.trim() };
+      if (choice!.kind === 'payment') return (await api.post(`/admin/payment-events/${event.id}/match/${choice!.id}`, body)).data;
+      if (choice!.kind === 'verified') return (await api.post(`/admin/payment-events/${event.id}/link/${choice!.id}`, body)).data;
+      return (await api.post(`/admin/live-commerce/transfers/${event.id}/attach/${choice!.id}`, body)).data;
+    },
     onSuccess: onDone,
     onSettled: () => {
       once.current = false;
@@ -267,6 +272,7 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
   });
   const payments: any[] = candidates.data?.payments ?? [];
   const purchases: any[] = candidates.data?.purchases ?? [];
+  const verified: any[] = candidates.data?.verified ?? [];
   const row = choice?.row;
 
   return (
@@ -279,7 +285,9 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
         <Spinner />
       ) : !confirming ? (
         <div className="space-y-4">
-          {!payments.length && !purchases.length && <p className="text-sm text-outline">{t('transfers.noCandidates')}</p>}
+          {!payments.length && !purchases.length && !verified.length && (
+            <p className="text-sm text-outline">{t('transfers.noCandidates')}</p>
+          )}
           {!!payments.length && (
             <fieldset>
               <legend className="mb-2 text-sm font-bold">{t('transfers.paymentsHeading')}</legend>
@@ -344,6 +352,36 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
               </div>
             </fieldset>
           )}
+          {!!verified.length && (
+            <fieldset>
+              <legend className="mb-1 text-sm font-bold">{t('transfers.verifiedHeading')}</legend>
+              <p className="mb-2 text-xs text-outline">{t('transfers.verifiedHint')}</p>
+              <div className="space-y-2">
+                {verified.map((p) => (
+                  <label key={p.paymentId} className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.paymentId ? 'border-primary' : 'border-outline-variant/60'}`}>
+                    <input
+                      type="radio"
+                      name="transfer-target"
+                      className="mt-1 accent-primary"
+                      checked={choice?.id === p.paymentId}
+                      onChange={() => setChoice({ kind: 'verified', id: p.paymentId, row: p })}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-bold">{p.title ?? '—'}</span>
+                      <span className="block text-on-surface-variant">
+                        {p.buyerName ?? '—'} · {egp(p.amountCents)} · {paymentMethodLabel(p.method)}
+                      </span>
+                      {p.paidAt && (
+                        <span className="block text-xs text-outline">
+                          {t('transfers.confirmedAt', { time: new Date(p.paidAt).toLocaleString('ar-EG') })}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <Field label={t('transfers.reason')} id="transfer-reason">
             <input id="transfer-reason" className="input" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
@@ -357,19 +395,33 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
             <dt className="text-outline">{t('transfers.buyer')}</dt>
             <dd>{row?.buyerName ?? '—'}</dd>
             <dt className="text-outline">{t('apay.item')}</dt>
-            <dd>{choice!.kind === 'payment' ? (row?.title ?? '—') : row?.session.title}</dd>
+            <dd>{choice!.kind === 'purchase' ? row?.session.title : (row?.title ?? '—')}</dd>
             <dt className="text-outline">{t('transfers.expected')}</dt>
-            <dd className="tabular-nums">{egp(choice!.kind === 'payment' ? row?.expectedCents : row?.studentPaysCents)}</dd>
+            <dd className="tabular-nums">
+              {egp(choice!.kind === 'payment' ? row?.expectedCents : choice!.kind === 'verified' ? row?.amountCents : row?.studentPaysCents)}
+            </dd>
             <dt className="text-outline">{t('transfers.incoming')}</dt>
             <dd className="tabular-nums">{egp(event.amountCents)}</dd>
             <dt className="text-outline">{t('transfers.payer')}</dt>
             <dd dir="auto">{event.payerName ?? '—'}</dd>
             <dt className="text-outline">{t('transfers.state')}</dt>
-            <dd>{choice!.kind === 'payment' ? (row?.claimed ? t('apay.claimed') : t('apay.notClaimed')) : t(`adminLive.status.${row?.status}`)}</dd>
+            <dd>
+              {choice!.kind === 'payment'
+                ? row?.claimed
+                  ? t('apay.claimed')
+                  : t('apay.notClaimed')
+                : choice!.kind === 'verified'
+                  ? t('transfers.alreadyConfirmed')
+                  : t(`adminLive.status.${row?.status}`)}
+            </dd>
           </dl>
           {choice!.kind === 'purchase' && row?.session.over && <p className="text-error">{t('transfers.classOver')}</p>}
           <p className="rounded-xl bg-error-container/50 p-3 text-on-error-container">
-            {choice!.kind === 'payment' ? t('transfers.confirmMatch') : t('transfers.confirmAttach')}
+            {choice!.kind === 'payment'
+              ? t('transfers.confirmMatch')
+              : choice!.kind === 'verified'
+                ? t('transfers.confirmLink')
+                : t('transfers.confirmAttach')}
           </p>
           <ErrorNote error={submit.error} />
           <div className="flex gap-2">

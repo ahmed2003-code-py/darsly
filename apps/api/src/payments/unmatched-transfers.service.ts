@@ -160,6 +160,52 @@ export class UnmatchedTransfersService {
       }));
   }
 
+  /**
+   * Payments an admin already confirmed by hand for exactly this amount, that
+   * no transfer is tied to yet — so the transfer that paid for one can be
+   * linked to it (no money moves) instead of sitting in the queue looking
+   * like money to return. Any rail, within a week of the transfer.
+   */
+  async verifiedCandidates(eventId: string) {
+    const e = await this.event(eventId);
+    const week = 7 * 86_400_000;
+    const rows = await this.prisma.payment.findMany({
+      where: {
+        gateway: 'manual',
+        status: 'PAID',
+        method: { in: ['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER'] as any[] },
+        createdAt: { gte: new Date(e.occurredAt.getTime() - week), lte: new Date(e.occurredAt.getTime() + week) },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        student: { select: { user: { select: { fullName: true } } } },
+        course: { select: { title: true } },
+        livePurchase: { select: { status: true, session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } } },
+      },
+    });
+    const due = rows.filter((p) => p.amountCents - (p.walletCents ?? 0) === e.amountCents);
+    const taken = new Set(
+      (
+        await this.prisma.paymentEvent.findMany({
+          where: { matchedPaymentId: { in: due.map((p) => p.id) } },
+          select: { matchedPaymentId: true },
+        })
+      ).map((x) => x.matchedPaymentId),
+    );
+    return due
+      .filter((p) => !taken.has(p.id))
+      .map((p) => ({
+        paymentId: p.id,
+        title: p.course?.title ?? p.livePurchase?.session.title ?? null,
+        buyerName: p.student?.user.fullName ?? p.livePurchase?.guestBuyer?.displayName ?? null,
+        amountCents: p.amountCents - (p.walletCents ?? 0),
+        method: p.method,
+        paidAt: p.paidAt,
+        livePurchaseStatus: p.livePurchase?.status ?? null,
+      }));
+  }
+
   async event(eventId: string) {
     const e = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
     if (!e) throw new NotFoundException('Event not found');

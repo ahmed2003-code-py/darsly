@@ -45,11 +45,12 @@ export class AdminLiveCommerceController {
   @ApiOperation({ summary: '[admin] Where an unmatched transfer could go: pending payments, and Live purchases with no payment' })
   async transferCandidates(@Param('eventId') eventId: string) {
     const e = await this.transfers.event(eventId);
-    const [payments, purchases] = await Promise.all([
+    const [payments, purchases, verified] = await Promise.all([
       this.transfers.paymentCandidates(eventId),
       this.commerce.recoveryCandidates(e.amountCents),
+      this.transfers.verifiedCandidates(eventId),
     ]);
-    return { amountCents: e.amountCents, provider: e.provider, status: e.status, payments, purchases };
+    return { amountCents: e.amountCents, provider: e.provider, status: e.status, payments, purchases, verified };
   }
 
   @Post('transfers/:eventId/attach/:purchaseId')

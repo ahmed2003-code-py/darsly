@@ -1647,7 +1647,8 @@
       "oneMatchOtherName": "One payment of this amount, but the transfer is in someone else’s name",
       "manualMatch": "Matched by hand by the Darsly team",
       "attachedByAdmin": "Turned into a payment by hand by the Darsly team",
-      "outgoing": "This message is money leaving, not arriving — never confirmed automatically"
+      "outgoing": "This message is money leaving, not arriving — never confirmed automatically",
+      "linkedToVerified": "Linked by hand to a payment already confirmed — no money moved"
     },
     "verifyTitle": "Confirm the payment arrived",
     "verifyWarning": "Make sure the money actually arrived before confirming. This confirms the booking and affects the books.",
@@ -2833,7 +2834,8 @@
     "eReturnMethodInvalid": "Choose how the money goes back.",
     "eReturnDestinationInvalid": "Enter the account holder name and number correctly.",
     "eReturnAlreadyOpen": "A return is already open for this transfer.",
-    "eReturnStateConflict": "The return changed state — refresh the page."
+    "eReturnStateConflict": "The return changed state — refresh the page.",
+    "ePaymentNotVerified": "This payment is not confirmed yet — use “Match to a payment” instead."
   },
   "myStudio": {
     "title": "My Studio",
@@ -4164,6 +4166,11 @@
     "cancelReturn": "Cancel return",
     "cancelReason": "Why cancel",
     "confirmComplete": "Confirm you actually sent back {{amount}}?",
-    "confirmAction": "Confirm"
+    "confirmAction": "Confirm",
+    "verifiedHeading": "Payments already confirmed by hand for this amount",
+    "verifiedHint": "If the Darsly team confirmed a payment itself before this transfer was tied to it, link it here — no money moves.",
+    "confirmedAt": "Confirmed {{time}}",
+    "alreadyConfirmed": "Already confirmed by hand",
+    "confirmLink": "This transfer is recorded as the money of a payment that was already confirmed. No money moves and no booking changes; the transfer can no longer be returned or matched to anything else. Use this only if it really is the same transfer."
   }
 }

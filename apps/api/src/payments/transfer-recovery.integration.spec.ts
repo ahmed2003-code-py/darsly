@@ -387,6 +387,44 @@ describe('Admin recovery of transfers the matcher would not take', () => {
     expect(again.status).toBe('REQUESTED');
   });
 
+  it('(27 Sep "test the money") a transfer whose payment an admin already confirmed by hand is linked, never returned, and nothing moves', async () => {
+    if (!guard()) return;
+    const w = await commerceWorld(prisma, { students: 0, priceCents: price() });
+    const { accessToken, purchase } = await S.commerce.guestHold(w.session.id, 'زائر');
+    await S.commerce.guestDeclareTransfer(accessToken, { method: 'VODAFONE_CASH', source: 'WALLET', senderWallet: phone() });
+    await S.commerce.guestSubmitTransfer(accessToken, { proofImageUrl: 'data:x' });
+    // The money came through a bank (another rail): nothing to match automatically.
+    const ev = await S.matching.ingest({
+      provider: 'BANK_TRANSFER',
+      amountCents: purchase.studentPaysCents,
+      externalId: randomUUID(),
+      rawMessage: `تم تنفيذ تحويل لحظي بمبلغ ${(purchase.studentPaysCents / 100).toFixed(2)} جم إلى حسابك برقم مرجعي ${randomUUID().slice(0, 8)}`,
+    });
+    expect(ev.status).toBe('UNMATCHED');
+    const pay = await prisma.payment.findUniqueOrThrow({ where: { livePurchaseId: purchase.id } });
+    // Linking to a payment not yet confirmed is refused — that is what match is for.
+    await expect(S.matching.linkToVerified(ev.eventId!, pay.id, adminId, 'same money')).rejects.toMatchObject({
+      response: { code: 'PAYMENT_NOT_VERIFIED' },
+    });
+    await S.manual.verifyByAdmin(adminId, pay.id);
+    const ledgerBefore = await prisma.ledgerEntry.count();
+    const verified = await T.verifiedCandidates(ev.eventId!);
+    expect(verified.map((v) => v.paymentId)).toContain(pay.id);
+    await S.matching.linkToVerified(ev.eventId!, pay.id, adminId, 'admin confirmed this transfer by hand at 07:45');
+    expect(await prisma.paymentEvent.findUniqueOrThrow({ where: { id: ev.eventId! } })).toMatchObject({ status: 'MATCHED', matchedPaymentId: pay.id });
+    expect(await prisma.ledgerEntry.count()).toBe(ledgerBefore);
+    expect((await S.commerce.guestStatus(accessToken)).status).toBe('CONFIRMED');
+    // Spent: it can no longer be returned, and the payment takes no second transfer.
+    await expect(
+      T.requestReturn(ev.eventId!, adminId, { method: 'VODAFONE_CASH', holderName: 'X Y', handle: phone(), reason: 'mistake' }),
+    ).rejects.toMatchObject({ response: { code: 'EVENT_ALREADY_CLAIMED' } });
+    const other = await bankToWalletSms(purchase.studentPaysCents, 'سارة محمود حسن');
+    await expect(S.matching.linkToVerified(other.eventId!, pay.id, adminId, 'again')).rejects.toMatchObject({
+      response: { code: 'PAYMENT_ALREADY_HAS_TRANSFER' },
+    });
+    expect((await T.verifiedCandidates(other.eventId!)).map((v) => v.paymentId)).not.toContain(pay.id);
+  });
+
   it('the admin list is masked: no raw SMS, only the tail of the reference', async () => {
     if (!guard()) return;
     const ev = await bankToWalletSms(price(), 'سارة محمود حسن');

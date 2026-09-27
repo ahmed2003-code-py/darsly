@@ -142,6 +142,20 @@ export class PaymentEventsController {
     return this.matching.manualMatch(id, paymentId, u.sub, dto?.reason);
   }
 
+  @Post('admin/payment-events/:id/link/:paymentId')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Mark a transfer as the money of a payment already confirmed by hand (no money moves)' })
+  linkToVerified(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('paymentId') paymentId: string,
+    @Body() dto: ReasonDto,
+  ) {
+    return this.matching.linkToVerified(id, paymentId, u.sub, dto.reason);
+  }
+
   @Post('admin/payment-events/:id/return')
   @HttpCode(200)
   @ApiBearerAuth()

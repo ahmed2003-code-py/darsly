@@ -40,6 +40,7 @@ const NOTE_PREFIX: [string, string][] = [
   ['one amount match, but the transfer is in the name of', 'oneMatchOtherName'],
   ['manual match by', 'manualMatch'],
   ['attached by admin', 'attachedByAdmin'],
+  ['linked by admin', 'linkedToVerified'],
 ];
 
 export default function TransferEventNote({ note }: { note: string }) {

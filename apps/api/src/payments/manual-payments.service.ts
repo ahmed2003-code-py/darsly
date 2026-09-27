@@ -14,7 +14,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
 import { assertCourseTrack } from '../catalog/subject-track';
-import { normalizePayerReference } from './payer-reference';
+import { normalizeDeclaration, normalizePayerReference } from './payer-reference';
+import { paymentRow, paymentStage } from './payment-stage';
 import { receivingHandles } from './receiving-accounts';
 import { checkProofAgainstClaim } from './proof-check';
 import { ProofReaderService } from './proof-reader.service';
@@ -45,6 +46,16 @@ export interface SubmitPaymentDto {
   /** CASH only: who the student handed the money to. Defaults to TEACHER. */
   cashReceiver?: 'TEACHER' | 'CENTER';
   note?: string;
+  /**
+   * Declare BEFORE transferring (the Live flow): no proof; the PENDING
+   * payment exists first, with where the money comes from, so the listener
+   * can confirm it the moment the SMS lands.
+   */
+  declare?: boolean;
+  /** WALLET (a mobile wallet — its number) or BANK (bank / InstaPay — the holder's name). */
+  source?: 'WALLET' | 'BANK';
+  senderWallet?: string;
+  payerName?: string;
 }
 
 /** Phase 7: staff recording cash they (or their Center) received in hand. */
@@ -116,11 +127,17 @@ export class ManualPaymentsService {
     const pending = await this.prisma.payment.findFirst({
       where: { studentId: student.id, courseId: course.id, status: 'PENDING' },
     });
-    if (pending)
+    if (pending) {
+      // Declaring again (a double click, a second tab, fixing a typo) while
+      // nothing has been claimed or matched returns the same payment.
+      if (dto.declare && !pending.claimedAt && !pending.proofImageUrl) {
+        return this.redeclare(pending.id, dto);
+      }
       throw new ConflictException({
         message: 'A payment is already under review',
         code: 'PAYMENT_PENDING',
       });
+    }
 
     // Checked before any money is named: the course being for another year is a
     // refusal, and taking a proof of payment for it would mean refunding it.
@@ -132,9 +149,18 @@ export class ManualPaymentsService {
     // see payer-reference.ts. A blank or malformed one could never match, and
     // every payment carrying one went to an admin to resolve by hand.
     // A cash claim carries whatever receipt number the student was given, if any.
+    // A declaration names where the money comes from (the same rules as a
+    // Live seat: a wallet's number, never ours; a bank / InstaPay holder's
+    // name). The older proof-first form still sends only a reference.
+    if (dto.declare && (isCash || dto.method === 'WALLET')) {
+      throw new BadRequestException({ message: 'Only a transfer is declared', code: 'METHOD_INVALID' });
+    }
+    const declared = dto.declare || dto.source ? normalizeDeclaration({ ...dto }, await this.receivingHandles()) : null;
     const reference = isCash
       ? (dto.reference ?? '').trim().slice(0, 120)
-      : normalizePayerReference(dto.method, dto.reference, await this.receivingHandles());
+      : declared
+        ? declared.reference
+        : normalizePayerReference(dto.method, dto.reference, await this.receivingHandles());
 
     const { netCents, feeCents, totalCents, couponId, couponMaxUses } = await this.quote(
       course,
@@ -171,7 +197,9 @@ export class ManualPaymentsService {
      * differently — the wallet knew the picture said 2,000 while the checkout
      * did not, and only the checkout still demanded a reference nobody has.
      */
-    const needsProof = !isWalletMethod && !isCash && cashDueCents > 0;
+    // A declaration is made before the transfer: its proof, if any, comes later
+    // and is supporting evidence — never what creates the payment.
+    const needsProof = !isWalletMethod && !isCash && cashDueCents > 0 && !dto.declare;
     const reading = needsProof ? await this.proofReader.read(dto.proofImageUrl ?? '') : null;
     if (needsProof) {
       const check = checkProofAgainstClaim(
@@ -258,6 +286,9 @@ export class ManualPaymentsService {
           reference,
           couponId,
           status: 'PENDING',
+          ...(declared ? { transferSource: declared.source, payerName: declared.payerName } : {}),
+          // Claimed when the proof came with it; a declaration waits for its transfer.
+          ...(needsProof ? { claimedAt: new Date() } : {}),
           ...(isCash
             ? {
                 cashOrigin: 'STUDENT_REPORTED' as const,
@@ -321,7 +352,9 @@ export class ManualPaymentsService {
       return { ...payment, status: 'PAID' };
     }
 
-    if (!isWalletMethod)
+    // A declaration is not yet a payment anyone can review: the teacher hears
+    // when there is something to see (a proof, or the confirmation itself).
+    if (!isWalletMethod && !dto.declare)
       await this.notifications.create({
         userId: course.teacher.user.id,
         type: 'ANNOUNCEMENT',
@@ -346,6 +379,174 @@ export class ManualPaymentsService {
    * coupon reservation, the enrolment upsert, the teacher's ledger credit and
    * the invoice are all the ones that already work.
    */
+  /**
+   * Declaring again while nothing has been claimed or matched: the same
+   * payment, with the identity corrected. The price, coupon and wallet part
+   * frozen at the first declaration stay as they were.
+   */
+  private async redeclare(paymentId: string, dto: SubmitPaymentDto) {
+    const declared = normalizeDeclaration({ ...dto }, await this.receivingHandles());
+    const matched = await this.prisma.paymentEvent.findFirst({ where: { matchedPaymentId: paymentId }, select: { id: true } });
+    if (matched) {
+      throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+    }
+    const flip = await this.prisma.payment.updateMany({
+      where: { id: paymentId, status: 'PENDING', claimedAt: null },
+      data: { method: dto.method as never, transferSource: declared.source, reference: declared.reference, payerName: declared.payerName },
+    });
+    if (flip.count === 0) {
+      throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+    }
+    return this.prisma.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      select: { id: true, status: true, amountCents: true, walletCents: true, enrollmentId: true, createdAt: true, method: true, cashReceiver: true },
+    });
+  }
+
+  /**
+   * "I transferred — here is the receipt." Supporting evidence for a person
+   * to review; the listener does not need it. Attached to the student's own
+   * open declaration, once.
+   */
+  async attachProof(userId: string, paymentId: string, proofImageUrl: string) {
+    const student = await this.studentOf(userId);
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment || payment.studentId !== student.id || !payment.courseId) throw new NotFoundException('Payment not found');
+    if (payment.status === 'PAID') return this.statusFor(userId, paymentId); // the SMS came first
+    if (payment.status !== 'PENDING' || payment.claimedAt) {
+      throw new ConflictException({ message: 'A proof for this payment was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+    }
+    const due = payment.amountCents - payment.walletCents;
+    const reading = await this.proofReader.read(proofImageUrl);
+    const check = checkProofAgainstClaim(reading, { amountCents: due }, await this.receivingHandles());
+    if (check.verdict === 'DISAGREES') {
+      throw new BadRequestException({ message: check.problems.join(' '), code: 'PROOF_DISAGREES', problems: check.problems });
+    }
+    const proofKey = await this.proofs.store('payments', proofImageUrl, PROOF_MAX_BYTES);
+    const flip = await this.prisma.payment.updateMany({
+      where: { id: paymentId, status: 'PENDING', claimedAt: null },
+      data: { proofImageUrl: proofKey, proofReading: (reading ?? undefined) as never, claimedAt: new Date() },
+    });
+    if (flip.count === 0) {
+      await this.proofs.discard(proofKey).catch(() => undefined);
+      return this.statusFor(userId, paymentId);
+    }
+    const course = await this.prisma.course.findUnique({
+      where: { id: payment.courseId },
+      select: { title: true, teacher: { select: { user: { select: { id: true } } } } },
+    });
+    if (course?.teacher?.user?.id) {
+      await this.notifications
+        .create({
+          userId: course.teacher.user.id,
+          type: 'ANNOUNCEMENT',
+          title: 'دفعة جديدة بانتظار المراجعة 💳',
+          body: `${student.user.fullName} رفع إثبات دفع لدورة «${course.title}».`,
+          meta: { paymentId, courseId: payment.courseId },
+        })
+        .catch(() => undefined);
+    }
+    return this.statusFor(userId, paymentId);
+  }
+
+  /** The student's own course payment, as the checkout watches it. */
+  async statusFor(userId: string, paymentId: string) {
+    const student = await this.studentOf(userId);
+    const p = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { enrollment: { select: { status: true } } },
+    });
+    if (!p || p.studentId !== student.id || !p.courseId) throw new NotFoundException('Payment not found');
+    return this.checkoutView(p);
+  }
+
+  /** The student's open (or just-confirmed) payment for a course, if any — to resume a checkout. */
+  async openForCourse(userId: string, courseId: string) {
+    const student = await this.studentOf(userId);
+    const p = await this.prisma.payment.findFirst({
+      where: {
+        studentId: student.id,
+        courseId,
+        gateway: 'manual',
+        method: { notIn: ['CASH', 'WALLET'] },
+        OR: [{ status: 'PENDING' }, { status: 'PAID', paidAt: { gte: new Date(Date.now() - 24 * 3600_000) } }],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { enrollment: { select: { status: true } } },
+    });
+    return p ? this.checkoutView(p) : null;
+  }
+
+  private async checkoutView(p: {
+    id: string;
+    status: string;
+    courseId: string | null;
+    amountCents: number;
+    walletCents: number;
+    method: string | null;
+    transferSource: string | null;
+    reference: string | null;
+    payerName: string | null;
+    claimedAt: Date | null;
+    rejectedReason: string | null;
+    createdAt: Date;
+    enrollment: { status: string } | null;
+  }) {
+    return {
+      id: p.id,
+      courseId: p.courseId,
+      status: p.status,
+      stage: await paymentStage(this.prisma, paymentRow(p)),
+      amountCents: p.amountCents,
+      walletCents: p.walletCents,
+      dueCents: p.amountCents - p.walletCents,
+      method: p.method,
+      transferSource: p.transferSource,
+      senderWallet: p.transferSource === 'WALLET' ? p.reference : null,
+      payerName: p.payerName,
+      claimedAt: p.claimedAt,
+      rejectedReason: p.rejectedReason,
+      enrollmentStatus: p.enrollment?.status ?? null,
+    };
+  }
+
+  /**
+   * Declarations nobody ever paid: open, never claimed, no proof, no transfer
+   * tied to them, older than the matcher's window (after which no SMS could
+   * reach them anyway). Closed through the ordinary reject path, so the
+   * coupon use, the reserved wallet part and the pending enrolment are all
+   * released exactly as a rejection releases them. A late transfer lands
+   * unmatched and is recovered by finance.
+   */
+  async expireDeclared(olderThanMs: number, limit = 50): Promise<number> {
+    const rows = await this.prisma.payment.findMany({
+      where: {
+        status: 'PENDING',
+        claimedAt: null,
+        livePurchaseId: null,
+        courseId: { not: null },
+        gateway: 'manual',
+        method: { notIn: ['CASH', 'WALLET'] },
+        OR: [{ proofImageUrl: null }, { proofImageUrl: '' }],
+        createdAt: { lt: new Date(Date.now() - olderThanMs) },
+      },
+      select: { id: true },
+      take: limit,
+    });
+    let expired = 0;
+    for (const r of rows) {
+      const matched = await this.prisma.paymentEvent.findFirst({ where: { matchedPaymentId: r.id }, select: { id: true } });
+      if (matched) continue;
+      try {
+        await this.reject({ sub: 'system', role: Role.SUPER_ADMIN }, r.id, 'انتهت مهلة التحويل — ما وصلش تحويل خلال 72 ساعة', true);
+        expired++;
+      } catch {
+        // Claimed or verified in the meantime: not ours to close.
+      }
+    }
+    return expired;
+  }
+
   /** See receiving-accounts.ts: our own numbers are not an answer to "from where". */
   private receivingHandles(): Promise<string[]> {
     return receivingHandles(this.prisma);

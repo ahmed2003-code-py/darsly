@@ -47,6 +47,20 @@ class SubmitPaymentDto {
   @IsOptional() @IsIn(['TEACHER', 'CENTER']) cashReceiver?: 'TEACHER' | 'CENTER';
   @IsOptional() @IsString() @MaxLength(300) note?: string;
 }
+/** Before transferring for a course: which Darsly account, and where the money comes FROM. */
+class DeclarePaymentDto {
+  @IsId() courseId: string;
+  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER']) method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
+  @IsIn(['WALLET', 'BANK']) source: 'WALLET' | 'BANK';
+  @IsOptional() @IsString() @MaxLength(20) senderWallet?: string;
+  @IsOptional() @IsString() @MaxLength(80) payerName?: string;
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+  @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
+  @IsOptional() @IsBoolean() useWallet?: boolean;
+}
+class ProofDto {
+  @IsString() @MaxLength(LIMITS.PROOF_DATA_URL) proofImageUrl: string;
+}
 class RecordCashDto {
   @IsId() studentId: string;
   @IsId() courseId: string;
@@ -118,6 +132,48 @@ export class ManualPaymentsController {
             .reconcilePayment(payment.id)
             .catch(() => ({ status: 'SKIPPED' as const }));
     return { ...payment, autoVerified: reconciled.status === 'MATCHED' };
+  }
+
+  /**
+   * The Live flow, for a course: declare where the money comes from BEFORE
+   * transferring. The PENDING payment exists before Darsly's account is shown,
+   * so the listener can confirm it the moment the SMS lands — no proof, no
+   * "I paid". An SMS already here is decided at once.
+   */
+  @Post('payments/declare')
+  @ApiBearerAuth()
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Declare a course transfer (creates the PENDING payment before the transfer)' })
+  async declare(@CurrentUser() u: JwtPayload, @Body() dto: DeclarePaymentDto) {
+    const payment = await this.payments.submit(u.sub, { ...dto, declare: true });
+    await this.matching.reconcilePayment(payment.id).catch(() => undefined);
+    return this.payments.statusFor(u.sub, payment.id);
+  }
+
+  @Post('payments/:id/proof')
+  @ApiBearerAuth()
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Attach the transfer receipt (supporting evidence) to my declared payment' })
+  async proof(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ProofDto) {
+    const out = await this.payments.attachProof(u.sub, id, dto.proofImageUrl);
+    await this.matching.reconcilePayment(id).catch(() => undefined);
+    return out.status === 'PENDING' ? this.payments.statusFor(u.sub, id) : out;
+  }
+
+  @Get('payments/:id/status')
+  @ApiBearerAuth()
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Where my course payment stands (the checkout polls this)' })
+  status(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.payments.statusFor(u.sub, id);
+  }
+
+  @Get('payments/for-course/:courseId')
+  @ApiBearerAuth()
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] My open (or just confirmed) transfer for a course, to resume the checkout' })
+  forCourse(@CurrentUser() u: JwtPayload, @Param('courseId') courseId: string) {
+    return this.payments.openForCourse(u.sub, courseId);
   }
 
   @Get('payments/mine')

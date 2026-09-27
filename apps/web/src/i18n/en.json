@@ -3156,13 +3156,13 @@
     "listening_one": "1 student listening",
     "listening_other": "{{count}} students listening",
     "react": {
-      "title": "React",
       "0": "Thumbs up",
       "1": "Applause",
       "2": "Heart",
       "3": "Laugh",
       "4": "Celebrate",
-      "5": "Thinking"
+      "5": "Thinking",
+      "title": "React"
     },
     "sounds": {
       "on": "Turn sounds on",
@@ -4198,7 +4198,15 @@
     "verifiedHint": "If the Darsly team confirmed a payment itself before this transfer was tied to it, link it here — no money moves.",
     "confirmedAt": "Confirmed {{time}}",
     "alreadyConfirmed": "Already confirmed by hand",
-    "confirmLink": "This transfer is recorded as the money of a payment that was already confirmed. No money moves and no booking changes; the transfer can no longer be returned or matched to anything else. Use this only if it really is the same transfer."
+    "confirmLink": "This transfer is recorded as the money of a payment that was already confirmed. No money moves and no booking changes; the transfer can no longer be returned or matched to anything else. Use this only if it really is the same transfer.",
+    "target": {
+      "LIVE": "Live",
+      "COURSE": "Course",
+      "WALLET_TOPUP": "Wallet top-up"
+    },
+    "topupsHeading": "Open wallet top-ups",
+    "topupTitle": "Darsly wallet top-up",
+    "confirmTopup": "The amount will be credited to the student's wallet once, through the normal approval, and this transfer tied to the top-up. Continue?"
   },
   "liveEdit": {
     "save": "Save changes",
@@ -4266,5 +4274,27 @@
     "reviewTitle": "Transfer received — under review",
     "reviewBody": "A transfer of your amount arrived but needs a check by the Darsly team before your seat is confirmed. Do not transfer again — we will tell you when it is confirmed.",
     "checkingBody": "Your seat is held while the payment is confirmed. As soon as the transfer message reaches us and matches, the booking confirms by itself — nothing else to do."
+  },
+  "checkout": {
+    "preparing": "Preparing your order…",
+    "checkingTitle": "Waiting for your transfer",
+    "checkingBodyCourse": "As soon as the transfer message reaches us and its details match, the course unlocks by itself — nothing else to do. You can close this page.",
+    "checkingBodyTopup": "As soon as the transfer message reaches us and its details match, the balance is added to your wallet by itself — nothing else to do. You can close this page.",
+    "reviewBodyCourse": "A transfer of this amount arrived but needs a check by the Darsly team before the course unlocks. Do not transfer again — we will let you know once it is confirmed.",
+    "reviewBodyTopup": "A transfer of this amount arrived but needs a check by the Darsly team before the balance is added. Do not transfer again — we will let you know once it is confirmed.",
+    "autoConfirmCourse": "Once the transfer reaches us we confirm the payment and unlock the course automatically if the details match — if they are unclear, the Darsly team reviews it.",
+    "autoConfirmTopup": "Once the transfer reaches us we add the balance to your wallet automatically if the details match — if they are unclear, the Darsly team reviews it.",
+    "courseConfirmedTitle": "Payment confirmed",
+    "courseConfirmedBody": "The course is unlocked — you can start now.",
+    "startCourse": "Start the course",
+    "topupConfirmedTitle": "Top-up confirmed",
+    "topupConfirmedBody": "{{amount}} was added to your wallet.",
+    "newBalance": "Your balance is now {{amount}}",
+    "walletPart": "{{amount}} comes from your wallet balance; the rest by transfer.",
+    "payCash": "Pay in cash instead",
+    "payByTransfer": "Pay by transfer",
+    "closedTitle": "This top-up was closed",
+    "newTopup": "Start a new top-up",
+    "followPayment": "Follow your payment"
   }
 }

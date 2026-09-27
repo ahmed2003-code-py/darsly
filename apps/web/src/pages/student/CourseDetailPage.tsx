@@ -496,6 +496,14 @@ export default function CourseDetailPage() {
                   </p>
                 </>
               )}
+              {/* A declared transfer waiting for its money: the modal resumes it —
+                  the account and amount, and the confirmation as it lands. */}
+              {isStudent && enrollmentStatus === 'PENDING_PAYMENT' && course.priceCents > 0 && (
+                <button className="btn-ghost w-full" onClick={() => setPayOpen(true)}>
+                  <span className="material-symbols-outlined text-base">receipt_long</span>
+                  {t('checkout.followPayment')}
+                </button>
+              )}
               <ErrorNote error={quote.error ?? enroll.error} />
 
               {course.bundleCourses?.length > 0 && (

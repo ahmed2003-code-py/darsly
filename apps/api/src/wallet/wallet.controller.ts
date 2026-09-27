@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { JwtPayload, PaymentMethod, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -13,6 +13,17 @@ class SubmitTopupDto {
   @IsEnum(PaymentMethod) method: PaymentMethod;
   @IsString() @MaxLength(LIMITS.PROOF_DATA_URL) proofImageUrl: string;
   @IsOptional() @IsString() @MaxLength(120) reference?: string;
+}
+class DeclareTopupDto {
+  @IsInt() @Min(1_000) @Max(5_000_000) amountCents: number;
+  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER']) method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
+  @IsIn(['WALLET', 'BANK']) source: 'WALLET' | 'BANK';
+  @IsOptional() @IsString() @MaxLength(20) senderWallet?: string;
+  @IsOptional() @IsString() @MaxLength(80) payerName?: string;
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+}
+class TopupProofDto {
+  @IsString() @MaxLength(LIMITS.PROOF_DATA_URL) proofImageUrl: string;
 }
 class RejectDto {
   @IsOptional() @IsString() @MaxLength(300) reason?: string;
@@ -50,11 +61,48 @@ export class WalletController {
     return { ...topup, autoApproved: reconciled?.status === 'MATCHED' };
   }
 
+  /**
+   * The Live flow, for a top-up: declare BEFORE transferring. The PENDING
+   * top-up exists before Darsly's account is shown; an SMS already here is
+   * decided at once, and a later one credits it by itself.
+   */
+  @Post('wallet/topups/declare')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Declare a top-up transfer (creates the PENDING top-up before the transfer)' })
+  async declareTopup(@CurrentUser() u: JwtPayload, @Body() dto: DeclareTopupDto) {
+    const t = await this.wallet.declareTopup(u.sub, dto);
+    await this.matching.reconcileTopup(t.id).catch(() => undefined);
+    return this.wallet.topupStatus(u.sub, t.id);
+  }
+
   @Get('wallet/topups/mine')
   @Roles(Role.STUDENT)
   @ApiOperation({ summary: '[student] My top-up requests + status' })
   myTopups(@CurrentUser() u: JwtPayload) {
     return this.wallet.myTopups(u.sub);
+  }
+
+  @Get('wallet/topups/open')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] My open top-up, if any (to resume it)' })
+  openTopup(@CurrentUser() u: JwtPayload) {
+    return this.wallet.openTopup(u.sub);
+  }
+
+  @Get('wallet/topups/:id')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Where my top-up stands, and my balance (the wallet screen polls this)' })
+  topupStatus(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.wallet.topupStatus(u.sub, id);
+  }
+
+  @Post('wallet/topups/:id/proof')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] Attach the transfer receipt (supporting evidence) to my declared top-up' })
+  async topupProof(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: TopupProofDto) {
+    await this.wallet.attachTopupProof(u.sub, id, dto.proofImageUrl);
+    await this.matching.reconcileTopup(id).catch(() => undefined);
+    return this.wallet.topupStatus(u.sub, id);
   }
 
   // ── Admin ─────────────────────────────────────────────────────────────────

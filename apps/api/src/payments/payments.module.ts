@@ -10,6 +10,7 @@ import { PaymentEventsController } from './payment-events.controller';
 import { PaymentMatchingService } from './payment-matching.service';
 import { PaymentTargets } from './payment-targets';
 import { UnmatchedTransfersService } from './unmatched-transfers.service';
+import { PaymentExpiryWorker } from './payment-expiry.worker';
 
 /** Global so EnrollmentsService / payouts / admin can record + read the ledger. */
 @Global()
@@ -23,6 +24,7 @@ import { UnmatchedTransfersService } from './unmatched-transfers.service';
     PaymentMatchingService,
     PaymentTargets,
     UnmatchedTransfersService,
+    PaymentExpiryWorker,
   ],
   exports: [LedgerService, PaymentMatchingService, PaymentTargets, PaymentAccountsService, UnmatchedTransfersService],
 })

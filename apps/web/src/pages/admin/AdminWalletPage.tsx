@@ -11,7 +11,10 @@ interface TopupRow {
   amountCents: number;
   method: string;
   reference: string | null;
-  proofImageUrl: string;
+  proofImageUrl: string | null;
+  transferSource: 'WALLET' | 'BANK' | null;
+  payerName: string | null;
+  claimedAt: string | null;
   status: string;
   createdAt: string;
   studentName: string;
@@ -96,13 +99,23 @@ export default function AdminWalletPage() {
         <div className="space-y-3">
           {rows.map((r) => (
             <div key={r.id} className="card flex flex-wrap items-center gap-4">
-              <button
-                onClick={() => setProof(r.proofImageUrl)}
-                className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-outline-variant/60"
-                title={t('walletAdmin.proof')}
-              >
-                <img src={r.proofImageUrl} alt="" className="h-full w-full object-cover" />
-              </button>
+              {r.proofImageUrl ? (
+                <button
+                  onClick={() => setProof(r.proofImageUrl)}
+                  className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-outline-variant/60"
+                  title={t('walletAdmin.proof')}
+                >
+                  <img src={r.proofImageUrl} alt="" className="h-full w-full object-cover" />
+                </button>
+              ) : (
+                // Declared before transferring: the bank's SMS confirms it; a receipt is optional.
+                <span
+                  className="grid h-16 w-16 shrink-0 place-items-center rounded-xl border border-dashed border-outline-variant/60 text-outline"
+                  title={t('apay.proofNo')}
+                >
+                  <span className="material-symbols-outlined">receipt_long</span>
+                </span>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="font-bold">{r.studentName}</p>
                 <p className="text-xs text-outline" dir="ltr">
@@ -112,6 +125,15 @@ export default function AdminWalletPage() {
                   {paymentMethodLabel(r.method)}
                   {r.reference ? ` · ${r.reference}` : ''} · {dateShort(r.createdAt)}
                 </p>
+                {r.transferSource && (
+                  <p className="mt-1 text-xs text-outline">
+                    {r.transferSource === 'BANK'
+                      ? t('apay.fromBank', { name: r.payerName ?? '—' })
+                      : t('apay.fromWallet', { number: r.reference ?? '—' })}
+                    {' · '}
+                    {r.claimedAt ? t('apay.claimed') : t('apay.notClaimed')}
+                  </p>
+                )}
                 {/* What the receipt itself said, so the owner is not squinting
                     at a thumbnail to check an amount we already read. */}
                 {r.proofReading && (

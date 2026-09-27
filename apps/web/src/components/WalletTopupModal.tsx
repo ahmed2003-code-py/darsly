@@ -1,18 +1,36 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
-import { imageToDataUrl } from '../lib/image';
-import { ErrorNote, Field, Modal } from './ui';
+import { egp } from '../lib/format';
+import { backoffInterval } from '../lib/livePolling';
+import LiveTransferForm, { type DeclareInput, type ProofInput } from './live/LiveTransferForm';
+import PaymentStageNote from './payments/PaymentStageNote';
+import { ErrorNote, Field, Modal, Spinner } from './ui';
 
-const METHOD_ICON: Record<string, string> = {
-  INSTAPAY: 'account_balance',
-  VODAFONE_CASH: 'smartphone',
-  BANK_TRANSFER: 'account_balance',
-  OTHER: 'payments',
-};
+/** The server's view of a top-up (see WalletService.topupView). */
+interface TopupView {
+  id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  stage: string;
+  amountCents: number;
+  method: string;
+  transferSource: 'WALLET' | 'BANK' | null;
+  senderWallet: string | null;
+  payerName: string | null;
+  claimedAt: string | null;
+  rejectedReason: string | null;
+  balanceCents: number;
+}
 
-/** Add funds to the student wallet by transfer + proof (mirrors PaymentModal). */
+/**
+ * Adding money to the Darsly wallet — the same flow as a paid Live seat.
+ *
+ * Amount and source first; that writes a PENDING top-up, and only then are
+ * Darsly's account and the exact amount shown. The transfer's SMS credits it
+ * by itself and this modal shows the new balance as it lands. A receipt is
+ * optional evidence for a reviewer, never the thing that confirms.
+ */
 export default function WalletTopupModal({
   open,
   onClose,
@@ -22,258 +40,208 @@ export default function WalletTopupModal({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState('');
-  const [reference, setReference] = useState('');
-  const [proof, setProof] = useState<string | null>(null);
-  const [proofName, setProofName] = useState('');
-  const [done, setDone] = useState(false);
+  // The top-up this modal is following. Found from the open one on the server
+  // first, then kept by id so its confirmation is still seen after it stops
+  // being "open".
+  const [topupId, setTopupId] = useState<string | null>(null);
 
-  const { data: accounts } = useQuery({
-    queryKey: ['payment-accounts'],
-    queryFn: async () => (await api.get('/payment-accounts')).data,
-    enabled: open,
+  const since = useRef(Date.now());
+  const lastState = useRef<string | null>(null);
+  const openTopup = useQuery({
+    queryKey: ['topup-open'],
+    queryFn: async (): Promise<TopupView | null> =>
+      (await api.get('/wallet/topups/open')).data || null,
+    enabled: open && !topupId,
   });
-  // One top-up may be under review at a time (the server refuses a second).
-  // Learning that from a rejected request after filling the whole form is a
-  // worse way to find out than being told before starting.
-  const { data: wallet } = useQuery({
-    queryKey: ['wallet'],
-    queryFn: async () => (await api.get('/wallet')).data,
-    enabled: open,
-  });
-  const hasPending = (wallet?.pendingTopups?.length ?? 0) > 0;
+  useEffect(() => {
+    if (openTopup.data?.id) setTopupId(openTopup.data.id);
+  }, [openTopup.data?.id]);
 
-  const amountCents = Math.round(parseFloat(amount || '0') * 100);
-  /**
-   * Which identifier this method's SMS will carry, and whether what the student
-   * typed could be it. Kept in step with the server's rule in
-   * payer-reference.ts, which is the authority — this is so a wrong number is
-   * caught while they are still looking at it. A top-up is the same transfer as
-   * a course payment with no course attached, and is matched the same way, so it
-   * asks for the same thing.
-   */
-  const refKind = method === 'VODAFONE_CASH' ? 'WALLET_NUMBER' : 'TRANSACTION_REFERENCE';
-  /**
-   * Only Vodafone Cash can be asked for an identifier.
-   *
-   * InstaPay and bank transfers give the two sides different reference numbers
-   * — the student's receipt says «المرجع 770916345902», the SMS we receive says
-   * «برقم مرجعي 3979e788» — so the field could never match anything. Those are
-   * identified from the receipt itself (amount + the minute it was sent), which
-   * the student is uploading anyway.
-   */
-  const refRequired = method === 'VODAFONE_CASH';
-  const refDigits = reference.replace(/[^\d]/g, '');
-  const referenceLooksRight =
-    refKind === 'WALLET_NUMBER'
-      ? /^(?:\+?20|0)?1[0125]\d{8}$/.test(refDigits)
-      : reference.replace(/[^0-9a-z]/gi, '').length >= 4;
-  // The number on the card they are reading is OURS, and it is the one that
-  // gets copied. It can never match an SMS — the parser drops the receiving
-  // number from the identities because it appears in every message — so it is
-  // refused here, in front of them, rather than by the server afterwards.
-  const ownNumber =
-    refKind === 'WALLET_NUMBER' &&
-    refDigits.length >= 10 &&
-    (accounts ?? []).some(
-      (a: any) => (a.handle ?? '').replace(/[^\d]/g, '').slice(-10) === refDigits.slice(-10),
-    );
-
-  /**
-   * Why the button cannot be pressed, in the student's words.
-   *
-   * A disabled button that explains nothing is the whole bug: the amount was
-   * below the minimum and the only sign of it was grey hint text far up the
-   * form. Every condition in `valid` names itself here, so the form can never
-   * again be silently un-submittable.
-   */
-  const blockers: string[] = [];
-  if (hasPending) blockers.push(t('walletStudent.blockPending'));
-  if (!(amountCents >= 1000)) blockers.push(t('walletStudent.blockAmount'));
-  if (!method) blockers.push(t('walletStudent.blockMethod'));
-  if (refRequired && method && ownNumber) blockers.push(t('walletStudent.blockOwnNumber'));
-  else if (refRequired && method && !referenceLooksRight)
-    blockers.push(t(`walletStudent.blockRef.${refKind}`));
-  if (!proof) blockers.push(t('walletStudent.blockProof'));
-  const valid = blockers.length === 0;
-
-  const submit = useMutation({
-    mutationFn: async () =>
-      (
-        await api.post('/wallet/topups', {
-          amountCents,
-          method,
-          proofImageUrl: proof,
-          reference: reference.trim() || undefined,
-        })
-      ).data,
-    onSuccess: () => {
-      setDone(true);
-      qc.invalidateQueries({ queryKey: ['wallet'] });
+  const topup = useQuery({
+    queryKey: ['topup', topupId],
+    queryFn: async (): Promise<TopupView> => {
+      const data = (await api.get(`/wallet/topups/${topupId}`)).data;
+      const key = `${data.status}:${data.stage}`;
+      if (key !== lastState.current) {
+        lastState.current = key;
+        since.current = Date.now();
+      }
+      return data;
     },
+    enabled: open && !!topupId,
+    refetchInterval: (q) =>
+      q.state.data?.status === 'PENDING' ? backoffInterval(since.current) : false,
   });
+  const view = topupId ? (topup.data ?? null) : null;
 
-  async function pickProof(file: File) {
-    setProofName(file.name);
-    setProof(await imageToDataUrl(file, { maxW: 900, maxH: 1400, quality: 0.7 }));
-  }
+  const credited = view?.status === 'APPROVED';
+  useEffect(() => {
+    if (credited) qc.invalidateQueries({ queryKey: ['wallet'] });
+  }, [credited, qc]);
+
+  const settle = (data: TopupView) => {
+    since.current = Date.now();
+    qc.setQueryData(['topup', data.id], data);
+    setTopupId(data.id);
+    qc.invalidateQueries({ queryKey: ['wallet'] });
+  };
+  const amountCents = Math.round(parseFloat(amount || '0') * 100);
+  const declare = useMutation({
+    mutationFn: async (input: DeclareInput) =>
+      (
+        await api.post('/wallet/topups/declare', {
+          amountCents: view?.amountCents ?? amountCents,
+          ...input,
+        })
+      ).data as TopupView,
+    onSuccess: settle,
+  });
+  const proof = useMutation({
+    mutationFn: async (input: ProofInput) =>
+      (await api.post(`/wallet/topups/${view?.id}/proof`, input)).data as TopupView,
+    onSuccess: settle,
+  });
 
   function close() {
-    // Reset so re-opening starts clean.
-    setDone(false);
+    // A finished top-up is not resumed next time; an open one is.
+    if (view && view.status !== 'PENDING') setTopupId(null);
     setAmount('');
-    setMethod('');
-    setReference('');
-    setProof(null);
-    setProofName('');
+    qc.invalidateQueries({ queryKey: ['topup-open'] });
     onClose();
+  }
+
+  let body: JSX.Element;
+  if ((openTopup.isLoading && !topupId) || (topupId && topup.isLoading)) {
+    body = (
+      <div
+        className="flex flex-col items-center gap-2 py-10 text-sm text-on-surface-variant"
+        aria-live="polite"
+      >
+        <Spinner />
+        {t('checkout.preparing')}
+      </div>
+    );
+  } else if (credited && view) {
+    body = (
+      <div
+        className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center"
+        role="status"
+      >
+        <span className="material-symbols-outlined mb-2 text-5xl text-secondary">verified</span>
+        <p className="font-heading text-lg font-bold">{t('checkout.topupConfirmedTitle')}</p>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {t('checkout.topupConfirmedBody', { amount: egp(view.amountCents) })}
+        </p>
+        <p className="mt-3 font-heading text-2xl font-bold text-primary tabular-nums">
+          {t('checkout.newBalance', { amount: egp(view.balanceCents) })}
+        </p>
+        <button className="btn-primary mt-5" onClick={close}>
+          {t('common.back')}
+        </button>
+      </div>
+    );
+  } else if (view && view.status === 'REJECTED') {
+    body = (
+      <div className="rounded-2xl border border-outline-variant/60 p-6 text-center">
+        <span className="material-symbols-outlined mb-2 text-5xl text-outline">event_busy</span>
+        <p className="font-heading text-lg font-bold">{t('checkout.closedTitle')}</p>
+        {view.rejectedReason && (
+          <p className="mt-1 text-sm text-on-surface-variant">{view.rejectedReason}</p>
+        )}
+        <button
+          className="btn-primary mt-5"
+          onClick={() => {
+            setTopupId(null);
+            qc.setQueryData(['topup-open'], null);
+          }}
+        >
+          {t('checkout.newTopup')}
+        </button>
+      </div>
+    );
+  } else if (view && view.claimedAt) {
+    body = (
+      <div
+        className="rounded-2xl border border-outline-variant/60 p-6 text-center"
+        aria-live="polite"
+      >
+        <span className="material-symbols-outlined mb-2 text-5xl text-primary">
+          {view.stage === 'UNDER_REVIEW' ? 'fact_check' : 'hourglass_top'}
+        </span>
+        <p className="font-heading text-lg font-bold">
+          {view.stage === 'UNDER_REVIEW' ? t('livePay.reviewTitle') : t('checkout.checkingTitle')}
+        </p>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {view.stage === 'UNDER_REVIEW'
+            ? t('checkout.reviewBodyTopup')
+            : t('checkout.checkingBodyTopup')}
+        </p>
+        <button className="btn-ghost mt-5" onClick={close}>
+          {t('common.back')}
+        </button>
+      </div>
+    );
+  } else if (view) {
+    body = (
+      <div>
+        <PaymentStageNote stage={view.stage} target="topup" />
+        <LiveTransferForm
+          purchase={{ studentPaysCents: view.amountCents, payment: view }}
+          underReview={view.stage === 'UNDER_REVIEW'}
+          onDeclare={(input) => declare.mutate(input)}
+          declaring={declare.isPending}
+          declareError={declare.error}
+          onSubmitProof={(input) => proof.mutate(input)}
+          pending={proof.isPending}
+          error={proof.error}
+          autoConfirmNote={t('checkout.autoConfirmTopup')}
+        />
+      </div>
+    );
+  } else {
+    const amountOk = amountCents >= 1000;
+    body = (
+      <div className="space-y-4">
+        <Field
+          label={t('walletStudent.amount')}
+          hint={t('walletStudent.amountHint')}
+          id="topup-amount"
+        >
+          <input
+            id="topup-amount"
+            className="input"
+            dir="ltr"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+            placeholder="100"
+          />
+        </Field>
+        {amountOk ? (
+          <LiveTransferForm
+            purchase={{ studentPaysCents: amountCents, payment: null }}
+            onDeclare={(input) => declare.mutate(input)}
+            declaring={declare.isPending}
+            declareError={declare.error}
+            onSubmitProof={(input) => proof.mutate(input)}
+            pending={proof.isPending}
+            error={proof.error}
+            autoConfirmNote={t('checkout.autoConfirmTopup')}
+          />
+        ) : (
+          amount && (
+            <p className="text-xs text-on-surface-variant">{t('walletStudent.blockAmount')}</p>
+          )
+        )}
+        <ErrorNote error={openTopup.error} />
+      </div>
+    );
   }
 
   return (
     <Modal open={open} onClose={close} title={t('walletStudent.topupTitle')} wide>
-      {done ? (
-        <div className="rounded-2xl border border-secondary/40 bg-secondary-container/30 p-6 text-center">
-          <span className="material-symbols-outlined mb-2 text-5xl text-secondary">
-            hourglass_top
-          </span>
-          <p className="font-heading text-lg font-bold">{t('walletStudent.submittedTitle')}</p>
-          <p className="mt-1 text-sm text-on-surface-variant">{t('walletStudent.submittedBody')}</p>
-          <button className="btn-primary mt-5" onClick={close}>
-            {t('common.back')}
-          </button>
-        </div>
-      ) : (
-        <div className="grid gap-5 sm:grid-cols-2">
-          {/* Where to send */}
-          <div>
-            <p className="mb-2 flex items-center gap-2 font-heading font-bold">
-              <span className="material-symbols-outlined text-primary rtl:-scale-x-100">
-                north_east
-              </span>
-              {t('walletStudent.transferTo')}
-            </p>
-            <div className="space-y-2">
-              {(accounts ?? []).map((a: any) => (
-                <div key={a.id} className="rounded-xl border border-outline-variant/60 p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">
-                      {METHOD_ICON[a.method] ?? 'payments'}
-                    </span>
-                    <span className="font-bold">{a.label}</span>
-                  </div>
-                  <p
-                    className="mt-1 select-all font-mono text-sm text-on-surface-variant"
-                    dir="ltr"
-                  >
-                    {a.handle}
-                  </p>
-                  {a.instructions && <p className="mt-1 text-xs text-outline">{a.instructions}</p>}
-                </div>
-              ))}
-              {accounts && accounts.length === 0 && (
-                <p className="text-sm text-outline">{t('pay.noAccounts')}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Amount + proof */}
-          <div>
-            <p className="mb-2 flex items-center gap-2 font-heading font-bold">
-              <span className="material-symbols-outlined text-primary">receipt_long</span>
-              {t('walletStudent.afterTransfer')}
-            </p>
-            <Field label={t('walletStudent.amount')} hint={t('walletStudent.amountHint')}>
-              <input
-                className="input"
-                dir="ltr"
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                placeholder="100"
-              />
-            </Field>
-            <Field label={t('walletStudent.method')}>
-              <select className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
-                <option value="">{t('walletStudent.pickMethod')}</option>
-                <option value="INSTAPAY">{t('method.INSTAPAY')}</option>
-                <option value="VODAFONE_CASH">{t('method.VODAFONE_CASH')}</option>
-                <option value="BANK_TRANSFER">{t('method.BANK_TRANSFER')}</option>
-                <option value="OTHER">{t('method.OTHER')}</option>
-              </select>
-            </Field>
-            {method && refRequired && (
-              <Field label={t(`pay.ref.${refKind}`)} hint={t(`pay.ref.${refKind}Hint`)}>
-                <input
-                  className="input"
-                  dir="ltr"
-                  inputMode={refKind === 'WALLET_NUMBER' ? 'tel' : 'text'}
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  placeholder={refKind === 'WALLET_NUMBER' ? '01xxxxxxxxx' : '05b6efa4'}
-                />
-              </Field>
-            )}
-            {method && !refRequired && (
-              <p className="mb-3 flex items-start gap-2 rounded-xl border border-outline-variant/60 bg-surface-container-low/60 p-3 text-xs leading-5 text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px] leading-5 text-primary">
-                  auto_awesome
-                </span>
-                {t('walletStudent.receiptIsTheProof')}
-              </p>
-            )}
-            <Field label={t('walletStudent.proof')}>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={(e) => e.target.files?.[0] && pickProof(e.target.files[0])}
-              />
-              <button
-                type="button"
-                className={`flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed py-4 text-sm font-bold transition ${proof ? 'border-secondary text-secondary' : 'border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary'}`}
-                onClick={() => fileRef.current?.click()}
-              >
-                <span className="material-symbols-outlined">
-                  {proof ? 'check_circle' : 'upload'}
-                </span>
-                {proof
-                  ? proofName || t('walletStudent.proofPicked')
-                  : t('walletStudent.uploadProof')}
-              </button>
-            </Field>
-            {proof && (
-              <img
-                src={proof}
-                alt=""
-                className="mb-3 max-h-40 rounded-lg border border-outline-variant/50 object-contain"
-              />
-            )}
-            <ErrorNote error={submit.error} />
-            {blockers.length > 0 && (
-              <ul className="mb-3 space-y-1 rounded-xl border border-outline-variant/60 bg-surface-container-low/60 p-3 text-xs text-on-surface-variant">
-                {blockers.map((b) => (
-                  <li key={b} className="flex items-start gap-2">
-                    <span className="material-symbols-outlined text-[16px] leading-5 text-outline">
-                      radio_button_unchecked
-                    </span>
-                    <span className="leading-5">{b}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              className="btn-primary w-full"
-              disabled={submit.isPending || !valid}
-              onClick={() => submit.mutate()}
-            >
-              {submit.isPending ? t('common.saving') : t('walletStudent.submit')}
-            </button>
-          </div>
-        </div>
-      )}
+      {body}
     </Modal>
   );
 }

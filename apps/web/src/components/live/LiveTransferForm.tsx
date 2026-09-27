@@ -99,7 +99,12 @@ export default function LiveTransferForm({
   const walletIsOurs = source === 'WALLET' && walletDigits.length >= 10 && ours(senderWallet);
   const walletOk = EG_MOBILE.test(walletDigits) && !walletIsOurs;
   const nameOk = payerName.trim().split(/\s+/).filter(Boolean).length >= 2;
-  const canDeclare = !!method && (source === 'WALLET' ? walletOk : source === 'BANK' ? nameOk : false);
+  // Into Darsly's InstaPay / bank account the bank's SMS names only the
+  // sender — their name is what lets it confirm by itself, so it is asked for
+  // there (and always for a bank / InstaPay source).
+  const needName = source === 'BANK' || (source === 'WALLET' && !!method && method !== 'VODAFONE_CASH');
+  const canDeclare =
+    !!method && (source === 'WALLET' ? walletOk : source === 'BANK' ? true : false) && (!needName || nameOk);
 
   const account = list.find((a) => a.method === (declared?.method ?? method)) ?? null;
   const showStep2 = !!declared && !editing;
@@ -224,7 +229,7 @@ export default function LiveTransferForm({
         declaringNow.current = true;
         onDeclare(
           source === 'WALLET'
-            ? { method, source, senderWallet: senderWallet.trim(), payerName: payerName.trim() || undefined }
+            ? { method, source, senderWallet: senderWallet.trim(), payerName: needName ? payerName.trim() : undefined }
             : { method, source, payerName: payerName.trim(), reference: reference.trim() || undefined },
         );
         setEditing(false);
@@ -317,6 +322,20 @@ export default function LiveTransferForm({
               <p className="mt-1 text-xs text-error" role="alert">{t('liveTransfer.badWallet')}</p>
             )
           )}
+        </Field>
+      )}
+
+      {source === 'WALLET' && needName && (
+        <Field label={t('liveTransfer.walletOwnerName')} hint={t('liveTransfer.walletOwnerNameHint')} id="live-transfer-wallet-name">
+          <input
+            id="live-transfer-wallet-name"
+            className="input"
+            dir="auto"
+            maxLength={80}
+            value={payerName}
+            aria-invalid={!!payerName && !nameOk}
+            onChange={(e) => setPayerName(e.target.value)}
+          />
         </Field>
       )}
 

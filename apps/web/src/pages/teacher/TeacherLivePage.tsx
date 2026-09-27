@@ -143,7 +143,7 @@ export default function TeacherLivePage() {
                     {t('live.bookedCount', { count: s.bookedCount })}
                     {s.capacity != null ? ` / ${s.capacity}` : ''}
                   </button>
-                  {s.accessMode === 'PAID' && !past && (
+                  {!s.groupId && !past && (
                     <button
                       className="flex items-center gap-1 text-sm font-semibold text-on-surface-variant hover:text-primary"
                       onClick={() => {
@@ -166,6 +166,13 @@ export default function TeacherLivePage() {
                   </button>
                 </div>
 
+                <button
+                  className="btn-ghost w-full py-2 text-sm"
+                  onClick={() => navigate(`/teacher/live/${s.id}`)}
+                >
+                  <span className="material-symbols-outlined text-base">tune</span>
+                  {t('liveManage.open')}
+                </button>
                 {/* The meeting itself. A session already running is re-entered
                     rather than started again — that is the refresh case, and
                     the second-device case. */}

@@ -6,6 +6,7 @@ import { egp } from '../../lib/format';
 import { ErrorNote, Modal, Spinner } from '../ui';
 import LiveTransferForm, { type DeclareInput, type ProofInput } from './LiveTransferForm';
 import { RefundAndReplaySummary } from './LiveOfferFacts';
+import { backoffInterval } from '../../lib/livePolling';
 
 /** The structured part of a refusal, when the server sent one. */
 const faultOf = (e: unknown) =>
@@ -58,11 +59,30 @@ export default function LiveCheckoutModal({
   const [route, setRoute] = useState<'choose' | 'transfer'>('choose');
   const busy = useRef(false);
 
+  // When the current payment state began: quick polling right after a change,
+  // backing off the longer nothing happens (see backoffInterval).
+  const since = useRef(Date.now());
+  const lastState = useRef<string | null>(null);
   const offer = useQuery({
     queryKey: ['live-offer', sessionId],
-    queryFn: async () => (await api.get(`/live/${sessionId}/offer`)).data,
+    queryFn: async () => {
+      const data = (await api.get(`/live/${sessionId}/offer`)).data;
+      const key = `${data?.purchase?.status}:${data?.purchase?.paymentStage}`;
+      if (key !== lastState.current) {
+        lastState.current = key;
+        since.current = Date.now();
+      }
+      return data;
+    },
     enabled: open,
     retry: false,
+    // Waiting on money (declared or sent): the listener usually confirms
+    // within moments of the SMS — nothing for the buyer to press meanwhile.
+    refetchInterval: (q) => {
+      const p = q.state.data?.purchase;
+      const waiting = p && (p.status === 'PAYMENT_PENDING' || (p.status === 'HELD' && p.payment?.status === 'PENDING'));
+      return waiting ? backoffInterval(since.current) : false;
+    },
   });
   // A code is checked on its own: a bad one says why, and the price stays.
   const preview = useQuery({
@@ -88,6 +108,7 @@ export default function LiveCheckoutModal({
   const countdown = useCountdown(active?.status === 'HELD' ? active.holdExpiresAt : null);
 
   const refresh = () => {
+    since.current = Date.now();
     qc.invalidateQueries({ queryKey: ['live-offer', sessionId] });
     qc.invalidateQueries({ queryKey: ['live-upcoming'] });
     qc.invalidateQueries({ queryKey: ['wallet'] });
@@ -128,17 +149,6 @@ export default function LiveCheckoutModal({
     onSettled: settle,
   });
 
-  // While a payment is being verified, look again every few seconds: the
-  // listener usually confirms within moments of the bank's SMS.
-  useEffect(() => {
-    if (active?.status !== 'PAYMENT_PENDING') return;
-    const i = setInterval(
-      () => qc.invalidateQueries({ queryKey: ['live-offer', sessionId] }),
-      5000,
-    );
-    return () => clearInterval(i);
-  }, [active?.status, qc, sessionId]);
-
   const couponFault = faultOf(preview.error);
   const once = (fn: () => void) => () => {
     if (busy.current) return;
@@ -172,9 +182,15 @@ export default function LiveCheckoutModal({
         className="rounded-2xl border border-outline-variant/60 bg-surface-container-low/60 p-6 text-center"
         aria-live="polite"
       >
-        <span className="material-symbols-outlined mb-2 text-5xl text-primary">hourglass_top</span>
-        <p className="font-heading text-lg font-bold">{t('liveBuy.pendingTitle')}</p>
-        <p className="mt-1 text-sm text-on-surface-variant">{t('liveBuy.pendingBody')}</p>
+        <span className="material-symbols-outlined mb-2 text-5xl text-primary">
+          {active.paymentStage === 'UNDER_REVIEW' ? 'fact_check' : 'hourglass_top'}
+        </span>
+        <p className="font-heading text-lg font-bold">
+          {active.paymentStage === 'UNDER_REVIEW' ? t('livePay.reviewTitle') : t('liveBuy.pendingTitle')}
+        </p>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {active.paymentStage === 'UNDER_REVIEW' ? t('livePay.reviewBody') : t('livePay.checkingBody')}
+        </p>
         <button className="btn-ghost mt-5" onClick={onClose}>
           {t('common.back')}
         </button>
@@ -195,6 +211,15 @@ export default function LiveCheckoutModal({
           >
             <span className="material-symbols-outlined text-[18px]">timer</span>
             {t('liveBuy.heldFor', { time: countdown.text })}
+          </p>
+        )}
+        {p.paymentStage === 'UNDER_REVIEW' && (
+          <p className="mb-4 flex items-start gap-2 rounded-xl border border-primary/30 bg-primary-fixed/30 p-3 text-sm" role="status">
+            <span className="material-symbols-outlined text-primary">fact_check</span>
+            <span>
+              <span className="block font-bold">{t('livePay.reviewTitle')}</span>
+              <span className="block text-xs text-on-surface-variant">{t('livePay.reviewBody')}</span>
+            </span>
           </p>
         )}
         <LiveTransferForm

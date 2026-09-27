@@ -69,17 +69,20 @@ function Chip({
   selected,
   onClick,
   children,
+  disabled,
 }: {
   selected: boolean;
   onClick: () => void;
   children: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={onClick}
-      className={`min-h-[2.5rem] rounded-full border px-4 py-1.5 text-sm font-semibold tabular-nums transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-1 ${
+      disabled={disabled}
+      className={`min-h-[2.5rem] rounded-full border px-4 py-1.5 text-sm font-semibold tabular-nums transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${
         selected
           ? 'border-primary bg-primary text-on-primary shadow-sm'
           : 'border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-outline hover:bg-surface-container-low'
@@ -134,32 +137,72 @@ function FieldError({ id, children }: { id: string; children?: ReactNode }) {
  * and left, or tried to create — never an error for a field not yet reached.
  * A line above the button reads the choice back before it is created.
  */
+/** A session being edited, as the teacher detail endpoint returns it. */
+export interface EditableSession {
+  id: string;
+  title: string;
+  description: string;
+  startsAt: string;
+  durationMin: number;
+  capacity: number | null;
+  accessMode: 'FREE' | 'PAID';
+  priceCents: number | null;
+  refundPolicy: LiveRefundPolicy;
+  replayPolicy: LiveReplayPolicy;
+  replayDays: number | null;
+  joinUrl: string | null;
+}
+
+function draftOf(s: EditableSession): Draft {
+  const at = new Date(s.startsAt).getTime();
+  return {
+    title: s.title,
+    description: s.description ?? '',
+    date: localDate(at),
+    time: localTime(at),
+    durationMin: String(s.durationMin),
+    capacity: s.capacity != null ? String(s.capacity) : '',
+  };
+}
+
 export default function LiveSessionForm({
   onCreated,
   onCancel,
+  session,
+  editable,
+  committed,
 }: {
   onCreated: () => void;
   onCancel: () => void;
+  /** Editing this session (PATCH) instead of creating one. */
+  session?: EditableSession;
+  /** The fields the server says may still change (edit mode only). */
+  editable?: string[];
+  /** People already hold seats: new terms are for new buyers only. */
+  committed?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const uid = useId();
-  const [d, setD] = useState<Draft>(fresh);
+  const editing = !!session;
+  /** May this field change? Always when creating; per the server when editing. */
+  const can = (f: string) => !editing || !!editable?.includes(f);
+  const [d, setD] = useState<Draft>(() => (session ? draftOf(session) : fresh()));
   const [whenMode, setWhenMode] = useState<WhenMode>('pick');
   const [dirty, setDirty] = useState<Partial<Record<LiveFormField, boolean>>>({});
   const [touched, setTouched] = useState<Partial<Record<LiveFormField, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   const [server, setServer] = useState<LiveFormErrors>({});
-  const [customLen, setCustomLen] = useState(false);
-  const [limited, setLimited] = useState(false);
+  const [customLen, setCustomLen] = useState(() => !!session && !DURATIONS.includes(session.durationMin));
+  const [limited, setLimited] = useState(() => session?.capacity != null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [joinUrl, setJoinUrl] = useState('');
+  const [joinUrl, setJoinUrl] = useState(session?.joinUrl ?? '');
   // FREE by default; PAID is a deliberate choice with its own few settings.
-  const [paid, setPaid] = useState(false);
-  const [price, setPrice] = useState('');
-  const [refundPolicy, setRefundPolicy] = useState<LiveRefundPolicy>('STANDARD');
-  const [replayPolicy, setReplayPolicy] = useState<LiveReplayPolicy>('INCLUDED_FOREVER');
-  const [replayDays, setReplayDays] = useState('7');
+  const [paid, setPaid] = useState(session?.accessMode === 'PAID');
+  const [price, setPrice] = useState(session?.priceCents != null ? String(session.priceCents / 100) : '');
+  const [refundPolicy, setRefundPolicy] = useState<LiveRefundPolicy>(session?.refundPolicy ?? 'STANDARD');
+  const [replayPolicy, setReplayPolicy] = useState<LiveReplayPolicy>(session?.replayPolicy ?? 'INCLUDED_FOREVER');
+  const [replayDays, setReplayDays] = useState(session?.replayDays != null ? String(session.replayDays) : '7');
   // One request at a time, whatever the button's state says: a double click
   // lands before React re-renders it disabled.
   const inFlight = useRef(false);
@@ -214,10 +257,15 @@ export default function LiveSessionForm({
     };
   };
   const commerce = () => ({ paid, price, replayPolicy, replayDays });
-  const local = {
-    ...clientErrors(values(), nowMs(), { capacityRequired: limited }),
-    ...commerceErrors(commerce()),
+  const startUnchanged = () =>
+    !!session && whenMode === 'pick' && new Date(combine(d.date, d.time)).getTime() === new Date(session.startsAt).getTime();
+  const checkErrors = (v: LiveFormValues): LiveFormErrors => {
+    const e = { ...clientErrors(v, nowMs(), { capacityRequired: limited }), ...commerceErrors(commerce()) };
+    // Renaming a class already under way is not rescheduling it.
+    if (startUnchanged()) delete e.startsAt;
+    return e;
   };
+  const local = checkErrors(values());
   const shown = (f: LiveFormField) =>
     server[f] ?? ((submitted || touched[f]) && local[f] ? local[f] : undefined);
   const err = (f: LiveFormField) => {
@@ -275,8 +323,15 @@ export default function LiveSessionForm({
 
   const create = useMutation({
     mutationFn: async (payload: Record<string, unknown>) =>
-      (await api.post('/teacher/live', payload)).data,
+      session
+        ? (await api.patch(`/teacher/live/${session.id}`, payload)).data
+        : (await api.post('/teacher/live', payload)).data,
     onSuccess: () => {
+      if (session) {
+        setServer({});
+        onCreated();
+        return;
+      }
       setD(fresh());
       setPaid(false);
       setPrice('');
@@ -301,17 +356,14 @@ export default function LiveSessionForm({
     if (inFlight.current) return;
     setSubmitted(true);
     const v = values();
-    const first = firstInvalid({
-      ...clientErrors(v, nowMs(), { capacityRequired: limited }),
-      ...commerceErrors(commerce()),
-    });
+    const first = firstInvalid(checkErrors(v));
     if (first) return focusField(first);
     inFlight.current = true;
     const payload: Record<string, unknown> = {
       ...toPayload(v, joinUrl),
       // "Now" is the server's now: the device clock may be off by minutes.
       ...(whenMode === 'now' ? { startsAt: new Date(nowMs()).toISOString() } : {}),
-      ...(features.data?.transcription && transcriptionMode ? { transcriptionMode } : {}),
+      ...(!editing && features.data?.transcription && transcriptionMode ? { transcriptionMode } : {}),
       // What a seat costs, and the rules a buyer gets — never Darsly's fee or
       // a split: those are the academy's terms, applied by the server.
       ...(paid
@@ -368,7 +420,8 @@ export default function LiveSessionForm({
           ref={bind('title')}
           className={`${inputCls('title')} text-base`}
           dir="auto"
-          autoFocus
+          autoFocus={!editing}
+          disabled={!can('title')}
           maxLength={LIVE_SESSION_RULES.titleMax + 20}
           value={d.title}
           placeholder={t('live.fTitlePh')}
@@ -389,6 +442,7 @@ export default function LiveSessionForm({
           className={`${inputCls('description')} min-h-[3.25rem] resize-y text-sm`}
           dir="auto"
           rows={2}
+          disabled={!can('description')}
           value={d.description}
           placeholder={t('live.form.descriptionPh')}
           onChange={(e) => touch('description', { description: e.target.value })}
@@ -401,11 +455,12 @@ export default function LiveSessionForm({
       <div role="group" aria-labelledby={`${uid}-access`}>
         <Label id={`${uid}-access`}>{t('liveCommerce.sessionType')}</Label>
         <div className="flex flex-wrap gap-2">
-          <Chip selected={!paid} onClick={() => setPaid(false)}>
+          <Chip selected={!paid} onClick={() => setPaid(false)} disabled={!can('accessMode')}>
             {t('liveCommerce.free')}
           </Chip>
           <Chip
             selected={paid}
+            disabled={!can('accessMode')}
             onClick={() => {
               setPaid(true);
               setJoinUrl('');
@@ -420,8 +475,16 @@ export default function LiveSessionForm({
             </span>
           </Chip>
         </div>
+        {editing && !can('accessMode') && (
+          <p className="mt-1.5 text-xs text-outline">{t('liveEdit.accessLocked')}</p>
+        )}
         {paid && (
           <div className="mt-4 space-y-4 rounded-2xl border border-outline-variant p-4">
+            {editing && committed && (
+              <p className="rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant">
+                {t('liveEdit.newBuyersOnly')}
+              </p>
+            )}
             <div>
               <label
                 htmlFor="live-price"
@@ -437,6 +500,7 @@ export default function LiveSessionForm({
                   inputMode="decimal"
                   dir="ltr"
                   placeholder="100"
+                  disabled={!can('priceCents')}
                   value={price}
                   onChange={(e) => {
                     setPrice(asciiDigits(e.target.value).replace(/\u066B/g, '.'));
@@ -499,7 +563,7 @@ export default function LiveSessionForm({
               </p>
               <div className="flex flex-wrap gap-2">
                 {LIVE_REFUND_POLICIES.map((rp) => (
-                  <Chip key={rp} selected={refundPolicy === rp} onClick={() => setRefundPolicy(rp)}>
+                  <Chip key={rp} selected={refundPolicy === rp} onClick={() => setRefundPolicy(rp)} disabled={!can('refundPolicy')}>
                     {t(`liveCommerce.refund.${rp}`)}
                   </Chip>
                 ))}
@@ -526,7 +590,7 @@ export default function LiveSessionForm({
               </p>
               <div className="flex flex-wrap gap-2">
                 {(['INCLUDED_FOREVER', 'INCLUDED_DAYS', 'NONE'] as const).map((rp) => (
-                  <Chip key={rp} selected={replayPolicy === rp} onClick={() => setReplayPolicy(rp)}>
+                  <Chip key={rp} selected={replayPolicy === rp} onClick={() => setReplayPolicy(rp)} disabled={!can('replayPolicy')}>
                     {t(`liveCommerce.replay.${rp}`)}
                   </Chip>
                 ))}
@@ -566,7 +630,7 @@ export default function LiveSessionForm({
           {t('live.form.when')}
         </Label>
         <div className="flex flex-wrap gap-2">
-          <Chip selected={whenMode === 'now'} onClick={chooseNow}>
+          <Chip selected={whenMode === 'now'} onClick={chooseNow} disabled={!can('startsAt')}>
             <span className="inline-flex items-center gap-1">
               <span aria-hidden className="material-symbols-outlined text-[16px]">
                 bolt
@@ -574,7 +638,7 @@ export default function LiveSessionForm({
               {t('live.form.now')}
             </span>
           </Chip>
-          <Chip selected={whenMode === 'pick' && d.date === tomorrow} onClick={chooseTomorrow}>
+          <Chip selected={whenMode === 'pick' && d.date === tomorrow} onClick={chooseTomorrow} disabled={!can('startsAt')}>
             {t('live.form.tomorrow')}
           </Chip>
         </div>
@@ -586,6 +650,7 @@ export default function LiveSessionForm({
             lang={lang}
             className={inputCls('startsAt')}
             value={d.date}
+            disabled={!can('startsAt')}
             min={today}
             aria-label={t('live.form.date')}
             onChange={(e) => pickDate(e.target.value)}
@@ -599,6 +664,7 @@ export default function LiveSessionForm({
             lang={lang}
             className={`${inputCls('startsAt')} tabular-nums`}
             value={d.time}
+            disabled={!can('startsAt')}
             aria-label={t('live.form.time')}
             onChange={(e) => pickTime(e.target.value)}
             {...a11y('startsAt')}
@@ -613,6 +679,9 @@ export default function LiveSessionForm({
           </p>
         )}
         <FieldError id={errorId('startsAt')}>{err('startsAt')}</FieldError>
+        {editing && committed && can('startsAt') && (
+          <p className="mt-1.5 text-xs text-outline">{t('liveEdit.laterOnly')}</p>
+        )}
       </div>
 
       {/* How long */}
@@ -625,6 +694,7 @@ export default function LiveSessionForm({
             <Chip
               key={m}
               selected={!customLen && d.durationMin === String(m)}
+              disabled={!can('durationMin')}
               onClick={() => {
                 setCustomLen(false);
                 touch('durationMin', { durationMin: String(m) });
@@ -639,6 +709,7 @@ export default function LiveSessionForm({
           ))}
           <Chip
             selected={customLen}
+            disabled={!can('durationMin')}
             onClick={() => {
               setCustomLen(true);
               setTimeout(() => refs.current.durationMin?.focus(), 0);
@@ -655,6 +726,7 @@ export default function LiveSessionForm({
                 ref={bind('durationMin')}
                 className={`${inputCls('durationMin')} pe-16 tabular-nums`}
                 inputMode="numeric"
+                disabled={!can('durationMin')}
                 value={d.durationMin}
                 aria-label={t('live.form.durationMinutes')}
                 onChange={(e) => touch('durationMin', { durationMin: asciiDigits(e.target.value) })}
@@ -680,11 +752,12 @@ export default function LiveSessionForm({
           {t('live.fCapacity')}
         </Label>
         <div className="flex flex-wrap gap-2">
-          <Chip selected={!limited} onClick={() => setLimited(false)}>
+          <Chip selected={!limited} onClick={() => setLimited(false)} disabled={!can('capacity')}>
             {t('live.form.unlimited')}
           </Chip>
           <Chip
             selected={limited}
+            disabled={!can('capacity')}
             onClick={() => {
               setLimited(true);
               setTimeout(() => refs.current.capacity?.focus(), 0);
@@ -706,6 +779,7 @@ export default function LiveSessionForm({
               ref={bind('capacity')}
               className={`${inputCls('capacity')} tabular-nums`}
               inputMode="numeric"
+              disabled={!can('capacity')}
               value={d.capacity}
               placeholder="30"
               onChange={(e) => touch('capacity', { capacity: asciiDigits(e.target.value) })}
@@ -811,7 +885,13 @@ export default function LiveSessionForm({
                 className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary/40 border-t-on-primary"
               />
             )}
-            {create.isPending ? t('live.form.creating') : t('live.form.create')}
+            {create.isPending
+              ? editing
+                ? t('common.saving')
+                : t('live.form.creating')
+              : editing
+                ? t('liveEdit.save')
+                : t('live.form.create')}
           </button>
         </div>
       </div>

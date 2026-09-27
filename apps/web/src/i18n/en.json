@@ -1350,7 +1350,12 @@
       "PRICE_INVALID": "Enter the price in numbers, with at most two decimals (e.g. 149.50).",
       "PRICE_TOO_LOW": "The minimum price for a paid session is {{min}} EGP.",
       "PRICE_TOO_HIGH": "The price is above the maximum ({{max}} EGP).",
-      "REPLAY_DAYS_INVALID": "Enter a whole number of days from 1 to {{max}}."
+      "REPLAY_DAYS_INVALID": "Enter a whole number of days from 1 to {{max}}.",
+      "RESCHEDULE_EARLIER_LOCKED": "People hold seats — the start can only move later.",
+      "CAPACITY_BELOW_TAKEN": "{{min}} seats are taken — capacity cannot be lower.",
+      "EDIT_LOCKED_COMMITTED": "This cannot change after people have booked.",
+      "LIVE_EDIT_LOCKED": "The class is running — this cannot change now.",
+      "SESSION_READ_ONLY": "The session has ended — it cannot be edited."
     },
     "dur": {
       "hours_one": "1 hour",
@@ -2835,7 +2840,12 @@
     "eReturnDestinationInvalid": "Enter the account holder name and number correctly.",
     "eReturnAlreadyOpen": "A return is already open for this transfer.",
     "eReturnStateConflict": "The return changed state — refresh the page.",
-    "ePaymentNotVerified": "This payment is not confirmed yet — use “Match to a payment” instead."
+    "ePaymentNotVerified": "This payment is not confirmed yet — use “Match to a payment” instead.",
+    "eRescheduleEarlierLocked": "People hold seats — the start can only move later.",
+    "eCapacityBelowTaken": "Capacity cannot be lower than the seats taken.",
+    "eEditLockedCommitted": "Some fields cannot change after people booked or paid.",
+    "eLiveEditLocked": "The class is running — only the title and description can change.",
+    "eSessionReadOnly": "The session is over or cancelled — it cannot be edited."
   },
   "myStudio": {
     "title": "My Studio",
@@ -3110,7 +3120,8 @@
         "busy": "The microphone is in use by another app. Close it and try again.",
         "unsupported": "This browser doesn't support the microphone. Try a recent Chrome, Edge or Safari.",
         "failed": "The microphone couldn't start. Try again."
-      }
+      },
+      "retry": "Try again"
     },
     "left": "left",
     "recordingBadge": "Recording",
@@ -3160,7 +3171,19 @@
     "transcriptOn": "Transcript on",
     "transcriptOnHint": "What is said in this class is turned into text after it ends, for the summary. The audio itself is deleted once transcribed.",
     "transcriptStart": "Start transcript",
-    "transcriptStop": "Stop transcript"
+    "transcriptStop": "Stop transcript",
+    "lobby": {
+      "open": "The class is open — you can enter now.",
+      "waitingOpen": "Entry opens in {{time}}. Test your devices meanwhile.",
+      "waitingTeacherHint": "Waiting for the teacher to start — the join button turns on by itself.",
+      "opensIn": "Opens in {{time}}",
+      "waitingTeacher": "Waiting for the teacher…",
+      "enterListening": "Enter as a listener",
+      "testTitle": "Test camera and mic (optional)",
+      "testHint": "You will enter as a listener. If the teacher lets you speak, the devices you pick here are used. The test stays on your device; nobody sees it.",
+      "testButton": "Start test",
+      "stopTest": "Stop test"
+    }
   },
   "summary": {
     "title": "AI lesson summary",
@@ -3917,7 +3940,9 @@
       "PAYMENT_REJECTED": "Your previous payment was not accepted. You can book again.",
       "OVERSOLD": "Your payment arrived after the seats filled up, so it was refunded in full.",
       "REFUNDED": "Refunded.",
-      "CANCELLED_BY_TEACHER": "The teacher cancelled the session; you were refunded in full."
+      "CANCELLED_BY_TEACHER": "The teacher cancelled the session; you were refunded in full.",
+      "REFUND_PENDING": "Your money is coming back — the refund is in progress.",
+      "CANCELLED_BY_STUDENT": "You cancelled this booking."
     },
     "cancelRefund": "Cancel your seat in “{{title}}”? The refund goes to your wallet according to the refund policy.",
     "cancelNoRefund": "Cancel your seat in “{{title}}”? No refund at this point under the session’s policy — your seat will be released."
@@ -4118,7 +4143,9 @@
     "autoConfirm": "As soon as the transfer reaches us we confirm automatically when the details match — otherwise the Darsly team reviews it.",
     "afterTransfer": "After you transfer",
     "submitProof": "I transferred — send the proof",
-    "proofNote": "The receipt helps the review team; confirmation comes from the transfer message itself."
+    "proofNote": "The receipt helps the review team; confirmation comes from the transfer message itself.",
+    "walletOwnerName": "Name on the wallet you are transferring from",
+    "walletOwnerNameHint": "The bank sends us only the sender’s name — your full name is what lets the booking confirm by itself."
   },
   "transfers": {
     "subtitle": "Money that reached Darsly accounts and matched nothing automatically. Match it to a payment, attach it to a Live purchase, or return it.",
@@ -4172,5 +4199,72 @@
     "confirmedAt": "Confirmed {{time}}",
     "alreadyConfirmed": "Already confirmed by hand",
     "confirmLink": "This transfer is recorded as the money of a payment that was already confirmed. No money moves and no booking changes; the transfer can no longer be returned or matched to anything else. Use this only if it really is the same transfer."
+  },
+  "liveEdit": {
+    "save": "Save changes",
+    "accessLocked": "People have booked or paid — the session cannot switch between free and paid now.",
+    "newBuyersOnly": "A new price and terms apply to new buyers only — earlier buyers keep theirs.",
+    "laterOnly": "People hold seats: the start can only move later, and they are told the new time."
+  },
+  "liveManage": {
+    "open": "Manage session",
+    "back": "All live sessions",
+    "edit": "Edit session",
+    "state": {
+      "SCHEDULED": "Upcoming",
+      "LIVE": "Live now",
+      "ENDED": "Ended",
+      "CANCELLED": "Cancelled"
+    },
+    "link": "Session link",
+    "linkHintFree": "Send it to anyone: a registered student books with their account, anyone else books as a guest with just a name.",
+    "linkHintPaid": "Send it to anyone: they pay for a seat, confirmed as soon as the transfer arrives.",
+    "copy": "Copy link",
+    "groupNoLink": "This session is for one group, so it has no public link.",
+    "seats": "Seats taken",
+    "seatsBreakdown": "Registered students: {{students}} · Guests: {{guests}}",
+    "viewPeople": "See who booked",
+    "guest": "Guest",
+    "sales": "Sales",
+    "salesConfirmed": "Confirmed seats",
+    "salesAwaiting": "Transfers awaiting confirmation",
+    "salesRefunded": "Refunded",
+    "salesEarnings": "Your share of confirmed seats",
+    "earningsHeld": "Earnings become yours once the class has actually been delivered.",
+    "editRules": "Editing",
+    "rules": {
+      "SCHEDULED": "Nobody has booked yet — you can change anything.",
+      "SCHEDULED_COMMITTED": "People hold seats: you can change the title and description, move the start later, change the length and raise the capacity (not below seats taken). A new price and terms apply to new buyers only; free/paid cannot change.",
+      "LIVE": "The class is running: only the title and description can change. Use \"extend\" inside the classroom for more time.",
+      "ENDED": "The session has ended — read-only.",
+      "CANCELLED": "The session was cancelled — read-only."
+    },
+    "cancelSession": "Cancel session",
+    "cancelPaidConfirm": "Cancel the session? Everyone who paid gets a full refund, and no earnings are paid for it."
+  },
+  "livePublic": {
+    "entry": "Entry",
+    "ended": "Ended",
+    "cancelled": "Cancelled",
+    "startsIn": "Starts in {{time}}",
+    "opensIn": "Entry opens in {{time}}",
+    "waitingTeacher": "Waiting for the teacher",
+    "waitingTeacherHint": "Entry is open — waiting for the teacher to start. This page updates by itself.",
+    "seatConfirmed": "Your seat is booked ✅",
+    "prepareDevices": "Set up camera and mic",
+    "prepareHint": "You can test your devices now; the join button turns on by itself when the class opens.",
+    "bookFree": "Book your seat (free)",
+    "reserveFree": "Book my seat for free",
+    "haveAccount": "Have an account? Sign in",
+    "signedInNotStudent": "You are signed in with a non-student account. To book as a student or a guest, open the link in another browser or after signing out.",
+    "notFoundHint": "The link is wrong, the session was cancelled, or it is for one group only.",
+    "overHint": "This session is over.",
+    "manage": "Manage booking",
+    "cancelFree": "Your booking is cancelled and the seat goes back to others."
+  },
+  "livePay": {
+    "reviewTitle": "Transfer received — under review",
+    "reviewBody": "A transfer of your amount arrived but needs a check by the Darsly team before your seat is confirmed. Do not transfer again — we will tell you when it is confirmed.",
+    "checkingBody": "Your seat is held while the payment is confirmed. As soon as the transfer message reaches us and matches, the booking confirms by itself — nothing else to do."
   }
 }

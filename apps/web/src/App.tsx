@@ -58,6 +58,7 @@ const TeacherProfilePage = lazyPage(() => import('./pages/student/TeacherProfile
 const AssignmentBuilderPage = lazyPage(() => import('./pages/teacher/AssignmentBuilderPage'));
 const CourseBuilderPage = lazyPage(() => import('./pages/teacher/CourseBuilderPage'));
 const TeacherLivePage = lazyPage(() => import('./pages/teacher/TeacherLivePage'));
+const TeacherLiveSessionPage = lazyPage(() => import('./pages/teacher/TeacherLiveSessionPage'));
 const MeetingPage = lazyPage(() => import('./pages/live/MeetingPage'));
 const PublicLivePage = lazyPage(() => import('./pages/live/PublicLivePage'));
 const GuestAccessPage = lazyPage(() => import('./pages/live/GuestAccessPage'));
@@ -527,6 +528,14 @@ export default function App() {
             element={
               <RequireAuth role={Role.TEACHER}>
                 <TeacherLivePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/live/:id"
+            element={
+              <RequireAuth role={Role.TEACHER}>
+                <TeacherLiveSessionPage />
               </RequireAuth>
             }
           />

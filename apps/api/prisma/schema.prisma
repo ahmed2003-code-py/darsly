@@ -1762,8 +1762,17 @@ model WalletTopup {
   amountCents    Int
   currency       String            @default("EGP")
   method         PaymentMethod
-  proofImageUrl  String
+  /// Supporting evidence only. Null for a top-up declared before the transfer
+  /// (the listener can confirm it without any proof).
+  proofImageUrl  String?
   reference      String?
+  /// Where the money comes FROM — see Payment.transferSource.
+  transferSource TransferSource?
+  /// The name on the account the money comes from — see Payment.payerName.
+  payerName      String?
+  /// When the student said "I have transferred" (sent a proof). Null while a
+  /// declared top-up waits for its transfer.
+  claimedAt      DateTime?
   /// What the uploaded receipt says, as read from the image — the amount, the
   /// time it was sent, and who it was sent to. Evidence, never proof: the bank's
   /// SMS is what says money arrived; this says whose it is. See proof-check.ts.

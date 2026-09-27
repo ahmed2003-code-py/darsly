@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { ErrorNote, Modal, Spinner } from '../ui';
+import PaymentStageNote from '../payments/PaymentStageNote';
 import LiveTransferForm, { type DeclareInput, type ProofInput } from './LiveTransferForm';
 import { RefundAndReplaySummary } from './LiveOfferFacts';
 import { backoffInterval } from '../../lib/livePolling';
@@ -213,17 +214,10 @@ export default function LiveCheckoutModal({
             {t('liveBuy.heldFor', { time: countdown.text })}
           </p>
         )}
-        {p.paymentStage === 'UNDER_REVIEW' && (
-          <p className="mb-4 flex items-start gap-2 rounded-xl border border-primary/30 bg-primary-fixed/30 p-3 text-sm" role="status">
-            <span className="material-symbols-outlined text-primary">fact_check</span>
-            <span>
-              <span className="block font-bold">{t('livePay.reviewTitle')}</span>
-              <span className="block text-xs text-on-surface-variant">{t('livePay.reviewBody')}</span>
-            </span>
-          </p>
-        )}
+        <PaymentStageNote stage={p.paymentStage} target="live" />
         <LiveTransferForm
           purchase={p}
+          underReview={p.paymentStage === 'UNDER_REVIEW'}
           onDeclare={(input) => declare.mutate(input)}
           declaring={declare.isPending}
           declareError={declare.error}

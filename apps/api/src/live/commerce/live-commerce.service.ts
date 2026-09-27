@@ -21,7 +21,8 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LedgerService } from '../../payments/ledger.service';
 import { PaymentTargets } from '../../payments/payment-targets';
-import { methodsFor, PaymentMatchingService } from '../../payments/payment-matching.service';
+import { PaymentMatchingService } from '../../payments/payment-matching.service';
+import { paymentRow, paymentStage } from '../../payments/payment-stage';
 import { normalizeDeclaration, normalizePayerReference } from '../../payments/payer-reference';
 import { receivingHandles } from '../../payments/receiving-accounts';
 import { checkProofAgainstClaim } from '../../payments/proof-check';
@@ -1979,24 +1980,9 @@ export class LiveCommerceService implements OnModuleInit {
    *
    * Only the existence of such a transfer is said, never whose it is.
    */
-  async paymentStage(p: { payment: { id: string; status: string; claimedAt: Date | null; method: string | null; amountCents: number; walletCents: number; createdAt: Date } | null }) {
-    const pay = p.payment;
-    if (!pay) return 'NONE' as const;
-    if (pay.status === 'PAID' || pay.status === 'REFUNDED') return 'CONFIRMED' as const;
-    if (pay.status === 'REJECTED' || pay.status === 'FAILED') return 'REJECTED' as const;
-    if (pay.method === 'WALLET' || !pay.method) return pay.claimedAt ? ('PROOF_SENT' as const) : ('AWAITING_TRANSFER' as const);
-    const seen = await this.prisma.paymentEvent.count({
-      where: {
-        status: { in: ['UNMATCHED', 'AMBIGUOUS'] },
-        matchedPaymentId: null,
-        matchedTopupId: null,
-        provider: { in: methodsFor(pay.method) as never[] },
-        amountCents: pay.amountCents - (pay.walletCents ?? 0),
-        occurredAt: { gte: new Date(pay.createdAt.getTime() - 30 * 60_000) },
-      },
-    });
-    if (seen > 0) return 'UNDER_REVIEW' as const;
-    return pay.claimedAt ? ('PROOF_SENT' as const) : ('AWAITING_TRANSFER' as const);
+  /** Where the buyer's money stands — the shared answer (see payments/payment-stage.ts). */
+  paymentStage(p: { payment: { status: string; claimedAt: Date | null; method: string | null; amountCents: number; walletCents: number; createdAt: Date } | null }) {
+    return paymentStage(this.prisma, p.payment ? paymentRow(p.payment) : null);
   }
 
   async byId(purchaseId: string) {

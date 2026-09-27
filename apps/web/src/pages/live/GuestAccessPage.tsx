@@ -11,6 +11,7 @@ import { enterAsGuest, rememberGuestSecret } from '../../lib/guest';
 import { confirmDelete } from '../../lib/confirm';
 import { useAuthStore } from '../../stores/auth';
 import { ErrorNote, Field, Spinner } from '../../components/ui';
+import PaymentStageNote from '../../components/payments/PaymentStageNote';
 import LiveTransferForm, { type DeclareInput, type ProofInput } from '../../components/live/LiveTransferForm';
 
 const REFUND_METHODS = ['VODAFONE_CASH', 'INSTAPAY', 'BANK_TRANSFER'] as const;
@@ -300,9 +301,10 @@ export default function GuestAccessPage() {
                 <p className="mb-3 text-xs text-on-surface-variant tabular-nums">{t('liveBuy.heldFor', { time: holdLeft })}</p>
               )}
               {s.status === 'EXPIRED' && <p className="mb-3 text-sm text-on-surface-variant">{t('guest.holdExpired')}</p>}
-              <PaymentStageNote stage={s.paymentStage} />
+              <PaymentStageNote stage={s.paymentStage} target="live" />
               <LiveTransferForm
                 purchase={s}
+                underReview={s.paymentStage === 'UNDER_REVIEW'}
                 onDeclare={(input) => declare.mutate(input)}
                 declaring={declare.isPending}
                 declareError={declare.error}
@@ -430,16 +432,3 @@ export default function GuestAccessPage() {
 }
 
 /** What the buyer's money is doing — said plainly, and never "pay again". */
-function PaymentStageNote({ stage }: { stage?: string }) {
-  const { t } = useTranslation();
-  if (stage !== 'UNDER_REVIEW') return null;
-  return (
-    <p className="mb-3 flex items-start gap-2 rounded-xl border border-primary/30 bg-primary-fixed/30 p-3 text-sm" role="status">
-      <span className="material-symbols-outlined text-primary">fact_check</span>
-      <span>
-        <span className="block font-bold">{t('livePay.reviewTitle')}</span>
-        <span className="block text-xs text-on-surface-variant">{t('livePay.reviewBody')}</span>
-      </span>
-    </p>
-  );
-}

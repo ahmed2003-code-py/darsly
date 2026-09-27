@@ -61,6 +61,8 @@ export default function LiveTransferForm({
   onSubmitProof,
   pending,
   error,
+  autoConfirmNote,
+  underReview = false,
 }: {
   purchase: TransferPurchase;
   onDeclare: (input: DeclareInput) => void;
@@ -69,6 +71,10 @@ export default function LiveTransferForm({
   onSubmitProof: (input: ProofInput) => void;
   pending: boolean;
   error: unknown;
+  /** What confirming by itself means here — a seat, a course, a top-up. */
+  autoConfirmNote?: string;
+  /** A transfer of this amount arrived and waits for a person (stage UNDER_REVIEW). */
+  underReview?: boolean;
 }) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -117,8 +123,10 @@ export default function LiveTransferForm({
 
   if (showStep2) {
     return (
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
+      <div className={`grid gap-5 ${underReview ? '' : 'sm:grid-cols-2'}`}>
+        {/* Money that arrived and waits for a person: "transfer now" would
+            read as "pay again" — only the optional receipt stays. */}
+        {!underReview && <div>
           <p className="mb-2 flex items-center gap-2 font-heading font-bold">
             <span className="material-symbols-outlined text-primary rtl:-scale-x-100">north_east</span>
             {t('liveTransfer.step2Title')}
@@ -154,9 +162,9 @@ export default function LiveTransferForm({
           </div>
           <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-on-surface-variant">
             <span className="material-symbols-outlined text-[16px] leading-5 text-primary">verified</span>
-            {t('liveTransfer.autoConfirm')}
+            {autoConfirmNote ?? t('liveTransfer.autoConfirm')}
           </p>
-        </div>
+        </div>}
 
         <div>
           <p className="mb-2 flex items-center gap-2 font-heading font-bold">

@@ -3211,7 +3211,23 @@
     "underMinute": "Under a minute",
     "noTranscript": "No speech was captured in this session, so there is nothing to summarise. Summaries are built from what was said during the class — check that the mic was on and that the lesson ran longer than a few seconds.",
     "transcriptionOff": "Transcription is not enabled on the platform’s video account, so there is no text to summarise. This is a provider setting that needs turning on.",
-    "transcriptPending": "The lesson's transcript is still being prepared by the video provider. Give it a minute and try again."
+    "transcriptPending": "The lesson's transcript is still being prepared by the video provider. Give it a minute and try again.",
+    "ready": "Summary ready",
+    "partialTitle": "Summary of an incomplete transcript",
+    "partial": "It may be missing parts of the class that could not be transcribed.",
+    "stale": "The transcript changed after this summary was made.",
+    "regenerate": "Regenerate summary",
+    "quick": "Quick summary",
+    "concepts": "Concepts and terms",
+    "examples": "Examples the teacher gave",
+    "formulas": "Formulas",
+    "corrections": "Teacher's corrections",
+    "correctionLine": "{{wrong}} → corrected: {{corrected}}",
+    "questions": "Questions asked in class",
+    "unanswered": "Asked, not answered in class",
+    "homeworkDue": "{{task}} — due: {{due}}",
+    "review": "Points to review",
+    "studyNotes": "Organised study notes"
   },
   "grading": {
     "title": "Marking",
@@ -3827,9 +3843,9 @@
     "transcript": {
       "title": "Transcript",
       "WAITING_FOR_RECORDING": "Waiting for the recording",
-      "TRANSCRIBING": "Transcribing the class",
+      "TRANSCRIBING": "Preparing the transcript and summary",
       "READY": "Transcript ready",
-      "FAILED": "The transcript could not be created",
+      "FAILED": "The transcript could not be prepared right now",
       "AT_PROVIDER": "Speech was captured; the transcript is prepared with the summary",
       "UNAVAILABLE": "No transcript for this class",
       "reason": {
@@ -3841,7 +3857,7 @@
       },
       "WAITING_FOR_CLASS_END": "Waiting for the class to end",
       "OFF": "Transcript is off",
-      "partial": "Some parts of the class could not be transcribed; the rest is shown here.",
+      "partial": "Some parts of the class could not be transcribed, so parts may be missing. The rest is shown here.",
       "search": "Search the transcript",
       "copy": "Copy transcript",
       "copied": "Copied",
@@ -3858,12 +3874,15 @@
         "OFF": "Off",
         "MANUAL": "Manual (from the classroom)",
         "AUTO_WHEN_RECORDING": "Automatic while recording"
-      }
+      },
+      "PARTIAL": "Transcript incomplete",
+      "failedHint": "The recording itself is not affected.",
+      "retry": "Try the missing parts again"
     },
     "summary": {
       "WAITING_FOR_TRANSCRIPT": "The summary will be written once the transcript is ready",
-      "GENERATING": "Writing the summary",
-      "FAILED": "The class summary could not be created",
+      "GENERATING": "Preparing the summary",
+      "FAILED": "The summary could not be prepared right now",
       "UNAVAILABLE": "A summary can't be written without a transcript"
     },
     "chat": {

@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { ErrorNote, Skeleton } from '../../components/ui';
+import { backoffInterval } from '../../lib/livePolling';
 import LiveReplayPlayer from './LiveReplayPlayer';
 
 /**
@@ -17,13 +18,31 @@ import LiveReplayPlayer from './LiveReplayPlayer';
  * the class; the server has already decided what each may read.
  */
 
-interface Summary {
+/** A summary written before study notes (schema version 1). */
+interface LegacySummary {
   summary: string;
   topics: string[];
   keyPoints: string[];
   questionsAndAnswers: { question: string; answer: string }[];
   actionItems: string[];
 }
+/** Study notes (schema version 2) — every item grounded in the transcript on the server. */
+interface StudyNotes {
+  schemaVersion: 2;
+  title: string;
+  quickSummary: string;
+  keyPoints: { text: string }[];
+  concepts: { term: string; explanation: string }[];
+  examples: { text: string }[];
+  formulas: { formula: string; meaning: string }[];
+  questions: { question: string; answered: boolean; answer: string | null }[];
+  homework: { task: string; due: string | null }[];
+  corrections: { wrong: string; corrected: string }[];
+  reviewPoints: string[];
+  studyNotes: string;
+}
+type Summary = LegacySummary | StudyNotes;
+const isStudyNotes = (x: Summary): x is StudyNotes => (x as StudyNotes).schemaVersion === 2;
 
 type RecStage = 'REQUESTED' | 'CAPTURING' | 'FINALIZING' | 'PROCESSING' | 'READY' | 'FAILED';
 type Visibility = 'PRIVATE' | 'STUDENTS';
@@ -267,6 +286,133 @@ function Highlight({ text, q }: { text: string; q: string }) {
   );
 }
 
+/** A summary written before study notes (kept readable as it was). */
+function LegacySummaryView({ data }: { data: LegacySummary }) {
+  const { t } = useTranslation();
+  return (
+    <div dir="auto" className="space-y-4">
+      <p className="text-sm leading-relaxed">{data.summary}</p>
+      {data.topics.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {data.topics.map((tp, i) => (
+            <span key={i} className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed">
+              {tp}
+            </span>
+          ))}
+        </div>
+      )}
+      <Part title={t('summary.keyPoints')}>
+        <Bullets items={data.keyPoints} empty={t('summary.noneKeyPoints')} />
+      </Part>
+      <Part title={t('summary.qa')}>
+        {data.questionsAndAnswers.length ? (
+          <dl className="space-y-2">
+            {data.questionsAndAnswers.map((qa, i) => (
+              <div key={i}>
+                <dt className="text-sm font-semibold">{qa.question}</dt>
+                <dd className="text-sm text-on-surface-variant">{qa.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-sm text-outline">{t('summary.noneQa')}</p>
+        )}
+      </Part>
+      <Part title={t('summary.homework')}>
+        <Bullets items={data.actionItems} empty={t('summary.noneHomework')} />
+      </Part>
+    </div>
+  );
+}
+
+/** A titled part of the study notes, shown only when the class gave it something. */
+function Part({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <h4 className="mb-1 text-sm font-bold">{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The study notes. A category the class did not touch (no formulas, no
+ * homework) is simply not shown — nothing is invented to fill it; homework
+ * alone says so, because "was there homework?" is a question students ask.
+ */
+function StudyNotesView({ n }: { n: StudyNotes }) {
+  const { t } = useTranslation();
+  const list = (xs: string[]) => <Bullets items={xs} empty="" />;
+  return (
+    <div dir="auto" className="space-y-4">
+      {n.title && <p className="font-heading text-base font-bold">{n.title}</p>}
+      {n.quickSummary && (
+        <Part title={t('summary.quick')}>
+          <p className="text-sm leading-relaxed">{n.quickSummary}</p>
+        </Part>
+      )}
+      {n.keyPoints.length > 0 && <Part title={t('summary.keyPoints')}>{list(n.keyPoints.map((k) => k.text))}</Part>}
+      {n.concepts.length > 0 && (
+        <Part title={t('summary.concepts')}>
+          <dl className="space-y-1.5">
+            {n.concepts.map((c, i) => (
+              <div key={i} className="text-sm">
+                <dt className="inline font-semibold" dir="auto">{c.term}</dt>
+                <dd className="inline text-on-surface-variant"> — {c.explanation}</dd>
+              </div>
+            ))}
+          </dl>
+        </Part>
+      )}
+      {n.formulas.length > 0 && (
+        <Part title={t('summary.formulas')}>
+          <ul className="space-y-1.5">
+            {n.formulas.map((fm, i) => (
+              <li key={i} className="text-sm">
+                <span dir="ltr" className="rounded bg-surface-container px-1.5 py-0.5 font-mono text-[13px]">{fm.formula}</span>
+                <span className="text-on-surface-variant"> — {fm.meaning}</span>
+              </li>
+            ))}
+          </ul>
+        </Part>
+      )}
+      {n.examples.length > 0 && <Part title={t('summary.examples')}>{list(n.examples.map((e) => e.text))}</Part>}
+      {n.corrections.length > 0 && (
+        <Part title={t('summary.corrections')}>
+          {list(n.corrections.map((c) => t('summary.correctionLine', { wrong: c.wrong, corrected: c.corrected })))}
+        </Part>
+      )}
+      {n.questions.length > 0 && (
+        <Part title={t('summary.questions')}>
+          <dl className="space-y-2">
+            {n.questions.map((q, i) => (
+              <div key={i}>
+                <dt className="text-sm font-semibold">{q.question}</dt>
+                <dd className="text-sm text-on-surface-variant">
+                  {q.answered && q.answer ? q.answer : <span className="text-outline">{t('summary.unanswered')}</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Part>
+      )}
+      <Part title={t('summary.homework')}>
+        {n.homework.length ? (
+          list(n.homework.map((h) => (h.due ? t('summary.homeworkDue', { task: h.task, due: h.due }) : h.task)))
+        ) : (
+          <p className="text-sm text-outline">{t('summary.noneHomework')}</p>
+        )}
+      </Part>
+      {n.reviewPoints.length > 0 && <Part title={t('summary.review')}>{list(n.reviewPoints)}</Part>}
+      {n.studyNotes && (
+        <Part title={t('summary.studyNotes')}>
+          <p className="whitespace-pre-wrap text-sm leading-7">{n.studyNotes.replace(/^#+\s*/gm, '')}</p>
+        </Part>
+      )}
+    </div>
+  );
+}
+
 /** The transcript, readable: by time, searchable, copyable. No speaker names — none are known. */
 function TranscriptViewer({ segments, partial }: { segments: Segment[]; partial: boolean }) {
   const { t } = useTranslation();
@@ -290,7 +436,7 @@ function TranscriptViewer({ segments, partial }: { segments: Segment[]; partial:
   };
   return (
     <div className="space-y-3">
-      {partial && <Status title={t('record.transcript.partial')} />}
+      {partial && <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <span
@@ -358,16 +504,38 @@ function TranscriptSection({
     stage: string;
     reason: string | null;
     partial?: boolean;
+    canRetry?: boolean;
     visibility?: Visibility;
     segments?: Segment[];
   };
 }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
+  const retry = useMutation({
+    mutationFn: async () => (await api.post(`/teacher/live/${sessionId}/transcript/retry`)).data,
+    onSettled: () => qc.invalidateQueries({ queryKey: ['live-detail', sessionId] }),
+  });
   const s = transcript.stage;
+  const retryButton =
+    teacher && transcript.canRetry ? (
+      <div className="mt-2 space-y-1">
+        <button type="button" className="btn-secondary !py-1.5 text-sm" disabled={retry.isPending} onClick={() => retry.mutate()}>
+          <span aria-hidden className="material-symbols-outlined text-[18px]">refresh</span>
+          {t('record.transcript.retry')}
+        </button>
+        <ErrorNote error={retry.error} />
+      </div>
+    ) : null;
   let body: ReactNode;
-  if (s === 'READY' && transcript.segments?.length)
-    body = <TranscriptViewer segments={transcript.segments} partial={!!transcript.partial} />;
+  if ((s === 'READY' || s === 'PARTIAL') && transcript.segments?.length)
+    body = (
+      <>
+        <TranscriptViewer segments={transcript.segments} partial={s === 'PARTIAL' || !!transcript.partial} />
+        {retryButton}
+      </>
+    );
   else if (s === 'READY') body = <Status tone="good" title={t('record.transcript.READY')} />;
+  else if (s === 'PARTIAL') body = <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />;
   else if (s === 'UNAVAILABLE' && transcript.reason === 'TRANSCRIPTION_OFF')
     body = <Status title={t('record.transcript.OFF')} />;
   else if (s === 'UNAVAILABLE')
@@ -377,7 +545,13 @@ function TranscriptSection({
         hint={transcript.reason ? t(`record.transcript.reason.${transcript.reason}`) : undefined}
       />
     );
-  else if (s === 'FAILED') body = <Status tone="bad" title={t('record.transcript.FAILED')} />;
+  else if (s === 'FAILED')
+    body = (
+      <>
+        <Status tone="bad" title={t('record.transcript.FAILED')} hint={t('record.transcript.failedHint')} />
+        {retryButton}
+      </>
+    );
   else if (s === 'AT_PROVIDER') body = <Status title={t('record.transcript.AT_PROVIDER')} />;
   else if (s === 'WAITING_FOR_CLASS_END') body = <Status title={t('record.transcript.WAITING_FOR_CLASS_END')} />;
   else body = <Status busy title={t(`record.transcript.${s}`)} />;
@@ -387,7 +561,7 @@ function TranscriptSection({
       icon="subject"
       title={t('record.transcript.title')}
       aside={
-        teacher && transcript.visibility && s === 'READY' ? (
+        teacher && transcript.visibility && (s === 'READY' || s === 'PARTIAL') ? (
           <VisibilityPicker sessionId={sessionId} resource="transcript" value={transcript.visibility} />
         ) : null
       }
@@ -471,10 +645,12 @@ export default function SessionSummary({
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
 
+  // When the current wait began: quick polling first, backing off, then
+  // stopping (lib/livePolling) — and none at all once everything has settled.
+  const movingSince = useRef<number | null>(null);
   const detail = useQuery({
     queryKey: ['live-detail', sessionId],
     queryFn: async () => (await api.get(`/live/${sessionId}/detail`)).data,
-    // While anything is still moving, the record catches up on its own.
     refetchInterval: (q) => {
       const d = q.state.data;
       if (!d) return false;
@@ -483,13 +659,27 @@ export default function SessionSummary({
         d.summary?.stage === 'GENERATING' ||
         d.transcript?.stage === 'TRANSCRIBING' ||
         d.transcript?.stage === 'WAITING_FOR_CLASS_END';
-      return moving ? 5000 : false;
+      if (!moving) {
+        movingSince.current = null;
+        return false;
+      }
+      movingSince.current ??= Date.now();
+      return backoffInterval(movingSince.current);
     },
   });
 
   const generate = useMutation({
     mutationFn: async () => (await api.post(`/teacher/live/${sessionId}/summary`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live-detail', sessionId] }),
+  });
+  // A new summary from the current transcript (never re-transcribes). One at a time.
+  const regenerating = useRef(false);
+  const regenerate = useMutation({
+    mutationFn: async () => (await api.post(`/teacher/live/${sessionId}/summary/regenerate`)).data,
+    onSettled: () => {
+      regenerating.current = false;
+      qc.invalidateQueries({ queryKey: ['live-detail', sessionId] });
+    },
   });
 
   if (detail.isLoading)
@@ -575,40 +765,29 @@ export default function SessionSummary({
         }
       >
         {sStage === 'READY' && data ? (
-          <div dir="auto" className="space-y-4">
-            <p className="text-sm leading-relaxed">{data.summary}</p>
-            {data.topics.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {data.topics.map((tp, i) => (
-                  <span key={i} className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed">
-                    {tp}
-                  </span>
-                ))}
+          <div className="space-y-3">
+            <Status tone="good" title={t('summary.ready')} />
+            {d.summary.partial && <Status title={t('summary.partialTitle')} hint={t('summary.partial')} />}
+            {d.summary.stale && <Status title={t('summary.stale')} />}
+            {isStudyNotes(data) ? <StudyNotesView n={data} /> : <LegacySummaryView data={data} />}
+            {isTeacher && d.summary.canRegenerate && (
+              <div className="space-y-1 pt-1">
+                <button
+                  type="button"
+                  className="btn-secondary !py-1.5 text-sm"
+                  disabled={regenerate.isPending}
+                  onClick={() => {
+                    if (regenerating.current) return;
+                    regenerating.current = true;
+                    regenerate.mutate();
+                  }}
+                >
+                  <span aria-hidden className="material-symbols-outlined text-[18px]">autorenew</span>
+                  {regenerate.isPending ? t('common.saving') : t('summary.regenerate')}
+                </button>
+                <ErrorNote error={regenerate.error} />
               </div>
             )}
-            <div>
-              <h4 className="mb-1 text-sm font-bold">{t('summary.keyPoints')}</h4>
-              <Bullets items={data.keyPoints} empty={t('summary.noneKeyPoints')} />
-            </div>
-            <div>
-              <h4 className="mb-1 text-sm font-bold">{t('summary.qa')}</h4>
-              {data.questionsAndAnswers.length ? (
-                <dl className="space-y-2">
-                  {data.questionsAndAnswers.map((qa, i) => (
-                    <div key={i}>
-                      <dt className="text-sm font-semibold">{qa.question}</dt>
-                      <dd className="text-sm text-on-surface-variant">{qa.answer}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="text-sm text-outline">{t('summary.noneQa')}</p>
-              )}
-            </div>
-            <div>
-              <h4 className="mb-1 text-sm font-bold">{t('summary.homework')}</h4>
-              <Bullets items={data.actionItems} empty={t('summary.noneHomework')} />
-            </div>
           </div>
         ) : sStage === 'GENERATING' || sStage === 'PROCESSING' ? (
           <Status busy title={t('record.summary.GENERATING')} />

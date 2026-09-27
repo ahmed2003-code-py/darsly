@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { paymentMethodLabel } from '../../lib/paymentMethods';
 import { askConfirm } from '../../lib/confirm';
@@ -7,6 +7,8 @@ import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { Badge, ErrorNote, Field, Modal, PageHeader, Skeleton } from '../../components/ui';
 import i18n from '../../i18n';
+import TransferEventNote from '../../components/admin/TransferEventNote';
+import { Link } from 'react-router-dom';
 
 const EVENT_TONE: Record<string, string> = {
   MATCHED: 'bg-secondary-container text-on-secondary-container',
@@ -26,6 +28,9 @@ export default function AdminPaymentsPage() {
   const qc = useQueryClient();
   const [proof, setProof] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  // The payment an admin is about to confirm, shown with its evidence first.
+  const [confirming, setConfirming] = useState<any | null>(null);
+  const verifying = useRef(false);
   const [form, setForm] = useState({ method: 'INSTAPAY', label: '', handle: '', instructions: '' });
 
   const { data: payments, isLoading } = useQuery({
@@ -47,7 +52,13 @@ export default function AdminPaymentsPage() {
   };
   const verify = useMutation({
     mutationFn: async (id: string) => (await api.post(`/admin/payments/${id}/verify`)).data,
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setConfirming(null);
+      invalidate();
+    },
+    onSettled: () => {
+      verifying.current = false;
+    },
   });
   const reject = useMutation({
     mutationFn: async (id: string) =>
@@ -116,12 +127,16 @@ export default function AdminPaymentsPage() {
                       </span>
                       <span>{paymentMethodLabel(p.method)}</span>
                       {p.reference && <span dir="ltr">#{p.reference}</span>}
+                      {p.livePurchaseId && !p.claimedAt && <Badge tone="neutral">{t('apay.notClaimed')}</Badge>}
                     </div>
                     <div className="mt-2 flex gap-2">
                       <button
                         className="btn-primary px-4 py-1.5 text-sm"
                         disabled={verify.isPending}
-                        onClick={() => verify.mutate(p.id)}
+                        onClick={() => {
+                          verify.reset();
+                          setConfirming(p);
+                        }}
                       >
                         {t('tpay.verify')}
                       </button>
@@ -137,7 +152,10 @@ export default function AdminPaymentsPage() {
               ))}
             </div>
           )}
-          <ErrorNote error={verify.error} />
+          <ErrorNote error={verify.error && !confirming ? verify.error : null} />
+          <Link to="/admin/live-commerce" className="mt-3 inline-block text-sm font-bold text-primary hover:underline">
+            {t('apay.transfersLink')}
+          </Link>
 
           {/* Auto-verification events from the notification listener */}
           <h2 className="mb-3 mt-8 flex items-center gap-2 font-heading text-xl font-extrabold">
@@ -166,16 +184,16 @@ export default function AdminPaymentsPage() {
                         <span className="font-bold">{egp(e.amountCents)}</span>
                         <span className="text-outline">·</span>
                         <span>{paymentMethodLabel(e.provider)}</span>
-                        {e.reference && (
+                        {e.referenceMasked && (
                           <>
                             <span className="text-outline">·</span>
                             <span className="text-outline" dir="ltr">
-                              #{e.reference}
+                              #{e.referenceMasked}
                             </span>
                           </>
                         )}
                       </p>
-                      {e.note && <EventNote note={e.note} />}
+                      {e.note && <TransferEventNote note={e.note} />}
                     </div>
                     <Badge
                       tone={
@@ -238,6 +256,80 @@ export default function AdminPaymentsPage() {
         </aside>
       </div>
 
+      <Modal open={!!confirming} onClose={() => setConfirming(null)} title={t('apay.verifyTitle')}>
+        {confirming && (
+          <div className="space-y-3 text-sm">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-xl border border-outline-variant/60 p-3">
+              <dt className="text-outline">{t('apay.buyer')}</dt>
+              <dd>{confirming.studentName}</dd>
+              <dt className="text-outline">{t('apay.item')}</dt>
+              <dd>
+                {confirming.courseTitle}
+                {confirming.sessionStartsAt && ` · ${new Date(confirming.sessionStartsAt).toLocaleString('ar-EG')}`}
+              </dd>
+              <dt className="text-outline">{t('apay.expected')}</dt>
+              <dd className="font-heading font-bold tabular-nums">
+                {egp(confirming.amountCents - (confirming.walletCents ?? 0))}
+              </dd>
+              <dt className="text-outline">{t('apay.evidence')}</dt>
+              <dd className="space-y-0.5">
+                <span className="block">{paymentMethodLabel(confirming.method)}</span>
+                <span className="block">
+                  {confirming.transferSource === 'WALLET' && confirming.reference
+                    ? t('apay.fromWallet', { number: confirming.reference })
+                    : confirming.transferSource === 'BANK'
+                      ? t('apay.fromBank', { name: confirming.payerName ?? '—' })
+                      : confirming.reference
+                        ? `#${confirming.reference}`
+                        : t('apay.noSource')}
+                </span>
+                <span className="block">{confirming.hasProof ? t('apay.proofYes') : t('apay.proofNo')}</span>
+                {confirming.proofSummary?.amountCents != null && (
+                  <span className="block">
+                    {t('apay.receiptSays', {
+                      amount: egp(confirming.proofSummary.amountCents),
+                      time: confirming.proofSummary.sentAtText ?? '—',
+                    })}
+                  </span>
+                )}
+              </dd>
+              <dt className="text-outline">{t('apay.state')}</dt>
+              <dd>
+                {confirming.livePurchaseStatus
+                  ? t(`adminLive.status.${confirming.livePurchaseStatus}`)
+                  : t('apay.statePending')}
+                {confirming.livePurchaseId && (
+                  <span className="block text-xs text-outline">
+                    {confirming.claimedAt ? t('apay.claimed') : t('apay.notClaimed')}
+                  </span>
+                )}
+              </dd>
+            </dl>
+            <p className="rounded-xl bg-error-container/50 p-3 text-on-error-container" role="alert">
+              {t('apay.verifyWarning')}
+            </p>
+            <ErrorNote error={verify.error} />
+            <div className="flex gap-2">
+              <button
+                className="btn-primary flex-1"
+                disabled={verify.isPending}
+                aria-busy={verify.isPending || undefined}
+                onClick={() => {
+                  if (verifying.current) return;
+                  verifying.current = true;
+                  verify.mutate(confirming.id);
+                }}
+              >
+                {verify.isPending ? t('common.saving') : t('apay.verifyConfirm')}
+              </button>
+              <button className="btn-ghost" onClick={() => setConfirming(null)}>
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <Modal open={!!proof} onClose={() => setProof(null)} title={t('tpay.proof')} wide>
         {proof && <img src={proof} alt="" className="mx-auto max-h-[70vh] rounded-lg" />}
       </Modal>
@@ -289,53 +381,5 @@ export default function AdminPaymentsPage() {
         </button>
       </Modal>
     </div>
-  );
-}
-
-/**
- * Why the matcher decided what it decided.
- *
- * The engine emits a fixed set of English diagnostics. Translated here rather
- * than at the source because they are also read from logs and tests, and an
- * unrecognised one still renders — left-to-right and wrapped, so a new string
- * reads as an English sentence instead of a clipped fragment of one.
- */
-const NOTE_KEY: Record<string, string> = {
-  // Current wording…
-  'no pending/unsettled payment or wallet top-up with this amount/method in the time window':
-    'noMatch',
-  'no sender reference — auto-verify disabled without a transfer identity; needs manual review':
-    'noReference',
-  'multiple payments share this reference': 'sharedReference',
-  'matched by amount+time (reference differed)': 'matchedByAmount',
-  'several amount matches, none by reference': 'severalMatches',
-  'reconciled when the payment was submitted (transfer arrived first)': 'reconciledPayment',
-  'reconciled when the top-up was submitted (transfer arrived first)': 'reconciledTopup',
-  // …and every wording the matcher has used before. A note is written into the
-  // row when the transfer arrives and stays there for ever, so rows outlive the
-  // sentence that produced them: mapping only the current strings leaves the
-  // oldest events — the ones most likely to still need a human — in English.
-  'no pending/unsettled payment with this amount/method in the time window': 'noMatch',
-  'no pending payment with this amount/method in the time window': 'noMatch',
-  'matched by amount+time (no reference)': 'matchedByAmount',
-  'several amount matches, no reference to disambiguate': 'severalMatches',
-};
-
-function EventNote({ note }: { note: string }) {
-  const { t } = useTranslation();
-  const key = NOTE_KEY[note.trim()];
-  if (key) {
-    return (
-      <p className="mt-0.5 text-xs leading-relaxed text-outline">{t(`apay.eventNote.${key}`)}</p>
-    );
-  }
-  return (
-    <p
-      className="mt-0.5 text-xs leading-relaxed text-outline"
-      dir="ltr"
-      style={{ textAlign: 'start' }}
-    >
-      {note}
-    </p>
   );
 }

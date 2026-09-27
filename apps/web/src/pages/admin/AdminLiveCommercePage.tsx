@@ -6,8 +6,9 @@ import { egp } from '../../lib/format';
 import { confirmDelete } from '../../lib/confirm';
 import { EmptyState, ErrorNote, PageHeader, Spinner } from '../../components/ui';
 import CommercialTermsPanel from '../../components/admin/CommercialTermsPanel';
+import UnmatchedTransfersPanel from '../../components/admin/UnmatchedTransfersPanel';
 
-type Tab = 'review' | 'refunds' | 'purchases' | 'terms';
+type Tab = 'review' | 'refunds' | 'purchases' | 'transfers' | 'terms';
 
 /**
  * Darsly finance's desk for Live sales: what needs a person (reviews and
@@ -56,6 +57,7 @@ export default function AdminLiveCommercePage() {
     { id: 'review', label: t('adminLive.tabs.review'), count: summary.data?.review },
     { id: 'refunds', label: t('adminLive.tabs.refunds'), count: summary.data?.refundRequests },
     { id: 'purchases', label: t('adminLive.tabs.purchases') },
+    { id: 'transfers', label: t('adminLive.tabs.transfers') },
     { id: 'terms', label: t('adminLive.tabs.terms') },
   ];
 
@@ -65,7 +67,9 @@ export default function AdminLiveCommercePage() {
         <div className="min-w-0">
           <p className="font-heading font-bold">{p.session.title}</p>
           <p className="text-sm text-on-surface-variant">
-            {p.buyerName ?? '—'} · {new Date(p.session.startsAt).toLocaleString('ar-EG')}
+            {p.buyerName ?? '—'}
+            {p.guest && <span className="text-xs"> ({t('adminLive.guest')})</span>} ·{' '}
+            {new Date(p.session.startsAt).toLocaleString('ar-EG')}
           </p>
         </div>
         <span className="rounded-full bg-surface-container px-2.5 py-0.5 text-xs font-bold">
@@ -74,7 +78,10 @@ export default function AdminLiveCommercePage() {
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
         <div>
-          <dt className="text-xs text-outline">{t('adminLive.paid')}</dt>
+          {/* Only money Darsly verified is "paid"; a held seat or a claimed transfer is an amount due. */}
+          <dt className="text-xs text-outline">
+            {p.amountReceived ? t('adminLive.amountPaid') : t('adminLive.amountDue')}
+          </dt>
           <dd className="tabular-nums">{egp(p.studentPaysCents)}</dd>
         </div>
         <div>
@@ -171,6 +178,12 @@ export default function AdminLiveCommercePage() {
         ))}
       </div>
       <ErrorNote error={act.error} />
+
+      {tab === 'transfers' && (
+        <div className="card">
+          <UnmatchedTransfersPanel />
+        </div>
+      )}
 
       {tab === 'terms' && (
         <div className="card">

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { egp } from '../../lib/format';
 import { ErrorNote, Modal, Spinner } from '../ui';
-import LiveTransferForm, { type TransferInput } from './LiveTransferForm';
+import LiveTransferForm, { type DeclareInput, type ProofInput } from './LiveTransferForm';
 import { RefundAndReplaySummary } from './LiveOfferFacts';
 
 /** The structured part of a refusal, when the server sent one. */
@@ -116,8 +116,14 @@ export default function LiveCheckoutModal({
       ).data,
     onSettled: settle,
   });
+  // Before the transfer: where the money comes from (writes the pending payment).
+  const declare = useMutation({
+    mutationFn: async (input: DeclareInput) =>
+      (await api.post(`/live/purchases/${(active ?? hold.data).id}/declare`, input)).data,
+    onSettled: settle,
+  });
   const transfer = useMutation({
-    mutationFn: async (input: TransferInput) =>
+    mutationFn: async (input: ProofInput) =>
       (await api.post(`/live/purchases/${(active ?? hold.data).id}/transfer`, input)).data,
     onSettled: settle,
   });
@@ -192,12 +198,16 @@ export default function LiveCheckoutModal({
           </p>
         )}
         <LiveTransferForm
-          amountCents={p.studentPaysCents}
+          purchase={p}
+          onDeclare={(input) => declare.mutate(input)}
+          declaring={declare.isPending}
+          declareError={declare.error}
+          onSubmitProof={(input) => transfer.mutate(input)}
           pending={transfer.isPending}
           error={transfer.error}
-          onSubmit={(input) => transfer.mutate(input)}
         />
-        {balance >= p.studentPaysCents && (
+        {/* Once a transfer is declared, paying again from the wallet could take the money twice. */}
+        {!p.payment && balance >= p.studentPaysCents && (
           <button
             className="btn-ghost mt-4 w-full"
             disabled={payWallet.isPending}

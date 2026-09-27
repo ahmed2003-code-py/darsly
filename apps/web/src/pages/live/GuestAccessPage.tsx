@@ -9,7 +9,7 @@ import { enterAsGuest, rememberGuestSecret } from '../../lib/guest';
 import { confirmDelete } from '../../lib/confirm';
 import { useAuthStore } from '../../stores/auth';
 import { ErrorNote, Field, Spinner } from '../../components/ui';
-import LiveTransferForm, { type TransferInput } from '../../components/live/LiveTransferForm';
+import LiveTransferForm, { type DeclareInput, type ProofInput } from '../../components/live/LiveTransferForm';
 
 const REFUND_METHODS = ['VODAFONE_CASH', 'INSTAPAY', 'BANK_TRANSFER'] as const;
 
@@ -121,8 +121,13 @@ export default function GuestAccessPage() {
   const s = status.data;
   const refresh = () => qc.invalidateQueries({ queryKey: ['guest-access', token] });
 
+  const declare = useMutation({
+    mutationFn: async (input: DeclareInput) =>
+      (await api.post(`/public/live/access/${encodeURIComponent(token)}/declare`, input)).data,
+    onSettled: refresh,
+  });
   const transfer = useMutation({
-    mutationFn: async (input: TransferInput) =>
+    mutationFn: async (input: ProofInput) =>
       (await api.post(`/public/live/access/${encodeURIComponent(token)}/transfer`, input)).data,
     onSettled: refresh,
   });
@@ -245,10 +250,13 @@ export default function GuestAccessPage() {
                   <p className="mb-3 text-sm text-on-surface-variant">{t('guest.holdExpired')}</p>
                 )}
                 <LiveTransferForm
-                  amountCents={s.studentPaysCents}
+                  purchase={s}
+                  onDeclare={(input) => declare.mutate(input)}
+                  declaring={declare.isPending}
+                  declareError={declare.error}
+                  onSubmitProof={(input) => transfer.mutate(input)}
                   pending={transfer.isPending}
                   error={transfer.error}
-                  onSubmit={(input) => transfer.mutate(input)}
                 />
               </div>
             )}

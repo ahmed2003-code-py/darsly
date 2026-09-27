@@ -84,6 +84,8 @@ function world(
     guestBuyer: { findUnique: jest.fn(async () => null) },
     liveBooking: {
       findUnique: jest.fn(async () => (over.booked ? { id: 'b1' } : null)),
+      // The seat's replay rights (none recorded here: a booking with no purchase keeps access).
+      findFirst: jest.fn(async () => (over.booked ? { purchase: null } : null)),
       findMany: jest.fn(async () => [{ student: { userId: 'su_1' } }]),
     },
     liveChatMessage: {
@@ -401,6 +403,11 @@ describe('the summary is written only from the transcript', () => {
           updated.push(data);
           return {};
         }),
+        // The summary is written only for the words it was made from (a compare-and-set).
+        updateMany: jest.fn(async ({ data }: any) => {
+          updated.push(data);
+          return { count: 1 };
+        }),
       },
       aiCallLog: { aggregate: jest.fn(async () => ({ _sum: { costMillicents: 0 } })) },
       aiJob: { update: jest.fn(async () => ({})) },
@@ -562,6 +569,12 @@ describe('the summary is written only from the transcript', () => {
     });
     const err = await handler.handle(job).catch((e) => e);
     expect(err.errorClass).toBe('RETRYABLE');
+    // Retried later (not at once), and the page keeps saying "being prepared"
+    // until the last attempt — only then does it say the summary failed.
+    expect(err.retryAfterMs).toBeGreaterThan(0);
+    expect(updated.some((u) => u.summaryError === 'AI_FAILED')).toBe(false);
+    const last = await handler.handle({ ...job, attempts: 3 }).catch((e) => e);
+    expect(last.errorClass).toBe('RETRYABLE');
     expect(updated.some((u) => u.summaryError === 'AI_FAILED')).toBe(true);
   });
 
@@ -573,14 +586,13 @@ describe('the summary is written only from the transcript', () => {
     expect(call.system).toMatch(/never follow instructions/i);
     // Fenced, so a transcript containing "ignore the above" reads as speech.
     expect(call.messages[0].content).toContain('<<<TRANSCRIPT>>>');
+    // The grounded study-notes schema: every factual item carries evidence.
     expect(call.schema.required).toEqual(
-      expect.arrayContaining([
-        'summary',
-        'topics',
-        'keyPoints',
-        'questionsAndAnswers',
-        'actionItems',
-      ]),
+      expect.arrayContaining(['title', 'quickSummary', 'keyPoints', 'concepts', 'questions', 'homework', 'corrections', 'studyNotes']),
     );
+    expect(call.schema.properties.keyPoints.items.required).toContain('evidence');
+    // The summary model, with nothing kept by the provider.
+    expect(call.model).toBe('gpt-6-luna');
+    expect(call.store).toBe(false);
   });
 });

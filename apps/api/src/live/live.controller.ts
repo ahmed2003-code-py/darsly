@@ -452,6 +452,22 @@ export class LiveController {
     return this.live.requestSummary(scopeOf(ctx), id);
   }
 
+  @Post('teacher/live/:id/summary/regenerate')
+  @HttpCode(200)
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Make the summary again from the current transcript (never re-transcribes)' })
+  regenerateSummary(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.requestSummary(scopeOf(ctx), id, { regenerate: true });
+  }
+
+  @Post('teacher/live/:id/transcript/retry')
+  @HttpCode(200)
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Try the parts of the transcript that failed again (their audio is still kept)' })
+  retryTranscript(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.retryTranscript(scopeOf(ctx), id);
+  }
+
   @Patch('teacher/live/:id/summary/visibility')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Share the summary with the class, or stop sharing it' })

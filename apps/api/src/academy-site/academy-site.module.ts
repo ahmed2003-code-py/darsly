@@ -23,6 +23,7 @@ import { AI_JOB_HANDLERS } from './jobs/ai-job.handler';
 import { LiveProvidersModule } from '../live/providers/live-providers.module';
 import { LiveSummaryHandler } from '../live/live-summary.handler';
 import { LiveTranscribeHandler } from '../live/transcription/live-transcribe.handler';
+import { queueLiveSummary, type SummaryJobs } from '../live/summary/summary-queue';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { AiJobService } from './jobs/ai-job.service';
@@ -68,9 +69,12 @@ import { AdaptiveReaderService } from '../paper-import/ocr/adaptive-reader.servi
     {
       // Built by hand: its speech-to-text call is a plain argument (a fake in tests).
       provide: LiveTranscribeHandler,
-      useFactory: (prisma: PrismaService, storage: StorageProvider) =>
-        new LiveTranscribeHandler(prisma, storage),
-      inject: [PrismaService, StorageProvider],
+      // When a class's words change, its summary is queued (once per class).
+      useFactory: (prisma: PrismaService, storage: StorageProvider, jobs: AiJobService) =>
+        new LiveTranscribeHandler(prisma, storage, undefined, undefined, ({ sessionId }) =>
+          queueLiveSummary(prisma, jobs as unknown as SummaryJobs, sessionId, { reason: 'transcript' }).then(() => undefined),
+        ),
+      inject: [PrismaService, StorageProvider, AiJobService],
     },
     ImageVariantsService,
     TranscriberService,

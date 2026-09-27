@@ -21,6 +21,8 @@ export type TranscriptStage =
   /** Being fetched or produced now. */
   | 'TRANSCRIBING'
   | 'READY'
+  /** Words exist, but some pieces of the class could not be transcribed. */
+  | 'PARTIAL'
   /** Captured by the provider during the class; fetched when a summary is asked for (Daily). */
   | 'AT_PROVIDER'
   | 'FAILED'
@@ -50,6 +52,10 @@ export interface PipelineInput {
   transcriptionOn?: boolean;
   /** The class has not ended yet. */
   classRunning?: boolean;
+  /** PROCESSING with nothing working on it for too long (a dead job): shown as FAILED. */
+  transcriptStalled?: boolean;
+  /** Why a FAILED transcript has no words (transcriptMeta.reason). */
+  transcriptFailReason?: string | null;
 }
 
 export function pipelineStages(x: PipelineInput): {
@@ -57,7 +63,16 @@ export function pipelineStages(x: PipelineInput): {
   summary: { stage: SummaryStage; canGenerate: boolean };
 } {
   let transcript: { stage: TranscriptStage; reason: TranscriptUnavailable | null };
-  if (x.hasTranscriptText || x.transcriptStatus === 'READY') {
+  if (x.transcriptStatus === 'PARTIAL') {
+    transcript = { stage: 'PARTIAL', reason: null };
+  } else if (x.provider === 'CLOUDFLARE' && x.transcriptStatus === 'PROCESSING') {
+    // Being made — or made again (a late piece reopened it). Never "ready"
+    // while a piece is outstanding; if nothing is working on it any more, the
+    // words already saved are shown as incomplete, or it has failed.
+    transcript = x.transcriptStalled
+      ? { stage: x.hasTranscriptText ? 'PARTIAL' : 'FAILED', reason: null }
+      : { stage: 'TRANSCRIBING', reason: null };
+  } else if (x.hasTranscriptText || x.transcriptStatus === 'READY') {
     transcript = { stage: 'READY', reason: null };
   } else if (x.provider === 'DAILY') {
     if (x.transcriptStatus === 'FAILED' || x.summaryError === 'TRANSCRIPTION_UNAVAILABLE') {
@@ -73,6 +88,8 @@ export function pipelineStages(x: PipelineInput): {
     // The lesson's own audio (captured in the teacher's browser) is being
     // transcribed — it does not wait for the recording.
     transcript = { stage: 'TRANSCRIBING', reason: null };
+  } else if (x.transcriptStatus === 'FAILED' && x.transcriptFailReason === 'NO_SPEECH') {
+    transcript = { stage: 'UNAVAILABLE', reason: 'NOTHING_CAPTURED' };
   } else if (x.transcriptStatus === 'FAILED') {
     transcript = { stage: 'FAILED', reason: null };
   } else if (!x.transcriptionOn) {
@@ -88,7 +105,7 @@ export function pipelineStages(x: PipelineInput): {
     summary = { stage: 'READY', canGenerate: false };
   } else if (x.summaryStatus === 'PROCESSING') {
     summary = { stage: 'GENERATING', canGenerate: false };
-  } else if (x.provider === 'CLOUDFLARE' && transcript.stage !== 'READY') {
+  } else if (x.provider === 'CLOUDFLARE' && transcript.stage !== 'READY' && transcript.stage !== 'PARTIAL') {
     // Never asked for, never failed: it is waiting, or it cannot happen.
     summary = {
       stage:

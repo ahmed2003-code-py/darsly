@@ -77,6 +77,7 @@ function liveWorld(
     guestBuyer: { findUnique: jest.fn(async () => null) },
     liveBooking: {
       findUnique: jest.fn(async () => over.booking ?? null),
+      findFirst: jest.fn(async () => (over.booking ? { purchase: null } : null)),
       findMany: jest.fn(async () => over.booked ?? []),
       deleteMany: jest.fn(async () => ({ count: 1 })),
     },
@@ -332,6 +333,17 @@ describe('L3: a summary costs what its calls cost, and says so', () => {
     priceOutPerMToken: 1000,
   } as unknown as AcademySiteConfig;
 
+  // The summary is priced at its own model's price (LIVE_SUMMARY_PRICE_*, cents
+  // per million tokens), set here to round numbers so the arithmetic reads.
+  const env = { ...process.env };
+  beforeAll(() => {
+    process.env.LIVE_SUMMARY_PRICE_IN = '200';
+    process.env.LIVE_SUMMARY_PRICE_OUT = '1000';
+  });
+  afterAll(() => {
+    process.env = env;
+  });
+
   const build = (resp: Record<string, unknown>, priorMillicents = 0) => {
     const logged: any[] = [];
     const prisma: any = {
@@ -443,10 +455,12 @@ describe('L3: a summary costs what its calls cost, and says so', () => {
       usage: { input_tokens: 1000, output_tokens: 6000 },
     });
     await expect(handler.handle(job as any)).rejects.toThrow(/Summary generation failed/);
-    // 1000 × 200/M + 6000 × 1000/M = 0.2 + 6 = 6.2¢ → 7¢ on the job
-    expect(prisma.aiJob.update).toHaveBeenCalledWith({
+    // A cut-off answer is asked for once more at double the allowance (and a
+    // one-section class has no smaller path): two billed answers.
+    // 2 × (1000 × 200/M + 6000 × 1000/M) = 2 × 6.2¢ = 12.4¢ → 13¢ on the job
+    expect(prisma.aiJob.update).toHaveBeenLastCalledWith({
       where: { id: 'job1' },
-      data: { costCents: 7 },
+      data: { costCents: 13 },
     });
   });
 

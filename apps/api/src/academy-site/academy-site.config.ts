@@ -19,8 +19,10 @@ export class AcademySiteConfig {
   readonly apiKey = process.env.OPENAI_API_KEY ?? '';
   readonly model = process.env.AI_MODEL ?? 'gpt-5';
   // Prices are in cents per million tokens.
-  readonly priceInPerMToken = num(process.env.AI_PRICE_IN_PER_MTOKEN, 300);
-  readonly priceOutPerMToken = num(process.env.AI_PRICE_OUT_PER_MTOKEN, 1500);
+  // Cents per million tokens for AI_MODEL (gpt-5): the published $1.25 / $10
+  // (read 2026-09-27). The old defaults ($3 / $15) overstated every gpt-5 call.
+  readonly priceInPerMToken = num(process.env.AI_PRICE_IN_PER_MTOKEN, 125);
+  readonly priceOutPerMToken = num(process.env.AI_PRICE_OUT_PER_MTOKEN, 1000);
   // Month-to-date spend ceiling in cents. 0 = uncapped.
   readonly monthlyBudgetCents = num(process.env.AI_MONTHLY_BUDGET_CENTS, 0);
   // A replica sets WORKER_ENABLED=false to opt out of processing jobs.

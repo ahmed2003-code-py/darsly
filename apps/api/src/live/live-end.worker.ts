@@ -5,6 +5,8 @@ import { LiveRetentionService } from './retention/live-retention.service';
 
 /** Temporary media is swept this often (it is hours old by the time it matters). */
 export const LIVE_RETENTION_EVERY_MS = 30 * 60_000;
+/** How often stalled transcripts and orphaned audio pieces are looked for. */
+export const LIVE_TRANSCRIPT_RECONCILE_EVERY_MS = 5 * 60_000;
 
 /** How often the sweep looks for classes whose time is up. */
 export const LIVE_END_SWEEP_MS = 15_000;
@@ -42,6 +44,7 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly retention?: LiveRetentionService,
   ) {}
   private lastRetention = 0;
+  private lastReconcile = 0;
 
   onModuleInit(): void {
     if ((process.env.LIVE_END_WORKER_ENABLED ?? 'true') !== 'true') {
@@ -98,6 +101,16 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
       await this.recordings?.sweepStale();
     } catch (e) {
       this.logger.error(`live recording sweep error: ${(e as Error).message}`);
+    }
+    try {
+      // No transcript left spinning, no audio piece left with nobody coming for it.
+      if (Date.now() - this.lastReconcile >= LIVE_TRANSCRIPT_RECONCILE_EVERY_MS) {
+        this.lastReconcile = Date.now();
+        const r = await this.live.reconcileTranscripts();
+        if (r.requeued || r.decided) this.logger.log(`live transcript recovery: ${r.requeued} requeued, ${r.decided} decided`);
+      }
+    } catch (e) {
+      this.logger.error(`live transcript recovery error: ${(e as Error).message}`);
     }
     try {
       // Transcription audio and failed recordings' pieces past their window.

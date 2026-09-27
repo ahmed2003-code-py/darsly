@@ -637,7 +637,7 @@ describe('Checkpoint C: temporary media is temporary', () => {
   }
   const HOUR = 3600_000;
 
-  it('audio that never became a transcript is deleted after its window; fresh or in-work audio is kept', async () => {
+  it('a class\'s leftover audio is deleted together once its newest piece is past the window; in-work audio is kept', async () => {
     if (!guard()) return;
     const w = await world();
     await prisma.liveSession.update({
@@ -658,13 +658,20 @@ describe('Checkpoint C: temporary media is temporary', () => {
     const old = await mk(1, 30);
     const fresh = await mk(2, 1);
     const r = retention();
+    // A fresh piece keeps the whole class: a retry or a re-assembly must never
+    // find it half-swept.
+    for (let i = 0; i < 20; i++) await r.svc.sweep();
+    expect(await prisma.liveAudioSegment.findUnique({ where: { id: old.id } })).not.toBeNull();
+    expect(await prisma.liveAudioSegment.findUnique({ where: { id: fresh.id } })).not.toBeNull();
+    // Once the newest piece is past the window too, the class goes — all of it.
+    await prisma.liveAudioSegment.update({ where: { id: fresh.id }, data: { createdAt: new Date(Date.now() - 25 * HOUR) } });
     for (let i = 0; i < 200; i++) {
       await r.svc.sweep();
       if (!(await prisma.liveAudioSegment.findUnique({ where: { id: old.id } }))) break;
     }
     expect(await prisma.liveAudioSegment.findUnique({ where: { id: old.id } })).toBeNull();
-    expect(r.deleted).toContain(old.key);
-    expect(await prisma.liveAudioSegment.findUnique({ where: { id: fresh.id } })).not.toBeNull();
+    expect(await prisma.liveAudioSegment.findUnique({ where: { id: fresh.id } })).toBeNull();
+    expect(r.deleted).toEqual(expect.arrayContaining([old.key, fresh.key]));
 
     // While its transcript is being made, even old audio stays.
     const w2 = await world();

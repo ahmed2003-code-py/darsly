@@ -52,6 +52,10 @@ import {
   validPieceSeq,
 } from './transcription/lesson-transcription';
 import { transcriptCaptureState } from './transcription/capture-state';
+import { finalizeTranscript } from './transcription/transcript-assembly';
+import { queueLiveSummary, type SummaryJobs } from './summary/summary-queue';
+import { forViewers } from './summary/grounded-summary';
+import { paidReplayVerdict } from './commerce/replay-entitlement';
 
 /** How long before the scheduled time the doors open. */
 export const JOIN_OPENS_MIN = 15;
@@ -75,6 +79,14 @@ export const PRESENCE_GRACE_SEC = 90;
  * request still being made for one that was lost.
  */
 export const SUMMARY_STALE_MS = 2 * 60_000;
+/**
+ * A transcript PROCESSING this long with no job queued or running, and no live
+ * lease, is stalled — shown as a failure and picked up by recovery. Longer
+ * than the longest legitimate quiet stretch (a 15-minute delayed retry).
+ */
+export const TRANSCRIPT_STALE_MS = 20 * 60_000;
+/** How many times recovery may re-queue one class's transcript. */
+export const TRANSCRIPT_MAX_RECOVERIES = 2;
 export { LIVE_MAX_DURATION_MIN } from './live-timing';
 
 /** Why a class ended — the teacher, the clock, or a cancellation. */
@@ -1615,12 +1627,16 @@ export class LiveService {
     await this.prisma.liveAudioSegment.upsert({
       where: { sessionId_roomName_seq: { sessionId: id, roomName, seq } },
       create: { sessionId: id, roomName, seq, key, sizeBytes: file.size, durationMs: ms },
-      // Only an untranscribed piece is ever replaced (see above).
-      update: { key, sizeBytes: file.size, durationMs: ms },
+      // Only an untranscribed piece is ever replaced (see above) — and a new
+      // copy of a piece that failed is a fresh chance for it.
+      update: { key, sizeBytes: file.size, durationMs: ms, error: null, attempts: 0, skipReason: null },
     });
     this.logger.log(
       `live.transcript.segment-uploaded liveSession=${id} seq=${seq} bytes=${file.size} kind=${kind}${existing ? ' replaced' : ''}`,
     );
+    // The last flush of an ended class may land after its transcript job has
+    // already begun: make sure a job will see it (never silently dropped).
+    if (session.status === 'ENDED') await this.reopenTranscript(session, roomName, 'late-piece').catch(() => undefined);
     return { ok: true as const, seq };
   }
 
@@ -2227,9 +2243,11 @@ export class LiveService {
    * Center's spend, not the teacher's personal workspace's), and it only
    * clashes with another summary of the same lesson.
    */
-  async requestSummary(scope: LiveScope, id: string) {
+  async requestSummary(scope: LiveScope, id: string, opts: { regenerate?: boolean } = {}) {
     const session = await this.assertOwned(scope, id);
-    if (session.summaryStatus === 'READY') return { status: 'READY' as const };
+    // "Regenerate" makes a new summary from the CURRENT transcript — it never
+    // runs speech-to-text again. Without it, a summary that exists is the answer.
+    if (session.summaryStatus === 'READY' && !opts.regenerate) return { status: 'READY' as const };
     // A Cloudflare lesson's words come from Darsly's own transcript of its
     // recording. Without one there is nothing to summarise — refused here,
     // before a job is queued to fail with NO_TRANSCRIPT and spend a retry.
@@ -2280,7 +2298,7 @@ export class LiveService {
       await this.jobs.enqueue(
         session.academyId ?? session.tenantId,
         'LIVE_SUMMARY',
-        { liveSessionId: id },
+        { liveSessionId: id, ...(opts.regenerate ? { force: true } : {}) },
         { sameInput: { path: 'liveSessionId', equals: id } },
       );
     } catch (e) {
@@ -2356,6 +2374,165 @@ export class LiveService {
    * a booked student sees what was shared with them, and no processing
    * details.
    */
+  /**
+   * Open a finished class's transcript again so a job picks up pieces nobody
+   * has transcribed (a late last piece, a teacher's retry, recovery). Claims
+   * the class (→ PROCESSING) unless it is already being worked on; a job
+   * already queued or running for it will see the new pieces itself.
+   */
+  private async reopenTranscript(
+    s: { id: string; tenantId: string; academyId: string | null },
+    roomName: string,
+    reason: string,
+  ): Promise<boolean> {
+    if (await this.jobs.hasActiveJobFor('LIVE_TRANSCRIBE', 'liveSessionId', s.id)) return true;
+    const claimed = await this.prisma.liveSession.updateMany({
+      where: { id: s.id, transcriptStatus: { not: 'PROCESSING' } },
+      data: { transcriptStatus: 'PROCESSING' },
+    });
+    if (claimed.count === 0 && !(await this.transcriptStalled(s.id))) return true;
+    try {
+      await this.jobs.enqueue(
+        s.academyId ?? s.tenantId,
+        'LIVE_TRANSCRIBE',
+        { liveSessionId: s.id, roomName },
+        { sameInput: { path: 'liveSessionId', equals: s.id } },
+      );
+      this.logger.log(`live.transcript.reopened liveSession=${s.id} reason=${reason}`);
+      return true;
+    } catch (e) {
+      const code = (e as { response?: { code?: string } })?.response?.code;
+      if (code === 'AI_JOB_ACTIVE') return true;
+      // Could not be queued (AI off, budget spent): decided from what exists.
+      await finalizeTranscript(this.prisma, {
+        sessionId: s.id,
+        roomName,
+        jobId: null,
+        model: transcriptionConfig().model,
+        giveUpPending: false,
+      }).catch(() => undefined);
+      await this.prisma.liveSession.updateMany({
+        where: { id: s.id, transcriptStatus: 'PROCESSING' },
+        data: { transcriptStatus: 'FAILED' },
+      });
+      this.logger.warn(`live.transcript.reopen-refused liveSession=${s.id}: ${(e as Error).message}`);
+      return false;
+    }
+  }
+
+  /** PROCESSING, with no job queued or running for it, and quiet for TRANSCRIPT_STALE_MS. */
+  private async transcriptStalled(sessionId: string): Promise<boolean> {
+    const s = await this.prisma.liveSession.findUnique({
+      where: { id: sessionId },
+      select: { transcriptStatus: true, updatedAt: true, transcriptLeaseUntil: true },
+    });
+    if (!s || s.transcriptStatus !== 'PROCESSING') return false;
+    if (Date.now() - s.updatedAt.getTime() < TRANSCRIPT_STALE_MS) return false;
+    if (s.transcriptLeaseUntil && s.transcriptLeaseUntil.getTime() > Date.now()) return false;
+    return !(await this.jobs.hasActiveJobFor('LIVE_TRANSCRIBE', 'liveSessionId', sessionId));
+  }
+
+  /** Pieces whose words are missing but whose audio is still kept (a retry can recover them). */
+  private readonly retryableWhere = (sessionId: string): Prisma.LiveAudioSegmentWhereInput => ({
+    sessionId,
+    text: null,
+    error: { not: null },
+    audioDeletedAt: null,
+    NOT: { error: { startsWith: 'AUDIO_MISSING' } },
+  });
+
+  /**
+   * The teacher's "try the missing parts again": pieces that failed but whose
+   * audio is still kept get a fresh chance, and one job transcribes only
+   * those — the rest keep their words, nothing is paid twice. A paid call, so
+   * teacher/staff only (the route), and never while a job is on it.
+   */
+  async retryTranscript(scope: LiveScope, id: string) {
+    const s = await this.assertOwned(scope, id);
+    if (s.provider !== 'CLOUDFLARE' || !s.roomName) {
+      throw new ConflictException({ message: 'Not a Darsly-hosted class', code: 'NOT_CLOUDFLARE' });
+    }
+    if (s.transcriptStatus === 'PROCESSING' && !(await this.transcriptStalled(id))) {
+      return { status: 'PROCESSING' as const };
+    }
+    if (!transcriptionConfig().enabled) {
+      throw new ConflictException({ message: 'Transcription is off', code: 'TRANSCRIPTION_OFF' });
+    }
+    const retryable = await this.prisma.liveAudioSegment.count({ where: this.retryableWhere(id) });
+    const pending = await this.prisma.liveAudioSegment.count({ where: { sessionId: id, text: null, error: null } });
+    if (!retryable && !pending) {
+      throw new ConflictException({ message: 'Nothing left that can be retried', code: 'NOTHING_TO_RETRY' });
+    }
+    await this.prisma.liveAudioSegment.updateMany({ where: this.retryableWhere(id), data: { error: null, attempts: 0 } });
+    await this.reopenTranscript(s, s.roomName, 'teacher-retry');
+    return { status: 'PROCESSING' as const };
+  }
+
+  /**
+   * Recovery, run by the live worker: no transcript stays PROCESSING with
+   * nothing working on it, and no piece stays untranscribed with nobody
+   * coming for it. A class is re-queued at most TRANSCRIPT_MAX_RECOVERIES
+   * times; after that — or when transcription is off — it is decided from
+   * what exists (READY / PARTIAL / FAILED), never left spinning.
+   */
+  async reconcileTranscripts(): Promise<{ requeued: number; decided: number }> {
+    const out = { requeued: 0, decided: 0 };
+    const cutoff = new Date(Date.now() - TRANSCRIPT_STALE_MS);
+    const candidates = await this.prisma.liveSession.findMany({
+      where: {
+        provider: 'CLOUDFLARE',
+        status: 'ENDED',
+        endedAt: { gte: new Date(Date.now() - 2 * 86_400_000), lt: cutoff },
+        updatedAt: { lt: cutoff },
+        roomName: { not: null },
+        OR: [
+          { transcriptStatus: 'PROCESSING' },
+          { audioSegments: { some: { text: null, error: null, createdAt: { lt: cutoff } } } },
+        ],
+      },
+      select: { id: true, tenantId: true, academyId: true, roomName: true, transcriptStatus: true, transcriptMeta: true },
+      // Oldest first: a backlog drains, 20 classes a pass.
+      orderBy: { updatedAt: 'asc' },
+      take: 20,
+    });
+    for (const s of candidates) {
+      if (await this.jobs.hasActiveJobFor('LIVE_TRANSCRIBE', 'liveSessionId', s.id)) continue;
+      if (s.transcriptStatus === 'PROCESSING' && !(await this.transcriptStalled(s.id))) continue;
+      const meta = (s.transcriptMeta ?? {}) as { recoveries?: number };
+      const recoveries = meta.recoveries ?? 0;
+      const pending = await this.prisma.liveAudioSegment.count({
+        where: { sessionId: s.id, text: null, error: null, audioDeletedAt: null },
+      });
+      if (pending && recoveries < TRANSCRIPT_MAX_RECOVERIES && transcriptionConfig().enabled) {
+        await this.prisma.liveSession.update({
+          where: { id: s.id },
+          data: {
+            transcriptMeta: { ...meta, recoveries: recoveries + 1 } as Prisma.InputJsonValue,
+            transcriptStatus: 'NOT_STARTED',
+          },
+        });
+        if (await this.reopenTranscript(s, s.roomName!, 'recovery')) out.requeued++;
+        continue;
+      }
+      await this.prisma.liveSession.updateMany({
+        where: { id: s.id, transcriptLeaseUntil: { lt: new Date() } },
+        data: { transcriptLeaseJobId: null, transcriptLeaseUntil: null },
+      });
+      const r = await finalizeTranscript(this.prisma, {
+        sessionId: s.id,
+        roomName: s.roomName!,
+        jobId: null,
+        model: transcriptionConfig().model,
+        giveUpPending: true,
+        onChanged: ({ sessionId }) =>
+          queueLiveSummary(this.prisma, this.jobs as unknown as SummaryJobs, sessionId, { reason: 'recovery' }).then(() => undefined),
+      });
+      if (r.status !== 'LOST') out.decided++;
+      this.logger.warn(`live.transcript.recovered liveSession=${s.id} status=${r.status}`);
+    }
+    return out;
+  }
+
   async sessionDetail(userId: string, sessionId: string) {
     const { role } = await this.assertInSession(userId, sessionId);
     const s = await this.prisma.liveSession.findUniqueOrThrow({
@@ -2385,10 +2562,26 @@ export class LiveService {
         transcriptText: true,
         transcriptSegments: true,
         transcriptMeta: true,
+        transcriptRevision: true,
+        summaryMeta: true,
         updatedAt: true,
       },
     });
     const teacher = role === 'TEACHER';
+    // A student's (or guest's) seat decides whether they keep the lesson's
+    // recording AND its words: the same verdict replay applies (policy NONE,
+    // a closed replay window, a refunded or cancelled seat → nothing). A
+    // booking with no purchase behind it (free, enrolled) keeps access.
+    let entitled = true;
+    if (!teacher) {
+      const booking = await this.prisma.liveBooking.findFirst({
+        where: { sessionId, student: { userId } },
+        select: { purchase: { select: { status: true, replayPolicy: true, replayDays: true } } },
+      });
+      const guest = booking ? null : await this.guestSeat(userId, sessionId);
+      const purchase = booking ? booking.purchase : (guest?.purchase ?? null);
+      entitled = paidReplayVerdict(purchase, { startsAt: s.startsAt, durationMin: s.durationMin, endedAt: s.endedAt }).ok;
+    }
     const recordingStatus = await this.refreshRecording(s);
     // Darsly's own recording (Cloudflare): its stage, not a bare status.
     const rec =
@@ -2407,9 +2600,9 @@ export class LiveService {
             select: { startedAt: true, createdAt: true },
           })
         : null;
-    const canSeeRecording = teacher || s.recordingVisibility === 'STUDENTS';
-    const canSeeTranscript = teacher || s.transcriptVisibility === 'STUDENTS';
-    const canSeeSummary = teacher || s.summaryVisibility === 'STUDENTS';
+    const canSeeRecording = teacher || (entitled && s.recordingVisibility === 'STUDENTS');
+    const canSeeTranscript = teacher || (entitled && s.transcriptVisibility === 'STUDENTS');
+    const canSeeSummary = teacher || (entitled && s.summaryVisibility === 'STUDENTS');
     // A PROCESSING with nothing behind it is shown as the failure it is, so the
     // page offers "try again" instead of a spinner that never stops.
     let summaryStatus = s.summaryStatus;
@@ -2429,6 +2622,8 @@ export class LiveService {
       recordingStage: recStage?.stage ?? null,
       transcriptionOn: cfg.enabled && s.transcriptionMode !== 'OFF',
       classRunning: effective === 'LIVE' || effective === 'SCHEDULED',
+      transcriptStalled: s.transcriptStatus === 'PROCESSING' && (await this.transcriptStalled(s.id)),
+      transcriptFailReason: ((s.transcriptMeta ?? null) as { reason?: string } | null)?.reason ?? null,
     });
     const recStageShown =
       recStage?.stage ??
@@ -2440,7 +2635,14 @@ export class LiveService {
             ? 'FAILED'
             : null);
     const meta = (s.transcriptMeta ?? null) as { partial?: boolean } | null;
-    const transcriptReady = stages.transcript.stage === 'READY';
+    // PARTIAL is readable too — it is what could be transcribed, marked as such.
+    const transcriptReady = stages.transcript.stage === 'READY' || stages.transcript.stage === 'PARTIAL';
+    const sMeta = (s.summaryMeta ?? null) as { transcriptRevision?: number; partial?: boolean } | null;
+    const retryable =
+      teacher && s.provider === 'CLOUDFLARE' && (stages.transcript.stage === 'PARTIAL' || stages.transcript.stage === 'FAILED')
+        ? (await this.prisma.liveAudioSegment.count({ where: this.retryableWhere(s.id) })) +
+          (await this.prisma.liveAudioSegment.count({ where: { sessionId: s.id, text: null, error: null } }))
+        : 0;
     const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
     return {
       id: s.id,
@@ -2498,7 +2700,9 @@ export class LiveService {
           ? {
               ...stages.transcript,
               reason: teacher ? stages.transcript.reason : null,
-              partial: !!meta?.partial,
+              partial: stages.transcript.stage === 'PARTIAL' || !!meta?.partial,
+              // Teacher only: pieces that failed but whose audio is still kept.
+              canRetry: teacher ? retryable > 0 && cfg.enabled : undefined,
               visibility: teacher ? s.transcriptVisibility : undefined,
               mode: teacher ? s.transcriptionMode : undefined,
               segments:
@@ -2512,7 +2716,17 @@ export class LiveService {
         stage: canSeeSummary ? stages.summary.stage : 'NOT_STARTED',
         canGenerate: teacher && stages.summary.canGenerate,
         status: canSeeSummary ? summaryStatus : 'NOT_STARTED',
-        data: canSeeSummary && summaryStatus === 'READY' ? s.summary : null,
+        // Never the internal evidence quotes (see summary/grounded-summary.ts).
+        data: canSeeSummary && summaryStatus === 'READY' ? forViewers(s.summary) : null,
+        // Made from a transcript with gaps: shown as such, never as the whole class.
+        partial: canSeeSummary && summaryStatus === 'READY' ? !!sMeta?.partial : false,
+        // Made from older words than the transcript now has (a recovered piece).
+        stale:
+          summaryStatus === 'READY' && sMeta?.transcriptRevision != null && sMeta.transcriptRevision !== s.transcriptRevision,
+        canRegenerate:
+          teacher &&
+          summaryStatus === 'READY' &&
+          (s.provider !== 'CLOUDFLARE' || transcriptReady),
         sharedWithStudents: s.summaryVisibility === 'STUDENTS',
         visibility: teacher ? s.summaryVisibility : undefined,
         // Only the teacher is told why, and only they can act on it.

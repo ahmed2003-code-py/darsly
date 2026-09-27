@@ -279,6 +279,17 @@ describe('L1 on Postgres: summary requests', () => {
 
 // ── L3 — one summary, end to end, through the real worker, with a retry ─────
 
+// The lesson summary is priced at its own model's price (LIVE_SUMMARY_PRICE_*,
+// cents per million tokens); pinned here to the numbers this file's arithmetic uses.
+const envBefore = { ...process.env };
+beforeAll(() => {
+  process.env.LIVE_SUMMARY_PRICE_IN = '200';
+  process.env.LIVE_SUMMARY_PRICE_OUT = '1000';
+});
+afterAll(() => {
+  process.env = envBefore;
+});
+
 describe('L3 on Postgres: AI call → AiCallLog → AiJob → monthly budget', () => {
   it('attempt 1 is billed and fails, attempt 2 succeeds: the job carries both, once', async () => {
     if (!guard()) return;
@@ -342,15 +353,13 @@ describe('L3 on Postgres: AI call → AiCallLog → AiJob → monthly budget', (
     };
     const spendBefore = await monthSpend();
 
+    // One attempt: the cut-off answer (1000×200/M + 6000×1000/M = 6.2¢) is
+    // asked for again at double the allowance in the same attempt, and that
+    // answer (4¢) is the summary. Both calls billed, both on the job.
     const jobId = await runOnce();
-    let job = await prisma.aiJob.findUniqueOrThrow({ where: { id: jobId } });
-    // 1000×200/M + 6000×1000/M = 0.2 + 6 = 6.2¢ → charged 7¢, and back in the queue.
-    expect(job.status).toBe('QUEUED');
-    expect(job.costCents).toBe(7);
-
-    expect(await runOnce()).toBe(jobId);
-    job = await prisma.aiJob.findUniqueOrThrow({ where: { id: jobId } });
+    const job = await prisma.aiJob.findUniqueOrThrow({ where: { id: jobId } });
     expect(job.status).toBe('SUCCEEDED');
+    expect(job.attempts).toBe(1);
 
     // The two calls, as logged — wait for the background writes to land.
     let calls: any[] = [];
@@ -415,6 +424,16 @@ describe('L1 on Postgres: a worker that fails every attempt', () => {
       const job = await jobs.claimNext(60_000);
       jobId = job!.id;
       await (worker as any).process(job);
+      const after = await prisma.aiJob.findUniqueOrThrow({ where: { id: jobId } });
+      const row = await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } });
+      if (attempt < 3) {
+        // Retried later, not at once — and still "being prepared" meanwhile.
+        expect(after.status).toBe('QUEUED');
+        expect(after.runAfter!.getTime()).toBeGreaterThan(Date.now() + 30_000);
+        expect(row.summaryStatus).toBe('PROCESSING');
+        // The delay passes.
+        await prisma.aiJob.update({ where: { id: jobId }, data: { runAfter: null } });
+      }
     }
     const job = await prisma.aiJob.findUniqueOrThrow({ where: { id: jobId } });
     expect(job.status).toBe('FAILED');

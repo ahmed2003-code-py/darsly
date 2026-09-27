@@ -44,15 +44,30 @@ export class LiveRetentionService {
   async sweep(now = Date.now()): Promise<{ audioPieces: number; audioFolders: number; recordings: number }> {
     const audioCut = new Date(now - transcriptionConfig().audioRetentionHours * 3600_000);
 
-    // 1. Pieces that outlived their purpose.
-    const stale = await this.prisma.liveAudioSegment.findMany({
-      where: { createdAt: { lt: audioCut }, session: { transcriptStatus: { not: 'PROCESSING' } } },
-      select: { id: true, key: true, sessionId: true },
+    // 1. Pieces that outlived their purpose — a whole class at a time, once its
+    //    newest piece is past the window and nothing is transcribing it. Words
+    //    already live in the transcript; the audio of pieces that FAILED was
+    //    kept this long for a retry, and goes now. (A transcribed piece's audio
+    //    went the moment its words were saved.)
+    const due = await this.prisma.liveAudioSegment.groupBy({
+      by: ['sessionId'],
+      where: { session: { transcriptStatus: { not: 'PROCESSING' } } },
+      _max: { createdAt: true },
+      having: { createdAt: { _max: { lt: audioCut } } },
+      orderBy: { sessionId: 'asc' },
       take: BATCH,
     });
+    const stale = due.length
+      ? await this.prisma.liveAudioSegment.findMany({
+          where: { sessionId: { in: due.map((d) => d.sessionId) } },
+          select: { id: true, key: true, sessionId: true, audioDeletedAt: true },
+        })
+      : [];
     for (const p of stale) {
-      await this.storage.delete(p.key).catch(() => undefined);
-      await this.prisma.liveAudioSegment.delete({ where: { id: p.id } }).catch(() => undefined);
+      if (!p.audioDeletedAt) await this.storage.delete(p.key).catch(() => undefined);
+    }
+    if (stale.length) {
+      await this.prisma.liveAudioSegment.deleteMany({ where: { id: { in: stale.map((p) => p.id) } } }).catch(() => undefined);
     }
 
     // 2. What is left in the folders of classes that old (orphaned objects).

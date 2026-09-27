@@ -94,6 +94,12 @@ interface AiCallOverrides {
    */
   timeoutMs?: number;
   maxRetries?: number;
+  /**
+   * Whether OpenAI may keep the request and response (Responses API `store`,
+   * which OpenAI defaults to true). Lesson content passes false. Left unset,
+   * nothing is sent and the provider default applies, as before.
+   */
+  store?: boolean;
 }
 
 /**
@@ -207,6 +213,7 @@ export class AiClient {
         imageDetail: opts.imageDetail,
         timeoutMs: opts.timeoutMs,
         maxRetries: opts.maxRetries,
+        store: opts.store,
         format: { name: opts.schemaName, schema: opts.schema },
       });
       const result = this.structuredFrom<T>(resp, opts.price, (o) => (outcome = o));
@@ -338,6 +345,7 @@ export class AiClient {
     };
     if (opts.temperature != null && !reasoning) params.temperature = opts.temperature;
     if (reasoning) params.reasoning = { effort: opts.reasoningEffort ?? 'low' };
+    if (opts.store != null) params.store = opts.store;
     if (opts.format) {
       params.text = {
         format: {

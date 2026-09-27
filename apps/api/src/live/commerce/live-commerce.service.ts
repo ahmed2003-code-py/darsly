@@ -22,7 +22,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { LedgerService } from '../../payments/ledger.service';
 import { PaymentTargets } from '../../payments/payment-targets';
 import { PaymentMatchingService } from '../../payments/payment-matching.service';
-import { normalizePayerReference } from '../../payments/payer-reference';
+import { normalizeDeclaration, normalizePayerReference } from '../../payments/payer-reference';
+import { receivingHandles } from '../../payments/receiving-accounts';
 import { checkProofAgainstClaim } from '../../payments/proof-check';
 import { ProofReaderService } from '../../payments/proof-reader.service';
 import { ProofStorageService } from '../../storage/proof-storage.service';
@@ -35,6 +36,28 @@ import { releaseCouponUse, reserveCouponUse } from '../../payments/coupon-use';
 import { mulDivRoundHalfUp } from '../../commerce/pricing';
 
 type Tx = Prisma.TransactionClient;
+
+/** The Darsly accounts a Live seat can be paid into (the destination). */
+export const TRANSFER_METHODS = ['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER'] as const;
+
+/** Before transferring: which Darsly account, and where the money comes from. */
+export interface DeclareDto {
+  method: string;
+  source: 'WALLET' | 'BANK';
+  senderWallet?: string;
+  payerName?: string;
+  reference?: string;
+}
+
+/** After transferring: the proof (plus, for a client that did not declare, the identity). */
+export interface TransferClaimDto {
+  method?: string;
+  reference?: string;
+  proofImageUrl?: string;
+  source?: 'WALLET' | 'BANK';
+  senderWallet?: string;
+  payerName?: string;
+}
 
 /** A screenshot a phone makes, not a document scan. */
 const PROOF_MAX_BYTES = 1_200 * 1024;
@@ -92,9 +115,12 @@ export const ACTIVE: LivePurchaseStatus[] = ['HELD', 'PAYMENT_PENDING', 'CONFIRM
  * here is a bug, and is refused rather than written.
  */
 const TRANSITIONS: Record<LivePurchaseStatus, LivePurchaseStatus[]> = {
-  HELD: ['PAYMENT_PENDING', 'CONFIRMED', 'EXPIRED', 'CANCELLED_BY_STUDENT', 'CANCELLED_BY_TEACHER'],
+  // HELD → PAYMENT_REJECTED: a declared transfer Darsly refused before it was claimed.
+  HELD: ['PAYMENT_PENDING', 'CONFIRMED', 'EXPIRED', 'CANCELLED_BY_STUDENT', 'CANCELLED_BY_TEACHER', 'PAYMENT_REJECTED'],
   PAYMENT_PENDING: ['CONFIRMED', 'PAYMENT_REJECTED', 'OVERSOLD', 'CANCELLED_BY_TEACHER'],
-  EXPIRED: ['PAYMENT_PENDING'],
+  // A declared payment outlives its hold: money that lands late still gets a
+  // seat if one is free and the class is ahead, and is refunded if not.
+  EXPIRED: ['PAYMENT_PENDING', 'CONFIRMED', 'OVERSOLD'],
   CONFIRMED: ['DELIVERED', 'CANCELLED_BY_STUDENT', 'CANCELLED_BY_TEACHER', 'NEEDS_REVIEW', 'REFUNDED', 'REFUND_PENDING'],
   NEEDS_REVIEW: ['DELIVERED', 'REFUNDED', 'REFUND_PENDING'],
   REFUND_PENDING: ['REFUNDED'],
@@ -489,6 +515,7 @@ export class LiveCommerceService implements OnModuleInit {
         if (existing) return existing;
         await this.assertBuyable(tx, s, student.id, now);
         await this.assertSeatFree(tx, s!, now);
+        await this.supersedeStaleDeclarations(tx, sessionId, student.id);
         const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(tx, s!, couponCode, student.id);
         return this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { studentId: student.id }, now);
       });
@@ -507,17 +534,142 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /**
-   * The buyer says they have transferred the money: here is the proof and the
-   * number it came from. A PENDING Payment is created for exactly the frozen
-   * price — the only thing the listener will match — and the seat is kept for
-   * them until the class ends while it is verified. The proof is evidence,
-   * never verification.
+   * A new checkout for a session makes an old, never-claimed declaration for
+   * it moot: its hold lapsed and nobody said they paid. It is closed (REJECTED,
+   * with the reason) so two open payments of one buyer never compete for the
+   * same transfer — the new one is where a late SMS belongs. A declaration
+   * already matched to a transfer, or claimed with proof, is left alone.
    */
-  async submitTransfer(
-    userId: string,
-    purchaseId: string,
-    dto: { method: string; reference?: string; proofImageUrl?: string },
-  ) {
+  private async supersedeStaleDeclarations(tx: Tx, sessionId: string, studentId: string) {
+    const stale = await tx.payment.findMany({
+      where: {
+        status: 'PENDING',
+        claimedAt: null,
+        livePurchase: { sessionId, studentId, status: 'EXPIRED' },
+      },
+      select: { id: true },
+    });
+    for (const p of stale) {
+      const matched = await tx.paymentEvent.findFirst({ where: { matchedPaymentId: p.id }, select: { id: true } });
+      if (matched) continue;
+      await tx.payment.updateMany({
+        where: { id: p.id, status: 'PENDING', claimedAt: null },
+        data: { status: 'REJECTED', rejectedReason: 'superseded by a new checkout before any transfer was claimed' },
+      });
+    }
+  }
+
+  /**
+   * A seat given back before any transfer was claimed takes its declaration
+   * with it: an open PENDING payment would otherwise stay a candidate for a
+   * transfer that now pays for nothing. If money does arrive after all, it is
+   * unmatched and goes to finance (match elsewhere, or return it).
+   */
+  private async closeDeclaration(tx: Tx, purchaseId: string, why: string) {
+    const d = await tx.payment.findUnique({ where: { livePurchaseId: purchaseId }, select: { id: true, status: true, claimedAt: true } });
+    if (!d || d.status !== 'PENDING' || d.claimedAt) return;
+    const matched = await tx.paymentEvent.findFirst({ where: { matchedPaymentId: d.id }, select: { id: true } });
+    if (matched) return;
+    await tx.payment.updateMany({
+      where: { id: d.id, status: 'PENDING', claimedAt: null },
+      data: { status: 'REJECTED', rejectedReason: why },
+    });
+  }
+
+  /**
+   * BEFORE the buyer is shown where to send money: say where it comes from.
+   *
+   * This writes the PENDING Payment for exactly the frozen price, with the
+   * buyer's sending identity (their wallet number, or — for a bank / InstaPay
+   * transfer — the account holder's name). From this moment the listener has a
+   * candidate: an SMS that lands one second after the transfer finds the
+   * payment already waiting, instead of a purchase with nothing to match
+   * (which is what stranded the 27 Sep 2026 production test).
+   *
+   * Repeatable while nothing has been claimed or matched: a typo is fixed by
+   * declaring again. The purchase stays HELD — the seat is still on its hold
+   * clock until the buyer says they have transferred.
+   */
+  async declareTransfer(userId: string, purchaseId: string, dto: DeclareDto) {
+    const student = await this.studentOf(userId);
+    const pre = await this.prisma.livePurchase.findUnique({ where: { id: purchaseId } });
+    if (!pre || pre.studentId !== student.id) throw new NotFoundException('Purchase not found');
+    await this.declareFor(pre, student.id, dto);
+    return this.byId(purchaseId);
+  }
+
+  async guestDeclareTransfer(raw: string, dto: DeclareDto) {
+    const p = await this.guestPurchase(raw);
+    await this.declareFor(p, null, dto);
+    return this.guestStatus(raw);
+  }
+
+  private async declareFor(pre: LivePurchase, studentId: string | null, dto: DeclareDto) {
+    if (!TRANSFER_METHODS.includes(dto.method as never)) {
+      throw new BadRequestException({ message: 'Choose which Darsly account you are sending to', code: 'METHOD_INVALID' });
+    }
+    const declared = normalizeDeclaration(dto, await this.receivingHandles());
+    const paymentId = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const s = await lockSession(tx, pre.sessionId);
+      const p = await lockPurchase(tx, pre.id);
+      if (!p) throw new NotFoundException('Purchase not found');
+      if (!s || s.deletedAt || s.cancelledAt) throw new NotFoundException('Session not found');
+      if (p.status === 'EXPIRED' || (p.status === 'HELD' && p.holdExpiresAt && p.holdExpiresAt <= now)) {
+        // Before any money moves, a lapsed hold is a new checkout, not a
+        // declaration against a seat that is no longer theirs.
+        throw new ConflictException({ message: 'Your hold has expired — start again', code: 'HOLD_EXPIRED' });
+      }
+      if (p.status !== 'HELD') {
+        throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED', status: p.status });
+      }
+      const existing = await tx.payment.findUnique({ where: { livePurchaseId: p.id } });
+      const fields = {
+        method: dto.method as never,
+        transferSource: declared.source,
+        reference: declared.reference,
+        payerName: declared.payerName,
+      };
+      if (existing) {
+        const matched = await tx.paymentEvent.findFirst({ where: { matchedPaymentId: existing.id }, select: { id: true } });
+        if (existing.status !== 'PENDING' || existing.claimedAt || matched) {
+          throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+        }
+        await tx.payment.update({ where: { id: existing.id }, data: fields });
+        return existing.id;
+      }
+      const payment = await tx.payment.create({
+        data: {
+          studentId,
+          livePurchaseId: p.id,
+          tenantId: p.tenantId,
+          academyId: p.academyId,
+          amountCents: p.studentPaysCents,
+          feeCents: p.feeCents,
+          netCents: p.teacherCents + p.centerCents,
+          currency: p.currency,
+          gateway: 'manual',
+          status: 'PENDING',
+          ...fields,
+        },
+      });
+      return payment.id;
+    });
+    // They may have transferred before declaring: an SMS already here is
+    // decided now, by the same policy as one that arrives later.
+    await this.matching.reconcilePayment(paymentId).catch((e) =>
+      this.logger.warn(`live.reconcile payment=${paymentId} failed: ${(e as Error).message}`),
+    );
+  }
+
+  /**
+   * The buyer says they have transferred the money: here is the proof. It is
+   * attached to the payment they declared (or, for a client that skipped the
+   * declaration, a PENDING Payment is created now exactly as before), and the
+   * seat is kept for them until the class ends while it is verified. The
+   * proof is evidence, never verification.
+   */
+  async submitTransfer(userId: string, purchaseId: string, dto: TransferClaimDto) {
     const student = await this.studentOf(userId);
     const pre = await this.prisma.livePurchase.findUnique({ where: { id: purchaseId } });
     if (!pre || pre.studentId !== student.id) throw new NotFoundException('Purchase not found');
@@ -525,24 +677,34 @@ export class LiveCommerceService implements OnModuleInit {
     return this.byId(purchaseId);
   }
 
-  /**
-   * The buyer says they have transferred the money: here is the proof and the
-   * number it came from. A PENDING Payment is created for exactly the frozen
-   * price — the only amount the listener will match — and the seat is kept
-   * for them until the class ends while it is verified. The proof is
-   * evidence, never verification. Shared by students and guests.
-   */
-  private async submitTransferFor(
-    pre: LivePurchase,
-    studentId: string | null,
-    dto: { method: string; reference?: string; proofImageUrl?: string },
-  ) {
+  /** Shared by students and guests. */
+  private async submitTransferFor(pre: LivePurchase, studentId: string | null, dto: TransferClaimDto) {
     const purchaseId = pre.id;
-    if (!['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER'].includes(dto.method)) {
-      throw new BadRequestException({ message: 'Choose how you transferred', code: 'METHOD_INVALID' });
-    }
     const handles = await this.receivingHandles();
-    const reference = normalizePayerReference(dto.method as never, dto.reference, handles);
+    const declared = await this.prisma.payment.findUnique({ where: { livePurchaseId: purchaseId } });
+    if (declared && declared.status === 'PAID') return; // the SMS beat the proof: already confirmed
+    if (declared && (declared.status !== 'PENDING' || declared.claimedAt)) {
+      throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+    }
+    // Without a declaration (an older client), the identity comes with the proof.
+    let identity: { method: string; transferSource: 'WALLET' | 'BANK' | null; reference: string; payerName: string | null } | null = null;
+    if (!declared) {
+      if (!TRANSFER_METHODS.includes(dto.method as never)) {
+        throw new BadRequestException({ message: 'Choose how you transferred', code: 'METHOD_INVALID' });
+      }
+      if (dto.source) {
+        const d = normalizeDeclaration({ ...dto, source: dto.source }, handles);
+        identity = { method: dto.method as string, transferSource: d.source, reference: d.reference, payerName: d.payerName };
+      } else {
+        const reference = normalizePayerReference(dto.method as never, dto.reference, handles);
+        identity = {
+          method: dto.method as string,
+          transferSource: dto.method === 'VODAFONE_CASH' ? 'WALLET' : null,
+          reference,
+          payerName: null,
+        };
+      }
+    }
     const reading = await this.proofReader.read(dto.proofImageUrl ?? '');
     const check = checkProofAgainstClaim(reading, { amountCents: pre.studentPaysCents }, handles);
     if (check.verdict === 'DISAGREES') {
@@ -583,29 +745,46 @@ export class LiveCommerceService implements OnModuleInit {
           if (full || over) keep = null;
         }
         assertTransition(p.status, 'PAYMENT_PENDING');
-        const payment = await tx.payment.create({
-          data: {
-            studentId,
-            livePurchaseId: p.id,
-            tenantId: p.tenantId,
-            academyId: p.academyId,
-            amountCents: p.studentPaysCents,
-            feeCents: p.feeCents,
-            netCents: p.teacherCents + p.centerCents,
-            currency: p.currency,
-            gateway: 'manual',
-            method: dto.method as never,
-            proofImageUrl: proofKey,
-            proofReading: (reading ?? undefined) as never,
-            reference,
-            status: 'PENDING',
-          },
-        });
+        let id: string;
+        if (declared) {
+          // Claimed exactly once: only a still-open, still-unclaimed declaration flips.
+          const flip = await tx.payment.updateMany({
+            where: { id: declared.id, status: 'PENDING', claimedAt: null },
+            data: { proofImageUrl: proofKey, proofReading: (reading ?? undefined) as never, claimedAt: now },
+          });
+          if (flip.count === 0) {
+            throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+          }
+          id = declared.id;
+        } else {
+          const payment = await tx.payment.create({
+            data: {
+              studentId,
+              livePurchaseId: p.id,
+              tenantId: p.tenantId,
+              academyId: p.academyId,
+              amountCents: p.studentPaysCents,
+              feeCents: p.feeCents,
+              netCents: p.teacherCents + p.centerCents,
+              currency: p.currency,
+              gateway: 'manual',
+              method: identity!.method as never,
+              transferSource: identity!.transferSource,
+              payerName: identity!.payerName,
+              proofImageUrl: proofKey,
+              proofReading: (reading ?? undefined) as never,
+              reference: identity!.reference,
+              claimedAt: now,
+              status: 'PENDING',
+            },
+          });
+          id = payment.id;
+        }
         await tx.livePurchase.update({
           where: { id: p.id },
           data: { status: 'PAYMENT_PENDING', holdExpiresAt: keep },
         });
-        return payment.id;
+        return id;
       });
     } catch (e) {
       await this.proofs.discard(proofKey).catch(() => undefined);
@@ -615,15 +794,14 @@ export class LiveCommerceService implements OnModuleInit {
       throw e;
     }
     // Buyers often transfer first and fill the form after: an SMS that is
-    // already here is matched now instead of waiting for a human.
+    // already here is decided now instead of waiting for a human.
     await this.matching.reconcilePayment(paymentId).catch((e) =>
       this.logger.warn(`live.reconcile payment=${paymentId} failed: ${(e as Error).message}`),
     );
   }
 
-  private async receivingHandles(): Promise<string[]> {
-    const accounts = await this.prisma.platformPaymentAccount.findMany({ select: { handle: true } });
-    return accounts.map((a) => a.handle);
+  private receivingHandles(): Promise<string[]> {
+    return receivingHandles(this.prisma);
   }
 
   /**
@@ -653,6 +831,11 @@ export class LiveCommerceService implements OnModuleInit {
             }
             await this.assertBuyable(tx, s, student.id, now);
             if (p) {
+              // A transfer already declared for this seat may be on its way:
+              // paying again from the wallet could take the money twice.
+              const declared = await tx.payment.findUnique({ where: { livePurchaseId: p.id }, select: { id: true } });
+              if (declared)
+                throw new ConflictException({ message: 'You already started a transfer for this seat', code: 'TRANSFER_ALREADY_STARTED' });
               // They held a seat for a transfer, then chose the wallet: the
               // same purchase and the same frozen price, paid differently.
               if (!p.holdExpiresAt || p.holdExpiresAt <= now) await this.assertSeatFree(tx, s!, now, p.id);
@@ -808,7 +991,7 @@ export class LiveCommerceService implements OnModuleInit {
         data: { status: 'REJECTED', rejectedReason: reason?.trim() || null, verifiedById: actorId },
       });
       if (flip.count === 0) throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
-      if (p && p.status === 'PAYMENT_PENDING') {
+      if (p && (p.status === 'PAYMENT_PENDING' || p.status === 'HELD')) {
         await tx.livePurchase.update({
           where: { id: p.id },
           data: { status: 'PAYMENT_REJECTED', holdExpiresAt: null, reviewReason: reason?.trim() || null },
@@ -1163,7 +1346,10 @@ export class LiveCommerceService implements OnModuleInit {
         where: { id: p.id },
         data: { status: 'CANCELLED_BY_STUDENT', cancelledAt: now, holdExpiresAt: null, cancelReason: 'student' },
       });
-      if (p.status === 'HELD') await releaseCouponUse(tx, p.couponId);
+      if (p.status === 'HELD') {
+        await releaseCouponUse(tx, p.couponId);
+        await this.closeDeclaration(tx, p.id, 'the buyer cancelled before claiming a transfer');
+      }
       if (p.status === 'CONFIRMED') {
         const remaining = await this.remainingParts(tx, p);
         const parts = this.studentRefundParts(p, remaining, s.startsAt, now);
@@ -1205,6 +1391,7 @@ export class LiveCommerceService implements OnModuleInit {
             data: { status: 'CANCELLED_BY_TEACHER', cancelledAt: now, holdExpiresAt: null, cancelReason: 'session cancelled' },
           });
           await releaseCouponUse(tx, p.couponId);
+          await this.closeDeclaration(tx, p.id, 'the session was cancelled before a transfer was claimed');
           return false;
         }
         if (p.status === 'CONFIRMED' || p.status === 'NEEDS_REVIEW') {
@@ -1402,7 +1589,7 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /** The guest's transfer proof — the same path, and the same rules, as a student's. */
-  async guestSubmitTransfer(raw: string, dto: { method: string; reference?: string; proofImageUrl?: string }) {
+  async guestSubmitTransfer(raw: string, dto: TransferClaimDto) {
     const p = await this.guestPurchase(raw);
     await this.submitTransferFor(p, null, dto);
     return this.guestStatus(raw);
@@ -1503,7 +1690,10 @@ export class LiveCommerceService implements OnModuleInit {
         data: { status: 'CANCELLED_BY_STUDENT', cancelledAt: now, holdExpiresAt: null, cancelReason: 'guest' },
       });
       await this.revokeGuestAccess(tx, p);
-      if (p.status === 'HELD') await releaseCouponUse(tx, p.couponId);
+      if (p.status === 'HELD') {
+        await releaseCouponUse(tx, p.couponId);
+        await this.closeDeclaration(tx, p.id, 'the buyer cancelled before claiming a transfer');
+      }
       if (p.status === 'CONFIRMED') await this.refundParts(tx, p, 'STUDENT_CANCEL', parts, null, destination);
     });
     return this.guestStatus(raw);
@@ -1519,6 +1709,140 @@ export class LiveCommerceService implements OnModuleInit {
     });
     if (r.count === 0) throw new NotFoundException({ message: 'Not found', code: 'REFUND_NOT_FOUND' });
     return this.guestStatus(raw);
+  }
+
+  // ── Finance: money that arrived with nothing to match ───────────────────
+
+  /**
+   * Seats a transfer could pay for, for the recovery screen: a purchase that
+   * never got a Payment (the buyer's form failed, or they never finished it),
+   * still HELD or already EXPIRED, whose frozen price is exactly this amount.
+   */
+  async recoveryCandidates(amountCents: number) {
+    const rows = await this.prisma.livePurchase.findMany({
+      where: { status: { in: ['HELD', 'EXPIRED'] }, studentPaysCents: amountCents, payment: { is: null } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        session: { select: { id: true, title: true, startsAt: true, durationMin: true, status: true, cancelledAt: true } },
+        student: { select: { user: { select: { fullName: true } } } },
+        guestBuyer: { select: { displayName: true } },
+      },
+    });
+    const now = Date.now();
+    return rows.map((p) => ({
+      purchaseId: p.id,
+      status: p.status,
+      createdAt: p.createdAt,
+      studentPaysCents: p.studentPaysCents,
+      buyerName: p.student?.user.fullName ?? p.guestBuyer?.displayName ?? null,
+      guest: !!p.guestBuyerId,
+      session: {
+        id: p.session.id,
+        title: p.session.title,
+        startsAt: p.session.startsAt,
+        status: p.session.status,
+        cancelled: !!p.session.cancelledAt,
+        // Money attached to a class that is over becomes a refund, not a seat.
+        over: p.session.status === 'ENDED' || now >= closesAtMs(p.session),
+      },
+    }));
+  }
+
+  /**
+   * Recovery: a transfer arrived for a seat whose buyer never got a Payment
+   * written (the incident of 27 Sep 2026). Darsly finance attaches it.
+   *
+   * In ONE transaction, under the session lock then the purchase lock: the
+   * purchase must still have no payment and be HELD or EXPIRED, the amount must
+   * be its frozen price to the piaster, the transfer must be on a transfer rail
+   * and still unclaimed. A PENDING Payment is created for it, the transfer is
+   * claimed by compare-and-swap (so it cannot also be matched or returned),
+   * and the purchase moves to PAYMENT_PENDING — the same shape a buyer's own
+   * claim produces. Then the ORDINARY admin verification runs: capacity is
+   * checked, a class that is already over (or full) turns the money into a
+   * full refund, the ledger is booked by the usual path. Nothing here grants
+   * a seat by itself.
+   *
+   * A retry after success finds the payment already tied to this transfer
+   * and returns the purchase as it is; any other state is refused.
+   */
+  async adminAttachTransfer(eventId: string, purchaseId: string, adminId: string, reason: string) {
+    const why = (reason ?? '').trim().slice(0, 300);
+    if (why.length < 3) throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
+    const pre = await this.prisma.livePurchase.findUnique({ where: { id: purchaseId }, include: { payment: true } });
+    if (!pre) throw new NotFoundException('Purchase not found');
+    const event = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+    if (pre.payment) {
+      // Idempotent retry: this transfer already became this purchase's payment.
+      if (event.matchedPaymentId === pre.payment.id) return { ...(await this.byId(purchaseId)), already: true };
+      throw new ConflictException({ message: 'This purchase already has a payment', code: 'PURCHASE_HAS_PAYMENT' });
+    }
+    if (event.status !== 'UNMATCHED' && event.status !== 'AMBIGUOUS') {
+      throw new ConflictException({ message: 'This transfer is already claimed', code: 'EVENT_ALREADY_CLAIMED', status: event.status });
+    }
+    if (!TRANSFER_METHODS.includes(event.provider as never)) {
+      throw new BadRequestException({ message: 'Not a transfer', code: 'METHOD_INVALID' });
+    }
+    if (event.amountCents !== pre.studentPaysCents) {
+      throw new BadRequestException({
+        message: `Transfer is ${event.amountCents} but the seat costs ${pre.studentPaysCents}`,
+        code: 'AMOUNT_MISMATCH',
+      });
+    }
+    const paymentId = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const s = await lockSession(tx, pre.sessionId);
+      const p = await lockPurchase(tx, purchaseId);
+      if (!p || !s) throw new NotFoundException('Purchase not found');
+      if (p.status !== 'HELD' && p.status !== 'EXPIRED') {
+        throw new ConflictException({ message: 'This purchase cannot take a payment', code: 'PURCHASE_STATE_CONFLICT', status: p.status });
+      }
+      if (await tx.payment.findUnique({ where: { livePurchaseId: p.id }, select: { id: true } })) {
+        throw new ConflictException({ message: 'This purchase already has a payment', code: 'PURCHASE_HAS_PAYMENT' });
+      }
+      const payment = await tx.payment.create({
+        data: {
+          studentId: p.studentId,
+          livePurchaseId: p.id,
+          tenantId: p.tenantId,
+          academyId: p.academyId,
+          amountCents: p.studentPaysCents,
+          feeCents: p.feeCents,
+          netCents: p.teacherCents + p.centerCents,
+          currency: p.currency,
+          gateway: 'manual',
+          method: event.provider,
+          reference: null,
+          payerName: event.payerName,
+          claimedAt: now,
+          recordedByUserId: adminId,
+          note: `recovered from transfer ${eventId}: ${why}`.slice(0, 300),
+          status: 'PENDING',
+        },
+      });
+      const claim = await tx.paymentEvent.updateMany({
+        where: { id: eventId, status: { in: ['UNMATCHED', 'AMBIGUOUS'] }, matchedPaymentId: null, matchedTopupId: null },
+        data: { status: 'MATCHED', matchedPaymentId: payment.id, note: `attached by admin ${adminId}: ${why}`.slice(0, 500) },
+      });
+      if (claim.count === 0) {
+        throw new ConflictException({ message: 'This transfer is already claimed', code: 'EVENT_ALREADY_CLAIMED' });
+      }
+      // The same shape a buyer's claim produces; verification decides the seat.
+      const keepable = !s.deletedAt && !s.cancelledAt && now.getTime() < closesAtMs(s) &&
+        (s.capacity == null || (await seatsTaken(tx, s.id, now, p.id)) < s.capacity);
+      assertTransition(p.status, 'PAYMENT_PENDING');
+      await tx.livePurchase.update({
+        where: { id: p.id },
+        data: { status: 'PAYMENT_PENDING', holdExpiresAt: keepable ? new Date(closesAtMs(s)) : null },
+      });
+      return payment.id;
+    });
+    await this.audit(adminId, 'live.transfer.attach', purchaseId, { eventId, paymentId, reason: why });
+    // The ordinary admin verification: Live handler, capacity, oversold refund, ledger.
+    await this.matching.verifyByAdmin(adminId, paymentId);
+    return { ...(await this.byId(purchaseId)), already: false };
   }
 
   // ── Finance: refunds sent by hand ────────────────────────────────────────
@@ -1624,6 +1948,12 @@ export class LiveCommerceService implements OnModuleInit {
             method: p.payment.method,
             rejectedReason: p.payment.rejectedReason,
             createdAt: p.payment.createdAt,
+            // The buyer's own declaration, so the checkout can show what they
+            // said and let them fix it until they claim the transfer.
+            transferSource: p.payment.transferSource ?? null,
+            senderWallet: p.payment.transferSource === 'WALLET' ? p.payment.reference : null,
+            payerName: p.payment.payerName ?? null,
+            claimedAt: p.payment.claimedAt ?? null,
           }
         : null,
       refunds: p.refunds.map((r) => ({

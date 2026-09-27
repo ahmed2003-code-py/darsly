@@ -7,6 +7,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LiveCommerceService } from './live-commerce.service';
+import { UnmatchedTransfersService } from '../../payments/unmatched-transfers.service';
+import { AdminReasonDto } from './transfer.dto';
 
 const STATUSES = new Set<string>(Object.values(LivePurchaseStatus));
 
@@ -36,7 +38,31 @@ export class AdminLiveCommerceController {
   constructor(
     private readonly commerce: LiveCommerceService,
     private readonly prisma: PrismaService,
+    private readonly transfers: UnmatchedTransfersService,
   ) {}
+
+  @Get('transfers/:eventId/candidates')
+  @ApiOperation({ summary: '[admin] Where an unmatched transfer could go: pending payments, and Live purchases with no payment' })
+  async transferCandidates(@Param('eventId') eventId: string) {
+    const e = await this.transfers.event(eventId);
+    const [payments, purchases] = await Promise.all([
+      this.transfers.paymentCandidates(eventId),
+      this.commerce.recoveryCandidates(e.amountCents),
+    ]);
+    return { amountCents: e.amountCents, provider: e.provider, status: e.status, payments, purchases };
+  }
+
+  @Post('transfers/:eventId/attach/:purchaseId')
+  @HttpCode(200)
+  @ApiOperation({ summary: '[admin] Recovery: turn an unmatched transfer into this purchase’s payment, then verify normally' })
+  attach(
+    @CurrentUser() u: JwtPayload,
+    @Param('eventId') eventId: string,
+    @Param('purchaseId') purchaseId: string,
+    @Body() dto: AdminReasonDto,
+  ) {
+    return this.commerce.adminAttachTransfer(eventId, purchaseId, u.sub, dto.reason);
+  }
 
   @Get('purchases')
   @ApiOperation({ summary: '[admin] Live purchases with their frozen split (filter by status/session)' })
@@ -51,7 +77,8 @@ export class AdminLiveCommerceController {
       include: {
         session: { select: { title: true, startsAt: true, durationMin: true, status: true, startedAt: true, endedAt: true } },
         student: { select: { user: { select: { fullName: true, phone: true } } } },
-        payment: { select: { id: true, status: true, method: true, reference: true, paidAt: true } },
+        guestBuyer: { select: { displayName: true } },
+        payment: { select: { id: true, status: true, method: true, paidAt: true, claimedAt: true, walletCents: true } },
         refunds: true,
       },
     });
@@ -62,7 +89,8 @@ export class AdminLiveCommerceController {
       session: p.session,
       sessionId: p.sessionId,
       academyId: p.academyId,
-      buyerName: p.student?.user.fullName ?? null,
+      buyerName: p.student?.user.fullName ?? p.guestBuyer?.displayName ?? null,
+      guest: !!p.guestBuyerId,
       buyerPhone: p.student?.user.phone ?? null,
       currency: p.currency,
       basePriceCents: p.basePriceCents,
@@ -82,6 +110,9 @@ export class AdminLiveCommerceController {
       replayPolicy: p.replayPolicy,
       replayDays: p.replayDays,
       payment: p.payment,
+      // Only a payment Darsly verified (or a wallet debit) is money received.
+      // A held seat, a declared or claimed transfer, is an amount DUE.
+      amountReceived: p.payment?.status === 'PAID' || p.payment?.status === 'REFUNDED',
       refunds: p.refunds,
       createdAt: p.createdAt,
       confirmedAt: p.confirmedAt,
@@ -94,7 +125,7 @@ export class AdminLiveCommerceController {
   @ApiOperation({ summary: '[admin] What needs a person: pending Live payments, reviews, refund requests' })
   async summary() {
     const [pendingPayments, review, refundRequests] = await Promise.all([
-      this.prisma.payment.count({ where: { status: 'PENDING', livePurchaseId: { not: null } } }),
+      this.prisma.payment.count({ where: { status: 'PENDING', livePurchaseId: { not: null }, claimedAt: { not: null } } }),
       this.prisma.livePurchase.count({ where: { status: 'NEEDS_REVIEW' } }),
       this.prisma.refund.count({ where: { status: { in: ['REQUESTED', 'APPROVED'] } } }),
     ]);

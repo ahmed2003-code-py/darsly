@@ -4,19 +4,13 @@ import { Throttle } from '@nestjs/throttler';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Public } from '../../common/decorators/public.decorator';
 import { LiveCommerceService } from './live-commerce.service';
+import { DeclareTransferDto, TransferClaimBodyDto } from './transfer.dto';
 
-const TRANSFER_METHODS = ['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER'] as const;
 const REFUND_METHODS = ['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER'] as const;
 
 class GuestHoldDto {
   @IsString() @MaxLength(80) displayName: string;
   @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
-}
-
-class GuestTransferDto {
-  @IsIn(TRANSFER_METHODS) method: (typeof TRANSFER_METHODS)[number];
-  @IsOptional() @IsString() @MaxLength(120) reference?: string;
-  @IsOptional() @IsString() @MaxLength(3_000_000) proofImageUrl?: string;
 }
 
 class RefundDestinationDto {
@@ -64,11 +58,19 @@ export class PublicLiveController {
     return this.commerce.guestStatus(token);
   }
 
+  @Post('access/:token/declare')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @ApiOperation({ summary: '[public] Before transferring: a guest says where the money comes from' })
+  declare(@Param('token') token: string, @Body() dto: DeclareTransferDto) {
+    return this.commerce.guestDeclareTransfer(token, dto);
+  }
+
   @Post('access/:token/transfer')
   @HttpCode(200)
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @ApiOperation({ summary: '[public] A guest sends the transfer proof' })
-  transfer(@Param('token') token: string, @Body() dto: GuestTransferDto) {
+  transfer(@Param('token') token: string, @Body() dto: TransferClaimBodyDto) {
     return this.commerce.guestSubmitTransfer(token, dto);
   }
 

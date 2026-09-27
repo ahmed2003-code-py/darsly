@@ -1,24 +1,11 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { LiveCommerceService } from './live-commerce.service';
-
-const TRANSFER_METHODS = ['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER'] as const;
-
-/**
- * A transfer's evidence. Deliberately nothing about money: the amount is the
- * purchase's frozen price, the target is the purchase in the URL, and the
- * status is decided by verification — none of it is the browser's to say.
- */
-class TransferDto {
-  @IsIn(TRANSFER_METHODS) method: (typeof TRANSFER_METHODS)[number];
-  @IsOptional() @IsString() @MaxLength(120) reference?: string;
-  // A client-resized screenshot as a data URL; the storage layer caps its size.
-  @IsOptional() @IsString() @MaxLength(3_000_000) proofImageUrl?: string;
-}
+import { DeclareTransferDto, TransferClaimBodyDto } from './transfer.dto';
 
 class CouponDto {
   @IsOptional() @IsString() @MaxLength(24) couponCode?: string;
@@ -54,11 +41,19 @@ export class LiveCommerceController {
     return this.commerce.payWithWallet(u.sub, id, dto?.couponCode);
   }
 
+  @Post('live/purchases/:purchaseId/declare')
+  @Roles(Role.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({ summary: '[student] Before transferring: say where the money comes from (creates the PENDING payment)' })
+  declare(@CurrentUser() u: JwtPayload, @Param('purchaseId') purchaseId: string, @Body() dto: DeclareTransferDto) {
+    return this.commerce.declareTransfer(u.sub, purchaseId, dto);
+  }
+
   @Post('live/purchases/:purchaseId/transfer')
   @Roles(Role.STUDENT)
   @HttpCode(200)
   @ApiOperation({ summary: '[student] Send the transfer proof for a held seat' })
-  transfer(@CurrentUser() u: JwtPayload, @Param('purchaseId') purchaseId: string, @Body() dto: TransferDto) {
+  transfer(@CurrentUser() u: JwtPayload, @Param('purchaseId') purchaseId: string, @Body() dto: TransferClaimBodyDto) {
     return this.commerce.submitTransfer(u.sub, purchaseId, dto);
   }
 

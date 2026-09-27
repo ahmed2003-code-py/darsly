@@ -1511,6 +1511,17 @@ model Payment {
   method         PaymentMethod?
   proofImageUrl  String? // client-resized screenshot (data URL)
   reference      String? // transaction/reference id or sender number
+  /// Where the buyer said the money comes FROM: their own mobile wallet (then
+  /// `reference` is that wallet's number) or a bank / InstaPay account (then
+  /// there is no sender number to give, and `payerName` is the account
+  /// holder). Null for payments made before the buyer was asked.
+  transferSource TransferSource?
+  /// The name on the account the buyer says they transferred from.
+  payerName      String?
+  /// When the buyer said "I have transferred" (proof sent). A Live payment is
+  /// created BEFORE the transfer, so the listener has a candidate the moment
+  /// the SMS lands; until this is set it is a declared, not a claimed, payment.
+  claimedAt      DateTime?
   /// What the uploaded receipt says — see WalletTopup.proofReading.
   proofReading   Json?
   rejectedReason String?
@@ -1550,6 +1561,48 @@ enum PaymentEventStatus {
   UNMATCHED // no candidate — needs manual review
   AMBIGUOUS // several candidates — needs manual disambiguation
   DUPLICATE // a prior event already handled this transfer
+  RETURNED // Darsly finance is sending (or sent) this money back — see TransferReturn
+}
+
+enum TransferSource {
+  WALLET // a mobile wallet: the provider's SMS prints its number
+  BANK // a bank account or InstaPay: no sender number exists
+}
+
+enum TransferReturnStatus {
+  REQUESTED
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+/// Money Darsly received that belongs to no purchase (or should not be kept),
+/// being sent back by hand. Not a Payment refund: no Payment exists, nothing
+/// was ever booked in the ledger, and nothing is booked now — the transfer in
+/// and the transfer back are both outside the books. One per event; while it
+/// is open the event is RETURNED, so it can never also be matched.
+model TransferReturn {
+  id                 String               @id @default(cuid())
+  paymentEventId     String               @unique
+  paymentEvent       PaymentEvent         @relation(fields: [paymentEventId], references: [id], onDelete: Restrict)
+  amountCents        Int
+  destinationMethod  PayoutMethod
+  destinationDetails Json
+  reason             String
+  status             TransferReturnStatus @default(REQUESTED)
+  requestedById      String
+  approvedById       String?
+  approvedAt         DateTime?
+  completedById      String?
+  completedAt        DateTime?
+  transferReference  String?
+  cancelledById      String?
+  cancelledAt        DateTime?
+  cancelReason       String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([status, createdAt])
 }
 
 // A raw incoming-transfer event reported by the Android notification listener
@@ -1572,6 +1625,7 @@ model PaymentEvent {
   payerName        String?
   deviceId         String?
   status           PaymentEventStatus @default(UNMATCHED)
+  transferReturn   TransferReturn?
   matchedPaymentId String?
   // A transfer can settle a course payment OR a wallet top-up — the two live in
   // different tables, so which one this event credited needs its own column to

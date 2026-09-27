@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
   ArrayMaxSize,
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -20,6 +21,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { IsOptionalId, LIMITS } from '../common/validation';
 import { ListenerKeyGuard } from './listener-key.guard';
 import { PaymentMatchingService } from './payment-matching.service';
+import { UnmatchedTransfersService } from './unmatched-transfers.service';
 
 class PaymentEventDto {
   @IsEnum(PaymentMethod) provider: PaymentMethod;
@@ -59,10 +61,32 @@ class PaymentEventDto {
   identities?: string[];
 }
 
+class MatchReasonDto {
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+}
+
+class ReturnDto {
+  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER']) method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER';
+  @IsString() @MaxLength(80) holderName: string;
+  @IsString() @MaxLength(64) handle: string;
+  @IsString() @MaxLength(500) reason: string;
+}
+
+class ReturnReferenceDto {
+  @IsString() @MaxLength(120) transferReference: string;
+}
+
+class ReasonDto {
+  @IsString() @MaxLength(500) reason: string;
+}
+
 @ApiTags('payments')
 @Controller()
 export class PaymentEventsController {
-  constructor(private readonly matching: PaymentMatchingService) {}
+  constructor(
+    private readonly matching: PaymentMatchingService,
+    private readonly transfers: UnmatchedTransfersService,
+  ) {}
 
   // ── Android notification listener → backend ────────────────────────────────
 
@@ -91,20 +115,66 @@ export class PaymentEventsController {
   @Get('admin/payment-events')
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
-  @ApiOperation({ summary: '[admin] Incoming transfer events (matched/unmatched)' })
+  @ApiOperation({ summary: '[admin] Incoming transfers (masked; status=OPEN for unmatched+ambiguous)' })
   list(@Query('status') status?: string) {
-    return this.matching.listEvents(status);
+    return this.transfers.list(status);
+  }
+
+  @Get('admin/payment-events/:id/payment-candidates')
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Pending payments this transfer could be matched to by hand' })
+  candidates(@Param('id') id: string) {
+    return this.transfers.paymentCandidates(id);
   }
 
   @Post('admin/payment-events/:id/match/:paymentId')
+  @HttpCode(200)
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
-  @ApiOperation({ summary: '[admin] Resolve an unmatched event → verify a payment' })
+  @ApiOperation({ summary: '[admin] Tie an unmatched transfer to a pending payment (re-validated) and verify it' })
   manualMatch(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
     @Param('paymentId') paymentId: string,
+    @Body() dto: MatchReasonDto,
   ) {
-    return this.matching.manualMatch(id, paymentId, u.sub);
+    return this.matching.manualMatch(id, paymentId, u.sub, dto?.reason);
+  }
+
+  @Post('admin/payment-events/:id/return')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Open a manual return of money that belongs to no purchase' })
+  requestReturn(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ReturnDto) {
+    return this.transfers.requestReturn(id, u.sub, dto);
+  }
+
+  @Post('admin/transfer-returns/:id/approve')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Approve a transfer return' })
+  approveReturn(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.transfers.approveReturn(id, u.sub);
+  }
+
+  @Post('admin/transfer-returns/:id/complete')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Mark a transfer return as sent back' })
+  completeReturn(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ReturnReferenceDto) {
+    return this.transfers.completeReturn(id, u.sub, dto.transferReference);
+  }
+
+  @Post('admin/transfer-returns/:id/cancel')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @Roles(Role.SUPER_ADMIN)
+  @ApiOperation({ summary: '[admin] Cancel an open transfer return (the transfer becomes unmatched again)' })
+  cancelReturn(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ReasonDto) {
+    return this.transfers.cancelReturn(id, u.sub, dto.reason);
   }
 }

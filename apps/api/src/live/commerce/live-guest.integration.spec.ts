@@ -243,7 +243,7 @@ describe('Listener hardening on Postgres', () => {
       const b = await S.commerce.hold(w2.students[0].user.id, w2.session.id);
       await S.commerce.submitTransfer(w1.students[0].user.id, a.id, { method: 'VODAFONE_CASH', reference: ref, proofImageUrl: 'data:x' });
       await S.commerce.submitTransfer(w2.students[0].user.id, b.id, { method: 'VODAFONE_CASH', reference: ref, proofImageUrl: 'data:x' });
-      await prisma.paymentEvent.create({
+      const ev = await prisma.paymentEvent.create({
         data: {
           provider: 'VODAFONE_CASH',
           amountCents: a.studentPaysCents,
@@ -259,8 +259,12 @@ describe('Listener hardening on Postgres', () => {
       ]);
       await Promise.all([S.matching.reconcilePayment(pa.id), S.matching.reconcilePayment(pb.id)]);
       const paid = await prisma.payment.count({ where: { id: { in: [pa.id, pb.id] }, status: 'PAID' } });
-      // One transfer, one payment verified — never two.
-      expect(paid).toBe(1);
+      // One transfer can never verify two payments. With two buyers declaring
+      // the same sending wallet it is not even given to one of them: the
+      // policy refuses to guess, and the transfer waits for a person.
+      expect(paid).toBe(0);
+      const after = await prisma.paymentEvent.findUniqueOrThrow({ where: { id: ev.id } });
+      expect(after.matchedPaymentId).toBeNull();
     }
   });
 });

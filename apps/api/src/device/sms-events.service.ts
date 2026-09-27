@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaymentMethod } from '@darsly/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
+import { receivingHandles } from '../payments/receiving-accounts';
 import { PaymentMatchingService } from '../payments/payment-matching.service';
 import { SenderRulesService } from './sender-rules.service';
 import {
@@ -167,17 +168,8 @@ export class SmsEventsService {
    * sender identity — that would match whichever student happened to type the
    * platform's number.
    */
-  private async receivingNumbers(): Promise<string[]> {
-    // Defensive: this is an enrichment, not a precondition. If it fails we simply
-    // do not exclude anything — never let it stop an SMS being processed.
-    try {
-      const accounts = await this.prisma.platformPaymentAccount.findMany({
-        select: { handle: true },
-      });
-      return accounts.map((account) => account.handle);
-    } catch {
-      return [];
-    }
+  private receivingNumbers(): Promise<string[]> {
+    return receivingHandles(this.prisma);
   }
 
   private async forward(

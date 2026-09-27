@@ -1,16 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PaymentEvent, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  isIncomingTransfer,
-  namesAgree,
-  parseIdentities,
-  parsePayerName,
-} from '../device/sms-parser';
-import { receiptMatchesTransfer } from './proof-check';
+import { isIncomingTransfer, parsePayerName } from '../device/sms-parser';
 import { ProofReading } from './proof-reader.service';
 import { ManualPaymentsService } from './manual-payments.service';
 import { WalletService } from '../wallet/wallet.service';
+import { decideMatch, MatchCandidate, MatchDecision } from './match-policy';
+import { receivingHandles } from './receiving-accounts';
+import { eventEvidence, normRef } from './transfer-evidence';
 
 export interface PaymentEventDto {
   provider: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
@@ -32,17 +29,20 @@ export interface PaymentEventDto {
    */
   externalId?: string;
   /**
-   * Every identifier the raw message could be matched on — the sending wallet's
-   * mobile number, a labelled transaction reference, and so on. The student typed
-   * exactly one of them at checkout, and which one is not ours to guess, so a hit
-   * on any counts. Falls back to [reference] when not supplied.
+   * Every identifier the raw message could be matched on. Used only when there
+   * is no raw message: when there is one, the server reads it itself.
    */
   identities?: string[];
 }
 
-// How far back a pending payment may have been created relative to the transfer.
-const WINDOW_BEFORE_MS = 72 * 3600_000;
-const WINDOW_AFTER_MS = 30 * 60_000;
+/**
+ * How far apart a transfer and the payment it pays for may have been created.
+ * Buyers transfer first and fill the form later (a course student, next
+ * morning), or — for a Live seat — declare first and transfer after.
+ */
+const WINDOW_MS = 72 * 3600_000;
+/** How near another unclaimed transfer of the same amount must be to count as a competitor. */
+const COMPETITOR_WINDOW_MS = 2 * 3600_000;
 
 /**
  * Which payment methods one provider's message may settle.
@@ -55,26 +55,15 @@ const WINDOW_AFTER_MS = 30 * 60_000;
  *
  * Only the bank family is pooled. A wallet is a different rail with a different
  * SMS and must stay separate. Pooling widens the *candidate set* and nothing
- * else: a match still needs an exact reference, and two candidates sharing one
- * reference are still refused as ambiguous.
+ * else: the policy still needs its evidence, and a wider pool only makes a
+ * match harder, never easier.
  */
-function methodsFor(provider: string): string[] {
-  return provider === 'INSTAPAY' || provider === 'BANK_TRANSFER'
-    ? ['INSTAPAY', 'BANK_TRANSFER']
-    : [provider];
+export function methodsFor(provider: string): string[] {
+  return provider === 'INSTAPAY' || provider === 'BANK_TRANSFER' ? ['INSTAPAY', 'BANK_TRANSFER'] : [provider];
 }
 
-function normRef(r?: string | null): string {
-  return (r ?? '').replace(/[^0-9a-z]/gi, '').toLowerCase();
-}
-/**
- * Exact normalized-reference equality. Auto-verification must never rely on
- * fuzzy/substring matching — "1234" and "12345" are DIFFERENT transfers, and
- * treating them as the same either drops a real payment or credits the wrong one.
- */
-function refExact(a: string, b: string): boolean {
-  return !!a && !!b && a === b;
-}
+/** Everything the policy needs about one candidate, plus how to act on it. */
+type PoolEntry = MatchCandidate & { status?: string };
 
 @Injectable()
 export class PaymentMatchingService {
@@ -85,9 +74,132 @@ export class PaymentMatchingService {
   ) {}
 
   /**
-   * Ingest a transfer notification from the Android listener, match it against a
-   * pending payment (amount + method + time window, disambiguated by reference),
-   * and auto-verify on a confident single match.
+   * Every pending candidate this transfer could pay for: PENDING payments (and
+   * teacher-self-verified PAID-but-unsettled ones) and PENDING wallet top-ups,
+   * on the same rail, owing exactly this amount, created within the window.
+   * A payment another transfer already claimed is not a candidate: one
+   * payment, one transfer.
+   */
+  private async pool(provider: string, amountCents: number, occurredAt: Date): Promise<PoolEntry[]> {
+    const createdAt = {
+      gte: new Date(occurredAt.getTime() - WINDOW_MS),
+      lte: new Date(occurredAt.getTime() + WINDOW_MS),
+    };
+    const payments = (
+      await this.prisma.payment.findMany({
+        where: {
+          gateway: 'manual',
+          method: { in: methodsFor(provider) as any[] },
+          createdAt,
+          OR: [{ status: 'PENDING' }, { status: 'PAID', settledAt: null }],
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          reference: true,
+          status: true,
+          amountCents: true,
+          walletCents: true,
+          proofReading: true,
+          payerName: true,
+          student: { select: { user: { select: { fullName: true } } } },
+          // A guest's seat has no student: the name they gave is who owes it.
+          livePurchase: { select: { guestBuyer: { select: { displayName: true } } } },
+        },
+      })
+    )
+      // A payment with a wallet part is waiting only on the remainder.
+      .filter((p) => p.amountCents - (p.walletCents ?? 0) === amountCents);
+    const claimed = payments.length
+      ? new Set(
+          (
+            await this.prisma.paymentEvent.findMany({
+              where: { matchedPaymentId: { in: payments.map((p) => p.id) } },
+              select: { matchedPaymentId: true },
+            })
+          ).map((e) => e.matchedPaymentId),
+        )
+      : new Set<string | null>();
+    const topups = await this.prisma.walletTopup.findMany({
+      where: { status: 'PENDING', amountCents, method: { in: methodsFor(provider) as any[] }, createdAt },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        reference: true,
+        proofReading: true,
+        student: { select: { user: { select: { fullName: true } } } },
+      },
+    });
+    return [
+      ...payments
+        .filter((p) => !claimed.has(p.id))
+        .map((p) => ({
+          kind: 'payment' as const,
+          id: p.id,
+          status: p.status,
+          reference: p.reference,
+          declaredPayerName: p.payerName ?? null,
+          ownerName: p.student?.user?.fullName ?? p.livePurchase?.guestBuyer?.displayName ?? '',
+          receipt: (p.proofReading as ProofReading | null) ?? null,
+        })),
+      ...topups.map((t) => ({
+        kind: 'topup' as const,
+        id: t.id,
+        reference: t.reference,
+        declaredPayerName: null,
+        ownerName: t.student?.user?.fullName ?? '',
+        receipt: (t.proofReading as ProofReading | null) ?? null,
+      })),
+    ];
+  }
+
+  /** Other unclaimed transfers of this amount and rail near this one. */
+  private openEventsNear(provider: string, amountCents: number, occurredAt: Date, excludeId?: string) {
+    return this.prisma.paymentEvent.count({
+      where: {
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        status: { in: ['UNMATCHED', 'AMBIGUOUS'] },
+        matchedPaymentId: null,
+        matchedTopupId: null,
+        provider: { in: methodsFor(provider) as any[] },
+        amountCents,
+        occurredAt: {
+          gte: new Date(occurredAt.getTime() - COMPETITOR_WINDOW_MS),
+          lte: new Date(occurredAt.getTime() + COMPETITOR_WINDOW_MS),
+        },
+      },
+    });
+  }
+
+  /** The policy's verdict on one transfer, against its whole pool. */
+  private async decide(
+    event: { provider: string; amountCents: number; occurredAt: Date; rawMessage?: string | null; reference?: string | null; identities?: string[] | null; payerName?: string | null; id?: string },
+    receiving: string[],
+  ): Promise<{ decision: MatchDecision; payerName: string | null }> {
+    const evidence = eventEvidence(event, receiving);
+    const candidates = await this.pool(event.provider, event.amountCents, event.occurredAt);
+    const otherOpenEvents = candidates.length
+      ? await this.openEventsNear(event.provider, event.amountCents, event.occurredAt, event.id)
+      : 0;
+    const decision = decideMatch(evidence, candidates, {
+      amountCents: event.amountCents,
+      occurredAt: event.occurredAt,
+      receiving,
+      otherOpenEvents,
+    });
+    return { decision, payerName: evidence.payerName };
+  }
+
+  /** Verify / settle / approve what a transfer was matched to. */
+  private async act(chosen: PoolEntry) {
+    if (chosen.kind === 'topup') await this.wallet.approveTopup(null, chosen.id);
+    else if (chosen.status === 'PAID') await this.manual.settle(chosen.id, 'system'); // PAID+unsettled → settle
+    else await this.manual.systemVerify(chosen.id);
+  }
+
+  /**
+   * Ingest a transfer notification from the Android listener: record it once,
+   * decide it by the matching policy, and act only on a MATCHED verdict.
    */
   async ingest(dto: PaymentEventDto) {
     const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
@@ -114,11 +226,7 @@ export class PaymentMatchingService {
     if (dedupeKey) {
       const prior = await this.prisma.paymentEvent.findUnique({ where: { dedupeKey } });
       if (prior) {
-        return {
-          eventId: prior.id,
-          status: 'DUPLICATE' as const,
-          matchedPaymentId: prior.matchedPaymentId,
-        };
+        return { eventId: prior.id, status: 'DUPLICATE' as const, matchedPaymentId: prior.matchedPaymentId };
       }
     }
 
@@ -127,19 +235,9 @@ export class PaymentMatchingService {
      *
      * The listener sits on a phone that both receives and sends, so a bank's
      * "تم تنفيذ تحويل لحظي بمبلغ 120.00 جم **من حسابك**" is the platform's own
-     * money going out. Booking that as an incoming payment settles a pending
-     * enrolment nobody paid for.
-     *
-     * The check existed and was enforced one layer up, in the device route
-     * only. This is the common engine both routes reach, and the key-
-     * authenticated route came in underneath it — so an outgoing debit
-     * submitted there was matched and settled. Verified against a running API:
-     * an outgoing SMS of the right amount turned a PENDING payment into PAID.
-     *
-     * Enforced here because this is where money is decided, not at one of the
-     * two doors. Silence is not treated as outgoing: an event with no raw
-     * message cannot be judged either way and keeps its existing behaviour,
-     * which is to be recorded and matched on its other evidence.
+     * money going out. Enforced here, in the engine both routes reach. Silence
+     * is not treated as outgoing: an event with no raw message cannot be judged
+     * either way and is matched on its other evidence.
      */
     if (dto.rawMessage?.trim() && !isIncomingTransfer(dto.rawMessage)) {
       const r = await this.record(
@@ -153,11 +251,11 @@ export class PaymentMatchingService {
       return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
     }
 
-    // No sender identity ⇒ NEVER auto-verify, even when the event itself is
-    // uniquely identified. Amount + time window alone cannot tell two students'
-    // identical transfers apart, and crediting the wrong enrollment is worse than
-    // asking a human. Recorded (with whatever dedupe identity we have) for review.
-    if (!ref) {
+    const receiving = await receivingHandles(this.prisma);
+    const evidence = eventEvidence(dto, receiving);
+    // Nothing on this transfer identifies it — no sender number, no provider
+    // reference. It is recorded for a person; nothing could verify it.
+    if (!evidence.senderNumbers.length && !evidence.providerRefs.length) {
       const r = await this.record(
         dto,
         occurredAt,
@@ -165,384 +263,111 @@ export class PaymentMatchingService {
         'UNMATCHED',
         null,
         'no sender reference — auto-verify disabled without a transfer identity; needs manual review',
+        null,
+        evidence.payerName,
       );
       return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
     }
 
-    // Candidates: PENDING payments to verify, OR self-verified (PAID + not yet
-    // settled) payments to reconcile — both within the method/time window. Not
-    // filtered by amount here: a payment with a wallet contribution is only
-    // waiting on (amountCents - walletCents), not the course's full price, and
-    // that subtraction can't be expressed in a plain equality filter — so it's
-    // applied just below instead, in JS, against this already narrow set.
-    const payments = (
-      await this.prisma.payment.findMany({
-        where: {
-          gateway: 'manual',
-          method: { in: methodsFor(dto.provider) as any[] },
-          createdAt: {
-            gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS),
-            lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS),
-          },
-          OR: [{ status: 'PENDING' }, { status: 'PAID', settledAt: null }],
-        },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          reference: true,
-          status: true,
-          amountCents: true,
-          walletCents: true,
-          proofReading: true,
-          // Who the platform thinks is paying, to weigh against who the provider
-          // says actually sent the money.
-          student: { select: { user: { select: { fullName: true } } } },
-          // A guest's seat has no student: the name they gave is who owes it.
-          livePurchase: { select: { guestBuyer: { select: { displayName: true } } } },
-        },
-      })
-    ).filter((p) => p.amountCents - p.walletCents === dto.amountCents);
-
-    // A wallet top-up is the same transfer with no course attached, so it
-    // competes for the same SMS on identical evidence. Pooling the two is what
-    // makes a top-up settle by itself instead of waiting on an admin — and
-    // pooling them is also what keeps a transfer that could be either from
-    // being credited twice.
-    const topups = await this.prisma.walletTopup.findMany({
-      where: {
-        status: 'PENDING',
-        amountCents: dto.amountCents,
-        method: { in: methodsFor(dto.provider) as any[] },
-        createdAt: {
-          gte: new Date(occurredAt.getTime() - WINDOW_BEFORE_MS),
-          lte: new Date(occurredAt.getTime() + WINDOW_AFTER_MS),
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        reference: true,
-        proofReading: true,
-        student: { select: { user: { select: { fullName: true } } } },
-      },
-    });
-
-    type Candidate = {
-      kind: 'payment' | 'topup';
-      id: string;
-      reference: string | null;
-      status?: string;
-      /** The name on the account that owes this money. */
-      owner: string;
-      /** What the receipt the student uploaded says, when it could be read. */
-      reading: ProofReading | null;
-    };
-    const candidates: Candidate[] = [
-      ...payments.map((p) => ({
-        kind: 'payment' as const,
-        id: p.id,
-        reference: p.reference,
-        status: p.status,
-        owner: p.student?.user?.fullName ?? p.livePurchase?.guestBuyer?.displayName ?? '',
-        reading: (p.proofReading as ProofReading | null) ?? null,
-      })),
-      ...topups.map((t) => ({
-        kind: 'topup' as const,
-        id: t.id,
-        reference: t.reference,
-        owner: t.student?.user?.fullName ?? '',
-        reading: (t.proofReading as ProofReading | null) ?? null,
-      })),
-    ];
-
-    let chosen: Candidate | null = null;
-    let status: 'MATCHED' | 'UNMATCHED' | 'AMBIGUOUS' = 'UNMATCHED';
-    let note: string | undefined;
-
-    const identities = (dto.identities?.length ? dto.identities : [dto.reference ?? ''])
-      .map(normRef)
-      .filter(Boolean);
-
-    // Who the provider says sent the money. Read from the raw message rather
-    // than taken from the caller: the phone forwards what it received, and the
-    // server re-derives anything that decides whether money is credited.
-    const payerName = parsePayerName(dto.rawMessage ?? '');
-
-    if (candidates.length === 0) {
-      status = 'UNMATCHED';
-      note =
-        'no pending/unsettled payment or wallet top-up with this amount/method in the time window';
-    } else {
-      /**
-       * The receipt as the identity, for the rails that share no reference.
-       *
-       * An InstaPay student's receipt and the bank's SMS carry different
-       * reference numbers, so the strong evidence here is not a string both
-       * sides print — it is the transfer itself: the same piastre amount sent
-       * in the same minute. Two people sending an identical amount within the
-       * same quarter-hour is what `length === 1` guards; more than one is
-       * ambiguous and goes to a human, exactly as a shared reference would be.
-       *
-       * Checked before the reference, because where a receipt was read it is
-       * the better evidence: the student typed the reference, the bank and the
-       * sender's own app produced these.
-       */
-      const receiptMatches = candidates.filter((c) =>
-        receiptMatchesTransfer(c.reading, { amountCents: dto.amountCents, occurredAt }),
-      );
-      const refMatches = candidates.filter((c) =>
-        identities.some((identity) => refExact(normRef(c.reference), identity)),
-      );
-      if (receiptMatches.length === 1 && refMatches.length <= 1) {
-        // A reference that points somewhere else is a contradiction, not a
-        // tie-break: when both speak and they disagree, neither is trusted.
-        if (refMatches.length === 1 && refMatches[0].id !== receiptMatches[0].id) {
-          status = 'AMBIGUOUS';
-          note =
-            'the uploaded receipt matches one top-up and the typed reference another — they cannot both be this transfer';
-        } else {
-          chosen = receiptMatches[0];
-          status = 'MATCHED';
-          note = `matched by the uploaded receipt (same amount, sent ${chosen.reading?.sentAtText ?? 'at the same time'})`;
-          if (payerName && chosen.owner && !namesAgree(payerName, chosen.owner)) {
-            note += `; the transfer is in the name of "${payerName}" and the account is "${chosen.owner}" — worth a look`;
-          }
-        }
-      } else if (receiptMatches.length > 1) {
-        status = 'AMBIGUOUS';
-        note = 'more than one receipt describes a transfer of this amount at this time';
-      } else if (refMatches.length === 1) {
-        chosen = refMatches[0];
-        status = 'MATCHED';
-        // The reference is the strong evidence and stands on its own. The name
-        // is recorded either way, because a transfer whose reference matches one
-        // student while the wallet belongs to somebody else is worth an admin's
-        // attention even though it is credited.
-        if (payerName && chosen.owner && !namesAgree(payerName, chosen.owner)) {
-          note = `matched by reference, but the transfer is in the name of "${payerName}" and the account is "${chosen.owner}" — worth a look`;
-        }
-      } else if (refMatches.length > 1) {
-        status = 'AMBIGUOUS';
-        note = 'multiple payments share this reference';
-      } else if (candidates.length === 1) {
-        /**
-         * One payment of this size, in this window, and the reference the
-         * student typed does not match the transfer.
-         *
-         * This used to be credited anyway, on amount and timing alone. That is
-         * the weakest evidence there is — two students buying the same course
-         * within three days transfer identical amounts, and whichever one the
-         * window happened to hold got the other's money. The name closes it: a
-         * transfer is credited here only when the person who sent it is the
-         * person who owes it.
-         *
-         * Where there is no name to check (a provider that does not print one),
-         * it goes to a human rather than through on the old evidence.
-         */
-        const owner = candidates[0].owner;
-        if (payerName && owner && namesAgree(payerName, owner)) {
-          chosen = candidates[0];
-          status = 'MATCHED';
-          note = `matched by amount+time and the payer's name ("${payerName}"); the reference differed`;
-        } else if (payerName && owner) {
-          status = 'AMBIGUOUS';
-          note = `one amount match, but the transfer is in the name of "${payerName}" and the account is "${owner}" — reference did not match either`;
-        } else {
-          status = 'AMBIGUOUS';
-          note = 'one amount match, but neither the reference nor a payer name confirms it';
-        }
-      } else {
-        status = 'AMBIGUOUS';
-        note = 'several amount matches, none by reference';
-      }
-    }
-
+    const { decision } = await this.decide({ ...dto, occurredAt }, receiving);
+    const chosen = decision.status === 'MATCHED' ? (decision.candidate as PoolEntry) : null;
     const r = await this.record(
       dto,
       occurredAt,
       dedupeKey,
-      status,
+      decision.status,
       chosen?.kind === 'payment' ? chosen.id : null,
-      note,
+      decision.note,
       chosen?.kind === 'topup' ? chosen.id : null,
-      payerName,
+      evidence.payerName,
     );
     // Only act if we actually recorded a fresh MATCHED event (a concurrent replay
     // that lost the unique-index race returns created=false and does nothing).
-    if (r.created && chosen && r.status === 'MATCHED') {
-      if (chosen.kind === 'topup') await this.wallet.approveTopup(null, chosen.id);
-      else if (chosen.status === 'PENDING') await this.manual.systemVerify(chosen.id);
-      else await this.manual.settle(chosen.id, 'system'); // PAID+unsettled → settle
-    }
+    if (r.created && chosen && r.status === 'MATCHED') await this.act(chosen);
     return { eventId: r.eventId, status: r.status, matchedPaymentId: r.matchedPaymentId };
   }
 
   /**
-   * The other direction: a payment was just submitted — is a transfer already
-   * sitting here waiting for it?
+   * The other direction: a payment (or top-up) was just created or claimed —
+   * is a transfer already sitting here waiting for it?
    *
-   * Matching used to look only backwards, from a transfer to an existing payment.
-   * But students transfer *first* and fill the form afterwards, so the SMS almost
-   * always lands before the payment row exists — a few seconds is enough. Every
-   * one of those events was filed UNMATCHED and nothing ever revisited it, which
-   * is why auto-verification looked broken while each half worked perfectly.
-   *
-   * Same evidence, same confidence rules as [ingest]: same provider, same amount,
-   * inside the same window, and exactly one identity match. Ambiguity still goes
-   * to a human.
+   * Buyers often transfer first and fill the form afterwards, so the SMS lands
+   * before the payment exists and is filed UNMATCHED. Each unclaimed transfer
+   * of this amount is decided again by the SAME policy against its whole pool
+   * (this candidate now included); only a transfer that the policy would give
+   * to exactly this candidate is claimed, with a compare-and-swap.
    */
-  async reconcilePayment(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: paymentId },
-      select: {
-        id: true,
-        status: true,
-        method: true,
-        amountCents: true,
-        walletCents: true,
-        reference: true,
-        createdAt: true,
-      },
-    });
-    if (!payment || payment.status !== 'PENDING') return { status: 'SKIPPED' as const };
-
-    const ref = normRef(payment.reference);
-    // Without an identity the student gave us, amount+time alone cannot tell two
-    // students' identical transfers apart. Same rule as the forward path.
-    if (!ref) return { status: 'NO_REFERENCE' as const };
-
-    // A wallet contribution means the transfer this payment is actually
-    // waiting on is only the remainder, not the course's full price.
-    const cashDueCents = payment.amountCents - payment.walletCents;
+  private async reconcile(kind: 'payment' | 'topup', id: string, provider: string, dueCents: number, createdAt: Date) {
     const events = await this.prisma.paymentEvent.findMany({
       where: {
-        status: 'UNMATCHED',
+        status: { in: ['UNMATCHED', 'AMBIGUOUS'] },
         matchedPaymentId: null,
-        provider: payment.method as any,
-        amountCents: cashDueCents,
-        occurredAt: {
-          gte: new Date(payment.createdAt.getTime() - WINDOW_BEFORE_MS),
-          lte: new Date(payment.createdAt.getTime() + WINDOW_AFTER_MS),
-        },
+        matchedTopupId: null,
+        provider: { in: methodsFor(provider) as any[] },
+        amountCents: dueCents,
+        occurredAt: { gte: new Date(createdAt.getTime() - WINDOW_MS), lte: new Date(createdAt.getTime() + WINDOW_MS) },
       },
       orderBy: { occurredAt: 'desc' },
       take: 50,
     });
-
-    const hits = events.filter((event) => {
-      const derived = parseIdentities(event.rawMessage ?? '')
-        .map(normRef)
-        .filter(Boolean);
-      const identities = derived.length ? derived : [normRef(event.reference)];
-      return identities.some((identity) => refExact(identity, ref));
-    });
-
-    if (hits.length === 0) return { status: 'UNMATCHED' as const };
+    // An outgoing debit, or a message with nothing in it, never pays for anything.
+    const usable = events.filter((e) => !e.rawMessage?.trim() || isIncomingTransfer(e.rawMessage));
+    if (!usable.length) return { status: 'UNMATCHED' as const };
+    const receiving = await receivingHandles(this.prisma);
+    const hits: PaymentEvent[] = [];
+    let ambiguous = false;
+    for (const e of usable) {
+      const { decision } = await this.decide(e, receiving);
+      if (decision.status === 'MATCHED' && decision.candidate.kind === kind && decision.candidate.id === id) hits.push(e);
+      else if (decision.status === 'AMBIGUOUS') ambiguous = true;
+    }
     if (hits.length > 1) return { status: 'AMBIGUOUS' as const };
+    if (hits.length === 0) return { status: ambiguous ? ('AMBIGUOUS' as const) : ('UNMATCHED' as const) };
 
     const event = hits[0];
-    // Claim the transfer with a compare-and-swap: two payments reconciling at
-    // the same instant (same sender, same amount) both read this event as
-    // UNMATCHED, and an unconditional update let both claim it — one real SMS
-    // verifying two payments. Only the claim that flips it wins.
+    // Claim the transfer with a compare-and-swap: two candidates reconciling at
+    // the same instant both read this event as unclaimed, and an unconditional
+    // update let both claim it — one real SMS verifying two payments. Only the
+    // claim that flips it wins.
     const claim = await this.prisma.paymentEvent.updateMany({
-      where: { id: event.id, status: 'UNMATCHED', matchedPaymentId: null, matchedTopupId: null },
-      data: {
-        status: 'MATCHED',
-        matchedPaymentId: payment.id,
-        note: 'reconciled when the payment was submitted (transfer arrived first)',
-      },
+      where: { id: event.id, status: { in: ['UNMATCHED', 'AMBIGUOUS'] }, matchedPaymentId: null, matchedTopupId: null },
+      data:
+        kind === 'payment'
+          ? { status: 'MATCHED', matchedPaymentId: id, note: 'reconciled when the payment was submitted (transfer arrived first)' }
+          : { status: 'MATCHED', matchedTopupId: id, note: 'reconciled when the top-up was submitted (transfer arrived first)' },
     });
     if (claim.count === 0) return { status: 'UNMATCHED' as const };
-    await this.manual.systemVerify(payment.id);
     return { status: 'MATCHED' as const, eventId: event.id };
   }
 
-  /**
-   * The top-up counterpart of [reconcilePayment]: a student almost always
-   * transfers first and fills the form after, so the SMS is already filed
-   * UNMATCHED by the time the top-up row exists. Without this the transfer sits
-   * there and the top-up waits on an admin — which is exactly how a paid 35 EGP
-   * top-up stayed pending.
-   *
-   * Same evidence and the same confidence bar as every other match: provider,
-   * amount, window, exactly one identity hit.
-   */
+  async reconcilePayment(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { id: true, status: true, method: true, amountCents: true, walletCents: true, createdAt: true, gateway: true },
+    });
+    if (!payment || payment.status !== 'PENDING' || payment.gateway !== 'manual' || !payment.method) {
+      return { status: 'SKIPPED' as const };
+    }
+    const r = await this.reconcile(
+      'payment',
+      payment.id,
+      payment.method,
+      payment.amountCents - payment.walletCents,
+      payment.createdAt,
+    );
+    if (r.status === 'MATCHED') await this.manual.systemVerify(payment.id);
+    return r;
+  }
+
   async reconcileTopup(topupId: string) {
     const topup = await this.prisma.walletTopup.findUnique({
       where: { id: topupId },
-      select: {
-        id: true,
-        status: true,
-        method: true,
-        amountCents: true,
-        reference: true,
-        createdAt: true,
-        proofReading: true,
-      },
+      select: { id: true, status: true, method: true, amountCents: true, createdAt: true },
     });
     if (!topup || topup.status !== 'PENDING') return { status: 'SKIPPED' as const };
-
-    const ref = normRef(topup.reference);
-    const reading = (topup.proofReading as ProofReading | null) ?? null;
-    // Either kind of evidence will do. An InstaPay top-up has no reference to
-    // give — the two sides print different ones — and its receipt is what
-    // identifies it instead. With neither, there is nothing to reconcile on.
-    if (!ref && !reading) return { status: 'NO_REFERENCE' as const };
-
-    const events = await this.prisma.paymentEvent.findMany({
-      where: {
-        status: 'UNMATCHED',
-        matchedPaymentId: null,
-        matchedTopupId: null,
-        // The same pooling as `ingest`: an InstaPay transfer is announced by the
-        // receiving *bank*, so the event says BANK_TRANSFER while the student
-        // said INSTAPAY.
-        provider: { in: methodsFor(topup.method) as any[] },
-        amountCents: topup.amountCents,
-        occurredAt: {
-          gte: new Date(topup.createdAt.getTime() - WINDOW_BEFORE_MS),
-          lte: new Date(topup.createdAt.getTime() + WINDOW_AFTER_MS),
-        },
-      },
-      orderBy: { occurredAt: 'desc' },
-      take: 50,
-    });
-
-    const hits = events.filter((event) => {
-      // The receipt: the same amount (already filtered) sent in the same minute.
-      if (
-        receiptMatchesTransfer(reading, {
-          amountCents: topup.amountCents,
-          occurredAt: event.occurredAt,
-        })
-      ) {
-        return true;
-      }
-      if (!ref) return false;
-      const derived = parseIdentities(event.rawMessage ?? '')
-        .map(normRef)
-        .filter(Boolean);
-      const identities = derived.length ? derived : [normRef(event.reference)];
-      return identities.some((identity) => refExact(identity, ref));
-    });
-
-    if (hits.length === 0) return { status: 'UNMATCHED' as const };
-    if (hits.length > 1) return { status: 'AMBIGUOUS' as const };
-
-    const event = hits[0];
-    // The same compare-and-swap as reconcilePayment: one transfer, one top-up.
-    const claim = await this.prisma.paymentEvent.updateMany({
-      where: { id: event.id, status: 'UNMATCHED', matchedPaymentId: null, matchedTopupId: null },
-      data: {
-        status: 'MATCHED',
-        matchedTopupId: topup.id,
-        note: 'reconciled when the top-up was submitted (transfer arrived first)',
-      },
-    });
-    if (claim.count === 0) return { status: 'UNMATCHED' as const };
-    await this.wallet.approveTopup(null, topup.id);
-    return { status: 'MATCHED' as const, eventId: event.id };
+    const r = await this.reconcile('topup', topup.id, topup.method, topup.amountCents, topup.createdAt);
+    if (r.status === 'MATCHED') await this.wallet.approveTopup(null, topup.id);
+    return r;
   }
 
   private async record(
@@ -592,30 +417,45 @@ export class PaymentMatchingService {
 
   // ── Admin ────────────────────────────────────────────────────────────────
 
-  listEvents(status?: string) {
-    return this.prisma.paymentEvent.findMany({
-      where: status ? { status: status as any } : {},
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+  /** The ordinary admin verification, for a payment finance tied to a transfer. */
+  verifyByAdmin(adminId: string, paymentId: string) {
+    return this.manual.verifyByAdmin(adminId, paymentId);
   }
 
-  /** Admin resolves an unmatched/ambiguous event by pointing it at a payment. */
-  async manualMatch(eventId: string, paymentId: string, actorId: string) {
+  /**
+   * An admin says this transfer is this payment.
+   *
+   * The server re-checks everything the screen showed: the transfer is still
+   * unclaimed (not matched, not being returned), it is on the payment's rail,
+   * it carries exactly what the payment is waiting on, the payment is still
+   * open, and no other transfer already paid for it. The transfer is claimed
+   * with a compare-and-swap before anything is verified, so a double click, a
+   * second admin or the automatic matcher cannot spend it twice; verification
+   * then runs through the ordinary admin path (the Live handler for a seat).
+   */
+  async manualMatch(eventId: string, paymentId: string, actorId: string, reason?: string) {
     const event = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
-    if (event.status === 'MATCHED') throw new BadRequestException('Event already matched');
+    if (event.status === 'MATCHED' || event.matchedPaymentId || event.matchedTopupId) {
+      throw new BadRequestException({ message: 'Event already matched', code: 'EVENT_ALREADY_CLAIMED' });
+    }
+    if (event.status === 'RETURNED') {
+      throw new BadRequestException({ message: 'This transfer is being returned', code: 'EVENT_RETURNED' });
+    }
+    if (event.status === 'DUPLICATE') {
+      throw new BadRequestException({ message: 'A duplicate notification is not a transfer', code: 'EVENT_DUPLICATE' });
+    }
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('Payment not found');
+    if (!payment.method || !methodsFor(event.provider).includes(payment.method)) {
+      throw new BadRequestException({
+        message: `The transfer arrived by ${event.provider}, the payment is ${payment.method ?? 'unknown'}`,
+        code: 'METHOD_MISMATCH',
+      });
+    }
     // A transfer is proof of exactly the amount it carried, not of any payment
-    // an admin points it at.
-    //
-    // "The amount" is what the transfer had to cover: a payment with a wallet
-    // contribution is waiting on `amountCents - walletCents`, the rest having
-    // been reserved from the balance at submit time. The automatic matcher has
-    // always compared against that (see `ingest`); comparing the admin's match
-    // against the full total instead made every mixed payment impossible to
-    // resolve by hand — the one path left once auto-matching gave up on it.
+    // an admin points it at. "The amount" is what the transfer had to cover:
+    // a payment with a wallet contribution is waiting on the remainder.
     const dueCents = payment.amountCents - (payment.walletCents ?? 0);
     if (event.amountCents !== dueCents) {
       throw new BadRequestException({
@@ -628,18 +468,20 @@ export class PaymentMatchingService {
         message: 'Payment is neither pending nor awaiting settlement',
         code: 'NOT_MATCHABLE',
       });
-    // Claim the transfer first, with a compare-and-swap, so two admins (or an
-    // admin and the matcher) cannot spend one transfer on two payments.
+    const already = await this.prisma.paymentEvent.findFirst({ where: { matchedPaymentId: paymentId }, select: { id: true } });
+    if (already) {
+      throw new BadRequestException({ message: 'Another transfer already paid for this payment', code: 'PAYMENT_ALREADY_HAS_TRANSFER' });
+    }
+    const why = (reason ?? '').trim().slice(0, 300);
     const claim = await this.prisma.paymentEvent.updateMany({
       where: { id: eventId, status: { in: ['UNMATCHED', 'AMBIGUOUS'] }, matchedPaymentId: null, matchedTopupId: null },
-      data: { status: 'MATCHED', matchedPaymentId: paymentId, note: `manual match by ${actorId}` },
+      data: { status: 'MATCHED', matchedPaymentId: paymentId, note: `manual match by ${actorId}${why ? `: ${why}` : ''}` },
     });
-    if (claim.count === 0) throw new BadRequestException('Event already matched');
+    if (claim.count === 0) throw new BadRequestException({ message: 'Event already matched', code: 'EVENT_ALREADY_CLAIMED' });
     try {
-      // Same as an automatic match: a pending payment is verified and settled;
-      // one a teacher already self-verified is settled — that is the whole
-      // point of a real transfer turning up for it.
-      if (payment.status === 'PENDING') await this.manual.systemVerify(paymentId);
+      // A pending payment is verified — by this admin, through the ordinary
+      // path; one a teacher already self-verified is settled.
+      if (payment.status === 'PENDING') await this.manual.verifyByAdmin(actorId, paymentId);
       else await this.manual.settle(paymentId, actorId);
     } catch (e) {
       // The payment was not verified: the transfer is not spent.
@@ -649,6 +491,17 @@ export class PaymentMatchingService {
       });
       throw e;
     }
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actorUserId: actorId,
+          action: 'payment.event.match',
+          entity: 'PaymentEvent',
+          entityId: eventId,
+          meta: { paymentId, reason: why || null } as never,
+        },
+      })
+      .catch(() => undefined);
     return { ok: true };
   }
 }

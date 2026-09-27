@@ -1,17 +1,13 @@
-import { PaymentMatchingService } from './payment-matching.service';
+import { matchingFake } from './matching-fake';
 
 /**
- * Deciding that a transfer belongs to a payment.
+ * Deciding that a transfer belongs to a payment — through the real service.
  *
  * The dangerous case is one pending payment of the right size in the window
- * whose reference does *not* match the transfer. That used to be credited on
- * amount and timing alone — the weakest evidence there is, because two students
- * buying the same course in the same three days transfer identical amounts, and
- * whichever one the window happened to hold got the other's money.
- *
- * The payer's name closes it. Both providers print it and the parser used to
- * throw it away; it is the one thing on a transfer a student cannot read off
- * somebody else's receipt.
+ * whose declared identity does *not* match the transfer. That used to be
+ * credited on the payer's name alone even when the SMS printed a different
+ * sending wallet. The SMS naming someone else's wallet is a contradiction now,
+ * and a contradiction always goes to a person.
  */
 const SMS = (payer: string) =>
   [
@@ -22,33 +18,16 @@ const SMS = (payer: string) =>
   ].join('\n');
 
 function ctx(over: { paymentRef?: string | null; owner?: string } = {}) {
-  const events: any[] = [];
-  const prisma: any = {
-    paymentEvent: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      create: jest.fn(async (args: any) => {
-        events.push(args.data);
-        return { id: 'evt1', ...args.data };
-      }),
-    },
-    payment: {
-      findMany: jest.fn().mockResolvedValue([
-        {
-          id: 'pay1',
-          reference: over.paymentRef === undefined ? '01999999999' : over.paymentRef,
-          status: 'PENDING',
-          amountCents: 10000,
-          walletCents: 0,
-          student: { user: { fullName: over.owner ?? 'أحمد عبد العزيز هريدي' } },
-        },
-      ]),
-    },
-    walletTopup: { findMany: jest.fn().mockResolvedValue([]) },
-  };
-  const manual: any = { systemVerify: jest.fn().mockResolvedValue({}), settle: jest.fn() };
-  const wallet: any = { approveTopup: jest.fn() };
-  const svc = new PaymentMatchingService(prisma, manual, wallet);
-  return { svc, manual, events };
+  return matchingFake({
+    payments: [
+      {
+        id: 'pay1',
+        reference: over.paymentRef === undefined ? '01099999999' : over.paymentRef,
+        amountCents: 10000,
+        student: { user: { fullName: over.owner ?? 'أحمد عبد العزيز هريدي' } },
+      },
+    ],
+  });
 }
 
 const transfer = (payer: string) => ({
@@ -56,33 +35,27 @@ const transfer = (payer: string) => ({
   amountCents: 10000,
   reference: '01284120292',
   identities: ['01284120292'],
-  externalId: 'sms-hash-1',
+  externalId: `sms-hash-${Math.random()}`,
   rawMessage: SMS(payer),
 });
 
-describe('one payment of this size, and the reference does not match', () => {
-  it('is credited when the payer is the person who owes it', async () => {
-    // Register spelling vs SMS spelling of one person: hamza, final ya, and
-    // where the compound name is broken all differ, and none of that means
-    // anything.
-    const { svc, manual } = ctx();
+describe('one payment of this size, and the declared number is not the sender', () => {
+  it('is NOT credited even when the name agrees: the SMS names another wallet', async () => {
+    const { svc, manual, events } = ctx();
     const r = await svc.ingest(transfer('احمد عبدالعزيز هريدى'));
-    expect(r.status).toBe('MATCHED');
-    expect(manual.systemVerify).toHaveBeenCalledWith('pay1');
+    expect(r.status).toBe('AMBIGUOUS');
+    expect(manual.systemVerify).not.toHaveBeenCalled();
+    expect(events[0].note).toContain('sender number');
   });
 
   it('goes to a human when the payer is somebody else', async () => {
     const { svc, manual } = ctx();
     const r = await svc.ingest(transfer('محمود ابراهيم سعيد'));
     expect(r.status).toBe('AMBIGUOUS');
-    // Nothing is credited: this is the case that used to take one student's
-    // money and open another student's course with it.
     expect(manual.systemVerify).not.toHaveBeenCalled();
   });
 
   it('goes to a human when the message names nobody', async () => {
-    // No name to weigh, so there is nothing left but amount and timing — which
-    // is not enough on its own and never was.
     const { svc, manual } = ctx();
     const r = await svc.ingest({
       ...transfer('x'),
@@ -91,34 +64,32 @@ describe('one payment of this size, and the reference does not match', () => {
     expect(r.status).toBe('AMBIGUOUS');
     expect(manual.systemVerify).not.toHaveBeenCalled();
   });
-
-  it('says in the note whose name it saw, so an admin can act on it', async () => {
-    const { svc, events } = ctx();
-    await svc.ingest(transfer('محمود ابراهيم سعيد'));
-    expect(events[0].note).toContain('محمود ابراهيم سعيد');
-    expect(events[0].note).toContain('أحمد عبد العزيز هريدي');
-  });
 });
 
-describe('the reference does match', () => {
-  it('is credited on the reference alone', async () => {
-    // The strong evidence, and it stands by itself: the student read a number
-    // off their own receipt and it is this transfer's.
+describe('the declared number is the sender', () => {
+  it('is credited on the sender number alone', async () => {
     const { svc, manual } = ctx({ paymentRef: '01284120292' });
     const r = await svc.ingest(transfer('احمد عبدالعزيز هريدى'));
     expect(r.status).toBe('MATCHED');
     expect(manual.systemVerify).toHaveBeenCalledWith('pay1');
   });
 
-  it('is still credited when the name disagrees, but says so', async () => {
+  it('is still credited when the account is in another name, but says so', async () => {
     // Somebody paying for their own child, or from a parent's wallet, is
-    // ordinary and must not be blocked. It is still worth an admin's eye, so
-    // the disagreement is written down rather than acted on.
+    // ordinary and must not be blocked. It is written down for an admin.
     const { svc, manual, events } = ctx({ paymentRef: '01284120292' });
     const r = await svc.ingest(transfer('محمود ابراهيم سعيد'));
     expect(r.status).toBe('MATCHED');
     expect(manual.systemVerify).toHaveBeenCalledWith('pay1');
     expect(events[0].note).toContain('worth a look');
+  });
+
+  it('(8) the same SMS delivered twice verifies once', async () => {
+    const { svc, manual } = ctx({ paymentRef: '01284120292' });
+    const t = transfer('احمد عبدالعزيز هريدى');
+    expect((await svc.ingest(t)).status).toBe('MATCHED');
+    expect((await svc.ingest(t)).status).toBe('DUPLICATE');
+    expect(manual.systemVerify).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -137,12 +108,6 @@ describe('every event records who sent the money', () => {
  * «تم تنفيذ تحويل لحظي بمبلغ 120.00 جم من حسابك» is the platform's own money
  * going out, and booking it as an incoming payment settles an enrolment nobody
  * paid for.
- *
- * `isIncomingTransfer` has always existed and was enforced in the device route
- * only. This is the common engine both routes reach, and the key-authenticated
- * route came in underneath it — so an outgoing debit submitted there was
- * matched and settled. Demonstrated against a running API: an outgoing SMS for
- * the right amount turned a PENDING payment into PAID.
  */
 describe('the direction of the transfer', () => {
   const OUTGOING = [
@@ -170,8 +135,6 @@ describe('the direction of the transfer', () => {
     const { svc, manual } = ctx({ paymentRef: '01284120292' });
     const r = await svc.ingest(event(OUTGOING));
     expect(r.status).toBe('UNMATCHED');
-    // The reference matches a pending payment exactly. Without the direction
-    // check that is enough to settle it, which is the whole defect.
     expect(manual.systemVerify).not.toHaveBeenCalled();
   });
 
@@ -182,7 +145,6 @@ describe('the direction of the transfer', () => {
   });
 
   it('still settles a genuine incoming transfer', async () => {
-    // The guard must not swallow the case it exists to let through.
     const { svc, manual } = ctx({ paymentRef: '01284120292' });
     const r = await svc.ingest(event(INCOMING));
     expect(r.status).toBe('MATCHED');
@@ -190,12 +152,32 @@ describe('the direction of the transfer', () => {
   });
 
   it('does not treat a missing message as outgoing', async () => {
-    // An event with no raw message cannot be judged either way. Refusing it
-    // here would break every caller that sends only structured fields, so it
-    // keeps its existing behaviour and is matched on its other evidence.
     const { svc, manual } = ctx({ paymentRef: '01284120292' });
     const r = await svc.ingest({ ...event(''), rawMessage: undefined });
     expect(r.status).toBe('MATCHED');
     expect(manual.systemVerify).toHaveBeenCalledWith('pay1');
+  });
+});
+
+describe('Darsly’s own number is never a payer', () => {
+  it('(12) an SMS whose only number is ours has no identity to match', async () => {
+    const { svc, manual } = ctx({ paymentRef: '01002589923' });
+    const r = await svc.ingest({
+      provider: 'VODAFONE_CASH',
+      amountCents: 10000,
+      reference: '01002589923',
+      identities: ['01002589923'],
+      externalId: 'ours-1',
+      rawMessage: 'تم استلام مبلغ 100.00 جنيه على رقم محفظتك 01002589923',
+    });
+    expect(r.status).toBe('UNMATCHED');
+    expect(manual.systemVerify).not.toHaveBeenCalled();
+  });
+
+  it('(12) a legacy payment whose "sender" is our number is never linked by it', async () => {
+    const { svc, manual } = ctx({ paymentRef: '01002589923' });
+    const r = await svc.ingest(transfer('احمد عبدالعزيز هريدى'));
+    expect(r.status).not.toBe('MATCHED');
+    expect(manual.systemVerify).not.toHaveBeenCalled();
   });
 });

@@ -735,7 +735,8 @@ describe('P6: a manual match compares the transfer with what the transfer had to
   const build = (event: number) => {
     const prisma: any = {
       paymentEvent: {
-        findUnique: jest.fn(async () => ({ id: 'e1', status: 'UNMATCHED', amountCents: event })),
+        findUnique: jest.fn(async () => ({ id: 'e1', status: 'UNMATCHED', provider: 'VODAFONE_CASH', amountCents: event })),
+        findFirst: jest.fn(async () => null),
         update: jest.fn(async () => ({})),
         updateMany: jest.fn(async () => ({ count: 1 })),
       },
@@ -745,11 +746,13 @@ describe('P6: a manual match compares the transfer with what the transfer had to
           status: 'PENDING',
           amountCents: 10_000,
           walletCents: 4_000,
+          method: 'VODAFONE_CASH',
           settledAt: null,
         })),
       },
+      auditLog: { create: jest.fn(async () => ({})) },
     };
-    const manual = { systemVerify: jest.fn(async () => ({ ok: true })), settle: jest.fn() };
+    const manual = { verifyByAdmin: jest.fn(async () => ({ ok: true })), settle: jest.fn() };
     const service = new PaymentMatchingService(prisma, manual as any, {} as any);
     return { service, manual, prisma };
   };
@@ -757,13 +760,14 @@ describe('P6: a manual match compares the transfer with what the transfer had to
   it('accepts a 60 EGP transfer for a 100 EGP payment with 40 EGP reserved from the wallet', async () => {
     const { service, manual } = build(6_000);
     expect(await service.manualMatch('e1', 'p1', 'admin')).toEqual({ ok: true });
-    expect(manual.systemVerify).toHaveBeenCalledWith('p1');
+    // Verified by the admin who matched it, through the ordinary admin path.
+    expect(manual.verifyByAdmin).toHaveBeenCalledWith('admin', 'p1');
   });
 
   it('still refuses a transfer of the full total — the wallet part was not transferred', async () => {
     const { service, manual } = build(10_000);
     const err = await service.manualMatch('e1', 'p1', 'admin').catch((e) => e);
     expect(err.getResponse()).toMatchObject({ code: 'AMOUNT_MISMATCH' });
-    expect(manual.systemVerify).not.toHaveBeenCalled();
+    expect(manual.verifyByAdmin).not.toHaveBeenCalled();
   });
 });

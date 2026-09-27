@@ -4,25 +4,17 @@ import {
   parseIdentities,
   parsePayerName,
 } from '../device/sms-parser';
-import { PaymentMatchingService } from './payment-matching.service';
+import { matchingFake } from './matching-fake';
 
 /**
  * An InstaPay top-up, end to end, from the exact message production sent on
- * 16 Sep 2026.
+ * 16 Sep 2026 — through the real matcher.
  *
- * Every step of this path was broken at once, and each break alone was enough
- * to stop the money being credited:
- *
- *  1. the message never counted as incoming — a bank says "a transfer was
- *     executed to your account", never "received", so it was dropped before it
- *     reached matching at all;
- *  2. the payer's name came out as «احمد عبدالعزيز هريدى على», the preposition
- *     included, so it agreed with nobody;
- *  3. the SMS is sent by the *bank*, so the event's provider is BANK_TRANSFER,
- *     while the student — reading a card labelled «إنستاباي درسلي» — had picked
- *     INSTAPAY, and an exact method equality found no candidates.
- *
- * This asserts the whole chain, so fixing one and regressing another is caught.
+ * The bank sends the SMS (provider BANK_TRANSFER) while the student picked
+ * INSTAPAY: the two are one rail. The bank's reference and the student's
+ * receipt reference are issued by different systems and never agree, so an
+ * InstaPay transfer is identified by the payer's name — under the policy's
+ * narrow rule — or by a person. A receipt is supporting evidence only.
  */
 const INSTAPAY_SMS =
   'يرجى العلم انه تم تنفيذ تحويل لحظي بمبلغ 5.00 جم إلى حسابك المنتهي بـ **7717 ' +
@@ -38,37 +30,14 @@ describe('the SMS itself', () => {
   });
 });
 
-function ctx(topupMethod: string, topupRef: string) {
-  return ctxNamed(topupMethod, topupRef, 'أحمد عبد العزيز هريدي');
-}
-
-function ctxNamed(topupMethod: string, topupRef: string, owner: string) {
-  const seen: any = {};
-  const prisma: any = {
-    paymentEvent: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      create: jest.fn(async (args: any) => ({ id: 'evt1', ...args.data })),
-    },
-    payment: {
-      findMany: jest.fn(async (args: any) => {
-        seen.paymentWhere = args.where;
-        return [];
-      }),
-    },
-    walletTopup: {
-      findMany: jest.fn(async (args: any) => {
-        seen.topupWhere = args.where;
-        const allowed = args.where.method?.in ?? [args.where.method];
-        return allowed.includes(topupMethod)
-          ? [{ id: 'top1', reference: topupRef, student: { user: { fullName: owner } } }]
-          : [];
-      }),
-    },
-  };
-  const manual: any = { systemVerify: jest.fn(), settle: jest.fn() };
-  const wallet: any = { approveTopup: jest.fn().mockResolvedValue({}) };
-  return { svc: new PaymentMatchingService(prisma, manual, wallet), wallet, seen };
-}
+const topupOf = (method: string, reference: string, owner = 'أحمد عبد العزيز هريدي', over: any = {}) => ({
+  id: 'top1',
+  amountCents: 500,
+  method,
+  reference,
+  student: { user: { fullName: owner } },
+  ...over,
+});
 
 const event = {
   // What the listener reports for a CIB message: the *bank* sent it.
@@ -81,48 +50,55 @@ const event = {
 };
 
 describe('a bank SMS against a top-up the student filed as InstaPay', () => {
-  it('credits it — the two are the same rail', async () => {
-    const { svc, wallet, seen } = ctx('INSTAPAY', '3979e788');
-    const r = await svc.ingest(event);
-    expect(seen.topupWhere.method).toEqual({ in: ['INSTAPAY', 'BANK_TRANSFER'] });
+  it('credits it on an exact provider reference — the two are the same rail', async () => {
+    const f = matchingFake({ topups: [topupOf('INSTAPAY', '3979e788')] });
+    const r = await f.svc.ingest(event);
+    expect(f.prisma.walletTopup.findMany.mock.calls[0][0].where.method).toEqual({ in: ['INSTAPAY', 'BANK_TRANSFER'] });
     expect(r.status).toBe('MATCHED');
-    expect(wallet.approveTopup).toHaveBeenCalled();
+    expect(f.wallet.approveTopup).toHaveBeenCalled();
   });
 
   it('does not reach across to a wallet top-up', async () => {
-    // A Vodafone Cash top-up is a different rail and must stay out of the pool.
-    const { svc, wallet } = ctx('VODAFONE_CASH', '3979e788');
-    const r = await svc.ingest(event);
+    const f = matchingFake({ topups: [topupOf('VODAFONE_CASH', '3979e788')] });
+    const r = await f.svc.ingest(event);
     expect(r.status).toBe('UNMATCHED');
-    expect(wallet.approveTopup).not.toHaveBeenCalled();
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
-  it("falls back to the payer's name when the reference differs", async () => {
-    // The student mistyped the reference. One top-up of this size in the window
-    // and the transfer is in their own name, so it is credited — the same rule
-    // that already applies to a wallet transfer, now reachable for InstaPay.
-    const { svc, wallet } = ctx('INSTAPAY', 'ffffffff');
-    const r = await svc.ingest(event);
+  it('credits on the full payer name when it is the only candidate and the only such transfer', async () => {
+    const f = matchingFake({ topups: [topupOf('INSTAPAY', 'ffffffff')] });
+    const r = await f.svc.ingest(event);
     expect(r.status).toBe('MATCHED');
-    expect(wallet.approveTopup).toHaveBeenCalled();
+    expect(f.wallet.approveTopup).toHaveBeenCalled();
+  });
+
+  it('refuses the name path when another unclaimed transfer of the amount is waiting', async () => {
+    const f = matchingFake({
+      topups: [topupOf('INSTAPAY', 'ffffffff')],
+      events: [
+        { id: 'other', provider: 'BANK_TRANSFER', amountCents: 500, status: 'UNMATCHED', occurredAt: new Date(), matchedPaymentId: null, matchedTopupId: null },
+      ],
+    });
+    const r = await f.svc.ingest(event);
+    expect(r.status).toBe('AMBIGUOUS');
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
   it('refuses when the reference differs AND the money is in another name', async () => {
-    // Pooling the methods must not weaken the evidence. This is the case that
-    // would hand one student's money to another, and it goes to a human.
-    const { svc, wallet } = ctxNamed('INSTAPAY', 'ffffffff', 'محمود إبراهيم سعيد');
-    const r = await svc.ingest(event);
+    const f = matchingFake({ topups: [topupOf('INSTAPAY', 'ffffffff', 'محمود إبراهيم سعيد')] });
+    const r = await f.svc.ingest(event);
     expect(r.status).toBe('AMBIGUOUS');
-    expect(wallet.approveTopup).not.toHaveBeenCalled();
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 });
 
 /**
- * The receipt as the identity — the case the reference can never cover.
+ * The receipt — corroboration, never authority.
  *
  * The student's InstaPay receipt says «المرجع 770916345902»; the bank's SMS to
- * the platform says «برقم مرجعي 3979e788». Nothing links them but the money
- * itself: 2,000 EGP sent at 07:55 on 16 Sep.
+ * the platform says «برقم مرجعي 3979e788». A receipt is an image the buyer
+ * controls, so "the same amount in the same minute" on it is never enough to
+ * take a real transfer.
  */
 const RECEIPT = {
   isReceipt: true,
@@ -138,28 +114,6 @@ const RECEIPT = {
   concerns: [],
 };
 
-function receiptCtx(topups: any[]) {
-  const prisma: any = {
-    paymentEvent: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      create: jest.fn(async (a: any) => ({ id: 'evt9', ...a.data })),
-    },
-    payment: { findMany: jest.fn().mockResolvedValue([]) },
-    walletTopup: { findMany: jest.fn().mockResolvedValue(topups) },
-  };
-  const wallet: any = { approveTopup: jest.fn().mockResolvedValue({}) };
-  return {
-    svc: new PaymentMatchingService(
-      prisma,
-      { systemVerify: jest.fn(), settle: jest.fn() } as any,
-      wallet,
-    ),
-    wallet,
-  };
-}
-
-// The bank SMS for that same transfer: same amount, booked two minutes later,
-// and carrying a reference the student has never seen.
 const bankSms = {
   provider: 'BANK_TRANSFER' as const,
   amountCents: 200000,
@@ -171,153 +125,120 @@ const bankSms = {
     'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك المنتهي بـ **7717 من محمد طه عطية مسعود على برقم مرجعي 3979e788',
 };
 
-describe('matching on the receipt, where no shared reference exists', () => {
+describe('the receipt is supporting evidence only', () => {
   const topup = (over: any = {}) => ({
     id: 'top1',
+    amountCents: 200000,
+    method: 'INSTAPAY',
     reference: '',
+    createdAt: new Date('2026-09-16T04:56:00Z'),
     proofReading: RECEIPT,
     student: { user: { fullName: 'محمد طه عطية مسعود' } },
     ...over,
   });
 
-  it('credits the top-up whose receipt is this transfer', async () => {
-    const { svc, wallet } = receiptCtx([topup()]);
-    const r = await svc.ingest(bankSms);
-    expect(r.status).toBe('MATCHED');
-    expect(wallet.approveTopup).toHaveBeenCalled();
+  it('credits the top-up on the payer’s full name; the receipt agrees but decides nothing', async () => {
+    const f = matchingFake({ topups: [topup()] });
+    expect((await f.svc.ingest(bankSms)).status).toBe('MATCHED');
+    expect(f.wallet.approveTopup).toHaveBeenCalled();
+  });
+
+  it('(3) a fitting receipt from a buyer in another name is never enough', async () => {
+    const f = matchingFake({ topups: [topup({ student: { user: { fullName: 'سارة علي حسن' } } })] });
+    const r = await f.svc.ingest(bankSms);
+    expect(r.status).toBe('AMBIGUOUS');
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
   it('refuses when two receipts describe the same amount at the same time', async () => {
-    const { svc, wallet } = receiptCtx([topup(), topup({ id: 'top2' })]);
-    const r = await svc.ingest(bankSms);
-    expect(r.status).toBe('AMBIGUOUS');
-    expect(wallet.approveTopup).not.toHaveBeenCalled();
+    const f = matchingFake({ topups: [topup(), topup({ id: 'top2' })] });
+    expect((await f.svc.ingest(bankSms)).status).toBe('AMBIGUOUS');
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
-  it('ignores a receipt for a transfer at a different time', async () => {
-    const other = topup({ proofReading: { ...RECEIPT, sentAtLocal: '2026-09-16T05:40' } });
-    const { svc, wallet } = receiptCtx([other]);
-    const r = await svc.ingest(bankSms);
-    // One candidate left, no receipt match, no reference match — the name path
-    // decides, and here the names do agree.
-    expect(r.status).toBe('MATCHED');
-    expect(wallet.approveTopup).toHaveBeenCalled();
-  });
-
-  it('refuses when the receipt and the typed reference point at different top-ups', async () => {
+  it('refuses when the receipt and an exact reference point at different top-ups', async () => {
     const byReceipt = topup();
     const byRef = topup({ id: 'top2', reference: '3979e788', proofReading: null });
-    const { svc, wallet } = receiptCtx([byReceipt, byRef]);
-    const r = await svc.ingest(bankSms);
-    expect(r.status).toBe('AMBIGUOUS');
-    expect(wallet.approveTopup).not.toHaveBeenCalled();
+    const f = matchingFake({ topups: [byReceipt, byRef] });
+    expect((await f.svc.ingest(bankSms)).status).toBe('AMBIGUOUS');
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
   it('still works for a top-up with no receipt reading at all', async () => {
-    const { svc, wallet } = receiptCtx([topup({ proofReading: null })]);
-    const r = await svc.ingest(bankSms);
-    expect(r.status).toBe('MATCHED');
-    expect(wallet.approveTopup).toHaveBeenCalled();
+    const f = matchingFake({ topups: [topup({ proofReading: null })] });
+    expect((await f.svc.ingest(bankSms)).status).toBe('MATCHED');
   });
 });
 
 /**
- * The race that actually happened, 16 Sep 2026 19:51.
- *
- * The bank's SMS landed at 19:51:27 and the student finished the form at
- * 19:51:42 — fifteen seconds later. The event was filed UNMATCHED because there
- * was nothing yet to match, and `reconcileTopup` (which exists for exactly this)
- * then refused to look, twice over: it returns early when the top-up has no
- * reference, and an InstaPay top-up has none by design; and it searched for
- * events whose provider equalled INSTAPAY, while the bank had filed a
- * BANK_TRANSFER.
+ * (9) The transfer arrives before the form is finished (16 Sep 2026 19:51):
+ * the SMS is filed UNMATCHED, and the top-up reconciles against it when it is
+ * submitted — by the same policy, claimed by compare-and-swap.
  */
 describe('the transfer arrives before the form is finished', () => {
   const topupRow = {
     id: 'top1',
-    status: 'PENDING',
     method: 'INSTAPAY',
     amountCents: 200000,
     reference: '',
     createdAt: new Date('2026-09-16T04:55:42Z'),
     proofReading: RECEIPT,
+    student: { user: { fullName: 'محمد طه عطية مسعود' } },
   };
   const eventRow = {
     id: 'evt1',
     provider: 'BANK_TRANSFER',
     amountCents: 200000,
     reference: '3979e788',
+    status: 'UNMATCHED',
+    matchedPaymentId: null,
+    matchedTopupId: null,
     occurredAt: new Date('2026-09-16T04:55:27Z'),
-    rawMessage: 'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك برقم مرجعي 3979e788',
+    rawMessage: 'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك من محمد طه عطية مسعود على برقم مرجعي 3979e788',
   };
 
-  function reconcileCtx(topup: any, events: any[]) {
-    const seen: any = {};
-    const prisma: any = {
-      walletTopup: { findUnique: jest.fn().mockResolvedValue(topup) },
-      paymentEvent: {
-        findMany: jest.fn(async (args: any) => {
-          seen.where = args.where;
-          return events;
-        }),
-        update: jest.fn().mockResolvedValue({}),
-        updateMany: jest.fn(async () => ({ count: 1 })),
-      },
-    };
-    const wallet: any = { approveTopup: jest.fn().mockResolvedValue({}) };
-    return {
-      svc: new PaymentMatchingService(
-        prisma,
-        { systemVerify: jest.fn(), settle: jest.fn() } as any,
-        wallet,
-      ),
-      wallet,
-      seen,
-    };
-  }
-
-  it('finds the transfer that arrived first and credits it', async () => {
-    const { svc, wallet, seen } = reconcileCtx(topupRow, [eventRow]);
-    const r = await svc.reconcileTopup('top1');
-    expect(seen.where.provider).toEqual({ in: ['INSTAPAY', 'BANK_TRANSFER'] });
-    expect(r.status).toBe('MATCHED');
-    expect(wallet.approveTopup).toHaveBeenCalledWith(null, 'top1');
+  it('finds the transfer that arrived first and credits it — once', async () => {
+    const f = matchingFake({ topups: [topupRow], events: [eventRow] });
+    expect((await f.svc.reconcileTopup('top1')).status).toBe('MATCHED');
+    expect(f.events[0]).toMatchObject({ status: 'MATCHED', matchedTopupId: 'top1' });
+    expect(f.wallet.approveTopup).toHaveBeenCalledWith(null, 'top1');
+    // Reconciling again finds nothing left to claim.
+    f.topups[0].status = 'PENDING';
+    expect((await f.svc.reconcileTopup('top1')).status).not.toBe('MATCHED');
+    expect(f.wallet.approveTopup).toHaveBeenCalledTimes(1);
   });
 
-  it('does not credit a transfer sent at a different time', async () => {
-    const far = { ...eventRow, occurredAt: new Date('2026-09-16T06:30:00Z') };
-    const { svc, wallet } = reconcileCtx(topupRow, [far]);
-    expect((await svc.reconcileTopup('top1')).status).toBe('UNMATCHED');
-    expect(wallet.approveTopup).not.toHaveBeenCalled();
+  it('(13) a receipt with no name in the SMS is not enough', async () => {
+    const f = matchingFake({
+      topups: [topupRow],
+      events: [{ ...eventRow, rawMessage: 'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك برقم مرجعي 3979e788' }],
+    });
+    expect((await f.svc.reconcileTopup('top1')).status).not.toBe('MATCHED');
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
   it('refuses when two unmatched transfers both fit', async () => {
-    const { svc, wallet } = reconcileCtx(topupRow, [eventRow, { ...eventRow, id: 'evt2' }]);
-    expect((await svc.reconcileTopup('top1')).status).toBe('AMBIGUOUS');
-    expect(wallet.approveTopup).not.toHaveBeenCalled();
+    const f = matchingFake({ topups: [topupRow], events: [eventRow, { ...eventRow, id: 'evt2' }] });
+    expect((await f.svc.reconcileTopup('top1')).status).not.toBe('MATCHED');
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
-  it('has nothing to go on with neither a reference nor a readable receipt', async () => {
-    const { svc } = reconcileCtx({ ...topupRow, proofReading: null }, [eventRow]);
-    expect((await svc.reconcileTopup('top1')).status).toBe('NO_REFERENCE');
+  it('never uses a transfer that is being returned', async () => {
+    const f = matchingFake({ topups: [topupRow], events: [{ ...eventRow, status: 'RETURNED' }] });
+    expect((await f.svc.reconcileTopup('top1')).status).toBe('UNMATCHED');
+    expect(f.wallet.approveTopup).not.toHaveBeenCalled();
   });
 
   it('still reconciles a Vodafone top-up by its wallet number', async () => {
-    const vf = {
-      ...topupRow,
-      method: 'VODAFONE_CASH',
-      reference: '01284120292',
-      proofReading: null,
-    };
+    const vf = { ...topupRow, method: 'VODAFONE_CASH', reference: '01284120292', proofReading: null };
     const vfEvent = {
       ...eventRow,
       provider: 'VODAFONE_CASH',
       reference: '01284120292',
       rawMessage: 'تم استلام مبلغ 2000.00 جنيه من 01284120292',
     };
-    const { svc, wallet, seen } = reconcileCtx(vf, [vfEvent]);
-    expect((await svc.reconcileTopup('top1')).status).toBe('MATCHED');
-    expect(seen.where.provider).toEqual({ in: ['VODAFONE_CASH'] });
-    expect(wallet.approveTopup).toHaveBeenCalled();
+    const f = matchingFake({ topups: [vf], events: [vfEvent] });
+    expect((await f.svc.reconcileTopup('top1')).status).toBe('MATCHED');
+    expect(f.wallet.approveTopup).toHaveBeenCalled();
   });
 });

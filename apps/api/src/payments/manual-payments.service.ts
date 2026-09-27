@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertCourseYear } from '../catalog/course-year';
 import { assertCourseTrack } from '../catalog/subject-track';
 import { normalizePayerReference } from './payer-reference';
+import { receivingHandles } from './receiving-accounts';
 import { checkProofAgainstClaim } from './proof-check';
 import { ProofReaderService } from './proof-reader.service';
 import { activateBundleChildren } from '../enrollments/bundle';
@@ -345,16 +346,9 @@ export class ManualPaymentsService {
    * coupon reservation, the enrolment upsert, the teacher's ledger credit and
    * the invoice are all the ones that already work.
    */
-  /** See wallet.service: our own numbers are not an answer to "from where". */
-  private async receivingHandles(): Promise<string[]> {
-    try {
-      const accounts = await this.prisma.platformPaymentAccount.findMany({
-        select: { handle: true },
-      });
-      return accounts.map((a) => a.handle);
-    } catch {
-      return [];
-    }
+  /** See receiving-accounts.ts: our own numbers are not an answer to "from where". */
+  private receivingHandles(): Promise<string[]> {
+    return receivingHandles(this.prisma);
   }
 
   async payFromWallet(userId: string, dto: { courseId: string; couponCode?: string }) {
@@ -640,6 +634,16 @@ export class ManualPaymentsService {
     // settlement (not withdrawable) until a trusted payment-event or admin settles it.
     const settle = user.role === Role.SUPER_ADMIN;
     return this.applyVerification(payment, user.sub, false, settle);
+  }
+
+  /**
+   * Darsly finance verifies a payment it has confirmed arrived (a manual match,
+   * a recovered transfer). The ordinary admin verification, attributed to the
+   * admin — a Live seat goes to the Live handler, which checks capacity and
+   * refunds a seat it cannot give.
+   */
+  async verifyByAdmin(adminId: string, paymentId: string) {
+    return this.verify({ sub: adminId, role: Role.SUPER_ADMIN }, paymentId);
   }
 
   /** Auto-verification by the notification-listener matching engine. A matched
@@ -1117,11 +1121,31 @@ export class ManualPaymentsService {
         student: { select: { user: { select: { fullName: true, phone: true } } } },
         course: { select: { title: true } },
         livePurchase: {
-          select: { session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } },
+          select: {
+            status: true,
+            session: { select: { title: true, startsAt: true } },
+            guestBuyer: { select: { displayName: true } },
+          },
         },
       },
     });
     return rows.map((p) => ({
+      // What an admin weighs before confirming money arrived: how the buyer
+      // said they paid, and what their receipt was read to say.
+      transferSource: p.transferSource,
+      payerName: p.payerName,
+      claimedAt: p.claimedAt,
+      hasProof: !!p.proofImageUrl,
+      proofSummary: p.proofReading
+        ? {
+            amountCents: (p.proofReading as any).amountCents ?? null,
+            sentAtText: (p.proofReading as any).sentAtText ?? null,
+          }
+        : null,
+      walletCents: p.walletCents,
+      guest: !p.studentId && !!p.livePurchaseId,
+      livePurchaseStatus: p.livePurchase?.status ?? null,
+      sessionStartsAt: p.livePurchase?.session.startsAt ?? null,
       id: p.id,
       status: p.status,
       amountCents: p.amountCents,

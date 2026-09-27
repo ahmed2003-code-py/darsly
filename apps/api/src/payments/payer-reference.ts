@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { isReceivingIdentifier } from './receiving-accounts';
 
 /**
  * What the student has to tell us about their transfer, and why it differs by
@@ -114,6 +115,15 @@ export function normalizePayerReference(
     return local;
   }
 
+  // Our own account (a number, an InstaPay address) is never a reference to
+  // the buyer's transfer, on any rail.
+  if (isReceivingIdentifier(value, receivingHandles)) {
+    throw new BadRequestException({
+      message: 'That is our account — enter the details of the account you transferred FROM',
+      code: 'OWN_NUMBER',
+      kind,
+    });
+  }
   // A reference has to have enough to it to identify one transfer. Four
   // alphanumeric characters is the floor: below that it matches by accident.
   const alnum = value.replace(/[^0-9a-z]/gi, '');
@@ -125,4 +135,54 @@ export function normalizePayerReference(
     });
   }
   return value;
+}
+
+export type TransferSourceKind = 'WALLET' | 'BANK';
+
+export interface TransferDeclaration {
+  source: TransferSourceKind;
+  /** WALLET: the sending wallet (01xxxxxxxxx). BANK: an optional transaction reference. */
+  reference: string;
+  /** The name on the account the money comes from. Required for BANK. */
+  payerName: string | null;
+}
+
+/**
+ * What a buyer tells us BEFORE they transfer: where the money comes FROM.
+ *
+ * The destination (which Darsly account) is a separate question. Money sent
+ * from a bank or InstaPay account into Darsly's Vodafone Cash wallet arrives as
+ * a Vodafone Cash SMS that names the payer and carries a transaction number —
+ * and no sender mobile number, because there is none. Asking that buyer for
+ * "the wallet number you transferred from" left them only our own number to
+ * type (the 27 Sep 2026 production test). So:
+ *
+ *   WALLET → the sending wallet's number, checked like every wallet number
+ *            (Egyptian mobile, never one of ours);
+ *   BANK   → no number at all; the account holder's name, and a transfer
+ *            reference only if they have one. Nothing is invented.
+ */
+export function normalizeDeclaration(
+  input: { source?: string; senderWallet?: string; payerName?: string; reference?: string },
+  receivingHandles: string[] = [],
+): TransferDeclaration {
+  const source = input.source;
+  const payerName = (input.payerName ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || null;
+  if (source === 'WALLET') {
+    // Same shape and own-number rules as every Vodafone Cash reference.
+    const reference = normalizePayerReference('VODAFONE_CASH', input.senderWallet, receivingHandles);
+    return { source, reference, payerName };
+  }
+  if (source === 'BANK') {
+    if (!payerName || payerName.length < 3 || payerName.split(' ').length < 2) {
+      throw new BadRequestException({
+        message: 'Enter the full name on the account you transferred from',
+        code: 'PAYER_NAME_REQUIRED',
+      });
+    }
+    const raw = (input.reference ?? '').trim();
+    const reference = raw ? normalizePayerReference('BANK_TRANSFER', raw, receivingHandles) : '';
+    return { source, reference, payerName };
+  }
+  throw new BadRequestException({ message: 'Say where you are transferring from', code: 'SOURCE_REQUIRED' });
 }

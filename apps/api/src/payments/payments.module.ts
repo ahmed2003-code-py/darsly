@@ -9,6 +9,7 @@ import { PaymentAccountsService } from './payment-accounts.service';
 import { PaymentEventsController } from './payment-events.controller';
 import { PaymentMatchingService } from './payment-matching.service';
 import { PaymentTargets } from './payment-targets';
+import { UnmatchedTransfersService } from './unmatched-transfers.service';
 
 /** Global so EnrollmentsService / payouts / admin can record + read the ledger. */
 @Global()
@@ -21,7 +22,8 @@ import { PaymentTargets } from './payment-targets';
     PaymentAccountsService,
     PaymentMatchingService,
     PaymentTargets,
+    UnmatchedTransfersService,
   ],
-  exports: [LedgerService, PaymentMatchingService, PaymentTargets, PaymentAccountsService],
+  exports: [LedgerService, PaymentMatchingService, PaymentTargets, PaymentAccountsService, UnmatchedTransfersService],
 })
 export class PaymentsModule {}

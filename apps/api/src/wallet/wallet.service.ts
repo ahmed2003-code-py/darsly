@@ -10,6 +10,7 @@ import { LedgerService } from '../payments/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePayerReference } from '../payments/payer-reference';
+import { receivingHandles } from '../payments/receiving-accounts';
 import { checkProofAgainstClaim } from '../payments/proof-check';
 import { ProofReaderService } from '../payments/proof-reader.service';
 
@@ -80,15 +81,8 @@ export class WalletService {
    * number did you transfer FROM". An enrichment, not a precondition: if the
    * lookup fails the reference is simply checked without it.
    */
-  private async receivingHandles(): Promise<string[]> {
-    try {
-      const accounts = await this.prisma.platformPaymentAccount.findMany({
-        select: { handle: true },
-      });
-      return accounts.map((a) => a.handle);
-    } catch {
-      return [];
-    }
+  private receivingHandles(): Promise<string[]> {
+    return receivingHandles(this.prisma);
   }
 
   async submitTopup(userId: string, dto: SubmitTopupDto) {

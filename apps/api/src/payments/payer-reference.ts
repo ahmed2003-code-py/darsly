@@ -139,6 +139,11 @@ export function normalizePayerReference(
 
 export type TransferSourceKind = 'WALLET' | 'BANK';
 
+/** A name worth matching on: at least two words. */
+function validName(name: string | null): name is string {
+  return !!name && name.length >= 3 && name.split(' ').length >= 2;
+}
+
 export interface TransferDeclaration {
   source: TransferSourceKind;
   /** WALLET: the sending wallet (01xxxxxxxxx). BANK: an optional transaction reference. */
@@ -163,7 +168,7 @@ export interface TransferDeclaration {
  *            reference only if they have one. Nothing is invented.
  */
 export function normalizeDeclaration(
-  input: { source?: string; senderWallet?: string; payerName?: string; reference?: string },
+  input: { source?: string; senderWallet?: string; payerName?: string; reference?: string; method?: string },
   receivingHandles: string[] = [],
 ): TransferDeclaration {
   const source = input.source;
@@ -171,10 +176,21 @@ export function normalizeDeclaration(
   if (source === 'WALLET') {
     // Same shape and own-number rules as every Vodafone Cash reference.
     const reference = normalizePayerReference('VODAFONE_CASH', input.senderWallet, receivingHandles);
+    // Into Darsly's wallet, the provider prints the sending number — that is
+    // the identity. Into Darsly's InstaPay / bank account, the bank's SMS
+    // names only the sender (the 27 Sep "test the money" transfer: wallet →
+    // InstaPay, matched by nobody). Without the name nothing could ever tie
+    // it to this buyer automatically, so it is asked for there.
+    if (input.method && input.method !== 'VODAFONE_CASH' && !validName(payerName)) {
+      throw new BadRequestException({
+        message: 'Enter the full name on the wallet you are transferring from',
+        code: 'PAYER_NAME_REQUIRED',
+      });
+    }
     return { source, reference, payerName };
   }
   if (source === 'BANK') {
-    if (!payerName || payerName.length < 3 || payerName.split(' ').length < 2) {
+    if (!validName(payerName)) {
       throw new BadRequestException({
         message: 'Enter the full name on the account you transferred from',
         code: 'PAYER_NAME_REQUIRED',

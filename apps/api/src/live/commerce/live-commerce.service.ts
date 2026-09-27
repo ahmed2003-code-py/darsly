@@ -21,7 +21,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LedgerService } from '../../payments/ledger.service';
 import { PaymentTargets } from '../../payments/payment-targets';
-import { PaymentMatchingService } from '../../payments/payment-matching.service';
+import { methodsFor, PaymentMatchingService } from '../../payments/payment-matching.service';
 import { normalizeDeclaration, normalizePayerReference } from '../../payments/payer-reference';
 import { receivingHandles } from '../../payments/receiving-accounts';
 import { checkProofAgainstClaim } from '../../payments/proof-check';
@@ -280,6 +280,32 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /**
+   * A FREE session's seat: every amount zero. The terms version is recorded
+   * only because every seat names one; no fee applies and none is owed.
+   */
+  private async freeSeat(session: LockedSession, db: Tx | PrismaService): Promise<{ breakdown: PriceBreakdown; feeRefundable: boolean }> {
+    const terms = await this.terms.effectiveFor(session.academyId ?? session.tenantId, new Date(), db);
+    return {
+      breakdown: {
+        basePriceCents: 0,
+        discountCents: 0,
+        feeCents: 0,
+        studentPaysCents: 0,
+        commercialNetCents: 0,
+        teacherCents: 0,
+        centerCents: 0,
+        feeType: terms.feeType,
+        feeMode: terms.feeMode,
+        feeBps: terms.feeBps,
+        feeFixedCents: terms.feeFixedCents,
+        termsVersionId: terms.id,
+        teacherSharePercent: null,
+      },
+      feeRefundable: false,
+    };
+  }
+
+  /**
    * A coupon for this seat, checked in full: it is this teacher's, made for
    * live seats (LIVE or ALL — a COURSE coupon never applies), for this session
    * if it names one, active, unexpired, not used up, and within its
@@ -358,7 +384,7 @@ export class LiveCommerceService implements OnModuleInit {
       replayDays: session.replayDays,
       closed: session.status === 'ENDED' || now.getTime() >= closesAtMs(session),
     };
-    let mine: Awaited<ReturnType<LiveCommerceService['view']>> | null = null;
+    let mine: (ReturnType<LiveCommerceService['view']> & { paymentStage: string }) | null = null;
     if (studentUserId) {
       const student = await this.prisma.studentProfile.findUnique({ where: { userId: studentUserId } });
       const p = student
@@ -368,7 +394,7 @@ export class LiveCommerceService implements OnModuleInit {
             include: { payment: true, refunds: true },
           })
         : null;
-      mine = p ? this.view(p) : null;
+      mine = p ? { ...this.view(p), paymentStage: await this.paymentStage(p) } : null;
     }
     if (session.accessMode !== 'PAID') return { ...base, studentPaysCents: 0, purchase: mine };
     const { breakdown } = await this.price(session, this.prisma);
@@ -399,9 +425,9 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /** Whether this session can be sold to this buyer at all, right now. */
-  private async assertBuyable(tx: Tx, s: LockedSession | null, studentId: string | null, now: Date) {
+  private async assertBuyable(tx: Tx, s: LockedSession | null, studentId: string | null, now: Date, allowFree = false) {
     if (!s || s.deletedAt || s.cancelledAt) throw new NotFoundException('Session not found');
-    if (s.accessMode !== 'PAID')
+    if (s.accessMode !== 'PAID' && !allowFree)
       throw new BadRequestException({ message: 'This session is free — book it instead', code: 'SESSION_IS_FREE' });
     if (s.status === 'ENDED' || now.getTime() >= closesAtMs(s))
       throw new ConflictException({ message: 'This session has ended', code: 'SESSION_ENDED' });
@@ -1487,7 +1513,12 @@ export class LiveCommerceService implements OnModuleInit {
     return p as typeof p & { guestBuyer: NonNullable<typeof p.guestBuyer> };
   }
 
-  /** What anyone may read about a PAID, public session before buying. */
+  /**
+   * What anyone may read about a public session: a PAID one to buy a seat on,
+   * or a FREE one to take a seat on. A group's class is for its group and is
+   * never public. The state is the server's (it owns the clock): whether the
+   * doors are open, whether the teacher has started, whether it is over.
+   */
   async publicOffer(sessionId: string) {
     const [s] = await this.prisma.$queryRaw<(LockedSession & { description: string; teacherName: string })[]>`
       SELECT s.id, s."tenantId", s."academyId", s."groupId", s.title, s.description, s.status::text AS status,
@@ -1496,12 +1527,12 @@ export class LiveCommerceService implements OnModuleInit {
              s."replayDays", s."startedAt", s."endedAt", s."cancelledAt", s."deletedAt", u."fullName" AS "teacherName"
       FROM "LiveSession" s JOIN "TeacherProfile" t ON t.id = s."tenantId" JOIN "User" u ON u.id = t."userId"
       WHERE s.id = ${sessionId}`;
-    // Only a PAID session open to everyone is sold publicly: a group's class
-    // is for its group, and a free class is booked by enrolled students.
-    if (!s || s.deletedAt || s.cancelledAt || s.accessMode !== 'PAID' || s.groupId) {
+    if (!s || s.deletedAt || s.cancelledAt || s.groupId) {
       throw new NotFoundException('Session not found');
     }
     const q = await this.quote(sessionId, null);
+    const now = Date.now();
+    const closesAt = closesAtMs(s);
     return {
       id: s.id,
       title: s.title,
@@ -1509,6 +1540,11 @@ export class LiveCommerceService implements OnModuleInit {
       teacherName: s.teacherName,
       startsAt: s.startsAt,
       durationMin: s.durationMin,
+      status: s.status,
+      live: s.status === 'LIVE' && now < closesAt,
+      joinOpensAt: new Date(s.startsAt.getTime() - 15 * 60_000),
+      closesAt: new Date(closesAt),
+      serverNow: new Date(now),
       ...q,
     };
   }
@@ -1530,10 +1566,14 @@ export class LiveCommerceService implements OnModuleInit {
     const now = new Date();
     const purchase = await this.prisma.$transaction(async (tx) => {
       const s = await lockSession(tx, sessionId);
-      await this.assertBuyable(tx, s, null, now);
+      await this.assertBuyable(tx, s, null, now, true);
       if (s!.groupId) throw new NotFoundException('Session not found');
       await this.assertSeatFree(tx, s!, now);
-      const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(tx, s!, couponCode, null);
+      // A free class: a zero seat, confirmed at once — no coupon, no payment.
+      const { breakdown, feeRefundable, coupon } =
+        s!.accessMode === 'PAID'
+          ? await this.priceWithCoupon(tx, s!, couponCode, null)
+          : { ...(await this.freeSeat(s!, tx)), coupon: null };
       const user = await tx.user.create({ data: { role: 'GUEST', fullName: name } });
       const guest = await tx.guestBuyer.create({ data: { userId: user.id, displayName: name } });
       return this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { guestBuyerId: guest.id }, now, undefined, {
@@ -1575,9 +1615,16 @@ export class LiveCommerceService implements OnModuleInit {
         startsAt: session.startsAt,
         durationMin: session.durationMin,
         status: session.status,
+        accessMode: session.accessMode,
         cancelled: !!(session.cancelledAt || session.deletedAt),
         joinOpensAt: new Date(joinOpensAt),
+        closesAt: new Date(closesAtMs(session)),
+        live: session.status === 'LIVE' && now < closesAtMs(session),
+        over: session.status === 'ENDED' || now >= closesAtMs(session),
       },
+      serverNow: new Date(now),
+      free: p.basePriceCents === 0,
+      paymentStage: await this.paymentStage(p),
       canEnter:
         p.status === 'CONFIRMED' &&
         !session.cancelledAt &&
@@ -1919,12 +1966,45 @@ export class LiveCommerceService implements OnModuleInit {
 
   // ── Reading ──────────────────────────────────────────────────────────────
 
+  /**
+   * Where the buyer's money stands, in the words the buyer needs:
+   *
+   *   AWAITING_TRANSFER — they declared, nothing has arrived yet;
+   *   PROOF_SENT        — they said they transferred; nothing matched yet;
+   *   UNDER_REVIEW      — a transfer of exactly their amount, on their rail,
+   *                       arrived after they declared and could not be tied to
+   *                       them automatically: a person is checking it. They
+   *                       must NOT be told to pay again;
+   *   CONFIRMED / REJECTED — decided.
+   *
+   * Only the existence of such a transfer is said, never whose it is.
+   */
+  async paymentStage(p: { payment: { id: string; status: string; claimedAt: Date | null; method: string | null; amountCents: number; walletCents: number; createdAt: Date } | null }) {
+    const pay = p.payment;
+    if (!pay) return 'NONE' as const;
+    if (pay.status === 'PAID' || pay.status === 'REFUNDED') return 'CONFIRMED' as const;
+    if (pay.status === 'REJECTED' || pay.status === 'FAILED') return 'REJECTED' as const;
+    if (pay.method === 'WALLET' || !pay.method) return pay.claimedAt ? ('PROOF_SENT' as const) : ('AWAITING_TRANSFER' as const);
+    const seen = await this.prisma.paymentEvent.count({
+      where: {
+        status: { in: ['UNMATCHED', 'AMBIGUOUS'] },
+        matchedPaymentId: null,
+        matchedTopupId: null,
+        provider: { in: methodsFor(pay.method) as never[] },
+        amountCents: pay.amountCents - (pay.walletCents ?? 0),
+        occurredAt: { gte: new Date(pay.createdAt.getTime() - 30 * 60_000) },
+      },
+    });
+    if (seen > 0) return 'UNDER_REVIEW' as const;
+    return pay.claimedAt ? ('PROOF_SENT' as const) : ('AWAITING_TRANSFER' as const);
+  }
+
   async byId(purchaseId: string) {
     const p = await this.prisma.livePurchase.findUniqueOrThrow({
       where: { id: purchaseId },
       include: { payment: true, refunds: true },
     });
-    return this.view(p);
+    return { ...this.view(p), paymentStage: await this.paymentStage(p) };
   }
 
   /** The buyer's view: their price, their state, their payment — never the split. */

@@ -89,7 +89,10 @@ function world(
     liveBooking: {
       findUnique: jest.fn(async () => (over.booked ? { id: 'b1', session: { ...session } } : null)),
       findMany: jest.fn(async () => [{ student: { userId: 'su1' } }]),
+      count: jest.fn(async () => (over.booked ? 1 : 0)),
     },
+    // The edit policy asks who is committed (holds, purchases) and who to tell.
+    livePurchase: { count: jest.fn(async () => 0), findMany: jest.fn(async () => []) },
     studentProfile: {
       findUnique: jest.fn(async () => ({ id: 'st1', user: { fullName: 'طالب' } })),
     },
@@ -303,7 +306,9 @@ describe("L7: a running class's clock only moves through extend", () => {
   it('refuses a duration edit on a live class', async () => {
     const { service, prisma } = world();
     const err = await service.update(OWNER, 'ls1', { durationMin: 90 }).catch((e) => e);
-    expect(err.getResponse()).toMatchObject({ code: 'LIVE_TIMING_LOCKED' });
+    // Refused by the state rule (LIVE: title and description only) before the
+    // timing rule is even reached — either way, nothing is written.
+    expect(['LIVE_EDIT_LOCKED', 'LIVE_TIMING_LOCKED']).toContain(err.getResponse().code);
     expect(prisma.liveSession.update).not.toHaveBeenCalled();
   });
 

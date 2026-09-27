@@ -239,6 +239,13 @@ export class LiveController {
     return this.live.remove(scopeOf(ctx), id, u.sub, dto?.reason);
   }
 
+  @Get('teacher/live/:id')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] One session: seats, sales (teacher side), share link and what may still change' })
+  teacherSessionDetail(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    return this.live.teacherDetail(scopeOf(ctx), id);
+  }
+
   @Get('teacher/live/:id/bookings')
   @AcademyStaff('live.manage')
   @ApiOperation({ summary: '[academy] Students booked for a session' })
@@ -324,6 +331,13 @@ export class LiveController {
   @ApiOperation({ summary: '[student] Book a seat' })
   book(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     return this.live.book(u.sub, id);
+  }
+
+  @Get('live/:id/my-access')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: '[student] My standing on one session (for its shared page)' })
+  myAccess(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.live.myAccess(u.sub, id);
   }
 
   @Delete('live/:id/book')

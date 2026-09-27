@@ -72,6 +72,8 @@ export class AdminLiveCommerceController {
       where: {
         ...(status && STATUSES.has(status) ? { status: status as LivePurchaseStatus } : {}),
         ...(sessionId ? { sessionId } : {}),
+        // Sales only: a guest's seat on a FREE class is not a sale.
+        basePriceCents: { gt: 0 },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,

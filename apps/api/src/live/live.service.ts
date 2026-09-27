@@ -448,6 +448,8 @@ export class LiveService {
       },
       existing,
     );
+    const changed = this.changedFields(existing, dto);
+    await this.assertEditAllowed(existing, dto, changed);
     await this.assertCommerceEditable(existing, dto);
     let teacher: { userId: string; teacherProfileId: string } | null = null;
     if (dto.teacherUserId != null && dto.teacherUserId !== existing.teacherUserId) {
@@ -475,7 +477,7 @@ export class LiveService {
     if (teacherUserId && (teacher || dto.startsAt != null || dto.durationMin != null)) {
       await this.assertTeacherFree(scope, teacherUserId, startsAt, durationMin, id);
     }
-    return this.prisma.liveSession.update({
+    const updated = await this.prisma.liveSession.update({
       where: { id },
       data: {
         ...(teacher ? { tenantId: teacher.teacherProfileId, teacherUserId: teacher.userId } : {}),
@@ -490,6 +492,274 @@ export class LiveService {
         ...this.commerceData(dto, existing),
       },
     });
+    // A class moved in time is said out loud to everyone holding a seat, and
+    // recorded: a buyer's seat and price stay exactly as they were.
+    if (changed.has('startsAt') || changed.has('durationMin')) {
+      await this.announceReschedule(updated, existing.startsAt, scope.userId);
+    }
+    return updated;
+  }
+
+  /** The fields an edit actually changes (the form sends every field every time). */
+  private changedFields(
+    existing: Prisma.LiveSessionGetPayload<object>,
+    dto: Partial<UpsertLiveDto>,
+  ): Set<keyof UpsertLiveDto> {
+    const out = new Set<keyof UpsertLiveDto>();
+    const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
+    if (dto.title != null && dto.title.trim() !== existing.title) out.add('title');
+    if (dto.description != null && dto.description !== existing.description) out.add('description');
+    if (dto.startsAt != null && new Date(dto.startsAt).getTime() !== existing.startsAt.getTime()) out.add('startsAt');
+    if (dto.durationMin != null && dto.durationMin !== existing.durationMin) out.add('durationMin');
+    if (dto.capacity !== undefined && !same(dto.capacity, existing.capacity)) out.add('capacity');
+    if (dto.courseId !== undefined && !same(dto.courseId, existing.courseId)) out.add('courseId');
+    if (dto.joinUrl !== undefined && !same(dto.joinUrl, existing.joinUrl)) out.add('joinUrl');
+    if (dto.teacherUserId != null && dto.teacherUserId !== existing.teacherUserId) out.add('teacherUserId');
+    if (dto.groupId !== undefined && !same(dto.groupId, existing.groupId)) out.add('groupId');
+    if (dto.accessMode !== undefined && dto.accessMode !== existing.accessMode) out.add('accessMode');
+    if (dto.priceCents !== undefined && !same(dto.priceCents, existing.priceCents)) out.add('priceCents');
+    if (dto.refundPolicy !== undefined && dto.refundPolicy !== existing.refundPolicy) out.add('refundPolicy');
+    if (dto.replayPolicy !== undefined && dto.replayPolicy !== existing.replayPolicy) out.add('replayPolicy');
+    if (dto.replayDays !== undefined && !same(dto.replayDays, existing.replayDays)) out.add('replayDays');
+    return out;
+  }
+
+  /**
+   * Who is committed to this session: students who booked, and anyone with a
+   * purchase still in play (a hold, a transfer being checked, a confirmed or
+   * delivered seat, a refund in flight). Guests have no LiveBooking — their
+   * seat is the purchase — which is exactly why bookings alone were not
+   * enough (a PAID session could be flipped to FREE under paying guests).
+   */
+  async commitment(sessionId: string, now = new Date()) {
+    const [bookings, purchases, taken] = await Promise.all([
+      this.prisma.liveBooking.count({ where: { sessionId } }),
+      this.prisma.livePurchase.count({
+        where: {
+          sessionId,
+          OR: [
+            { status: { in: ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW', 'REFUND_PENDING', 'PAYMENT_PENDING'] } },
+            { status: 'HELD', holdExpiresAt: { gt: now } },
+            { payment: { status: { in: ['PENDING', 'PAID'] } } },
+          ],
+        },
+      }),
+      seatsTaken(this.prisma, sessionId, now),
+    ]);
+    return { bookings, purchases, seatsTaken: taken, committed: bookings + purchases > 0 };
+  }
+
+  /**
+   * What a teacher may change, by the session's state — decided here, where
+   * the rules are enforced, and handed to the page so it can say so.
+   *
+   *   SCHEDULED, nobody committed → everything.
+   *   SCHEDULED, people committed → title, description, a LATER start, the
+   *     length, a capacity no lower than the seats already taken, and the
+   *     price / refund / replay terms for NEW buyers only (every purchase keeps
+   *     the terms it was made under). Never FREE↔PAID, never the teacher or
+   *     group (the seller and the audience people paid for).
+   *   LIVE → title and description; time only through "extend".
+   *   ENDED or CANCELLED → read-only.
+   */
+  editPolicy(
+    s: { status: LiveSessionStatus; startsAt: Date; durationMin: number; cancelledAt: Date | null; deletedAt: Date | null },
+    committed: boolean,
+  ) {
+    const all: (keyof UpsertLiveDto)[] = [
+      'title', 'description', 'startsAt', 'durationMin', 'capacity', 'courseId', 'joinUrl',
+      'teacherUserId', 'groupId', 'accessMode', 'priceCents', 'refundPolicy', 'replayPolicy', 'replayDays',
+    ];
+    if (s.cancelledAt || s.deletedAt) return { state: 'CANCELLED' as const, editable: [] as string[], committed };
+    const status = this.effectiveStatus(s);
+    if (status === 'ENDED') return { state: 'ENDED' as const, editable: [] as string[], committed };
+    if (status === 'LIVE') return { state: 'LIVE' as const, editable: ['title', 'description'], committed };
+    const editable = committed
+      ? all.filter((f) => !['accessMode', 'teacherUserId', 'groupId'].includes(f))
+      : all;
+    return { state: 'SCHEDULED' as const, editable: editable as string[], committed };
+  }
+
+  private async assertEditAllowed(
+    existing: Prisma.LiveSessionGetPayload<object>,
+    dto: Partial<UpsertLiveDto>,
+    changed: Set<keyof UpsertLiveDto>,
+  ) {
+    if (!changed.size) return;
+    const c = await this.commitment(existing.id);
+    const policy = this.editPolicy(existing, c.committed);
+    const refused = [...changed].filter((f) => !policy.editable.includes(f));
+    if (refused.length) {
+      const code =
+        policy.state === 'ENDED' || policy.state === 'CANCELLED'
+          ? 'SESSION_READ_ONLY'
+          : policy.state === 'LIVE'
+            ? 'LIVE_EDIT_LOCKED'
+            : refused.includes('accessMode')
+              ? 'ACCESS_MODE_LOCKED'
+              : 'EDIT_LOCKED_COMMITTED';
+      throw new ConflictException({
+        message: `These cannot change now: ${refused.join(', ')}`,
+        code,
+        fields: refused.map((field) => ({ field, code })),
+      });
+    }
+    if (c.committed && changed.has('startsAt') && dto.startsAt && new Date(dto.startsAt) < existing.startsAt) {
+      // Earlier would shrink the refund window people bought under, and may
+      // start the class before a buyer can make it: only later is allowed.
+      throw new ConflictException({
+        message: 'People already hold seats — the class can only be moved later',
+        code: 'RESCHEDULE_EARLIER_LOCKED',
+        fields: [{ field: 'startsAt', code: 'RESCHEDULE_EARLIER_LOCKED' }],
+      });
+    }
+    if (changed.has('capacity') && dto.capacity != null && dto.capacity < c.seatsTaken) {
+      throw new ConflictException({
+        message: `${c.seatsTaken} seats are already taken`,
+        code: 'CAPACITY_BELOW_TAKEN',
+        taken: c.seatsTaken,
+        fields: [{ field: 'capacity', code: 'CAPACITY_BELOW_TAKEN', params: { min: c.seatsTaken } }],
+      });
+    }
+  }
+
+  /** Everyone holding a seat hears that the class moved (guests see it on their page). */
+  private async announceReschedule(
+    s: { id: string; title: string; startsAt: Date; durationMin: number; academyId: string | null; tenantId: string },
+    oldStartsAt: Date,
+    actorUserId: string,
+  ) {
+    const holders = await this.prisma.liveBooking.findMany({
+      where: { sessionId: s.id },
+      select: { student: { select: { userId: true } } },
+    });
+    const buyers = await this.prisma.livePurchase.findMany({
+      where: { sessionId: s.id, studentId: { not: null }, status: { in: ['HELD', 'PAYMENT_PENDING'] } },
+      select: { student: { select: { userId: true } } },
+    });
+    const users = [...new Set([...holders, ...buyers].map((h) => h.student?.userId).filter((u): u is string => !!u))];
+    const when = s.startsAt.toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
+    await Promise.all(
+      users.map((userId) =>
+        this.notifications.create({
+          userId,
+          type: 'LIVE_SESSION_REMINDER',
+          title: 'موعد الجلسة اتغيّر 🕒',
+          body: `«${s.title}» بقت يوم ${when} (${s.durationMin} دقيقة). حجزك زي ما هو.`,
+          meta: { sessionId: s.id, rescheduled: true },
+        }),
+      ),
+    );
+    await this.prisma.auditLog
+      .create({
+        data: {
+          actorUserId,
+          action: 'live.reschedule',
+          entity: 'LiveSession',
+          entityId: s.id,
+          academyId: s.academyId ?? s.tenantId,
+          meta: { from: oldStartsAt.toISOString(), to: s.startsAt.toISOString(), notified: users.length } as never,
+        },
+      })
+      .catch(() => undefined);
+  }
+
+  /**
+   * The teacher's page for one session: what it is, who is in it, what was
+   * sold (the teacher's side only — never Darsly's fee), the link to share,
+   * and what may still be changed.
+   */
+  async teacherDetail(scope: LiveScope, id: string) {
+    const s = await this.assertOwned(scope, id);
+    const now = new Date();
+    const c = await this.commitment(id, now);
+    const purchases = await this.prisma.livePurchase.findMany({
+      where: { sessionId: id },
+      select: {
+        status: true,
+        guestBuyerId: true,
+        basePriceCents: true,
+        teacherCents: true,
+        payment: { select: { status: true, claimedAt: true } },
+      },
+    });
+    const sold = purchases.filter((p) => p.basePriceCents > 0);
+    const seated = ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'];
+    const guestSeats = purchases.filter((p) => p.guestBuyerId && seated.includes(p.status)).length;
+    const status = this.effectiveStatus(s);
+    return {
+      session: {
+        id: s.id,
+        title: s.title,
+        description: s.description,
+        startsAt: s.startsAt,
+        durationMin: s.durationMin,
+        capacity: s.capacity,
+        accessMode: s.accessMode,
+        priceCents: s.priceCents,
+        currency: s.currency,
+        refundPolicy: s.refundPolicy,
+        replayPolicy: s.replayPolicy,
+        replayDays: s.replayDays,
+        groupId: s.groupId,
+        joinUrl: s.joinUrl,
+        status,
+        startedAt: s.startedAt,
+        endedAt: s.endedAt,
+        cancelledAt: s.cancelledAt,
+        joinOpensAt: new Date(this.opensAt(s)),
+        closesAt: new Date(this.closesAt(s)),
+      },
+      // A group's class is for its group: it has no public link.
+      publicPath: s.groupId ? null : `/live/s/${s.id}`,
+      seats: {
+        capacity: s.capacity,
+        taken: c.seatsTaken,
+        studentBookings: c.bookings,
+        guestSeats,
+      },
+      sales:
+        s.accessMode === 'PAID' || sold.length
+          ? {
+              confirmed: sold.filter((p) => seated.includes(p.status)).length,
+              awaitingPayment: sold.filter((p) => p.status === 'PAYMENT_PENDING' || (p.status === 'HELD' && p.payment?.status === 'PENDING')).length,
+              held: sold.filter((p) => p.status === 'HELD' && !p.payment).length,
+              refunded: sold.filter((p) => ['REFUNDED', 'REFUND_PENDING', 'OVERSOLD', 'CANCELLED_BY_TEACHER'].includes(p.status)).length,
+              // The teacher's own share of seats sold (held until the class is delivered).
+              teacherCents: sold
+                .filter((p) => seated.includes(p.status) && p.payment?.status === 'PAID')
+                .reduce((a, p) => a + p.teacherCents, 0),
+            }
+          : null,
+      edit: this.editPolicy(s, c.committed),
+    };
+  }
+
+  /**
+   * A registered student's standing on one session — for the session's own
+   * page (reached from a shared link), where the list may not include it.
+   */
+  async myAccess(userId: string, sessionId: string) {
+    const student = await this.studentOf(userId);
+    const s = await this.prisma.liveSession.findUnique({ where: { id: sessionId } });
+    if (!s || s.deletedAt) throw new NotFoundException('Session not found');
+    const booking = await this.prisma.liveBooking.findUnique({
+      where: { sessionId_studentId: { sessionId, studentId: student.id } },
+      select: { id: true },
+    });
+    const status = this.effectiveStatus(s);
+    return {
+      booked: !!booking,
+      status,
+      accessMode: s.accessMode,
+      joinOpensAt: new Date(this.opensAt(s)),
+      closesAt: new Date(this.closesAt(s)),
+      canJoin: !!booking && status === 'LIVE' && Date.now() >= this.opensAt(s),
+      // A FREE class shared by its link can be booked by any student; a
+      // group's class only by its group (the booking itself checks).
+      canBook: !booking && s.accessMode === 'FREE' && status !== 'ENDED',
+      serverNow: new Date(),
+    };
   }
 
   /**
@@ -636,22 +906,54 @@ export class LiveService {
       orderBy: { startsAt: 'asc' },
       include: { _count: { select: { bookings: true } } },
     });
-    return sessions.map((s) => ({ ...s, bookedCount: s._count.bookings }));
+    // A guest's seat has no LiveBooking (it is the purchase itself): counted
+    // here too, or a class sold only to guests reads "0 booked".
+    const guestSeats = sessions.length
+      ? await this.prisma.livePurchase.groupBy({
+          by: ['sessionId'],
+          where: {
+            sessionId: { in: sessions.map((x) => x.id) },
+            guestBuyerId: { not: null },
+            status: { in: ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'] },
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const guestsBy = new Map(guestSeats.map((g) => [g.sessionId, g._count._all]));
+    return sessions.map((s) => ({ ...s, bookedCount: s._count.bookings + (guestsBy.get(s.id) ?? 0) }));
   }
 
   async bookingsFor(scope: LiveScope, id: string) {
     await this.assertOwned(scope, id);
-    const rows = await this.prisma.liveBooking.findMany({
-      where: { sessionId: id },
-      orderBy: { createdAt: 'asc' },
-      include: { student: { select: { user: { select: { fullName: true, phone: true } } } } },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      fullName: r.student.user.fullName,
-      phone: r.student.user.phone,
-      bookedAt: r.createdAt,
-    }));
+    const [rows, guests] = await Promise.all([
+      this.prisma.liveBooking.findMany({
+        where: { sessionId: id },
+        orderBy: { createdAt: 'asc' },
+        include: { student: { select: { user: { select: { fullName: true, phone: true } } } } },
+      }),
+      this.prisma.livePurchase.findMany({
+        where: { sessionId: id, guestBuyerId: { not: null }, status: { in: ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'] } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, confirmedAt: true, createdAt: true, guestBuyer: { select: { displayName: true } } },
+      }),
+    ]);
+    return [
+      ...rows.map((r) => ({
+        id: r.id,
+        fullName: r.student.user.fullName,
+        phone: r.student.user.phone,
+        bookedAt: r.createdAt,
+        guest: false,
+      })),
+      // A guest gave a name only; there is no phone to show.
+      ...guests.map((g) => ({
+        id: g.id,
+        fullName: g.guestBuyer?.displayName ?? '—',
+        phone: null,
+        bookedAt: g.confirmedAt ?? g.createdAt,
+        guest: true,
+      })),
+    ];
   }
 
   // ── Student ────────────────────────────────────────────────────────────────
@@ -672,7 +974,8 @@ export class LiveService {
         select: { sessionId: true },
       })
     ).map((p) => p.sessionId);
-    if (!academyIds.length && !purchased.length) return [];
+    const bookedAny = await this.prisma.liveBooking.count({ where: { studentId: student.id } });
+    if (!academyIds.length && !purchased.length && !bookedAny) return [];
     const groupIds = (
       await this.prisma.groupMembership.findMany({
         where: { studentId: student.id },
@@ -689,6 +992,8 @@ export class LiveService {
             OR: [{ groupId: null }, { groupId: { in: groupIds } }],
           },
           { id: { in: purchased } },
+          // Booked from a shared link, without being enrolled with the academy.
+          { bookings: { some: { studentId: student.id } } },
         ],
       },
       orderBy: { startsAt: 'asc' },
@@ -771,7 +1076,13 @@ export class LiveService {
         code: 'PAID_SESSION_NEEDS_PURCHASE',
       });
     }
-    await this.assertEnrolledWith(student.id, session);
+    // A FREE academy-wide class is public — its link is shared to be used, by
+    // anyone. A group's class stays its group's (enrollment and membership
+    // checked as always).
+    if (session.groupId) await this.assertEnrolledWith(student.id, session);
+    if (session.cancelledAt || this.effectiveStatus(session) === 'ENDED') {
+      throw new ConflictException({ message: 'This session has ended', code: 'SESSION_ENDED' });
+    }
 
     const already = await this.prisma.liveBooking.findUnique({
       where: { sessionId_studentId: { sessionId, studentId: student.id } },
@@ -912,7 +1223,7 @@ export class LiveService {
       s = booking.session;
       displayName = student.user.fullName;
     }
-    this.assertWindowOpen(s);
+    this.assertWindowOpen(s, true);
 
     // No reward here. Being handed a token means being *allowed* in, not having
     // attended — LIVE_ATTENDED is paid from real heartbeat time (see
@@ -928,7 +1239,11 @@ export class LiveService {
           meeting: null,
           participant: { role: 'STUDENT' as const },
         };
-      throw new BadRequestException({ message: 'المدرّس لم يبدأ الفصل بعد', code: 'NOT_STARTED' });
+      throw new BadRequestException({
+        message: 'المدرّس لم يبدأ الفصل بعد',
+        code: 'NOT_STARTED',
+        session: this.meetingSession(s),
+      });
     }
 
     const meeting = await this.providers.forSession(s).participantAccess({
@@ -2273,15 +2588,22 @@ export class LiveService {
     return s.status;
   }
 
-  private assertWindowOpen(s: { startsAt: Date; durationMin: number; status: LiveSessionStatus }) {
+  private assertWindowOpen(
+    s: { id?: string; title?: string; startsAt: Date; durationMin: number; status: LiveSessionStatus; startedAt?: Date | null },
+    withSession = false,
+  ) {
+    // The waiting answers carry the session (title, times, the server's clock)
+    // so the classroom page can be a lobby with a countdown, not a dead end.
+    const session = withSession && s.id && s.title ? { session: this.meetingSession(s as never) } : {};
     if (Date.now() < this.opensAt(s)) {
       throw new BadRequestException({
         message: `يفتح الفصل قبل الموعد بـ${JOIN_OPENS_MIN} دقيقة`,
         code: 'NOT_OPEN_YET',
+        ...session,
       });
     }
     if (this.effectiveStatus(s) === 'ENDED') {
-      throw new BadRequestException({ message: 'انتهت هذه الجلسة', code: 'ENDED' });
+      throw new BadRequestException({ message: 'انتهت هذه الجلسة', code: 'ENDED', ...session });
     }
   }
 

@@ -12,6 +12,14 @@ import { AiErrorClass } from '../ai/ai-job.error';
 export const MAX_ATTEMPTS = 3;
 
 /**
+ * Attempts a job type gets before it is FAILED. LIVE_TRANSCRIBE gets four —
+ * the first run and three delayed retries (≈1, 5, 15 min): a provider outage
+ * of a few minutes must not cost the rest of a lesson.
+ */
+export const maxAttemptsFor = (type: AiJobType | string): number =>
+  type === 'LIVE_TRANSCRIBE' ? 4 : MAX_ATTEMPTS;
+
+/**
  * DB-backed job queue for AI work (no Redis). Jobs are claimed atomically with
  * FOR UPDATE SKIP LOCKED so multiple API replicas can process safely, and the
  * same claim query re-acquires RUNNING jobs whose lease expired (crash
@@ -141,7 +149,8 @@ export class AiJobService {
           "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE id = (
         SELECT id FROM "AiJob"
-        WHERE status = 'QUEUED'::"AiJobStatus"
+        WHERE (status = 'QUEUED'::"AiJobStatus"
+               AND ("runAfter" IS NULL OR "runAfter" <= (now() AT TIME ZONE 'UTC')))
            OR (status = 'RUNNING'::"AiJobStatus" AND "leaseExpiresAt" < (now() AT TIME ZONE 'UTC'))
         ORDER BY "createdAt" ASC
         LIMIT 1
@@ -188,16 +197,21 @@ export class AiJobService {
    *  everything else is terminal. Not academy-scoped: jobId here is always
    *  `job.id` from a job this worker itself claimed via claimNext(), never
    *  user input. */
-  async fail(jobId: string, err: { message: string; errorClass: AiErrorClass }): Promise<void> {
+  async fail(
+    jobId: string,
+    err: { message: string; errorClass: AiErrorClass; retryAfterMs?: number },
+  ): Promise<void> {
     const job = await this.prisma.aiJob.findUnique({ where: { id: jobId } });
     if (!job) return;
     // A stopped job is not failed and is never retried.
     if (job.status === 'CANCELED') return;
-    const retry = err.errorClass === 'RETRYABLE' && job.attempts < MAX_ATTEMPTS;
+    const retry = err.errorClass === 'RETRYABLE' && job.attempts < maxAttemptsFor(job.type);
     await this.prisma.aiJob.updateMany({
       where: { id: jobId, status: 'RUNNING' },
       data: {
         status: retry ? 'QUEUED' : 'FAILED',
+        // A delayed retry is not claimable before then (see claimNext).
+        runAfter: retry && err.retryAfterMs ? new Date(Date.now() + err.retryAfterMs) : null,
         error: err.message.slice(0, 1000),
         errorClass: err.errorClass,
         leaseExpiresAt: null,

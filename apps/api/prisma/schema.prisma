@@ -2579,6 +2579,10 @@ model LiveSession {
   /// The structured summary, exactly as the schema the model was held to.
   summary            Json?
   summaryError       String?
+  /// How the summary was made: model, the transcript revision it was built
+  /// from, whether that transcript was PARTIAL, items dropped by the evidence
+  /// check, calls and tokens. Never any of the words.
+  summaryMeta        Json?
   /// Off by default. A summary is the teacher's notes on their own lesson
   /// until they decide otherwise — and a bad first draft should not be
   /// published to a class before they have read it.
@@ -2610,6 +2614,13 @@ model LiveSession {
   /// Facts about how the transcript was made: pieces, failed pieces, audio
   /// seconds, model, estimated cost, timings. Never any of the words.
   transcriptMeta         Json?
+  /// Bumped every time transcriptText changes, so a summary knows whether it
+  /// was built from the current words (summaryMeta.transcriptRevision).
+  transcriptRevision     Int                   @default(0)
+  /// The one LIVE_TRANSCRIBE job allowed to work on this class right now, and
+  /// until when — a second job (duplicate delivery, reclaim) steps aside.
+  transcriptLeaseJobId   String?
+  transcriptLeaseUntil   DateTime?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -2643,22 +2654,30 @@ model LiveSession {
 /// not recorded. Each piece stands alone (its own WebM header). Deleted once
 /// the transcript is made: the words are kept, the audio is not.
 model LiveAudioSegment {
-  id            String      @id @default(cuid())
-  sessionId     String
-  session       LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  roomName      String
-  seq           Int
-  key           String
-  sizeBytes     Int
+  id             String      @id @default(cuid())
+  sessionId      String
+  session        LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName       String
+  seq            Int
+  key            String
+  sizeBytes      Int
   /// This piece's words, once transcribed — a retry does not pay for it again.
-  text          String?
+  text           String?
   /// Length of the piece as the teacher's page measured it (for cost).
-  durationMs    Int?
+  durationMs     Int?
   /// Set when this one piece could not be transcribed for good (the rest of
   /// the lesson still is: the transcript is then marked partial).
-  error         String?
-  transcribedAt DateTime?
-  createdAt     DateTime    @default(now())
+  error          String?
+  transcribedAt  DateTime?
+  /// Provider attempts spent on this piece (a retry of a retryable failure).
+  attempts       Int         @default(0)
+  /// Why a piece produced no words without being a failure: TOO_SHORT (a
+  /// tail of under 2 s, never sent), PROMPT_ECHO (the provider returned the
+  /// lesson title instead of speech).
+  skipReason     String?
+  /// Set when this piece's audio was deleted after its words were saved.
+  audioDeletedAt DateTime?
+  createdAt      DateTime    @default(now())
 
   @@unique([sessionId, roomName, seq])
   @@index([sessionId, createdAt])
@@ -2884,6 +2903,8 @@ enum LivePipelineStatus {
   PROCESSING
   READY
   FAILED
+  /// A usable transcript with one or more pieces missing (transcripts only).
+  PARTIAL
 }
 
 /// A message sent inside the classroom.
@@ -3341,6 +3362,8 @@ model AiJob {
   stage            String? // extract | brand | copy | assemble
   attempts         Int         @default(0)
   leaseExpiresAt   DateTime?
+  /// A retry waits until then (delayed backoff); null = claimable now.
+  runAfter         DateTime?
   errorClass       String? // RETRYABLE | TERMINAL
   error            String?
   costCents        Int         @default(0)

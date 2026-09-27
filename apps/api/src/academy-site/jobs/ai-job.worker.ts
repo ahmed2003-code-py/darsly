@@ -111,9 +111,10 @@ export class AiJobWorker implements OnModuleInit, OnModuleDestroy {
       await this.jobs.succeed(job.id, result ?? {});
     } catch (e) {
       const errorClass = e instanceof AiJobError ? e.errorClass : 'RETRYABLE';
+      const retryAfterMs = e instanceof AiJobError ? e.retryAfterMs : undefined;
       const message = e instanceof Error ? e.message : String(e);
       this.logger.warn(`job ${job.id} (${job.type}) failed [${errorClass}]: ${message}`);
-      await this.jobs.fail(job.id, { message, errorClass });
+      await this.jobs.fail(job.id, { message, errorClass, retryAfterMs });
     } finally {
       clearInterval(heartbeat);
     }

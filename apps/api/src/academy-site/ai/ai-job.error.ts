@@ -16,6 +16,11 @@ export class AiJobError extends Error {
      * good one. Absent when no response came back at all.
      */
     readonly usage?: { inputTokens: number; outputTokens: number },
+    /**
+     * Wait this long before the queue tries again (delayed backoff). Absent:
+     * the retry is claimable at once, which is what every existing caller gets.
+     */
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'AiJobError';

@@ -90,7 +90,14 @@ export default function MeetingPage() {
     queryFn: async () =>
       (await api.get(isTeacher ? `/teacher/live/${id}/join` : `/live/${id}/join`)).data,
     retry: false,
+    // Waiting for the doors (or the teacher): ask again until they open. The
+    // socket below makes a teacher's start immediate; this is the backstop.
+    refetchInterval: (q) => {
+      const code = (q.state.error as any)?.response?.data?.code;
+      return code === 'NOT_OPEN_YET' || code === 'NOT_STARTED' ? 8_000 : false;
+    },
   });
+  const [receivedAt] = useState(() => Date.now());
   const provider: LiveProvider | null = entry.data?.meeting?.provider ?? null;
   const meeting = useLiveMeeting(id, provider, { onTiming: clock.apply });
   const setEnded = meeting.setEnded;
@@ -168,6 +175,19 @@ export default function MeetingPage() {
     if (entry.data?.externalUrl) window.location.replace(entry.data.externalUrl);
   }, [entry.data]);
 
+  // The teacher opened the room: a waiting lobby becomes a ready one at once.
+  useEffect(() => {
+    const sock = getSocket();
+    if (!sock) return;
+    const onStarted = (p: { sessionId: string }) => {
+      if (p?.sessionId === id) void entry.refetch();
+    };
+    sock.on('live:started', onStarted);
+    return () => {
+      sock.off('live:started', onStarted);
+    };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Ended — by the teacher, the clock, or a cancellation. Bound again once the
   // provider is known, so it marks the adapter actually in use.
   useEffect(() => {
@@ -215,6 +235,26 @@ export default function MeetingPage() {
   }
   if (entry.isLoading || entry.data?.externalUrl) {
     return <StateScreen icon="videocam" title={t('meeting.preparing')} busy />;
+  }
+  // Not open yet, or open and waiting for the teacher: the lobby, waiting —
+  // with the session the server sent along with its refusal.
+  const refusal = (entry.error as any)?.response?.data;
+  if (entry.isError && (refusal?.code === 'NOT_OPEN_YET' || refusal?.code === 'NOT_STARTED') && refusal.session) {
+    const serverNow = refusal.session.serverNow ? new Date(refusal.session.serverNow).getTime() : NaN;
+    const skewMs = Number.isFinite(serverNow) && Math.abs(serverNow - receivedAt) > 30_000 ? serverNow - receivedAt : 0;
+    return (
+      <Lobby
+        session={refusal.session}
+        listenOnly={!isTeacher}
+        isTeacher={isTeacher}
+        ready={false}
+        joining={false}
+        waiting={{ code: refusal.code, opensAt: new Date(refusal.session.startsAt).getTime() - 15 * 60_000 }}
+        skewMs={skewMs}
+        onEnter={() => undefined}
+        onBack={() => navigate(home)}
+      />
+    );
   }
   if (entry.isError) {
     const code = (entry.error as any)?.response?.data?.code;

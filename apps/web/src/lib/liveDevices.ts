@@ -66,6 +66,8 @@ export interface LobbyDevices {
   setCamOn: (v: boolean) => void;
   setMicOn: (v: boolean) => void;
   choose: (p: DevicePrefs) => void;
+  /** Ask the browser again (after the person allowed access in its settings). */
+  retry: () => void;
   /** Stops everything the lobby opened — before the classroom opens its own. */
   release: () => void;
 }
@@ -92,6 +94,8 @@ export function useLobbyDevices(enabled: boolean): LobbyDevices {
   const camRef = useRef<MediaStreamTrack | null>(null);
   const micRef = useRef<MediaStreamTrack | null>(null);
   const acRef = useRef<AudioContext | null>(null);
+  // Bumped by retry(): re-runs both device effects with the same choices.
+  const [attempt, setAttempt] = useState(0);
 
   const listDevices = useCallback(async () => {
     try {
@@ -106,6 +110,10 @@ export function useLobbyDevices(enabled: boolean): LobbyDevices {
   // Camera preview.
   useEffect(() => {
     if (!enabled || !supported) {
+      // Turning the test off lets go of the camera at once (its light goes out).
+      camRef.current?.stop();
+      camRef.current = null;
+      setPreview(null);
       setChecking(false);
       return;
     }
@@ -134,7 +142,7 @@ export function useLobbyDevices(enabled: boolean): LobbyDevices {
     return () => {
       cancelled = true;
     };
-  }, [enabled, supported, camOn, prefs.cameraId, listDevices]);
+  }, [enabled, supported, camOn, prefs.cameraId, listDevices, attempt]);
 
   // Microphone level.
   useEffect(() => {
@@ -180,7 +188,7 @@ export function useLobbyDevices(enabled: boolean): LobbyDevices {
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [enabled, supported, micOn, prefs.micId, listDevices]);
+  }, [enabled, supported, micOn, prefs.micId, listDevices, attempt]);
 
   const release = useCallback(() => {
     camRef.current?.stop();
@@ -193,6 +201,12 @@ export function useLobbyDevices(enabled: boolean): LobbyDevices {
   }, []);
 
   useEffect(() => release, [release]);
+
+  const retry = useCallback(() => {
+    setCamProblem(null);
+    setMicProblem(null);
+    setAttempt((n) => n + 1);
+  }, []);
 
   const choose = useCallback((p: DevicePrefs) => {
     setPrefs((cur) => {
@@ -217,6 +231,7 @@ export function useLobbyDevices(enabled: boolean): LobbyDevices {
     setCamOn,
     setMicOn,
     choose,
+    retry,
     release,
   };
 }

@@ -121,7 +121,7 @@ export const Tile = memo(function Tile({
             'aria-label': `${p.local ? t('meeting.you') : p.name} — ${pinned ? t('meeting.unpin') : t('meeting.pin')}`,
           }
         : {})}
-      className={`group relative block aspect-video w-full overflow-hidden rounded-xl bg-zinc-800 text-start outline-none ring-offset-2 ring-offset-zinc-950 focus-visible:ring-2 focus-visible:ring-primary ${
+      className={`group relative block aspect-video w-full overflow-hidden rounded-xl bg-zinc-800 text-start outline-none ring-offset-2 ring-offset-surface focus-visible:ring-2 focus-visible:ring-primary ${
         pinned ? 'ring-2 ring-primary' : ''
       }`}
     >

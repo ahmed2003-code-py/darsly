@@ -51,7 +51,7 @@ function Ctl({
         ? 'bg-red-500/15 text-red-300 hover:bg-red-500/25'
         : active
           ? 'bg-primary text-on-primary hover:bg-primary/90'
-          : 'bg-white/[0.08] text-zinc-100 hover:bg-white/[0.14]';
+          : 'bg-on-surface/[0.08] text-on-surface hover:bg-on-surface/[0.14]';
   return (
     <span className="group relative inline-flex">
       <button
@@ -60,7 +60,7 @@ function Ctl({
         disabled={disabled}
         aria-label={label}
         aria-pressed={active ?? (off !== undefined ? !off : undefined)}
-        className={`relative inline-flex h-11 items-center justify-center gap-2 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={`relative inline-flex h-11 items-center justify-center gap-2 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40 ${
           showLabel ? 'px-4' : labelLg ? 'w-11 lg:w-auto lg:px-4' : 'w-11'
         } ${color}`}
       >
@@ -83,7 +83,7 @@ function Ctl({
       {!showLabel && (
         <span
           aria-hidden
-          className={`pointer-events-none absolute bottom-full start-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 shadow-lg group-hover:block group-focus-within:block rtl:translate-x-1/2 ${labelLg ? 'lg:!hidden' : ''}`}
+          className={`pointer-events-none absolute bottom-full start-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-inverse-surface px-2 py-1 text-xs font-medium text-inverse-on-surface shadow-lg group-hover:block group-focus-within:block rtl:translate-x-1/2 ${labelLg ? 'lg:!hidden' : ''}`}
         >
           {label}
         </span>
@@ -99,13 +99,13 @@ const SessionClock = memo(function SessionClock({ anchor }: { anchor: ClockAncho
   if (!c) return null;
   const late = c.remainingMs <= 5 * 60_000;
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold tabular-nums" dir="ltr">
+    <span className="inline-flex items-center gap-2 rounded-full bg-on-surface/[0.06] px-3 py-1 text-xs font-semibold tabular-nums" dir="ltr">
       {c.elapsedMs != null && (
-        <span className="hidden text-zinc-300 sm:inline" title={t('meeting.elapsed')}>
+        <span className="hidden text-on-surface-variant sm:inline" title={t('meeting.elapsed')}>
           {formatClock(c.elapsedMs)}
         </span>
       )}
-      <span className={late ? 'text-amber-300' : 'text-zinc-400'} title={t('meeting.remaining')}>
+      <span className={late ? 'text-amber-500' : 'text-on-surface-variant'} title={t('meeting.remaining')}>
         {c.remainingMs > 0 ? `${formatClock(c.remainingMs)} ${t('meeting.left')}` : t('meeting.overtime')}
       </span>
     </span>
@@ -116,7 +116,7 @@ const SessionClock = memo(function SessionClock({ anchor }: { anchor: ClockAncho
 
 function StageFrame({ children, className = '' }: { children?: ReactNode; className?: string }) {
   return (
-    <div className={`relative min-h-0 overflow-hidden rounded-xl bg-zinc-900 ${className}`}>{children}</div>
+    <div className={`relative min-h-0 overflow-hidden rounded-xl bg-zinc-900 text-zinc-100 ${className}`}>{children}</div>
   );
 }
 
@@ -352,14 +352,14 @@ export default function Classroom(props: ClassroomProps) {
           <button
             type="button"
             onClick={() => toggle('people')}
-            className="flex shrink-0 items-center gap-3 self-start rounded-full bg-white/[0.05] py-1.5 ps-1.5 pe-4 text-sm text-zinc-300 hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex shrink-0 items-center gap-3 self-start rounded-full bg-on-surface/[0.05] py-1.5 ps-1.5 pe-4 text-sm text-on-surface-variant hover:bg-on-surface/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <span className="flex -space-x-2 rtl:space-x-reverse">
               {listeners.slice(0, 6).map((p) => (
                 <span
                   key={p.sessionId}
                   aria-hidden
-                  className="grid h-7 w-7 place-items-center rounded-full bg-zinc-700 text-xs font-bold text-zinc-100 ring-2 ring-zinc-950"
+                  className="grid h-7 w-7 place-items-center rounded-full bg-surface-container-highest text-xs font-bold text-on-surface ring-2 ring-surface"
                 >
                   {p.name.trim().charAt(0) || '؟'}
                 </span>
@@ -377,7 +377,7 @@ export default function Classroom(props: ClassroomProps) {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="fixed inset-0 flex flex-col bg-zinc-950 text-zinc-100">
+      <div className="fixed inset-0 flex flex-col bg-surface text-on-surface">
         {/* ── Top bar ── */}
         <header className="flex h-14 shrink-0 items-center gap-3 px-3 sm:px-4">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-bold text-white">
@@ -394,7 +394,7 @@ export default function Classroom(props: ClassroomProps) {
                 type="button"
                 onClick={extend.run}
                 disabled={extend.pending}
-                className="hidden items-center gap-1 rounded-full bg-white/[0.06] px-3 py-1 text-xs font-semibold text-zinc-200 hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:inline-flex"
+                className="hidden items-center gap-1 rounded-full bg-on-surface/[0.06] px-3 py-1 text-xs font-semibold text-on-surface hover:bg-on-surface/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:inline-flex"
               >
                 <span aria-hidden className="material-symbols-outlined text-[16px]">more_time</span>
                 {extend.pending ? t('meeting.extending') : t('meeting.extend')}
@@ -410,7 +410,7 @@ export default function Classroom(props: ClassroomProps) {
             )}
             {meeting.provider === 'cloudflare' && meeting.transcribing && (
               <span
-                className="hidden items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-zinc-300 sm:inline-flex"
+                className="hidden items-center gap-1 rounded-full bg-on-surface/[0.06] px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant sm:inline-flex"
                 role="status"
                 title={t('meeting.transcriptOnHint')}
               >
@@ -421,7 +421,7 @@ export default function Classroom(props: ClassroomProps) {
             <button
               type="button"
               onClick={() => toggle('people')}
-              className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-semibold text-zinc-200 hover:bg-white/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex items-center gap-1 rounded-full bg-on-surface/[0.06] px-2.5 py-1 text-xs font-semibold text-on-surface hover:bg-on-surface/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               aria-label={t('meeting.peopleCount', { count: participants.length })}
             >
               <span aria-hidden className="material-symbols-outlined text-[16px]">group</span>
@@ -438,7 +438,7 @@ export default function Classroom(props: ClassroomProps) {
             {/* Status, never a curtain over the video. */}
             {(alone || waitingTeacher) && effective !== 'presentation' && (
               <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center px-4">
-                <div className="flex items-center gap-2 rounded-full bg-zinc-900/90 px-4 py-2 text-sm shadow-lg ring-1 ring-white/10">
+                <div className="flex items-center gap-2 rounded-full bg-zinc-900/90 px-4 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10">
                   <span aria-hidden className="h-2 w-2 rounded-full bg-emerald-400" />
                   <span className="font-semibold">{alone ? t('meeting.readyTitle') : t('meeting.waitingTeacherTitle')}</span>
                   <span className="text-zinc-400">· {alone ? t('meeting.waitingStudents') : t('meeting.waitingTeacherInRoom')}</span>
@@ -452,7 +452,7 @@ export default function Classroom(props: ClassroomProps) {
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
-                className="absolute top-3 end-4 flex items-center gap-3 rounded-xl bg-zinc-900/95 py-2 ps-3 pe-2 shadow-lg ring-1 ring-amber-400/40"
+                className="absolute top-3 end-4 flex items-center gap-3 rounded-xl bg-zinc-900/95 py-2 ps-3 pe-2 text-zinc-100 shadow-lg ring-1 ring-amber-400/40"
                 role="status"
               >
                 <span aria-hidden className="material-symbols-outlined text-[20px] text-amber-300">back_hand</span>
@@ -521,7 +521,7 @@ export default function Classroom(props: ClassroomProps) {
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
                     className={`rounded-full px-4 py-2 text-sm font-semibold shadow-lg ${
-                      cf?.connection === 'reconnecting' ? 'bg-amber-400 text-zinc-950' : 'bg-zinc-800 text-zinc-100'
+                      cf?.connection === 'reconnecting' ? 'bg-amber-400 text-zinc-950' : 'bg-inverse-surface text-inverse-on-surface'
                     }`}
                   >
                     {announce}
@@ -547,7 +547,7 @@ export default function Classroom(props: ClassroomProps) {
 
         {/* ── Dock ── */}
         <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
-          <div className="hidden min-w-0 items-center gap-2 text-xs text-zinc-400 md:flex">
+          <div className="hidden min-w-0 items-center gap-2 text-xs text-on-surface-variant md:flex">
             {cf && !amOwner && myHand === 'HAND_RAISED' && (
               <span className="inline-flex items-center gap-1.5 text-amber-300">
                 <span aria-hidden className="material-symbols-outlined text-[16px]">back_hand</span>
@@ -707,7 +707,7 @@ export default function Classroom(props: ClassroomProps) {
                 type="button"
                 onClick={endClass}
                 disabled={props.ending}
-                className="inline-flex h-11 items-center gap-2 rounded-full bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 disabled:opacity-50"
+                className="inline-flex h-11 items-center gap-2 rounded-full bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50"
               >
                 <span aria-hidden className="material-symbols-outlined text-[20px]">stop_circle</span>
                 {t('meeting.endForAll')}
@@ -755,7 +755,7 @@ function ReactionPicker({ onPick, onClose }: { onPick: (e: string) => void; onCl
       ref={ref}
       role="menu"
       aria-label={t('meeting.react.title')}
-      className="absolute bottom-full start-1/2 z-20 mb-2 flex -translate-x-1/2 gap-1 rounded-full bg-zinc-800 p-1.5 shadow-xl ring-1 ring-white/10 rtl:translate-x-1/2"
+      className="absolute bottom-full start-1/2 z-20 mb-2 flex -translate-x-1/2 gap-1 rounded-full bg-surface-container-high p-1.5 shadow-xl ring-1 ring-outline-variant rtl:translate-x-1/2"
     >
       {REACTIONS.map((e) => (
         <button
@@ -764,7 +764,7 @@ function ReactionPicker({ onPick, onClose }: { onPick: (e: string) => void; onCl
           role="menuitem"
           aria-label={t(`meeting.react.${REACTIONS.indexOf(e)}`)}
           onClick={() => onPick(e)}
-          className="grid h-10 w-10 place-items-center rounded-full text-2xl transition-transform duration-150 hover:scale-110 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:hover:scale-100"
+          className="grid h-10 w-10 place-items-center rounded-full text-2xl transition-transform duration-150 hover:scale-110 hover:bg-on-surface/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:hover:scale-100"
         >
           {e}
         </button>
@@ -807,7 +807,7 @@ function LayoutMenu({
       ref={ref}
       role="menu"
       aria-label={t('meeting.layout.title')}
-      className="absolute bottom-full end-0 z-20 mb-2 w-60 rounded-xl bg-zinc-800 p-1.5 shadow-xl ring-1 ring-white/10"
+      className="absolute bottom-full end-0 z-20 mb-2 w-60 rounded-xl bg-surface-container-high p-1.5 shadow-xl ring-1 ring-outline-variant"
     >
       {items.map((it) => (
         <button
@@ -817,13 +817,13 @@ function LayoutMenu({
           aria-checked={value === it.v}
           onClick={() => onChange(it.v)}
           className={`flex w-full items-start gap-3 rounded-lg px-3 py-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-            value === it.v ? 'bg-white/10' : 'hover:bg-white/5'
+            value === it.v ? 'bg-on-surface/10' : 'hover:bg-on-surface/5'
           }`}
         >
           <span aria-hidden className="material-symbols-outlined mt-0.5 text-[20px]">{it.icon}</span>
           <span>
             <span className="block text-sm font-semibold">{t(`meeting.layout.${it.v}`)}</span>
-            <span className="block text-xs text-zinc-400">{t(`meeting.layout.${it.v}Hint`)}</span>
+            <span className="block text-xs text-on-surface-variant">{t(`meeting.layout.${it.v}Hint`)}</span>
           </span>
           {value === it.v && <span aria-hidden className="material-symbols-outlined ms-auto text-[18px] text-primary">check</span>}
         </button>
@@ -874,7 +874,7 @@ function SidePanel({
       <aside
         aria-label={panel === 'chat' ? t('meeting.chat') : t('meeting.people')}
         onKeyDown={(e) => e.key === 'Escape' && setPanel(null)}
-        className="fixed inset-y-0 end-0 z-40 flex w-full flex-col bg-zinc-900 sm:w-[380px] xl:static xl:z-auto xl:me-3 xl:mb-2 xl:w-[340px] xl:rounded-xl"
+        className="fixed inset-y-0 end-0 z-40 flex w-full flex-col bg-surface-container-low sm:w-[380px] xl:static xl:z-auto xl:me-3 xl:mb-2 xl:w-[340px] xl:rounded-xl"
       >
         <div className="flex h-14 shrink-0 items-center gap-1 px-3">
           <div role="tablist" className="flex flex-1 gap-1">
@@ -886,7 +886,7 @@ function SidePanel({
                 aria-selected={panel === tab}
                 onClick={() => setPanel(tab)}
                 className={`rounded-full px-3 py-1.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                  panel === tab ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                  panel === tab ? 'bg-on-surface/10 text-on-surface' : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
                 {tab === 'people' ? t('meeting.people') : t('meeting.chat')}
@@ -903,7 +903,7 @@ function SidePanel({
             type="button"
             aria-label={t('common.close')}
             onClick={() => setPanel(null)}
-            className="grid h-9 w-9 place-items-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="grid h-9 w-9 place-items-center rounded-full text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
@@ -921,14 +921,14 @@ function SidePanel({
 function Person({ name, sub, children }: { name: string; sub?: ReactNode; children?: ReactNode }) {
   return (
     <li className="flex items-center gap-3 py-2">
-      <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-700 text-sm font-bold">
+      <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-container-highest text-sm font-bold">
         {name.trim().charAt(0) || '؟'}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold" dir="auto">
           {name}
         </span>
-        {sub && <span className="block text-xs text-zinc-400">{sub}</span>}
+        {sub && <span className="block text-xs text-on-surface-variant">{sub}</span>}
       </span>
       {children}
     </li>
@@ -936,7 +936,7 @@ function Person({ name, sub, children }: { name: string; sub?: ReactNode; childr
 }
 
 function GroupTitle({ children }: { children: ReactNode }) {
-  return <h3 className="mb-1 mt-4 text-xs font-bold text-zinc-400 first:mt-0">{children}</h3>;
+  return <h3 className="mb-1 mt-4 text-xs font-bold text-on-surface-variant first:mt-0">{children}</h3>;
 }
 
 function People({
@@ -976,7 +976,7 @@ function People({
                 </button>
                 <button
                   type="button"
-                  className="rounded-full px-2.5 py-1 text-xs font-semibold text-zinc-300 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="rounded-full px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-on-surface/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   onClick={() => void cf.decideHand(h.userId, 'reject')}
                 >
                   {t('meeting.reject')}
@@ -1012,7 +1012,7 @@ function People({
       )}
       <GroupTitle>{t('meeting.inClass', { count: rest.length })}</GroupTitle>
       {rest.length === 0 ? (
-        <p className="py-3 text-sm text-zinc-500">{t('meeting.noStudentsYet')}</p>
+        <p className="py-3 text-sm text-outline">{t('meeting.noStudentsYet')}</p>
       ) : (
         <ul>
           {rest.map((p) => (
@@ -1022,7 +1022,7 @@ function People({
               sub={p.owner ? t('meeting.teacherBadge') : undefined}
             >
               {!p.audio && (
-                <span aria-label={t('meeting.micOff')} className="material-symbols-outlined text-[18px] text-zinc-500">
+                <span aria-label={t('meeting.micOff')} className="material-symbols-outlined text-[18px] text-outline">
                   mic_off
                 </span>
               )}
@@ -1033,7 +1033,7 @@ function People({
                       type="button"
                       aria-label={t('meeting.muteOne')}
                       title={t('meeting.muteOne')}
-                      className="grid h-8 w-8 place-items-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="grid h-8 w-8 place-items-center rounded-full text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       onClick={() => meeting.muteParticipant(p.sessionId)}
                     >
                       <span className="material-symbols-outlined text-[18px]">mic_off</span>
@@ -1043,7 +1043,7 @@ function People({
                     type="button"
                     aria-label={t('meeting.removeOne')}
                     title={t('meeting.removeOne')}
-                    className="grid h-8 w-8 place-items-center rounded-full text-zinc-400 hover:bg-red-500/15 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="grid h-8 w-8 place-items-center rounded-full text-on-surface-variant hover:bg-red-500/15 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     onClick={() => void remove(p)}
                   >
                     <span className="material-symbols-outlined text-[18px]">person_remove</span>
@@ -1069,24 +1069,24 @@ function Chat({ chat, userId }: { chat: ReturnType<typeof useLiveChat>; userId: 
     <>
       <div ref={feed} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-2" aria-live="polite">
         {chat.messages.length === 0 ? (
-          <p className="py-10 text-center text-sm text-zinc-500">{t('meeting.chatEmpty')}</p>
+          <p className="py-10 text-center text-sm text-outline">{t('meeting.chatEmpty')}</p>
         ) : (
           chat.messages.map((msg) => {
             const mine = msg.senderId === userId;
             return (
               <div key={msg.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
                 {!mine && (
-                  <span className="mb-0.5 text-[11px] font-semibold text-zinc-400">
+                  <span className="mb-0.5 text-[11px] font-semibold text-on-surface-variant">
                     {msg.senderName}
                     {msg.senderRole === 'TEACHER' && ` · ${t('meeting.teacherBadge')}`}
                   </span>
                 )}
-                <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${mine ? 'bg-primary text-on-primary' : 'bg-white/[0.08]'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${mine ? 'bg-primary text-on-primary' : 'bg-on-surface/[0.08]'}`}>
                   <p className="whitespace-pre-wrap break-words text-sm" dir="auto">
                     {msg.body}
                   </p>
                 </div>
-                <span className="mt-0.5 text-[10px] text-zinc-500">
+                <span className="mt-0.5 text-[10px] text-outline">
                   {new Date(msg.createdAt).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -1107,7 +1107,7 @@ function Chat({ chat, userId }: { chat: ReturnType<typeof useLiveChat>; userId: 
         }}
       >
         <input
-          className="h-11 min-w-0 flex-1 rounded-full bg-white/[0.08] px-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-primary"
+          className="h-11 min-w-0 flex-1 rounded-full bg-on-surface/[0.08] px-4 text-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary"
           dir="auto"
           value={draft}
           maxLength={2000}

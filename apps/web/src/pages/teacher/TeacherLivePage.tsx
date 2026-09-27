@@ -16,6 +16,7 @@ import {
 import SessionSummary from '../live/SessionSummary';
 import LiveSessionForm from './LiveSessionForm';
 import { formatDuration } from '../../lib/liveSessionForm';
+import { egp } from '../../lib/format';
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', {
@@ -33,6 +34,7 @@ export default function TeacherLivePage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [bookingsFor, setBookingsFor] = useState<string | null>(null);
+  const [copiedFor, setCopiedFor] = useState<string | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['teacher-live'],
     queryFn: async () => (await api.get('/teacher/live')).data,
@@ -95,7 +97,19 @@ export default function TeacherLivePage() {
             return (
               <div key={s.id} className="card flex flex-col gap-2">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="min-w-0 font-heading text-lg font-bold">{s.title}</h3>
+                  <h3 className="min-w-0 font-heading text-lg font-bold">
+                    {s.title}
+                    {/* The seller's price (what they set), or free. */}
+                    <span
+                      className={`ms-2 inline-block rounded-full px-2.5 py-0.5 align-middle text-xs font-bold tabular-nums ${
+                        s.accessMode === 'PAID'
+                          ? 'bg-primary-fixed text-on-primary-fixed'
+                          : 'bg-secondary-container text-on-secondary-container'
+                      }`}
+                    >
+                      {s.accessMode === 'PAID' ? egp(s.priceCents) : t('liveBuy.free')}
+                    </span>
+                  </h3>
                   {live ? (
                     <Badge tone="error">
                       <span className="me-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current align-middle" />
@@ -129,6 +143,19 @@ export default function TeacherLivePage() {
                     {t('live.bookedCount', { count: s.bookedCount })}
                     {s.capacity != null ? ` / ${s.capacity}` : ''}
                   </button>
+                  {s.accessMode === 'PAID' && !past && (
+                    <button
+                      className="flex items-center gap-1 text-sm font-semibold text-on-surface-variant hover:text-primary"
+                      onClick={() => {
+                        const url = `${window.location.origin}/live/s/${s.id}`;
+                        void navigator.clipboard?.writeText(url);
+                        setCopiedFor(s.id);
+                      }}
+                    >
+                      <span className="material-symbols-outlined text-base">link</span>
+                      {copiedFor === s.id ? t('liveCommerce.linkCopied') : t('liveCommerce.copyPublicLink')}
+                    </button>
+                  )}
                   <button
                     className="text-error/70 hover:text-error"
                     onClick={async () =>

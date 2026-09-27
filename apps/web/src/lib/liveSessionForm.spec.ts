@@ -13,6 +13,7 @@ import {
   asciiDigits,
   clockSkew,
   formatDuration,
+  commerceErrors,
   type LiveFormValues,
 } from './liveSessionForm';
 import i18next from 'i18next';
@@ -189,5 +190,33 @@ describe('the new-session form', () => {
     expect(p).toMatchObject({ title: 'عنوان', durationMin: 60, capacity: null, joinUrl: null });
     expect(typeof p.startsAt).toBe('string');
     expect(toPayload({ ...ok, capacity: '30' }, '').capacity).toBe(30);
+  });
+
+  it('checks a PAID price the way the server reads it — exact piasters, strict format, bounds in EGP', () => {
+    const base = { paid: true, replayPolicy: 'INCLUDED_FOREVER' as const, replayDays: '' };
+    expect(commerceErrors({ ...base, price: '' }).priceCents?.code).toBe('PRICE_REQUIRED');
+    for (const bad of ['abc', '1.005', '-5', '1e3', '12.', '1,000']) {
+      expect(commerceErrors({ ...base, price: bad }).priceCents?.code).toBe('PRICE_INVALID');
+    }
+    expect(commerceErrors({ ...base, price: '0' }).priceCents).toEqual({ code: 'PRICE_TOO_LOW', params: { min: 1 } });
+    expect(commerceErrors({ ...base, price: '1000001' }).priceCents).toEqual({ code: 'PRICE_TOO_HIGH', params: { max: 1_000_000 } });
+    for (const good of ['50', '75', '100', '149.50', '149.5', '٧٥']) {
+      expect(commerceErrors({ ...base, price: good }).priceCents).toBeUndefined();
+    }
+    // FREE never has a price problem.
+    expect(commerceErrors({ ...base, paid: false, price: 'abc' })).toEqual({});
+  });
+
+  it('checks replay days only when replay is limited to days', () => {
+    const base = { paid: true, price: '100' };
+    expect(commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '0' }).replayDays?.code).toBe('REPLAY_DAYS_INVALID');
+    expect(commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '2.5' }).replayDays?.code).toBe('REPLAY_DAYS_INVALID');
+    expect(commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '7' }).replayDays).toBeUndefined();
+    expect(commerceErrors({ ...base, replayPolicy: 'NONE', replayDays: 'x' }).replayDays).toBeUndefined();
+  });
+
+  it('shows the server’s price bounds in EGP, not piasters', () => {
+    const err = { response: { data: { fields: [{ field: 'priceCents', code: 'PRICE_TOO_LOW', params: { min: 100 } }] } } };
+    expect(serverErrors(err).priceCents).toEqual({ code: 'PRICE_TOO_LOW', params: { min: 1 } });
   });
 });

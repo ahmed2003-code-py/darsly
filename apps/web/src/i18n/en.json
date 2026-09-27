@@ -138,7 +138,8 @@
     "centerActivity": "Activity",
     "profile": "Profile",
     "centerCourses": "Center courses",
-    "centerStudio": "Center Studio"
+    "centerStudio": "Center Studio",
+    "adminLiveCommerce": "Live sales"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -665,7 +666,16 @@
       "inactive": "Inactive",
       "create": "Create coupon",
       "deleteConfirm": "Delete this coupon?",
-      "empty": "No coupons yet"
+      "empty": "No coupons yet",
+      "scope": {
+        "COURSE": "Courses",
+        "LIVE": "Live sessions",
+        "ALL": "Everything"
+      },
+      "allLive": "All paid sessions",
+      "appliesTo": "Applies to",
+      "liveSession": "Session",
+      "perStudent": "Limit per student"
     },
     "academyStudio": "Academy Studio"
   },
@@ -850,7 +860,8 @@
       "staff": "Staff",
       "flags": "Feature flags",
       "activity": "Activity",
-      "studio": "Center Studio"
+      "studio": "Center Studio",
+      "commerce": "Commerce"
     },
     "owner": "Owner",
     "lastActivity": "Last activity",
@@ -1334,7 +1345,12 @@
       "CAPACITY_TOO_SMALL": "Capacity must be at least one student.",
       "CAPACITY_TOO_LARGE": "Capacity can be at most {{max}} students.",
       "INVALID": "Check this field.",
-      "CAPACITY_REQUIRED": "Enter the maximum number of students."
+      "CAPACITY_REQUIRED": "Enter the maximum number of students.",
+      "PRICE_REQUIRED": "Enter the session price.",
+      "PRICE_INVALID": "Enter the price in numbers, with at most two decimals (e.g. 149.50).",
+      "PRICE_TOO_LOW": "The minimum price for a paid session is {{min}} EGP.",
+      "PRICE_TOO_HIGH": "The price is above the maximum ({{max}} EGP).",
+      "REPLAY_DAYS_INVALID": "Enter a whole number of days from 1 to {{max}}."
     },
     "dur": {
       "hours_one": "1 hour",
@@ -2742,7 +2758,35 @@
     "eExtensionTooLong": "A class cannot run longer than {{max}} minutes.",
     "eExtensionTooShort": "That would still end the class in the past. Choose a longer extension.",
     "eLiveTimingLocked": "The class is running — use “+15 min” inside the classroom instead of editing its time.",
-    "eTeacherConflict": "The teacher has another session at that time."
+    "eTeacherConflict": "The teacher has another session at that time.",
+    "ePaidSessionNeedsPurchase": "This session is paid — book and pay.",
+    "ePaymentAlreadySubmitted": "A payment for this seat was already sent.",
+    "ePaymentUnderReview": "Your payment is being verified — it cannot be cancelled now.",
+    "eSeatNotActive": "This seat is not active.",
+    "eAccessNotFound": "This link is not valid.",
+    "eGuestNameInvalid": "Enter your name (2–60 characters).",
+    "eRefundMethodInvalid": "Choose how to receive the refund.",
+    "eRefundDestinationInvalid": "Enter the account holder name and number correctly.",
+    "eCouponInvalid": "This discount code is not valid.",
+    "eFeeExceedsPrice": "This price is below Darsly’s fee — raise the price.",
+    "eCommercialTermsInvalid": "Check the commercial terms values.",
+    "eCommercialTermsMissing": "No commercial terms are configured — contact Darsly.",
+    "eCenterRevenueSplitNotConfigured": "The Center has not agreed a teacher share yet — set it before selling.",
+    "eRefundNoDestination": "The buyer has not given a refund account yet.",
+    "eSessionEnded": "This session has ended.",
+    "eWalletConcurrentWrite": "Another wallet payment was in progress — try again.",
+    "eAccessModeLocked": "Students have booked — the session cannot switch between free and paid.",
+    "ePurchaseStateConflict": "This purchase is not in a state that allows this.",
+    "eAnotherPurchaseActive": "You have another active purchase for this session.",
+    "eNotInGroup": "This session is for a group you are not in.",
+    "eLivePaymentAdminOnly": "Only Darsly verifies live-session payments.",
+    "ePaidCancelViaPurchase": "A paid seat is cancelled from its purchase.",
+    "eAlreadyReleased": "Earnings were already released.",
+    "eRefundStateConflict": "This refund is not in a state that allows this.",
+    "eTransferReferenceRequired": "Enter the transfer reference.",
+    "eSessionIsFree": "This session is free — book it directly.",
+    "eGuestScope": "Not available to guests.",
+    "ePriceInvalid": "The price is not valid."
   },
   "myStudio": {
     "title": "My Studio",
@@ -3772,5 +3816,229 @@
       "chat": "Chat"
     },
     "actualDuration": "Ran {{duration}}"
+  },
+  "liveBuy": {
+    "title": "Book “{{title}}”",
+    "seatPrice": "Seat price",
+    "free": "Free",
+    "unavailable": "Not bookable right now",
+    "autoConfirmHint": "After you transfer and send the proof, your booking is confirmed automatically as soon as the bank message arrives — or by the Darsly team.",
+    "confirmedTitle": "Your seat is confirmed ✅",
+    "confirmedBody": "Your seat is confirmed. You will find it in your live sessions and can join when it starts.",
+    "pendingTitle": "Waiting for payment confirmation",
+    "pendingBody": "We received your transfer proof; your seat is held until the payment is confirmed. We will let you know.",
+    "heldFor": "Your seat is held for {{time}} — transfer and upload the proof before it runs out.",
+    "payFromWalletInstead": "Or pay {{amount}} from your wallet now",
+    "payFromWallet": "Pay from wallet",
+    "payByTransfer": "Pay by transfer",
+    "walletBalance": "Wallet balance: {{amount}}",
+    "walletShort": "Not enough balance to pay from the wallet",
+    "coupon": "Discount code",
+    "couponPh": "Discount code (optional)",
+    "applyCoupon": "Apply",
+    "couponReason": {
+      "not-found": "This code is not valid for this session.",
+      "other-session": "This code is for another session.",
+      "expired": "This code has expired.",
+      "used-up": "This code has been used up.",
+      "per-student": "You have already used this code.",
+      "below-fee": "This code cannot be used on this session."
+    },
+    "pendingBadge": "Awaiting confirmation",
+    "pendingCta": "Awaiting payment confirmation",
+    "continueCta": "Continue payment",
+    "buyCta": "Book & pay",
+    "refund": {
+      "none": "No refund if you cancel yourself.",
+      "days_one": "Full refund if you cancel 1 day before",
+      "days_other": "Full refund if you cancel {{count}} days before",
+      "hours_one": "Full refund if you cancel 1 hour before",
+      "hours_other": "Full refund if you cancel {{count}} hours before"
+    },
+    "replay": {
+      "none": "Recording not included.",
+      "forever": "Includes watching the recording afterwards (if the teacher shares it).",
+      "days_one": "Includes the recording for 1 day after the session",
+      "days_other": "Includes the recording for {{count}} days after the session",
+      "short": "Recording included",
+      "daysShort_one": "Recording 1 day",
+      "daysShort_other": "Recording {{count}} days"
+    },
+    "statusNote": {
+      "PAYMENT_REJECTED": "Your previous payment was not accepted. You can book again.",
+      "OVERSOLD": "Your payment arrived after the seats filled up, so it was refunded in full.",
+      "REFUNDED": "Refunded.",
+      "CANCELLED_BY_TEACHER": "The teacher cancelled the session; you were refunded in full."
+    },
+    "cancelRefund": "Cancel your seat in “{{title}}”? The refund goes to your wallet according to the refund policy.",
+    "cancelNoRefund": "Cancel your seat in “{{title}}”? No refund at this point under the session’s policy — your seat will be released."
+  },
+  "guest": {
+    "notFound": "This session is not available for booking.",
+    "closed": "Booking for this session is closed.",
+    "yourName": "Your name",
+    "yourNameHint": "The name the teacher sees in class.",
+    "reserve": "Reserve my seat",
+    "noAccountNeeded": "No Darsly account needed.",
+    "linkInvalid": "This link is not valid.",
+    "hello": "Hi {{name}}",
+    "keepLink": "Keep this link — it is your only way to your booking and to the classroom.",
+    "yourLink": "Your booking link",
+    "copy": "Copy",
+    "copied": "Copied ✓",
+    "sessionCancelled": "The teacher cancelled this session. If you paid, you will be refunded in full.",
+    "payNow": "Pay to confirm your seat",
+    "holdExpired": "Your hold expired. If you already transferred, upload the proof — if the seats are gone, you will be refunded in full.",
+    "pendingBody": "We received your transfer proof. This page updates by itself once the payment is confirmed.",
+    "canEnter": "The session is live — you can join now.",
+    "entersLater": "You can join from {{time}} once the teacher starts.",
+    "classOver": "The session is over.",
+    "refundTitle": "A refund owed to you",
+    "refundStatus": {
+      "REQUESTED": "Your refund request was received and is waiting for the Darsly team.",
+      "APPROVED": "Approved; the transfer is on its way.",
+      "COMPLETED": "The money has been sent to you.",
+      "REJECTED": "The refund request was not accepted."
+    },
+    "refundMethod": "How to receive it",
+    "refundHolder": "Account holder name",
+    "refundWallet": "Wallet number",
+    "refundAccount": "Account number / payment address",
+    "sendRefundHere": "Send it to this account",
+    "cancelSeat": "Cancel booking",
+    "cancelHeld": "Your seat is not paid yet. Cancelling costs nothing.",
+    "cancelConfirmed": "If a refund is due under the refund policy, enter the account to send it to.",
+    "confirmCancel": "Confirm cancellation",
+    "replacesSession": "You are signed in as {{name}} on this device. Joining as a guest signs you out. Continue?"
+  },
+  "liveCommerce": {
+    "sessionType": "Session type",
+    "free": "Free",
+    "paid": "Paid",
+    "price": "Session price",
+    "egp": "EGP",
+    "preview": {
+      "price": "Session price",
+      "fee": "Darsly fee",
+      "studentPays": "Student pays",
+      "teacherNet": "Teacher net",
+      "centerShare": "Center share"
+    },
+    "refundPolicy": "Refund policy when a student cancels",
+    "refund": {
+      "FLEXIBLE": "Flexible",
+      "STANDARD": "Standard",
+      "STRICT": "Strict",
+      "NO_REFUND": "No refund"
+    },
+    "replayPolicy": "Recording",
+    "replay": {
+      "INCLUDED_FOREVER": "Always included",
+      "INCLUDED_DAYS": "For some days",
+      "NONE": "Not included"
+    },
+    "replayDays": "Days",
+    "replayNeedsSharing": "Students only see the recording once you share it from the session page.",
+    "copyPublicLink": "Copy booking link",
+    "linkCopied": "Link copied ✓",
+    "pendingEarnings": "Pending live earnings",
+    "pendingEarningsHint_one": "From 1 seat — added to your balance once the session is delivered",
+    "pendingEarningsHint_other": "From {{count}} seats — added to your balance once the session is delivered"
+  },
+  "adminTerms": {
+    "effective": "Terms in force",
+    "mode": {
+      "ADDITIVE": "Added on top",
+      "DEDUCTED": "Deducted from price"
+    },
+    "feeRefundable": "Fee refunded on student cancel",
+    "feeKept": "Fee kept on student cancel",
+    "inherited": "(platform default)",
+    "none": "No terms in force.",
+    "additiveHint": "Example: price 100 EGP, fee 10% → student pays 110, Darsly 10, seller 100.",
+    "deductedHint": "Example: price 100 EGP, fee 10% → student pays 100, Darsly 10, seller 90.",
+    "newVersion": "New terms version",
+    "feeType": "Fee type",
+    "percent": "Percentage",
+    "fixed": "Fixed amount",
+    "valuePercent": "Percentage (%)",
+    "valueFixed": "Amount (EGP)",
+    "feeMode": "Fee mode",
+    "effectiveFrom": "Effective from",
+    "effectiveFromHint": "Empty = now",
+    "refundableLabel": "Refund Darsly’s fee when a student cancels in time",
+    "note": "Note",
+    "save": "Save version",
+    "fee": "Fee",
+    "splits": "Each teacher’s share in this Center",
+    "centerDefault": "Center default share: {{pct}}",
+    "noSplit": "Not agreed",
+    "ownAgreement": "own agreement",
+    "platformDefault": "Platform default terms (live sessions)"
+  },
+  "adminLive": {
+    "title": "Live session sales",
+    "subtitle": "Reviews, refunds, and every live purchase with its financial breakdown.",
+    "tabs": {
+      "review": "Needs review",
+      "refunds": "Refunds",
+      "purchases": "All purchases",
+      "terms": "Commercial terms"
+    },
+    "status": {
+      "HELD": "Held",
+      "PAYMENT_PENDING": "Payment pending",
+      "CONFIRMED": "Confirmed",
+      "DELIVERED": "Delivered",
+      "EXPIRED": "Expired",
+      "PAYMENT_REJECTED": "Payment rejected",
+      "CANCELLED_BY_STUDENT": "Cancelled by buyer",
+      "CANCELLED_BY_TEACHER": "Cancelled by teacher",
+      "REFUND_PENDING": "Refund pending",
+      "REFUNDED": "Refunded",
+      "OVERSOLD": "Oversold — refunded",
+      "NEEDS_REVIEW": "Needs review"
+    },
+    "paid": "Paid",
+    "fee": "Darsly fee",
+    "teacher": "Teacher",
+    "center": "Center",
+    "reason": "Reason: {{reason}}",
+    "release": "Approve & release earnings",
+    "confirmRelease": "Mark this session delivered and release the earnings? This happens once.",
+    "refund": "Full refund",
+    "confirmRefund": "Refund the buyer in full and remove their seat?",
+    "pendingPayments": "Live payments pending",
+    "filter": "Filter by status",
+    "allStatuses": "All statuses",
+    "nothingToReview": "Nothing needs review.",
+    "noPurchases": "No purchases.",
+    "noRefunds": "No refunds.",
+    "guest": "guest",
+    "refundReason": {
+      "STUDENT_CANCEL": "Buyer cancelled",
+      "TEACHER_CANCEL": "Teacher cancelled",
+      "OVERSOLD": "Seats filled",
+      "NO_SHOW": "Not delivered",
+      "ADMIN": "Admin decision"
+    },
+    "destination": {
+      "WALLET": "To Darsly wallet",
+      "MANUAL_TRANSFER": "Manual transfer"
+    },
+    "awaitingDestination": "Waiting for the buyer’s account details",
+    "transferRef": "Transfer reference: {{ref}}",
+    "approve": "Approve",
+    "reject": "Reject",
+    "rejectReason": "Reason for rejecting",
+    "transferRefPh": "Transfer reference",
+    "markTransferred": "Mark as transferred",
+    "confirmTransferred": "Confirm you transferred {{amount}} to the buyer? It is recorded in the ledger once.",
+    "refundStatus": {
+      "REQUESTED": "Awaiting review",
+      "APPROVED": "Approved — awaiting transfer",
+      "COMPLETED": "Completed",
+      "REJECTED": "Rejected"
+    }
   }
 }

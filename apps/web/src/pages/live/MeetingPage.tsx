@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Role } from '@darsly/shared-types';
+import { guestHome } from '../../lib/guest';
 import { api } from '../../lib/api';
 import { useLiveMeeting, type LiveProvider } from '../../lib/useLiveMeeting';
 import { useAuthStore } from '../../stores/auth';
@@ -81,7 +82,8 @@ export default function MeetingPage() {
   const [joining, setJoining] = useState(false);
   const clock = useClockAnchor();
   const [extendNote, setExtendNote] = useState<string | null>(null);
-  const home = isTeacher ? '/teacher/live' : '/live';
+  // A guest's way back is the page of the seat they bought.
+  const home = isTeacher ? '/teacher/live' : user?.role === Role.GUEST ? guestHome() : '/live';
 
   const entry = useQuery({
     queryKey: ['live-entry', id, isTeacher],

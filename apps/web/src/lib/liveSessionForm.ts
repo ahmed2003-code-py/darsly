@@ -1,6 +1,11 @@
 import {
+  LIVE_PRICE_MAX_CENTS,
+  LIVE_PRICE_MIN_CENTS,
+  LIVE_REPLAY_DAYS_MAX,
   LIVE_SESSION_RULES,
+  parseMoneyToCents,
   validateLiveSession,
+  type LiveReplayPolicy,
   type LiveSessionFieldCode,
   type LiveSessionFieldError,
 } from '@darsly/shared-types';
@@ -13,14 +18,23 @@ import {
  * server stays the authority: whatever it refuses comes back as
  * `fields: [{ field, code, params }]` and lands under the same field.
  */
-export type LiveFormField = 'title' | 'description' | 'startsAt' | 'durationMin' | 'capacity';
+export type LiveFormField =
+  | 'title'
+  | 'description'
+  | 'priceCents'
+  | 'startsAt'
+  | 'durationMin'
+  | 'capacity'
+  | 'replayDays';
 /** Form order — the first invalid one is where focus goes. */
 export const LIVE_FORM_ORDER: LiveFormField[] = [
   'title',
   'description',
+  'priceCents',
   'startsAt',
   'durationMin',
   'capacity',
+  'replayDays',
 ];
 
 export interface LiveFormValues {
@@ -34,7 +48,15 @@ export interface LiveFormValues {
 
 export interface FieldProblem {
   /** CAPACITY_REQUIRED is the form's own: "limit" chosen but no number typed. */
-  code: LiveSessionFieldCode | 'CAPACITY_REQUIRED' | 'INVALID';
+  code:
+    | LiveSessionFieldCode
+    | 'CAPACITY_REQUIRED'
+    | 'INVALID'
+    | 'PRICE_REQUIRED'
+    | 'PRICE_INVALID'
+    | 'PRICE_TOO_LOW'
+    | 'PRICE_TOO_HIGH'
+    | 'REPLAY_DAYS_INVALID';
   params: Record<string, number>;
 }
 export type LiveFormErrors = Partial<Record<LiveFormField, FieldProblem>>;
@@ -103,6 +125,34 @@ export function formatDuration(min: number, t: T): string {
 }
 
 /**
+ * A PAID session's own fields: the price as the teacher typed it (EGP, up to
+ * two decimals — read with the same strict parser the server's numbers come
+ * from, never a float) and, when replay is limited, the number of days.
+ * Bounds are shown in EGP.
+ */
+export function commerceErrors(c: {
+  paid: boolean;
+  price: string;
+  replayPolicy: LiveReplayPolicy;
+  replayDays: string;
+}): LiveFormErrors {
+  const out: LiveFormErrors = {};
+  if (c.paid) {
+    const cents = parseMoneyToCents(c.price);
+    if (!c.price.trim()) out.priceCents = { code: 'PRICE_REQUIRED', params: {} };
+    else if (cents == null) out.priceCents = { code: 'PRICE_INVALID', params: {} };
+    else if (cents < LIVE_PRICE_MIN_CENTS) out.priceCents = { code: 'PRICE_TOO_LOW', params: { min: LIVE_PRICE_MIN_CENTS / 100 } };
+    else if (cents > LIVE_PRICE_MAX_CENTS) out.priceCents = { code: 'PRICE_TOO_HIGH', params: { max: LIVE_PRICE_MAX_CENTS / 100 } };
+  }
+  if (c.replayPolicy === 'INCLUDED_DAYS') {
+    const n = Number(c.replayDays.trim());
+    if (!/^\d+$/.test(c.replayDays.trim()) || n < 1 || n > LIVE_REPLAY_DAYS_MAX)
+      out.replayDays = { code: 'REPLAY_DAYS_INVALID', params: { max: LIVE_REPLAY_DAYS_MAX } };
+  }
+  return out;
+}
+
+/**
  * What the server refused, by field. Anything it refused that is not about a
  * field (a clash with another class, the network) is left to the banner.
  */
@@ -113,9 +163,15 @@ export function serverErrors(error: unknown): LiveFormErrors {
   if (Array.isArray(data?.fields)) {
     for (const f of data.fields as { field?: unknown; code?: unknown; params?: unknown }[]) {
       if (typeof f?.field !== 'string' || !LIVE_FORM_ORDER.includes(f.field as LiveFormField)) continue;
+      const params = (f.params && typeof f.params === 'object' ? { ...f.params } : {}) as Record<string, number>;
+      // The server speaks piasters; the form shows EGP.
+      if (f.field === 'priceCents') {
+        if (typeof params.min === 'number') params.min = params.min / 100;
+        if (typeof params.max === 'number') params.max = params.max / 100;
+      }
       out[f.field as LiveFormField] ??= {
         code: (typeof f.code === 'string' ? f.code : 'INVALID') as FieldProblem['code'],
-        params: (f.params && typeof f.params === 'object' ? f.params : {}) as Record<string, number>,
+        params,
       };
     }
   } else if (Array.isArray(data?.message)) {

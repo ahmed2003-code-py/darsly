@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import { lazyPage } from './lib/lazyPage';
 import { loginUrlFor } from './lib/redirect';
 import { useAuthStore } from './stores/auth';
+import { guestHome } from './lib/guest';
 
 // Route-level code splitting: each screen is its own chunk, so the initial
 // load only ships the shell + login. Keeps the app fast as it scales.
@@ -58,7 +59,10 @@ const AssignmentBuilderPage = lazyPage(() => import('./pages/teacher/AssignmentB
 const CourseBuilderPage = lazyPage(() => import('./pages/teacher/CourseBuilderPage'));
 const TeacherLivePage = lazyPage(() => import('./pages/teacher/TeacherLivePage'));
 const MeetingPage = lazyPage(() => import('./pages/live/MeetingPage'));
+const PublicLivePage = lazyPage(() => import('./pages/live/PublicLivePage'));
+const GuestAccessPage = lazyPage(() => import('./pages/live/GuestAccessPage'));
 const AdminPaymentsPage = lazyPage(() => import('./pages/admin/AdminPaymentsPage'));
+const AdminLiveCommercePage = lazyPage(() => import('./pages/admin/AdminLiveCommercePage'));
 const AdminAcademyStudioPage = lazyPage(() => import('./pages/admin/AdminAcademyStudioPage'));
 const AdminStudioPage = lazyPage(() => import('./pages/admin/AdminStudioPage'));
 const TeacherAnalyticsPage = lazyPage(() => import('./pages/teacher/TeacherAnalyticsPage'));
@@ -145,6 +149,8 @@ function JoinRoute() {
 
 /** Where a role belongs when it is somewhere it does not. */
 function homeFor(role?: Role): string {
+  // A guest bought one live seat; its only page is that purchase.
+  if (role === Role.GUEST) return guestHome();
   if (role === Role.TEACHER) return '/teacher';
   if (role === Role.STAFF) return '/center';
   if (role === Role.SUPER_ADMIN) return '/admin';
@@ -154,6 +160,7 @@ function homeFor(role?: Role): string {
 /** Each role lands on its own home. */
 function HomeRedirect() {
   const user = useAuthStore((s) => s.user);
+  if (user?.role === Role.GUEST) return <Navigate to={guestHome()} replace />;
   if (user?.role === Role.TEACHER) return <Navigate to="/teacher" replace />;
   if (user?.role === Role.STAFF) return <Navigate to="/center" replace />;
   if (user?.role === Role.SUPER_ADMIN) return <Navigate to="/admin" replace />;
@@ -211,6 +218,10 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/activate" element={<ActivateAccountPage />} />
           <Route path="/join/:token" element={<JoinRoute />} />
+          {/* A paid live class sold to anyone, and a guest's private page for
+              the seat they bought — public; the secret in the URL is the key. */}
+          <Route path="/live/s/:id" element={<PublicLivePage />} />
+          <Route path="/live/access/:token" element={<GuestAccessPage />} />
 
           {/* Student / public browsing */}
           <Route path="/" element={<HomeRedirect />} />
@@ -654,6 +665,14 @@ export default function App() {
             element={
               <RequireAuth role={Role.SUPER_ADMIN}>
                 <AdminPaymentsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/live-commerce"
+            element={
+              <RequireAuth role={Role.SUPER_ADMIN}>
+                <AdminLiveCommercePage />
               </RequireAuth>
             }
           />

@@ -704,9 +704,15 @@ export class LiveService {
         },
       },
     });
+    const now = new Date();
     return Promise.all(
       sessions.map(async (s) => ({
         ...this.studentView(s, s.bookings.length > 0),
+        // Seats left the way capacity is enforced: booked seats, guests'
+        // confirmed seats and unexpired holds.
+        ...(s.capacity != null
+          ? { seatsLeft: Math.max(0, s.capacity - (await seatsTaken(this.prisma, s.id, now))) }
+          : {}),
         ...(await this.commerceView(s, s.purchases[0] ?? null)),
       })),
     );

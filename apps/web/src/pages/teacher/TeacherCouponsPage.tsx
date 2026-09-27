@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DeleteButton } from '../../components/DeleteButton';
 import { FormEvent, useState } from 'react';
+import { parseMoneyToCents } from '@darsly/shared-types';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { dateShort, egp } from '../../lib/format';
@@ -21,6 +22,10 @@ interface CouponForm {
   maxUses: string;
   expiresAt: string;
   courseId: string;
+  /** What it can discount: courses (every coupon before live seats), live seats, or both. */
+  scope: 'COURSE' | 'LIVE' | 'ALL';
+  liveSessionId: string;
+  maxUsesPerStudent: string;
 }
 
 const EMPTY: CouponForm = {
@@ -30,6 +35,9 @@ const EMPTY: CouponForm = {
   maxUses: '',
   expiresAt: '',
   courseId: '',
+  scope: 'COURSE',
+  liveSessionId: '',
+  maxUsesPerStudent: '',
 };
 
 export default function TeacherCouponsPage() {
@@ -45,6 +53,13 @@ export default function TeacherCouponsPage() {
     queryKey: ['teacher-courses'],
     queryFn: async () => (await api.get('/teacher/courses')).data,
   });
+  const { data: liveSessions } = useQuery({
+    queryKey: ['teacher-live'],
+    queryFn: async () => (await api.get('/teacher/live')).data,
+  });
+  const paidSessions = (liveSessions ?? []).filter(
+    (s: any) => s.accessMode === 'PAID' && s.status !== 'ENDED',
+  );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['teacher-coupons'] });
 
@@ -54,10 +69,16 @@ export default function TeacherCouponsPage() {
         await api.post('/teacher/coupons', {
           code: f.code.trim().toUpperCase(),
           percentOff: f.type === 'percent' ? Number(f.value) : undefined,
-          amountOffCents: f.type === 'amount' ? Math.round(Number(f.value) * 100) : undefined,
+          // Read as an exact amount of piasters, never through a float.
+          amountOffCents:
+            f.type === 'amount' ? (parseMoneyToCents(f.value) ?? undefined) : undefined,
           maxUses: f.maxUses ? Number(f.maxUses) : undefined,
           expiresAt: f.expiresAt ? new Date(f.expiresAt).toISOString() : undefined,
-          courseId: f.courseId || undefined,
+          scope: f.scope,
+          courseId: f.scope === 'COURSE' ? f.courseId || undefined : undefined,
+          liveSessionId: f.scope === 'LIVE' ? f.liveSessionId || undefined : undefined,
+          maxUsesPerStudent:
+            f.scope !== 'COURSE' && f.maxUsesPerStudent ? Number(f.maxUsesPerStudent) : undefined,
         })
       ).data,
     onSuccess: () => {
@@ -127,7 +148,16 @@ export default function TeacherCouponsPage() {
                     {c.percentOff ? `${c.percentOff}%` : egp(c.amountOffCents)}
                   </td>
                   <td className="px-6 py-4 text-on-surface-variant">
-                    {c.course?.title ?? t('teacher.coupons.allCourses')}
+                    <span className="me-1 rounded bg-surface-container px-1.5 py-0.5 text-xs font-semibold">
+                      {t(`teacher.coupons.scope.${c.scope ?? 'COURSE'}`)}
+                    </span>
+                    {c.course?.title ??
+                      c.liveSession?.title ??
+                      (c.scope === 'LIVE'
+                        ? t('teacher.coupons.allLive')
+                        : c.scope === 'ALL'
+                          ? ''
+                          : t('teacher.coupons.allCourses'))}
                   </td>
                   <td className="px-6 py-4">
                     {c.usedCount} / {c.maxUses ?? '∞'}
@@ -193,20 +223,68 @@ export default function TeacherCouponsPage() {
                 />
               </Field>
             </div>
-            <Field label={t('teacher.coupons.course')}>
+            <Field label={t('teacher.coupons.appliesTo')}>
               <select
                 className="input py-2"
-                value={form.courseId}
-                onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+                value={form.scope}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    scope: e.target.value as CouponForm['scope'],
+                    courseId: '',
+                    liveSessionId: '',
+                  })
+                }
               >
-                <option value="">{t('teacher.coupons.allCourses')}</option>
-                {(courses ?? []).map((c: any) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
+                <option value="COURSE">{t('teacher.coupons.scope.COURSE')}</option>
+                <option value="LIVE">{t('teacher.coupons.scope.LIVE')}</option>
+                <option value="ALL">{t('teacher.coupons.scope.ALL')}</option>
               </select>
             </Field>
+            {form.scope === 'COURSE' && (
+              <Field label={t('teacher.coupons.course')}>
+                <select
+                  className="input py-2"
+                  value={form.courseId}
+                  onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+                >
+                  <option value="">{t('teacher.coupons.allCourses')}</option>
+                  {(courses ?? []).map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {form.scope === 'LIVE' && (
+              <Field label={t('teacher.coupons.liveSession')}>
+                <select
+                  className="input py-2"
+                  value={form.liveSessionId}
+                  onChange={(e) => setForm({ ...form, liveSessionId: e.target.value })}
+                >
+                  <option value="">{t('teacher.coupons.allLive')}</option>
+                  {paidSessions.map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {form.scope !== 'COURSE' && (
+              <Field label={t('teacher.coupons.perStudent')} hint={t('teacher.coupons.unlimited')}>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  value={form.maxUsesPerStudent}
+                  onChange={(e) =>
+                    setForm({ ...form, maxUsesPerStudent: e.target.value.replace(/\D/g, '') })
+                  }
+                />
+              </Field>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <Field label={t('teacher.coupons.maxUses')} hint={t('teacher.coupons.unlimited')}>
                 <input

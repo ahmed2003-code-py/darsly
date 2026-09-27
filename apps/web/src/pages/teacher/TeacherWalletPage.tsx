@@ -166,6 +166,15 @@ export default function TeacherWalletPage() {
             {egp(wallet.netCents ?? wallet.earnedHereCents ?? 0)}
           </p>
         </div>
+        {/* Live seats sold but not yet delivered: owed, not yet withdrawable.
+            They move into the balance above once the class is delivered. */}
+        <div className="card">
+          <p className="text-sm text-on-surface-variant">{t('liveCommerce.pendingEarnings')}</p>
+          <p className="font-heading text-3xl font-extrabold">{egp(wallet.livePendingCents ?? 0)}</p>
+          <p className="mt-1 text-xs text-outline">
+            {t('liveCommerce.pendingEarningsHint', { count: wallet.livePendingSeats ?? 0 })}
+          </p>
+        </div>
         <button
           type="button"
           className="card text-start transition hover:shadow-md"

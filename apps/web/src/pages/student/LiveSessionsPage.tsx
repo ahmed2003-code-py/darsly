@@ -15,6 +15,15 @@ import {
 } from '../../components/ui';
 import SessionSummary from '../live/SessionSummary';
 import { confirmDelete } from '../../lib/confirm';
+import { egp } from '../../lib/format';
+import { LIVE_REFUND_WINDOW_HOURS, type LiveRefundPolicy } from '@darsly/shared-types';
+import LiveCheckoutModal from '../../components/live/LiveCheckoutModal';
+
+/** Whether a student's own cancellation now would still be refunded (the server decides; this words it). */
+function refundableNow(policy: LiveRefundPolicy, startsAt: string) {
+  const h = LIVE_REFUND_WINDOW_HOURS[policy];
+  return h != null && Date.now() <= new Date(startsAt).getTime() - h * 3600_000;
+}
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', {
@@ -69,8 +78,17 @@ export default function LiveSessionsPage() {
     mutationFn: async (id: string) => (await api.delete(`/live/${id}/book`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live-upcoming'] }),
   });
+  const cancelPaid = useMutation({
+    mutationFn: async (purchaseId: string) =>
+      (await api.post(`/live/purchases/${purchaseId}/cancel`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['live-upcoming'] });
+      qc.invalidateQueries({ queryKey: ['wallet'] });
+    },
+  });
   const navigate = useNavigate();
   const [recordFor, setRecordFor] = useState<string | null>(null);
+  const [buying, setBuying] = useState<{ id: string; title: string } | null>(null);
 
   return (
     <div className="page">
@@ -94,6 +112,11 @@ export default function LiveSessionsPage() {
             // Once the class has begun the booking is its record, and the
             // server refuses to cancel it — so the button is not offered.
             const started = live || new Date(s.startsAt).getTime() <= Date.now();
+            const paid = s.accessMode === 'PAID';
+            const pStatus: string | undefined = s.purchase?.status;
+            // Booked means the server confirmed the seat — for a paid session,
+            // a verified payment; never a transfer that is still being checked.
+            const booked = s.booked;
             return (
               <div key={s.id} className="card flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-3">
@@ -123,7 +146,26 @@ export default function LiveSessionsPage() {
                     <h3 className="font-heading text-lg font-bold">{s.title}</h3>
                     <p className="text-sm text-primary">{s.teacherName}</p>
                   </div>
-                  {s.booked && <Badge tone="teal">{t('live.booked')}</Badge>}
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {/* The one price a student pays, or free — never the split. */}
+                    <span
+                      className={`rounded-full px-3 py-1 text-sm font-bold tabular-nums ${
+                        paid
+                          ? 'bg-primary-fixed text-on-primary-fixed'
+                          : 'bg-secondary-container text-on-secondary-container'
+                      }`}
+                    >
+                      {paid
+                        ? s.studentPaysCents != null
+                          ? egp(s.studentPaysCents)
+                          : t('liveBuy.unavailable')
+                        : t('liveBuy.free')}
+                    </span>
+                    {booked && <Badge tone="teal">{t('live.booked')}</Badge>}
+                    {!booked && pStatus === 'PAYMENT_PENDING' && (
+                      <Badge tone="neutral">{t('liveBuy.pendingBadge')}</Badge>
+                    )}
+                  </div>
                 </div>
 
                 {s.description && (
@@ -145,7 +187,24 @@ export default function LiveSessionsPage() {
                       {t('live.seatsLeft', { count: s.seatsLeft })}
                     </span>
                   )}
+                  {paid && s.replayPolicy !== 'NONE' && (
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">replay</span>
+                      {s.replayPolicy === 'INCLUDED_DAYS'
+                        ? t('liveBuy.replay.daysShort', { count: s.replayDays ?? 0 })
+                        : t('liveBuy.replay.short')}
+                    </span>
+                  )}
                 </div>
+                {paid &&
+                  pStatus &&
+                  ['PAYMENT_REJECTED', 'OVERSOLD', 'REFUNDED', 'CANCELLED_BY_TEACHER'].includes(
+                    pStatus,
+                  ) && (
+                    <p className="rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant">
+                      {t(`liveBuy.statusNote.${pStatus}`)}
+                    </p>
+                  )}
 
                 {/* A finished lesson still has something in it: the notes, if
                     the teacher shared them. */}
@@ -158,7 +217,7 @@ export default function LiveSessionsPage() {
                       <span className="material-symbols-outlined text-base">description</span>
                       {t('live.viewSession')}
                     </button>
-                  ) : s.booked ? (
+                  ) : booked ? (
                     <>
                       <button
                         className="btn-primary flex-1 py-2.5 text-sm"
@@ -178,18 +237,54 @@ export default function LiveSessionsPage() {
                       {!started && (
                         <button
                           className="btn-ghost px-4 py-2.5 text-sm"
-                          disabled={cancel.isPending}
-                          onClick={async () =>
-                            (await confirmDelete({
-                              kind: 'cancel',
-                              message: t('live.cancelBookingConfirm', { title: s.title }),
-                            })) && cancel.mutate(s.id)
-                          }
+                          disabled={cancel.isPending || cancelPaid.isPending}
+                          onClick={async () => {
+                            // A paid seat is given back through its purchase,
+                            // and the student is told first what comes back.
+                            if (paid && s.purchase) {
+                              const ok = await confirmDelete({
+                                kind: 'cancel',
+                                message: refundableNow(s.refundPolicy, s.startsAt)
+                                  ? t('liveBuy.cancelRefund', { title: s.title })
+                                  : t('liveBuy.cancelNoRefund', { title: s.title }),
+                              });
+                              if (ok) cancelPaid.mutate(s.purchase.id);
+                              return;
+                            }
+                            if (
+                              await confirmDelete({
+                                kind: 'cancel',
+                                message: t('live.cancelBookingConfirm', { title: s.title }),
+                              })
+                            )
+                              cancel.mutate(s.id);
+                          }}
                         >
                           {t('live.cancel')}
                         </button>
                       )}
                     </>
+                  ) : paid ? (
+                    <button
+                      className="btn-primary flex-1 py-2.5 text-sm"
+                      disabled={
+                        pStatus === 'PAYMENT_PENDING' ||
+                        (full && pStatus !== 'HELD') ||
+                        !s.purchasable
+                      }
+                      onClick={() => setBuying({ id: s.id, title: s.title })}
+                    >
+                      <span className="material-symbols-outlined text-base">
+                        {pStatus === 'PAYMENT_PENDING' ? 'hourglass_top' : 'shopping_cart'}
+                      </span>
+                      {pStatus === 'PAYMENT_PENDING'
+                        ? t('liveBuy.pendingCta')
+                        : pStatus === 'HELD'
+                          ? t('liveBuy.continueCta')
+                          : full
+                            ? t('live.full')
+                            : t('liveBuy.buyCta')}
+                    </button>
                   ) : (
                     <button
                       className="btn-primary flex-1 py-2.5 text-sm"
@@ -201,11 +296,23 @@ export default function LiveSessionsPage() {
                     </button>
                   )}
                 </div>
-                <ErrorNote error={book.error || cancel.error} />
+                <ErrorNote error={book.error || cancel.error || cancelPaid.error} />
               </div>
             );
           })}
         </div>
+      )}
+
+      {buying && (
+        <LiveCheckoutModal
+          open={!!buying}
+          sessionId={buying.id}
+          title={buying.title}
+          onClose={() => {
+            setBuying(null);
+            qc.invalidateQueries({ queryKey: ['live-upcoming'] });
+          }}
+        />
       )}
 
       <Modal open={!!recordFor} onClose={() => setRecordFor(null)} title={t('live.sessionRecord')}>

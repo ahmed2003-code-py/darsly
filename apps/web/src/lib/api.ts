@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
+import { isGuest, renewGuestToken } from './guest';
 
 // Production build is served by the API itself -> same-origin relative calls.
 // Local dev (vite on :5173) talks to the API on :4000 unless VITE_API_URL says otherwise.
@@ -38,6 +39,17 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
     const { refreshToken, setTokens, clear } = useAuthStore.getState();
+    // A guest has no refresh token: its classroom token is renewed from the
+    // purchase's access secret, and only while the seat is still active.
+    if (error.response?.status === 401 && isGuest() && !original._retried) {
+      original._retried = true;
+      const fresh = await renewGuestToken(api.defaults.baseURL as string);
+      if (fresh) {
+        original.headers.Authorization = `Bearer ${fresh}`;
+        return api(original);
+      }
+      return Promise.reject(error);
+    }
     if (error.response?.status === 401 && refreshToken && !original._retried) {
       original._retried = true;
       refreshing ??= axios

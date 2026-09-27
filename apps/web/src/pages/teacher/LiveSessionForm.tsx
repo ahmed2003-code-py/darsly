@@ -1,11 +1,12 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { resolveError } from '../../lib/errorMessage';
 import {
   asciiDigits,
   clientErrors,
+  commerceErrors,
   clockSkew,
   combine,
   firstInvalid,
@@ -23,6 +24,14 @@ import {
   type LiveFormValues,
 } from '../../lib/liveSessionForm';
 import { Field } from '../../components/ui';
+import { egp } from '../../lib/format';
+import {
+  LIVE_REFUND_POLICIES,
+  LIVE_REFUND_WINDOW_HOURS,
+  parseMoneyToCents,
+  type LiveRefundPolicy,
+  type LiveReplayPolicy,
+} from '@darsly/shared-types';
 
 type TranscriptionMode = 'OFF' | 'MANUAL' | 'AUTO_WHEN_RECORDING';
 /** "now" = start the moment it is created; "pick" = the date and time shown. */
@@ -45,7 +54,14 @@ function fresh(): Draft {
   // A class is usually "later today": the next half hour is the likeliest
   // answer, so most teachers only type a title.
   const at = nextSlot(Date.now());
-  return { title: '', description: '', date: localDate(at), time: localTime(at), durationMin: '60', capacity: '' };
+  return {
+    title: '',
+    description: '',
+    date: localDate(at),
+    time: localTime(at),
+    durationMin: '60',
+    capacity: '',
+  };
 }
 
 /** One choice among a few, as buttons rather than a dropdown. */
@@ -74,9 +90,23 @@ function Chip({
   );
 }
 
-function Label({ children, htmlFor, id, error }: { children: ReactNode; htmlFor?: string; id?: string; error?: boolean }) {
+function Label({
+  children,
+  htmlFor,
+  id,
+  error,
+}: {
+  children: ReactNode;
+  htmlFor?: string;
+  id?: string;
+  error?: boolean;
+}) {
   return (
-    <label id={id} htmlFor={htmlFor} className={`mb-2 block text-sm font-semibold ${error ? 'text-error' : 'text-on-surface-variant'}`}>
+    <label
+      id={id}
+      htmlFor={htmlFor}
+      className={`mb-2 block text-sm font-semibold ${error ? 'text-error' : 'text-on-surface-variant'}`}
+    >
       {children}
     </label>
   );
@@ -86,7 +116,9 @@ function FieldError({ id, children }: { id: string; children?: ReactNode }) {
   if (!children) return null;
   return (
     <p id={id} role="alert" className="mt-1.5 flex items-start gap-1 text-sm text-error">
-      <span aria-hidden className="material-symbols-outlined mt-px text-[18px]">error</span>
+      <span aria-hidden className="material-symbols-outlined mt-px text-[18px]">
+        error
+      </span>
       <span>{children}</span>
     </p>
   );
@@ -102,7 +134,13 @@ function FieldError({ id, children }: { id: string; children?: ReactNode }) {
  * and left, or tried to create — never an error for a field not yet reached.
  * A line above the button reads the choice back before it is created.
  */
-export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+export default function LiveSessionForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: () => void;
+  onCancel: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const uid = useId();
@@ -116,6 +154,12 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
   const [limited, setLimited] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [joinUrl, setJoinUrl] = useState('');
+  // FREE by default; PAID is a deliberate choice with its own few settings.
+  const [paid, setPaid] = useState(false);
+  const [price, setPrice] = useState('');
+  const [refundPolicy, setRefundPolicy] = useState<LiveRefundPolicy>('STANDARD');
+  const [replayPolicy, setReplayPolicy] = useState<LiveReplayPolicy>('INCLUDED_FOREVER');
+  const [replayDays, setReplayDays] = useState('7');
   // One request at a time, whatever the button's state says: a double click
   // lands before React re-renders it disabled.
   const inFlight = useRef(false);
@@ -133,6 +177,21 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
     },
     staleTime: 5 * 60_000,
   });
+  // The server's own breakdown of the price being typed, a moment after the
+  // typing stops — never computed here, because the terms are not the page's.
+  const priceCents = paid ? parseMoneyToCents(price) : null;
+  const [previewFor, setPreviewFor] = useState<number | null>(null);
+  useEffect(() => {
+    const h = setTimeout(() => setPreviewFor(priceCents), 400);
+    return () => clearTimeout(h);
+  }, [priceCents]);
+  const preview = useQuery({
+    queryKey: ['live-price-preview', previewFor],
+    queryFn: async () =>
+      (await api.get('/teacher/live/price-preview', { params: { priceCents: previewFor } })).data,
+    enabled: paid && previewFor != null && previewFor >= 100,
+    retry: false,
+  });
   const skew = features.data?.skew ?? 0;
   const nowMs = () => Date.now() + skew;
   const [mode, setMode] = useState<TranscriptionMode | null>(null);
@@ -148,13 +207,19 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
     return {
       title: d.title,
       description: d.description,
-      startsAt: whenMode === 'now' ? combine(localDate(at), localTime(at)) : combine(d.date, d.time),
+      startsAt:
+        whenMode === 'now' ? combine(localDate(at), localTime(at)) : combine(d.date, d.time),
       durationMin: d.durationMin,
       capacity: limited ? d.capacity : '',
     };
   };
-  const local = clientErrors(values(), nowMs(), { capacityRequired: limited });
-  const shown = (f: LiveFormField) => server[f] ?? ((submitted || touched[f]) && local[f] ? local[f] : undefined);
+  const commerce = () => ({ paid, price, replayPolicy, replayDays });
+  const local = {
+    ...clientErrors(values(), nowMs(), { capacityRequired: limited }),
+    ...commerceErrors(commerce()),
+  };
+  const shown = (f: LiveFormField) =>
+    server[f] ?? ((submitted || touched[f]) && local[f] ? local[f] : undefined);
   const err = (f: LiveFormField) => {
     const p = shown(f);
     return p ? t(messageKey(p.code), p.params) : undefined;
@@ -201,13 +266,20 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
   const chooseTomorrow = () => {
     setWhenMode('pick');
     // Keep a time the teacher picked; "now"'s minute is not one.
-    touch('startsAt', { date: tomorrow, time: whenMode === 'now' || !d.time ? TOMORROW_DEFAULT_TIME : d.time }, true);
+    touch(
+      'startsAt',
+      { date: tomorrow, time: whenMode === 'now' || !d.time ? TOMORROW_DEFAULT_TIME : d.time },
+      true,
+    );
   };
 
   const create = useMutation({
-    mutationFn: async (payload: Record<string, unknown>) => (await api.post('/teacher/live', payload)).data,
+    mutationFn: async (payload: Record<string, unknown>) =>
+      (await api.post('/teacher/live', payload)).data,
     onSuccess: () => {
       setD(fresh());
+      setPaid(false);
+      setPrice('');
       setWhenMode('pick');
       setDirty({});
       setTouched({});
@@ -229,7 +301,10 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
     if (inFlight.current) return;
     setSubmitted(true);
     const v = values();
-    const first = firstInvalid(clientErrors(v, nowMs(), { capacityRequired: limited }));
+    const first = firstInvalid({
+      ...clientErrors(v, nowMs(), { capacityRequired: limited }),
+      ...commerceErrors(commerce()),
+    });
     if (first) return focusField(first);
     inFlight.current = true;
     const payload: Record<string, unknown> = {
@@ -237,6 +312,18 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
       // "Now" is the server's now: the device clock may be off by minutes.
       ...(whenMode === 'now' ? { startsAt: new Date(nowMs()).toISOString() } : {}),
       ...(features.data?.transcription && transcriptionMode ? { transcriptionMode } : {}),
+      // What a seat costs, and the rules a buyer gets — never Darsly's fee or
+      // a split: those are the academy's terms, applied by the server.
+      ...(paid
+        ? {
+            accessMode: 'PAID',
+            priceCents: parseMoneyToCents(price),
+            refundPolicy,
+            replayPolicy,
+            replayDays: replayPolicy === 'INCLUDED_DAYS' ? Number(replayDays) : null,
+            joinUrl: null,
+          }
+        : { accessMode: 'FREE' }),
     };
     create.mutate(payload);
   };
@@ -289,8 +376,12 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
           {...a11y('title')}
         />
         <FieldError id={errorId('title')}>{err('title')}</FieldError>
-        <label htmlFor="live-description" className="mb-2 mt-4 block text-sm font-semibold text-on-surface-variant">
-          {t('live.fDescription')} <span className="font-normal text-outline">({t('common.optional')})</span>
+        <label
+          htmlFor="live-description"
+          className="mb-2 mt-4 block text-sm font-semibold text-on-surface-variant"
+        >
+          {t('live.fDescription')}{' '}
+          <span className="font-normal text-outline">({t('common.optional')})</span>
         </label>
         <textarea
           id="live-description"
@@ -306,6 +397,169 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
         <FieldError id={errorId('description')}>{err('description')}</FieldError>
       </div>
 
+      {/* Free or paid — FREE unless the teacher chooses otherwise. */}
+      <div role="group" aria-labelledby={`${uid}-access`}>
+        <Label id={`${uid}-access`}>{t('liveCommerce.sessionType')}</Label>
+        <div className="flex flex-wrap gap-2">
+          <Chip selected={!paid} onClick={() => setPaid(false)}>
+            {t('liveCommerce.free')}
+          </Chip>
+          <Chip
+            selected={paid}
+            onClick={() => {
+              setPaid(true);
+              setJoinUrl('');
+              setTimeout(() => refs.current.priceCents?.focus(), 0);
+            }}
+          >
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden className="material-symbols-outlined text-[16px]">
+                payments
+              </span>
+              {t('liveCommerce.paid')}
+            </span>
+          </Chip>
+        </div>
+        {paid && (
+          <div className="mt-4 space-y-4 rounded-2xl border border-outline-variant p-4">
+            <div>
+              <label
+                htmlFor="live-price"
+                className={`mb-1.5 block text-sm font-semibold ${shown('priceCents') ? 'text-error' : 'text-on-surface-variant'}`}
+              >
+                {t('liveCommerce.price')}
+              </label>
+              <div className="relative w-48" dir="ltr">
+                <input
+                  id="live-price"
+                  ref={bind('priceCents')}
+                  className={`${inputCls('priceCents')} pe-14 tabular-nums`}
+                  inputMode="decimal"
+                  dir="ltr"
+                  placeholder="100"
+                  value={price}
+                  onChange={(e) => {
+                    setPrice(asciiDigits(e.target.value).replace(/\u066B/g, '.'));
+                    setDirty((p2) => ({ ...p2, priceCents: true }));
+                    if (server.priceCents) setServer((p2) => ({ ...p2, priceCents: undefined }));
+                  }}
+                  {...a11y('priceCents')}
+                />
+                <span className="pointer-events-none absolute inset-y-0 end-4 flex items-center text-sm text-outline">
+                  {t('liveCommerce.egp')}
+                </span>
+              </div>
+              <FieldError id={errorId('priceCents')}>{err('priceCents')}</FieldError>
+              {/* The server's breakdown under the academy's current terms. */}
+              {!local.priceCents && preview.data && previewFor === priceCents && (
+                <dl
+                  className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl bg-surface-container-low p-3 text-sm"
+                  aria-live="polite"
+                >
+                  <dt className="text-on-surface-variant">{t('liveCommerce.preview.price')}</dt>
+                  <dd className="text-end tabular-nums">{egp(preview.data.priceCents)}</dd>
+                  <dt className="text-on-surface-variant">{t('liveCommerce.preview.fee')}</dt>
+                  <dd className="text-end tabular-nums">
+                    {preview.data.feeMode === 'DEDUCTED' ? '−' : '+'}
+                    {egp(preview.data.feeCents)}
+                  </dd>
+                  <dt className="font-semibold">{t('liveCommerce.preview.studentPays')}</dt>
+                  <dd className="text-end font-semibold tabular-nums">
+                    {egp(preview.data.studentPaysCents)}
+                  </dd>
+                  <dt className="font-semibold text-primary-text">
+                    {t('liveCommerce.preview.teacherNet')}
+                  </dt>
+                  <dd className="text-end font-semibold text-primary-text tabular-nums">
+                    {egp(preview.data.teacherCents)}
+                  </dd>
+                  {preview.data.kind === 'CENTER' && (
+                    <>
+                      <dt className="text-on-surface-variant">
+                        {t('liveCommerce.preview.centerShare')}
+                      </dt>
+                      <dd className="text-end tabular-nums">{egp(preview.data.centerCents)}</dd>
+                    </>
+                  )}
+                </dl>
+              )}
+              {preview.error && !local.priceCents ? (
+                <p className="mt-2 text-sm text-error" role="alert">
+                  {resolveError(preview.error).message}
+                </p>
+              ) : null}
+            </div>
+
+            <div role="group" aria-labelledby={`${uid}-refund`}>
+              <p
+                id={`${uid}-refund`}
+                className="mb-2 text-sm font-semibold text-on-surface-variant"
+              >
+                {t('liveCommerce.refundPolicy')}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {LIVE_REFUND_POLICIES.map((rp) => (
+                  <Chip key={rp} selected={refundPolicy === rp} onClick={() => setRefundPolicy(rp)}>
+                    {t(`liveCommerce.refund.${rp}`)}
+                  </Chip>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-outline">
+                {LIVE_REFUND_WINDOW_HOURS[refundPolicy] == null
+                  ? t('liveBuy.refund.none')
+                  : (LIVE_REFUND_WINDOW_HOURS[refundPolicy] as number) >= 48
+                    ? t('liveBuy.refund.days', {
+                        count: Math.round((LIVE_REFUND_WINDOW_HOURS[refundPolicy] as number) / 24),
+                      })
+                    : t('liveBuy.refund.hours', {
+                        count: LIVE_REFUND_WINDOW_HOURS[refundPolicy] as number,
+                      })}
+              </p>
+            </div>
+
+            <div role="group" aria-labelledby={`${uid}-replay`}>
+              <p
+                id={`${uid}-replay`}
+                className="mb-2 text-sm font-semibold text-on-surface-variant"
+              >
+                {t('liveCommerce.replayPolicy')}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(['INCLUDED_FOREVER', 'INCLUDED_DAYS', 'NONE'] as const).map((rp) => (
+                  <Chip key={rp} selected={replayPolicy === rp} onClick={() => setReplayPolicy(rp)}>
+                    {t(`liveCommerce.replay.${rp}`)}
+                  </Chip>
+                ))}
+              </div>
+              {replayPolicy === 'INCLUDED_DAYS' && (
+                <div className="mt-3 w-40">
+                  <label
+                    htmlFor="live-replay-days"
+                    className="mb-1.5 block text-xs font-semibold text-on-surface-variant"
+                  >
+                    {t('liveCommerce.replayDays')}
+                  </label>
+                  <input
+                    id="live-replay-days"
+                    ref={bind('replayDays')}
+                    className={`${inputCls('replayDays')} tabular-nums`}
+                    inputMode="numeric"
+                    value={replayDays}
+                    onChange={(e) => {
+                      setReplayDays(asciiDigits(e.target.value));
+                      setDirty((p2) => ({ ...p2, replayDays: true }));
+                    }}
+                    {...a11y('replayDays')}
+                  />
+                  <FieldError id={errorId('replayDays')}>{err('replayDays')}</FieldError>
+                </div>
+              )}
+              <p className="mt-1.5 text-xs text-outline">{t('liveCommerce.replayNeedsSharing')}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* When */}
       <div role="group" aria-labelledby={`${uid}-when`}>
         <Label id={`${uid}-when`} error={!!shown('startsAt')}>
@@ -314,7 +568,9 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
         <div className="flex flex-wrap gap-2">
           <Chip selected={whenMode === 'now'} onClick={chooseNow}>
             <span className="inline-flex items-center gap-1">
-              <span aria-hidden className="material-symbols-outlined text-[16px]">bolt</span>
+              <span aria-hidden className="material-symbols-outlined text-[16px]">
+                bolt
+              </span>
               {t('live.form.now')}
             </span>
           </Chip>
@@ -350,7 +606,9 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
         </div>
         {whenMode === 'now' && !shown('startsAt') && (
           <p className="mt-1.5 flex items-center gap-1 text-sm text-on-surface-variant">
-            <span aria-hidden className="material-symbols-outlined text-[16px] text-primary-text">bolt</span>
+            <span aria-hidden className="material-symbols-outlined text-[16px] text-primary-text">
+              bolt
+            </span>
             {t('live.form.nowHint')}
           </p>
         )}
@@ -372,7 +630,11 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
                 touch('durationMin', { durationMin: String(m) });
               }}
             >
-              {m === 60 ? t('live.form.hour') : m === 120 ? t('live.form.twoHours') : t('live.minutes', { count: m })}
+              {m === 60
+                ? t('live.form.hour')
+                : m === 120
+                  ? t('live.form.twoHours')
+                  : t('live.minutes', { count: m })}
             </Chip>
           ))}
           <Chip
@@ -433,7 +695,10 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
         </div>
         {limited && (
           <div className="mt-3 w-40">
-            <label htmlFor="live-capacity" className="mb-1.5 block text-xs font-semibold text-on-surface-variant">
+            <label
+              htmlFor="live-capacity"
+              className="mb-1.5 block text-xs font-semibold text-on-surface-variant"
+            >
               {t('live.form.maxStudents')}
             </label>
             <input
@@ -481,27 +746,37 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs leading-relaxed text-outline">{t('live.form.transcriptionHint')}</p>
+                <p className="mt-1 text-xs leading-relaxed text-outline">
+                  {t('live.form.transcriptionHint')}
+                </p>
               </Field>
             )}
             <p className="text-xs leading-relaxed text-outline">{t('live.builtInHint')}</p>
-            <Field label={t('live.useExternal')} id="live-joinUrl" className="mb-0">
-              <input
-                id="live-joinUrl"
-                className="input"
-                dir="ltr"
-                value={joinUrl}
-                onChange={(e) => setJoinUrl(e.target.value)}
-                placeholder="https://meet…"
-              />
-            </Field>
+            {/* A paid seat is enforced by Darsly's own classroom — no outside link. */}
+            {!paid && (
+              <Field label={t('live.useExternal')} id="live-joinUrl" className="mb-0">
+                <input
+                  id="live-joinUrl"
+                  className="input"
+                  dir="ltr"
+                  value={joinUrl}
+                  onChange={(e) => setJoinUrl(e.target.value)}
+                  placeholder="https://meet…"
+                />
+              </Field>
+            )}
           </div>
         )}
       </div>
 
       {banner && (
-        <p role="alert" className="flex items-start gap-2 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container">
-          <span aria-hidden className="material-symbols-outlined text-[18px]">error</span>
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-xl bg-error-container px-4 py-2.5 text-sm text-on-error-container"
+        >
+          <span aria-hidden className="material-symbols-outlined text-[18px]">
+            error
+          </span>
           {banner}
         </p>
       )}
@@ -510,8 +785,13 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
           sticky stops at that padding, hence -bottom-6 to sit flush on its edge. */}
       <div className="sticky -bottom-6 z-10 -mx-6 -mb-6 border-t border-outline-variant bg-surface-container-lowest px-6 pb-6 pt-4">
         {readBack && (
-          <p className="mb-3 flex items-center gap-2 text-sm font-medium text-on-surface" aria-live="polite">
-            <span aria-hidden className="material-symbols-outlined text-[18px] text-primary-text">event_available</span>
+          <p
+            className="mb-3 flex items-center gap-2 text-sm font-medium text-on-surface"
+            aria-live="polite"
+          >
+            <span aria-hidden className="material-symbols-outlined text-[18px] text-primary-text">
+              event_available
+            </span>
             <span className="tabular-nums">{readBack}</span>
           </p>
         )}
@@ -526,7 +806,10 @@ export default function LiveSessionForm({ onCreated, onCancel }: { onCreated: ()
             aria-busy={create.isPending || undefined}
           >
             {create.isPending && (
-              <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary/40 border-t-on-primary" />
+              <span
+                aria-hidden
+                className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary/40 border-t-on-primary"
+              />
             )}
             {create.isPending ? t('live.form.creating') : t('live.form.create')}
           </button>

@@ -71,6 +71,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/admin/academy-studio', icon: 'auto_awesome', labelKey: 'nav.adminStudio' },
   { to: '/admin/studio', icon: 'tune', labelKey: 'nav.adminControlStudio' },
   { to: '/admin/payments', icon: 'receipt_long', labelKey: 'nav.adminPayments' },
+  { to: '/admin/live-commerce', icon: 'sensors', labelKey: 'nav.adminLiveCommerce' },
   { to: '/admin/wallet', icon: 'account_balance_wallet', labelKey: 'nav.adminWallet' },
   { to: '/admin/payouts', icon: 'payments', labelKey: 'nav.adminPayouts' },
   { to: '/admin/gamification', icon: 'trophy', labelKey: 'nav.adminGamification' },

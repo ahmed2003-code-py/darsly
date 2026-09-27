@@ -23,9 +23,10 @@ import {
 import { Badge, ErrorNote, Field, Modal, Skeleton } from '../../components/ui';
 import { CenterThemeGrantEditor } from './CenterThemeGrantPicker';
 import { confirmDelete } from '../../lib/confirm';
+import CommercialTermsPanel from '../../components/admin/CommercialTermsPanel';
 
-const TABS_PERSONAL = ['overview', 'staff', 'flags', 'activity'] as const;
-const TABS_CENTER = ['overview', 'staff', 'studio', 'flags', 'activity'] as const;
+const TABS_PERSONAL = ['overview', 'staff', 'commerce', 'flags', 'activity'] as const;
+const TABS_CENTER = ['overview', 'staff', 'studio', 'commerce', 'flags', 'activity'] as const;
 type Tab = (typeof TABS_CENTER)[number];
 
 const TONE: Record<AcademyStatus, 'teal' | 'warn' | 'error' | 'neutral'> = {
@@ -556,6 +557,14 @@ export default function AdminAcademyDetailPage() {
             status={data.status}
             kind={data.kind}
           />
+        </div>
+      )}
+
+      {/* Darsly's commercial terms with this academy (Live sales), and — in a
+          Center — what each teacher's split works out to. */}
+      {tab === 'commerce' && (
+        <div className="card p-5">
+          <CommercialTermsPanel academyId={data.id} />
         </div>
       )}
 

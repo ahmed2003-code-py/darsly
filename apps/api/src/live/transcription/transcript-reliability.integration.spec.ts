@@ -10,7 +10,7 @@ import { CF_STUN } from '../providers/cloudflare-realtime.client';
 import { LiveProviders } from '../providers/live-providers';
 import { LiveRetentionService } from '../retention/live-retention.service';
 import { LiveTranscribeHandler, TRANSCRIPT_LEASE_MS } from './live-transcribe.handler';
-import { audioKey } from './lesson-transcription';
+import { audioKey, classifySttRefusal, SttError } from './lesson-transcription';
 
 /**
  * The LIVE_TRANSCRIBE pipeline on a real PostgreSQL — the regressions for the
@@ -173,7 +173,7 @@ describe('permanent failures: PARTIAL, never READY, failed audio kept', () => {
 });
 
 describe('temporary outages: retried later, never given up early', () => {
-  it('a 503 on piece 4 → the job asks to be retried in ≈1 min; what was saved stays; the next attempt finishes READY', async () => {
+  it('a lasting 503 on pieces 4–6 → quick retries, then the job asks to be retried in ≈30 s; what was saved stays; the next attempt finishes READY', async () => {
     if (!guard()) return;
     const w = await world(6);
     let down = true;
@@ -185,7 +185,7 @@ describe('temporary outages: retried later, never given up early', () => {
     const err = await h.handle(job(w.ls.id, w.roomName, 1)).catch((e) => e);
     expect(err).toBeInstanceOf(AiJobError);
     expect(err.errorClass).toBe('RETRYABLE');
-    expect(err.retryAfterMs).toBe(60_000);
+    expect(err.retryAfterMs).toBe(30_000);
     let s = await reload(w.ls.id);
     expect(s.transcriptStatus).toBe('PROCESSING');
     expect((await rows(w.ls.id)).filter((p) => p.text).length).toBe(3);
@@ -199,7 +199,7 @@ describe('temporary outages: retried later, never given up early', () => {
     expect(stt.mock.calls.filter((c) => idx(w, c[0]) < 3)).toHaveLength(3);
   });
 
-  it('the retry schedule is 1, 5, 15 minutes; only the 4th attempt gives up — and then PARTIAL, audio kept', async () => {
+  it('the retry schedule is 30 s, 2, 8 minutes; only the 4th attempt gives up — and then PARTIAL, audio kept', async () => {
     if (!guard()) return;
     const w = await world(3);
     const stt = jest.fn(async (a: Buffer) => {
@@ -212,7 +212,7 @@ describe('temporary outages: retried later, never given up early', () => {
       const e = await h.handle(job(w.ls.id, w.roomName, attempt)).catch((x) => x);
       delays.push(e.retryAfterMs);
     }
-    expect(delays).toEqual([60_000, 5 * 60_000, 15 * 60_000]);
+    expect(delays).toEqual([30_000, 2 * 60_000, 8 * 60_000]);
     await h.handle(job(w.ls.id, w.roomName, 4));
     const s = await reload(w.ls.id);
     expect(s.transcriptStatus).toBe('PARTIAL');
@@ -254,36 +254,26 @@ describe('temporary outages: retried later, never given up early', () => {
 });
 
 describe('workers, leases and duplicates', () => {
-  it('crash AFTER the answer, BEFORE saving: that piece is paid twice, kept once', async () => {
+  it('a worker that dies mid-call: the next owner pays only for the piece never saved, kept once', async () => {
     if (!guard()) return;
     const w = await world(3);
-    let crashed = false;
+    let died = false;
     const stt = jest.fn(async (a: Buffer) => {
-      if (!crashed && idx(w, a) === 1) {
-        crashed = true;
-        throw new Error('process killed');
+      if (!died && idx(w, a) === 1) {
+        died = true;
+        // The provider answered, but this worker never lives to save it.
+        return new Promise<string>(() => undefined);
       }
       return words(w)(a);
     });
-    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1)).catch(() => undefined);
+    void handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    await new Promise((r) => setTimeout(r, 300));
     // The dead worker's lease expires (it never released it).
     await prisma.liveSession.update({ where: { id: w.ls.id }, data: { transcriptLeaseUntil: new Date(Date.now() - 1000) } });
     await handler(w, stt).handle(job(w.ls.id, w.roomName, 2));
     expect(paragraphs((await reload(w.ls.id)).transcriptText)).toEqual([0, 1, 2].map((i) => `مقطع ${i} — supervised learning`));
-    expect(stt).toHaveBeenCalledTimes(4);
-  });
-
-  it('crash AFTER saving: the retry never pays for the saved piece again', async () => {
-    if (!guard()) return;
-    const w = await world(3);
-    let n = 0;
-    const stt = jest.fn(async (a: Buffer) => {
-      if (++n === 2) throw new Error('process killed after piece 0 was saved');
-      return words(w)(a);
-    });
-    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1)).catch(() => undefined);
-    await handler(w, stt).handle(job(w.ls.id, w.roomName, 2));
-    expect(stt.mock.calls.map((c) => idx(w, c[0]))).toEqual([0, 1, 1, 2]);
+    // Pieces 0 and 2 once, piece 1 twice (the lost answer, then the new owner's).
+    expect(stt.mock.calls.map((c) => idx(w, c[0])).sort()).toEqual([0, 1, 1, 2]);
     expect((await reload(w.ls.id)).transcriptStatus).toBe('READY');
   });
 
@@ -318,7 +308,8 @@ describe('workers, leases and duplicates', () => {
       return words(w)(a);
     });
     await handler(w, stt).handle(job(w.ls.id, w.roomName));
-    expect(stt).toHaveBeenCalledTimes(2); // pieces 0 and 1 — not 2 and 3
+    // Pieces 0–2 were already under way (three at a time); piece 3 is never started.
+    expect(stt.mock.calls.map((c) => idx(w, c[0])).sort()).toEqual([0, 1, 2]);
     expect((await reload(w.ls.id)).transcriptStatus).toBe('PROCESSING'); // the new owner decides it
   });
 
@@ -398,31 +389,52 @@ describe('bad answers and tiny pieces', () => {
     expect((await rows(w.ls.id)).find((p) => p.skipReason)?.skipReason).toBe('PROMPT_ECHO');
   });
 
-  it('the title echoed back for a long piece is lost speech: retried, and PARTIAL if it never comes back', async () => {
+  it('the title echoed back for a long piece is lost speech: asked again at once WITHOUT the title, and kept when it comes back', async () => {
+    if (!guard()) return;
+    const w = await world(2, { title: 'مقدمة في Machine Learning' });
+    const stt = jest.fn(async (a: Buffer, _f: string, o?: { prompt?: string }) =>
+      idx(w, a) === 1 && o?.prompt ? 'مقدمة في Machine Learning' : words(w)(a),
+    );
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    const s = await reload(w.ls.id);
+    expect(s.transcriptStatus).toBe('READY');
+    expect(paragraphs(s.transcriptText)).toHaveLength(2);
+    expect(stt).toHaveBeenCalledTimes(3);
+    expect(stt.mock.calls.filter((c) => !c[2]?.prompt)).toHaveLength(1);
+  });
+
+  it('an echo that comes back twice fails that piece at once: PARTIAL in the first run, no 15-minute wait', async () => {
     if (!guard()) return;
     const w = await world(2, { title: 'مقدمة في Machine Learning' });
     const stt = jest.fn(async (a: Buffer) => (idx(w, a) === 1 ? 'مقدمة في Machine Learning' : words(w)(a)));
-    const e = await handler(w, stt).handle(job(w.ls.id, w.roomName, 1)).catch((x) => x);
-    expect(e.retryAfterMs).toBe(60_000);
-    await handler(w, stt).handle(job(w.ls.id, w.roomName, 4));
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
     const s = await reload(w.ls.id);
     expect(s.transcriptStatus).toBe('PARTIAL');
     expect(s.transcriptText).not.toMatch(/مقدمة/);
+    expect((await rows(w.ls.id)).find((p) => p.error)?.error).toMatch(/^GUARD_REJECTED: PROMPT_ECHO/);
+    expect(stt).toHaveBeenCalledTimes(3);
   });
 
-  it('a repetition loop is not accepted as the transcript: retried, and PARTIAL if it persists', async () => {
+  it('a repetition loop is not accepted: asked again once; a second loop fails that piece (PARTIAL), a good second answer is kept', async () => {
     if (!guard()) return;
-    const w = await world(2);
     const loop = Array.from({ length: 12 }, () => 'نقول دلوقتي مين هينجح خلينا ناخد مثال من الواقع عندنا مدرسة فيها 1250 طالب').join(' ');
+    const w = await world(2);
     const stt = jest.fn(async (a: Buffer) => (idx(w, a) === 0 ? loop : words(w)(a)));
-    const e = await handler(w, stt).handle(job(w.ls.id, w.roomName, 1)).catch((x) => x);
-    expect(e.errorClass).toBe('RETRYABLE');
-    expect((await rows(w.ls.id)).find((p) => idx(w, Buffer.from(`a:${p.seq}`)) === 0)?.text).toBeNull();
-    await handler(w, stt).handle(job(w.ls.id, w.roomName, 4));
-    const s = await reload(w.ls.id);
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    let s = await reload(w.ls.id);
     expect(s.transcriptStatus).toBe('PARTIAL');
     expect(s.transcriptText).not.toMatch(/مين هينجح/);
-    expect((await rows(w.ls.id)).find((p) => p.error)?.error).toMatch(/REPETITION_LOOP/);
+    expect((await rows(w.ls.id)).find((p) => p.error)?.error).toMatch(/^GUARD_REJECTED: REPETITION_LOOP/);
+    // Both rejected answers were paid for, and both are on the call log.
+    expect(await prisma.aiCallLog.count({ where: { liveSessionId: w.ls.id, status: 'loop' } })).toBe(2);
+
+    const w2 = await world(1);
+    let first = true;
+    const stt2 = jest.fn(async (a: Buffer) => (first ? ((first = false), loop) : words(w2)(a)));
+    await handler(w2, stt2).handle(job(w2.ls.id, w2.roomName, 1));
+    s = await reload(w2.ls.id);
+    expect(s.transcriptStatus).toBe('READY');
+    expect(stt2).toHaveBeenCalledTimes(2);
   });
 
   it('a teacher who repeats a sentence three times is kept as said', async () => {
@@ -518,5 +530,268 @@ describe('recovery: PARTIAL → READY, stuck PROCESSING, retention', () => {
     expect(await prisma.liveAudioSegment.count({ where: { sessionId: w.ls.id } })).toBe(0);
     // The transcript itself is untouched by retention.
     expect((await reload(w.ls.id)).transcriptStatus).toBe('PARTIAL');
+  });
+});
+
+/**
+ * The 2026-09-27 production failure (class cmuk5pkhb…, 3 min 44 s): two pieces,
+ * 180 s + 21.6 s; OpenAI answered every call with 429 insufficient_quota (no
+ * credits). The queue treated it as a rate limit and waited 1, 5 and 15
+ * minutes: FAILED 22 minutes after the class, having never had a chance.
+ */
+describe('smart retries: failures handled by what they are', () => {
+  const PROD_BODY = JSON.stringify({
+    error: {
+      message: 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.',
+      type: 'insufficient_quota',
+      param: null,
+      code: 'insufficient_quota',
+    },
+  });
+  const noCredits = () => classifySttRefusal(429, PROD_BODY);
+  function service(w: { storage: Storage }) {
+    const client = { configured: true, turnConfigured: false, iceServers: jest.fn(async () => [CF_STUN]), closeTracks: jest.fn(async () => ({})), getSession: jest.fn(async () => ({ tracks: [] })) };
+    const providers = new LiveProviders([new CloudflareLiveProvider(prisma, client as any)], 'CLOUDFLARE');
+    const jobs = new AiJobService(prisma, { enabled: true, monthlyBudgetCents: 0 } as any);
+    return new LiveService(prisma, { create: jest.fn(async () => ({})) } as any, {} as any, providers, { emitToLive: jest.fn(), emitToUser: jest.fn() } as any, jobs, {} as any, w.storage as any);
+  }
+  const sleeps = () => {
+    const waited: number[] = [];
+    return { waited, sleep: async (ms: number) => void waited.push(ms) };
+  };
+
+  it('REPRODUCED: 180 s + 21.6 s, every call "429 insufficient_quota" → decided in the FIRST run: FAILED (service unavailable), audio kept, no retry scheduled', async () => {
+    if (!guard()) return;
+    const w = await world(2, { durations: { 1: 21.568 } });
+    const stt = jest.fn(async () => {
+      throw noCredits();
+    });
+    const { waited, sleep } = sleeps();
+    // The run ends normally: no RETRYABLE error, so the queue schedules nothing.
+    await new LiveTranscribeHandler(prisma, w.storage as any, stt, sleep).handle(job(w.ls.id, w.roomName, 1));
+    const s = await reload(w.ls.id);
+    expect(s.transcriptStatus).toBe('FAILED');
+    expect(s.transcriptMeta).toMatchObject({ reason: 'PROVIDER_UNAVAILABLE', providerUnavailable: 2, failed: 2 });
+    // Never retried the same refusal: at most one call per piece, no waits.
+    expect(stt.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(waited).toEqual([]);
+    const r = await rows(w.ls.id);
+    expect(r.every((p) => p.error === 'PROVIDER_UNAVAILABLE: 429 insufficient_quota')).toBe(true);
+    expect(w.storage.objects.size).toBe(2);
+    // Every call is on the log, classified, and none of them billed.
+    const log = await prisma.aiCallLog.findMany({ where: { liveSessionId: w.ls.id } });
+    expect(log).toHaveLength(stt.mock.calls.length);
+    expect(log.every((c) => c.error === 'ACCOUNT: 429 insufficient_quota' && c.costMillicents === 0)).toBe(true);
+    // The teacher sees why, and can retry once the account is fixed.
+    const d: any = await service(w).sessionDetail(w.teacher.id, w.ls.id);
+    expect(d.transcript).toMatchObject({ stage: 'FAILED', reason: 'SERVICE_UNAVAILABLE', canRetry: true });
+    expect(d.summary.stage).toBe('UNAVAILABLE');
+  });
+
+  it('…and once the account is fixed, the teacher retry makes it READY, paying for those two pieces only', async () => {
+    if (!guard()) return;
+    const w = await world(2, { durations: { 1: 21.568 } });
+    let broke = true;
+    const stt = jest.fn(async (a: Buffer) => {
+      if (broke) throw noCredits();
+      return words(w)(a);
+    });
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    const svc = service(w);
+    await svc.retryTranscript(w.scope as any, w.ls.id);
+    const queued = await prisma.aiJob.findFirstOrThrow({ where: { type: 'LIVE_TRANSCRIBE', input: { path: ['liveSessionId'], equals: w.ls.id } } });
+    // A second press while it is queued queues nothing more.
+    await svc.retryTranscript(w.scope as any, w.ls.id);
+    expect(await prisma.aiJob.count({ where: { type: 'LIVE_TRANSCRIBE', input: { path: ['liveSessionId'], equals: w.ls.id } } })).toBe(1);
+    const detail: any = await svc.sessionDetail(w.teacher.id, w.ls.id);
+    expect(detail.transcript).toMatchObject({ stage: 'TRANSCRIBING', progress: { done: 0, total: 2 } });
+    broke = false;
+    const before = stt.mock.calls.length;
+    const changed = jest.fn(async () => undefined);
+    await handler(w, stt, changed).handle({ ...queued, attempts: 1 } as any);
+    const s = await reload(w.ls.id);
+    expect(s.transcriptStatus).toBe('READY');
+    expect(stt.mock.calls.length - before).toBe(2);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(w.storage.objects.size).toBe(0);
+    await prisma.aiJob.update({ where: { id: queued.id }, data: { status: 'SUCCEEDED' } });
+  });
+
+  it('credits run out mid-class: what was transcribed is kept (PARTIAL), the rest is marked at once, no blind retries', async () => {
+    if (!guard()) return;
+    const w = await world(6);
+    const stt = jest.fn(async (a: Buffer) => {
+      if (idx(w, a) >= 3) throw noCredits();
+      return words(w)(a);
+    });
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    const s = await reload(w.ls.id);
+    expect(s.transcriptStatus).toBe('PARTIAL');
+    expect(paragraphs(s.transcriptText)).toEqual([0, 1, 2].map((i) => `مقطع ${i} — supervised learning`));
+    expect((s.transcriptMeta as any).providerUnavailable).toBe(3);
+    // Stopped sending once the account was refused.
+    expect(stt.mock.calls.filter((c) => idx(w, c[0]) >= 3).length).toBeLessThanOrEqual(3);
+  });
+
+  it('a true rate limit: waits what it was told (capped), then carries on in the same run', async () => {
+    if (!guard()) return;
+    const w = await world(2);
+    let limited = 1;
+    const stt = jest.fn(async (a: Buffer) => {
+      if (idx(w, a) === 1 && limited-- > 0) throw classifySttRefusal(429, JSON.stringify({ error: { code: 'rate_limit_exceeded' } }), '7');
+      return words(w)(a);
+    });
+    const { waited, sleep } = sleeps();
+    await new LiveTranscribeHandler(prisma, w.storage as any, stt, sleep).handle(job(w.ls.id, w.roomName, 1));
+    expect((await reload(w.ls.id)).transcriptStatus).toBe('READY');
+    expect(waited).toEqual([7000]);
+  });
+
+  it('a lasting rate limit: nothing new is started, and the queue retries no sooner than Retry-After', async () => {
+    if (!guard()) return;
+    const w = await world(6);
+    const stt = jest.fn(async () => {
+      throw classifySttRefusal(429, JSON.stringify({ error: { code: 'rate_limit_exceeded' } }), '90');
+    });
+    const e = await handler(w, stt).handle(job(w.ls.id, w.roomName, 1)).catch((x) => x);
+    expect(e).toMatchObject({ errorClass: 'RETRYABLE', retryAfterMs: 90_000 });
+    // Three lanes, two tries each at most: never six pieces hammered.
+    expect(stt.mock.calls.length).toBeLessThanOrEqual(6);
+    expect((await rows(w.ls.id)).every((p) => p.error === null)).toBe(true);
+  });
+
+  it('a 500 or a timeout once: retried a couple of seconds later in the same run, READY without the queue', async () => {
+    if (!guard()) return;
+    const w = await world(3);
+    const hiccups = new Map<number, Error>([
+      [0, classifySttRefusal(500, '')],
+      [2, new SttError('TIMEOUT', 'TimeoutError')],
+    ]);
+    const stt = jest.fn(async (a: Buffer) => {
+      const e = hiccups.get(idx(w, a));
+      if (e) {
+        hiccups.delete(idx(w, a));
+        throw e;
+      }
+      return words(w)(a);
+    });
+    const { waited, sleep } = sleeps();
+    await new LiveTranscribeHandler(prisma, w.storage as any, stt, sleep).handle(job(w.ls.id, w.roomName, 1));
+    expect((await reload(w.ls.id)).transcriptStatus).toBe('READY');
+    expect(waited).toEqual([2000, 2000]);
+    expect(stt).toHaveBeenCalledTimes(5);
+  });
+
+  it('one piece down does not hold up the others: the rest are transcribed in the same run', async () => {
+    if (!guard()) return;
+    const w = await world(5);
+    const stt = jest.fn(async (a: Buffer) => {
+      if (idx(w, a) === 0) throw classifySttRefusal(503, '');
+      return words(w)(a);
+    });
+    const e = await handler(w, stt).handle(job(w.ls.id, w.roomName, 1)).catch((x) => x);
+    expect(e.retryAfterMs).toBe(30_000);
+    // Pieces 1–4 are saved already; only piece 0 is owed.
+    const r = await rows(w.ls.id);
+    expect(r.filter((p) => p.text).length).toBe(4);
+    expect(stt.mock.calls.filter((c) => idx(w, c[0]) === 0)).toHaveLength(3);
+  });
+
+  it('a file the provider cannot read fails that piece alone, and the retry button does not offer it', async () => {
+    if (!guard()) return;
+    const w = await world(2);
+    const stt = jest.fn(async (a: Buffer) => {
+      if (idx(w, a) === 1) throw classifySttRefusal(400, JSON.stringify({ error: { code: 'invalid_value' } }));
+      return words(w)(a);
+    });
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    expect((await reload(w.ls.id)).transcriptStatus).toBe('PARTIAL');
+    expect(stt).toHaveBeenCalledTimes(2);
+    expect((await rows(w.ls.id)).find((p) => p.error)?.error).toMatch(/^BAD_AUDIO/);
+    const d: any = await service(w).sessionDetail(w.teacher.id, w.ls.id);
+    expect(d.transcript.canRetry).toBe(false);
+    await expect(service(w).retryTranscript(w.scope as any, w.ls.id)).rejects.toMatchObject({ response: { code: 'NOTHING_TO_RETRY' } });
+  });
+
+  it('a 3-minute teacher-only class: one 180 s piece → READY in one call, one call logged', async () => {
+    if (!guard()) return;
+    const w = await world(1);
+    const stt = jest.fn(async (a: Buffer) => words(w)(a));
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    expect((await reload(w.ls.id)).transcriptStatus).toBe('READY');
+    expect(stt).toHaveBeenCalledTimes(1);
+    expect(await prisma.aiCallLog.count({ where: { liveSessionId: w.ls.id } })).toBe(1);
+  });
+
+  it('nothing said in any piece → FAILED "no speech", not a failure', async () => {
+    if (!guard()) return;
+    const w = await world(2);
+    await handler(w, jest.fn(async () => '')).handle(job(w.ls.id, w.roomName, 1));
+    const s = await reload(w.ls.id);
+    expect(s.transcriptStatus).toBe('FAILED');
+    expect((s.transcriptMeta as any).reason).toBe('NO_SPEECH');
+  });
+
+  it('Egyptian Arabic with English terms is kept exactly as answered: no guard trips on it', async () => {
+    if (!guard()) return;
+    const w = await world(1, { title: 'Machine Learning' });
+    const said =
+      'طيب يا جماعة النهارده هنتكلم عن الـ overfitting، يعني الموديل بيحفظ الـ training data بدل ما يتعلم منها. ' +
+      'عشان كده بنعمل validation set ونشوف الـ loss بيقل ولا لأ، ولو الـ accuracy على الـ test وحشة يبقى عندنا مشكلة.';
+    await handler(w, jest.fn(async () => said)).handle(job(w.ls.id, w.roomName, 1));
+    expect((await reload(w.ls.id)).transcriptText).toBe(said);
+  });
+
+  it('the upload window: work starts on the pieces already here, the late last piece is waited for and included, then decided', async () => {
+    if (!guard()) return;
+    const w = await world(2);
+    // The class ended 10 s ago: the last piece may still arrive for ≈40 s.
+    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { endedAt: new Date(Date.now() - 10_000) } });
+    const order: string[] = [];
+    const stt = jest.fn(async (a: Buffer) => {
+      order.push(`stt ${idx(w, a)}`);
+      return words(w)(a);
+    });
+    // A virtual clock: waiting moves time on.
+    const realNow = Date.now.bind(Date);
+    let offset = 0;
+    const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+    const sleep = async (ms: number) => {
+      order.push('wait');
+      expect(ms).toBeGreaterThan(30_000);
+      expect(ms).toBeLessThanOrEqual(40_000);
+      // The final flush lands during the window.
+      await addPiece(w.ls, w.storage, w.startSec + 2 * PIECE_SEC, 21);
+      offset += ms;
+    };
+    try {
+      await new LiveTranscribeHandler(prisma, w.storage as any, stt, sleep).handle(job(w.ls.id, w.roomName, 1));
+    } finally {
+      now.mockRestore();
+    }
+    expect(order.slice(0, 2).sort()).toEqual(['stt 0', 'stt 1']);
+    expect(order.slice(2)).toEqual(['wait', 'stt 2']);
+    const s = await reload(w.ls.id);
+    expect(s.transcriptStatus).toBe('READY');
+    expect(paragraphs(s.transcriptText)).toHaveLength(3);
+    expect(s.transcriptRevision).toBe(1);
+  });
+
+  it('a long class: never more than three calls in flight, every piece once, in spoken order', async () => {
+    if (!guard()) return;
+    const w = await world(20);
+    let inFlight = 0;
+    let peak = 0;
+    const stt = jest.fn(async (a: Buffer) => {
+      peak = Math.max(peak, ++inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return words(w)(a);
+    });
+    await handler(w, stt).handle(job(w.ls.id, w.roomName, 1));
+    expect(peak).toBe(3);
+    expect(stt).toHaveBeenCalledTimes(20);
+    expect(paragraphs((await reload(w.ls.id)).transcriptText)).toEqual(Array.from({ length: 20 }, (_, i) => `مقطع ${i} — supervised learning`));
+    expect(await prisma.aiCallLog.count({ where: { liveSessionId: w.ls.id } })).toBe(20);
   });
 });

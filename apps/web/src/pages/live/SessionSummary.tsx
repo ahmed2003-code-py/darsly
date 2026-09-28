@@ -202,6 +202,8 @@ function TranscriptSection({
     reason: string | null;
     partial?: boolean;
     canRetry?: boolean;
+    /** Teacher only, while it is being made. */
+    progress?: { done: number; total: number };
     visibility?: Visibility;
     segments?: Segment[];
   };
@@ -245,13 +247,32 @@ function TranscriptSection({
   else if (s === 'FAILED')
     body = (
       <>
-        <Status tone="bad" title={t('record.transcript.FAILED')} hint={t('record.transcript.failedHint')} />
+        <Status
+          tone="bad"
+          title={t('record.transcript.FAILED')}
+          hint={
+            transcript.reason === 'SERVICE_UNAVAILABLE'
+              ? t('record.transcript.reason.SERVICE_UNAVAILABLE')
+              : t('record.transcript.failedHint')
+          }
+        />
         {retryButton}
       </>
     );
   else if (s === 'AT_PROVIDER') body = <Status title={t('record.transcript.AT_PROVIDER')} />;
   else if (s === 'WAITING_FOR_CLASS_END') body = <Status title={t('record.transcript.WAITING_FOR_CLASS_END')} />;
-  else body = <Status busy title={t(`record.transcript.${s}`)} />;
+  else
+    body = (
+      <Status
+        busy
+        title={t(`record.transcript.${s}`)}
+        hint={
+          s === 'TRANSCRIBING' && transcript.progress && transcript.progress.total > 1
+            ? t('record.transcript.progress', transcript.progress)
+            : undefined
+        }
+      />
+    );
   return (
     <Block
       id="rec-transcript"

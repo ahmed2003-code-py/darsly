@@ -100,9 +100,82 @@ export type SpeechToText = (
 ) => Promise<string>;
 
 /**
- * OpenAI's transcription endpoint, Arabic. A refusal of the request (4xx) is
- * terminal — retrying the same audio will be refused again; an outage or a
- * timeout is retried by the job queue.
+ * Why a transcription call failed — what decides whether trying again can help:
+ *
+ *  ACCOUNT     the provider refuses this account (no credits, billing off, bad
+ *              key). Every call will be refused until someone fixes the
+ *              account: never waited on, never retried blindly.
+ *  RATE_LIMIT  too many requests right now (a true 429): wait, then again.
+ *  SERVER      the provider failed (5xx): again shortly.
+ *  TIMEOUT / NETWORK  no answer: again shortly.
+ *  BAD_AUDIO   this file is refused (400/413/415): the same bytes will be
+ *              refused again — this piece fails, the rest go on.
+ *  REQUEST     any other refusal of the request: this piece fails.
+ */
+export type SttFailureKind = 'ACCOUNT' | 'RATE_LIMIT' | 'SERVER' | 'TIMEOUT' | 'NETWORK' | 'BAD_AUDIO' | 'REQUEST';
+
+export const TRANSIENT_STT_FAILURES: readonly SttFailureKind[] = ['RATE_LIMIT', 'SERVER', 'TIMEOUT', 'NETWORK'];
+
+export class SttError extends AiJobError {
+  constructor(
+    readonly kind: SttFailureKind,
+    /** Short and safe to store: status and the provider's error code — never the audio, words or key. */
+    readonly detail: string,
+    retryAfterMs?: number,
+  ) {
+    super(
+      `Transcription ${kind}: ${detail}`,
+      TRANSIENT_STT_FAILURES.includes(kind) ? 'RETRYABLE' : 'TERMINAL',
+      undefined,
+      retryAfterMs,
+    );
+    this.name = 'SttError';
+  }
+}
+
+/** Provider error codes that mean the account itself cannot be served. */
+const ACCOUNT_CODES = new Set([
+  'insufficient_quota',
+  'billing_hard_limit_reached',
+  'billing_not_active',
+  'access_terminated',
+  'account_deactivated',
+  'invalid_api_key',
+  'invalid_organization',
+]);
+
+/** An HTTP refusal from the transcription endpoint → what kind of failure it is. */
+export function classifySttRefusal(status: number, body: string, retryAfter?: string | null): SttError {
+  let code = '';
+  try {
+    const e = (JSON.parse(body) as { error?: { code?: string; type?: string } }).error;
+    code = String(e?.code || e?.type || '');
+  } catch {
+    // Not JSON (a proxy's page): the status alone decides.
+    code = /insufficient_quota/.test(body) ? 'insufficient_quota' : '';
+  }
+  const detail = `${status}${code ? ` ${code.slice(0, 60)}` : ''}`;
+  if (status === 401 || status === 403 || ACCOUNT_CODES.has(code)) return new SttError('ACCOUNT', detail);
+  if (status === 429) {
+    const secs = Number(retryAfter);
+    return new SttError('RATE_LIMIT', detail, Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined);
+  }
+  if (status >= 500) return new SttError('SERVER', detail);
+  if (status === 400 || status === 413 || status === 415) return new SttError('BAD_AUDIO', detail);
+  return new SttError('REQUEST', detail);
+}
+
+/** Any error a transcriber threw → its kind (a stand-in transcriber in tests may throw plain errors). */
+export function sttFailureKind(e: unknown): SttFailureKind {
+  if (e instanceof SttError) return e.kind;
+  if (e instanceof AiJobError && e.errorClass === 'TERMINAL') return 'REQUEST';
+  return 'NETWORK';
+}
+
+/**
+ * OpenAI's transcription endpoint, Arabic. Failures are classified (see
+ * SttFailureKind): an account refusal or a bad file is final, an outage, a
+ * rate limit or a timeout is worth another try.
  *
  * `prompt` carries the lesson's title: the model spells a subject's own terms
  * (often English inside Egyptian Arabic) better when it knows the subject.
@@ -122,22 +195,23 @@ export function openAiSpeechToText(cfg = transcriptionConfig()): SpeechToText {
         method: 'POST',
         headers: { Authorization: `Bearer ${cfg.apiKey}` },
         body: form,
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(STT_TIMEOUT_MS),
       });
     } catch (e) {
-      throw new AiJobError(`Transcription unreachable: ${(e as Error).name}`, 'RETRYABLE');
+      const name = (e as Error).name;
+      throw new SttError(name === 'TimeoutError' || name === 'AbortError' ? 'TIMEOUT' : 'NETWORK', name);
     }
     if (!res.ok) {
-      const body = (await res.text().catch(() => '')).slice(0, 200);
-      throw new AiJobError(
-        `Transcription refused (${res.status}): ${body}`,
-        res.status >= 500 || res.status === 429 ? 'RETRYABLE' : 'TERMINAL',
-      );
+      const body = (await res.text().catch(() => '')).slice(0, 2000);
+      throw classifySttRefusal(res.status, body, res.headers.get('retry-after'));
     }
     const j = (await res.json()) as { text?: string };
     return (j.text ?? '').trim();
   };
 }
+
+/** One call's ceiling: a 3-minute piece is answered in seconds, so a minute is an outage. */
+export const STT_TIMEOUT_MS = 60_000;
 
 /** Storage key for one piece — under source/, never served. */
 export const audioKey = (sessionId: string, roomName: string, seq: number, ext = 'webm') =>

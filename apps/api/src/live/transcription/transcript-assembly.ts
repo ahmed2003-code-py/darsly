@@ -17,8 +17,13 @@ export interface TranscriptMeta {
   skipped: number;
   failed: number;
   partial: boolean;
-  /** Why a FAILED transcript has no words: nothing was said, or nothing could be transcribed. */
-  reason: 'NO_SPEECH' | 'ALL_FAILED' | null;
+  /**
+   * Why a FAILED transcript has no words: nothing was said, nothing could be
+   * transcribed, or the transcription provider refused the account itself.
+   */
+  reason: 'NO_SPEECH' | 'ALL_FAILED' | 'PROVIDER_UNAVAILABLE' | null;
+  /** Pieces that failed because the provider refused the account (audio kept: a retry can recover them). */
+  providerUnavailable: number;
   audioSeconds: number;
   model: string;
   estUsd: number;
@@ -69,6 +74,7 @@ export async function finalizeTranscript(
     select: { startedAt: true, transcriptText: true, transcriptRevision: true },
   });
   const failed = rows.filter((r) => r.error).length;
+  const providerUnavailable = rows.filter((r) => r.error?.startsWith('PROVIDER_UNAVAILABLE')).length;
   const pending = rows.filter((r) => r.text === null && !r.error).length;
   const classStartSec = Math.floor((session.startedAt?.getTime() ?? (rows[0]?.seq ?? 0) * 1000) / 1000);
   const { segments, text } = assembleTranscript(rows, classStartSec);
@@ -83,7 +89,8 @@ export async function finalizeTranscript(
     skipped: rows.filter((r) => !!r.skipReason).length,
     failed,
     partial: status === 'PARTIAL',
-    reason: text ? null : failed ? 'ALL_FAILED' : 'NO_SPEECH',
+    reason: text ? null : providerUnavailable ? 'PROVIDER_UNAVAILABLE' : failed ? 'ALL_FAILED' : 'NO_SPEECH',
+    providerUnavailable,
     audioSeconds: Math.round(rows.reduce((n, r) => n + estimateMs(r), 0) / 1000),
     model: opts.model,
     estUsd: Number(((sentMs / 60_000) * sttUsdPerMin(opts.model)).toFixed(4)),

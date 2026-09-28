@@ -2432,13 +2432,17 @@ export class LiveService {
     return !(await this.jobs.hasActiveJobFor('LIVE_TRANSCRIBE', 'liveSessionId', sessionId));
   }
 
-  /** Pieces whose words are missing but whose audio is still kept (a retry can recover them). */
+  /**
+   * Pieces whose words are missing but whose audio is still kept (a retry can
+   * recover them). Not a piece whose audio is gone, nor one the provider
+   * refused as unreadable: the same bytes would be refused again.
+   */
   private readonly retryableWhere = (sessionId: string): Prisma.LiveAudioSegmentWhereInput => ({
     sessionId,
     text: null,
     error: { not: null },
     audioDeletedAt: null,
-    NOT: { error: { startsWith: 'AUDIO_MISSING' } },
+    NOT: [{ error: { startsWith: 'AUDIO_MISSING' } }, { error: { startsWith: 'BAD_AUDIO' } }],
   });
 
   /**
@@ -2671,6 +2675,15 @@ export class LiveService {
         ? (await this.prisma.liveAudioSegment.count({ where: this.retryableWhere(s.id) })) +
           (await this.prisma.liveAudioSegment.count({ where: { sessionId: s.id, text: null, error: null } }))
         : 0;
+    // Teacher only, while it is being made: how many pieces are done so far.
+    let progress: { done: number; total: number } | undefined;
+    if (teacher && stages.transcript.stage === 'TRANSCRIBING' && s.provider === 'CLOUDFLARE') {
+      const [total, done] = await Promise.all([
+        this.prisma.liveAudioSegment.count({ where: { sessionId: s.id } }),
+        this.prisma.liveAudioSegment.count({ where: { sessionId: s.id, OR: [{ text: { not: null } }, { error: { not: null } }] } }),
+      ]);
+      if (total > 0) progress = { done, total };
+    }
     const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
     return {
       id: s.id,
@@ -2731,6 +2744,7 @@ export class LiveService {
               partial: stages.transcript.stage === 'PARTIAL' || !!meta?.partial,
               // Teacher only: pieces that failed but whose audio is still kept.
               canRetry: teacher ? retryable > 0 && cfg.enabled : undefined,
+              progress,
               visibility: teacher ? s.transcriptVisibility : undefined,
               mode: teacher ? s.transcriptionMode : undefined,
               segments:

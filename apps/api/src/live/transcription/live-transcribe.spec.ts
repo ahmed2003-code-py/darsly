@@ -4,9 +4,13 @@ import {
   assembleTranscript,
   audioKey,
   captureActive,
+  classifySttRefusal,
   sniffAudio,
+  SttError,
+  sttFailureKind,
   transcriptionConfig,
 } from './lesson-transcription';
+import { retryDelayFor } from './stt-guards';
 
 /**
  * B.8 + Checkpoint C — a Darsly-hosted lesson's transcript from the audio its
@@ -226,5 +230,42 @@ describe('the lesson-audio upload', () => {
     it("someone else's class is not found", async () => {
       expect(await code(setup(null).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe('Session not found');
     });
+  });
+});
+
+describe('what a transcription failure is (2026-09-27: every call refused 429 insufficient_quota)', () => {
+  const body = (code: string, type = code) => JSON.stringify({ error: { message: 'x', type, code } });
+
+  it('no credits / billing / a bad key is the ACCOUNT — final, never waited on', () => {
+    const quota = classifySttRefusal(429, body('insufficient_quota'));
+    expect(quota).toMatchObject({ kind: 'ACCOUNT', errorClass: 'TERMINAL', detail: '429 insufficient_quota' });
+    expect(classifySttRefusal(401, body('invalid_api_key')).kind).toBe('ACCOUNT');
+    expect(classifySttRefusal(403, '').kind).toBe('ACCOUNT');
+    expect(classifySttRefusal(400, body('billing_hard_limit_reached')).kind).toBe('ACCOUNT');
+    // The exact production body (the code is null there; the type carries it).
+    const prod = JSON.stringify({ error: { message: 'You have no credits remaining.', type: 'insufficient_quota', param: null, code: null } });
+    expect(classifySttRefusal(429, prod).kind).toBe('ACCOUNT');
+    // Stored detail is short: no provider message, no URL.
+    expect(quota.detail).not.toMatch(/credits|http/);
+  });
+
+  it('a true rate limit, an outage and a timeout are worth another try; a rate limit keeps its Retry-After', () => {
+    expect(classifySttRefusal(429, body('rate_limit_exceeded'), '7')).toMatchObject({ kind: 'RATE_LIMIT', errorClass: 'RETRYABLE', retryAfterMs: 7000 });
+    expect(classifySttRefusal(429, '')).toMatchObject({ kind: 'RATE_LIMIT', retryAfterMs: undefined });
+    expect(classifySttRefusal(500, '')).toMatchObject({ kind: 'SERVER', errorClass: 'RETRYABLE' });
+    expect(classifySttRefusal(502, '<html>bad gateway</html>').kind).toBe('SERVER');
+    expect(new SttError('TIMEOUT', 'TimeoutError').errorClass).toBe('RETRYABLE');
+  });
+
+  it('a file it cannot read fails that piece only; anything else thrown counts as a network failure', () => {
+    expect(classifySttRefusal(400, body('invalid_value'))).toMatchObject({ kind: 'BAD_AUDIO', errorClass: 'TERMINAL' });
+    expect(classifySttRefusal(415, '').kind).toBe('BAD_AUDIO');
+    expect(classifySttRefusal(404, '').kind).toBe('REQUEST');
+    expect(sttFailureKind(new Error('socket hang up'))).toBe('NETWORK');
+    expect(sttFailureKind(classifySttRefusal(429, body('insufficient_quota')))).toBe('ACCOUNT');
+  });
+
+  it('delays: ≈30 s, 2 and 8 min between attempts — never the old 1/5/15', () => {
+    expect([1, 2, 3].map(retryDelayFor)).toEqual([30_000, 120_000, 480_000]);
   });
 });

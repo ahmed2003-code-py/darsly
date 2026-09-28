@@ -3854,7 +3854,8 @@
         "NO_TRANSCRIPTION": "Transcribing recordings isn't switched on yet.",
         "TRANSCRIPTION_OFF": "Transcription was not on for this class.",
         "NOTHING_SAID": "Not enough speech was captured.",
-        "NOTHING_CAPTURED": "No speech was captured to transcribe in this class."
+        "NOTHING_CAPTURED": "No speech was captured to transcribe in this class.",
+        "SERVICE_UNAVAILABLE": "The speech-to-text service wasn't available. The class audio is still kept, so you can try again later."
       },
       "WAITING_FOR_CLASS_END": "Waiting for the class to end",
       "OFF": "Transcript is off",
@@ -3878,7 +3879,8 @@
       },
       "PARTIAL": "Transcript incomplete",
       "failedHint": "The recording itself is not affected.",
-      "retry": "Try the missing parts again"
+      "retry": "Try the missing parts again",
+      "progress": "Parts ready: {{done}} of {{total}}"
     },
     "summary": {
       "WAITING_FOR_TRANSCRIPT": "The summary will be written once the transcript is ready",

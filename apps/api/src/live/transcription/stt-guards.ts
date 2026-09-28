@@ -105,10 +105,20 @@ export function looksLikeRepetitionLoop(text: string, durationMs: number | null)
 }
 
 /**
- * Delayed retries of a LIVE_TRANSCRIBE job after a retryable failure (an
- * outage, a 429/5xx, a repetition loop): ≈1, 5 and 15 minutes. Indexed by the
- * attempt that just failed (1-based); the fourth attempt is the last.
+ * Delayed retries of a LIVE_TRANSCRIBE job, when pieces are still owed after
+ * a transient failure (an outage, a rate limit, a timeout) that the quick
+ * retries inside the job did not get past: ≈30 s, 2 min and 8 min. Indexed by
+ * the attempt that just failed (1-based); the fourth attempt is the last.
+ * With the quick retries a piece rides out ≈11 minutes of provider trouble.
+ *
+ * Failures that no wait can fix — the provider refusing the account, a file it
+ * cannot read, an answer the guards rejected twice — never come here.
  */
-export const TRANSCRIBE_RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000];
+export const TRANSCRIBE_RETRY_DELAYS_MS = [30_000, 2 * 60_000, 8 * 60_000];
 export const retryDelayFor = (attempt: number) =>
   TRANSCRIBE_RETRY_DELAYS_MS[Math.min(Math.max(attempt, 1), TRANSCRIBE_RETRY_DELAYS_MS.length) - 1];
+
+/** Inside one run, a piece that met a transient failure is tried again after these waits. */
+export const PIECE_QUICK_RETRY_MS = [2_000, 8_000];
+/** A rate limit's own "retry after" is honoured inside the run only up to this. */
+export const MAX_IN_RUN_WAIT_MS = 20_000;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
+import GroupChatCard from './GroupChatCard';
 import {
   AttendanceStudent,
   useAddGroupMembers,
@@ -471,6 +472,8 @@ export default function TeacherGroupDetailPage() {
           {data.status === 'ACTIVE' ? t('groups.archiveGroup') : t('groups.reactivateGroup')}
         </button>
       </div>
+
+      <GroupChatCard groupId={groupId!} archived={data.status === 'ARCHIVED'} />
 
       <div className="mb-6 flex gap-2">
         {TABS.map((tb) => (

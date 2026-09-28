@@ -44,8 +44,9 @@ const CATCH_UP = 100;
 export type SendTarget =
   | { threadId: string }
   | { studentId: string; academyId?: string }
-  | { tenantId: string }
-  | { staffUserId: string; academyId: string };
+  | { tenantId: string; studentId?: string; academyId?: string }
+  | { staffUserId: string; academyId: string; studentId?: string }
+  | { team: true; academyId: string; studentId?: string };
 
 export interface SendInput {
   body: string;

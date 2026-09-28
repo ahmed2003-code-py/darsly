@@ -1,12 +1,81 @@
 # Student Care: Assistants, Guardians & Messaging — Architecture Plan
 
-Status: written 2026-09-28 against `main` @ `e23c7c6` as a proposal. Phase 0
-(0A + 0B messenger) and **Phase 1 (assistant authorization)** are built — see
-"Phase 1 — as built" below for where the build departs from this text. The
-Guardian phases are not built. Every "exists today" claim in section A was read
-from the code at that commit; file paths are given so each can be checked.
+Status: written 2026-09-28 against `main` @ `e23c7c6` as a proposal. Built since:
+Phase 0 (0A + 0B messenger, messenger polish), Phase 1 (assistant authorization)
+and Phase 2 (Student Care, team inbox, guardians, group chat) — see the "as built"
+sections below for where the build departs from this text. Guardian payments and
+guardians in class groups are not built. Every "exists today" claim in section A
+was read from the code at that commit; file paths are given so each can be checked.
 
 ---
+
+## Phase 2 — as built: Student Care, Team Inbox, Guardians, Group Chat
+
+**One conversation model, three kinds** (`ChatThread.kind`):
+
+| Kind | Learner side | Staff side | Identity (`dedupeKey`, server-derived, UNIQUE) |
+|---|---|---|---|
+| DIRECT | the student, or one guardian of them | one named staff member | `<academy>\|<student>\|S\|U:<staff>` · `<academy>\|<student>\|G:<guardian>\|U:<staff>` |
+| TEAM | the student, or one guardian of them | every staff member with `message.inbox` whose scope includes the student | `<academy>\|<student>\|S\|TEAM` · `<academy>\|<student>\|G:<guardian>\|TEAM` |
+| GROUP | the active students of an existing Group | staff with `message.group` on that group (owner: every group; others: `GroupAssignment`) | `<academy>\|GROUP:<group>` + partial unique index `(groupId) WHERE kind='GROUP'` |
+
+A guardian's conversations are never the child's: the learner segment differs, so
+they are different rows; the child cannot open them and vice versa.
+
+**ConversationPolicy** (`chat/conversation-policy.ts`) is the single place that
+decides, for every kind: `viewer(user, thread)` → `{side, canSend, canManage,
+historyFrom}` or null, `recipients(thread)` for realtime and notifications, and
+`senderOf` (frozen kind/title: `Ahmed · Student Support`, `GUARDIAN · FATHER`).
+ChatService, uploads, reactions, deletion, the socket gateway (via
+`canAccessThread`) and Student 360 all ask it; nothing else branches on kind for
+authorization. Everything is re-read per request — a revoked guardian link, a lost
+course, a removed group member or a lost capability bites on the next request.
+
+**Group chat (existing Groups are the only membership):**
+- A Group is an academy cohort with no course link; its members are
+  `GroupMembership` (soft-deleted on removal) and its staff are `GroupAssignment`.
+  The chat keeps no participant list — access is derived per request.
+- Enable/disable/mode from the group page (`group.manage` + the group's own scope);
+  enabling is `INSERT … ON CONFLICT` on the derived key (idempotent, concurrent-safe).
+  Disabling sets `archivedAt` (students lose access; staff read-only; history kept).
+- Modes: OPEN (everyone writes) and ANNOUNCEMENTS (staff write, students read) —
+  enforced as `canSend`, which also gates uploads and voice.
+- History boundary: a student reads from `GroupMembership.addedAt`. Re-adding a
+  previously removed student now resets `addedAt` (a new membership), so they do not
+  regain what was said while they were out; active members are untouched. The
+  boundary applies to pages, `around`/cursors, quotes (shown "unavailable"),
+  reactions, hide/delete and unread counts.
+- Read state in groups is a count (`seenCount` on the sender's own messages, from
+  the existing per-person cursors) — never avatars under every message.
+- Guardians are not in class groups (V1).
+
+**Team inbox:** filters All / Unread / Mine / Unassigned / Resolved; claim is a
+conditional update (two claims cannot both win); reassign — own conversation or
+`message.oversee`; resolve — assignee, anyone while unassigned, or oversee; a
+learner-side message reopens the same conversation. Notifications: the assignee if
+assigned, otherwise the authorized team; staff replies notify only the learner.
+
+**Guardians:** `Guardian` (a `GUARDIAN` user) ↔ `GuardianLink` (academy-scoped,
+ACTIVE/REVOKED) ↔ `StudentProfile`. Access links: 32-byte tokens, sha256 stored,
+30-day expiry, rotation revokes previous tokens, `lastUsedAt`/`useCount`, rate-limited
+exchange at `/auth/guardian/consume`; the URL is `/g#<token>` (fragment, removed from
+the address bar on load). Revoking a guardian's last link revokes their
+DeviceSessions. A GUARDIAN token is refused on every route not marked
+`@GuardianAllowed` (dashboard, chat, notifications, own session). A phone that
+belongs to a non-guardian account is refused (V1: one role per account).
+
+**Capabilities added:** `message.inbox`, `message.oversee` (owner only, outside the
+assistant ceiling), `message.group`.
+
+**Student 360** (`/staff/students/:id?academy=`): overview (courses, progress,
+attendance, groups), progress, groups (with their chats), guardians
+(`guardian.manage`), payments (`payment.view`, per student, academy-scoped), and the
+conversations about the student the viewer may open — each section through
+StaffScopeService; the group section through the group scope.
+
+**Notifications:** one unread notification per conversation per person
+(updated, not stacked); no toast or OS notification for the conversation that is
+open on screen.
 
 ## Phase 1 — as built (deviations from the proposal)
 

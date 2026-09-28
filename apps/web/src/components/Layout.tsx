@@ -91,9 +91,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         ? t('layout.teacherConsole')
         : assistantMode
           ? t('layout.assistantConsole')
-          : user?.role === Role.STAFF
-            ? t('layout.staffConsole')
-            : t('layout.studentSpace');
+          : user?.role === Role.GUARDIAN
+            ? t('layout.guardianSpace')
+            : user?.role === Role.STAFF
+              ? t('layout.staffConsole')
+              : t('layout.studentSpace');
 
   const { nav: navCfg, header, footer } = layout;
   const desktopNav = navCfg.desktop;

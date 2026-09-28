@@ -2,7 +2,13 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { ChatSenderKind, ChatThreadDto, RealtimeEvents, Role } from '@darsly/shared-types';
+import {
+  ChatSenderKind,
+  ChatThreadDto,
+  InboxFilter,
+  RealtimeEvents,
+  Role,
+} from '@darsly/shared-types';
 import { api } from '../lib/api';
 import { askConfirm } from '../lib/confirm';
 import { errorMessage } from '../lib/errorMessage';
@@ -65,19 +71,58 @@ export default function MessagesPage() {
   // writing to an assistant names both.
   const draftAssistant = activeId ? null : params.get('assistant');
   const draftAcademy = activeId ? null : params.get('academy');
-  const drafting = !!(draftStudent || draftTeacher || (draftAssistant && draftAcademy));
+  // The academy's support team — a destination, not a person.
+  const draftTeam = !activeId && params.get('team') === '1';
+  // A guardian always writes about one child: which one.
+  const draftChild = activeId ? null : params.get('child');
+  const drafting = !!(
+    draftStudent ||
+    draftTeacher ||
+    (draftAssistant && draftAcademy) ||
+    (draftTeam && draftAcademy)
+  );
   const showConversation = !!(activeId || drafting);
   const desktop = useIsDesktop();
-  const isStudent = useAuthStore((s) => s.user?.role) === Role.STUDENT;
+  const role = useAuthStore((s) => s.user?.role);
+  const isLearner = role === Role.STUDENT || role === Role.GUARDIAN;
+  const isStaff = !isLearner;
   const [picking, setPicking] = useState(false);
+  // A guardian arriving from a child's page with no one chosen yet: ask whom.
+  useEffect(() => {
+    if (role === Role.GUARDIAN && draftChild && !drafting) setPicking(true);
+  }, [role, draftChild, drafting]);
+  const [filter, setFilter] = useState<InboxFilter>('all');
 
-  /** The conversation list, one keyset page at a time. */
+  /**
+   * Who the first message goes to, before a conversation exists. A guardian's
+   * carries the child it is about; the server checks every part of it.
+   */
+  const draftTarget = useMemo((): SendTarget | null => {
+    const child = draftChild ? { studentId: draftChild } : {};
+    if (draftStudent)
+      return { studentId: draftStudent, ...(draftAcademy ? { academyId: draftAcademy } : {}) };
+    if (draftTeam && draftAcademy) return { ...child, academyId: draftAcademy, team: true };
+    if (draftAssistant && draftAcademy)
+      return { ...child, staffUserId: draftAssistant, academyId: draftAcademy };
+    if (draftTeacher)
+      return {
+        ...child,
+        tenantId: draftTeacher,
+        ...(draftAcademy ? { academyId: draftAcademy } : {}),
+      };
+    return null;
+  }, [draftStudent, draftTeam, draftAcademy, draftAssistant, draftTeacher, draftChild]);
+
+  /** The conversation list, one keyset page at a time (through an inbox view, for staff). */
   const threadsQuery = useInfiniteQuery({
-    queryKey: ['chat-threads', 'pages'],
+    queryKey: ['chat-threads', 'pages', isStaff ? filter : 'all'],
     queryFn: async ({ pageParam }) =>
       (
         await api.get<ChatThreadDto[]>('/chat/threads', {
-          params: pageParam ? { before: pageParam } : {},
+          params: {
+            ...(pageParam ? { before: pageParam } : {}),
+            ...(isStaff && filter !== 'all' ? { filter } : {}),
+          },
         })
       ).data,
     initialPageParam: null as string | null,
@@ -100,20 +145,20 @@ export default function MessagesPage() {
     threadId: string | null;
     counterpartName: string;
     counterpartAvatarUrl: string | null;
-    counterpartKind: ChatSenderKind;
+    counterpartKind: ChatSenderKind | null;
     counterpartTitle?: string | null;
+    kind?: 'DIRECT' | 'TEAM';
   }>({
-    queryKey: ['chat-resolve', draftStudent, draftTeacher, draftAssistant, draftAcademy],
-    queryFn: async () =>
-      (
-        await api.get('/chat/resolve', {
-          params: draftStudent
-            ? { studentId: draftStudent, ...(draftAcademy ? { academyId: draftAcademy } : {}) }
-            : draftAssistant
-              ? { staffUserId: draftAssistant, academyId: draftAcademy }
-              : { tenantId: draftTeacher },
-        })
-      ).data,
+    queryKey: [
+      'chat-resolve',
+      draftStudent,
+      draftTeacher,
+      draftAssistant,
+      draftAcademy,
+      draftTeam,
+      draftChild,
+    ],
+    queryFn: async () => (await api.get('/chat/resolve', { params: draftTarget })).data,
     enabled: drafting,
   });
   useEffect(() => {
@@ -125,11 +170,20 @@ export default function MessagesPage() {
     const socket = getSocket();
     if (!socket) return;
     const refresh = () => queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
+    // A conversation's state moved — claimed, resolved, a group switched to
+    // announcements: its header and its row must follow at once.
+    const moved = (e: { threadId?: string }) => {
+      void refresh();
+      if (e?.threadId)
+        void queryClient.invalidateQueries({ queryKey: ['chat-thread', e.threadId] });
+    };
     socket.on(RealtimeEvents.MESSAGE, refresh);
     socket.on(RealtimeEvents.SEEN, refresh);
+    socket.on(RealtimeEvents.THREAD_UPDATED, moved);
     return () => {
       socket.off(RealtimeEvents.MESSAGE, refresh);
       socket.off(RealtimeEvents.SEEN, refresh);
+      socket.off(RealtimeEvents.THREAD_UPDATED, moved);
     };
   }, [queryClient]);
   useEffect(() => {
@@ -137,6 +191,7 @@ export default function MessagesPage() {
   }, [activeId, queryClient]);
 
   const headerThread = listed ?? fetchedHeader;
+  const groupThreads = useMemo(() => threads.filter((th) => th.kind === 'GROUP'), [threads]);
   const header: ConversationHeader | null = activeId
     ? headerThread
       ? {
@@ -146,6 +201,7 @@ export default function MessagesPage() {
           kind: headerThread.counterpartKind ?? null,
           title: headerThread.counterpartTitle ?? null,
           myLastReadAt: headerThread.myLastReadAt ?? null,
+          thread: headerThread,
         }
       : null
     : drafting && resolved && !resolved.threadId
@@ -156,19 +212,12 @@ export default function MessagesPage() {
           kind: resolved.counterpartKind,
           title: resolved.counterpartTitle ?? null,
           myLastReadAt: null,
+          draftTeam: resolved.kind === 'TEAM',
         }
       : null;
   const openError = activeId ? headerError : resolveError;
 
-  const target: SendTarget | null = activeId
-    ? { threadId: activeId }
-    : draftStudent
-      ? { studentId: draftStudent, ...(draftAcademy ? { academyId: draftAcademy } : {}) }
-      : draftAssistant && draftAcademy
-        ? { staffUserId: draftAssistant, academyId: draftAcademy }
-        : draftTeacher
-          ? { tenantId: draftTeacher }
-          : null;
+  const target: SendTarget | null = activeId ? { threadId: activeId } : draftTarget;
 
   const refreshList = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ['chat-threads'] }),
@@ -246,6 +295,8 @@ export default function MessagesPage() {
       loadingMore={threadsQuery.isFetchingNextPage}
       onLoadMore={() => void threadsQuery.fetchNextPage()}
       onOpen={(id) => setParams({ t: id })}
+      filter={isStaff ? filter : null}
+      onFilter={setFilter}
       lang={i18n.language}
       t={t}
     />
@@ -257,7 +308,7 @@ export default function MessagesPage() {
         title={t('messages.title')}
         subtitle={t('messages.subtitle')}
         action={
-          isStudent ? (
+          isLearner ? (
             <button className="btn-primary" onClick={() => setPicking(true)}>
               <span className="material-symbols-outlined text-[20px]">edit_square</span>
               {t('messages.newConversation')}
@@ -265,16 +316,26 @@ export default function MessagesPage() {
           ) : undefined
         }
       />
-      {isStudent && (
+      {isLearner && (
         <ContactPicker
           open={picking}
           onClose={() => setPicking(false)}
+          groups={groupThreads}
+          childId={draftChild}
+          onOpenGroup={(id) => {
+            setPicking(false);
+            setParams({ t: id });
+          }}
           onPick={(c) => {
             setPicking(false);
+            // A guardian's choice is about one child; a student's is about themselves.
+            const child: Record<string, string> = c.studentId ? { child: c.studentId } : {};
             setParams(
-              c.kind === 'ASSISTANT'
-                ? { assistant: c.staffUserId!, academy: c.academyId }
-                : { teacher: c.tenantId! },
+              c.kind === 'TEAM'
+                ? { ...child, team: '1', academy: c.academyId }
+                : c.kind === 'ASSISTANT'
+                  ? { ...child, assistant: c.staffUserId!, academy: c.academyId }
+                  : { ...child, teacher: c.tenantId!, academy: c.academyId },
             );
           }}
           t={t}

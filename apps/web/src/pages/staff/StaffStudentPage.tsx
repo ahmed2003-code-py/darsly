@@ -1,22 +1,60 @@
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import Avatar from '../../components/Avatar';
-import { Badge, EmptyState, ProgressBar, Skeleton, Spinner } from '../../components/ui';
-import { dateShort } from '../../lib/format';
-import { useAssistantWorkspace, useStaffProgress, useStaffStudent } from '../../lib/staff';
+import { Badge, EmptyState, Spinner } from '../../components/ui';
+import { dateShort, egp } from '../../lib/format';
+import {
+  useAssistantWorkspace,
+  useStaffCare,
+  useStaffProgress,
+  useStaffStudent,
+  useStudentPayments,
+} from '../../lib/staff';
+import { useStaffAcademyStore } from '../../stores/staffAcademy';
+import { AttendanceCard, CourseProgressList, LiveList } from '../care/CareViews';
+import GuardianManager from '../care/GuardianManager';
+
+type Tab = 'overview' | 'progress' | 'groups' | 'guardians' | 'payments' | 'care';
 
 /**
- * One student, as far as the assistant's courses go: their enrollments in
- * those courses, their progress there, and a way to message them — each part
- * only when the assistant holds the matching access. A student outside the
- * assistant's courses is a 404 from the server, shown as "not found" here.
+ * Student 360 — one student, as far as the viewer's reach goes.
+ *
+ * Every section is read through the viewer's scope on the server: a
+ * course-limited assistant sees their courses' slice and nothing else; the
+ * owner sees their academy's. A section the viewer holds no capability for is
+ * not shown (and would be refused). No wallet, nothing platform-wide.
  */
 export default function StaffStudentPage() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
+  const [params] = useSearchParams();
   const ws = useAssistantWorkspace();
-  const student = useStaffStudent(ws.academyId, id);
-  const progress = useStaffProgress(ws.academyId, id, !!student.data?.can.progress);
+  const selected = useStaffAcademyStore((s) => s.academyId);
+  const academyId = params.get('academy') ?? ws.academyId ?? selected ?? undefined;
+  const student = useStaffStudent(academyId, id);
+  const s = student.data;
+  const progress = useStaffProgress(academyId, id, !!s?.can.progress);
+  const care = useStaffCare(academyId, s ? id : undefined);
+  const payments = useStudentPayments(academyId, id, !!s?.can.payments);
+  const [tab, setTab] = useState<Tab>('overview');
+
+  const tabs = useMemo(
+    () =>
+      (
+        [
+          ['overview', true],
+          ['progress', !!s?.can.progress],
+          ['groups', true],
+          ['guardians', !!s?.can.guardians],
+          ['payments', !!s?.can.payments],
+          ['care', true],
+        ] as [Tab, boolean][]
+      )
+        .filter(([, ok]) => ok)
+        .map(([k]) => k),
+    [s],
+  );
 
   if (ws.isLoading || student.isLoading) {
     return (
@@ -25,7 +63,7 @@ export default function StaffStudentPage() {
       </div>
     );
   }
-  if (!student.data) {
+  if (!s || !academyId) {
     return (
       <div className="page">
         <EmptyState
@@ -33,31 +71,24 @@ export default function StaffStudentPage() {
           title={t('staff.studentNotFound')}
           hint={t('staff.studentNotFoundHint')}
         />
-        <div className="mt-4 text-center">
-          <Link to="/staff" className="btn-secondary">
-            {t('staff.backToStudents')}
-          </Link>
-        </div>
       </div>
     );
   }
-  const s = student.data;
+
+  const avg = progress.data?.length
+    ? Math.round(progress.data.reduce((n, p) => n + p.percent, 0) / progress.data.length)
+    : null;
+  const teamThread = care.data?.conversations.find(
+    (c) => c.kind === 'TEAM' && c.learner === 'STUDENT',
+  );
 
   return (
     <div className="page">
-      <Link
-        to="/staff"
-        className="mb-4 inline-flex items-center gap-1 text-sm font-bold text-primary-text"
-      >
-        <span className="material-symbols-outlined text-[18px] rtl:-scale-x-100">arrow_back</span>
-        {t('staff.backToStudents')}
-      </Link>
-
-      <div className="card mb-6 flex flex-wrap items-center gap-4 p-5">
-        <Avatar id={s.id} name={s.name} url={s.avatarUrl} size={64} />
+      <div className="card mb-4 flex flex-wrap items-center gap-4 p-4 sm:p-5">
+        <Avatar id={s.id} name={s.name} url={s.avatarUrl} size={60} />
         <div className="min-w-[12rem] flex-1">
           <h1 className="font-heading text-2xl font-bold text-on-surface">
-            <bdi>{s.name}</bdi>
+            <bdi className="break-words">{s.name}</bdi>
           </h1>
           <div className="mt-1 flex flex-wrap gap-1">
             {s.courses.map((c) => (
@@ -65,108 +96,179 @@ export default function StaffStudentPage() {
                 {c.title} · {t(`staff.enrollment.${c.status}`, c.status)}
               </Badge>
             ))}
+            {s.guardians > 0 && (
+              <Badge tone="neutral">
+                <span className="material-symbols-outlined text-[14px]">family_restroom</span>
+                {t('care.guardiansCount', { count: s.guardians })}
+              </Badge>
+            )}
           </div>
         </div>
-        {s.can.message && ws.academyId && (
-          <Link
-            to={`/messages?student=${encodeURIComponent(s.id)}&academy=${encodeURIComponent(ws.academyId)}`}
-            className="btn-primary w-full justify-center sm:w-auto"
-          >
-            <span className="material-symbols-outlined text-[20px]">chat</span>
-            {t('staff.message')}
-          </Link>
-        )}
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          {s.can.message && (
+            <Link
+              to={`/messages?student=${encodeURIComponent(s.id)}&academy=${encodeURIComponent(academyId)}`}
+              className="btn-primary flex-1 justify-center sm:flex-none"
+            >
+              <span className="material-symbols-outlined text-[20px]">chat</span>
+              {t('staff.message')}
+            </Link>
+          )}
+          {teamThread && (
+            <Link
+              to={`/messages?t=${teamThread.id}`}
+              className="btn-secondary flex-1 justify-center sm:flex-none"
+            >
+              <span className="material-symbols-outlined text-[20px]">support_agent</span>
+              {t('care.supportConversation')}
+            </Link>
+          )}
+        </div>
       </div>
 
-      {s.can.progress ? (
-        <section>
-          <h2 className="mb-3 font-heading text-lg font-bold text-on-surface">
-            {t('staff.progress')}
-          </h2>
-          {progress.isLoading ? (
-            <Skeleton className="h-40 rounded-2xl" />
-          ) : !progress.data?.length ? (
-            <EmptyState icon="insights" title={t('staff.noProgress')} />
-          ) : (
-            <div className="space-y-4">
-              {progress.data.map((p) => (
-                <article key={p.course.id} className="card p-5">
-                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="font-heading font-bold text-on-surface">
-                      <bdi>{p.course.title}</bdi>
-                    </h3>
-                    <span className="text-sm text-on-surface-variant">
-                      {t('staff.lessonsDone', {
-                        done: p.lessons.completed,
-                        total: p.lessons.total,
-                      })}
-                    </span>
-                  </div>
-                  <ProgressBar pct={p.percent} />
-                  <p className="mt-2 text-xs text-on-surface-variant">
-                    {p.lastActivityAt
-                      ? t('staff.lastActive', { date: dateShort(p.lastActivityAt) })
-                      : t('staff.notStarted')}
-                  </p>
+      <div className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist">
+        {tabs.map((k) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${
+              tab === k
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            {t(`care.tab.${k}`)}
+          </button>
+        ))}
+      </div>
 
-                  {p.quizzes.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="mb-1 text-sm font-bold text-on-surface">
-                        {t('staff.quizzes')}
-                      </h4>
-                      <ul className="divide-y divide-outline-variant/40 text-sm">
-                        {p.quizzes.map((q) => (
-                          <li
-                            key={q.lessonId}
-                            className="flex items-center justify-between gap-3 py-2"
-                          >
-                            <bdi className="min-w-0 truncate text-on-surface">{q.lessonTitle}</bdi>
-                            {q.needsManualGrading ? (
-                              <Badge tone="warn">{t('staff.awaitingMarking')}</Badge>
-                            ) : (
-                              <Badge tone={q.passed ? 'primary' : 'error'}>
-                                <span dir="ltr">{q.scorePct ?? 0}%</span>
-                              </Badge>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {p.assignments.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="mb-1 text-sm font-bold text-on-surface">
-                        {t('staff.assignments')}
-                      </h4>
-                      <ul className="divide-y divide-outline-variant/40 text-sm">
-                        {p.assignments.map((a) => (
-                          <li
-                            key={a.lessonId}
-                            className="flex items-center justify-between gap-3 py-2"
-                          >
-                            <bdi className="min-w-0 truncate text-on-surface">{a.lessonTitle}</bdi>
-                            {a.gradedAt ? (
-                              <Badge>
-                                <span dir="ltr">
-                                  {a.score}/{a.maxScore}
-                                </span>
-                              </Badge>
-                            ) : (
-                              <Badge tone="warn">{t('staff.awaitingMarking')}</Badge>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
+      {tab === 'overview' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Tile label={t('care.tile.courses')} value={String(s.courses.length)} />
+            <Tile label={t('care.tile.progress')} value={avg != null ? `${avg}%` : '—'} />
+            <Tile
+              label={t('care.tile.attendance')}
+              value={
+                care.data?.attendance
+                  ? `${Math.round(((care.data.attendance.PRESENT + care.data.attendance.LATE) / care.data.attendance.total) * 100)}%`
+                  : '—'
+              }
+            />
+            <Tile label={t('care.tile.groups')} value={String(care.data?.groups.length ?? '—')} />
+          </div>
+          <AttendanceCard attendance={care.data?.attendance ?? null} />
+          <LiveList live={care.data?.live ?? []} />
+          {!care.data?.attendance && !care.data?.live.length && (
+            <p className="text-sm text-on-surface-variant">{t('care.nothingRecorded')}</p>
           )}
-        </section>
-      ) : (
-        <p className="text-sm text-on-surface-variant">{t('staff.noProgressAccess')}</p>
+        </div>
       )}
+
+      {tab === 'progress' &&
+        (progress.isLoading ? <Spinner /> : <CourseProgressList courses={progress.data ?? []} />)}
+
+      {tab === 'groups' &&
+        (!care.data?.groups.length ? (
+          <EmptyState icon="diversity_3" title={t('care.noGroups')} />
+        ) : (
+          <ul className="space-y-2">
+            {care.data.groups.map((g) => (
+              <li key={g.id} className="card flex items-center gap-3 p-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-secondary-container text-on-secondary-container">
+                  <span className="material-symbols-outlined text-[20px]">groups</span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <bdi className="block truncate font-bold text-on-surface">{g.name}</bdi>
+                  <span className="text-xs text-on-surface-variant">
+                    {t('care.since', { date: dateShort(g.since) })}
+                  </span>
+                </div>
+                {g.chat ? (
+                  <Link to={`/messages?t=${g.chat.threadId}`} className="btn-secondary shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">forum</span>
+                    {t('care.groupChat')}
+                  </Link>
+                ) : (
+                  <span className="text-xs text-outline">{t('care.noGroupChat')}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ))}
+
+      {tab === 'guardians' && (
+        <GuardianManager academyId={academyId} studentId={s.id} studentName={s.name} />
+      )}
+
+      {tab === 'payments' &&
+        (payments.isLoading ? (
+          <Spinner />
+        ) : !payments.data?.length ? (
+          <EmptyState icon="receipt_long" title={t('staff.noPayments')} />
+        ) : (
+          <ul className="card divide-y divide-outline-variant/40 p-0">
+            {payments.data.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <span className="min-w-0 flex-1 truncate text-sm text-on-surface">
+                  {p.course?.title} · {dateShort(p.createdAt)}
+                </span>
+                <span className="font-bold text-on-surface" dir="ltr">
+                  {egp(p.amountCents)}
+                </span>
+                <Badge
+                  tone={
+                    p.status === 'PAID' ? 'primary' : p.status === 'PENDING' ? 'warn' : 'neutral'
+                  }
+                >
+                  {t(`staff.paymentStatus.${p.status}`, p.status)}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        ))}
+
+      {tab === 'care' &&
+        (!care.data?.conversations.length ? (
+          <EmptyState icon="forum" title={t('care.noConversations')} />
+        ) : (
+          <ul className="space-y-2">
+            {care.data.conversations.map((c) => (
+              <li key={c.id}>
+                <Link
+                  to={`/messages?t=${c.id}`}
+                  className="card flex items-center gap-3 p-3 hover:bg-surface-container-low"
+                >
+                  <span className="material-symbols-outlined text-primary-text">
+                    {c.kind === 'GROUP' ? 'groups' : c.kind === 'TEAM' ? 'support_agent' : 'chat'}
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm font-bold text-on-surface">
+                    {t(`care.conv.${c.kind}`)}
+                    {c.learner === 'GUARDIAN' ? ` · ${t('care.withGuardian')}` : ''}
+                  </span>
+                  {c.resolved != null && (
+                    <Badge tone={c.resolved ? 'neutral' : 'warn'}>
+                      {c.resolved ? t('messages.resolved') : t('care.open')}
+                    </Badge>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ))}
+    </div>
+  );
+}
+
+function Tile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card p-3 text-center">
+      <div className="font-heading text-2xl font-bold text-on-surface" dir="ltr">
+        {value}
+      </div>
+      <div className="text-xs text-on-surface-variant">{label}</div>
     </div>
   );
 }

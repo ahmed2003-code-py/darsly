@@ -78,6 +78,8 @@ const TeacherChallengesPage = lazyPage(() => import('./pages/teacher/TeacherChal
 const ChallengeBuilderPage = lazyPage(() => import('./pages/teacher/ChallengeBuilderPage'));
 const GradingPage = lazyPage(() => import('./pages/teacher/GradingPage'));
 const TeamPage = lazyPage(() => import('./pages/teacher/TeamPage'));
+const GuardianAccessPage = lazyPage(() => import('./pages/guardian/GuardianAccessPage'));
+const GuardianHomePage = lazyPage(() => import('./pages/guardian/GuardianHomePage'));
 const StaffHomePage = lazyPage(() => import('./pages/staff/StaffHomePage'));
 const StaffStudentPage = lazyPage(() => import('./pages/staff/StaffStudentPage'));
 const StaffPaymentsPage = lazyPage(() => import('./pages/staff/StaffPaymentsPage'));
@@ -163,6 +165,7 @@ function homeFor(role?: Role): string {
   // tells them apart from the memberships.
   if (role === Role.STAFF) return '/';
   if (role === Role.SUPER_ADMIN) return '/admin';
+  if (role === Role.GUARDIAN) return '/guardian';
   return '/';
 }
 
@@ -188,6 +191,7 @@ function HomeRedirect() {
   if (user?.role === Role.GUEST) return <Navigate to={guestHome()} replace />;
   if (user?.role === Role.TEACHER) return <Navigate to="/teacher" replace />;
   if (user?.role === Role.STAFF) return <StaffHome />;
+  if (user?.role === Role.GUARDIAN) return <Navigate to="/guardian" replace />;
   if (user?.role === Role.SUPER_ADMIN) return <Navigate to="/admin" replace />;
   return (
     <RequireAuth>
@@ -243,6 +247,7 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/activate" element={<ActivateAccountPage />} />
           <Route path="/join/:token" element={<JoinRoute />} />
+          <Route path="/g" element={<GuardianAccessPage />} />
           {/* A paid live class sold to anyone, and a guest's private page for
               the seat they bought — public; the secret in the URL is the key. */}
           <Route path="/live/s/:id" element={<PublicLivePage />} />
@@ -544,6 +549,14 @@ export default function App() {
             element={
               <RequireAuth role={Role.TEACHER}>
                 <GradingPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/guardian"
+            element={
+              <RequireAuth role={Role.GUARDIAN}>
+                <GuardianHomePage />
               </RequireAuth>
             }
           />

@@ -29,6 +29,18 @@ export const roleKey = (kind?: ChatSenderKind | null) =>
           ? 'messages.roles.admin'
           : 'messages.roles.student';
 
+/**
+ * What stands beside a sender's name: an assistant's title, a guardian's
+ * relationship to the child ("Father"), or their role.
+ */
+export function senderLabel(
+  sender: { kind?: ChatSenderKind | null; title?: string | null },
+  t: T,
+): string {
+  if (sender.kind === 'GUARDIAN') return t(`guardian.rel.${sender.title ?? 'GUARDIAN'}`);
+  return sender.title || t(roleKey(sender.kind));
+}
+
 export interface BubbleProps {
   m: LocalMessage;
   run: RunPosition;
@@ -143,9 +155,7 @@ function MessageBubbleImpl({
         {showSender && run.first && sender && !mine && (
           <p className="mb-0.5 flex min-w-0 max-w-full items-baseline gap-1 px-1 text-xs">
             <bdi className="truncate font-bold text-on-surface">{sender.name}</bdi>
-            <span className="shrink-0 text-on-surface-variant">
-              · {sender.title || t(roleKey(sender.kind))}
-            </span>
+            <span className="shrink-0 text-on-surface-variant">· {senderLabel(sender, t)}</span>
           </p>
         )}
 
@@ -307,7 +317,7 @@ function MessageBubbleImpl({
                         ? t('messages.sending')
                         : m.status === 'failed'
                           ? t('messages.sendFailed')
-                          : m.readAt
+                          : m.readAt || m.seenCount
                             ? t('messages.seen')
                             : t('messages.sent')
                     }
@@ -316,9 +326,15 @@ function MessageBubbleImpl({
                       ? 'schedule'
                       : m.status === 'failed'
                         ? 'error'
-                        : m.readAt
+                        : m.readAt || m.seenCount
                           ? 'done_all'
                           : 'done'}
+                  </span>
+                )}
+                {/* A group: how many have read it — a number, never a row of faces. */}
+                {mine && !deleted && !!m.seenCount && (
+                  <span aria-label={t('messages.seenByCount', { count: m.seenCount })}>
+                    {m.seenCount}
                   </span>
                 )}
               </p>

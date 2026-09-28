@@ -266,7 +266,8 @@ export class LedgerService {
     // wallet legs below actually need it, and they refuse without one.
     const studentId = payment.studentId as string;
     const needsStudent = payment.method === 'WALLET' || (payment.walletCents ?? 0) > 0;
-    if (needsStudent && !studentId) throw new Error(`Payment ${paymentId} draws on a wallet but has no student`);
+    if (needsStudent && !studentId)
+      throw new Error(`Payment ${paymentId} draws on a wallet but has no student`);
 
     // Additive-fee model: amountCents (paid) = platform fee + academy net. The
     // fee/net are frozen on the Payment at submit time; fall back to the legacy
@@ -497,7 +498,10 @@ export class LedgerService {
     if (payment.method === 'CASH') {
       // Cash never reaches Darsly, so it cannot be held for a class — refused
       // rather than booked as money the platform does not have.
-      throw new BadRequestException({ message: 'Cash cannot pay for a live seat', code: 'LIVE_NO_CASH' });
+      throw new BadRequestException({
+        message: 'Cash cannot pay for a live seat',
+        code: 'LIVE_NO_CASH',
+      });
     }
     const paidFully = payment.method === 'WALLET';
     const walletCents = payment.walletCents ?? 0;
@@ -519,12 +523,21 @@ export class LedgerService {
     const academyId = payment.academyId ?? payment.tenantId;
     const debits: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
     if (paidFully) {
-      debits.push({ account: this.walletAccount(studentId as string), direction: 'DEBIT', amountCents: payment.amountCents });
+      debits.push({
+        account: this.walletAccount(studentId as string),
+        direction: 'DEBIT',
+        amountCents: payment.amountCents,
+      });
     } else {
       if (walletCents > 0)
-        debits.push({ account: this.paymentEscrowAccount(payment.id), direction: 'DEBIT', amountCents: walletCents });
+        debits.push({
+          account: this.paymentEscrowAccount(payment.id),
+          direction: 'DEBIT',
+          amountCents: walletCents,
+        });
       const cash = payment.amountCents - walletCents;
-      if (cash > 0) debits.push({ account: 'platform:cash', direction: 'DEBIT', amountCents: cash });
+      if (cash > 0)
+        debits.push({ account: 'platform:cash', direction: 'DEBIT', amountCents: cash });
     }
     const txn = await db.ledgerTransaction.create({
       data: {
@@ -585,7 +598,8 @@ export class LedgerService {
     const key = `refund:${r.refundId}`;
     const prior = await db.ledgerTransaction.findUnique({ where: { idempotencyKey: key } });
     if (prior) return prior.id;
-    if (!Number.isSafeInteger(r.amountCents) || r.amountCents <= 0) throw new Error('bookLiveRefund: amount must be positive');
+    if (!Number.isSafeInteger(r.amountCents) || r.amountCents <= 0)
+      throw new Error('bookLiveRefund: amount must be positive');
     const held = await this.heldBalance(r.purchaseId, db);
     if (held < r.amountCents) {
       throw new BadRequestException({
@@ -597,7 +611,11 @@ export class LedgerService {
     }
     const credit =
       'wallet' in r.destination
-        ? { account: this.walletAccount(r.destination.wallet), direction: 'CREDIT' as const, amountCents: r.amountCents }
+        ? {
+            account: this.walletAccount(r.destination.wallet),
+            direction: 'CREDIT' as const,
+            amountCents: r.amountCents,
+          }
         : { account: 'platform:cash', direction: 'CREDIT' as const, amountCents: r.amountCents };
     const txn = await db.ledgerTransaction.create({
       data: {
@@ -651,7 +669,8 @@ export class LedgerService {
     }
     const amount = fee + teacher + center;
     if (amount === 0) return null;
-    if (center > 0 && !r.centerAccount) throw new Error('releaseLivePurchase: a center share needs a center account');
+    if (center > 0 && !r.centerAccount)
+      throw new Error('releaseLivePurchase: a center share needs a center account');
     const held = await this.heldBalance(r.purchaseId, db);
     if (held < amount) {
       throw new BadRequestException({
@@ -663,15 +682,41 @@ export class LedgerService {
     }
     const scope = { tenantId: r.tenantId, academyId: r.academyId };
     const credits: Prisma.LedgerEntryCreateWithoutTransactionInput[] = [];
-    if (fee > 0) credits.push({ account: 'platform:commission', direction: 'CREDIT', amountCents: fee, ...scope });
-    if (teacher > 0) credits.push({ account: this.teacherAccount(r.tenantId), direction: 'CREDIT', amountCents: teacher, ...scope });
-    if (center > 0) credits.push({ account: r.centerAccount as string, direction: 'CREDIT', amountCents: center, ...scope });
+    if (fee > 0)
+      credits.push({
+        account: 'platform:commission',
+        direction: 'CREDIT',
+        amountCents: fee,
+        ...scope,
+      });
+    if (teacher > 0)
+      credits.push({
+        account: this.teacherAccount(r.tenantId),
+        direction: 'CREDIT',
+        amountCents: teacher,
+        ...scope,
+      });
+    if (center > 0)
+      credits.push({
+        account: r.centerAccount as string,
+        direction: 'CREDIT',
+        amountCents: center,
+        ...scope,
+      });
     const txn = await db.ledgerTransaction.create({
       data: {
         description: `live seat delivered ${r.purchaseId}`,
         idempotencyKey: key,
         entries: {
-          create: [{ account: this.heldAccount(r.purchaseId), direction: 'DEBIT', amountCents: amount, ...scope }, ...credits],
+          create: [
+            {
+              account: this.heldAccount(r.purchaseId),
+              direction: 'DEBIT',
+              amountCents: amount,
+              ...scope,
+            },
+            ...credits,
+          ],
         },
       },
     });
@@ -893,7 +938,7 @@ export class LedgerService {
 
   /**
    * DRS-INV-YYYY-NNNNNN invoice on first paid record. Idempotent per payment.
-   * Deriving the serial from count() can race two concurrent payments onto the
+   * Deriving the serial from the highest one can race two concurrent payments onto the
    * same serial, so we retry on a unique-constraint conflict (on either the
    * paymentId or the serial) — safe to run outside the money-critical
    * transaction because a failure here never un-credits a teacher.
@@ -903,8 +948,16 @@ export class LedgerService {
       const existing = await this.prisma.invoice.findUnique({ where: { paymentId } });
       if (existing) return existing;
       const year = new Date().getFullYear();
-      const count = await this.prisma.invoice.count();
-      const serial = `DRS-INV-${year}-${String(count + 1 + attempt).padStart(6, '0')}`;
+      // Next after the highest serial of the year — soft-deleted rows keep
+      // their serials and removed rows leave gaps, so count() can collide.
+      const prefix = `DRS-INV-${year}-`;
+      const last = await this.prisma.invoice.findFirst({
+        where: { serial: { startsWith: prefix }, deletedAt: undefined },
+        orderBy: { serial: 'desc' },
+        select: { serial: true },
+      });
+      const next = (last ? Number(last.serial.slice(prefix.length)) || 0 : 0) + 1 + attempt;
+      const serial = `${prefix}${String(next).padStart(6, '0')}`;
       try {
         return await this.prisma.invoice.create({ data: { paymentId, serial } });
       } catch (e) {

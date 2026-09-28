@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { RealtimeEvents } from '@darsly/shared-types';
 import { api } from '../lib/api';
-import { notificationRoute } from '../lib/notificationRoute';
+import { isConversationOpen, notificationRoute } from '../lib/notificationRoute';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/auth';
 
@@ -64,6 +64,7 @@ export default function NotificationToasts() {
     const onNotification = (n: any) => {
       if (document.visibilityState !== 'visible') return; // the OS notification has it
       if (!n?.title) return;
+      if (isConversationOpen(n.meta?.threadId)) return; // already on screen
       push({
         id: `n-${n.id}`,
         notifId: n.id,

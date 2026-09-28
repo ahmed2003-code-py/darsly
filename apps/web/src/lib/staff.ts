@@ -40,7 +40,27 @@ export interface StaffStudentRow {
 export interface StaffStudent extends StaffStudentRow {
   userId: string;
   courses: { id: string; title: string; status: string; since: string; expiresAt: string | null }[];
-  can: { progress: boolean; message: boolean };
+  can: { progress: boolean; message: boolean; guardians: boolean; payments: boolean };
+  guardians: number;
+}
+
+export interface StaffCare {
+  groups: {
+    id: string;
+    name: string;
+    status: string;
+    since: string;
+    chat: { threadId: string; mode: 'OPEN' | 'ANNOUNCEMENTS' | null } | null;
+  }[];
+  attendance: import('./guardian').AttendanceSummary | null;
+  live: { title: string; startsAt: string; minutes: number }[];
+  conversations: {
+    id: string;
+    kind: 'DIRECT' | 'TEAM' | 'GROUP';
+    learner: 'STUDENT' | 'GUARDIAN' | null;
+    mine: boolean | null;
+    resolved: boolean | null;
+  }[];
 }
 
 export interface StaffCourseProgress {
@@ -170,6 +190,29 @@ export function useStaffPayments(academyId: string | undefined, status?: string)
       (await api.get('/staff/payments', { ...at(academyId), params: status ? { status } : {} }))
         .data,
     enabled: !!academyId,
+    retry: false,
+  });
+}
+
+export function useStaffCare(academyId: string | undefined, studentId: string | undefined) {
+  return useQuery<StaffCare>({
+    queryKey: ['staff-care', academyId, studentId],
+    queryFn: async () => (await api.get(`/staff/students/${studentId}/care`, at(academyId))).data,
+    enabled: !!academyId && !!studentId,
+    retry: false,
+  });
+}
+
+export function useStudentPayments(
+  academyId: string | undefined,
+  studentId: string | undefined,
+  enabled: boolean,
+) {
+  return useQuery<StaffPayment[]>({
+    queryKey: ['staff-payments-student', academyId, studentId],
+    queryFn: async () =>
+      (await api.get('/staff/payments', { ...at(academyId), params: { studentId } })).data,
+    enabled: !!academyId && !!studentId && enabled,
     retry: false,
   });
 }

@@ -11,6 +11,8 @@ export type AssistantCapability =
   | 'student.view'
   | 'progress.view'
   | 'message.reply'
+  | 'message.inbox'
+  | 'message.group'
   | 'assessment.grade'
   | 'attendance.mark'
   | 'group.manage'
@@ -61,7 +63,7 @@ export interface AssistantLink {
 /** The capabilities the Team screen offers, in the order it shows them, grouped. */
 export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] = [
   { key: 'students', caps: ['student.view', 'progress.view'] },
-  { key: 'messages', caps: ['message.reply'] },
+  { key: 'messages', caps: ['message.reply', 'message.inbox', 'message.group'] },
   {
     key: 'teaching',
     caps: ['assessment.grade', 'attendance.mark', 'group.manage', 'schedule.manage'],
@@ -77,6 +79,7 @@ const SUPPORT: AssistantCapability[] = [
   'student.view',
   'progress.view',
   'message.reply',
+  'message.inbox',
   'guardian.manage',
 ];
 export const PRESETS: Record<
@@ -85,7 +88,13 @@ export const PRESETS: Record<
 > = {
   support: { permissions: SUPPORT, directContact: true },
   academic: {
-    permissions: [...SUPPORT, 'assessment.grade', 'attendance.mark', 'group.manage'],
+    permissions: [
+      ...SUPPORT,
+      'assessment.grade',
+      'attendance.mark',
+      'group.manage',
+      'message.group',
+    ],
     directContact: false,
   },
   operations: {

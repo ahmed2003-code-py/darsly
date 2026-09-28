@@ -67,9 +67,10 @@ export function useUploads(
       const fd = new FormData();
       fd.append('file', item.file, item.name);
       if ('threadId' in t) fd.append('threadId', t.threadId);
-      if ('studentId' in t) fd.append('studentId', t.studentId);
+      if ('studentId' in t && t.studentId) fd.append('studentId', t.studentId);
       if ('tenantId' in t) fd.append('tenantId', t.tenantId);
       if ('staffUserId' in t) fd.append('staffUserId', t.staffUserId);
+      if ('team' in t && t.team) fd.append('team', '1');
       if ('academyId' in t && t.academyId) fd.append('academyId', t.academyId);
       if (item.voiceSec) {
         fd.append('voice', '1');

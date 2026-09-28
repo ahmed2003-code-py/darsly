@@ -143,7 +143,8 @@
     "team": "Team",
     "staffHome": "My students",
     "staffPayments": "Payments",
-    "assisting": "Assisting"
+    "assisting": "Assisting",
+    "guardianHome": "My children"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -171,7 +172,8 @@
     "studentSpace": "Student space",
     "adminConsole": "Platform console",
     "staffConsole": "Center console",
-    "assistantConsole": "Assistant"
+    "assistantConsole": "Assistant",
+    "guardianSpace": "Parent"
   },
   "topbar": {
     "enablePush": "Enable browser alerts",
@@ -286,7 +288,52 @@
     "filesCount_one": "1 file",
     "filesCount_other": "{{count}} files",
     "removeVoice": "Remove voice note",
-    "recordDone": "Done"
+    "recordDone": "Done",
+    "people": "People",
+    "support": "Support",
+    "askSupport": "Ask the support team",
+    "aboutChild": "About {{name}}",
+    "myGroups": "My groups",
+    "members_one": "1 member",
+    "members_other": "{{count}} members",
+    "inbox": "Inbox",
+    "filter": {
+      "all": "All",
+      "unread": "Unread",
+      "mine": "Mine",
+      "unassigned": "Unassigned",
+      "resolved": "Resolved"
+    },
+    "announcements": "Announcements",
+    "resolved": "Resolved",
+    "unassigned": "Unassigned",
+    "supportTeam": "Support team",
+    "guardianOf": "Parent of {{name}}",
+    "claim": "Claim",
+    "reopen": "Reopen",
+    "resolve": "Resolve",
+    "actionFailed": "That did not work. Try again.",
+    "aboutStudent": "About this student",
+    "writtenByGuardian": "{{name}} ({{relation}}) is writing about this student.",
+    "coursesInScope": "Courses (yours)",
+    "guardiansLinked_one": "1 guardian linked",
+    "guardiansLinked_other": "{{count}} guardians linked",
+    "noGuardians": "No guardian linked",
+    "assignee": "Assigned to",
+    "openStudent360": "Open Student 360",
+    "groupInfo": "Group info",
+    "modeAnnouncements": "Announcements",
+    "modeOpen": "Open chat",
+    "modeAnnouncementsHint": "Only staff can write. Students read.",
+    "modeOpenHint": "Students and staff can all write.",
+    "switchToOpen": "Let students write",
+    "switchToAnnouncements": "Announcements only",
+    "groupStaff": "Teachers & staff",
+    "groupStudents_one": "1 student",
+    "groupStudents_other": "{{count}} students",
+    "readOnlyAnnouncements": "Announcements only — students can read but not write here.",
+    "seenByCount_one": "Seen by 1",
+    "seenByCount_other": "Seen by {{count}}"
   },
   "discovery": {
     "title": "Discover Teachers",
@@ -4597,6 +4644,16 @@
         "short": "Guardians",
         "label": "Manage parents",
         "hint": "Linking parents to students — arrives with parent access."
+      },
+      "message.inbox": {
+        "short": "Support inbox",
+        "label": "Answer the support team inbox",
+        "hint": "Support conversations from the students (and parents) of their courses."
+      },
+      "message.group": {
+        "short": "Group chats",
+        "label": "Take part in class group chats",
+        "hint": "Chats of the groups you assign to them."
       }
     },
     "direct": {
@@ -4654,5 +4711,114 @@
     },
     "noPayments": "Nothing here",
     "gradingSubtitle": "Work waiting to be marked in your courses."
+  },
+  "guardian": {
+    "linkInvalid": "This link no longer works",
+    "linkInvalidHint": "Ask the academy to send you a new one.",
+    "signingIn": "Opening your child’s page…",
+    "noChildren": "No children linked",
+    "noChildrenHint": "The academy may have removed this access. Ask them for a new link.",
+    "children": "Your children",
+    "rel": {
+      "FATHER": "Father",
+      "MOTHER": "Mother",
+      "GUARDIAN": "Guardian",
+      "OTHER": "Family"
+    },
+    "contact": "Contact the academy",
+    "courses": "Courses",
+    "privacyNote": "You see what the academy records for this child here. Payments and account details are not shown."
+  },
+  "care": {
+    "noProgress": "No course progress yet",
+    "lessonsDone": "{{done}} of {{total}} lessons",
+    "lastActive": "Last active {{date}}",
+    "notStarted": "Not started yet",
+    "exams": "Exams & quizzes",
+    "homework": "Homework",
+    "awaitingMarking": "Awaiting marking",
+    "attendance": "Attendance",
+    "att": {
+      "PRESENT": "Present",
+      "ABSENT": "Absent",
+      "LATE": "Late",
+      "EXCUSED": "Excused"
+    },
+    "live": "Live classes attended",
+    "minutes_one": "{{count}} min",
+    "minutes_other": "{{count}} min",
+    "activity": "Recent activity",
+    "kind": {
+      "QUIZ": "Quiz",
+      "ASSIGNMENT": "Homework",
+      "ATTENDANCE": "Attendance",
+      "LIVE": "Live class"
+    },
+    "guardians": "Parents & guardians",
+    "addGuardian": "Add guardian",
+    "noGuardians": "No guardian linked",
+    "noGuardiansHint": "Add a parent so they can follow progress and message the academy.",
+    "revoked": "Removed",
+    "linkExpired": "Link expired",
+    "lastUsed": "last opened {{date}}",
+    "neverUsed": "link not opened yet",
+    "newLink": "New link",
+    "revokeConfirm": "Remove {{name}}’s access? Their link stops working immediately.",
+    "revoke": "Remove",
+    "addGuardianFor": "Add a guardian for {{name}}",
+    "guardianName": "Name",
+    "guardianPhone": "Mobile number",
+    "guardianPhoneHint": "Egyptian mobile. Used to recognise the same parent across children.",
+    "relationship": "Relationship",
+    "createAccess": "Create access link",
+    "shareText": "Hello {{name}}, you can follow {{student}} and message the academy here: {{url}}",
+    "linkReady": "Access link ready",
+    "linkReadyHint": "Send this private link to the guardian. It opens their child’s page without a password and works for 30 days.",
+    "copied": "Copied",
+    "copy": "Copy",
+    "shareWhatsapp": "Send on WhatsApp",
+    "done": "Done",
+    "guardiansCount_one": "1 guardian",
+    "guardiansCount_other": "{{count}} guardians",
+    "supportConversation": "Support conversation",
+    "tab": {
+      "overview": "Overview",
+      "progress": "Progress",
+      "groups": "Groups",
+      "guardians": "Guardians",
+      "payments": "Payments",
+      "care": "Conversations"
+    },
+    "tile": {
+      "courses": "Courses",
+      "progress": "Avg. progress",
+      "attendance": "Attendance",
+      "groups": "Groups"
+    },
+    "nothingRecorded": "No attendance or live classes recorded yet.",
+    "noGroups": "Not in any of your groups",
+    "since": "since {{date}}",
+    "groupChat": "Group chat",
+    "noGroupChat": "No group chat",
+    "noConversations": "No conversations yet",
+    "conv": {
+      "DIRECT": "Direct conversation",
+      "TEAM": "Support conversation",
+      "GROUP": "Group chat"
+    },
+    "withGuardian": "with guardian",
+    "open": "Open"
+  },
+  "groupChat": {
+    "title": "Group chat",
+    "offHint": "A conversation for this group’s students and staff. Its members follow the group automatically.",
+    "openHint": "On · students and staff can write.",
+    "announcementsHint": "On · announcements only: students read, staff write.",
+    "open": "Open chat",
+    "toOpen": "Let students write",
+    "toAnnouncements": "Announcements only",
+    "disableConfirm": "Turn off this group’s chat? Students lose access; the messages are kept.",
+    "disable": "Turn off",
+    "enable": "Enable group chat"
   }
 }

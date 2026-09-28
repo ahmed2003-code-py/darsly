@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RealtimeEvents } from '@darsly/shared-types';
-import { notificationRoute } from './notificationRoute';
+import { isConversationOpen, notificationRoute } from './notificationRoute';
 import { getSocket } from './socket';
 import { useAuthStore } from '../stores/auth';
 
@@ -93,6 +93,7 @@ export function useWebNotifications(navigate?: (to: string) => void) {
       meta?: Record<string, unknown>;
     }) => {
       if (!n?.title) return;
+      if (isConversationOpen(n.meta?.threadId)) return;
       const to = notificationRoute(n, roleOf());
       show(
         n.title,
@@ -110,6 +111,7 @@ export function useWebNotifications(navigate?: (to: string) => void) {
       // The sender gets the same event echoed back; don't notify them of
       // their own message.
       if (!m || m.mine) return;
+      if (isConversationOpen(m.threadId)) return;
       const to = m.threadId ? `/messages?t=${m.threadId}` : '/messages';
       show(m.senderName ?? '', m.body ?? '', `chat-${m.threadId ?? ''}`, () => go.current?.(to));
     };

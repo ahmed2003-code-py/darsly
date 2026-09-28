@@ -8,7 +8,15 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChatMessageDto, ChatSenderKind, RealtimeEvents, Role } from '@darsly/shared-types';
+import {
+  ChatMessageDto,
+  ChatSenderKind,
+  ChatThreadDto,
+  RealtimeEvents,
+  Role,
+} from '@darsly/shared-types';
+import { GroupIcon, TeamIcon } from './ContactPicker';
+import { GroupInfoPanel, StudentContextPanel, TeamActions } from './ConversationInfo';
 import { getSocket } from '../../lib/socket';
 import { useAuthStore } from '../../stores/auth';
 import Avatar from '../../components/Avatar';
@@ -37,6 +45,10 @@ export interface ConversationHeader {
   title?: string | null;
   /** The viewer's read position when the conversation was opened (unread divider). */
   myLastReadAt: string | null;
+  /** The conversation as the list knows it (kind, team state, group) — absent for a draft. */
+  thread?: ChatThreadDto;
+  /** A draft to the support team: drawn as the team, not a person. */
+  draftTeam?: boolean;
 }
 
 export default function Conversation({
@@ -318,9 +330,34 @@ export default function Conversation({
     return out;
   }, [conv.messages]);
 
-  const subtitle = peerTyping
-    ? t('messages.typing')
-    : header.title || (header.kind ? t(roleKey(header.kind)) : '');
+  const th = header.thread;
+  const isGroup = th?.kind === 'GROUP';
+  const isTeam = th?.kind === 'TEAM' || !!header.draftTeam;
+  const learnerViewer = user?.role === Role.STUDENT || user?.role === Role.GUARDIAN;
+  const staffTeam = th?.kind === 'TEAM' && !learnerViewer;
+  const [infoOpen, setInfoOpen] = useState(false);
+  // What the header says under the name: who they are here, or for a group,
+  // its size and mode; for the support team, that it is the team; for staff
+  // on a support conversation, who has it.
+  const baseSubtitle = isGroup
+    ? `${t('messages.members', { count: th!.memberCount ?? 0 })}${
+        th!.groupMode === 'ANNOUNCEMENTS' ? ` · ${t('messages.announcements')}` : ''
+      }`
+    : isTeam && learnerViewer
+      ? t('messages.supportTeam')
+      : header.kind === 'GUARDIAN' && th?.studentName
+        ? `${t(`guardian.rel.${th.guardianRelationship ?? 'GUARDIAN'}`)} · ${th.studentName}`
+        : staffTeam
+          ? th!.resolvedAt
+            ? `${t('messages.supportTeam')} · ${t('messages.resolved')}`
+            : th!.assigneeName
+              ? `${t('messages.supportTeam')} · ${th!.assigneeName}`
+              : `${t('messages.supportTeam')} · ${t('messages.unassigned')}`
+          : header.title || (header.kind ? t(roleKey(header.kind)) : '');
+  const subtitle = peerTyping ? t('messages.typing') : baseSubtitle;
+  // An announcements-only group is read-only for its students (the server
+  // refuses their sends regardless; this just says so up front).
+  const readOnly = isGroup && user?.role === Role.STUDENT && th!.groupMode === 'ANNOUNCEMENTS';
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-container-low/60">
@@ -332,7 +369,13 @@ export default function Conversation({
         >
           <span className="material-symbols-outlined rtl:-scale-x-100">arrow_back</span>
         </button>
-        <Avatar id={header.personId} name={header.name} url={header.avatarUrl} size={40} />
+        {isGroup ? (
+          <GroupIcon name={header.name} size={40} />
+        ) : isTeam && learnerViewer ? (
+          <TeamIcon size={40} />
+        ) : (
+          <Avatar id={header.personId} name={header.name} url={header.avatarUrl} size={40} />
+        )}
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-heading text-base font-bold text-on-surface">
             <bdi>{header.name}</bdi>
@@ -344,7 +387,18 @@ export default function Conversation({
             {subtitle}
           </p>
         </div>
-        {onClear && (
+        {staffTeam && <TeamActions thread={th!} t={t} />}
+        {th && (isGroup || !learnerViewer) && (
+          <button
+            onClick={() => setInfoOpen(true)}
+            title={isGroup ? t('messages.groupInfo') : t('messages.aboutStudent')}
+            aria-label={isGroup ? t('messages.groupInfo') : t('messages.aboutStudent')}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high"
+          >
+            <span className="material-symbols-outlined text-[22px]">info</span>
+          </button>
+        )}
+        {onClear && !isGroup && !staffTeam && (
           <button
             onClick={onClear}
             title={t('messages.clear')}
@@ -492,21 +546,36 @@ export default function Conversation({
         </p>
       )}
 
-      <Composer
-        draft={draft}
-        setDraft={setDraft}
-        replyTo={replyTo}
-        onCancelReply={() => setReplyTo(null)}
-        uploads={uploads}
-        canRecord
-        onVoice={onVoice}
-        onSend={() => void send()}
-        onType={onType}
-        onNotice={setNotice}
-        inputRef={inputRef}
-        lang={lang}
-        t={t}
-      />
+      {th &&
+        infoOpen &&
+        (isGroup ? (
+          <GroupInfoPanel threadId={th.id} open onClose={() => setInfoOpen(false)} t={t} />
+        ) : (
+          <StudentContextPanel thread={th} open onClose={() => setInfoOpen(false)} t={t} />
+        ))}
+
+      {readOnly ? (
+        <div className="flex items-center justify-center gap-2 border-t border-outline-variant/40 bg-surface-container-lowest px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-sm text-on-surface-variant">
+          <span className="material-symbols-outlined text-[20px]">campaign</span>
+          {t('messages.readOnlyAnnouncements')}
+        </div>
+      ) : (
+        <Composer
+          draft={draft}
+          setDraft={setDraft}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          uploads={uploads}
+          canRecord
+          onVoice={onVoice}
+          onSend={() => void send()}
+          onType={onType}
+          onNotice={setNotice}
+          inputRef={inputRef}
+          lang={lang}
+          t={t}
+        />
+      )}
     </div>
   );
 }

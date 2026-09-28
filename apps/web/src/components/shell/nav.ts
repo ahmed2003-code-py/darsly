@@ -98,6 +98,12 @@ export const ASSISTING_ITEM: NavItem = {
   labelKey: 'nav.assisting',
 };
 
+/** A guardian: their children, and the conversations about them. Nothing else. */
+export const GUARDIAN_NAV: NavItem[] = [
+  { to: '/guardian', icon: 'family_restroom', labelKey: 'nav.guardianHome', end: true },
+  { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
+];
+
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
   { to: '/admin/academies', icon: 'apartment', labelKey: 'nav.adminAcademies' },
@@ -129,11 +135,13 @@ export const BOTTOM_TABS: Record<string, string[]> = {
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
   [Role.STAFF]: ['/center', '/center/members', '/teacher/groups', '/teacher/schedule'],
   ASSISTANT: ['/staff', '/messages', '/staff/grading', '/staff/payments'],
+  [Role.GUARDIAN]: ['/guardian', '/messages'],
 };
 
 export function navFor(role: string | undefined): NavItem[] {
   if (role === Role.SUPER_ADMIN) return ADMIN_NAV;
   if (role === Role.TEACHER) return TEACHER_NAV;
   if (role === Role.STAFF) return STAFF_NAV;
+  if (role === Role.GUARDIAN) return GUARDIAN_NAV;
   return STUDENT_NAV;
 }

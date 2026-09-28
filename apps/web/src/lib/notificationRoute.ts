@@ -77,3 +77,15 @@ export function notificationRoute(n: NotificationLike, role?: string): string | 
     }
   }
 }
+
+/**
+ * Is this conversation on screen right now? A message in the conversation
+ * the reader is looking at is already in front of them: no toast, no OS
+ * notification — whatever kind of conversation it is.
+ */
+export function isConversationOpen(threadId?: unknown): boolean {
+  if (typeof threadId !== 'string' || !threadId) return false;
+  if (typeof document === 'undefined' || document.visibilityState !== 'visible') return false;
+  if (window.location.pathname !== '/messages') return false;
+  return new URLSearchParams(window.location.search).get('t') === threadId;
+}

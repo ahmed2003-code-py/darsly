@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import type { ChatThreadDto } from '@darsly/shared-types';
+import type { ChatThreadDto, InboxFilter } from '@darsly/shared-types';
 import Avatar from '../../components/Avatar';
+import { GroupIcon, TeamIcon } from './ContactPicker';
 import { listTime } from './format';
 
 type T = (k: string, o?: any) => string;
@@ -13,6 +14,8 @@ export default function ConversationList({
   loadingMore,
   onLoadMore,
   onOpen,
+  filter,
+  onFilter,
   lang,
   t,
 }: {
@@ -23,6 +26,9 @@ export default function ConversationList({
   loadingMore: boolean;
   onLoadMore: () => void;
   onOpen: (id: string) => void;
+  /** Staff only: the inbox view in use (null for students and guardians). */
+  filter?: InboxFilter | null;
+  onFilter?: (f: InboxFilter) => void;
   lang: string;
   t: T;
 }) {
@@ -37,6 +43,30 @@ export default function ConversationList({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-outline-variant/40 p-3">
+        {filter && onFilter && (
+          <div
+            className="-mx-1 mb-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5"
+            role="tablist"
+            aria-label={t('messages.inbox')}
+          >
+            {(['all', 'unread', 'mine', 'unassigned', 'resolved'] as InboxFilter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                role="tab"
+                aria-selected={filter === f}
+                onClick={() => onFilter(f)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  filter === f
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                {t(`messages.filter.${f}`)}
+              </button>
+            ))}
+          </div>
+        )}
         <label className="relative block">
           <span className="material-symbols-outlined pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[20px] text-outline">
             search
@@ -86,12 +116,18 @@ export default function ConversationList({
                     active ? 'bg-primary-fixed/50' : 'hover:bg-surface-container-low'
                   }`}
                 >
-                  <Avatar
-                    id={th.studentId + th.tenantId}
-                    name={th.counterpartName}
-                    url={th.counterpartAvatarUrl}
-                    size={48}
-                  />
+                  {th.kind === 'GROUP' ? (
+                    <GroupIcon name={th.counterpartName} size={48} />
+                  ) : th.kind === 'TEAM' && !th.counterpartKind ? (
+                    <TeamIcon size={48} />
+                  ) : (
+                    <Avatar
+                      id={th.studentId + th.tenantId}
+                      name={th.counterpartName}
+                      url={th.counterpartAvatarUrl}
+                      size={48}
+                    />
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <bdi
@@ -133,6 +169,7 @@ export default function ConversationList({
                         </span>
                       )}
                     </span>
+                    <RowChips th={th} t={t} />
                   </span>
                 </button>
               </li>
@@ -158,5 +195,57 @@ export default function ConversationList({
         </ul>
       )}
     </div>
+  );
+}
+
+/** What kind of conversation a row is, in one quiet line: support, group, who it is about. */
+function RowChips({ th, t }: { th: ChatThreadDto; t: T }) {
+  const chips: { icon: string; text: string; tone?: 'done' | 'warn' }[] = [];
+  if (th.kind === 'GROUP') {
+    chips.push({ icon: 'groups', text: t('messages.members', { count: th.memberCount ?? 0 }) });
+    if (th.groupMode === 'ANNOUNCEMENTS')
+      chips.push({ icon: 'campaign', text: t('messages.announcements') });
+  }
+  if (th.kind === 'TEAM') {
+    if (th.counterpartKind) {
+      // Staff view: who it is waiting on.
+      chips.push(
+        th.resolvedAt
+          ? { icon: 'check_circle', text: t('messages.resolved'), tone: 'done' }
+          : th.assigneeName
+            ? { icon: 'person', text: th.assigneeName }
+            : { icon: 'inbox', text: t('messages.unassigned'), tone: 'warn' },
+      );
+    } else {
+      chips.push({ icon: 'support_agent', text: t('messages.supportTeam') });
+    }
+  }
+  if (th.learnerKind === 'GUARDIAN' && th.counterpartKind === 'GUARDIAN' && th.studentName) {
+    chips.push({
+      icon: 'family_restroom',
+      text: t('messages.guardianOf', { name: th.studentName }),
+    });
+  }
+  if (!chips.length) return null;
+  return (
+    <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-on-surface-variant">
+      {chips.map((c, i) => (
+        <span
+          key={i}
+          className={`flex min-w-0 items-center gap-0.5 ${
+            c.tone === 'warn'
+              ? 'font-bold text-primary-text'
+              : c.tone === 'done'
+                ? 'text-outline'
+                : ''
+          }`}
+        >
+          <span className="material-symbols-outlined text-[13px]" aria-hidden>
+            {c.icon}
+          </span>
+          <bdi className="truncate">{c.text}</bdi>
+        </span>
+      ))}
+    </span>
   );
 }

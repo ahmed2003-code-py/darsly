@@ -667,6 +667,14 @@ function Review({
                   {/* Composed here, in the reader's language. `detail` is the
                       server's fallback, for a code this build predates. */}
                   {key ? t(key, { ...(w.params ?? {}), defaultValue: w.detail }) : w.detail}
+                  {/* The disagreements themselves, as reported — the teacher decides. */}
+                  {w.code === 'SOURCE_CONFLICT' && w.detail && (
+                    <ul className="mt-1 list-[circle] space-y-0.5 ps-5" dir="auto">
+                      {w.detail.split('\n').map((line, j) => (
+                        <li key={j}>{line}</li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               );
             })}

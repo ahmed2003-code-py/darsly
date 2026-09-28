@@ -99,6 +99,7 @@ export interface DraftWarning {
 export function warningKey(code: string): string | null {
   const known = [
     'PARTIAL_TRANSCRIPT',
+    'SOURCE_CONFLICT',
     'PAGE_FAILED',
     'PAGE_PROVIDER_ERROR',
     'PAGE_OUTPUT_INVALID',
@@ -116,6 +117,8 @@ export function warningKey(code: string): string | null {
   ];
   return known.includes(code) ? `paper.warn.${code}` : null;
 }
+
+export type QuestionSourceKind = 'LIVE_TRANSCRIPT' | 'UPLOADED_DOCUMENT' | 'BOTH';
 
 export interface ImportPage {
   id: string;
@@ -158,8 +161,15 @@ export interface PaperImport {
   status: ImportStatus;
   stage: CreationStage;
   title: string;
-  sourceKind: 'IMAGES' | 'PDF' | 'MIXED';
+  sourceKind: 'IMAGES' | 'PDF' | 'MIXED' | 'TRANSCRIPT';
   error: string | null;
+  /** A session made from a Live class: which sources it has, and where each
+   *  question came from (by question id). For the teacher's review only. */
+  liveSources?: {
+    transcript: boolean;
+    documents: boolean;
+    provenance: Record<string, { kind: QuestionSourceKind }>;
+  };
   lessonId: string | null;
   courseId: string | null;
   draft: ExamDraft;

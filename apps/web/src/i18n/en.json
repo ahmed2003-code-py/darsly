@@ -3624,7 +3624,8 @@
       "PAGE_PROVIDER_ERROR": "Page {{page}} could not be processed — the reading service did not respond. Your file is safe; read the failed pages again.",
       "PAGE_OUTPUT_INVALID": "Page {{page}} was read but the result came back malformed, so it was not used. Your file is safe; read the failed pages again.",
       "COMPLETED_WITH_VARIANTS": "You asked for {{wanted}} questions and the exam has {{wanted}}. The material carried {{fromMaterial}} distinct ones; the other {{variants}} were written as variants of them, with different numbers and framing — each is marked so you can check it.",
-      "PARTIAL_TRANSCRIPT": "The transcript is incomplete; the exam may not cover every part of the class"
+      "PARTIAL_TRANSCRIPT": "The class transcript is incomplete, so the exam may not cover everything that was explained.",
+      "SOURCE_CONFLICT": "The class transcript and the uploaded file disagree on something; no questions were written on it. Check which is right:"
     },
     "variant": "Variant"
   },
@@ -3755,6 +3756,11 @@
       "REREADING": "Zooming in to re-read the unclear parts ({{done}} of {{total}})",
       "CHECKING_NUMBERS": "Checking the numbers one by one",
       "SHAPING": "Arranging the text into questions and options"
+    },
+    "from": {
+      "LIVE_TRANSCRIPT": "From the class",
+      "UPLOADED_DOCUMENT": "From the slides",
+      "BOTH": "From both"
     }
   },
   "drafts": {
@@ -4336,9 +4342,7 @@
     "editExam": "Edit exam",
     "examInProgress": "An exam from this class is being prepared in the Exam Studio",
     "openStudio": "Open the Exam Studio",
-    "examNeedsTranscript": "An AI exam needs the class transcript. You can create an exam by hand or link an existing one.",
-    "examPartialTitle": "Incomplete transcript",
-    "examPartialBody": "The transcript is incomplete; the exam may not cover every part of the class",
+    "examPartialBody": "The class transcript is incomplete, so the exam may not cover everything that was explained.",
     "newCourseTitle": "Create a new course from this class",
     "newCourseHint": "A new draft course is created with the recording as its first lesson. You set the price and publish it later from the course page — nothing is published on its own.",
     "chooseCourse": "Course",
@@ -4370,6 +4374,33 @@
     "linkSubmit": "Link",
     "fromLive": "Recorded from a live class",
     "studyNotes": "Study notes",
-    "transcript": "Class transcript"
+    "transcript": "Class transcript",
+    "examWithoutTranscript": "The class transcript isn't available — you can still write the exam from a file or slides you upload.",
+    "src": {
+      "title": "Choose what the exam covers",
+      "hint": "The exam is written only from what you choose here. You can choose both.",
+      "transcript": "Class transcript",
+      "transcriptReady": "Ready",
+      "transcriptPartial": "Incomplete",
+      "transcriptUnavailable": "Not available",
+      "transcriptUnavailableHint": "This class's transcript couldn't be prepared, so it can't be used. Uploading files still works.",
+      "minutes_zero": "under a minute",
+      "minutes_one": "1 minute",
+      "minutes_two": "2 minutes",
+      "minutes_few": "{{count}} minutes",
+      "minutes_many": "{{count}} minutes",
+      "minutes_other": "{{count}} minutes",
+      "partialWarning": "The class transcript is incomplete, so the exam may not cover everything that was explained.",
+      "partialAck": "I understand — continue with the available transcript",
+      "files": "Add slides or a file",
+      "formats": "PDF or images (PNG, JPG or WebP). Save PowerPoint or Word files as PDF first.",
+      "pick": "Choose files",
+      "rejected": "These files aren't supported: {{names}}",
+      "remove": "Remove {{name}}",
+      "next": "Next you'll choose how many questions and which kinds, and you'll review the whole exam before it's published.",
+      "continue": "Continue",
+      "uploading": "Uploading files…",
+      "preparing": "Preparing…"
+    }
   }
 }

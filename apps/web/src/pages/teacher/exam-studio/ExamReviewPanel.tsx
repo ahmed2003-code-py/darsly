@@ -106,6 +106,10 @@ function QuestionCard({
   const { t } = useTranslation();
   const [showSource, setShowSource] = useState(false);
   const sourcePage = record.pages.find((p) => p.pageNumber === question.sourcePages[0]);
+  const origin =
+    record.liveSources?.transcript && record.liveSources.documents
+      ? record.liveSources.provenance[question.id]?.kind
+      : undefined;
 
   // Only a generated question can be written again: there is nothing to write
   // one from on the paper path, where the question is somebody's actual exam.
@@ -228,12 +232,29 @@ function QuestionCard({
         </label>
         {/* Where this came from. On the paper path that is a page of the scan;
             on the content path it is the teacher's own lecture file. */}
+        {/* A class and a file together: where each question came from
+            (teacher only; never part of the exam students see). */}
+        {origin && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              origin === 'BOTH'
+                ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-300'
+                : origin === 'LIVE_TRANSCRIPT'
+                  ? 'bg-primary/10 text-primary-text'
+                  : 'bg-secondary-container text-on-secondary-container'
+            }`}
+          >
+            {t(`examStudio.from.${origin}`)}
+          </span>
+        )}
         {record.kind === 'CONTENT' && question.sourceFile ? (
           <span className="text-on-surface-variant">
-            {t('examStudio.source', {
-              file: question.sourceFile,
-              page: question.sourcePages[0] ?? '',
-            })}
+            {origin === 'LIVE_TRANSCRIPT' || (!origin && record.sourceKind === 'TRANSCRIPT')
+              ? question.sourceFile
+              : t('examStudio.source', {
+                  file: question.sourceFile,
+                  page: question.sourcePages[0] ?? '',
+                })}
           </span>
         ) : (
           sourcePage && (

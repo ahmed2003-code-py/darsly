@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { ErrorNote, Field, Modal, Skeleton } from '../../components/ui';
 import { api } from '../../lib/api';
-import { askConfirm } from '../../lib/confirm';
+import ExamSourceDialog from './ExamSourceDialog';
 
 /**
  * «حوّل حصتك إلى محتوى» — a finished class, reused as course content.
@@ -20,7 +20,7 @@ interface ContentStatus {
   eligible: boolean;
   ended: boolean;
   recordingReady: boolean;
-  transcript: { status: string; usable: boolean; partial: boolean };
+  transcript: { status: string; usable: boolean; partial: boolean; durationSec?: number | null };
   summaryReady: boolean;
   lessons: {
     id: string;
@@ -34,7 +34,7 @@ interface ContentStatus {
   examSession: { id: string; status: string; stage: string; lessonId: string | null; partial: boolean } | null;
 }
 
-type Dialog = null | 'existing' | 'new' | 'link';
+type Dialog = null | 'existing' | 'new' | 'link' | 'exam';
 
 const errCode = (e: unknown) => (e as { response?: { data?: { code?: string } } })?.response?.data?.code;
 
@@ -58,17 +58,6 @@ export default function LiveContentSection({
   });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
 
-  const examBusy = useRef(false);
-  const exam = useMutation({
-    mutationFn: async (acknowledgePartial: boolean) =>
-      (await api.post(`/teacher/live/${sessionId}/content/exam`, { acknowledgePartial })).data as { id: string },
-    // Straight to the Exam Studio; the recording's course is offered as where the exam goes.
-    onSuccess: (r) => navigate(`/teacher/exam-studio/${r.id}${courseParam()}`),
-    onSettled: () => {
-      examBusy.current = false;
-    },
-  });
-
   const courseParam = () => {
     const c = status.data?.lessons.find((l) => l.isRecording)?.course.id;
     return c ? `?course=${c}` : '';
@@ -83,17 +72,9 @@ export default function LiveContentSection({
   const exams = s.lessons.filter((l) => l.type === 'QUIZ');
   const openExamSession = s.examSession && s.examSession.status !== 'COMPLETED' ? s.examSession : null;
 
-  const startExam = async () => {
-    if (examBusy.current || exam.isPending) return;
-    if (openExamSession) return navigate(`/teacher/exam-studio/${openExamSession.id}${courseParam()}`);
-    let ack = false;
-    if (s.transcript.partial) {
-      ack = await askConfirm(t('liveContent.examPartialBody'), { title: t('liveContent.examPartialTitle') });
-      if (!ack) return;
-    }
-    examBusy.current = true;
-    exam.mutate(ack);
-  };
+  // One session per class: an open one is reopened, otherwise the sources are chosen first.
+  const startExam = () =>
+    openExamSession ? navigate(`/teacher/exam-studio/${openExamSession.id}${courseParam()}`) : setDialog('exam');
 
   return (
     <section
@@ -185,18 +166,14 @@ export default function LiveContentSection({
             </button>
           </>
         )}
-        <button
-          type="button"
-          className="btn-secondary justify-center"
-          disabled={!s.transcript.usable || exam.isPending}
-          onClick={() => void startExam()}
-        >
+        <button type="button" className="btn-secondary justify-center" onClick={startExam}>
           <span aria-hidden className="material-symbols-outlined text-[18px]">quiz</span>
           {openExamSession ? t('liveContent.openStudio') : t('liveContent.createExam')}
         </button>
       </div>
-      {!s.transcript.usable && <p className="mt-2 text-xs text-on-surface-variant">{t('liveContent.examNeedsTranscript')}</p>}
-      <ErrorNote error={exam.error} />
+      {!s.transcript.usable && !openExamSession && (
+        <p className="mt-2 text-xs text-on-surface-variant">{t('liveContent.examWithoutTranscript')}</p>
+      )}
       {recordingLesson && (
         <button type="button" className="mt-3 text-sm font-semibold text-primary-text hover:underline" onClick={() => setDialog('link')}>
           {t('liveContent.linkExam')}
@@ -215,6 +192,15 @@ export default function LiveContentSection({
             setDialog(null);
             refresh();
           }}
+        />
+      )}
+      {dialog === 'exam' && (
+        <ExamSourceDialog
+          sessionId={sessionId}
+          transcript={s.transcript}
+          onClose={() => setDialog(null)}
+          // Straight to the Exam Studio; the recording's course is offered as where the exam goes.
+          onCreated={(id) => navigate(`/teacher/exam-studio/${id}${courseParam()}`)}
         />
       )}
       {dialog === 'link' && (

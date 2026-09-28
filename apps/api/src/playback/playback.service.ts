@@ -1,3 +1,4 @@
+import { lessonLiveView } from '../live-content/lesson-live-view';
 import {
   BadRequestException,
   ForbiddenException,
@@ -69,6 +70,38 @@ export class PlaybackService {
    * time-window (accessWindowDays), and views cap.
    */
   private async resolveAccess(userId: string, role: Role, lessonId: string) {
+    const e = await this.lessonEntitlement(userId, role, lessonId);
+    const { lesson, course, student, progress } = e;
+    if (!student) {
+      this.assertVideoReady(lesson);
+      return { lesson, course, student: null, progress: null, viewsCap: null };
+    }
+
+    // Views cap: max distinct plays per student.
+    const viewsCap = lesson.viewsCap ?? course.defaultViewsCap ?? null;
+    if (viewsCap != null && (progress?.viewCount ?? 0) >= viewsCap) {
+      await this.flag('VIEW_CAP_EXCEEDED', 'WARNING', {
+        tenantId: course.tenantId,
+        studentId: student.id,
+        meta: { lessonId, viewsCap },
+      });
+      throw new ForbiddenException('You have reached the maximum number of views for this lesson');
+    }
+
+    // Only now — the viewer is authorized — do we surface video readiness.
+    this.assertVideoReady(lesson);
+    return { lesson, course, student, progress, viewsCap };
+  }
+
+  /**
+   * Who may open this lesson at all — the course's own rule and nothing else:
+   * the owner teacher / super admin; a student with an active enrollment (or
+   * a free preview), past any drip date, past the course's entry exam, inside
+   * the access window. Shared by playing the video and reading the lesson's
+   * class notes, so neither can drift from the other. A Live purchase plays
+   * no part here: a lesson made from a Live class is a course lesson.
+   */
+  private async lessonEntitlement(userId: string, role: Role, lessonId: string) {
     // findFirst (not findUnique) so the soft-delete middleware filters the
     // lesson; the nested unit/course are checked explicitly (nested includes
     // are not auto-filtered) — a "deleted" lesson/unit/course must not play.
@@ -87,14 +120,12 @@ export class PlaybackService {
     // Decide ACCESS first — never leak video state to an unauthorized viewer.
     // Owner teacher / super admin can always preview.
     if (role === Role.SUPER_ADMIN) {
-      this.assertVideoReady(lesson);
-      return { lesson, course, student: null, progress: null, viewsCap: null };
+      return { lesson, course, student: null, progress: null };
     }
     if (role === Role.TEACHER) {
       const teacher = await this.prisma.teacherProfile.findUnique({ where: { userId } });
       if (teacher && teacher.id === course.tenantId) {
-        this.assertVideoReady(lesson);
-        return { lesson, course, student: null, progress: null, viewsCap: null };
+        return { lesson, course, student: null, progress: null };
       }
       throw new ForbiddenException('Not your course');
     }
@@ -142,20 +173,24 @@ export class PlaybackService {
       }
     }
 
-    // Views cap: max distinct plays per student.
-    const viewsCap = lesson.viewsCap ?? course.defaultViewsCap ?? null;
-    if (viewsCap != null && (progress?.viewCount ?? 0) >= viewsCap) {
-      await this.flag('VIEW_CAP_EXCEEDED', 'WARNING', {
-        tenantId: course.tenantId,
-        studentId: student.id,
-        meta: { lessonId, viewsCap },
-      });
-      throw new ForbiddenException('You have reached the maximum number of views for this lesson');
-    }
+    return { lesson, course, student: student as typeof student | null, progress };
+  }
 
-    // Only now — the viewer is authorized — do we surface video readiness.
-    this.assertVideoReady(lesson);
-    return { lesson, course, student, progress, viewsCap };
+  /**
+   * The class notes of a lesson made from a Live class — the study notes and
+   * the transcript the teacher chose to publish with it, as frozen then.
+   * Opened by exactly the lesson's own entitlement (lessonEntitlement): no
+   * video needed, no play counted. Evidence quotes never leave the server.
+   */
+  async lessonClassNotes(user: JwtPayload, lessonId: string) {
+    const { lesson } = await this.lessonEntitlement(user.sub, user.role as Role, lessonId);
+    const view = lessonLiveView(lesson.liveContent);
+    return {
+      fromLive: !!lesson.sourceLiveSessionId || !!lesson.liveContent,
+      summary: view?.summary ?? null,
+      transcript: view?.transcript ?? null,
+      transcriptPartial: view?.transcriptPartial ?? false,
+    };
   }
 
   private assertVideoReady(lesson: { videoAsset: { status: string } | null }): void {

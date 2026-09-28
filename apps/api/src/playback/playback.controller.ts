@@ -75,6 +75,19 @@ export class PlaybackController {
 
   // ── Session control (bearer) ──────────────────────────────────────────────
 
+  /**
+   * The study notes and transcript published with a lesson made from a Live
+   * class — opened by the lesson's own course entitlement, never by a Live
+   * purchase. Declared before the parameterised HLS routes below.
+   */
+  @Get('lessons/:lessonId/class-notes')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Class notes of a lesson made from a Live class (lesson entitlement)' })
+  classNotes(@CurrentUser() user: JwtPayload, @Param('lessonId') lessonId: string) {
+    return this.playback.lessonClassNotes(user, lessonId);
+  }
+
   @Post('sessions')
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiBearerAuth()

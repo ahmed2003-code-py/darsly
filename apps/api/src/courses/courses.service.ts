@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -1151,6 +1152,16 @@ export class CoursesService {
   async removeLessonVideo(scope: CourseScope, lessonId: string) {
     const lesson = await this.assertLesson(scope, lessonId);
     if (!lesson.videoAssetId) return { id: lessonId, videoRemoved: false };
+    // One stored video, several references: a Live class's recording that was
+    // published as this lesson is still that class's replay. Taking it off the
+    // lesson only unlinks it — the video, its HLS and its key stay.
+    if (await this.prisma.liveRecording.count({ where: { videoAssetId: lesson.videoAssetId } })) {
+      await this.prisma.lesson.update({
+        where: { id: lessonId },
+        data: { videoAssetId: null, durationSec: 0 },
+      });
+      return { id: lessonId, videoRemoved: true, videoKept: true };
+    }
     const asset = await this.assertVideoAssetOwned(this.author(scope), lesson.videoAssetId);
 
     // The relation has no cascade, so the FK must be cleared before the row
@@ -1172,6 +1183,133 @@ export class CoursesService {
         .catch(() => undefined);
     }
     return { id: lessonId, videoRemoved: true };
+  }
+
+  /**
+   * Which lesson holds a video right now, if any — including one that was
+   * deleted (soft) or whose section/course was: `Lesson.videoAssetId` is
+   * unique, and a deleted row still holds it.
+   */
+  async videoHolder(videoAssetId: string) {
+    const rows = await this.prisma.$queryRaw<
+      { id: string; deleted: boolean; courseId: string }[]
+    >`SELECT l.id, (l."deletedAt" IS NOT NULL OR u."deletedAt" IS NOT NULL OR c."deletedAt" IS NOT NULL) AS deleted, c.id AS "courseId"
+        FROM "Lesson" l JOIN "CourseUnit" u ON u.id = l."unitId" JOIN "Course" c ON c.id = u."courseId"
+       WHERE l."videoAssetId" = ${videoAssetId}`;
+    return rows[0] ?? null;
+  }
+
+  /**
+   * A lesson made from a video that is already processed — a Live class's
+   * recording. Nothing is uploaded, copied or transcoded: the lesson points at
+   * the same VideoAsset the class's replay uses.
+   *
+   * The course and section are checked exactly as for any lesson (the
+   * caller's authoring scope; an archived course refuses). The caller has
+   * already proven the video is theirs (it is their class's recording), so
+   * the upload-ownership check — which is about uploads — is not re-applied.
+   * A video held only by a deleted lesson is released first; one held by a
+   * live lesson is refused (`VIDEO_IN_USE`) — one request never makes two.
+   */
+  async addRecordedLesson(
+    scope: CourseScope,
+    courseId: string,
+    target: { unitId?: string; newUnitTitle?: string },
+    lesson: {
+      title: string;
+      description?: string;
+      videoAssetId: string;
+      durationSec: number;
+      sourceLiveSessionId: string;
+      liveContent: Prisma.InputJsonValue;
+    },
+  ) {
+    const course = await this.assertCourse(scope, courseId);
+    if (course.status === 'ARCHIVED') {
+      throw new ConflictException({ message: 'This course is archived', code: 'COURSE_ARCHIVED' });
+    }
+    let unitId: string;
+    if (target.unitId) {
+      const unit = await this.assertUnit(scope, target.unitId);
+      if (unit.courseId !== courseId) {
+        throw new BadRequestException({ message: 'That section does not belong to this course', code: 'UNIT_NOT_IN_COURSE' });
+      }
+      unitId = unit.id;
+    } else if (target.newUnitTitle?.trim()) {
+      unitId = (await this.createUnit(scope, courseId, { title: target.newUnitTitle.trim().slice(0, 200) })).id;
+    } else {
+      unitId = (await this.getOrCreateDefaultUnit(courseId)).id;
+    }
+
+    const holder = await this.videoHolder(lesson.videoAssetId);
+    if (holder && !holder.deleted) {
+      throw new ConflictException({ message: 'This recording is already a lesson', code: 'VIDEO_IN_USE', lessonId: holder.id, courseId: holder.courseId });
+    }
+    if (holder) {
+      // Deleted rows are invisible to the soft-delete middleware: released directly.
+      await this.prisma.$executeRaw`UPDATE "Lesson" SET "videoAssetId" = NULL WHERE id = ${holder.id}`;
+    }
+    const last = await this.prisma.lesson.aggregate({ where: { unitId }, _max: { sortOrder: true } });
+    try {
+      return await this.prisma.lesson.create({
+        data: {
+          unitId,
+          title: lesson.title.slice(0, 200),
+          description: lesson.description?.slice(0, 5_000) || undefined,
+          type: 'VIDEO',
+          sortOrder: (last._max.sortOrder ?? -1) + 1,
+          durationSec: Math.min(86_400, Math.max(0, Math.round(lesson.durationSec))),
+          videoAssetId: lesson.videoAssetId,
+          sourceLiveSessionId: lesson.sourceLiveSessionId,
+          liveContent: lesson.liveContent,
+        },
+        include: { unit: { select: { id: true, title: true, isDefault: true, courseId: true } } },
+      });
+    } catch (e) {
+      // A second request that got here at the same moment: the unique video
+      // link lets exactly one lesson exist.
+      if ((e as { code?: string }).code === 'P2002') {
+        const h = await this.videoHolder(lesson.videoAssetId);
+        throw new ConflictException({ message: 'This recording is already a lesson', code: 'VIDEO_IN_USE', lessonId: h?.id, courseId: h?.courseId });
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Put an existing exam right after a lesson of the same course — the one
+   * relationship a course already has between "watch this" and "then take
+   * this": order in the curriculum. The exam is moved, never copied.
+   */
+  async placeExamAfter(
+    scope: CourseScope,
+    examLessonId: string,
+    afterLessonId: string,
+    sourceLiveSessionId: string | null,
+  ) {
+    const exam = await this.assertLesson(scope, examLessonId);
+    const after = await this.assertLesson(scope, afterLessonId);
+    if (exam.type !== 'QUIZ') {
+      throw new BadRequestException({ message: 'That lesson is not an exam', code: 'NOT_AN_EXAM' });
+    }
+    if (exam.unit.courseId !== after.unit.courseId) {
+      throw new BadRequestException({ message: 'The exam must be in the same course as the lesson', code: 'EXAM_OTHER_COURSE' });
+    }
+    await this.prisma.$transaction([
+      this.prisma.lesson.updateMany({
+        where: { unitId: after.unitId, sortOrder: { gt: after.sortOrder }, id: { not: exam.id } },
+        data: { sortOrder: { increment: 1 } },
+      }),
+      this.prisma.lesson.update({
+        where: { id: exam.id },
+        data: {
+          unitId: after.unitId,
+          sortOrder: after.sortOrder + 1,
+          ...(sourceLiveSessionId && !exam.sourceLiveSessionId ? { sourceLiveSessionId } : {}),
+        },
+      }),
+    ]);
+    return { id: exam.id, unitId: after.unitId };
   }
 
   async removeLesson(scope: CourseScope, lessonId: string) {

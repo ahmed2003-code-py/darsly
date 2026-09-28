@@ -1108,6 +1108,19 @@ model Lesson {
   videoAsset   VideoAsset? @relation(fields: [videoAssetId], references: [id])
   durationSec  Int         @default(0)
 
+  /// The Live class this lesson was made from (its recording), or — for an
+  /// exam lesson — the class it was written from / linked to. Provenance only:
+  /// it grants nothing (a Live buyer does not gain the course, a course
+  /// student needs no Live purchase). SetNull keeps the lesson if the class goes.
+  sourceLiveSessionId String?
+  sourceLiveSession   LiveSession? @relation("liveDerivedLessons", fields: [sourceLiveSessionId], references: [id], onDelete: SetNull)
+  /// What the teacher chose to publish with a lesson made from a Live class,
+  /// frozen when it was made: { includeSummary, includeTranscript, summary,
+  /// transcriptSegments, transcriptPartial, transcriptRevision, snapshotAt }.
+  /// A snapshot, so regenerating the class's summary never changes a
+  /// published lesson.
+  liveContent         Json?
+
   isFreePreview       Boolean   @default(false)
   // Content drip: unlock at a fixed date, or N days after enrollment (first match wins)
   dripUnlockAt        DateTime?
@@ -1131,6 +1144,7 @@ model Lesson {
   chatMessages     ChatMessage[]
 
   @@index([unitId, sortOrder])
+  @@index([sourceLiveSessionId])
 }
 
 enum VideoAssetStatus {
@@ -2621,6 +2635,9 @@ model LiveSession {
   /// until when — a second job (duplicate delivery, reclaim) steps aside.
   transcriptLeaseJobId   String?
   transcriptLeaseUntil   DateTime?
+  /// While a "turn this class into content" request runs (seconds): a second
+  /// click, tab or retry is told it is in progress instead of doing it twice.
+  contentClaimUntil      DateTime?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -2637,6 +2654,7 @@ model LiveSession {
   recordings     LiveRecording[]
   audioSegments  LiveAudioSegment[]
   replays        LiveReplaySession[]
+  derivedLessons Lesson[]            @relation("liveDerivedLessons")
 
   @@index([tenantId, startsAt])
   @@index([academyId, startsAt])
@@ -3938,6 +3956,8 @@ enum PaperSourceKind {
   /// Images and PDFs in the same upload. A teacher photographing an exam and
   /// attaching the printed cover sheet is one exam, not two imports.
   MIXED
+  /// A Live class's own transcript — text already, nothing to read.
+  TRANSCRIPT
 }
 
 /// Which of the two ways into the Exam Creation Studio this session took.
@@ -4077,6 +4097,11 @@ model PaperImport {
   lessonId String?
   courseId String?
 
+  /// Set when the material is a Live class's transcript (sourceKind TRANSCRIPT).
+  sourceLiveSessionId String?
+  /// { liveSessionId, transcriptRevision, partial } — how complete the source was.
+  sourceMeta          Json?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   /// Soft delete: rows with deletedAt set are hidden from all reads.
@@ -4087,6 +4112,7 @@ model PaperImport {
 
   @@index([academyId, createdAt])
   @@index([tenantId, status])
+  @@index([sourceLiveSessionId])
 }
 
 /// One page of paper, and what reading it produced.

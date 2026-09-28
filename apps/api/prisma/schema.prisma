@@ -2383,7 +2383,7 @@ model ChatThread {
   /// what makes two simultaneous first messages land in one conversation (see
   /// chat-thread.identity.ts). Rows that are not the canonical conversation of
   /// their pair carry "legacy:<id>", which can never collide.
-  dedupeKey     String        @unique
+  dedupeKey     String    @unique
   /// The newest message, kept on the row so the list can sort and page without
   /// reading every conversation's messages.
   lastMessageAt DateTime?

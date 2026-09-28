@@ -16,8 +16,12 @@ export interface ThreadIdentity {
   /** Author scope of the teacher (TeacherProfile.id); equals academyId today. */
   tenantId: string;
   studentId: string;
-  /** The staff member on the other side of the conversation. */
-  staffUserId: string;
+  /** DIRECT: the staff member on the other side. Null for TEAM. */
+  staffUserId: string | null;
+  /** TEAM: the academy's support team is the other side. */
+  team?: boolean;
+  /** The learner side is this guardian of the student, not the student. */
+  guardianUserId?: string | null;
 }
 
 /**
@@ -33,8 +37,22 @@ export interface ThreadIdentity {
  * computes for existing rows, or a conversation from before the migration and
  * one opened after it would be two conversations with the same person.
  */
-export function threadKey(i: Pick<ThreadIdentity, 'academyId' | 'studentId' | 'staffUserId'>) {
-  return `${i.academyId}|${i.studentId}|S|U:${i.staffUserId}`;
+/**
+ * The learner segment keeps a guardian's conversations apart from the
+ * child's; TEAM replaces the staff member. Lesson or course context rides on
+ * messages, never in the key:
+ *
+ *   <academy>|<student>|S|U:<staff>             student ↔ a staff member
+ *   <academy>|<student>|S|TEAM                  student ↔ the support team
+ *   <academy>|<student>|G:<guardian>|U:<staff>  guardian ↔ a staff member
+ *   <academy>|<student>|G:<guardian>|TEAM       guardian ↔ the support team
+ */
+export function threadKey(
+  i: Pick<ThreadIdentity, 'academyId' | 'studentId' | 'staffUserId' | 'team' | 'guardianUserId'>,
+) {
+  const learner = i.guardianUserId ? `G:${i.guardianUserId}` : 'S';
+  const staff = i.team ? 'TEAM' : `U:${i.staffUserId}`;
+  return `${i.academyId}|${i.studentId}|${learner}|${staff}`;
 }
 
 /**
@@ -85,10 +103,13 @@ export async function resolveCanonicalThread(
 ): Promise<ResolvedThread> {
   const rows = await db.$queryRaw<ResolvedThread[]>`
     INSERT INTO "ChatThread"
-      ("id", "type", "tenantId", "studentId", "academyId", "staffUserId", "dedupeKey", "createdAt", "updatedAt")
+      ("id", "type", "kind", "tenantId", "studentId", "academyId", "staffUserId", "guardianUserId",
+       "dedupeKey", "createdAt", "updatedAt")
     VALUES
-      (${newThreadId()}, 'DM'::"ChatThreadType", ${identity.tenantId}, ${identity.studentId},
-       ${identity.academyId}, ${identity.staffUserId}, ${threadKey(identity)}, now(), now())
+      (${newThreadId()}, 'DM'::"ChatThreadType",
+       ${identity.team ? 'TEAM' : 'DIRECT'}::"ChatThreadKind", ${identity.tenantId},
+       ${identity.studentId}, ${identity.academyId}, ${identity.team ? null : identity.staffUserId},
+       ${identity.guardianUserId ?? null}, ${threadKey(identity)}, now(), now())
     ON CONFLICT ("dedupeKey") DO UPDATE SET "dedupeKey" = EXCLUDED."dedupeKey"
     RETURNING "id", "tenantId", "studentId", "dedupeKey", "deletedAt", (xmax = 0) AS "created"`;
   return rows[0];

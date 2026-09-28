@@ -4,6 +4,8 @@ import { CAPABILITIES } from '../academy/permissions';
 import { StaffScope, StaffScopeService } from '../academy/staff-scope.service';
 import { avatarUrl } from '../common/signed-link';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConversationPolicy } from '../chat/conversation-policy';
+import { JwtPayload } from '@darsly/shared-types';
 
 const STUDENT_PAGE = 50;
 
@@ -18,6 +20,7 @@ export class StaffService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scopes: StaffScopeService,
+    private readonly policy: ConversationPolicy,
   ) {}
 
   /** Who I am here and what I may do — drives the workspace's navigation. */
@@ -156,7 +159,12 @@ export class StaffService {
       can: {
         progress: scope.ctx.can('progress.view'),
         message: scope.ctx.can('message.reply'),
+        guardians: scope.ctx.can('guardian.manage'),
+        payments: scope.ctx.can('payment.view'),
       },
+      guardians: await this.prisma.guardianLink.count({
+        where: { studentId, academyId: scope.ctx.academyId, status: 'ACTIVE' },
+      }),
     };
   }
 
@@ -254,12 +262,14 @@ export class StaffService {
    * Payments for my courses — read only. Never the wallet, never a balance,
    * never another course's money; only granted with payment.view.
    */
-  async payments(scope: StaffScope, status?: string) {
+  async payments(scope: StaffScope, status?: string, studentId?: string) {
+    if (studentId) await this.scopes.assertStudent(scope, studentId);
     const rows = await this.prisma.payment.findMany({
       where: {
         academyId: scope.ctx.academyId,
         course: scope.courses,
         ...(status ? { status: status as any } : {}),
+        ...(studentId ? { studentId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -284,5 +294,126 @@ export class StaffService {
       course: p.course,
       student: p.student ? { id: p.student.id, name: p.student.user.fullName } : null,
     }));
+  }
+
+  /**
+   * The care side of Student 360: the student's groups that are the viewer's
+   * (the owner's every group, anyone else's assigned groups) with their chat,
+   * attendance in those groups, live sessions of the viewer's courses, and
+   * the conversations about this student the viewer may open — each checked
+   * by ConversationPolicy, so nothing here opens a door the messenger keeps
+   * shut.
+   */
+  async care(scope: StaffScope, user: JwtPayload, studentId: string) {
+    await this.scopes.assertStudent(scope, studentId);
+    const { ctx } = scope;
+    const ownsAll = ctx.role === 'OWNER' || ctx.isPlatformAdmin;
+    const groupScope = {
+      academyId: ctx.academyId,
+      deletedAt: null,
+      ...(ownsAll ? {} : { assignments: { some: { userId: ctx.userId, deletedAt: null } } }),
+    };
+    const student = await this.prisma.studentProfile.findUniqueOrThrow({
+      where: { id: studentId },
+      select: { userId: true },
+    });
+    const courseIds = (
+      await this.prisma.course.findMany({ where: scope.courses, select: { id: true } })
+    ).map((c) => c.id);
+    const [memberships, attendance, live, threads] = await Promise.all([
+      this.prisma.groupMembership.findMany({
+        where: { studentId, group: groupScope },
+        select: {
+          addedAt: true,
+          group: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              chatThreads: {
+                where: { kind: 'GROUP', archivedAt: null },
+                select: { id: true, groupMode: true },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.attendanceRecord.findMany({
+        where: { studentId, academyId: ctx.academyId, session: { group: groupScope } },
+        orderBy: { markedAt: 'desc' },
+        take: 60,
+        select: {
+          status: true,
+          session: { select: { date: true, group: { select: { name: true } } } },
+        },
+      }),
+      this.prisma.liveAttendance.findMany({
+        where: {
+          userId: student.userId,
+          session: { academyId: ctx.academyId, courseId: { in: courseIds } },
+        },
+        orderBy: { joinedAt: 'desc' },
+        take: 10,
+        select: {
+          joinedAt: true,
+          durationSeconds: true,
+          session: { select: { title: true, startsAt: true } },
+        },
+      }),
+      this.prisma.chatThread.findMany({
+        where: {
+          academyId: ctx.academyId,
+          OR: [
+            { studentId },
+            { kind: 'GROUP', group: { members: { some: { studentId, deletedAt: null } } } },
+          ],
+        },
+        orderBy: { lastMessageAt: 'desc' },
+        take: 30,
+        select: { id: true },
+      }),
+    ]);
+    const counts = { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 } as Record<string, number>;
+    for (const a of attendance) counts[a.status] = (counts[a.status] ?? 0) + 1;
+    const conversations = [];
+    for (const t of threads) {
+      const p = await this.policy.parties(t.id);
+      if (!p || !(await this.policy.viewer(user, p))) continue;
+      conversations.push({
+        id: p.id,
+        kind: p.kind,
+        learner: p.kind === 'GROUP' ? null : p.guardianUserId ? 'GUARDIAN' : 'STUDENT',
+        mine: p.kind === 'DIRECT' ? p.staffUserId === user.sub : null,
+        resolved: p.kind === 'TEAM' ? !!p.resolvedAt : null,
+      });
+    }
+    return {
+      groups: memberships.map((m) => ({
+        id: m.group.id,
+        name: m.group.name,
+        status: m.group.status,
+        since: m.addedAt,
+        chat: m.group.chatThreads[0]
+          ? { threadId: m.group.chatThreads[0].id, mode: m.group.chatThreads[0].groupMode }
+          : null,
+      })),
+      attendance: attendance.length
+        ? {
+            total: attendance.length,
+            ...counts,
+            recent: attendance.slice(0, 8).map((a) => ({
+              date: a.session.date,
+              group: a.session.group.name,
+              status: a.status,
+            })),
+          }
+        : null,
+      live: live.map((l) => ({
+        title: l.session.title,
+        startsAt: l.session.startsAt,
+        minutes: Math.round(l.durationSeconds / 60),
+      })),
+      conversations,
+    };
   }
 }

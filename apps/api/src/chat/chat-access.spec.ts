@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { Role } from '@darsly/shared-types';
+import { ConversationPolicy } from './conversation-policy';
 import { ChatService } from './chat.service';
 
 /**
@@ -32,12 +33,21 @@ function makeService(over: { thread?: unknown; studentId?: string | null } = {})
         }
       : over.thread;
   // The rest of a thread row the service reads (its parties), when present.
+  // The learner is identified by user id: the caller (u1) IS the thread's
+  // student only when the test says the caller's profile is studentA; the
+  // thread's teacher is u1 too, reached only with the matching tenant.
+  const callerIsTheStudent = over.studentId === undefined || over.studentId === 'studentA';
   const full = thread
     ? {
         dedupeKey: 'k',
-        staffUserId: 'teacherUser',
-        student: { userId: 'studentUser' },
-        teacher: { userId: 'teacherUser' },
+        kind: 'DIRECT',
+        guardianUserId: null,
+        assigneeUserId: null,
+        resolvedAt: null,
+        academyId: 'teacherA',
+        staffUserId: 'u1',
+        student: { userId: callerIsTheStudent ? 'u1' : 'someone-else-user' },
+        teacher: { userId: 'u1' },
         ...(thread as object),
       }
     : thread;
@@ -69,7 +79,17 @@ function makeService(over: { thread?: unknown; studentId?: string | null } = {})
         ),
     },
   } as any;
-  return { svc: new ChatService(prisma, none, none, none, noScopes), prisma };
+  return {
+    svc: new ChatService(
+      prisma,
+      none,
+      none,
+      none,
+      noScopes,
+      new ConversationPolicy(prisma, noScopes),
+    ),
+    prisma,
+  };
 }
 
 const user = (role: Role, over: Record<string, unknown> = {}) =>
@@ -313,8 +333,22 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
     const fifty = listPrisma(50);
     const teacher = user(Role.TEACHER, { tenantId: 'teacherA' });
 
-    const a = await new ChatService(one, none, none, none, noScopes).listThreads(teacher);
-    const b = await new ChatService(fifty, none, none, none, noScopes).listThreads(teacher);
+    const a = await new ChatService(
+      one,
+      none,
+      none,
+      none,
+      noScopes,
+      new ConversationPolicy(one, noScopes),
+    ).listThreads(teacher);
+    const b = await new ChatService(
+      fifty,
+      none,
+      none,
+      none,
+      noScopes,
+      new ConversationPolicy(fifty, noScopes),
+    ).listThreads(teacher);
 
     expect(a).toHaveLength(1);
     expect(b).toHaveLength(50);
@@ -329,10 +363,24 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
     const p = listPrisma(3);
     const teacher = user(Role.TEACHER, { tenantId: 'teacherA' });
 
-    await new ChatService(p, none, none, none, noScopes).listThreads(teacher);
+    await new ChatService(
+      p,
+      none,
+      none,
+      none,
+      noScopes,
+      new ConversationPolicy(p, noScopes),
+    ).listThreads(teacher);
     expect(p.chatThread.findMany.mock.calls[0][0].take).toBe(50);
 
-    await new ChatService(p, none, none, none, noScopes).listThreads(teacher, { limit: 5000 });
+    await new ChatService(
+      p,
+      none,
+      none,
+      none,
+      noScopes,
+      new ConversationPolicy(p, noScopes),
+    ).listThreads(teacher, { limit: 5000 });
     expect(p.chatThread.findMany.mock.calls[1][0].take).toBe(100);
   });
 });

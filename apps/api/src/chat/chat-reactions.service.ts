@@ -33,9 +33,9 @@ export class ChatReactionsService {
   private async reachable(user: JwtPayload, messageId: string) {
     const m = await this.prisma.chatMessage.findFirst({
       where: { id: messageId },
-      select: { id: true, threadId: true, revokedAt: true },
+      select: { id: true, threadId: true, revokedAt: true, createdAt: true },
     });
-    if (!m || !(await this.chat.canAccessThread(user, m.threadId))) {
+    if (!m || !(await this.chat.mayTouch(user, m))) {
       throw new ForbiddenException('Not your thread');
     }
     return m;
@@ -89,7 +89,7 @@ export class ChatReactionsService {
       userId: r.userId,
       name: r.user.fullName,
     }));
-    for (const userId of parties ? this.chat.participantIds(parties) : []) {
+    for (const userId of parties ? await this.chat.participantIds(parties) : []) {
       const event: ChatReactionEvent = {
         threadId: m.threadId,
         messageId: m.id,

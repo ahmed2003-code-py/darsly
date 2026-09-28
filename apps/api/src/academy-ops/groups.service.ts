@@ -243,20 +243,24 @@ export class GroupsService {
       });
     }
 
-    await this.prisma.$transaction(
-      [...validIds].map((studentId) =>
-        this.prisma.groupMembership.upsert({
-          where: { groupId_studentId: { groupId, studentId } },
-          create: { groupId, studentId, academyId: ctx.academyId },
-          // `upsert` matches on the unique pair, which a soft-deleted row still
-          // occupies — so a student who was removed and is being added back
-          // lands here, not in `create`. Clearing `deletedAt` is what makes the
-          // second add work; an empty update silently did nothing and the
-          // student never reappeared in the group.
-          update: { deletedAt: null },
-        }),
-      ),
-    );
+    const ids = [...validIds];
+    const now = new Date();
+    await this.prisma.$transaction([
+      // A student removed earlier and added back starts a NEW membership:
+      // `addedAt` moves to now, because it is the start of what the group's
+      // chat lets them read — they must not come back into what was said
+      // while they were out. (The unique pair still holds the old row, so it
+      // is revived rather than created.) Members who are already active are
+      // left exactly as they are.
+      this.prisma.groupMembership.updateMany({
+        where: { groupId, studentId: { in: ids }, deletedAt: { not: null } },
+        data: { deletedAt: null, addedAt: now },
+      }),
+      this.prisma.groupMembership.createMany({
+        data: ids.map((studentId) => ({ groupId, studentId, academyId: ctx.academyId })),
+        skipDuplicates: true,
+      }),
+    ]);
     await this.audit.log({
       actorUserId: ctx.userId,
       action: 'group.members.add',

@@ -27,6 +27,10 @@ enum Role {
   // credential is the purchase's access secret, and the short-lived token that
   // secret buys is refused everywhere except that one session's classroom.
   GUEST
+  // A parent or guardian. Signs in only through a staff-issued access link and
+  // sees nothing but the children an ACTIVE GuardianLink gives them — never a
+  // member of any academy, never staff.
+  GUARDIAN
 }
 
 model User {
@@ -80,6 +84,7 @@ model User {
   taughtSessions     GroupSession[]
   taughtLiveSessions LiveSession[]       @relation("liveSessionTeacher")
   guestBuyer         GuestBuyer?
+  guardian           Guardian?
 }
 
 // ─────────────────────────── Academy (Workspace) ───────────────────────────
@@ -185,13 +190,14 @@ enum AcademyEnrollmentMode {
 }
 
 model Academy {
-  id          String        @id @default(cuid())
-  slug        String        @unique
-  name        String
-  status      AcademyStatus @default(ACTIVE)
-  kind        AcademyKind   @default(PERSONAL)
-  ownerUserId String
-  owner       User          @relation("academyOwner", fields: [ownerUserId], references: [id])
+  id            String         @id @default(cuid())
+  guardianLinks GuardianLink[]
+  slug          String         @unique
+  name          String
+  status        AcademyStatus  @default(ACTIVE)
+  kind          AcademyKind    @default(PERSONAL)
+  ownerUserId   String
+  owner         User           @relation("academyOwner", fields: [ownerUserId], references: [id])
 
   // Branding (inline for now; normalizable later without a domain change).
   logoUrl      String?
@@ -420,6 +426,7 @@ model Group {
   attendanceSessions AttendanceSession[]
   groupSessions      GroupSession[]
   liveSessions       LiveSession[]
+  chatThreads        ChatThread[]
 
   @@index([academyId, status])
 }
@@ -767,17 +774,18 @@ model TeacherProfile {
 }
 
 model StudentProfile {
-  id      String        @id @default(cuid())
-  userId  String        @unique
-  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  gradeId String?
-  grade   GradeLevel?   @relation(fields: [gradeId], references: [id])
+  id            String         @id @default(cuid())
+  userId        String         @unique
+  guardianLinks GuardianLink[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gradeId       String?
+  grade         GradeLevel?    @relation(fields: [gradeId], references: [id])
   /// Which school system this student is in — GENERAL or LANGUAGES, never BOTH
   /// (that value describes a subject, not a student). Null for anyone who
   /// signed up before the question existed: like an unset year, it means the
   /// filter has nothing to go on, so they are shown everything rather than
   /// locked out of the platform they already paid for.
-  track   SubjectTrack?
+  track         SubjectTrack?
 
   // Motivation / streaks
   currentStreak     Int       @default(0)
@@ -2383,23 +2391,43 @@ model Review {
   @@index([tenantId])
 }
 
+/// DIRECT: one learner-side party and one named staff member. TEAM: one
+/// learner-side party and the academy's support team — shared by every staff
+/// member allowed to see it, with a light owner (assignee) and a resolved state.
+enum ChatThreadKind {
+  DIRECT
+  TEAM
+  /// The class conversation of an existing Group: its active students and the
+  /// staff allowed into it. Membership is the Group's, never the chat's own.
+  GROUP
+}
+
+/// OPEN: everyone in the group may write. ANNOUNCEMENTS: staff write,
+/// students read.
+enum GroupChatMode {
+  OPEN
+  ANNOUNCEMENTS
+}
+
 enum ChatThreadType {
   DM // direct student↔teacher chat
   QA // Q&A, optionally pinned to a lesson timestamp
 }
 
 model ChatThread {
-  id                String         @id @default(cuid())
-  type              ChatThreadType @default(DM)
-  tenantId          String
-  teacher           TeacherProfile @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  studentId         String
-  student           StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id                String          @id @default(cuid())
+  type              ChatThreadType  @default(DM)
+  /// A teacher's author scope. Null for GROUP (a class chat is nobody's inbox).
+  tenantId          String?
+  teacher           TeacherProfile? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// The student the conversation is with or about. Null for GROUP.
+  studentId         String?
+  student           StudentProfile? @relation(fields: [studentId], references: [id], onDelete: Cascade)
   // Q&A pinned to a moment in a video
   lessonId          String?
   videoTimestampSec Int?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   /// Where each side's view of this conversation starts.
   ///
@@ -2415,19 +2443,34 @@ model ChatThread {
   /// The academy this conversation lives in. For every teacher↔student
   /// conversation so far it is the teacher's own workspace, whose id equals
   /// tenantId. Nullable only until Messaging V2 makes it the scope.
-  academyId     String?
-  /// The staff member on the other side (today: the teacher's user).
-  staffUserId   String?
+  academyId      String?
+  /// The staff member on the other side of a DIRECT conversation. Null for TEAM.
+  staffUserId    String?
+  kind           ChatThreadKind @default(DIRECT)
+  /// Set when the learner side is a guardian of `studentId` (their own
+  /// conversations, never the student's): the guardian's user id.
+  guardianUserId String?
+  /// TEAM only: who on the team has taken it (null = unassigned), and whether
+  /// it is resolved — a new message from the learner side reopens it.
+  assigneeUserId String?
+  resolvedAt     DateTime?
+  resolvedById   String?
+  /// GROUP only: the existing Group this is the chat of, its mode, and when a
+  /// manager switched it off (the Group itself is untouched).
+  groupId        String?
+  group          Group?         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupMode      GroupChatMode?
+  archivedAt     DateTime?
   /// The conversation's identity, computed on the server and never taken from
   /// a client: "<academyId>|<studentId>|S|U:<staffUserId>". UNIQUE, which is
   /// what makes two simultaneous first messages land in one conversation (see
   /// chat-thread.identity.ts). Rows that are not the canonical conversation of
   /// their pair carry "legacy:<id>", which can never collide.
-  dedupeKey     String    @unique
+  dedupeKey      String         @unique
   /// The newest message, kept on the row so the list can sort and page without
   /// reading every conversation's messages.
-  lastMessageAt DateTime?
-  lastMessageId String?
+  lastMessageAt  DateTime?
+  lastMessageId  String?
 
   messages    ChatMessage[]
   attachments ChatAttachment[]
@@ -2439,6 +2482,74 @@ model ChatThread {
   @@index([studentId, updatedAt])
   @@index([tenantId, lastMessageAt(sort: Desc), id(sort: Desc)])
   @@index([studentId, lastMessageAt(sort: Desc), id(sort: Desc)])
+  @@index([academyId, kind, lastMessageAt(sort: Desc), id(sort: Desc)])
+  @@index([guardianUserId, lastMessageAt(sort: Desc)])
+  @@index([groupId])
+}
+
+// ─────────────────────────── Guardians ─────────────────────────────────────
+
+/// A parent or guardian: a GUARDIAN user plus what links them to children.
+model Guardian {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  links     GuardianLink[]
+}
+
+enum GuardianLinkStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum GuardianRelationship {
+  FATHER
+  MOTHER
+  GUARDIAN
+  OTHER
+}
+
+/// One guardian ↔ one student, in one academy. Every guardian request is
+/// authorized through an ACTIVE row here — two children sharing a phone
+/// number, or a surname, grant nothing.
+model GuardianLink {
+  id              String                @id @default(cuid())
+  guardianId      String
+  guardian        Guardian              @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  studentId       String
+  student         StudentProfile        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academyId       String
+  academy         Academy               @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  relationship    GuardianRelationship  @default(GUARDIAN)
+  status          GuardianLinkStatus    @default(ACTIVE)
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  revokedAt       DateTime?
+  revokedById     String?
+  tokens          GuardianAccessToken[]
+
+  @@unique([guardianId, studentId, academyId])
+  @@index([studentId, academyId])
+  @@index([academyId, status])
+}
+
+/// A passwordless access link for one GuardianLink. Only sha256(token) is
+/// stored; the raw token exists in the shared URL's fragment alone. Reusable
+/// until it expires, is rotated (a new one revokes the old) or is revoked.
+model GuardianAccessToken {
+  id              String       @id @default(cuid())
+  linkId          String
+  link            GuardianLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  tokenHash       String       @unique
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  lastUsedAt      DateTime?
+  useCount        Int          @default(0)
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+
+  @@index([linkId])
 }
 
 model ChatMessage {

@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { GUEST_ALLOWED_KEY } from '../decorators/guest-allowed.decorator';
+import { GUARDIAN_ALLOWED_KEY } from '../decorators/guardian-allowed.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -63,7 +64,8 @@ export class JwtAuthGuard implements CanActivate {
           });
           // A guest token is for one classroom, not for being "someone" on
           // public pages: it is treated as anonymous there.
-          if (payload.role !== Role.GUEST && (await this.sessionIsLive(payload))) request.user = payload;
+          if (payload.role !== Role.GUEST && (await this.sessionIsLive(payload)))
+            request.user = payload;
         } catch {
           /* anonymous */
         }
@@ -97,6 +99,7 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     if (payload.role === Role.GUEST) this.assertGuestScope(context, request, payload);
+    if (payload.role === Role.GUARDIAN) this.assertGuardianScope(context);
 
     request.user = payload;
     return true;
@@ -108,7 +111,11 @@ export class JwtAuthGuard implements CanActivate {
    * the token was issued for. Everything else is refused before any handler
    * runs, whatever that handler's own checks would have said.
    */
-  private assertGuestScope(context: ExecutionContext, request: { params?: Record<string, string> }, payload: JwtPayload) {
+  private assertGuestScope(
+    context: ExecutionContext,
+    request: { params?: Record<string, string> },
+    payload: JwtPayload,
+  ) {
     const allowed = this.reflector.getAllAndOverride<boolean>(GUEST_ALLOWED_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -116,6 +123,20 @@ export class JwtAuthGuard implements CanActivate {
     const target = request.params?.id;
     if (!allowed || !payload.liveSessionId || !target || target !== payload.liveSessionId) {
       throw new ForbiddenException({ message: 'Not available to a guest', code: 'GUEST_SCOPE' });
+    }
+  }
+
+  /** A guardian token reaches only routes marked @GuardianAllowed. */
+  private assertGuardianScope(context: ExecutionContext) {
+    const allowed = this.reflector.getAllAndOverride<boolean>(GUARDIAN_ALLOWED_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!allowed) {
+      throw new ForbiddenException({
+        message: 'Not available to a guardian',
+        code: 'GUARDIAN_SCOPE',
+      });
     }
   }
 

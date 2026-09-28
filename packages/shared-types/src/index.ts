@@ -17,6 +17,8 @@ export enum Role {
    * to that one session and refused on every route not marked @GuestAllowed.
    */
   GUEST = 'GUEST',
+  /** A parent/guardian: sees only children an ACTIVE GuardianLink gives them. */
+  GUARDIAN = 'GUARDIAN',
 }
 
 export enum TeacherStatus {
@@ -408,6 +410,8 @@ export interface ChatMessageDto {
   reactions?: ChatReactionDto[];
   /** Deleted for everyone by its sender: a tombstone with no content. */
   deleted?: boolean;
+  /** GROUP, on the sender's own copy: how many other members have read it. */
+  seenCount?: number;
 }
 
 /**
@@ -444,11 +448,72 @@ export interface ChatThreadDto {
   counterpartKind?: ChatSenderKind;
   /** An assistant counterpart's title in the academy ("Student Support"). */
   counterpartTitle?: string | null;
+  /** DIRECT: one named person. TEAM: the academy's support team. GROUP: a class group's chat. */
+  kind?: 'DIRECT' | 'TEAM' | 'GROUP';
+  /** GROUP only. */
+  groupId?: string | null;
+  groupName?: string | null;
+  groupMode?: GroupChatMode | null;
+  memberCount?: number;
+  archived?: boolean;
+  academyId?: string | null;
+  academyName?: string | null;
+  /** Who the learner side is: the student, or one of their guardians. */
+  learnerKind?: 'STUDENT' | 'GUARDIAN';
+  /** The student the conversation is about (a guardian's child, for staff and multi-child guardians). */
+  studentName?: string | null;
+  guardianRelationship?: GuardianRelationship | null;
+  /** TEAM only: who has it, and whether it is resolved. */
+  assigneeUserId?: string | null;
+  assigneeName?: string | null;
+  resolvedAt?: string | null;
+}
+
+export type GuardianRelationship = 'FATHER' | 'MOTHER' | 'GUARDIAN' | 'OTHER';
+
+/** OPEN: everyone writes. ANNOUNCEMENTS: staff write, students read. */
+export type GroupChatMode = 'OPEN' | 'ANNOUNCEMENTS';
+
+/** A class group's chat, as its info panel shows it. */
+export interface GroupChatInfoDto {
+  threadId: string | null;
+  groupId: string;
+  name: string;
+  academyName: string | null;
+  enabled: boolean;
+  mode: GroupChatMode;
+  memberCount: number;
+  staff: { id: string; name: string; avatarUrl: string | null; kind: ChatSenderKind; title: string | null }[];
+  /** Students, for staff only. */
+  students: { id: string; name: string; avatarUrl: string | null }[] | null;
+  /** What the viewer may do: write now, and manage the chat (on/off, mode). */
+  can: { send: boolean; manage: boolean };
+}
+
+/** The staff inbox's views of the conversation list. */
+export type InboxFilter = 'all' | 'mine' | 'unassigned' | 'unread' | 'resolved';
+
+/** What staff see beside a conversation: who, where, which of their courses. */
+export interface ChatContextDto {
+  student: { id: string; name: string; avatarUrl: string | null };
+  academy: { id: string; name: string } | null;
+  courses: { id: string; title: string; status: string }[];
+  guardian: { name: string; relationship: GuardianRelationship } | null;
+  guardians: number;
+  canManageGuardians: boolean;
+  kind: 'DIRECT' | 'TEAM';
+  assignee: { id: string; name: string } | null;
+  resolvedAt: string | null;
+  can: { claim: boolean; assign: boolean; resolve: boolean };
 }
 
 /** Someone a student can start a conversation with (GET /chat/contacts). */
 export interface ChatContactDto {
-  kind: 'OWNER' | 'ASSISTANT';
+  /** OWNER: the teacher. ASSISTANT: a directly-reachable assistant. TEAM: the academy's support team. */
+  kind: 'OWNER' | 'ASSISTANT' | 'TEAM';
+  /** A guardian's contacts are per child: which child the conversation is about. */
+  studentId?: string;
+  studentName?: string;
   /** a teacher: their tenant */
   tenantId?: string;
   /** an assistant: who they are, and in which academy */
@@ -491,6 +556,8 @@ export interface SendMessagePayload {
   academyId?: string;
   /** when a student starts a thread with an assistant */
   staffUserId?: string;
+  /** the academy's support team (with academyId; a guardian also names studentId) */
+  team?: boolean;
   body: string;
   /** Q&A pinned to a lesson moment */
   lessonId?: string;

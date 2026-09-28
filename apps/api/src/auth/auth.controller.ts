@@ -6,6 +6,7 @@ import { Request } from 'express';
 import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { GuardianAllowed } from '../common/decorators/guardian-allowed.decorator';
 import { AuthService } from './auth.service';
 import {
   ChangePasswordDto,
@@ -144,6 +145,7 @@ export class AuthController {
     return this.authService.refresh(dto.refreshToken);
   }
 
+  @GuardianAllowed()
   @Post('logout')
   @HttpCode(200)
   @ApiBearerAuth()
@@ -163,6 +165,7 @@ export class AuthController {
     return this.authService.changePassword(user, dto);
   }
 
+  @GuardianAllowed()
   @Get('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Current user profile (role-specific includes)' })
@@ -170,6 +173,7 @@ export class AuthController {
     return this.authService.me(user.sub);
   }
 
+  @GuardianAllowed()
   @Get('sessions')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List my active device sessions' })
@@ -177,6 +181,7 @@ export class AuthController {
     return this.authService.listSessions(user.sub);
   }
 
+  @GuardianAllowed()
   @Delete('sessions/:id')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke one of my device sessions' })

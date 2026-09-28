@@ -10,6 +10,7 @@ import { databaseReady } from '../common/testing/db-available';
 import { avatarUrl, chatFileUrl, verifyLink } from '../common/signed-link';
 import { AcademyService } from '../academy/academy.service';
 import { StaffScopeService } from '../academy/staff-scope.service';
+import { ConversationPolicy } from './conversation-policy';
 import { ChatService } from './chat.service';
 import { ChatAttachmentsService } from './chat-attachments.service';
 import { ChatReactionsService } from './chat-reactions.service';
@@ -57,7 +58,7 @@ const realtime = {
     events.push({ userId, event, payload }),
   emitToThread: () => undefined,
 } as any;
-const notifications = { create: async () => ({}) } as any;
+const notifications = { create: async () => ({}), upsertForThread: async () => ({}) } as any;
 
 let chat: ChatService;
 let files: ChatAttachmentsService;
@@ -78,6 +79,7 @@ beforeAll(async () => {
     notifications,
     storage,
     new StaffScopeService(prisma, new AcademyService(prisma)),
+    new ConversationPolicy(prisma, new StaffScopeService(prisma, new AcademyService(prisma))),
   );
   files = new ChatAttachmentsService(prisma, storage, chat);
   reactions = new ChatReactionsService(prisma, chat, realtime);

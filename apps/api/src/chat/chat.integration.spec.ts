@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { databaseReady } from '../common/testing/db-available';
 import { AcademyService } from '../academy/academy.service';
 import { StaffScopeService } from '../academy/staff-scope.service';
+import { ConversationPolicy } from './conversation-policy';
 import { ChatService } from './chat.service';
 
 /**
@@ -26,7 +27,7 @@ let ready = false;
 let chat: ChatService;
 
 const realtime = { emitToUser: () => undefined, emitToThread: () => undefined } as any;
-const notifications = { create: async () => ({}) } as any;
+const notifications = { create: async () => ({}), upsertForThread: async () => ({}) } as any;
 const storage = {} as any;
 
 beforeAll(async () => {
@@ -38,6 +39,7 @@ beforeAll(async () => {
     notifications,
     storage,
     new StaffScopeService(prisma, new AcademyService(prisma)),
+    new ConversationPolicy(prisma, new StaffScopeService(prisma, new AcademyService(prisma))),
   );
 });
 afterAll(async () => {

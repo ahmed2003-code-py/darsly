@@ -20,13 +20,16 @@ import * as os from 'os';
 import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
+  ValidateIf,
   Matches,
   Max,
   MaxLength,
@@ -37,6 +40,7 @@ import { IsOptionalId } from '../common/validation';
 import { StorageProvider } from '../storage/storage.provider';
 import {
   ChatService,
+  InboxFilter,
   CHAT_MESSAGE_MAX_LEN,
   CLIENT_MESSAGE_ID,
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -47,6 +51,7 @@ import {
 } from './chat.service';
 import { CHAT_FILE_MAX_BYTES, ChatAttachmentsService } from './chat-attachments.service';
 import { ChatReactionsService } from './chat-reactions.service';
+import { GuardianAllowed } from '../common/decorators/guardian-allowed.decorator';
 
 class SendMessageDto {
   @IsOptionalId() threadId?: string;
@@ -55,6 +60,8 @@ class SendMessageDto {
   @IsOptionalId() studentId?: string;
   @IsOptionalId() academyId?: string;
   @IsOptionalId() staffUserId?: string;
+  /** The academy's support team (with academyId). */
+  @IsOptional() @IsBoolean() team?: boolean;
   // May be empty when the message carries attachments; the service decides.
   @IsOptional() @IsString() @MaxLength(CHAT_MESSAGE_MAX_LEN) body = '';
   @IsOptionalId() lessonId?: string;
@@ -82,6 +89,10 @@ class ReadDto {
 /** A page of conversations: `before` is the id of the last one already shown. */
 class ThreadsQuery {
   @IsOptionalId() before?: string;
+  /** The staff inbox's views; ignored for students and guardians. */
+  @IsOptional()
+  @IsIn(['all', 'mine', 'unassigned', 'unread', 'resolved'])
+  filter?: InboxFilter;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(THREAD_PAGE_MAX) limit?: number;
 }
 
@@ -99,6 +110,23 @@ class ResolveQuery {
   @IsOptionalId() tenantId?: string;
   @IsOptionalId() academyId?: string;
   @IsOptionalId() staffUserId?: string;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  team?: boolean;
+}
+
+class AssignDto {
+  /** Who takes it; null to leave it unassigned. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(40)
+  userId: string | null = null;
+}
+
+class ResolveDto {
+  @IsBoolean() resolved: boolean;
 }
 
 /** Open the conversation with someone — the student for a teacher, the academy
@@ -116,6 +144,7 @@ class OpenThreadDto {
 @ApiTags('chat')
 @ApiBearerAuth()
 @Controller('chat')
+@GuardianAllowed()
 export class ChatController {
   constructor(
     private readonly chat: ChatService,
@@ -150,6 +179,7 @@ export class ChatController {
     @Body('staffUserId') staffUserId?: string,
     // A voice note recorded in the composer: the same pending upload, sent
     // (or not) with the rest of the message.
+    @Body('team') team?: string,
     @Body('voice') voice?: string,
     @Body('durationSec') durationSec?: string,
   ) {
@@ -164,6 +194,7 @@ export class ChatController {
         tenantId: id(tenantId),
         academyId: id(academyId),
         staffUserId: id(staffUserId),
+        team: team === '1' || team === 'true',
       },
       voice === '1' || voice === 'true' ? { durationSec: Number(durationSec) || 0 } : undefined,
     );
@@ -213,6 +244,41 @@ export class ChatController {
   @ApiOperation({ summary: 'A page of my conversations, newest activity first' })
   threads(@CurrentUser() user: JwtPayload, @Query() q: ThreadsQuery) {
     return this.chat.listThreads(user, q);
+  }
+
+  @Post('threads/:id/claim')
+  @HttpCode(200)
+  @ApiOperation({ summary: '[team inbox] Take an unassigned TEAM conversation' })
+  claim(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.chat.claim(user, id);
+  }
+
+  @Put('threads/:id/assignee')
+  @ApiOperation({
+    summary: '[team inbox] Hand a TEAM conversation to someone who can see it (or to nobody)',
+  })
+  assign(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: AssignDto) {
+    return this.chat.assign(user, id, dto.userId ?? null);
+  }
+
+  @Put('threads/:id/resolved')
+  @ApiOperation({ summary: '[team inbox] Resolve or reopen a TEAM conversation' })
+  setResolved(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: ResolveDto) {
+    return this.chat.resolve(user, id, dto.resolved);
+  }
+
+  @Get('threads/:id/assignees')
+  @ApiOperation({ summary: '[team inbox] Who this TEAM conversation can be handed to' })
+  assignees(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.chat.assignees(user, id);
+  }
+
+  @Get('threads/:id/context')
+  @ApiOperation({
+    summary: '[staff] The student beside a conversation: academy, courses in my scope, guardian',
+  })
+  context(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.chat.context(user, id);
   }
 
   @Get('contacts')

@@ -34,6 +34,14 @@ export const CAPABILITIES = [
   'student.view', // see the students of my courses
   'progress.view', // see their lessons, quiz and assignment results
   'message.reply', // talk with the students of my courses, as myself
+  // Phase 2 (shared inbox). inbox: the academy's TEAM conversations with
+  // students of my courses. oversee: manage anyone's assignment, and resolve
+  // any of them — the owner's by default, never an assistant's.
+  'message.inbox',
+  'message.oversee',
+  // A class group's chat: take part in the chats of groups that are yours
+  // (the owner's every group; anyone else's only groups assigned to them).
+  'message.group',
   'guardian.manage', // (Guardian phase) link and manage a student's guardians
   'payment.view', // see payments for my courses — read only, never the wallet
 ] as const;
@@ -62,6 +70,8 @@ export const ROLE_PERMISSIONS: Record<AcademyRole, Capability[]> = {
     'student.view',
     'progress.view',
     'message.reply',
+    'message.inbox',
+    'message.group',
     'guardian.manage',
     'payment.view',
   ],
@@ -82,6 +92,8 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   'student.view',
   'progress.view',
   'message.reply',
+  'message.inbox',
+  'message.group',
   'guardian.manage',
   'payment.view',
   'assessment.grade',

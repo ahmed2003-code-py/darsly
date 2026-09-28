@@ -5,6 +5,8 @@ import { AcademyStaff } from '../academy/academy-staff.decorator';
 import { AcademyMembershipGuard } from '../academy/guards/academy-membership.guard';
 import { StaffScopeService } from '../academy/staff-scope.service';
 import { StaffService } from './staff.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtPayload } from '@darsly/shared-types';
 
 /**
  * The staff workspace — what an assistant opens after signing in. The
@@ -62,14 +64,32 @@ export class StaffController {
     return this.staff.progress(await this.scopes.forContext(ctx), studentId);
   }
 
+  @Get('students/:studentId/care')
+  @AcademyStaff('student.view')
+  @ApiOperation({
+    summary: "[staff] A student's groups, attendance, live classes and conversations — in my scope",
+  })
+  async care(
+    @CurrentUser() user: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.staff.care(await this.scopes.forContext(ctx), user, studentId);
+  }
+
   @Get('payments')
   @AcademyStaff('payment.view')
   @ApiOperation({ summary: '[staff] Payments for my courses (read only)' })
-  async payments(@CurrentAcademy() ctx: AcademyContext, @Query('status') status?: string) {
+  async payments(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Query('status') status?: string,
+    @Query('studentId') studentId?: string,
+  ) {
     const allowed = ['PENDING', 'PAID', 'REJECTED', 'FAILED', 'REFUNDED'];
     return this.staff.payments(
       await this.scopes.forContext(ctx),
       status && allowed.includes(status) ? status : undefined,
+      typeof studentId === 'string' && studentId.length <= 40 ? studentId : undefined,
     );
   }
 }

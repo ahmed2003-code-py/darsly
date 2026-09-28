@@ -5,6 +5,7 @@ import { IsOptional, IsBooleanString } from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { PageQuery, asPage, pageArgs } from '../common/pagination';
+import { GuardianAllowed } from '../common/decorators/guardian-allowed.decorator';
 
 /**
  * `take: 30` used to be the whole of this endpoint's paging, with no way to
@@ -21,6 +22,7 @@ class ListQuery extends PageQuery {
 @ApiTags('notifications')
 @ApiBearerAuth()
 @Controller('notifications')
+@GuardianAllowed()
 export class NotificationsController {
   constructor(private readonly prisma: PrismaService) {}
 

@@ -29,6 +29,7 @@ export const MESSAGE_INCLUDE = {
       audioKey: true,
       deletedAt: true,
       revokedAt: true,
+      createdAt: true,
       sender: { select: { fullName: true } },
       attachments: {
         select: { kind: true, fileName: true },
@@ -149,8 +150,10 @@ export function attachmentDto(a: {
 }
 
 /** A quoted message, reduced to what one compact line needs. */
-function replySummary(r: any): ChatMessageDto['replyTo'] {
-  if (r.deletedAt || r.revokedAt) {
+function replySummary(r: any, historyFrom: Date | null): ChatMessageDto['replyTo'] {
+  // Deleted — or from before the viewer's history starts (a student who joined
+  // a group later must not read an older message through someone's quote).
+  if (r.deletedAt || r.revokedAt || (historyFrom && new Date(r.createdAt) < historyFrom)) {
     return { id: r.id, senderName: '', body: '', isVoice: false, unavailable: true };
   }
   const attachments: { kind: string; fileName: string }[] = r.attachments ?? [];
@@ -178,7 +181,12 @@ function replySummary(r: any): ChatMessageDto['replyTo'] {
 export function toMessageDto(
   m: any,
   viewerUserId: string,
-  ctx: { reactions?: Map<string, ChatReactionDto[]>; seenBy?: Date | null } = {},
+  ctx: {
+    reactions?: Map<string, ChatReactionDto[]>;
+    seenBy?: Date | null;
+    historyFrom?: Date | null;
+    seenCount?: number;
+  } = {},
 ): ChatMessageDto {
   const mine = m.senderId === viewerUserId;
   const seen = mine && ctx.seenBy && ctx.seenBy.getTime() >= new Date(m.createdAt).getTime();
@@ -206,7 +214,7 @@ export function toMessageDto(
       kind,
       title: m.senderTitle ?? null,
     },
-    replyTo: m.replyTo && !revoked ? replySummary(m.replyTo) : null,
+    replyTo: m.replyTo && !revoked ? replySummary(m.replyTo, ctx.historyFrom ?? null) : null,
     audio:
       m.audioKey && !revoked
         ? { durationSec: m.audioDurationSec ?? 0, bytes: m.audioBytes ?? 0 }
@@ -218,5 +226,6 @@ export function toMessageDto(
     attachments: revoked ? [] : (m.attachments ?? []).map(attachmentDto),
     reactions: revoked ? [] : (ctx.reactions?.get(m.id) ?? []),
     ...(revoked ? { deleted: true } : {}),
+    ...(ctx.seenCount !== undefined ? { seenCount: ctx.seenCount } : {}),
   };
 }

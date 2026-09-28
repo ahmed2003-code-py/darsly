@@ -11,6 +11,7 @@ import { TeamController } from '../academy/team.controller';
 import { TeamService } from '../academy/team.service';
 import { AssignmentsService } from '../assessments/assignments.service';
 import { StaffGradingController } from '../assessments/staff-grading.controller';
+import { ConversationPolicy } from '../chat/conversation-policy';
 import { ChatService } from '../chat/chat.service';
 import { databaseReady } from '../common/testing/db-available';
 import { PrismaService } from '../prisma/prisma.service';
@@ -33,11 +34,18 @@ let ready = false;
 const academy = new AcademyService(prisma);
 const scopes = new StaffScopeService(prisma, academy);
 const team = new TeamService(prisma);
-const staff = new StaffService(prisma, scopes);
+const staff = new StaffService(prisma, scopes, new ConversationPolicy(prisma, scopes));
 const links = new InvitationLinksService(prisma, team);
-const notifications = { create: async () => ({}) } as any;
+const notifications = { create: async () => ({}), upsertForThread: async () => ({}) } as any;
 const realtime = { emitToUser: () => undefined, emitToThread: () => undefined } as any;
-const chat = new ChatService(prisma, realtime, notifications, {} as any, scopes);
+const chat = new ChatService(
+  prisma,
+  realtime,
+  notifications,
+  {} as any,
+  scopes,
+  new ConversationPolicy(prisma, scopes),
+);
 const assignments = new AssignmentsService(
   prisma,
   {} as any,

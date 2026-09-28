@@ -37,6 +37,44 @@ export class NotificationsService {
     return notification;
   }
 
+  /**
+   * One unread notification per conversation per person: a new message in a
+   * conversation that already has an unread notification updates it (text,
+   * time) instead of stacking another one on the bell.
+   */
+  async upsertForThread(input: {
+    userId: string;
+    type: NotificationType | keyof typeof NotificationType;
+    title: string;
+    body?: string;
+    threadId: string;
+  }) {
+    const existing = await this.prisma.notification.findFirst({
+      where: {
+        userId: input.userId,
+        type: input.type as NotificationType,
+        readAt: null,
+        meta: { path: ['threadId'], equals: input.threadId },
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      return this.create({
+        userId: input.userId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        meta: { threadId: input.threadId },
+      });
+    }
+    const notification = await this.prisma.notification.update({
+      where: { id: existing.id },
+      data: { title: input.title, body: input.body ?? '', createdAt: new Date() },
+    });
+    this.realtime.emitToUser(input.userId, RealtimeEvents.NOTIFICATION, notification);
+    return notification;
+  }
+
   async pushUnread(userId: string) {
     const unread = await this.prisma.notification.count({
       where: { userId, readAt: null },

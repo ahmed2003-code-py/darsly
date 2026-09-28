@@ -98,6 +98,7 @@ export interface DraftWarning {
  *  should show the server's fallback text instead of an empty line. */
 export function warningKey(code: string): string | null {
   const known = [
+    'PARTIAL_TRANSCRIPT',
     'PAGE_FAILED',
     'PAGE_PROVIDER_ERROR',
     'PAGE_OUTPUT_INVALID',

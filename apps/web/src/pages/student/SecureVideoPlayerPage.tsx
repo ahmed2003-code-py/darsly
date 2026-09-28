@@ -14,6 +14,7 @@ import { GAMIFICATION_KEY, GamificationOutcome } from '../../lib/gamification';
 import { Markdown } from '../../lib/markdown';
 import { RewardBurst } from '../../components/gamification/RewardBurst';
 import { confirmDelete } from '../../lib/confirm';
+import LessonClassNotes from '../../components/live/LessonClassNotes';
 
 type Tab = 'notes' | 'attachments' | 'qa';
 
@@ -778,6 +779,10 @@ export default function SecureVideoPlayerPage() {
             <span className="material-symbols-outlined text-sm">shield</span>
             {t('player.watermarkNote')}
           </p>
+
+          {/* A lesson made from a Live class: its study notes and transcript,
+              if the teacher published them with it (nothing for other lessons). */}
+          {lessonId && <LessonClassNotes lessonId={lessonId} />}
 
           {/* What finishing this lesson earned — floats, never blocks. */}
           <RewardBurst outcome={reward} onDone={() => setReward(null)} />

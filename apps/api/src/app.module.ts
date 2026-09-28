@@ -34,6 +34,7 @@ import { AssessmentsModule } from './assessments/assessments.module';
 import { ChallengesModule } from './challenges/challenges.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { LiveModule } from './live/live.module';
+import { LiveContentModule } from './live-content/live-content.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { StudentExtrasModule } from './student/student-extras.module';
 import { ProfileModule } from './profile/profile.module';
@@ -125,6 +126,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     ChallengesModule,
     ReviewsModule,
     LiveModule,
+    LiveContentModule,
     AnalyticsModule,
     StudentExtrasModule,
     ProfileModule,

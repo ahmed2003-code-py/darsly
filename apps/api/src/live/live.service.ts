@@ -2533,6 +2533,34 @@ export class LiveService {
     return out;
   }
 
+  /**
+   * A finished class's material, for turning it into course content: the
+   * class (teacher/staff scope — assertOwned), its recording when it is a
+   * READY processed video (encrypted HLS, reusable as a lesson), and its words
+   * and notes as they stand. Reads only; nothing is generated here.
+   */
+  async contentSource(scope: LiveScope, id: string) {
+    const s = await this.assertOwned(scope, id);
+    const rec = await this.prisma.liveRecording.findFirst({
+      where: { sessionId: id, status: 'READY', videoAssetId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, videoAssetId: true, durationSec: true },
+    });
+    const asset = rec?.videoAssetId
+      ? await this.prisma.videoAsset.findUnique({
+          where: { id: rec.videoAssetId },
+          select: { id: true, status: true, durationSec: true, hlsMasterKey: true },
+        })
+      : null;
+    return {
+      session: s,
+      recording:
+        rec && asset && asset.status === 'READY' && asset.hlsMasterKey
+          ? { id: rec.id, videoAssetId: asset.id, durationSec: asset.durationSec || rec.durationSec }
+          : null,
+    };
+  }
+
   async sessionDetail(userId: string, sessionId: string) {
     const { role } = await this.assertInSession(userId, sessionId);
     const s = await this.prisma.liveSession.findUniqueOrThrow({

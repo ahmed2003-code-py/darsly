@@ -22,6 +22,7 @@ import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { ensureGamificationReferenceData } from '../gamification/gamification-reference-data';
+import { threadKey } from '../chat/chat-thread.identity';
 
 type Db = PrismaClient;
 
@@ -932,12 +933,24 @@ export async function seedDatabase(prisma: Db, log: (m: string) => void = () => 
       // Chat thread with the teacher (some students).
       if (chance(0.4)) {
         const thread = await prisma.chatThread.create({
-          data: { type: 'DM', tenantId: academy.id, studentId: st.id },
+          data: {
+            type: 'DM',
+            tenantId: academy.id,
+            studentId: st.id,
+            academyId: academy.id,
+            staffUserId: tUser.id,
+            dedupeKey: threadKey({
+              academyId: academy.id,
+              studentId: st.id,
+              staffUserId: tUser.id,
+            }),
+          },
         });
         const lines = pick(CHAT_LINES);
+        let last: { id: string; createdAt: Date } | null = null;
         for (let mi = 0; mi < lines.length; mi++) {
           const fromStudent = mi % 2 === 0;
-          await prisma.chatMessage.create({
+          last = await prisma.chatMessage.create({
             data: {
               threadId: thread.id,
               senderId: fromStudent ? st.userId : tUser.id,
@@ -948,7 +961,7 @@ export async function seedDatabase(prisma: Db, log: (m: string) => void = () => 
         }
         await prisma.chatThread.update({
           where: { id: thread.id },
-          data: { updatedAt: new Date() },
+          data: { updatedAt: new Date(), lastMessageAt: last?.createdAt, lastMessageId: last?.id },
         });
         stats.chats++;
       }

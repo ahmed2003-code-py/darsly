@@ -179,6 +179,14 @@
     "dismiss": "Remove this notification"
   },
   "messages": {
+    "moreConversations": "Older conversations",
+    "backToList": "Back to conversations",
+    "loadEarlier": "Earlier messages",
+    "startWith": "No messages yet. Start a conversation with {{name}}.",
+    "sendFailed": "Not sent",
+    "retry": "Retry",
+    "discard": "Discard",
+    "sending": "Sending",
     "title": "Messages",
     "subtitle": "Your conversations with teachers and students",
     "empty": "No conversations yet",

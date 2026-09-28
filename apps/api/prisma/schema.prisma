@@ -2372,12 +2372,31 @@ model ChatThread {
   clearedForTeacherAt DateTime?
   clearedForStudentAt DateTime?
 
+  /// The academy this conversation lives in. For every teacher↔student
+  /// conversation so far it is the teacher's own workspace, whose id equals
+  /// tenantId. Nullable only until Messaging V2 makes it the scope.
+  academyId     String?
+  /// The staff member on the other side (today: the teacher's user).
+  staffUserId   String?
+  /// The conversation's identity, computed on the server and never taken from
+  /// a client: "<academyId>|<studentId>|S|U:<staffUserId>". UNIQUE, which is
+  /// what makes two simultaneous first messages land in one conversation (see
+  /// chat-thread.identity.ts). Rows that are not the canonical conversation of
+  /// their pair carry "legacy:<id>", which can never collide.
+  dedupeKey     String        @unique
+  /// The newest message, kept on the row so the list can sort and page without
+  /// reading every conversation's messages.
+  lastMessageAt DateTime?
+  lastMessageId String?
+
   messages  ChatMessage[]
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 
   @@index([tenantId, updatedAt])
   @@index([studentId, updatedAt])
+  @@index([tenantId, lastMessageAt(sort: Desc), id(sort: Desc)])
+  @@index([studentId, lastMessageAt(sort: Desc), id(sort: Desc)])
 }
 
 model ChatMessage {
@@ -2413,11 +2432,18 @@ model ChatMessage {
   audioBytes       Int?
   audioMimeType    String?
 
+  /// A client-generated id for this send. Retrying the same send after a
+  /// timeout or a dropped connection returns the message already stored
+  /// instead of posting it twice. Null for every message sent before it existed.
+  clientMessageId String?
+
   createdAt DateTime  @default(now())
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 
-  @@index([threadId, createdAt])
+  @@unique([senderId, clientMessageId])
+  /// Newest-first keyset pages within a conversation.
+  @@index([threadId, createdAt(sort: Desc), id(sort: Desc)])
   @@index([lessonId])
   /// Created by 20260913011318_chat_replies_and_voice and present in production; declared here so the schema describes the database rather than a subset of it.
   @@index([replyToId])

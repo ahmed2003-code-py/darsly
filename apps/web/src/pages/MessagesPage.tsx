@@ -1,79 +1,132 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { ChatMessageDto, ChatThreadDto, RealtimeEvents } from '@darsly/shared-types';
+import { ChatMessageDto, ChatThreadDto, RealtimeEvents, Role } from '@darsly/shared-types';
 import { api } from '../lib/api';
 import { askConfirm } from '../lib/confirm';
+import { errorMessage } from '../lib/errorMessage';
 import { getSocket } from '../lib/socket';
+import { useAuthStore } from '../stores/auth';
 import { EmptyState, PageHeader, Spinner } from '../components/ui';
+import { LocalMessage } from './messages/messageList';
+import { SendTarget, useConversation } from './messages/useConversation';
 
 /** Five minutes, matching the server. A voice note is a thought, not a lecture. */
 const VOICE_MAX_SECONDS = 300;
+/** Must match the API's default list page (THREAD_PAGE). */
+const THREAD_PAGE = 50;
+/** Within this distance of the bottom, the reader is "at the latest message". */
+const NEAR_BOTTOM_PX = 120;
+
+/** What a conversation's header needs, whether or not the conversation exists yet. */
+interface Header {
+  name: string;
+  avatarUrl: string | null;
+  threadId: string | null;
+}
 
 export default function MessagesPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
   const [params, setParams] = useSearchParams();
   const activeId = params.get('t');
+  // Someone with no conversation yet — the console's message button lands here
+  // with `?student=`, a student's "message the teacher" with `?teacher=`.
+  // Opening this creates nothing; the first message sent does.
+  const draftStudent = activeId ? null : params.get('student');
+  const draftTeacher = activeId ? null : params.get('teacher');
+  const drafting = !!(draftStudent || draftTeacher);
+
   const [draft, setDraft] = useState('');
-  const [messages, setMessages] = useState<ChatMessageDto[]>([]);
   const [peerTyping, setPeerTyping] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessageDto | null>(null);
   const [notice, setNotice] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimer = useRef<number>();
 
-  const { data: threads, isLoading } = useQuery<ChatThreadDto[]>({
-    queryKey: ['chat-threads'],
-    queryFn: async () => (await api.get('/chat/threads')).data,
-    // A conversation list that is a minute out of date reads as broken. Cheap
-    // enough to ask often, and the socket usually gets there first anyway.
+  /**
+   * The conversation list, one keyset page at a time. Refreshed on a timer as
+   * well as by the socket: a list a minute out of date reads as broken.
+   */
+  const threadsQuery = useInfiniteQuery({
+    queryKey: ['chat-threads', 'pages'],
+    queryFn: async ({ pageParam }) =>
+      (
+        await api.get<ChatThreadDto[]>('/chat/threads', {
+          params: pageParam ? { before: pageParam } : {},
+        })
+      ).data,
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.length >= THREAD_PAGE ? last[last.length - 1].id : undefined),
     refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   });
-  const active = threads?.find((th) => th.id === activeId);
+  const threads = useMemo(() => threadsQuery.data?.pages.flat() ?? [], [threadsQuery.data]);
+  const listed = threads.find((th) => th.id === activeId);
 
-  /**
-   * The open conversation, polled as well as pushed.
-   *
-   * The socket is the fast path, but it is not a guarantee: a phone that slept,
-   * a network that dropped the connection, a carrier that blocks the upgrade —
-   * all of them end with a page that quietly stops receiving. Asking every few
-   * seconds costs one small request and means a message always arrives.
-   */
-  const { data: fetched } = useQuery<ChatMessageDto[]>({
-    queryKey: ['chat-messages', activeId],
-    queryFn: async () => (await api.get(`/chat/threads/${activeId}/messages`)).data,
-    enabled: !!activeId,
-    refetchInterval: 5_000,
-    refetchOnWindowFocus: true,
+  // A conversation that is not on the loaded pages — an old notification, a
+  // deep link — still gets its header.
+  const { data: fetchedHeader, error: headerError } = useQuery<ChatThreadDto>({
+    queryKey: ['chat-thread', activeId],
+    queryFn: async () => (await api.get(`/chat/threads/${activeId}`)).data,
+    enabled: !!activeId && !listed && threadsQuery.isFetched,
   });
 
-  // Merge what the poll brought with what the socket pushed. A local message is
-  // kept only while it is newer than anything the server just sent — otherwise
-  // clearing the conversation would be undone by whatever was still in memory.
+  // Someone with no conversation yet: who they are, and whether one exists
+  // after all (then go straight to it).
+  const { data: resolved, error: resolveError } = useQuery<{
+    threadId: string | null;
+    counterpartName: string;
+    counterpartAvatarUrl: string | null;
+  }>({
+    queryKey: ['chat-resolve', draftStudent, draftTeacher],
+    queryFn: async () =>
+      (
+        await api.get('/chat/resolve', {
+          params: draftStudent ? { studentId: draftStudent } : { tenantId: draftTeacher },
+        })
+      ).data,
+    enabled: drafting,
+  });
   useEffect(() => {
-    if (!fetched) return;
-    setMessages((prev) => {
-      const byId = new Map(fetched.map((m) => [m.id, m]));
-      const newest = fetched.length ? new Date(fetched[fetched.length - 1].createdAt).getTime() : 0;
-      for (const m of prev) {
-        if (!byId.has(m.id) && new Date(m.createdAt).getTime() > newest) byId.set(m.id, m);
-      }
-      return [...byId.values()].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      );
-    });
-  }, [fetched]);
+    if (resolved?.threadId) setParams({ t: resolved.threadId }, { replace: true });
+  }, [resolved?.threadId, setParams]);
+
+  const headerThread = listed ?? fetchedHeader;
+  const header: Header | null = activeId
+    ? headerThread
+      ? {
+          name: headerThread.counterpartName,
+          avatarUrl: headerThread.counterpartAvatarUrl,
+          threadId: activeId,
+        }
+      : null
+    : drafting && resolved && !resolved.threadId
+      ? { name: resolved.counterpartName, avatarUrl: resolved.counterpartAvatarUrl, threadId: null }
+      : null;
+  const openError = activeId ? headerError : resolveError;
+
+  const conv = useConversation(activeId, {
+    id: user?.id ?? '',
+    name: user?.fullName ?? '',
+    role: (user?.role ?? Role.STUDENT) as ChatMessageDto['senderRole'],
+  });
 
   useEffect(() => {
     setReplyTo(null);
-    if (!activeId) {
-      setMessages([]);
-      return;
-    }
+    setPeerTyping(false);
+    if (!activeId) return;
     const socket = getSocket();
     socket?.emit(RealtimeEvents.JOIN_THREAD, activeId);
     queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
@@ -83,16 +136,11 @@ export default function MessagesPage() {
     };
   }, [activeId, queryClient]);
 
-  // Live incoming messages + typing echo.
+  // Anything new anywhere moves the list; the typing echo is only for this one.
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
-    const onMessage = (m: ChatMessageDto) => {
-      if (m.threadId === activeId) {
-        setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
-      }
-      queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
-    };
+    const onMessage = () => queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
     const onTyping = (p: { threadId: string }) => {
       if (p.threadId === activeId) {
         setPeerTyping(true);
@@ -108,25 +156,73 @@ export default function MessagesPage() {
     };
   }, [activeId, queryClient]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, peerTyping]);
+  /* ── Scrolling ───────────────────────────────────────────────────────────
+   * Three rules, so the view never jumps under the reader:
+   *  - a conversation opens at its newest message;
+   *  - a new message scrolls into view only if the reader was already at the
+   *    bottom, or wrote it — someone reading back is left where they are;
+   *  - an older page loaded above keeps the message they were looking at in
+   *    the same place on screen.
+   */
+  const nearBottom = useRef(true);
+  const prepend = useRef<{ height: number; top: number } | null>(null);
+  const openedFor = useRef<string | null>(null);
+
+  const onScroll = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+    if (el.scrollTop < 80 && conv.hasOlder && !conv.loadingOlder) {
+      prepend.current = { height: el.scrollHeight, top: el.scrollTop };
+      void conv.loadOlder().then((n) => {
+        if (!n) prepend.current = null;
+      });
+    }
+  }, [conv]);
+
+  const lastMessage = conv.messages[conv.messages.length - 1];
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    if (prepend.current) {
+      el.scrollTop = el.scrollHeight - prepend.current.height + prepend.current.top;
+      prepend.current = null;
+      return;
+    }
+    const key = activeId ?? 'draft';
+    if (openedFor.current !== key && conv.loaded) {
+      openedFor.current = key;
+      el.scrollTop = el.scrollHeight;
+      nearBottom.current = true;
+      return;
+    }
+    if (nearBottom.current || lastMessage?.mine) el.scrollTop = el.scrollHeight;
+  }, [conv.messages, conv.loaded, activeId, lastMessage, peerTyping]);
+
+  /* ── Sending ─────────────────────────────────────────────────────────── */
+
+  const target: SendTarget | null = activeId
+    ? { threadId: activeId }
+    : draftStudent
+      ? { studentId: draftStudent }
+      : draftTeacher
+        ? { tenantId: draftTeacher }
+        : null;
 
   async function send(e: FormEvent) {
     e.preventDefault();
     const body = draft.trim();
-    if (!body || !activeId) return;
+    if (!body || !target) return;
     setDraft('');
-    const replyToId = replyTo?.id;
+    const quoted = replyTo;
     setReplyTo(null);
-    const socket = getSocket();
-    if (socket?.connected) {
-      socket.emit(RealtimeEvents.SEND_MESSAGE, { threadId: activeId, body, replyToId });
-    } else {
-      // REST fallback: append the returned message directly.
-      const { data } = await api.post('/chat/messages', { threadId: activeId, body, replyToId });
-      setMessages((prev) => [...prev, { ...data.message }]);
+    const threadId = await conv.send(target, { body, replyTo: quoted });
+    if (threadId && !activeId) {
+      // The first message just created the conversation: from here on the
+      // page is that conversation, and back does not return to the draft.
+      setParams({ t: threadId }, { replace: true });
     }
+    queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
   }
 
   /** A recorded clip, sent the moment recording stops. */
@@ -141,14 +237,12 @@ export default function MessagesPage() {
       if (replyToId) fd.append('replyToId', replyToId);
       try {
         const { data } = await api.post(`/chat/threads/${activeId}/voice`, fd);
-        setMessages((prev) =>
-          prev.some((x) => x.id === data.message.id) ? prev : [...prev, data.message],
-        );
+        conv.add(data.message);
       } catch {
         setNotice(t('messages.voiceFailed'));
       }
     },
-    [activeId, replyTo, t],
+    [activeId, replyTo, t, conv],
   );
 
   function onType() {
@@ -162,15 +256,15 @@ export default function MessagesPage() {
     if (id === activeId) {
       // Emptied on screen at the same moment it is emptied on the server, so
       // there is no window where the cleared messages are still sitting there.
-      setMessages([]);
+      conv.reset();
       setParams({});
     }
-    queryClient.invalidateQueries({ queryKey: ['chat-messages', id] });
     queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
   }
 
   /** Group by day so a long conversation reads as days, not as one wall. */
-  const grouped = useMemo(() => groupByDay(messages), [messages]);
+  const grouped = useMemo(() => groupByDay(conv.messages), [conv.messages]);
+  const showConversation = !!(activeId || drafting);
 
   return (
     <div className="page">
@@ -183,14 +277,14 @@ export default function MessagesPage() {
         {/* Thread list */}
         <div
           className={`w-full border-e border-outline-variant/40 sm:w-80 sm:shrink-0 ${
-            activeId ? 'hidden sm:block' : ''
+            showConversation ? 'hidden sm:block' : ''
           }`}
         >
-          {isLoading ? (
+          {threadsQuery.isLoading ? (
             <div className="grid h-full place-items-center">
               <Spinner />
             </div>
-          ) : !threads?.length ? (
+          ) : !threads.length ? (
             <div className="p-6">
               <EmptyState icon="forum" title={t('messages.empty')} hint={t('messages.emptyHint')} />
             </div>
@@ -228,13 +322,25 @@ export default function MessagesPage() {
                   </button>
                 </li>
               ))}
+              {threadsQuery.hasNextPage && (
+                <li className="p-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => void threadsQuery.fetchNextPage()}
+                    disabled={threadsQuery.isFetchingNextPage}
+                    className="text-sm font-bold text-primary disabled:opacity-50"
+                  >
+                    {t('messages.moreConversations')}
+                  </button>
+                </li>
+              )}
             </ul>
           )}
         </div>
 
         {/* Conversation */}
-        <div className={`flex min-w-0 flex-1 flex-col ${activeId ? '' : 'hidden sm:flex'}`}>
-          {!active ? (
+        <div className={`flex min-w-0 flex-1 flex-col ${showConversation ? '' : 'hidden sm:flex'}`}>
+          {!showConversation ? (
             <div className="flex flex-1 items-center justify-center text-outline">
               <div className="text-center">
                 <span className="material-symbols-outlined text-5xl text-outline-variant">
@@ -242,6 +348,17 @@ export default function MessagesPage() {
                 </span>
                 <p className="mt-2">{t('messages.selectThread')}</p>
               </div>
+            </div>
+          ) : openError ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="text-on-surface-variant">{errorMessage(openError)}</p>
+              <button className="btn-secondary" onClick={() => setParams({})}>
+                {t('messages.backToList')}
+              </button>
+            </div>
+          ) : !header ? (
+            <div className="grid flex-1 place-items-center">
+              <Spinner />
             </div>
           ) : (
             <>
@@ -253,29 +370,64 @@ export default function MessagesPage() {
                 >
                   <span className="material-symbols-outlined rtl:-scale-x-100">arrow_back</span>
                 </button>
-                <Avatar name={active.counterpartName} url={active.counterpartAvatarUrl} rem={2.5} />
+                <Avatar name={header.name} url={header.avatarUrl} rem={2.5} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-heading font-bold">{active.counterpartName}</p>
+                  <p className="truncate font-heading font-bold">{header.name}</p>
                   <p className="truncate text-xs text-on-surface-variant">
                     {peerTyping ? t('messages.typing') : ''}
                   </p>
                 </div>
-                <button
-                  onClick={() => void clearThread(active.id)}
-                  title={t('messages.clear')}
-                  aria-label={t('messages.clear')}
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-outline transition hover:bg-error-container hover:text-on-error-container"
-                >
-                  <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
-                </button>
+                {header.threadId && (
+                  <button
+                    onClick={() => void clearThread(header.threadId!)}
+                    title={t('messages.clear')}
+                    aria-label={t('messages.clear')}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-outline transition hover:bg-error-container hover:text-on-error-container"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete_sweep</span>
+                  </button>
+                )}
               </header>
 
-              <div className="flex-1 space-y-1 overflow-y-auto bg-surface-container-low/40 px-3 py-4 sm:px-5">
-                {!messages.length && (
-                  <p className="py-10 text-center text-sm text-on-surface-variant">
-                    {t('messages.startHint')}
-                  </p>
+              <div
+                ref={scrollerRef}
+                onScroll={onScroll}
+                className="flex-1 space-y-1 overflow-y-auto bg-surface-container-low/40 px-3 py-4 sm:px-5"
+              >
+                {conv.hasOlder && (
+                  <div className="flex justify-center py-2">
+                    {conv.loadingOlder ? (
+                      <Spinner />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = scrollerRef.current;
+                          if (el) prepend.current = { height: el.scrollHeight, top: el.scrollTop };
+                          void conv.loadOlder();
+                        }}
+                        className="text-xs font-bold text-primary"
+                      >
+                        {t('messages.loadEarlier')}
+                      </button>
+                    )}
+                  </div>
                 )}
+                {!conv.loaded ? (
+                  <div className="grid place-items-center py-10">
+                    <Spinner />
+                  </div>
+                ) : conv.error && !conv.messages.length ? (
+                  <p className="py-10 text-center text-sm text-error">{errorMessage(conv.error)}</p>
+                ) : !conv.messages.length ? (
+                  // No conversation yet is a normal state, not an error: say
+                  // who this will reach and put the cursor in the composer.
+                  <p className="py-10 text-center text-sm text-on-surface-variant">
+                    {header.threadId
+                      ? t('messages.startHint')
+                      : t('messages.startWith', { name: header.name })}
+                  </p>
+                ) : null}
                 {grouped.map(({ day, items }) => (
                   <div key={day} className="space-y-1">
                     <p className="sticky top-0 z-10 mx-auto my-3 w-fit rounded-full bg-surface-container-high px-3 py-1 text-xs font-bold text-on-surface-variant">
@@ -283,7 +435,7 @@ export default function MessagesPage() {
                     </p>
                     {items.map((m, i) => (
                       <Bubble
-                        key={m.id}
+                        key={m.clientMessageId && m.mine ? `c:${m.clientMessageId}` : m.id}
                         m={m}
                         // Only the last of a run shows a tail and a timestamp,
                         // so three quick messages read as one turn, not three.
@@ -292,13 +444,14 @@ export default function MessagesPage() {
                           setReplyTo(m);
                           inputRef.current?.focus();
                         }}
+                        onRetry={() => m.clientMessageId && void conv.retry(m.clientMessageId)}
+                        onDiscard={() => m.clientMessageId && conv.discard(m.clientMessageId)}
                         t={t}
                         lang={i18n.language}
                       />
                     ))}
                   </div>
                 ))}
-                <div ref={bottomRef} />
               </div>
 
               {notice && (
@@ -335,7 +488,9 @@ export default function MessagesPage() {
                 setDraft={setDraft}
                 onType={onType}
                 onSubmit={send}
-                onVoice={sendVoice}
+                // A voice note is uploaded into a conversation, so it waits
+                // until the first written message has created one.
+                onVoice={header.threadId ? sendVoice : null}
                 onNotice={setNotice}
                 inputRef={inputRef}
                 t={t}
@@ -378,15 +533,40 @@ function Bubble({
   m,
   last,
   onReply,
+  onRetry,
+  onDiscard,
   t,
   lang,
 }: {
-  m: ChatMessageDto;
+  m: LocalMessage;
   last: boolean;
   onReply: () => void;
+  onRetry: () => void;
+  onDiscard: () => void;
   t: (k: string, o?: any) => string;
   lang: string;
 }) {
+  // A send that did not reach the server stays on screen, marked, with a way
+  // to try again — never silently dropped, and never sent twice (the retry
+  // reuses the same client id).
+  if (m.status === 'failed') {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <div className="max-w-[78%] rounded-2xl rounded-bs-sm bg-error-container px-3.5 py-2 text-on-error-container shadow-hairline sm:max-w-[70%]">
+          <p className="whitespace-pre-wrap break-words text-sm">{m.body}</p>
+        </div>
+        <p className="flex items-center gap-3 text-xs">
+          <span className="text-error">{t('messages.sendFailed')}</span>
+          <button type="button" onClick={onRetry} className="font-bold text-primary">
+            {t('messages.retry')}
+          </button>
+          <button type="button" onClick={onDiscard} className="text-on-surface-variant">
+            {t('messages.discard')}
+          </button>
+        </p>
+      </div>
+    );
+  }
   return (
     <div className={`group/msg flex items-end gap-1 ${m.mine ? 'flex-row' : 'flex-row-reverse'}`}>
       <div
@@ -447,8 +627,11 @@ function Bubble({
           >
             {shortTime(m.createdAt, lang)}
             {m.mine && (
-              <span className="material-symbols-outlined text-[13px]">
-                {m.readAt ? 'done_all' : 'done'}
+              <span
+                className="material-symbols-outlined text-[13px]"
+                aria-label={m.status === 'sending' ? t('messages.sending') : undefined}
+              >
+                {m.status === 'sending' ? 'schedule' : m.readAt ? 'done_all' : 'done'}
               </span>
             )}
           </p>
@@ -578,7 +761,8 @@ function Composer({
   setDraft: (v: string) => void;
   onType: () => void;
   onSubmit: (e: FormEvent) => void;
-  onVoice: (blob: Blob, seconds: number) => void;
+  /** null while there is no conversation to upload into yet */
+  onVoice: ((blob: Blob, seconds: number) => void) | null;
   onNotice: (m: string) => void;
   inputRef: React.RefObject<HTMLInputElement>;
   t: (k: string, o?: any) => string;
@@ -621,7 +805,7 @@ function Composer({
         const seconds = elapsedRef.current;
         setRecording(false);
         setElapsed(0);
-        if (!keepRef.current || seconds < 1) return;
+        if (!keepRef.current || seconds < 1 || !onVoice) return;
         onVoice(new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' }), seconds);
       };
       recorder.start();
@@ -694,8 +878,12 @@ function Composer({
           onType();
         }}
       />
-      {draft.trim() ? (
-        <button className="btn-primary h-11 px-5" aria-label={t('messages.send')}>
+      {draft.trim() || !onVoice ? (
+        <button
+          className="btn-primary h-11 px-5"
+          aria-label={t('messages.send')}
+          disabled={!draft.trim()}
+        >
           <span className="material-symbols-outlined rtl:-scale-x-100">send</span>
         </button>
       ) : (

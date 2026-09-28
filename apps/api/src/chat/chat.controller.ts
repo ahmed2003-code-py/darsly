@@ -7,6 +7,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UploadedFile,
@@ -17,11 +18,28 @@ import { memoryStorage } from 'multer';
 import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IsOptionalId } from '../common/validation';
 import { StorageProvider } from '../storage/storage.provider';
-import { ChatService, CHAT_MESSAGE_MAX_LEN, VOICE_MAX_BYTES } from './chat.service';
+import {
+  ChatService,
+  CHAT_MESSAGE_MAX_LEN,
+  CLIENT_MESSAGE_ID,
+  MESSAGE_PAGE_MAX,
+  THREAD_PAGE_MAX,
+  VOICE_MAX_BYTES,
+} from './chat.service';
 
 class SendMessageDto {
   @IsOptionalId() threadId?: string;
@@ -32,6 +50,27 @@ class SendMessageDto {
   @IsOptionalId() lessonId?: string;
   // A day of video: past that the timestamp is a typo, not a seek position.
   @IsOptional() @IsInt() @Min(0) @Max(86_400) videoTimestampSec?: number;
+  /** The client's id for this send; a retry with the same id is stored once. */
+  @IsOptional() @IsString() @Matches(CLIENT_MESSAGE_ID) clientMessageId?: string;
+}
+
+/** A page of conversations: `before` is the id of the last one already shown. */
+class ThreadsQuery {
+  @IsOptionalId() before?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(THREAD_PAGE_MAX) limit?: number;
+}
+
+/** A page of one conversation, keyed on a message of it. */
+class MessagesQuery {
+  @IsOptionalId() before?: string;
+  @IsOptionalId() after?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(MESSAGE_PAGE_MAX) limit?: number;
+}
+
+/** Who a not-yet-existing conversation would be with. */
+class ResolveQuery {
+  @IsOptionalId() studentId?: string;
+  @IsOptionalId() tenantId?: string;
 }
 
 /** Open the conversation with someone — the student for a teacher, the academy
@@ -56,16 +95,32 @@ export class ChatController {
   ) {}
 
   @Get('threads')
-  @ApiOperation({ summary: 'My chat threads (student: my teachers; teacher: my tenant)' })
-  threads(@CurrentUser() user: JwtPayload) {
-    return this.chat.listThreads(user);
+  @ApiOperation({ summary: 'A page of my conversations, newest activity first' })
+  threads(@CurrentUser() user: JwtPayload, @Query() q: ThreadsQuery) {
+    return this.chat.listThreads(user, q);
+  }
+
+  @Get('resolve')
+  @ApiOperation({
+    summary: 'The conversation with someone, if one exists — never creates one',
+  })
+  resolve(@CurrentUser() user: JwtPayload, @Query() q: ResolveQuery) {
+    return this.chat.resolveTarget(user, q);
   }
 
   @Post('threads')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Open (or find) the conversation with someone' })
+  @ApiOperation({
+    summary: 'DEPRECATED (tabs from before /chat/resolve): open the conversation with someone',
+  })
   open(@CurrentUser() user: JwtPayload, @Body() dto: OpenThreadDto) {
     return this.chat.openThread(user, dto);
+  }
+
+  @Get('threads/:id')
+  @ApiOperation({ summary: 'One conversation of mine (header for a deep link)' })
+  thread(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.chat.getThread(user, id);
   }
 
   @Delete('threads/:id')
@@ -75,9 +130,11 @@ export class ChatController {
   }
 
   @Get('threads/:id/messages')
-  @ApiOperation({ summary: 'Messages in a thread (marks them read)' })
-  messages(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
-    return this.chat.getMessages(user, id);
+  @ApiOperation({
+    summary: 'A page of a thread, oldest-first: newest page, or before/after a message',
+  })
+  messages(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Query() q: MessagesQuery) {
+    return this.chat.getMessages(user, id, q);
   }
 
   @Post('messages')

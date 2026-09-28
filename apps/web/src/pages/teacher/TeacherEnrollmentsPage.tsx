@@ -125,28 +125,25 @@ function SummaryChip({ icon, value, label }: { icon: string; value: string; labe
  * The console knew who the student was and still sent the teacher to WhatsApp,
  * because chat could only be started from the student's side — a teacher with
  * something to say had to wait to be spoken to first.
+ *
+ * Plain navigation, nothing written: the messages page shows the existing
+ * conversation, or an empty one ready to type in, and the conversation itself
+ * is only created when the first message is actually sent.
  */
 function MessageButton({ studentId, label }: { studentId: string; label: string }) {
   const navigate = useNavigate();
-  const open = useMutation({
-    mutationFn: async () => (await api.post('/chat/threads', { studentId })).data,
-    onSuccess: (d) => navigate(`/messages?t=${d.threadId}`),
-  });
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
-      disabled={open.isPending}
       onClick={(e) => {
         e.stopPropagation();
-        open.mutate();
+        navigate(`/messages?student=${encodeURIComponent(studentId)}`);
       }}
-      className="grid h-9 w-9 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed transition hover:bg-primary hover:text-on-primary disabled:opacity-50"
+      className="grid h-9 w-9 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed transition hover:bg-primary hover:text-on-primary"
     >
-      <span className="material-symbols-outlined text-[20px]">
-        {open.isPending ? 'hourglass' : 'forum'}
-      </span>
+      <span className="material-symbols-outlined text-[20px]">forum</span>
     </button>
   );
 }

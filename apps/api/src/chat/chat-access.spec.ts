@@ -202,11 +202,105 @@ describe('ChatService — the gate is actually applied', () => {
     );
   });
 
-  it('caps a conversation read rather than returning all of it', async () => {
+  /**
+   * Opening a conversation reads the NEWEST page. It used to read the oldest
+   * 200 in ascending order, so anything past the 200th message of a long
+   * conversation never appeared at all.
+   */
+  it('caps a conversation read and takes it from the newest end', async () => {
     const { svc, prisma } = makeService();
 
     await svc.getMessages(user(Role.TEACHER, { tenantId: 'teacherA' }), 't1');
 
-    expect(prisma.chatMessage.findMany.mock.calls[0][0].take).toBe(200);
+    const args = prisma.chatMessage.findMany.mock.calls[0][0];
+    expect(args.take).toBe(40);
+    expect(args.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+  });
+
+  it('never lets a client ask for an unbounded page', async () => {
+    const { svc, prisma } = makeService();
+
+    await svc.getMessages(user(Role.TEACHER, { tenantId: 'teacherA' }), 't1', { limit: 1e9 });
+
+    expect(prisma.chatMessage.findMany.mock.calls[0][0].take).toBe(100);
+  });
+});
+
+/**
+ * The conversation list costs the same number of queries for one conversation
+ * as for a full page. It used to run one unread `count` per conversation, on
+ * top of loading every conversation the viewer ever had.
+ */
+describe('ChatService.listThreads — bounded and not N+1', () => {
+  function listPrisma(threadCount: number) {
+    const threads = Array.from({ length: threadCount }, (_, i) => ({
+      id: `t${i}`,
+      type: 'DM',
+      tenantId: 'teacherA',
+      studentId: `s${i}`,
+      lessonId: null,
+      videoTimestampSec: null,
+      lastMessageId: `m${i}`,
+      lastMessageAt: new Date(),
+      updatedAt: new Date(),
+      teacher: { user: { fullName: 'T', avatarUrl: null } },
+      student: { user: { fullName: `S${i}`, avatarUrl: null } },
+    }));
+    return {
+      teacherProfile: { findUnique: jest.fn().mockResolvedValue({ acceptsStudentMessages: true }) },
+      chatThread: {
+        fields: { clearedForTeacherAt: 'ref-t', clearedForStudentAt: 'ref-s' },
+        findMany: jest.fn().mockResolvedValue(threads),
+        findFirst: jest.fn(),
+      },
+      chatMessage: {
+        findMany: jest.fn().mockResolvedValue(
+          threads.map((_, i) => ({
+            id: `m${i}`,
+            body: `hi ${i}`,
+            audioKey: null,
+            createdAt: new Date(),
+          })),
+        ),
+        count: jest.fn(),
+      },
+      $queryRaw: jest.fn().mockResolvedValue(threads.map((t) => ({ threadId: t.id, unread: 2 }))),
+    } as any;
+  }
+
+  const calls = (p: any) =>
+    p.teacherProfile.findUnique.mock.calls.length +
+    p.chatThread.findMany.mock.calls.length +
+    p.chatThread.findFirst.mock.calls.length +
+    p.chatMessage.findMany.mock.calls.length +
+    p.chatMessage.count.mock.calls.length +
+    p.$queryRaw.mock.calls.length;
+
+  it('issues the same number of queries for 1 conversation as for 50', async () => {
+    const one = listPrisma(1);
+    const fifty = listPrisma(50);
+    const teacher = user(Role.TEACHER, { tenantId: 'teacherA' });
+
+    const a = await new ChatService(one, none, none, none).listThreads(teacher);
+    const b = await new ChatService(fifty, none, none, none).listThreads(teacher);
+
+    expect(a).toHaveLength(1);
+    expect(b).toHaveLength(50);
+    expect(calls(fifty)).toBe(calls(one));
+    // Unread is one grouped query, never a count per conversation.
+    expect(fifty.chatMessage.count).not.toHaveBeenCalled();
+    expect(fifty.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(b.every((t) => t.unread === 2)).toBe(true);
+  });
+
+  it('asks the database for one page, never everything', async () => {
+    const p = listPrisma(3);
+    const teacher = user(Role.TEACHER, { tenantId: 'teacherA' });
+
+    await new ChatService(p, none, none, none).listThreads(teacher);
+    expect(p.chatThread.findMany.mock.calls[0][0].take).toBe(50);
+
+    await new ChatService(p, none, none, none).listThreads(teacher, { limit: 5000 });
+    expect(p.chatThread.findMany.mock.calls[1][0].take).toBe(100);
   });
 });

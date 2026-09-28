@@ -329,6 +329,8 @@ export interface ChatMessageDto {
   audio?: { durationSec: number; bytes: number } | null;
   /** Set when the message was written about a lesson, and where in its video. */
   lesson?: { id: string; title: string; atSec: number | null } | null;
+  /** The sender's own id for the send; present only on the sender's copy. */
+  clientMessageId?: string | null;
 }
 
 export interface ChatThreadDto {
@@ -376,6 +378,11 @@ export interface SendMessagePayload {
   /** Q&A pinned to a lesson moment */
   lessonId?: string;
   videoTimestampSec?: number;
+  /**
+   * The client's id for this send (a UUID). Retrying with the same id returns
+   * the message already stored instead of posting it again.
+   */
+  clientMessageId?: string;
 }
 
 // ── Progress & student comfort ───────────────────────────────────────────────

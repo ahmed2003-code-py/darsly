@@ -17,6 +17,9 @@ import { ChatService } from './chat.service';
  */
 const none = {} as any;
 
+/** No staff memberships anywhere: the teacher/student paths only. */
+const noScopes = { resolve: async () => null } as any;
+
 function makeService(over: { thread?: unknown; studentId?: string | null } = {}) {
   const thread =
     over.thread === undefined
@@ -66,7 +69,7 @@ function makeService(over: { thread?: unknown; studentId?: string | null } = {})
         ),
     },
   } as any;
-  return { svc: new ChatService(prisma, none, none, none), prisma };
+  return { svc: new ChatService(prisma, none, none, none, noScopes), prisma };
 }
 
 const user = (role: Role, over: Record<string, unknown> = {}) =>
@@ -282,6 +285,7 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
         count: jest.fn(),
       },
       chatReadState: { findMany: jest.fn().mockResolvedValue([]) },
+      academyMembership: { findMany: jest.fn().mockResolvedValue([]) },
       $queryRaw: jest.fn().mockResolvedValue(threads.map((t) => ({ threadId: t.id, unread: 2 }))),
     } as any;
   }
@@ -293,6 +297,7 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
     p.chatMessage.findMany.mock.calls.length +
     p.chatMessage.count.mock.calls.length +
     p.chatReadState.findMany.mock.calls.length +
+    p.academyMembership.findMany.mock.calls.length +
     p.$queryRaw.mock.calls.length;
 
   it('issues the same number of queries for 1 conversation as for 50', async () => {
@@ -300,8 +305,8 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
     const fifty = listPrisma(50);
     const teacher = user(Role.TEACHER, { tenantId: 'teacherA' });
 
-    const a = await new ChatService(one, none, none, none).listThreads(teacher);
-    const b = await new ChatService(fifty, none, none, none).listThreads(teacher);
+    const a = await new ChatService(one, none, none, none, noScopes).listThreads(teacher);
+    const b = await new ChatService(fifty, none, none, none, noScopes).listThreads(teacher);
 
     expect(a).toHaveLength(1);
     expect(b).toHaveLength(50);
@@ -316,10 +321,10 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
     const p = listPrisma(3);
     const teacher = user(Role.TEACHER, { tenantId: 'teacherA' });
 
-    await new ChatService(p, none, none, none).listThreads(teacher);
+    await new ChatService(p, none, none, none, noScopes).listThreads(teacher);
     expect(p.chatThread.findMany.mock.calls[0][0].take).toBe(50);
 
-    await new ChatService(p, none, none, none).listThreads(teacher, { limit: 5000 });
+    await new ChatService(p, none, none, none, noScopes).listThreads(teacher, { limit: 5000 });
     expect(p.chatThread.findMany.mock.calls[1][0].take).toBe(100);
   });
 });

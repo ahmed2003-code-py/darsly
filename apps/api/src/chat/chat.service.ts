@@ -20,6 +20,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { avatarUrl } from '../common/signed-link';
+import { StaffScopeService } from '../academy/staff-scope.service';
 import { resolveCanonicalThread, ThreadIdentity, threadKey } from './chat-thread.identity';
 import {
   aggregateReactions,
@@ -47,6 +48,20 @@ export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
  * UUID fits, and so does anything else URL-safe of a sensible length.
  */
 export const CLIENT_MESSAGE_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+/**
+ * Who a message is for. An existing conversation (threadId), or a person:
+ * a student names a teacher (tenantId) or an assistant (staffUserId +
+ * academyId); staff name a student (studentId), plus the academy when it is
+ * not their own workspace.
+ */
+export interface ChatTarget {
+  threadId?: string;
+  tenantId?: string;
+  studentId?: string;
+  academyId?: string;
+  staffUserId?: string;
+}
 
 /** Which way a page of messages reads from its cursor. */
 export interface MessagePageQuery {
@@ -92,10 +107,13 @@ type ThreadWithSides = Prisma.ChatThreadGetPayload<{ include: typeof THREAD_INCL
 export interface ThreadParties {
   id: string;
   tenantId: string;
+  academyId: string | null;
   studentId: string;
   dedupeKey: string;
   studentUserId: string;
   staffUserId: string;
+  /** OWNER: the teacher's own conversation. ASSISTANT: one of their assistants'. */
+  staffKind: 'OWNER' | 'ASSISTANT';
   clearedForTeacherAt: Date | null;
   clearedForStudentAt: Date | null;
 }
@@ -111,6 +129,7 @@ export class ChatService {
     private readonly realtime: RealtimeService,
     private readonly notifications: NotificationsService,
     private readonly storage: StorageProvider,
+    private readonly scopes: StaffScopeService,
   ) {}
 
   // ── Identity helpers ──────────────────────────────────────────────────────
@@ -120,19 +139,74 @@ export class ChatService {
     return s?.id ?? null;
   }
 
-  /** True if the user is a participant in the thread (student, tenant teacher, or admin). */
+  /**
+   * True if the user is a participant in the thread: its student, the teacher
+   * whose own conversation it is, the assistant whose conversation it is —
+   * for as long as that assistant may still serve this student — or an admin.
+   *
+   * An assistant's access is re-derived on every call from their membership
+   * as it is now (StaffScopeService): taking the student's course off them,
+   * or their message.reply, or the membership itself, closes the conversation
+   * to them on the next request. A teacher does not see their assistants'
+   * conversations through this (that is the Phase 2 shared inbox).
+   */
   async canAccessThread(user: JwtPayload, threadId: string): Promise<boolean> {
-    const thread = await this.prisma.chatThread.findUnique({ where: { id: threadId } });
+    const thread = await this.prisma.chatThread.findUnique({
+      where: { id: threadId },
+      select: {
+        tenantId: true,
+        studentId: true,
+        academyId: true,
+        staffUserId: true,
+        teacher: { select: { userId: true } },
+      },
+    });
     if (!thread) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
+    const assistantThread = !!thread.staffUserId && thread.staffUserId !== thread.teacher.userId;
+    if (assistantThread && thread.staffUserId === user.sub) {
+      return this.assistantMayServe(user, thread.academyId, thread.studentId);
+    }
+    if (assistantThread && user.role !== Role.STUDENT) return false;
     // `!!user.tenantId` is defence in depth rather than a fix for a live bug:
     // the column is non-nullable and a teacher's token always carries a
     // tenant. But `undefined === undefined` is true, so the comparison on its
     // own would grant a tenant-less token access to a tenant-less thread the
     // day either of those assumptions stops holding.
     if (user.role === Role.TEACHER) return !!user.tenantId && thread.tenantId === user.tenantId;
+    if (user.role !== Role.STUDENT) return false;
     const sid = await this.studentId(user.sub);
     return !!sid && thread.studentId === sid;
+  }
+
+  /**
+   * May this staff member talk with this student in this academy right now:
+   * a live membership holding message.reply, and the student enrolled in one
+   * of their courses.
+   */
+  private async assistantMayServe(
+    user: Pick<JwtPayload, 'sub' | 'role'>,
+    academyId: string | null,
+    studentId: string,
+  ): Promise<boolean> {
+    if (!academyId) return false;
+    const scope = await this.scopes.resolve(user.sub, academyId, user.role);
+    if (!scope || !scope.ctx.can('message.reply')) return false;
+    return this.scopes.hasStudent(scope, studentId);
+  }
+
+  /** The title an assistant carries in this academy ("Student Support"). */
+  private async assistantTitle(
+    db: Prisma.TransactionClient,
+    academyId: string | null,
+    userId: string,
+  ): Promise<string | null> {
+    if (!academyId) return null;
+    const m = await db.academyMembership.findFirst({
+      where: { academyId, userId, status: 'ACTIVE' },
+      select: { title: true },
+    });
+    return m?.title ?? null;
   }
 
   /** The conversation's participants, or null when it does not exist. */
@@ -142,6 +216,7 @@ export class ChatService {
       select: {
         id: true,
         tenantId: true,
+        academyId: true,
         studentId: true,
         dedupeKey: true,
         staffUserId: true,
@@ -152,13 +227,16 @@ export class ChatService {
       },
     });
     if (!t) return null;
+    const staffUserId = t.staffUserId ?? t.teacher.userId;
     return {
       id: t.id,
       tenantId: t.tenantId,
+      academyId: t.academyId,
       studentId: t.studentId,
       dedupeKey: t.dedupeKey,
       studentUserId: t.student.userId,
-      staffUserId: t.staffUserId ?? t.teacher.userId,
+      staffUserId,
+      staffKind: staffUserId === t.teacher.userId ? 'OWNER' : 'ASSISTANT',
       clearedForTeacherAt: t.clearedForTeacherAt,
       clearedForStudentAt: t.clearedForStudentAt,
     } satisfies ThreadParties;
@@ -175,7 +253,7 @@ export class ChatService {
    */
   private senderKindFor(user: JwtPayload, p: ThreadParties): ChatSenderKind {
     if (user.sub === p.studentUserId) return 'STUDENT';
-    if (user.sub === p.staffUserId) return 'OWNER';
+    if (user.sub === p.staffUserId) return p.staffKind;
     if (user.role === Role.SUPER_ADMIN) return 'ADMIN';
     if (user.role === Role.TEACHER) return 'TEACHER';
     return 'STUDENT';
@@ -204,19 +282,9 @@ export class ChatService {
     user: JwtPayload,
     page: { limit?: number; before?: string } = {},
   ): Promise<ChatThreadDto[]> {
-    // A teacher who has closed messaging is not shown a list of conversations
-    // nobody can add to.
-    if (user.role === Role.TEACHER && user.tenantId && !(await this.messagingOpen(user.tenantId))) {
-      return [];
-    }
     const limit = clamp(page.limit ?? THREAD_PAGE, 1, THREAD_PAGE_MAX);
-    const side: Prisma.ChatThreadWhereInput =
-      user.role === Role.TEACHER
-        ? { tenantId: user.tenantId ?? '__none__' }
-        : {
-            studentId: (await this.studentId(user.sub)) ?? '__none__',
-            teacher: { acceptsStudentMessages: true },
-          };
+    const side = await this.listSide(user);
+    if (!side) return [];
 
     // A conversation someone cleared has nothing in it for them until the next
     // message lands, and an empty conversation is not a row worth drawing —
@@ -255,6 +323,53 @@ export class ChatService {
   }
 
   /**
+   * Which conversations are this viewer's to list.
+   *
+   *  - a student: their own, where messaging is open;
+   *  - a teacher: their own conversations in their workspace — not their
+   *    assistants' (that is the Phase 2 shared inbox);
+   *  - an assistant: their own conversations, in each academy where they may
+   *    still message, with students still in their courses. The same rule as
+   *    canAccessThread, as a filter, so the list never shows a conversation
+   *    that would refuse to open.
+   *
+   * A teacher who also assists in someone else's academy sees both.
+   */
+  private async listSide(user: JwtPayload): Promise<Prisma.ChatThreadWhereInput | null> {
+    if (user.role === Role.STUDENT) {
+      return {
+        studentId: (await this.studentId(user.sub)) ?? '__none__',
+        teacher: { acceptsStudentMessages: true },
+      };
+    }
+    const sides: Prisma.ChatThreadWhereInput[] = [];
+    // A teacher who has closed messaging is not shown a list of conversations
+    // nobody can add to.
+    if (user.role === Role.TEACHER && user.tenantId && (await this.messagingOpen(user.tenantId))) {
+      sides.push({
+        tenantId: user.tenantId,
+        OR: [{ staffUserId: null }, { staffUserId: user.sub }],
+      });
+    }
+    const memberships = await this.prisma.academyMembership.findMany({
+      where: { userId: user.sub, status: 'ACTIVE', role: { in: ['ASSISTANT', 'TEACHER'] } },
+      select: { academyId: true },
+    });
+    for (const { academyId } of memberships) {
+      if (academyId === user.tenantId) continue;
+      const scope = await this.scopes.resolve(user.sub, academyId, user.role);
+      if (!scope || !scope.ctx.can('message.reply')) continue;
+      sides.push({
+        academyId,
+        staffUserId: user.sub,
+        student: this.scopes.studentWhere(scope),
+        teacher: { acceptsStudentMessages: true },
+      });
+    }
+    return sides.length ? { OR: sides } : null;
+  }
+
+  /**
    * One conversation's header, for a link that lands on a conversation that
    * is not on the first page of the list (an old notification, a deep link).
    */
@@ -289,6 +404,33 @@ export class ChatService {
     if (!threads.length) return [];
     const ids = threads.map((th) => th.id);
     const lastIds = threads.map((th) => th.lastMessageId).filter((x): x is string => !!x);
+    // The assistants on the staff side of any of these conversations: who they
+    // are, and the title the academy gave them. One query each, for the page.
+    const assistantThreads = threads.filter(
+      (th) => th.staffUserId && th.staffUserId !== th.teacher.userId,
+    );
+    const assistantIds = [...new Set(assistantThreads.map((th) => th.staffUserId!))];
+    const [assistants, titles] = assistantIds.length
+      ? await Promise.all([
+          this.prisma.user.findMany({
+            where: { id: { in: assistantIds } },
+            select: { id: true, fullName: true, avatarUrl: true, updatedAt: true },
+          }),
+          this.prisma.academyMembership.findMany({
+            where: {
+              userId: { in: assistantIds },
+              academyId: {
+                in: [...new Set(assistantThreads.map((th) => th.academyId!).filter(Boolean))],
+              },
+            },
+            select: { userId: true, academyId: true, title: true },
+          }),
+        ])
+      : [[], []];
+    const assistantById = new Map(assistants.map((u) => [u.id, u]));
+    const titleOf = (academyId: string | null, userId: string) =>
+      titles.find((m) => m.academyId === academyId && m.userId === userId)?.title ?? null;
+
     const [lastMessages, unread, cursors] = await Promise.all([
       lastIds.length
         ? this.prisma.chatMessage.findMany({
@@ -313,11 +455,17 @@ export class ChatService {
     const cursorOf = (threadId: string, userId: string) =>
       cursors.find((c) => c.threadId === threadId && c.userId === userId)?.lastReadAt ?? null;
 
-    const isTeacher = user.role === Role.TEACHER;
     return threads.map((thread) => {
-      const counterpart = isTeacher ? thread.student.user : thread.teacher.user;
+      // Which side the viewer is on is decided by the conversation, not by the
+      // account's role: a teacher can be the assistant in someone else's.
+      const staffSide = thread.student.userId !== user.sub;
       const staffUserId = thread.staffUserId ?? thread.teacher.userId;
-      const counterpartUserId = isTeacher ? thread.student.userId : staffUserId;
+      const isAssistant = staffUserId !== thread.teacher.userId;
+      const staffUser = isAssistant
+        ? (assistantById.get(staffUserId) ?? thread.teacher.user)
+        : thread.teacher.user;
+      const counterpart = staffSide ? thread.student.user : staffUser;
+      const counterpartUserId = staffSide ? thread.student.userId : staffUserId;
       const last = thread.lastMessageId ? lastById.get(thread.lastMessageId) : undefined;
       return {
         id: thread.id,
@@ -326,7 +474,8 @@ export class ChatService {
         studentId: thread.studentId,
         counterpartName: counterpart.fullName,
         counterpartAvatarUrl: avatarUrl(counterpart),
-        counterpartKind: isTeacher ? 'STUDENT' : 'OWNER',
+        counterpartKind: staffSide ? 'STUDENT' : isAssistant ? 'ASSISTANT' : 'OWNER',
+        counterpartTitle: !staffSide && isAssistant ? titleOf(thread.academyId, staffUserId) : null,
         lessonId: thread.lessonId,
         lessonTitle: null,
         videoTimestampSec: thread.videoTimestampSec,
@@ -615,7 +764,7 @@ export class ChatService {
    */
   async authorizeTarget(
     user: JwtPayload,
-    payload: { threadId?: string; tenantId?: string; studentId?: string },
+    payload: ChatTarget,
   ): Promise<{ threadId: string } | { identity: ThreadIdentity }> {
     if (payload.threadId) {
       if (!(await this.canAccessThread(user, payload.threadId))) {
@@ -628,6 +777,7 @@ export class ChatService {
     if (user.role === Role.STUDENT) {
       const sid = await this.studentId(user.sub);
       if (!sid) throw new BadRequestException('No student profile');
+      if (payload.staffUserId) return this.studentToAssistant(sid, payload);
       if (!payload.tenantId) throw new BadRequestException('tenantId required to start a chat');
       // Enrollment gate: a student can only DM a teacher they study with.
       const enrolled = await this.prisma.enrollment.findFirst({
@@ -643,6 +793,12 @@ export class ChatService {
       // a lesson used to open a second thread with the same person, which read
       // as two chats with one teacher; the lesson rides on the message instead.
       return { identity: this.identity(payload.tenantId, sid, teacher.userId) };
+    }
+
+    // An assistant (or a teacher helping in someone else's academy) writing
+    // first: as themselves, in that academy, to a student of their courses.
+    if (payload.academyId && payload.academyId !== user.tenantId) {
+      return this.assistantToStudent(user, payload.academyId, payload.studentId);
     }
 
     // A teacher writing first. This used to be refused outright, which meant a
@@ -661,6 +817,168 @@ export class ChatService {
     });
     if (!shares) throw new ForbiddenException('You can only message your own students');
     return { identity: this.identity(tenantId, payload.studentId, teacher.userId) };
+  }
+
+  /**
+   * A student starting a conversation with an assistant: only one the academy
+   * made reachable (directContact), who may still message, and whose courses
+   * the student is actively enrolled in. Everything is checked against the
+   * assistant's membership as it is now.
+   */
+  private async studentToAssistant(
+    studentId: string,
+    payload: ChatTarget,
+  ): Promise<{ identity: ThreadIdentity }> {
+    const refuse = () =>
+      new ForbiddenException({
+        message: 'This person cannot be messaged directly',
+        code: 'ASSISTANT_NOT_REACHABLE',
+      });
+    if (!payload.academyId)
+      throw new BadRequestException('academyId required to message an assistant');
+    const member = await this.prisma.academyMembership.findFirst({
+      where: {
+        userId: payload.staffUserId!,
+        academyId: payload.academyId,
+        role: 'ASSISTANT',
+        status: 'ACTIVE',
+        directContact: true,
+      },
+      select: { user: { select: { role: true } } },
+    });
+    if (!member) throw refuse();
+    const scope = await this.scopes.resolve(
+      payload.staffUserId!,
+      payload.academyId,
+      member.user.role,
+    );
+    if (!scope || !scope.ctx.can('message.reply')) throw refuse();
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { studentId, status: 'ACTIVE', course: scope.courses },
+      orderBy: { createdAt: 'desc' },
+      select: { course: { select: { tenantId: true } } },
+    });
+    if (!enrollment) throw refuse();
+    const tenantId = enrollment.course.tenantId;
+    await this.openTeacher(tenantId, 'Messaging is switched off for this academy');
+    return {
+      identity: {
+        academyId: payload.academyId,
+        tenantId,
+        studentId,
+        staffUserId: payload.staffUserId!,
+      },
+    };
+  }
+
+  /**
+   * A staff member writing first in an academy that is not their own
+   * workspace. They must hold message.reply there, and the student must be
+   * enrolled — in any status — in one of their courses. The conversation is
+   * theirs (staffUserId), never the teacher's: they do not speak as the
+   * teacher and the teacher's inbox is not where it lands.
+   */
+  private async assistantToStudent(
+    user: JwtPayload,
+    academyId: string,
+    studentId?: string,
+  ): Promise<{ identity: ThreadIdentity }> {
+    if (!studentId) throw new BadRequestException('studentId required to start a chat');
+    const scope = await this.scopes.resolve(user.sub, academyId, user.role);
+    if (!scope || !scope.ctx.can('message.reply')) {
+      throw new ForbiddenException({
+        message: 'You cannot message students in this academy',
+        code: 'NO_MESSAGE_PERMISSION',
+      });
+    }
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { studentId, course: scope.courses },
+      orderBy: { createdAt: 'desc' },
+      select: { course: { select: { tenantId: true } } },
+    });
+    if (!enrollment) throw new ForbiddenException('You can only message students of your courses');
+    const tenantId = enrollment.course.tenantId;
+    await this.openTeacher(tenantId, 'Messaging is switched off for this academy');
+    return { identity: { academyId, tenantId, studentId, staffUserId: user.sub } };
+  }
+
+  /**
+   * Who a student can start a conversation with: each teacher they are
+   * actively enrolled with (whose messaging is open), and each assistant of
+   * those academies the academy made reachable (directContact) who may
+   * message and works on one of the student's courses. An assistant with
+   * directContact off is simply not here — and studentToAssistant refuses
+   * them too, so leaving them out is not the only thing stopping it.
+   */
+  async contacts(user: JwtPayload) {
+    if (user.role !== Role.STUDENT) return [];
+    const sid = await this.studentId(user.sub);
+    if (!sid) return [];
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { studentId: sid, status: 'ACTIVE' },
+      select: { course: { select: { tenantId: true, academyId: true } } },
+    });
+    const tenantIds = [...new Set(enrollments.map((e) => e.course.tenantId))];
+    const academyIds = [
+      ...new Set(enrollments.map((e) => e.course.academyId).filter((x): x is string => !!x)),
+    ];
+    const person = { id: true, fullName: true, avatarUrl: true, updatedAt: true } as const;
+    const [teachers, candidates, academies] = await Promise.all([
+      this.prisma.teacherProfile.findMany({
+        where: { id: { in: tenantIds }, acceptsStudentMessages: true },
+        select: { id: true, user: { select: person } },
+      }),
+      this.prisma.academyMembership.findMany({
+        where: {
+          academyId: { in: academyIds },
+          role: 'ASSISTANT',
+          status: 'ACTIVE',
+          directContact: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          userId: true,
+          academyId: true,
+          title: true,
+          user: { select: { ...person, role: true } },
+        },
+      }),
+      this.prisma.academy.findMany({
+        where: { id: { in: academyIds } },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const academyName = (id: string) => academies.find((a) => a.id === id)?.name ?? null;
+    const assistants = [];
+    for (const m of candidates) {
+      const scope = await this.scopes.resolve(m.userId, m.academyId, m.user.role);
+      if (!scope || !scope.ctx.can('message.reply')) continue;
+      const shares = await this.prisma.enrollment.count({
+        where: { studentId: sid, status: 'ACTIVE', course: scope.courses },
+      });
+      if (!shares) continue;
+      assistants.push({
+        kind: 'ASSISTANT' as const,
+        staffUserId: m.userId,
+        academyId: m.academyId,
+        academyName: academyName(m.academyId),
+        name: m.user.fullName,
+        avatarUrl: avatarUrl(m.user),
+        title: m.title,
+      });
+    }
+    return [
+      ...teachers.map((t) => ({
+        kind: 'OWNER' as const,
+        tenantId: t.id,
+        academyId: t.id,
+        academyName: academyName(t.id),
+        name: t.user.fullName,
+        avatarUrl: avatarUrl(t.user),
+        title: null,
+      })),
+      ...assistants,
+    ];
   }
 
   /** The teacher behind a tenant, provided their messaging is switched on. */
@@ -695,12 +1013,13 @@ export class ChatService {
    */
   async resolveTarget(
     user: JwtPayload,
-    payload: { studentId?: string; tenantId?: string },
+    payload: ChatTarget,
   ): Promise<{
     threadId: string | null;
     counterpartName: string;
     counterpartAvatarUrl: string | null;
     counterpartKind: ChatSenderKind;
+    counterpartTitle: string | null;
   }> {
     const target = await this.authorizeTarget(user, payload);
     if ('threadId' in target) throw new BadRequestException('Resolve a person, not a thread');
@@ -718,11 +1037,15 @@ export class ChatService {
             .then((s) => s?.user ?? null),
     ]);
     if (!counterpart) throw new NotFoundException('No one to message here');
+    const toAssistant = user.role === Role.STUDENT && !!payload.staffUserId;
     return {
       threadId: existing && !existing.deletedAt ? existing.id : null,
       counterpartName: counterpart.fullName,
       counterpartAvatarUrl: avatarUrl(counterpart),
-      counterpartKind: user.role === Role.STUDENT ? 'OWNER' : 'STUDENT',
+      counterpartKind: user.role !== Role.STUDENT ? 'STUDENT' : toAssistant ? 'ASSISTANT' : 'OWNER',
+      counterpartTitle: toAssistant
+        ? await this.assistantTitle(this.prisma, identity.academyId, identity.staffUserId)
+        : null,
     };
   }
 
@@ -730,7 +1053,7 @@ export class ChatService {
    * DEPRECATED — kept only for browser tabs loaded before `resolve` existed.
    * Goes through the same atomic path as a send, so it cannot duplicate.
    */
-  async openThread(user: JwtPayload, payload: { studentId?: string; tenantId?: string }) {
+  async openThread(user: JwtPayload, payload: ChatTarget) {
     const target = await this.authorizeTarget(user, payload);
     if ('threadId' in target) return { threadId: target.threadId };
     const thread = await this.prisma.$transaction((tx) =>
@@ -787,11 +1110,16 @@ export class ChatService {
 
     const parties = (await this.parties(threadId))!;
     const replyTo = await this.replyTarget(threadId, replyToId);
+    const senderKind = this.senderKindFor(user, parties);
     const message = await this.prisma.chatMessage.create({
       data: {
         threadId,
         senderId: user.sub,
-        senderKind: this.senderKindFor(user, parties),
+        senderKind,
+        senderTitle:
+          senderKind === 'ASSISTANT'
+            ? await this.assistantTitle(this.prisma, parties.academyId, user.sub)
+            : null,
         body: '',
         replyToId: replyTo,
         audioDurationSec: seconds,
@@ -900,11 +1228,18 @@ export class ChatService {
           ? await tx.lesson.findUnique({ where: { id: payload.lessonId }, select: { id: true } })
           : null;
 
+        const senderKind = this.senderKindFor(user, parties);
         const created = await tx.chatMessage.create({
           data: {
             threadId,
             senderId: user.sub,
-            senderKind: this.senderKindFor(user, parties),
+            senderKind,
+            // An assistant's title is frozen onto what they said, so a later
+            // change of title does not rewrite who said it as what.
+            senderTitle:
+              senderKind === 'ASSISTANT'
+                ? await this.assistantTitle(tx, parties.academyId, user.sub)
+                : null,
             body,
             replyToId,
             lessonId: lesson?.id,

@@ -247,7 +247,9 @@ describe('QuizzesService', () => {
       },
     });
     // q1 correct (2), q2 wrong (0), q3 awarded 3 → 5/6 = 83%
-    const res = await svc.gradeAttempt('t1', 'teacherUser', 'a1', { scores: { q3: 3 } });
+    const res = await svc.gradeAttempt({ tenantId: 't1' }, 'teacherUser', 'a1', {
+      scores: { q3: 3 },
+    });
     expect(res.scorePct).toBe(83);
     expect(res.passed).toBe(true);
     expect(res.needsManualGrading).toBe(false);

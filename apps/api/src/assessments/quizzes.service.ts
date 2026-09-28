@@ -191,7 +191,7 @@ export class QuizzesService {
 
   /** Teacher awards points for short-answer questions and finalizes the score. */
   async gradeAttempt(
-    tenantId: string,
+    courses: Prisma.CourseWhereInput,
     gradedByUserId: string,
     attemptId: string,
     dto: GradeAttemptDto,
@@ -202,7 +202,7 @@ export class QuizzesService {
       where: {
         id: attemptId,
         voidedAt: null,
-        quiz: { lesson: { unit: { course: { tenantId } } } },
+        quiz: { lesson: { unit: { course: courses } } },
       },
       include: { quiz: { include: { questions: true, lesson: true } } },
     });

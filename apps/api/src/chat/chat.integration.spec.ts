@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseReady } from '../common/testing/db-available';
+import { AcademyService } from '../academy/academy.service';
+import { StaffScopeService } from '../academy/staff-scope.service';
 import { ChatService } from './chat.service';
 
 /**
@@ -30,7 +32,13 @@ const storage = {} as any;
 beforeAll(async () => {
   await prisma.onModuleInit().catch(() => undefined);
   ready = await databaseReady(prisma, ['chatThread', 'chatMessage', 'enrollment']);
-  chat = new ChatService(prisma, realtime, notifications, storage);
+  chat = new ChatService(
+    prisma,
+    realtime,
+    notifications,
+    storage,
+    new StaffScopeService(prisma, new AcademyService(prisma)),
+  );
 });
 afterAll(async () => {
   await prisma.$disconnect().catch(() => undefined);

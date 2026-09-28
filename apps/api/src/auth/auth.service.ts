@@ -181,11 +181,11 @@ export class AuthService {
    *     claimed leaves no account behind, and a created account always holds
    *     its ACTIVE membership.
    *
-   * Both TEACHER and ASSISTANT invitees get the teacher identity, because
-   * every staff capability in a Center (grading, attendance, authoring) is
-   * checked against one — only the membership role differs. Subjects and
-   * stages are what courses are filed under, so a TEACHER must supply them; an
-   * ASSISTANT authors nothing and may leave them empty.
+   * A TEACHER invitee gets the teacher identity; subjects and stages are what
+   * courses are filed under, so they must supply them. An ASSISTANT gets a
+   * STAFF account and no teacher identity at all: they author nothing, own no
+   * storefront, and act everywhere as themselves — what they may do in the
+   * academy is their membership's grant, not a profile.
    */
   async registerViaInvitation(dto: RegisterViaInvitationDto, device: DeviceContext) {
     const invite = await this.links.resolveLive(dto.token);
@@ -209,27 +209,32 @@ export class AuthService {
           code: 'STAGES_REQUIRED',
         });
     }
-    if (subjectIds.length) await this.assertSubjectsExist(subjectIds);
-    const slug = await this.uniqueSlug(email, fullName);
+    const isTeacher = invite.role === 'TEACHER';
+    if (isTeacher && subjectIds.length) await this.assertSubjectsExist(subjectIds);
+    const slug = isTeacher ? await this.uniqueSlug(email, fullName) : null;
     const passwordHash = await argon2.hash(dto.password);
 
     const { user, membership } = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
-          role: Role.TEACHER,
+          role: isTeacher ? Role.TEACHER : Role.STAFF,
           email,
           phone,
           username,
           fullName,
           passwordHash,
-          teacherProfile: {
-            create: {
-              slug,
-              status: TeacherStatus.APPROVED,
-              subjects: { create: subjectIds.map((subjectId) => ({ subjectId })) },
-              stages,
-            },
-          },
+          ...(isTeacher
+            ? {
+                teacherProfile: {
+                  create: {
+                    slug: slug!,
+                    status: TeacherStatus.APPROVED,
+                    subjects: { create: subjectIds.map((subjectId) => ({ subjectId })) },
+                    stages,
+                  },
+                },
+              }
+            : {}),
         },
         include: { teacherProfile: true, studentProfile: true },
       });
@@ -238,7 +243,9 @@ export class AuthService {
     });
 
     const tokens = await this.tokenService.createSession(
-      { id: user.id, role: Role.TEACHER, tenantId: user.teacherProfile!.id },
+      isTeacher
+        ? { id: user.id, role: Role.TEACHER, tenantId: user.teacherProfile!.id }
+        : { id: user.id, role: Role.STAFF },
       { ...device, deviceName: dto.deviceName ?? device.deviceName },
     );
     return { user: this.publicUser(user), membership, isNewUser: true, ...tokens };

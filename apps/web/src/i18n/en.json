@@ -139,7 +139,11 @@
     "profile": "Profile",
     "centerCourses": "Center courses",
     "centerStudio": "Center Studio",
-    "adminLiveCommerce": "Live sales"
+    "adminLiveCommerce": "Live sales",
+    "team": "Team",
+    "staffHome": "My students",
+    "staffPayments": "Payments",
+    "assisting": "Assisting"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -166,7 +170,8 @@
     "teacherConsole": "Teacher console",
     "studentSpace": "Student space",
     "adminConsole": "Platform console",
-    "staffConsole": "Center console"
+    "staffConsole": "Center console",
+    "assistantConsole": "Assistant"
   },
   "topbar": {
     "enablePush": "Enable browser alerts",
@@ -268,7 +273,9 @@
     "unsupported": "Reload the page to see this message.",
     "clear": "Clear this conversation",
     "clearConfirm": "Clear these messages for you? The other person keeps their copy, and anything sent from now on still arrives.",
-    "closed": "This teacher is not accepting messages right now."
+    "closed": "This teacher is not accepting messages right now.",
+    "newConversation": "New conversation",
+    "noContacts": "No one to message yet — you can message the teachers of courses you are enrolled in."
   },
   "discovery": {
     "title": "Discover Teachers",
@@ -4458,5 +4465,183 @@
       "uploading": "Uploading files…",
       "preparing": "Preparing…"
     }
+  },
+  "team": {
+    "ownerOnly": "Only the academy owner manages the team.",
+    "title": "Team",
+    "subtitle": "Assistants help you with your students. Each one sees only the courses you choose, and acts under their own name.",
+    "add": "Add assistant",
+    "empty": "No assistants yet",
+    "emptyHint": "Add one to help reply to students, follow their progress or mark their work.",
+    "pending": "Invitations not used yet",
+    "suspended": "Paused",
+    "courses": "Courses",
+    "allCourses": "All courses, including new ones",
+    "noCourses": "No courses yet — they see nothing",
+    "can": "Can",
+    "nothingYet": "Nothing yet",
+    "directOn": "Students can message them directly",
+    "directOff": "Students cannot start a chat with them",
+    "edit": "Edit access",
+    "reactivate": "Resume",
+    "suspend": "Pause",
+    "remove": "Remove",
+    "removeConfirm": "Remove {{name}} from your team? They lose access immediately.",
+    "assistant": "Assistant",
+    "expires": "Expires {{date}}",
+    "revoke": "Cancel invitation",
+    "shareText": "You are invited to join my team on Darsly: {{url}}",
+    "linkReady": "Invitation ready",
+    "linkReadyHint": "Send this link to your assistant. It works once, for one person, for 14 days. They create their own account with it.",
+    "copied": "Copied",
+    "copy": "Copy",
+    "shareWhatsapp": "Send on WhatsApp",
+    "done": "Done",
+    "editTitle": "{{name}} — access",
+    "addTitle": "Add an assistant",
+    "startFrom": "Start from",
+    "preset": {
+      "support": {
+        "title": "Student Support",
+        "hint": "Answers students, follows their progress"
+      },
+      "academic": {
+        "title": "Academic Assistant",
+        "hint": "Support, plus marking and attendance"
+      },
+      "operations": {
+        "title": "Operations",
+        "hint": "Schedule, attendance and payment questions"
+      },
+      "custom": {
+        "title": "Custom",
+        "hint": "Pick exactly what they can do"
+      }
+    },
+    "titleLabel": "Title students see",
+    "titleHint": "Shown next to their name, e.g. \"Ahmed · Student Support\".",
+    "whichCourses": "Which courses?",
+    "scope": {
+      "SELECTED": "Only the courses I pick",
+      "SELECTEDHint": "They see these courses and their students — nothing else.",
+      "ALL": "All my courses",
+      "ALLHint": "Every course, including ones you create later."
+    },
+    "noCoursesYet": "You have no courses yet.",
+    "courseStatus": {
+      "DRAFT": "Draft",
+      "ARCHIVED": "Archived"
+    },
+    "pickACourse": "Pick at least one course — until then they see no students.",
+    "whatCanTheyDo": "What can they do?",
+    "group": {
+      "students": "Students",
+      "messages": "Messages",
+      "teaching": "Teaching",
+      "payments": "Payments",
+      "guardians": "Parents"
+    },
+    "cap": {
+      "student.view": {
+        "short": "Students",
+        "label": "See their students",
+        "hint": "The students of their courses, and which of those courses each takes."
+      },
+      "progress.view": {
+        "short": "Progress",
+        "label": "See progress and results",
+        "hint": "Lessons finished, quiz scores and assignment marks — in their courses only."
+      },
+      "message.reply": {
+        "short": "Messages",
+        "label": "Talk with students",
+        "hint": "Message the students of their courses, as themselves."
+      },
+      "assessment.grade": {
+        "short": "Marking",
+        "label": "Mark quizzes and assignments",
+        "hint": "Written answers and assignments waiting to be marked in their courses."
+      },
+      "attendance.mark": {
+        "short": "Attendance",
+        "label": "Take attendance",
+        "hint": "For the groups you assign to them."
+      },
+      "group.manage": {
+        "short": "Groups",
+        "label": "Manage groups",
+        "hint": "Only the groups you assign to them."
+      },
+      "schedule.manage": {
+        "short": "Schedule",
+        "label": "Manage the schedule",
+        "hint": "Sessions of the groups you assign to them."
+      },
+      "payment.view": {
+        "short": "Payments",
+        "label": "See payments for their courses",
+        "hint": "Read only: they can answer \"did my payment arrive?\". They never see your wallet or balance."
+      },
+      "guardian.manage": {
+        "short": "Guardians",
+        "label": "Manage parents",
+        "hint": "Linking parents to students — arrives with parent access."
+      }
+    },
+    "direct": {
+      "label": "Students can start a chat with them",
+      "hint": "They appear in students' \"New conversation\" list. Off: only they can start one."
+    },
+    "save": "Save",
+    "createLink": "Create invitation link"
+  },
+  "staff": {
+    "noAcademy": "You are not assisting in any academy",
+    "noAcademyHint": "Ask the teacher for a new invitation link.",
+    "hello": "Hi {{name}}",
+    "youAre": "You are {{title}} here.",
+    "myCourses": "My courses",
+    "noCourses": "No courses assigned yet",
+    "noCoursesHint": "The teacher chooses which courses you help with.",
+    "studentsCount": "{{count}} students",
+    "studentsOf": "Students of {{course}}",
+    "myStudents": "My students",
+    "searchStudents": "Search students",
+    "noMatches": "No student matches that name",
+    "noStudents": "No students in your courses yet",
+    "more": "Show more",
+    "noStudentAccess": "You do not have access to the student list. Ask the teacher if you need it.",
+    "studentNotFound": "Student not found",
+    "studentNotFoundHint": "They may not be in any of your courses, or your access changed.",
+    "backToStudents": "My students",
+    "enrollment": {
+      "ACTIVE": "active",
+      "PENDING_PAYMENT": "awaiting payment",
+      "PENDING_APPROVAL": "awaiting approval",
+      "REJECTED": "rejected",
+      "EXPIRED": "expired",
+      "REVOKED": "ended"
+    },
+    "message": "Message",
+    "progress": "Progress",
+    "noProgress": "No progress yet",
+    "lessonsDone": "{{done}} of {{total}} lessons",
+    "lastActive": "Last active {{date}}",
+    "notStarted": "Not started yet",
+    "quizzes": "Quizzes",
+    "assignments": "Assignments",
+    "awaitingMarking": "Awaiting marking",
+    "noProgressAccess": "You do not have access to progress.",
+    "paymentsTitle": "Payments",
+    "paymentsSubtitle": "Payments for your courses — to answer students' questions. Read only.",
+    "paymentStatus": {
+      "PENDING": "Pending",
+      "PAID": "Confirmed",
+      "REJECTED": "Rejected",
+      "FAILED": "Failed",
+      "REFUNDED": "Refunded"
+    },
+    "noPayments": "Nothing here",
+    "gradingSubtitle": "Work waiting to be marked in your courses."
   }
 }

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LessonAccessService } from './lesson-access.service';
@@ -53,19 +54,37 @@ export class AssignmentsService {
     return { ...assignment, pendingGrading };
   }
 
-  async gradeSubmission(tenantId: string, submissionId: string, dto: GradeSubmissionDto) {
+  async gradeSubmission(
+    courses: Prisma.CourseWhereInput,
+    gradedByUserId: string,
+    submissionId: string,
+    dto: GradeSubmissionDto,
+  ) {
     const submission = await this.prisma.assignmentSubmission.findFirst({
-      where: { id: submissionId, assignment: { lesson: { unit: { course: { tenantId } } } } },
-      include: { assignment: { include: { lesson: true } } },
+      where: { id: submissionId, assignment: { lesson: { unit: { course: courses } } } },
+      include: {
+        assignment: {
+          include: {
+            lesson: { include: { unit: { select: { course: { select: { tenantId: true } } } } } },
+          },
+        },
+      },
     });
     if (!submission) throw new NotFoundException('Submission not found');
+    // The course's author — whose gamification ledger this lands in — whoever marks it.
+    const tenantId = submission.assignment.lesson.unit.course.tenantId;
     if (dto.score > submission.assignment.maxScore) {
       throw new BadRequestException('Score exceeds the assignment maximum');
     }
 
     const updated = await this.prisma.assignmentSubmission.update({
       where: { id: submissionId },
-      data: { score: dto.score, feedback: dto.feedback ?? '', gradedAt: new Date() },
+      data: {
+        score: dto.score,
+        feedback: dto.feedback ?? '',
+        gradedAt: new Date(),
+        gradedBy: gradedByUserId,
+      },
     });
 
     // A bonus for excellent work — 85% or better of the assignment's own

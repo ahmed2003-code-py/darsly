@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { isCorrectAnswer } from './quizzes.service';
@@ -16,7 +17,8 @@ import { isCorrectAnswer } from './quizzes.service';
  * the work, not from the lesson it happens to live in — and it is the only
  * place that has to know quizzes and assignments are two different tables.
  *
- * Scoping is by `course.tenantId`, the teacher's own id, on every query here.
+ * Scoping is by a Course filter on every query here: `{ tenantId }` for a
+ * teacher's own console, the member's StaffScope for an assistant.
  * There is no path through this service that reads another teacher's work.
  */
 /**
@@ -61,7 +63,7 @@ export class GradingService {
    * few hundred unmarked papers has a different problem from the one this
    * screen solves, and the cap keeps a runaway query honest.
    */
-  async queue(tenantId: string) {
+  async queue(scope: Prisma.CourseWhereInput) {
     const [attempts, submissions] = await Promise.all([
       this.prisma.quizAttempt.findMany({
         where: {
@@ -69,7 +71,9 @@ export class GradingService {
           gradedAt: null,
           voidedAt: null,
           submittedAt: { not: null },
-          quiz: { lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } } },
+          quiz: {
+            lesson: { deletedAt: null, unit: { course: { AND: [scope, { deletedAt: null }] } } },
+          },
         },
         orderBy: { submittedAt: 'asc' },
         take: GradingService.MAX_ITEMS,
@@ -94,7 +98,7 @@ export class GradingService {
         where: {
           gradedAt: null,
           assignment: {
-            lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } },
+            lesson: { deletedAt: null, unit: { course: { AND: [scope, { deletedAt: null }] } } },
           },
         },
         orderBy: { createdAt: 'asc' },
@@ -180,11 +184,11 @@ export class GradingService {
    * Only the questions a machine cannot mark are returned — the rest are
    * already scored and are not a decision anyone has to make.
    */
-  async quizAttempt(tenantId: string, attemptId: string) {
+  async quizAttempt(courses: Prisma.CourseWhereInput, attemptId: string) {
     const attempt = await this.prisma.quizAttempt.findFirst({
       where: {
         id: attemptId,
-        quiz: { lesson: { unit: { course: { tenantId } } } },
+        quiz: { lesson: { unit: { course: courses } } },
       },
       select: {
         id: true,
@@ -247,9 +251,9 @@ export class GradingService {
   }
 
   /** One assignment submission, the same idea with a single body of work. */
-  async submission(tenantId: string, submissionId: string) {
+  async submission(courses: Prisma.CourseWhereInput, submissionId: string) {
     const sub = await this.prisma.assignmentSubmission.findFirst({
-      where: { id: submissionId, assignment: { lesson: { unit: { course: { tenantId } } } } },
+      where: { id: submissionId, assignment: { lesson: { unit: { course: courses } } } },
       select: {
         id: true,
         body: true,
@@ -303,9 +307,11 @@ export class GradingService {
    * courses. `openReports` is what makes this worth opening: it is the only
    * place a student's "this question is wrong" surfaces at all.
    */
-  async analysis(tenantId: string) {
+  async analysis(scope: Prisma.CourseWhereInput) {
     const quizzes = await this.prisma.quiz.findMany({
-      where: { lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } } },
+      where: {
+        lesson: { deletedAt: null, unit: { course: { AND: [scope, { deletedAt: null }] } } },
+      },
       select: {
         id: true,
         lessonId: true,
@@ -325,7 +331,7 @@ export class GradingService {
 
     const reportCounts = await this.prisma.questionReport.groupBy({
       by: ['questionId'],
-      where: { status: 'OPEN', question: { quiz: { lesson: { unit: { course: { tenantId } } } } } },
+      where: { status: 'OPEN', question: { quiz: { lesson: { unit: { course: scope } } } } },
       _count: true,
     });
     const openByQuestion = new Map(reportCounts.map((r) => [r.questionId, r._count]));
@@ -334,7 +340,9 @@ export class GradingService {
     // a piece of written work are not the same thing to a teacher, and a single
     // mixed list was the first thing that made this screen hard to read.
     const assignments = await this.prisma.assignment.findMany({
-      where: { lesson: { deletedAt: null, unit: { course: { tenantId, deletedAt: null } } } },
+      where: {
+        lesson: { deletedAt: null, unit: { course: { AND: [scope, { deletedAt: null }] } } },
+      },
       select: {
         lessonId: true,
         maxScore: true,
@@ -415,9 +423,9 @@ export class GradingService {
    * quarters of the class picked the same wrong option is usually not a class
    * that failed to revise — it is a key with the wrong letter in it.
    */
-  async quizAnalysis(tenantId: string, lessonId: string) {
+  async quizAnalysis(courses: Prisma.CourseWhereInput, lessonId: string) {
     const quiz = await this.prisma.quiz.findFirst({
-      where: { lessonId, lesson: { unit: { course: { tenantId } } } },
+      where: { lessonId, lesson: { unit: { course: courses } } },
       select: {
         id: true,
         lesson: {
@@ -524,9 +532,14 @@ export class GradingService {
    * are left alone — they have not been scored yet and will be scored against
    * the new key when they are.
    */
-  async fixKey(tenantId: string, userId: string, questionId: string, correctOptionIds: string[]) {
+  async fixKey(
+    courses: Prisma.CourseWhereInput,
+    userId: string,
+    questionId: string,
+    correctOptionIds: string[],
+  ) {
     const question = await this.prisma.quizQuestion.findFirst({
-      where: { id: questionId, quiz: { lesson: { unit: { course: { tenantId } } } } },
+      where: { id: questionId, quiz: { lesson: { unit: { course: courses } } } },
       select: {
         id: true,
         type: true,
@@ -626,9 +639,9 @@ export class GradingService {
   }
 
   /** The teacher looked and the question was right after all. */
-  async dismissReport(tenantId: string, userId: string, reportId: string) {
+  async dismissReport(courses: Prisma.CourseWhereInput, userId: string, reportId: string) {
     const report = await this.prisma.questionReport.findFirst({
-      where: { id: reportId, question: { quiz: { lesson: { unit: { course: { tenantId } } } } } },
+      where: { id: reportId, question: { quiz: { lesson: { unit: { course: courses } } } } },
       select: { id: true },
     });
     if (!report) throw new NotFoundException('Report not found');
@@ -665,9 +678,9 @@ export class GradingService {
    * an average. Ordered worst first — a teacher scanning this is looking for
    * who needs help, and that person is at the bottom of an alphabetical list.
    */
-  async quizStudents(tenantId: string, lessonId: string) {
+  async quizStudents(courses: Prisma.CourseWhereInput, lessonId: string) {
     const quiz = await this.prisma.quiz.findFirst({
-      where: { lessonId, lesson: { unit: { course: { tenantId } } } },
+      where: { lessonId, lesson: { unit: { course: courses } } },
       select: {
         passingScore: true,
         lesson: {
@@ -714,9 +727,9 @@ export class GradingService {
   }
 
   /** The same for a written assignment. */
-  async assignmentStudents(tenantId: string, lessonId: string) {
+  async assignmentStudents(courses: Prisma.CourseWhereInput, lessonId: string) {
     const assignment = await this.prisma.assignment.findFirst({
-      where: { lessonId, lesson: { unit: { course: { tenantId } } } },
+      where: { lessonId, lesson: { unit: { course: courses } } },
       select: {
         maxScore: true,
         lesson: {
@@ -765,9 +778,9 @@ export class GradingService {
    * answering here is "why did this student get this mark", and that cannot be
    * answered by the questions they were marked on by hand alone.
    */
-  async attemptReview(tenantId: string, attemptId: string) {
+  async attemptReview(courses: Prisma.CourseWhereInput, attemptId: string) {
     const attempt = await this.prisma.quizAttempt.findFirst({
-      where: { id: attemptId, quiz: { lesson: { unit: { course: { tenantId } } } } },
+      where: { id: attemptId, quiz: { lesson: { unit: { course: courses } } } },
       select: {
         id: true,
         answers: true,

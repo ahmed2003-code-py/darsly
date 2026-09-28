@@ -338,31 +338,60 @@ model AcademyDomain {
 
 // A (User, Academy, Role) relationship. All in-academy authority is per-membership.
 model AcademyMembership {
-  id                  String           @id @default(cuid())
+  id                  String                @id @default(cuid())
   userId              String
-  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   academyId           String
-  academy             Academy          @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  academy             Academy               @relation(fields: [academyId], references: [id], onDelete: Cascade)
   role                AcademyRole
-  status              MembershipStatus @default(ACTIVE)
+  status              MembershipStatus      @default(ACTIVE)
   // A student's single primary academy; one true per user. Enforced in application code
   // AND at the DB level via a partial unique index (migration 20260920040600 — not
   // representable here since Prisma's DSL has no WHERE-qualified @@unique).
-  isHome              Boolean          @default(false)
+  isHome              Boolean               @default(false)
   // Optional named-capability overrides layered on top of the role defaults.
-  permissions         Json             @default("[]")
+  permissions         Json                  @default("[]")
   // Phase 7: per-teacher revenue share inside a Center (overrides Academy.teacherSharePercent).
   revenueSharePercent Int?
+  /// Phase 1 (assistants): what the students see beside their name
+  /// ("Student Support"), which courses their work reaches, and whether a
+  /// student may start a conversation with them. An ASSISTANT's `permissions`
+  /// are their WHOLE grant (no role defaults), ceilinged in permissions.ts.
+  title               String?
+  courseScope         MembershipCourseScope @default(ALL)
+  directContact       Boolean               @default(false)
+  courses             MembershipCourse[]
   invitedBy           String?
   joinedAt            DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt           DateTime?
 
   @@unique([userId, academyId])
   @@index([academyId, role, status])
   @@index([userId, isHome])
+}
+
+enum MembershipCourseScope {
+  ALL
+  SELECTED
+}
+
+/// One course a SELECTED-scope member works on. Relational rather than a JSON
+/// list so a deleted course drops out by itself and "who works on Physics" is
+/// one indexed query.
+model MembershipCourse {
+  id           String            @id @default(cuid())
+  membershipId String
+  membership   AcademyMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  courseId     String
+  course       Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  academyId    String
+  createdAt    DateTime          @default(now())
+
+  @@unique([membershipId, courseId])
+  @@index([academyId, courseId])
 }
 
 enum GroupStatus {
@@ -638,6 +667,10 @@ model AcademyInvitationLink {
   /// join) so the owner sees which of the three happened.
   declinedAt       DateTime?
   declinedByUserId String?
+  /// ASSISTANT links only: the grant the membership is created with —
+  /// { title, permissions, courseScope, courseIds, directContact }. Decided by
+  /// the owner at issue time and re-validated at redemption; never the client's.
+  grant            Json?
   createdAt        DateTime    @default(now())
 
   @@index([academyId, usedAt])
@@ -1044,12 +1077,13 @@ model Course {
 
   units         CourseUnit[]
   enrollments   Enrollment[]
+  staffScopes   MembershipCourse[]
   coupons       Coupon[]
   reviews       Review[]
   certificates  Certificate[]
   payments      Payment[]
-  bundleParents BundleItem[]  @relation("bundleChild")
-  bundleItems   BundleItem[]  @relation("bundleParent")
+  bundleParents BundleItem[]       @relation("bundleChild")
+  bundleItems   BundleItem[]       @relation("bundleParent")
   savedBy       SavedCourse[]
   challenges    Challenge[]
 
@@ -2110,6 +2144,8 @@ model AssignmentSubmission {
   score     Int?
   feedback  String?
   gradedAt  DateTime?
+  /// Who marked it — the teacher or an assistant, never "the academy".
+  gradedBy  String?
   createdAt DateTime  @default(now())
 
   @@unique([assignmentId, studentId])

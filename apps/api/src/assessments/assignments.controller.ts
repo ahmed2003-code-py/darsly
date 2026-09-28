@@ -40,7 +40,12 @@ export class AssignmentsController {
     @Param('submissionId') submissionId: string,
     @Body() dto: GradeSubmissionDto,
   ) {
-    return this.assignments.gradeSubmission(u.tenantId!, submissionId, dto);
+    return this.assignments.gradeSubmission(
+      { tenantId: u.tenantId ?? '__none__' },
+      u.sub,
+      submissionId,
+      dto,
+    );
   }
 
   // ── Student ────────────────────────────────────────────────────────────────

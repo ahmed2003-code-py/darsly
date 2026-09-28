@@ -9,6 +9,7 @@ import { CreateInvitationLinkDto } from './dto';
 import { AcademyMembershipGuard } from './guards/academy-membership.guard';
 import { PermissionGuard } from './guards/permission.guard';
 import { InvitationLinksService } from './invitation-links.service';
+import { TeamService } from './team.service';
 
 /**
  * Shareable staff invitation links (Phase 3). Management routes are
@@ -21,6 +22,7 @@ import { InvitationLinksService } from './invitation-links.service';
 export class InvitationLinksController {
   constructor(
     private readonly links: InvitationLinksService,
+    private readonly team: TeamService,
     private readonly audit: AuditService,
   ) {}
 
@@ -35,14 +37,23 @@ export class InvitationLinksController {
     @CurrentAcademy() ctx: AcademyContext,
     @Body() dto: CreateInvitationLinkDto,
   ) {
-    const link = await this.links.create(ctx.academyId, user.sub, dto.role);
+    const grant =
+      dto.role === 'ASSISTANT' && dto.grant
+        ? await this.team.normalizeGrant(ctx.academyId, dto.grant)
+        : undefined;
+    const link = await this.links.create(ctx.academyId, user.sub, dto.role, grant);
     await this.audit.log({
       actorUserId: user.sub,
       action: 'member.invitationLink.create',
       entity: 'AcademyInvitationLink',
       entityId: link.id,
       academyId: ctx.academyId,
-      meta: { role: link.role, expiresAt: link.expiresAt, viaPlatformAdmin: ctx.isPlatformAdmin },
+      meta: {
+        role: link.role,
+        expiresAt: link.expiresAt,
+        viaPlatformAdmin: ctx.isPlatformAdmin,
+        ...(grant ? { grant } : {}),
+      },
     });
     return link;
   }

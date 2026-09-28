@@ -1,8 +1,56 @@
 # Student Care: Assistants, Guardians & Messaging — Architecture Plan
 
-Status: **PROPOSAL, not implemented.** Written 2026-09-28 against `main` @ `e23c7c6`.
-Nothing in this document has been built. Every "exists today" claim below was
-read from the code at that commit; file paths are given so each can be checked.
+Status: written 2026-09-28 against `main` @ `e23c7c6` as a proposal. Phase 0
+(0A + 0B messenger) and **Phase 1 (assistant authorization)** are built — see
+"Phase 1 — as built" below for where the build departs from this text. The
+Guardian phases are not built. Every "exists today" claim in section A was read
+from the code at that commit; file paths are given so each can be checked.
+
+---
+
+## Phase 1 — as built (deviations from the proposal)
+
+The proposal below is kept as written; these are the places the build chose
+differently, and why.
+
+1. **Student scope is course-only.** A student is in an assistant's scope when
+   they have an enrollment (any status) in one of the assistant's courses —
+   `StaffScopeService` (`academy/staff-scope.service.ts`). The proposal also
+   admitted students of *assigned groups*; that path is left to the group
+   routes' own `GroupAssignment` scoping, so "which students can Ahmed see"
+   has one answer that the owner can read off the Team screen.
+2. **Academy-wide capabilities switch off for a SELECTED assistant.**
+   `ACADEMY_WIDE` in `permissions.ts` (`student.manage`, `live.manage`,
+   `analytics.read`, `assessment.author`, `chat.moderate`) guards routes that
+   see the whole academy. Rather than scope-check each of those routes, an
+   assistant limited to some courses simply does not hold them. Legacy
+   assistants (backfilled, `courseScope = ALL`) keep them unchanged.
+3. **Assistants never handle money.** `ASSISTANT_CEILING` has `payment.view`
+   (new, read-only, in-scope courses only, `GET /staff/payments`) but not
+   `payment.verify` / `payment.collect` / `wallet.*`. The Operations preset
+   is `student.view, message.reply, schedule.manage, attendance.mark,
+   payment.view`.
+4. **`message.inbox` / `message.oversee` are not introduced yet** — they only
+   mean something with the Phase 2 shared inbox. Phase 1 adds
+   `message.reply`: an assistant talks with students of their courses in
+   *their own* conversations (`staffUserId` = the assistant). The teacher does
+   not see those conversations (no oversight until Phase 2), and an assistant
+   does not see the teacher's.
+5. **Assistant conversations' `tenantId`** is the author of the in-scope course
+   that connects the pair (the FK must point at a TeacherProfile); the
+   teacher's `acceptsStudentMessages` switch closes assistant conversations too.
+6. **One Team page for both kinds of academy**: `/teacher/team`
+   (`TEACHER` and `STAFF` owners), not a reuse of `CenterMembersPage`.
+7. **The assistant's workspace is `/staff`** (courses, students, student
+   progress, `/staff/grading`, `/staff/payments`) instead of a Student 360
+   page under `/teacher`. A STAFF account that owns nothing lands there.
+8. **Grading** goes through `GradingService` with a Course filter instead of a
+   tenantId; `/staff/grading/*` passes the member's scope, and a mark records
+   `gradedBy` (new column on `AssignmentSubmission`; `QuizAttempt.gradedBy`
+   already existed). Fixing an answer key and dismissing a report stay with
+   the author.
+9. **The grant travels on the invitation link** (`AcademyInvitationLink.grant`,
+   JSON) and is re-validated at redemption; a link without one grants nothing.
 
 ---
 

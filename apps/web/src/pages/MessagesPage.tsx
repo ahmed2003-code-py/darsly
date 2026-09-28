@@ -2,13 +2,15 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { ChatSenderKind, ChatThreadDto, RealtimeEvents } from '@darsly/shared-types';
+import { ChatSenderKind, ChatThreadDto, RealtimeEvents, Role } from '@darsly/shared-types';
 import { api } from '../lib/api';
 import { askConfirm } from '../lib/confirm';
 import { errorMessage } from '../lib/errorMessage';
 import { getSocket } from '../lib/socket';
 import { PageHeader, Spinner } from '../components/ui';
 import ConversationList from './messages/ConversationList';
+import ContactPicker from './messages/ContactPicker';
+import { useAuthStore } from '../stores/auth';
 import Conversation, { ConversationHeader } from './messages/Conversation';
 import type { SendTarget } from './messages/useConversation';
 
@@ -59,9 +61,15 @@ export default function MessagesPage() {
   // Opening this creates nothing; the first message sent does.
   const draftStudent = activeId ? null : params.get('student');
   const draftTeacher = activeId ? null : params.get('teacher');
-  const drafting = !!(draftStudent || draftTeacher);
+  // An assistant writing from their workspace names the academy; a student
+  // writing to an assistant names both.
+  const draftAssistant = activeId ? null : params.get('assistant');
+  const draftAcademy = activeId ? null : params.get('academy');
+  const drafting = !!(draftStudent || draftTeacher || (draftAssistant && draftAcademy));
   const showConversation = !!(activeId || drafting);
   const desktop = useIsDesktop();
+  const isStudent = useAuthStore((s) => s.user?.role) === Role.STUDENT;
+  const [picking, setPicking] = useState(false);
 
   /** The conversation list, one keyset page at a time. */
   const threadsQuery = useInfiniteQuery({
@@ -93,12 +101,17 @@ export default function MessagesPage() {
     counterpartName: string;
     counterpartAvatarUrl: string | null;
     counterpartKind: ChatSenderKind;
+    counterpartTitle?: string | null;
   }>({
-    queryKey: ['chat-resolve', draftStudent, draftTeacher],
+    queryKey: ['chat-resolve', draftStudent, draftTeacher, draftAssistant, draftAcademy],
     queryFn: async () =>
       (
         await api.get('/chat/resolve', {
-          params: draftStudent ? { studentId: draftStudent } : { tenantId: draftTeacher },
+          params: draftStudent
+            ? { studentId: draftStudent, ...(draftAcademy ? { academyId: draftAcademy } : {}) }
+            : draftAssistant
+              ? { staffUserId: draftAssistant, academyId: draftAcademy }
+              : { tenantId: draftTeacher },
         })
       ).data,
     enabled: drafting,
@@ -131,6 +144,7 @@ export default function MessagesPage() {
           avatarUrl: headerThread.counterpartAvatarUrl,
           personId: headerThread.studentId + headerThread.tenantId,
           kind: headerThread.counterpartKind ?? null,
+          title: headerThread.counterpartTitle ?? null,
           myLastReadAt: headerThread.myLastReadAt ?? null,
         }
       : null
@@ -138,8 +152,9 @@ export default function MessagesPage() {
       ? {
           name: resolved.counterpartName,
           avatarUrl: resolved.counterpartAvatarUrl,
-          personId: (draftStudent ?? '') + (draftTeacher ?? ''),
+          personId: (draftStudent ?? '') + (draftTeacher ?? '') + (draftAssistant ?? ''),
           kind: resolved.counterpartKind,
+          title: resolved.counterpartTitle ?? null,
           myLastReadAt: null,
         }
       : null;
@@ -148,10 +163,12 @@ export default function MessagesPage() {
   const target: SendTarget | null = activeId
     ? { threadId: activeId }
     : draftStudent
-      ? { studentId: draftStudent }
-      : draftTeacher
-        ? { tenantId: draftTeacher }
-        : null;
+      ? { studentId: draftStudent, ...(draftAcademy ? { academyId: draftAcademy } : {}) }
+      : draftAssistant && draftAcademy
+        ? { staffUserId: draftAssistant, academyId: draftAcademy }
+        : draftTeacher
+          ? { tenantId: draftTeacher }
+          : null;
 
   const refreshList = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ['chat-threads'] }),
@@ -236,7 +253,33 @@ export default function MessagesPage() {
 
   return (
     <div className="page">
-      <PageHeader title={t('messages.title')} subtitle={t('messages.subtitle')} />
+      <PageHeader
+        title={t('messages.title')}
+        subtitle={t('messages.subtitle')}
+        action={
+          isStudent ? (
+            <button className="btn-primary" onClick={() => setPicking(true)}>
+              <span className="material-symbols-outlined text-[20px]">edit_square</span>
+              {t('messages.newConversation')}
+            </button>
+          ) : undefined
+        }
+      />
+      {isStudent && (
+        <ContactPicker
+          open={picking}
+          onClose={() => setPicking(false)}
+          onPick={(c) => {
+            setPicking(false);
+            setParams(
+              c.kind === 'ASSISTANT'
+                ? { assistant: c.staffUserId!, academy: c.academyId }
+                : { teacher: c.tenantId! },
+            );
+          }}
+          t={t}
+        />
+      )}
       <div className="card flex h-[calc(100dvh-15rem)] min-h-[28rem] overflow-hidden p-0 lg:h-[calc(100dvh-13rem)]">
         <aside
           className={`w-full shrink-0 border-e border-outline-variant/40 lg:w-[22rem] ${fullScreen ? 'hidden' : ''}`}

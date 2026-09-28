@@ -9,6 +9,7 @@ import { AcademyRole, Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertStaffEligible } from './permissions';
+import { AssistantGrant, TeamService } from './team.service';
 
 const TOKEN_BYTES = 32;
 const DEFAULT_TTL_DAYS = 14;
@@ -28,17 +29,33 @@ const GONE = () =>
  */
 @Injectable()
 export class InvitationLinksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly team: TeamService,
+  ) {}
 
   private hash(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  async create(academyId: string, createdByUserId: string, role: AcademyRole) {
+  async create(
+    academyId: string,
+    createdByUserId: string,
+    role: AcademyRole,
+    grant?: AssistantGrant,
+  ) {
     const raw = randomBytes(TOKEN_BYTES).toString('base64url');
     const expiresAt = new Date(Date.now() + DEFAULT_TTL_DAYS * 86_400_000);
     const row = await this.prisma.academyInvitationLink.create({
-      data: { academyId, role, tokenHash: this.hash(raw), createdByUserId, expiresAt },
+      data: {
+        academyId,
+        role,
+        tokenHash: this.hash(raw),
+        createdByUserId,
+        expiresAt,
+        // Only an assistant's link carries a grant; a teacher's role is its grant.
+        ...(role === 'ASSISTANT' && grant ? { grant: { ...grant } } : {}),
+      },
       select: { id: true, role: true, expiresAt: true, createdAt: true },
     });
     // The raw token is returned exactly once, here — never persisted, never logged.
@@ -58,6 +75,7 @@ export class InvitationLinksService {
         declinedAt: true,
         createdAt: true,
         createdByUserId: true,
+        grant: true,
       },
     });
     const now = new Date();
@@ -91,7 +109,9 @@ export class InvitationLinksService {
   /** What the invitee sees before deciding — nothing that isn't already implied by the link. */
   async preview(token: string) {
     const row = await this.resolveLive(token);
-    return { academyName: row.academy.name, role: row.role, expiresAt: row.expiresAt };
+    const title =
+      row.grant && typeof (row.grant as any).title === 'string' ? (row.grant as any).title : null;
+    return { academyName: row.academy.name, role: row.role, title, expiresAt: row.expiresAt };
   }
 
   /**
@@ -136,17 +156,21 @@ export class InvitationLinksService {
     // No row, or LEFT/INVITED/SUSPENDED: an explicit accept is exactly the
     // consent the re-invitation lifecycle requires — creates or reactivates
     // straight to ACTIVE, never through the generic member-update path.
-    return this.prisma.academyMembership.upsert({
-      where: { userId_academyId: { userId, academyId: row.academyId } },
-      update: { role: row.role, status: 'ACTIVE', joinedAt: new Date() },
-      create: {
-        userId,
-        academyId: row.academyId,
-        role: row.role,
-        status: 'ACTIVE',
-        joinedAt: new Date(),
-      },
-      select: { id: true, academyId: true, role: true, status: true },
+    return this.prisma.$transaction(async (tx) => {
+      const membership = await tx.academyMembership.upsert({
+        where: { userId_academyId: { userId, academyId: row.academyId } },
+        update: { role: row.role, status: 'ACTIVE', joinedAt: new Date() },
+        create: {
+          userId,
+          academyId: row.academyId,
+          role: row.role,
+          status: 'ACTIVE',
+          joinedAt: new Date(),
+        },
+        select: { id: true, academyId: true, role: true, status: true },
+      });
+      await this.applyLinkGrant(tx, membership, row.grant);
+      return membership;
     });
   }
 
@@ -187,12 +211,30 @@ export class InvitationLinksService {
     if (claimed.count !== 1) throw GONE();
     const row = await tx.academyInvitationLink.findUniqueOrThrow({
       where: { tokenHash },
-      select: { academyId: true, role: true },
+      select: { academyId: true, role: true, grant: true },
     });
-    return tx.academyMembership.create({
+    const membership = await tx.academyMembership.create({
       data: { userId, academyId: row.academyId, role: row.role, status: 'ACTIVE', joinedAt: now },
       select: { id: true, academyId: true, role: true, status: true },
     });
+    await this.applyLinkGrant(tx, membership, row.grant);
+    return membership;
+  }
+
+  /**
+   * An assistant's membership gets exactly the link's grant — or nothing, for
+   * a link made without one. Rejoining never revives what a previous stint
+   * held: the grant is written whole every time.
+   */
+  private async applyLinkGrant(
+    tx: Prisma.TransactionClient,
+    membership: { id: string; academyId: string; role: AcademyRole },
+    raw: Prisma.JsonValue | null,
+  ) {
+    if (membership.role !== 'ASSISTANT') return;
+    const grant =
+      (await this.team.grantFromLink(tx, membership.academyId, raw)) ?? TeamService.EMPTY_GRANT;
+    await this.team.applyGrant(tx, membership.id, membership.academyId, grant);
   }
 
   /** A live link, or the reason it is not. Public so registration can resolve the same way accept does. */
@@ -203,6 +245,7 @@ export class InvitationLinksService {
         tokenHash: true,
         role: true,
         academyId: true,
+        grant: true,
         expiresAt: true,
         usedAt: true,
         revokedAt: true,

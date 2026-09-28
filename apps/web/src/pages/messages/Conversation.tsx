@@ -33,6 +33,8 @@ export interface ConversationHeader {
   /** The counterpart's id, for their avatar colour. */
   personId: string | null;
   kind: ChatSenderKind | null;
+  /** An assistant's title in the academy ("Student Support"), shown instead of the role. */
+  title?: string | null;
   /** The viewer's read position when the conversation was opened (unread divider). */
   myLastReadAt: string | null;
 }
@@ -295,7 +297,9 @@ export default function Conversation({
     return out;
   }, [conv.messages]);
 
-  const subtitle = peerTyping ? t('messages.typing') : header.kind ? t(roleKey(header.kind)) : '';
+  const subtitle = peerTyping
+    ? t('messages.typing')
+    : header.title || (header.kind ? t(roleKey(header.kind)) : '');
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-container-low/60">

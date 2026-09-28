@@ -15,7 +15,8 @@ import InvitationsBanner from './InvitationsBanner';
 import NotificationToasts from './NotificationToasts';
 import BottomNav from './shell/BottomNav';
 import Footer from './shell/Footer';
-import { BOTTOM_TABS, NavItem, navFor } from './shell/nav';
+import { ASSISTING_ITEM, assistantNav, BOTTOM_TABS, NavItem, navFor } from './shell/nav';
+import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
 
@@ -56,6 +57,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   });
   const chatClosed =
     user?.role === Role.TEACHER && teacherProfile?.acceptsStudentMessages === false;
+  // An assistant's menu follows what they may do in the academy they assist.
+  const ws = useAssistantWorkspace();
+  const staffMe = useStaffMe(ws.isAssistantAccount ? ws.academyId : undefined);
 
   // The student's own layer, fetched once the session is known. `bootStudio`
   // has already replayed the cached copy, so this is a correction rather than
@@ -70,9 +74,14 @@ export default function Layout({ children }: { children: ReactNode }) {
   // The drawer closes itself on navigation, whichever surface opened it.
   useEffect(() => setDrawer(false), [location.pathname]);
 
-  const baseNav = navFor(user?.role);
+  const assistantMode = ws.isAssistantAccount;
+  const baseNav = assistantMode
+    ? assistantNav(staffMe.data?.permissions ?? [])
+    : ws.assists && user?.role === Role.TEACHER
+      ? [...navFor(user?.role), ASSISTING_ITEM]
+      : navFor(user?.role);
   const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;
-  const bottomTabs = (BOTTOM_TABS[user?.role ?? Role.STUDENT] ?? [])
+  const bottomTabs = (BOTTOM_TABS[assistantMode ? 'ASSISTANT' : (user?.role ?? Role.STUDENT)] ?? [])
     .map((to) => nav.find((n) => n.to === to))
     .filter((n): n is NavItem => !!n);
   const roleLabel =
@@ -80,9 +89,11 @@ export default function Layout({ children }: { children: ReactNode }) {
       ? t('layout.adminConsole')
       : user?.role === Role.TEACHER
         ? t('layout.teacherConsole')
-        : user?.role === Role.STAFF
-          ? t('layout.staffConsole')
-          : t('layout.studentSpace');
+        : assistantMode
+          ? t('layout.assistantConsole')
+          : user?.role === Role.STAFF
+            ? t('layout.staffConsole')
+            : t('layout.studentSpace');
 
   const { nav: navCfg, header, footer } = layout;
   const desktopNav = navCfg.desktop;

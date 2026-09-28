@@ -8,6 +8,8 @@ import { JwtPayload, Role } from '@darsly/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { databaseReady } from '../common/testing/db-available';
 import { avatarUrl, chatFileUrl, verifyLink } from '../common/signed-link';
+import { AcademyService } from '../academy/academy.service';
+import { StaffScopeService } from '../academy/staff-scope.service';
 import { ChatService } from './chat.service';
 import { ChatAttachmentsService } from './chat-attachments.service';
 import { ChatReactionsService } from './chat-reactions.service';
@@ -70,7 +72,13 @@ beforeAll(async () => {
     'chatReaction',
     'chatReadState',
   ]);
-  chat = new ChatService(prisma, realtime, notifications, storage);
+  chat = new ChatService(
+    prisma,
+    realtime,
+    notifications,
+    storage,
+    new StaffScopeService(prisma, new AcademyService(prisma)),
+  );
   files = new ChatAttachmentsService(prisma, storage, chat);
   reactions = new ChatReactionsService(prisma, chat, realtime);
 });

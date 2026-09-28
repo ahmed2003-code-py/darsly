@@ -6,11 +6,12 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { InvitationLinksService } from './invitation-links.service';
+import { TeamService } from './team.service';
 
 const sha = (t: string) => createHash('sha256').update(t).digest('hex');
 
 function makePrisma() {
-  return {
+  const p: any = {
     academyInvitationLink: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -26,8 +27,13 @@ function makePrisma() {
       findFirst: jest.fn(),
       upsert: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
+    membershipCourse: { deleteMany: jest.fn(), createMany: jest.fn() },
+    course: { findMany: jest.fn().mockResolvedValue([]) },
   } as any;
+  p.$transaction = jest.fn((fn: any) => fn(p));
+  return p;
 }
 const future = new Date(Date.now() + 60_000);
 const past = new Date(Date.now() - 60_000);
@@ -56,7 +62,11 @@ describe('InvitationLinksService.create', () => {
       expiresAt: future,
       createdAt: new Date(),
     });
-    const res = await new InvitationLinksService(prisma).create('c1', 'owner1', 'TEACHER' as any);
+    const res = await new InvitationLinksService(prisma, new TeamService(prisma)).create(
+      'c1',
+      'owner1',
+      'TEACHER' as any,
+    );
     const data = prisma.academyInvitationLink.create.mock.calls[0][0].data;
     expect(data.academyId).toBe('c1');
     expect(data.createdByUserId).toBe('owner1');
@@ -110,7 +120,7 @@ describe('InvitationLinksService.list', () => {
         createdByUserId: 'o',
       },
     ]);
-    const rows = await new InvitationLinksService(prisma).list('c1');
+    const rows = await new InvitationLinksService(prisma, new TeamService(prisma)).list('c1');
     expect(rows.map((r) => r.status)).toEqual(['PENDING', 'USED', 'REVOKED', 'EXPIRED']);
     expect(rows.every((r) => !('token' in r) && !('tokenHash' in r))).toBe(true);
   });
@@ -124,7 +134,7 @@ describe('InvitationLinksService.revoke', () => {
       usedAt: null,
       revokedAt: null,
     });
-    await new InvitationLinksService(prisma).revoke('c1', 'l1');
+    await new InvitationLinksService(prisma, new TeamService(prisma)).revoke('c1', 'l1');
     expect(prisma.academyInvitationLink.update).toHaveBeenCalledWith({
       where: { id: 'l1' },
       data: { revokedAt: expect.any(Date) },
@@ -137,26 +147,29 @@ describe('InvitationLinksService.revoke', () => {
       usedAt: new Date(),
       revokedAt: null,
     });
-    await expect(new InvitationLinksService(prisma).revoke('c1', 'l1')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      new InvitationLinksService(prisma, new TeamService(prisma)).revoke('c1', 'l1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
   it("a foreign-academy id 404s — never reveals another Center's link", async () => {
     const prisma = makePrisma();
     prisma.academyInvitationLink.findFirst.mockResolvedValue(null);
-    await expect(new InvitationLinksService(prisma).revoke('c1', 'l1')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      new InvitationLinksService(prisma, new TeamService(prisma)).revoke('c1', 'l1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
 describe('InvitationLinksService.preview', () => {
-  it('exposes only Center name, role, expiry', async () => {
+  it("exposes only Center name, role, the assistant's title and expiry", async () => {
     const prisma = makePrisma();
     prisma.academyInvitationLink.findUnique.mockResolvedValue(liveRow());
-    await expect(new InvitationLinksService(prisma).preview('raw-token')).resolves.toEqual({
+    await expect(
+      new InvitationLinksService(prisma, new TeamService(prisma)).preview('raw-token'),
+    ).resolves.toEqual({
       academyName: 'Center',
       role: 'TEACHER',
+      title: null,
       expiresAt: future,
     });
   });
@@ -175,7 +188,9 @@ describe('InvitationLinksService.preview', () => {
   ])('%s → no sensitive detail leaked', async (_l, row) => {
     const prisma = makePrisma();
     prisma.academyInvitationLink.findUnique.mockResolvedValue(row);
-    await expect(new InvitationLinksService(prisma).preview('raw-token')).rejects.toThrow();
+    await expect(
+      new InvitationLinksService(prisma, new TeamService(prisma)).preview('raw-token'),
+    ).rejects.toThrow();
   });
 });
 
@@ -200,7 +215,10 @@ describe('InvitationLinksService.accept', () => {
 
   it('creates an ACTIVE membership from a fresh accept', async () => {
     const prisma = setup();
-    const m = await new InvitationLinksService(prisma).accept('raw-token', 'u1');
+    const m = await new InvitationLinksService(prisma, new TeamService(prisma)).accept(
+      'raw-token',
+      'u1',
+    );
     expect(m).toMatchObject({ status: 'ACTIVE', role: 'TEACHER' });
     expect(prisma.academyMembership.upsert.mock.calls[0][0].create).toMatchObject({
       userId: 'u1',
@@ -213,7 +231,7 @@ describe('InvitationLinksService.accept', () => {
   it('eligibility is checked BEFORE the token is claimed — an ineligible attempt does not burn it', async () => {
     const prisma = setup({ role: 'STUDENT' });
     await expect(
-      new InvitationLinksService(prisma).accept('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1'),
     ).rejects.toMatchObject({ response: { code: 'STUDENT_NOT_STAFF' } });
     expect(prisma.academyInvitationLink.updateMany).not.toHaveBeenCalled();
   });
@@ -228,14 +246,14 @@ describe('InvitationLinksService.accept', () => {
   ])('rejects %s', async (_l, over) => {
     const prisma = setup(over);
     await expect(
-      new InvitationLinksService(prisma).accept('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1'),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.academyMembership.upsert).not.toHaveBeenCalled();
   });
 
   it('claims the token atomically; the claim query is bound to the exact row', async () => {
     const prisma = setup();
-    await new InvitationLinksService(prisma).accept('raw-token', 'u1');
+    await new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1');
     expect(prisma.academyInvitationLink.updateMany.mock.calls[0][0].where).toMatchObject({
       tokenHash: sha('raw-token'),
       usedAt: null,
@@ -247,7 +265,7 @@ describe('InvitationLinksService.accept', () => {
     const prisma = setup();
     prisma.academyInvitationLink.updateMany.mockResolvedValue({ count: 0 });
     await expect(
-      new InvitationLinksService(prisma).accept('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1'),
     ).rejects.toBeInstanceOf(GoneException);
     expect(prisma.academyMembership.upsert).not.toHaveBeenCalled();
   });
@@ -260,7 +278,7 @@ describe('InvitationLinksService.accept', () => {
       claimed = true;
       return { count: 1 };
     });
-    const svc = new InvitationLinksService(prisma);
+    const svc = new InvitationLinksService(prisma, new TeamService(prisma));
     const results = await Promise.allSettled([
       svc.accept('raw-token', 'u1'),
       svc.accept('raw-token', 'u2'),
@@ -277,7 +295,7 @@ describe('InvitationLinksService.accept', () => {
       role: 'TEACHER',
     });
     await expect(
-      new InvitationLinksService(prisma).accept('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1'),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.academyInvitationLink.updateMany).toHaveBeenCalledTimes(1); // claimed before the conflict was found
     expect(prisma.academyMembership.upsert).not.toHaveBeenCalled();
@@ -290,7 +308,7 @@ describe('InvitationLinksService.accept', () => {
       status: 'LEFT',
       role: 'TEACHER',
     });
-    await new InvitationLinksService(prisma).accept('raw-token', 'u1');
+    await new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1');
     expect(prisma.academyMembership.upsert.mock.calls[0][0].update).toMatchObject({
       status: 'ACTIVE',
       role: 'TEACHER',
@@ -299,7 +317,7 @@ describe('InvitationLinksService.accept', () => {
 
   it('role and academyId always come from the stored row, never the accept call', async () => {
     const prisma = setup({}, { role: 'ASSISTANT', academyId: 'other-center' });
-    await new InvitationLinksService(prisma).accept('raw-token', 'u1');
+    await new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1');
     expect(prisma.academyMembership.upsert.mock.calls[0][0].create).toMatchObject({
       role: 'ASSISTANT',
       academyId: 'other-center',
@@ -308,7 +326,7 @@ describe('InvitationLinksService.accept', () => {
 
   it('multi-Center: accepting into Center B only touches the (user, Center B) row — a teacher already ACTIVE in Center A, PERSONAL, or elsewhere is untouched', async () => {
     const prisma = setup({}, { academyId: 'centerB' });
-    await new InvitationLinksService(prisma).accept('raw-token', 'u1');
+    await new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1');
     expect(prisma.academyMembership.findUnique).toHaveBeenCalledWith({
       where: { userId_academyId: { userId: 'u1', academyId: 'centerB' } },
     });
@@ -337,7 +355,10 @@ describe('InvitationLinksService.accept — consumed links', () => {
 
   it('the user who already won this link gets their membership back — a retried accept is not a failure', async () => {
     const prisma = consumedBy('u1');
-    const m = await new InvitationLinksService(prisma).accept('raw-token', 'u1');
+    const m = await new InvitationLinksService(prisma, new TeamService(prisma)).accept(
+      'raw-token',
+      'u1',
+    );
     expect(m).toMatchObject({ id: 'm1', academyId: 'c1', status: 'ACTIVE' });
     // Nothing is claimed or written again.
     expect(prisma.academyInvitationLink.updateMany).not.toHaveBeenCalled();
@@ -348,7 +369,7 @@ describe('InvitationLinksService.accept — consumed links', () => {
   it('a consumed link never transfers: any other user → 410, nothing written', async () => {
     const prisma = consumedBy('u1');
     await expect(
-      new InvitationLinksService(prisma).accept('raw-token', 'u2'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u2'),
     ).rejects.toBeInstanceOf(GoneException);
     expect(prisma.academyInvitationLink.updateMany).not.toHaveBeenCalled();
     expect(prisma.academyMembership.upsert).not.toHaveBeenCalled();
@@ -358,7 +379,7 @@ describe('InvitationLinksService.accept — consumed links', () => {
     const prisma = consumedBy('u1');
     prisma.academyMembership.findFirst.mockResolvedValue(null);
     await expect(
-      new InvitationLinksService(prisma).accept('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1'),
     ).rejects.toBeInstanceOf(GoneException);
   });
 
@@ -368,7 +389,7 @@ describe('InvitationLinksService.accept — consumed links', () => {
       liveRow({ declinedAt: past, declinedByUserId: 'u1' }),
     );
     await expect(
-      new InvitationLinksService(prisma).accept('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).accept('raw-token', 'u1'),
     ).rejects.toBeInstanceOf(GoneException);
     expect(prisma.academyInvitationLink.updateMany).not.toHaveBeenCalled();
   });
@@ -379,7 +400,10 @@ describe('InvitationLinksService.decline', () => {
     const prisma = makePrisma();
     prisma.academyInvitationLink.findUnique.mockResolvedValue(liveRow());
     prisma.academyInvitationLink.updateMany.mockResolvedValue({ count: 1 });
-    const res = await new InvitationLinksService(prisma).decline('raw-token', 'u1');
+    const res = await new InvitationLinksService(prisma, new TeamService(prisma)).decline(
+      'raw-token',
+      'u1',
+    );
     expect(res).toEqual({ id: 'l1', academyId: 'c1', role: 'TEACHER', declined: true });
     const call = prisma.academyInvitationLink.updateMany.mock.calls[0][0];
     expect(call.where).toMatchObject({
@@ -400,7 +424,7 @@ describe('InvitationLinksService.decline', () => {
     );
     prisma.academyInvitationLink.updateMany.mockResolvedValue({ count: 0 });
     await expect(
-      new InvitationLinksService(prisma).decline('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).decline('raw-token', 'u1'),
     ).resolves.toMatchObject({ declined: true });
   });
 
@@ -414,7 +438,7 @@ describe('InvitationLinksService.decline', () => {
     prisma.academyInvitationLink.findUnique.mockResolvedValue(row);
     prisma.academyInvitationLink.updateMany.mockResolvedValue({ count: 0 });
     await expect(
-      new InvitationLinksService(prisma).decline('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).decline('raw-token', 'u1'),
     ).rejects.toBeInstanceOf(GoneException);
   });
 
@@ -422,7 +446,7 @@ describe('InvitationLinksService.decline', () => {
     const prisma = makePrisma();
     prisma.academyInvitationLink.findUnique.mockResolvedValue(null);
     await expect(
-      new InvitationLinksService(prisma).decline('raw-token', 'u1'),
+      new InvitationLinksService(prisma, new TeamService(prisma)).decline('raw-token', 'u1'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
@@ -442,7 +466,7 @@ describe('InvitationLinksService.list', () => {
         createdByUserId: 'o',
       },
     ]);
-    const rows = await new InvitationLinksService(prisma).list('c1');
+    const rows = await new InvitationLinksService(prisma, new TeamService(prisma)).list('c1');
     expect(rows[0].status).toBe('DECLINED');
   });
 });
@@ -450,7 +474,9 @@ describe('InvitationLinksService.list', () => {
 describe('InvitationLinksService.claimForNewUser (inside a registration transaction)', () => {
   const tx = () => ({
     academyInvitationLink: { updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
-    academyMembership: { create: jest.fn() },
+    academyMembership: { create: jest.fn(), update: jest.fn() },
+    membershipCourse: { deleteMany: jest.fn(), createMany: jest.fn() },
+    course: { findMany: jest.fn().mockResolvedValue([]) },
   });
 
   it("claims the exact row, then builds the membership from the ROW — academyId and role are never the caller's to say", async () => {
@@ -461,11 +487,10 @@ describe('InvitationLinksService.claimForNewUser (inside a registration transact
       role: 'ASSISTANT',
     });
     t.academyMembership.create.mockImplementation(async ({ data }: any) => ({ id: 'm1', ...data }));
-    const m = await new InvitationLinksService(makePrisma()).claimForNewUser(
-      t as any,
-      sha('raw-token'),
-      'new-user',
-    );
+    const m = await new InvitationLinksService(
+      makePrisma(),
+      new TeamService(makePrisma()),
+    ).claimForNewUser(t as any, sha('raw-token'), 'new-user');
     expect(t.academyInvitationLink.updateMany.mock.calls[0][0].where).toMatchObject({
       tokenHash: sha('raw-token'),
       usedAt: null,
@@ -489,7 +514,7 @@ describe('InvitationLinksService.claimForNewUser (inside a registration transact
     const t = tx();
     t.academyInvitationLink.updateMany.mockResolvedValue({ count: 0 });
     await expect(
-      new InvitationLinksService(makePrisma()).claimForNewUser(
+      new InvitationLinksService(makePrisma(), new TeamService(makePrisma())).claimForNewUser(
         t as any,
         sha('raw-token'),
         'new-user',

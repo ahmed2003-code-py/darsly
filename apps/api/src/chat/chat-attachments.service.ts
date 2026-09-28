@@ -15,7 +15,7 @@ import { StorageProvider } from '../storage/storage.provider';
 import { ChatFileVariant, verifyLink } from '../common/signed-link';
 import { attachmentDto } from './chat-presenter';
 import { newThreadId, threadKey } from './chat-thread.identity';
-import { ChatService } from './chat.service';
+import { ChatTarget, ChatService } from './chat.service';
 
 // sharp is a native dep, loaded the way the rest of the API loads it.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -104,11 +104,8 @@ export function cleanFileName(raw: string, ext: string): string {
   return `${stem}.${ext}`;
 }
 
-export interface UploadTarget {
-  threadId?: string;
-  studentId?: string;
-  tenantId?: string;
-}
+/** Where the file will be sent — the same target a message names (see ChatTarget). */
+export type UploadTarget = ChatTarget;
 
 @Injectable()
 export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {

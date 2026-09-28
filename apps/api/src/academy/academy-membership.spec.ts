@@ -129,8 +129,12 @@ describe('AcademyService.addMember — identity eligibility', () => {
       teacherProfile: { status: 'PENDING' },
     });
     await expect(
-      new AcademyService(prisma).addMember('a1', { email: 'x@y.z', role: 'ASSISTANT' }),
+      new AcademyService(prisma).addMember('a1', { email: 'x@y.z', role: 'TEACHER' }),
     ).rejects.toMatchObject({ response: { code: 'TEACHER_NOT_APPROVED' } });
+    // Nor as an assistant: an unapproved teacher identity is not a staff account.
+    await expect(
+      new AcademyService(prisma).addMember('a1', { email: 'x@y.z', role: 'ASSISTANT' }),
+    ).rejects.toMatchObject({ response: { code: 'ASSISTANT_NOT_ELIGIBLE' } });
   });
 
   it('refuses a disabled account', async () => {

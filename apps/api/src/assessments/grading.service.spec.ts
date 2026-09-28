@@ -45,14 +45,14 @@ function svc(attempts: any[], submissions: any[]) {
 describe('the marking queue', () => {
   it("only ever looks inside this teacher's own courses", async () => {
     const { s, seen } = svc([], []);
-    await s.queue('t1');
-    expect(seen.attemptWhere.quiz.lesson.unit.course.tenantId).toBe('t1');
-    expect(seen.subWhere.assignment.lesson.unit.course.tenantId).toBe('t1');
+    await s.queue({ tenantId: 't1' });
+    expect(seen.attemptWhere.quiz.lesson.unit.course.AND[0].tenantId).toBe('t1');
+    expect(seen.subWhere.assignment.lesson.unit.course.AND[0].tenantId).toBe('t1');
   });
 
   it('asks only for work that is actually waiting', async () => {
     const { s, seen } = svc([], []);
-    await s.queue('t1');
+    await s.queue({ tenantId: 't1' });
     expect(seen.attemptWhere).toMatchObject({
       needsManualGrading: true,
       gradedAt: null,
@@ -64,7 +64,7 @@ describe('the marking queue', () => {
 
   it('groups quizzes and assignments together under their course', async () => {
     const { s } = svc([attempt('a1', '2026-09-01')], [submission('s1', '2026-09-02')]);
-    const out = await s.queue('t1');
+    const out = await s.queue({ tenantId: 't1' });
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ courseId: 'c1', courseTitle: 'الجبر', pending: 2 });
     expect(out[0].items.map((i: any) => i.kind)).toEqual(['QUIZ', 'ASSIGNMENT']);
@@ -75,7 +75,7 @@ describe('the marking queue', () => {
       [attempt('newer', '2026-09-10'), attempt('older', '2026-09-01')],
       [submission('middle', '2026-09-05')],
     );
-    const out = await s.queue('t1');
+    const out = await s.queue({ tenantId: 't1' });
     expect(out[0].items.map((i: any) => i.id)).toEqual(['older', 'middle', 'newer']);
   });
 
@@ -88,7 +88,7 @@ describe('the marking queue', () => {
       ],
       [],
     );
-    const out = await s.queue('t1');
+    const out = await s.queue({ tenantId: 't1' });
     expect(out.map((c: any) => [c.courseId, c.pending])).toEqual([
       ['c2', 2],
       ['c1', 1],
@@ -97,6 +97,6 @@ describe('the marking queue', () => {
 
   it('is an empty list, not a failure, when there is nothing to mark', async () => {
     const { s } = svc([], []);
-    await expect(s.queue('t1')).resolves.toEqual([]);
+    await expect(s.queue({ tenantId: 't1' })).resolves.toEqual([]);
   });
 });

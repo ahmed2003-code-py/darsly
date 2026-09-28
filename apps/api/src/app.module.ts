@@ -46,6 +46,7 @@ import { StorageModule } from './storage/storage.module';
 import { TeachersModule } from './teachers/teachers.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AcademyModule } from './academy/academy.module';
+import { StaffModule } from './staff/staff.module';
 import { AcademySiteModule } from './academy-site/academy-site.module';
 import { DeviceModule } from './device/device.module';
 import { GamificationModule } from './gamification/gamification.module';
@@ -131,6 +132,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     StudentExtrasModule,
     ProfileModule,
     AcademyModule,
+    StaffModule,
     AcademySiteModule,
     FeatureFlagsModule,
     AcademyOpsModule,

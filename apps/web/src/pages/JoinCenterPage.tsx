@@ -74,7 +74,8 @@ function DecisionCard({ token, preview }: { token: string; preview: InvitationPr
     accept.mutate(token, {
       onSuccess: async () => {
         await refetchAcademies();
-        navigate('/teacher', { replace: true });
+        // An assistant lands in their workspace; a teacher in their console.
+        navigate(preview.role === 'ASSISTANT' ? '/staff' : '/teacher', { replace: true });
       },
     });
   const doDecline = () =>
@@ -85,7 +86,8 @@ function DecisionCard({ token, preview }: { token: string; preview: InvitationPr
       <span className="material-symbols-outlined mb-3 text-5xl text-primary">apartment</span>
       <p className="mb-1 font-heading text-lg font-bold">{preview.academyName}</p>
       <p className="mb-4 text-sm text-on-surface-variant">
-        {t('joinCenter.invitedAs')} <Badge tone="teal">{roleLabel(t, preview.role)}</Badge>
+        {t('joinCenter.invitedAs')}{' '}
+        <Badge tone="teal">{preview.title || roleLabel(t, preview.role)}</Badge>
       </p>
       <p className="mb-4 text-xs text-outline">{t('joinCenter.decisionHint')}</p>
       <ErrorNote error={accept.error ?? decline.error} />
@@ -123,7 +125,7 @@ function SignedOutLanding({
     ? t('joinCenter.landingTitle', { name: preview.academyName })
     : t('joinCenter.title');
   const subtitle = preview
-    ? t('joinCenter.landingSubtitle', { role: roleLabel(t, preview.role) })
+    ? t('joinCenter.landingSubtitle', { role: preview.title || roleLabel(t, preview.role) })
     : undefined;
 
   return (

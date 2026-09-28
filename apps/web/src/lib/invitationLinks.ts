@@ -18,6 +18,8 @@ export interface CreatedInvitationLink extends Pick<
 export interface InvitationPreview {
   academyName: string;
   role: 'TEACHER' | 'ASSISTANT';
+  /** An assistant's title, as the owner set it ("Student Support"). */
+  title?: string | null;
   expiresAt: string;
 }
 

@@ -13,6 +13,10 @@ export interface AcademyContext {
   status: MembershipStatus;
   /** true for the platform super admin acting via an explicit platform context */
   isPlatformAdmin: boolean;
+  /** The membership behind this context (absent for the platform admin). */
+  membershipId?: string;
+  /** Which courses this member's work reaches; see StaffScopeService. */
+  courseScope?: 'ALL' | 'SELECTED';
   can(capability: Capability): boolean;
 }
 

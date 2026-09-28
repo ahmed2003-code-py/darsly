@@ -425,6 +425,22 @@ export interface ChatThreadDto {
   /** How far the other side has read — drives ✓✓ on the viewer's messages. */
   counterpartLastReadAt?: string | null;
   counterpartKind?: ChatSenderKind;
+  /** An assistant counterpart's title in the academy ("Student Support"). */
+  counterpartTitle?: string | null;
+}
+
+/** Someone a student can start a conversation with (GET /chat/contacts). */
+export interface ChatContactDto {
+  kind: 'OWNER' | 'ASSISTANT';
+  /** a teacher: their tenant */
+  tenantId?: string;
+  /** an assistant: who they are, and in which academy */
+  staffUserId?: string;
+  academyId: string;
+  academyName: string | null;
+  name: string;
+  avatarUrl: string | null;
+  title: string | null;
 }
 
 /** Socket.io event names (server↔client), kept in one place to avoid typos. */
@@ -453,6 +469,10 @@ export interface SendMessagePayload {
   tenantId?: string;
   /** when a teacher starts the thread, the student they are writing to */
   studentId?: string;
+  /** the academy, when staff write outside their own workspace or a student writes to an assistant */
+  academyId?: string;
+  /** when a student starts a thread with an assistant */
+  staffUserId?: string;
   body: string;
   /** Q&A pinned to a lesson moment */
   lessonId?: string;

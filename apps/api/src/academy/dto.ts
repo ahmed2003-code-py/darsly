@@ -1,4 +1,7 @@
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
@@ -11,6 +14,7 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { LIMITS } from '../common/validation';
 
@@ -78,7 +82,26 @@ export class UpdateMemberDto {
   @IsOptional() @IsBoolean() canCollectCash?: boolean;
 }
 
+/**
+ * What an assistant may do and where — exactly what the Team screen stores.
+ * The preset the teacher started from is not part of it: presets only fill
+ * these fields in the browser.
+ */
+export class AssistantGrantDto {
+  @IsString() @MinLength(1) @MaxLength(40) title: string;
+  @IsArray() @ArrayMaxSize(30) @IsString({ each: true }) permissions: string[];
+  @IsIn(['ALL', 'SELECTED']) courseScope: 'ALL' | 'SELECTED';
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  courseIds: string[];
+  @IsBoolean() directContact: boolean;
+}
+
 export class CreateInvitationLinkDto {
   @IsIn(['TEACHER', 'ASSISTANT'])
   role: 'TEACHER' | 'ASSISTANT';
+  /** ASSISTANT only; an assistant link without one grants nothing until set on the Team screen. */
+  @IsOptional() @ValidateNested() @Type(() => AssistantGrantDto) grant?: AssistantGrantDto;
 }

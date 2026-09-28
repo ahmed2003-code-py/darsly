@@ -800,13 +800,19 @@ export class AcademyService {
       membership.user.teacherProfile?.status !== 'APPROVED'
     )
       return null;
-    const perms = permissionsFor(membership.role as AcademyRole, membership.permissions as unknown);
+    const perms = permissionsFor(
+      membership.role as AcademyRole,
+      membership.permissions as unknown,
+      membership.courseScope,
+    );
     return {
       academyId,
       userId,
       role: membership.role as AcademyRole,
       status: membership.status,
       isPlatformAdmin: false,
+      membershipId: membership.id,
+      courseScope: membership.courseScope,
       can: (c) => perms.has(c),
     };
   }

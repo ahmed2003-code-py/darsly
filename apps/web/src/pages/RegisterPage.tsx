@@ -111,7 +111,8 @@ export default function RegisterPage() {
         });
         setTokens(data.accessToken, data.refreshToken);
         setUser(data.user);
-        navigate('/teacher', { replace: true });
+        // Home decides: a teacher's console, or an assistant's workspace.
+        navigate('/', { replace: true });
       } else if (role === 'student') {
         if (!gradeId) throw new Error(t('auth.gradeRequired'));
         if (!track) throw new Error(t('auth.trackRequired'));

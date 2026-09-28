@@ -5,6 +5,9 @@ import { AcademySubjectsController } from './academy-subjects.controller';
 import { AcademySubjectsService } from './academy-subjects.service';
 import { AcademyMembershipGuard } from './guards/academy-membership.guard';
 import { InvitationLinksController } from './invitation-links.controller';
+import { StaffScopeService } from './staff-scope.service';
+import { TeamController } from './team.controller';
+import { TeamService } from './team.service';
 import { InvitationLinksService } from './invitation-links.service';
 import { PermissionGuard } from './guards/permission.guard';
 
@@ -15,14 +18,27 @@ import { PermissionGuard } from './guards/permission.guard';
  * Phase 3 adds shareable staff invitation links alongside the existing email invite.
  */
 @Module({
-  controllers: [AcademyController, InvitationLinksController, AcademySubjectsController],
+  controllers: [
+    AcademyController,
+    InvitationLinksController,
+    AcademySubjectsController,
+    TeamController,
+  ],
   providers: [
     AcademyService,
     AcademyMembershipGuard,
     PermissionGuard,
     InvitationLinksService,
     AcademySubjectsService,
+    StaffScopeService,
+    TeamService,
   ],
-  exports: [AcademyService, AcademyMembershipGuard, PermissionGuard, InvitationLinksService],
+  exports: [
+    AcademyService,
+    AcademyMembershipGuard,
+    PermissionGuard,
+    InvitationLinksService,
+    StaffScopeService,
+  ],
 })
 export class AcademyModule {}

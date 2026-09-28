@@ -73,7 +73,7 @@ const attempt = (id: string, chose: string, scorePct: number) => ({
 describe('correcting a question key', () => {
   it('writes the new key on the question', async () => {
     const { svc, prisma } = ctx();
-    await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(prisma.quizQuestion.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { correctOptionIds: ['b'], correctOptionId: 'b' } }),
     );
@@ -83,40 +83,40 @@ describe('correcting a question key', () => {
     // Key said "a"; the real answer is "b". This student answered b and was
     // marked down for it: 40% becomes 65% (10 of 40 marks = 25 points).
     const { svc, scoreOf } = ctx({ attempts: [attempt('A', 'b', 40)] });
-    await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(scoreOf('A')).toMatchObject({ scorePct: 65, passed: true });
   });
 
   it('does NOT take the mark back from a student who picked the old key', async () => {
     // They answered "a" when the key said "a". Not their mistake.
     const { svc, scoreOf } = ctx({ attempts: [attempt('B', 'a', 90)] });
-    const out = await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    const out = await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(scoreOf('B')).toBeUndefined();
     expect(out.raised).toBe(0);
   });
 
   it('leaves alone a student the change makes no difference to', async () => {
     const { svc, scoreOf } = ctx({ attempts: [attempt('C', 'c', 50)] });
-    await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(scoreOf('C')).toBeUndefined();
   });
 
   it('recomputes whether they passed, at the new mark', async () => {
     // 30% + 25 points = 55%, which clears a passing score of 50.
     const { svc, scoreOf } = ctx({ attempts: [attempt('D', 'b', 30)] });
-    await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(scoreOf('D')).toMatchObject({ scorePct: 55, passed: true });
   });
 
   it('never pushes a mark above full', async () => {
     const { svc, scoreOf } = ctx({ attempts: [attempt('E', 'b', 95)] });
-    await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(scoreOf('E')!.scorePct).toBe(100);
   });
 
   it('only looks at papers that already carry a mark', async () => {
     const { svc, prisma } = ctx();
-    await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(prisma.quizAttempt.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -131,7 +131,7 @@ describe('correcting a question key', () => {
 
   it('answers the students who complained', async () => {
     const { svc, prisma } = ctx();
-    const out = await svc.fixKey('t1', 'u-teacher', 'q1', ['b']);
+    const out = await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b']);
     expect(prisma.questionReport.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { questionId: 'q1', status: 'OPEN' },
@@ -143,12 +143,12 @@ describe('correcting a question key', () => {
 
   it('refuses a key that names no option on the question', async () => {
     const { svc } = ctx();
-    await expect(svc.fixKey('t1', 'u-teacher', 'q1', ['zzz'])).rejects.toThrow();
+    await expect(svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['zzz'])).rejects.toThrow();
   });
 
   it('refuses a written question, which has no key', async () => {
     const { svc } = ctx({ type: 'SHORT_ANSWER' });
-    await expect(svc.fixKey('t1', 'u-teacher', 'q1', ['b'])).rejects.toThrow();
+    await expect(svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b'])).rejects.toThrow();
   });
 
   it('handles a question that accepts more than one option', async () => {
@@ -156,14 +156,14 @@ describe('correcting a question key', () => {
     const { svc, scoreOf } = ctx({
       attempts: [{ id: 'F', studentId: 's-F', scorePct: 50, answers: { q1: ['b', 'c'] } }],
     });
-    await svc.fixKey('t1', 'u-teacher', 'q1', ['b', 'c']);
+    await svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b', 'c']);
     expect(scoreOf('F')).toMatchObject({ scorePct: 75 });
   });
 
   it("cannot reach a question in another teacher's course", async () => {
     const { svc, prisma } = ctx();
     prisma.quizQuestion.findFirst.mockResolvedValue(null);
-    await expect(svc.fixKey('t1', 'u-teacher', 'q1', ['b'])).rejects.toThrow();
+    await expect(svc.fixKey({ tenantId: 't1' }, 'u-teacher', 'q1', ['b'])).rejects.toThrow();
     expect(
       prisma.quizQuestion.findFirst.mock.calls[0][0].where.quiz.lesson.unit.course.tenantId,
     ).toBe('t1');

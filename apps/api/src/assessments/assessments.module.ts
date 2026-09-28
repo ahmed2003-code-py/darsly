@@ -1,3 +1,5 @@
+import { AcademyModule } from '../academy/academy.module';
+import { StaffGradingController } from './staff-grading.controller';
 import { Global, Module } from '@nestjs/common';
 import { AcademySiteModule } from '../academy-site/academy-site.module';
 import { AiGraderService } from './ai-grader.service';
@@ -22,12 +24,13 @@ import { QuizzesService } from './quizzes.service';
  */
 @Global()
 @Module({
-  imports: [AcademySiteModule],
+  imports: [AcademySiteModule, AcademyModule],
   controllers: [
     QuizzesController,
     AssignmentsController,
     CertificatesController,
     GradingController,
+    StaffGradingController,
   ],
   providers: [
     LessonAccessService,

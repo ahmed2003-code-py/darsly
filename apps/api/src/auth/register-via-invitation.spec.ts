@@ -21,12 +21,14 @@ function harness(role: 'TEACHER' | 'ASSISTANT' = 'TEACHER') {
     passwordHash: data.passwordHash,
     failedLogins: 0,
     lockedUntil: null,
-    teacherProfile: {
-      id: 'tp-new',
-      status: data.teacherProfile.create.status,
-      slug: data.teacherProfile.create.slug,
-      stages: data.teacherProfile.create.stages,
-    },
+    teacherProfile: data.teacherProfile
+      ? {
+          id: 'tp-new',
+          status: data.teacherProfile.create.status,
+          slug: data.teacherProfile.create.slug,
+          stages: data.teacherProfile.create.stages,
+        }
+      : null,
     studentProfile: null,
   }));
   const prisma: any = {
@@ -129,19 +131,19 @@ describe('AuthService.registerViaInvitation — TEACHER invitation', () => {
 });
 
 describe('AuthService.registerViaInvitation — ASSISTANT invitation', () => {
-  it('needs no subjects/stages, still gets the teacher identity the Center checks staff against, joins as ASSISTANT', async () => {
-    const { svc, tx } = harness('ASSISTANT');
+  it('needs no subjects/stages, gets a STAFF account of their own — no teacher identity — and joins as ASSISTANT', async () => {
+    const { svc, tx, tokenService } = harness('ASSISTANT');
     const res = await svc.registerViaInvitation(
       body({ subjectIds: undefined, stages: undefined }),
       {},
     );
     const created = tx.user.create.mock.calls[0][0].data;
-    expect(created.role).toBe('TEACHER');
-    expect(created.teacherProfile.create.status).toBe('APPROVED');
-    expect(created.teacherProfile.create.subjects.create).toEqual([]);
-    expect(created.teacherProfile.create.stages).toEqual([]);
+    expect(created.role).toBe('STAFF');
+    expect(created.teacherProfile).toBeUndefined();
     expect(res.membership).toMatchObject({ role: 'ASSISTANT', academyId: 'center-1' });
     expect(tx.academy.upsert).not.toHaveBeenCalled();
+    // The session carries no tenant: an assistant never acts as a teacher's workspace.
+    expect(tokenService.createSession.mock.calls[0][0]).toEqual({ id: 'new-user', role: 'STAFF' });
   });
 });
 
@@ -161,7 +163,7 @@ describe('AuthService.registerViaInvitation — the request decides nothing abou
     );
     expect(res.membership).toMatchObject({ role: 'ASSISTANT', academyId: 'center-1' });
     expect(links.claimForNewUser).toHaveBeenCalledWith(tx, 'hash', 'new-user');
-    expect(tx.user.create.mock.calls[0][0].data.role).toBe('TEACHER');
+    expect(tx.user.create.mock.calls[0][0].data.role).toBe('STAFF');
   });
 
   it('a TEACHER link cannot be turned into an ASSISTANT membership (or vice versa) by the client', async () => {

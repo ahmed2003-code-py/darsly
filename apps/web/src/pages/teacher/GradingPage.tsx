@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { dateShort } from '../../lib/format';
@@ -47,6 +47,46 @@ interface QueueCourse {
 
 type View = 'queue' | 'analysis';
 
+/**
+ * Where the marking queue reads and writes. A teacher's console uses their
+ * own routes; an assistant's workspace uses the staff routes, which the
+ * server narrows to the assistant's courses. The screen is the same.
+ */
+interface GradingEndpoints {
+  key: string;
+  queue: string;
+  attempt: (id: string) => string;
+  submission: (id: string) => string;
+  gradeAttempt: (id: string) => string;
+  gradeSubmission: (id: string) => string;
+}
+const TEACHER_GRADING: GradingEndpoints = {
+  key: 'teacher',
+  queue: '/teacher/grading',
+  attempt: (id) => `/teacher/grading/quiz-attempts/${id}`,
+  submission: (id) => `/teacher/grading/submissions/${id}`,
+  gradeAttempt: (id) => `/teacher/quiz-attempts/${id}/grade`,
+  gradeSubmission: (id) => `/teacher/assignment-submissions/${id}/grade`,
+};
+const STAFF_GRADING: GradingEndpoints = {
+  key: 'staff',
+  queue: '/staff/grading',
+  attempt: (id) => `/staff/grading/quiz-attempts/${id}`,
+  submission: (id) => `/staff/grading/submissions/${id}`,
+  gradeAttempt: (id) => `/staff/grading/quiz-attempts/${id}/grade`,
+  gradeSubmission: (id) => `/staff/grading/submissions/${id}/grade`,
+};
+const GradingApi = createContext<GradingEndpoints>(TEACHER_GRADING);
+
+/** The marking queue alone, against the staff routes — the assistant's grading page. */
+export function StaffGradingQueue() {
+  return (
+    <GradingApi.Provider value={STAFF_GRADING}>
+      <Queue />
+    </GradingApi.Provider>
+  );
+}
+
 export default function GradingPage() {
   const { t } = useTranslation();
   const [view, setView] = useState<View>('queue');
@@ -78,10 +118,11 @@ function Queue() {
   const qc = useQueryClient();
   const [open, setOpen] = useState<QueueItem | null>(null);
   const [openCourse, setOpenCourse] = useState<string | null>(null);
+  const endpoints = useContext(GradingApi);
 
   const { data: queue, isLoading } = useQuery<QueueCourse[]>({
-    queryKey: ['grading-queue'],
-    queryFn: async () => (await api.get('/teacher/grading')).data,
+    queryKey: ['grading-queue', endpoints.key],
+    queryFn: async () => (await api.get(endpoints.queue)).data,
   });
 
   const total = (queue ?? []).reduce((n, c) => n + c.pending, 0);
@@ -192,16 +233,11 @@ function scoreFrom(raw: string, max: number): number | null {
 function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
   const { t } = useTranslation();
   const isQuiz = item.kind === 'QUIZ';
+  const endpoints = useContext(GradingApi);
   const { data, isLoading } = useQuery<any>({
-    queryKey: ['grading-item', item.kind, item.id],
+    queryKey: ['grading-item', endpoints.key, item.kind, item.id],
     queryFn: async () =>
-      (
-        await api.get(
-          isQuiz
-            ? `/teacher/grading/quiz-attempts/${item.id}`
-            : `/teacher/grading/submissions/${item.id}`,
-        )
-      ).data,
+      (await api.get(isQuiz ? endpoints.attempt(item.id) : endpoints.submission(item.id))).data,
   });
 
   const [scores, setScores] = useState<Record<string, string>>({});
@@ -213,10 +249,10 @@ function MarkPanel({ item, onDone }: { item: QueueItem; onDone: () => void }) {
       if (isQuiz) {
         const out: Record<string, number> = {};
         for (const q of data.questions) out[q.id] = scoreFrom(scores[q.id] ?? '', q.points) ?? 0;
-        return (await api.post(`/teacher/quiz-attempts/${item.id}/grade`, { scores: out })).data;
+        return (await api.post(endpoints.gradeAttempt(item.id), { scores: out })).data;
       }
       return (
-        await api.post(`/teacher/assignment-submissions/${item.id}/grade`, {
+        await api.post(endpoints.gradeSubmission(item.id), {
           score: scoreFrom(score, data.maxScore ?? 100) ?? 0,
           feedback: feedback.trim() || undefined,
         })

@@ -32,7 +32,16 @@ const CATCH_UP = 100;
  * start one with. The conversation is created by the server with the first
  * message — never by opening the page, and never by attaching a file.
  */
-export type SendTarget = { threadId: string } | { studentId: string } | { tenantId: string };
+/**
+ * Who a send is for: a conversation, or a person — a student (from staff; with
+ * the academy when it is not the sender's own workspace), a teacher (from a
+ * student), or an assistant the academy made reachable (from a student).
+ */
+export type SendTarget =
+  | { threadId: string }
+  | { studentId: string; academyId?: string }
+  | { tenantId: string }
+  | { staffUserId: string; academyId: string };
 
 export interface SendInput {
   body: string;

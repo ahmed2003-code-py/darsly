@@ -57,7 +57,7 @@ export class QuizzesController {
     @Param('attemptId') attemptId: string,
     @Body() dto: GradeAttemptDto,
   ) {
-    return this.quizzes.gradeAttempt(u.tenantId!, u.sub, attemptId, dto);
+    return this.quizzes.gradeAttempt({ tenantId: u.tenantId ?? '__none__' }, u.sub, attemptId, dto);
   }
 
   /**

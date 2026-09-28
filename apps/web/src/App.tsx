@@ -5,6 +5,7 @@ import BrandTheme from './components/BrandTheme';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { Spinner } from './components/ui';
+import { useMyAcademies } from './lib/academy';
 import { setStudioSuspended } from './lib/studio';
 import LoginPage from './pages/LoginPage';
 import { lazyPage } from './lib/lazyPage';
@@ -76,6 +77,11 @@ const ChallengePlayPage = lazyPage(() => import('./pages/student/ChallengePlayPa
 const TeacherChallengesPage = lazyPage(() => import('./pages/teacher/TeacherChallengesPage'));
 const ChallengeBuilderPage = lazyPage(() => import('./pages/teacher/ChallengeBuilderPage'));
 const GradingPage = lazyPage(() => import('./pages/teacher/GradingPage'));
+const TeamPage = lazyPage(() => import('./pages/teacher/TeamPage'));
+const StaffHomePage = lazyPage(() => import('./pages/staff/StaffHomePage'));
+const StaffStudentPage = lazyPage(() => import('./pages/staff/StaffStudentPage'));
+const StaffPaymentsPage = lazyPage(() => import('./pages/staff/StaffPaymentsPage'));
+const StaffGradingPage = lazyPage(() => import('./pages/staff/StaffGradingPage'));
 const TeacherCouponsPage = lazyPage(() => import('./pages/teacher/TeacherCouponsPage'));
 const TeacherDashboardPage = lazyPage(() => import('./pages/teacher/TeacherDashboardPage'));
 const AcademyStudioPage = lazyPage(() => import('./pages/academy/AcademyStudioPage'));
@@ -153,9 +159,27 @@ function homeFor(role?: Role): string {
   // A guest bought one live seat; its only page is that purchase.
   if (role === Role.GUEST) return guestHome();
   if (role === Role.TEACHER) return '/teacher';
-  if (role === Role.STAFF) return '/center';
+  // A STAFF account is either a Center's desk or an assistant; HomeRedirect
+  // tells them apart from the memberships.
+  if (role === Role.STAFF) return '/';
   if (role === Role.SUPER_ADMIN) return '/admin';
   return '/';
+}
+
+/**
+ * A STAFF account's home: the Center console for a Center's desk (it owns
+ * the Center), the assistant workspace for anyone else.
+ */
+function StaffHome() {
+  const { data, isLoading } = useMyAcademies();
+  if (isLoading || !data) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <Spinner />
+      </div>
+    );
+  }
+  return <Navigate to={data.some((a) => a.role === 'OWNER') ? '/center' : '/staff'} replace />;
 }
 
 /** Each role lands on its own home. */
@@ -163,7 +187,7 @@ function HomeRedirect() {
   const user = useAuthStore((s) => s.user);
   if (user?.role === Role.GUEST) return <Navigate to={guestHome()} replace />;
   if (user?.role === Role.TEACHER) return <Navigate to="/teacher" replace />;
-  if (user?.role === Role.STAFF) return <Navigate to="/center" replace />;
+  if (user?.role === Role.STAFF) return <StaffHome />;
   if (user?.role === Role.SUPER_ADMIN) return <Navigate to="/admin" replace />;
   return (
     <RequireAuth>
@@ -520,6 +544,46 @@ export default function App() {
             element={
               <RequireAuth role={Role.TEACHER}>
                 <GradingPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/teacher/team"
+            element={
+              <RequireAuth role={[Role.TEACHER, Role.STAFF]}>
+                <TeamPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/staff"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <StaffHomePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/staff/students/:id"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <StaffStudentPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/staff/payments"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <StaffPaymentsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/staff/grading"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <StaffGradingPage />
               </RequireAuth>
             }
           />

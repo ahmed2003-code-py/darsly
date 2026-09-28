@@ -67,6 +67,8 @@ export function useUploads(
       if ('threadId' in t) fd.append('threadId', t.threadId);
       if ('studentId' in t) fd.append('studentId', t.studentId);
       if ('tenantId' in t) fd.append('tenantId', t.tenantId);
+      if ('staffUserId' in t) fd.append('staffUserId', t.staffUserId);
+      if ('academyId' in t && t.academyId) fd.append('academyId', t.academyId);
       patch(item.key, { status: 'uploading', progress: 0, error: undefined });
       api
         .post<ChatAttachmentDto>('/chat/attachments', fd, {

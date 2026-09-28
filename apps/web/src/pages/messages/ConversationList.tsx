@@ -93,15 +93,20 @@ export default function ConversationList({
                     size={48}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
+                    <span className="flex items-baseline gap-2">
                       <bdi
                         className={`truncate ${unread ? 'font-bold text-on-surface' : 'font-medium text-on-surface'}`}
                       >
                         {th.counterpartName}
                       </bdi>
+                      {th.counterpartTitle && (
+                        <span className="min-w-0 shrink truncate text-xs text-on-surface-variant">
+                          {th.counterpartTitle}
+                        </span>
+                      )}
                       {th.lastMessageAt && (
                         <span
-                          className={`shrink-0 text-xs ${unread ? 'font-bold text-primary-text' : 'text-outline'}`}
+                          className={`ms-auto shrink-0 text-xs ${unread ? 'font-bold text-primary-text' : 'text-outline'}`}
                         >
                           {listTime(th.lastMessageAt, lang)}
                         </span>

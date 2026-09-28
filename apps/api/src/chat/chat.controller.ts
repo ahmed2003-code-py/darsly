@@ -52,6 +52,8 @@ class SendMessageDto {
   @IsOptionalId() replyToId?: string;
   @IsOptionalId() tenantId?: string;
   @IsOptionalId() studentId?: string;
+  @IsOptionalId() academyId?: string;
+  @IsOptionalId() staffUserId?: string;
   // May be empty when the message carries attachments; the service decides.
   @IsOptional() @IsString() @MaxLength(CHAT_MESSAGE_MAX_LEN) body = '';
   @IsOptionalId() lessonId?: string;
@@ -94,6 +96,8 @@ class MessagesQuery {
 class ResolveQuery {
   @IsOptionalId() studentId?: string;
   @IsOptionalId() tenantId?: string;
+  @IsOptionalId() academyId?: string;
+  @IsOptionalId() staffUserId?: string;
 }
 
 /** Open the conversation with someone — the student for a teacher, the academy
@@ -141,6 +145,8 @@ export class ChatController {
     @Body('threadId') threadId?: string,
     @Body('studentId') studentId?: string,
     @Body('tenantId') tenantId?: string,
+    @Body('academyId') academyId?: string,
+    @Body('staffUserId') staffUserId?: string,
   ) {
     if (!file) throw new BadRequestException('file is required');
     const id = (v?: string) => (typeof v === 'string' && v && v.length <= 40 ? v : undefined);
@@ -148,6 +154,8 @@ export class ChatController {
       threadId: id(threadId),
       studentId: id(studentId),
       tenantId: id(tenantId),
+      academyId: id(academyId),
+      staffUserId: id(staffUserId),
     });
   }
 
@@ -180,6 +188,15 @@ export class ChatController {
   @ApiOperation({ summary: 'A page of my conversations, newest activity first' })
   threads(@CurrentUser() user: JwtPayload, @Query() q: ThreadsQuery) {
     return this.chat.listThreads(user, q);
+  }
+
+  @Get('contacts')
+  @ApiOperation({
+    summary:
+      '[student] Who I can start a conversation with: my teachers, and the assistants they made reachable',
+  })
+  contacts(@CurrentUser() user: JwtPayload) {
+    return this.chat.contacts(user);
   }
 
   @Get('resolve')

@@ -37,6 +37,7 @@ export const TEACHER_NAV: NavItem[] = [
   { to: '/teacher/schedule', icon: 'calendar_month', labelKey: 'nav.schedule' },
   { to: '/teacher/grading', icon: 'grading', labelKey: 'nav.grading' },
   { to: '/teacher/analytics', icon: 'monitoring', labelKey: 'nav.analytics' },
+  { to: '/teacher/team', icon: 'support_agent', labelKey: 'nav.team' },
   { to: '/teacher/live', icon: 'sensors', labelKey: 'nav.live' },
   { to: '/messages', icon: 'forum', labelKey: 'nav.messages' },
   { to: '/teacher/wallet', icon: 'account_balance_wallet', labelKey: 'nav.wallet' },
@@ -53,6 +54,7 @@ export const TEACHER_NAV: NavItem[] = [
 export const STAFF_NAV: NavItem[] = [
   { to: '/center', icon: 'apartment', labelKey: 'nav.centerDashboard', end: true },
   { to: '/center/members', icon: 'group', labelKey: 'nav.centerMembers' },
+  { to: '/teacher/team', icon: 'support_agent', labelKey: 'nav.team' },
   { to: '/teacher/courses', icon: 'video_library', labelKey: 'nav.centerCourses' },
   { to: '/center/subjects', icon: 'menu_book', labelKey: 'nav.centerSubjects' },
   { to: '/teacher/groups', icon: 'diversity_3', labelKey: 'nav.groups' },
@@ -63,6 +65,38 @@ export const STAFF_NAV: NavItem[] = [
   { to: '/center/studio', icon: 'palette', labelKey: 'nav.centerStudio' },
   { to: '/center/settings', icon: 'settings', labelKey: 'nav.centerSettings' },
 ];
+
+/**
+ * An assistant's navigation is drawn from what they may do — an entry for a
+ * capability they do not hold would only lead to a refusal. The server still
+ * refuses regardless; this only keeps the menu honest.
+ */
+export function assistantNav(permissions: string[]): NavItem[] {
+  const has = (c: string) => permissions.includes(c);
+  return [
+    { to: '/staff', icon: 'groups', labelKey: 'nav.staffHome', end: true },
+    ...(has('message.reply') ? [{ to: '/messages', icon: 'forum', labelKey: 'nav.messages' }] : []),
+    ...(has('assessment.grade')
+      ? [{ to: '/staff/grading', icon: 'grading', labelKey: 'nav.grading' }]
+      : []),
+    ...(has('group.manage') || has('attendance.mark')
+      ? [{ to: '/teacher/groups', icon: 'diversity_3', labelKey: 'nav.groups' }]
+      : []),
+    ...(has('schedule.manage')
+      ? [{ to: '/teacher/schedule', icon: 'calendar_month', labelKey: 'nav.schedule' }]
+      : []),
+    ...(has('payment.view')
+      ? [{ to: '/staff/payments', icon: 'receipt_long', labelKey: 'nav.staffPayments' }]
+      : []),
+  ];
+}
+
+/** A teacher who also assists in someone else's academy gets one door to that workspace. */
+export const ASSISTING_ITEM: NavItem = {
+  to: '/staff',
+  icon: 'support_agent',
+  labelKey: 'nav.assisting',
+};
 
 export const ADMIN_NAV: NavItem[] = [
   { to: '/admin', icon: 'space_dashboard', labelKey: 'nav.adminOverview', end: true },
@@ -94,6 +128,7 @@ export const BOTTOM_TABS: Record<string, string[]> = {
   ],
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
   [Role.STAFF]: ['/center', '/center/members', '/teacher/groups', '/teacher/schedule'],
+  ASSISTANT: ['/staff', '/messages', '/staff/grading', '/staff/payments'],
 };
 
 export function navFor(role: string | undefined): NavItem[] {

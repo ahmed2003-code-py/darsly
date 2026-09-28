@@ -20,6 +20,6 @@ import { PaperImportService } from './paper-import.service';
   imports: [AcademyModule, AuditModule, AcademySiteModule, CoursesModule, PaperImportCoreModule],
   controllers: [PaperImportController],
   providers: [PaperImportService, ExamBuilderService, ExamExportService],
-  exports: [ExamExportService],
+  exports: [ExamExportService, PaperImportService],
 })
 export class PaperImportModule {}

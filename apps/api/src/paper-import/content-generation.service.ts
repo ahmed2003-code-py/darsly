@@ -3,7 +3,7 @@ import { PaperImport, PaperImportPage, Prisma } from '@prisma/client';
 import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
-import { DraftQuestion, DraftWarning, ExamDraft } from './extraction.schema';
+import { DraftQuestion, DraftWarning, ExamDraft, partialTranscriptWarning } from './extraction.schema';
 import { ExamSpec, normalizeSpec, PlannedQuestion, specFromQuestions } from './exam-spec';
 import { gradeQuestions, findDuplicates, GradedQuestion } from './question-quality';
 import { QuestionGeneratorService } from './question-generator.service';
@@ -375,6 +375,9 @@ export class ContentGenerationService {
     const numbered = questions.map((q, i) => ({ ...q, number: i + 1 }));
     const findings = gradeQuestions(numbered, undefined, { requireGrounding: true });
     const warnings: DraftWarning[] = [];
+    // Written from a Live class's transcript that has gaps: said again with
+    // every draft, so the teacher reviewing it is never left unaware.
+    if ((record.sourceMeta as { partial?: boolean } | null)?.partial) warnings.push(partialTranscriptWarning());
 
     // The spec is rewritten to match the exam that actually exists, so
     // "change the settings" opens the real numbers; the warning below says

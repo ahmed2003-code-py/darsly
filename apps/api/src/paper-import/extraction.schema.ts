@@ -348,6 +348,8 @@ export interface ExamDraft {
 }
 
 export type DraftWarningCode =
+  /// The source was a Live class's transcript with parts missing.
+  | 'PARTIAL_TRANSCRIPT'
   | 'PAGE_FAILED'
   /// The provider did not answer at all. Nothing is known about the page, and
   /// telling a teacher their handwriting is illegible would be a lie.
@@ -631,4 +633,12 @@ function missingNumbers(printed: number[]): number[] {
     for (let n = from + 1; n < to && gaps.length < 10; n++) gaps.push(n);
   }
   return gaps;
+}
+
+/** The exam's source transcript has gaps: the exam may not cover the whole class. */
+export function partialTranscriptWarning(): DraftWarning {
+  return {
+    code: 'PARTIAL_TRANSCRIPT',
+    detail: 'النص غير مكتمل، وقد لا يغطي الامتحان كل أجزاء الحصة',
+  } as DraftWarning;
 }

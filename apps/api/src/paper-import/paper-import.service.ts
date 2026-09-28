@@ -4,12 +4,13 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ExamCreationKind, PaperImport, PaperSourceKind, Prisma } from '@prisma/client';
 import { AiJobService } from '../academy-site/jobs/ai-job.service';
 import { AuditService } from '../audit/audit.service';
 import { assertMagicMatchesMime } from '../common/image.util';
-import { CourseScope } from '../courses/courses.service';
+import { CourseScope, CoursesService } from '../courses/courses.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import {
@@ -20,9 +21,10 @@ import {
   SetSpecDto,
 } from './dto/paper-import.dto';
 import { ContentGenerationService } from './content-generation.service';
+import { chunkSource, type SourcePage } from './source-text';
 import { normalizeSpec, specProblems } from './exam-spec';
 import { ExamBuilderService } from './exam-builder.service';
-import { DraftQuestion, DraftWarning, ExamDraft } from './extraction.schema';
+import { DraftQuestion, DraftWarning, ExamDraft, partialTranscriptWarning } from './extraction.schema';
 import { PAPER_IMAGE_MIME, PAPER_PDF_MIME, PagePreparerService } from './page-preparer.service';
 import { PaperImportConfig } from './paper-import.config';
 
@@ -76,6 +78,8 @@ export class PaperImportService {
     private readonly builder: ExamBuilderService,
     private readonly audit: AuditService,
     private readonly content: ContentGenerationService,
+    /** Places an exam written from a Live class right after that class's lesson. */
+    @Optional() private readonly courses?: CoursesService,
   ) {}
 
   /**
@@ -435,6 +439,82 @@ export class PaperImportService {
 
   // ── stage 2: progress and review ─────────────────────────────────────────
 
+  /**
+   * An exam session whose material is a Live class's own transcript.
+   *
+   * The content path without its reading stage: the words are already text,
+   * so there is nothing to upload, store or pay a model to read. The chunks
+   * are built at once and the session lands where every content session
+   * lands once read — CONFIGURING, the teacher's turn to say what exam they
+   * want. From there it is the ordinary pipeline: the same generator (and its
+   * grounding gate), the same review screen, the same confirm. Nothing is
+   * generated, and nothing is paid for, until the teacher asks.
+   *
+   * `partial` records that the class was not fully transcribed; the teacher
+   * has already been told and chose to go on. It is kept on the session
+   * (sourceMeta) and shown as a warning through generation and review.
+   */
+  async createFromTranscript(
+    scope: ImportScope,
+    input: {
+      title: string;
+      /** The transcript, in the order spoken — one entry per captured piece. */
+      segments: { startSec: number | null; text: string }[];
+      liveSessionId: string;
+      transcriptRevision: number;
+      partial: boolean;
+    },
+  ) {
+    await this.assertNotBusy(scope);
+    const file = 'نص الحصة';
+    const pages: SourcePage[] = input.segments
+      .filter((s) => s.text?.trim())
+      .map((s, i) => ({ file, page: i + 1, text: s.text.trim() }));
+    const chunks = chunkSource(pages);
+    if (!chunks.length) {
+      throw new BadRequestException({ message: 'The transcript has nothing to write an exam from', code: 'NO_SOURCE_TEXT' });
+    }
+    const warnings: DraftWarning[] = input.partial ? [partialTranscriptWarning()] : [];
+    const record = await this.prisma.paperImport.create({
+      data: {
+        academyId: scope.academyId,
+        tenantId: scope.authorTenantId!,
+        createdBy: scope.userId,
+        sourceKind: 'TRANSCRIPT',
+        kind: 'CONTENT',
+        status: 'CONFIGURING',
+        stage: 'READY',
+        title: input.title.slice(0, 200),
+        warnings: warnings as unknown as Prisma.InputJsonValue,
+        sourceLiveSessionId: input.liveSessionId,
+        sourceMeta: {
+          liveSessionId: input.liveSessionId,
+          transcriptRevision: input.transcriptRevision,
+          partial: input.partial,
+        },
+        chunks: {
+          create: chunks.map((c) => ({
+            index: c.index,
+            text: c.text,
+            sourceFile: c.sourceFile,
+            page: c.page,
+            tokensApprox: c.tokensApprox,
+          })),
+        },
+      },
+      select: { id: true, status: true, stage: true, title: true },
+    });
+    await this.audit.log({
+      actorUserId: scope.userId,
+      academyId: scope.academyId,
+      action: 'paper-import.create',
+      entity: 'PaperImport',
+      entityId: record.id,
+      meta: { kind: 'CONTENT', sourceKind: 'TRANSCRIPT', liveSessionId: input.liveSessionId, chunks: chunks.length, partial: input.partial },
+    });
+    return record;
+  }
+
   async list(scope: ImportScope) {
     return this.prisma.paperImport.findMany({
       where: this.where(scope),
@@ -634,6 +714,26 @@ export class PaperImportService {
         courseId: built.courseId,
       },
     });
+    // Written from a Live class's transcript: the exam lesson says which class.
+    if (record.sourceLiveSessionId) {
+      await this.prisma.lesson.update({
+        where: { id: built.lessonId },
+        data: { sourceLiveSessionId: record.sourceLiveSessionId },
+      });
+      // "Watch the class, then take its exam": when the class's recording is
+      // a lesson of the same course, the exam goes right after it.
+      const video = await this.prisma.lesson.findFirst({
+        where: {
+          sourceLiveSessionId: record.sourceLiveSessionId,
+          type: 'VIDEO',
+          unit: { courseId: built.courseId, deletedAt: null },
+        },
+        select: { id: true },
+      });
+      if (video && this.courses) {
+        await this.courses.placeExamAfter(scope, built.lessonId, video.id, null).catch(() => undefined);
+      }
+    }
     await this.audit.log({
       actorUserId: scope.userId,
       academyId: scope.academyId,

@@ -127,11 +127,19 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
   }
 
   @SubscribeMessage(RealtimeEvents.TYPING)
-  async typing(@ConnectedSocket() client: Socket, @MessageBody() threadId: string) {
+  typing(@ConnectedSocket() client: Socket, @MessageBody() threadId: string) {
     const user = this.member(client);
-    // Gate on thread access — otherwise anyone who guesses a thread id could
-    // spray typing echoes into (and leak their identity to) that room.
-    if (!user || !(await this.chat.canAccessThread(user, threadId))) return;
+    if (!user || typeof threadId !== 'string') return;
+    // Gate on the room, not the database: a socket is only ever in
+    // `thread:<id>` after JOIN_THREAD passed canAccessThread, so membership IS
+    // the access check. This used to run a thread query on every keystroke.
+    if (!client.rooms.has(`thread:${threadId}`)) return;
+    // At most one echo per socket per 2 s — the client already throttles, this
+    // is the guarantee for one that does not.
+    const now = Date.now();
+    const last = (client.data.lastTypingAt as number | undefined) ?? 0;
+    if (now - last < 2000) return;
+    client.data.lastTypingAt = now;
     client
       .to(`thread:${threadId}`)
       .emit(RealtimeEvents.TYPING_ECHO, { threadId, userId: user.sub });

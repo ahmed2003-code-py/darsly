@@ -308,9 +308,75 @@ export enum ChatThreadType {
 export interface ChatReplyToDto {
   id: string;
   senderName: string;
-  /** Empty when the quoted message is a voice note. */
+  /** Empty when the quoted message is a voice note or attachments only. */
   body: string;
   isVoice: boolean;
+  /** Set when the quoted message carried attachments (the first one's kind). */
+  attachmentKind?: ChatAttachmentKind | null;
+  /** The original was removed: draw "Message unavailable", do not jump. */
+  unavailable?: boolean;
+}
+
+/**
+ * Who someone is inside a conversation — frozen on each message when it is
+ * sent, so a later role change never re-labels history. Not the global
+ * account role: an assistant's account may be a teacher's.
+ */
+export type ChatSenderKind = 'OWNER' | 'TEACHER' | 'ASSISTANT' | 'STUDENT' | 'GUARDIAN' | 'ADMIN';
+
+export interface ChatParticipantDto {
+  id: string;
+  name: string;
+  /** A signed, cacheable image URL — never inline image data. */
+  avatarUrl: string | null;
+  kind: ChatSenderKind;
+  /** An academy-chosen title such as "Student Support", when there is one. */
+  title: string | null;
+}
+
+export type ChatAttachmentKind = 'IMAGE' | 'FILE';
+
+export interface ChatAttachmentDto {
+  id: string;
+  kind: ChatAttachmentKind;
+  name: string;
+  mimeType: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  /** Signed, short-lived: the file itself (images: the full re-encoded image). */
+  url: string;
+  /** Signed: a small preview for images; null for other files. */
+  previewUrl: string | null;
+  /** Signed: the same bytes served as a download. */
+  downloadUrl: string;
+}
+
+/** The reactions a message may carry. Small and professional on purpose. */
+export const CHAT_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+export type ChatReactionEmoji = (typeof CHAT_REACTIONS)[number];
+
+export interface ChatReactionDto {
+  emoji: string;
+  count: number;
+  /** The viewer's own reaction is this one. */
+  mine: boolean;
+  /** Who reacted, for a tooltip; capped. */
+  names: string[];
+}
+
+/** Pushed when a message's reactions change, per recipient (so `mine` is theirs). */
+export interface ChatReactionEvent {
+  threadId: string;
+  messageId: string;
+  reactions: ChatReactionDto[];
+}
+
+/** Pushed when someone's read position in a conversation moves forward. */
+export interface ChatSeenEvent {
+  threadId: string;
+  userId: string;
+  lastReadAt: string;
 }
 
 export interface ChatMessageDto {
@@ -331,6 +397,10 @@ export interface ChatMessageDto {
   lesson?: { id: string; title: string; atSec: number | null } | null;
   /** The sender's own id for the send; present only on the sender's copy. */
   clientMessageId?: string | null;
+  /** Who sent it, as they were in this conversation when they sent it. */
+  sender?: ChatParticipantDto;
+  attachments?: ChatAttachmentDto[];
+  reactions?: ChatReactionDto[];
 }
 
 export interface ChatThreadDto {
@@ -348,6 +418,13 @@ export interface ChatThreadDto {
   lastMessageAt: string | null;
   unread: number;
   updatedAt: string;
+  /** The last message was sent by the viewer (the list prefixes "You:"). */
+  lastMessageMine?: boolean;
+  /** How far the viewer has read — the conversation opens its unread divider here. */
+  myLastReadAt?: string | null;
+  /** How far the other side has read — drives ✓✓ on the viewer's messages. */
+  counterpartLastReadAt?: string | null;
+  counterpartKind?: ChatSenderKind;
 }
 
 /** Socket.io event names (server↔client), kept in one place to avoid typos. */
@@ -360,6 +437,8 @@ export const RealtimeEvents = {
   MARK_READ: 'chat:read',
   // server → client
   MESSAGE: 'chat:message',
+  REACTION: 'chat:reaction',
+  SEEN: 'chat:seen',
   THREAD_UPDATED: 'chat:thread',
   TYPING_ECHO: 'chat:typing',
   NOTIFICATION: 'notification:new',
@@ -383,6 +462,8 @@ export interface SendMessagePayload {
    * the message already stored instead of posting it again.
    */
   clientMessageId?: string;
+  /** PENDING uploads (POST /chat/attachments) to send with this message. */
+  attachmentIds?: string[];
 }
 
 // ── Progress & student comfort ───────────────────────────────────────────────

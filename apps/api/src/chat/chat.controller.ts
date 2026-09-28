@@ -7,6 +7,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -14,12 +15,15 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
+import * as os from 'os';
 import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload } from '@darsly/shared-types';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsInt,
   IsOptional,
   IsString,
@@ -27,7 +31,6 @@ import {
   Max,
   MaxLength,
   Min,
-  MinLength,
 } from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IsOptionalId } from '../common/validation';
@@ -36,22 +39,41 @@ import {
   ChatService,
   CHAT_MESSAGE_MAX_LEN,
   CLIENT_MESSAGE_ID,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   MESSAGE_PAGE_MAX,
   THREAD_PAGE_MAX,
   VOICE_MAX_BYTES,
 } from './chat.service';
+import { CHAT_FILE_MAX_BYTES, ChatAttachmentsService } from './chat-attachments.service';
+import { ChatReactionsService } from './chat-reactions.service';
 
 class SendMessageDto {
   @IsOptionalId() threadId?: string;
   @IsOptionalId() replyToId?: string;
   @IsOptionalId() tenantId?: string;
   @IsOptionalId() studentId?: string;
-  @IsString() @MinLength(1) @MaxLength(CHAT_MESSAGE_MAX_LEN) body: string;
+  // May be empty when the message carries attachments; the service decides.
+  @IsOptional() @IsString() @MaxLength(CHAT_MESSAGE_MAX_LEN) body = '';
   @IsOptionalId() lessonId?: string;
   // A day of video: past that the timestamp is a typo, not a seek position.
   @IsOptional() @IsInt() @Min(0) @Max(86_400) videoTimestampSec?: number;
   /** The client's id for this send; a retry with the same id is stored once. */
   @IsOptional() @IsString() @Matches(CLIENT_MESSAGE_ID) clientMessageId?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_ATTACHMENTS_PER_MESSAGE)
+  @IsString({ each: true })
+  @MaxLength(40, { each: true })
+  attachmentIds?: string[];
+}
+
+class ReactDto {
+  @IsString() @MaxLength(16) emoji: string;
+}
+
+class ReadDto {
+  /** Read up to and including this message; omitted = the newest one. */
+  @IsOptionalId() upTo?: string;
 }
 
 /** A page of conversations: `before` is the id of the last one already shown. */
@@ -64,6 +86,7 @@ class ThreadsQuery {
 class MessagesQuery {
   @IsOptionalId() before?: string;
   @IsOptionalId() after?: string;
+  @IsOptionalId() around?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(MESSAGE_PAGE_MAX) limit?: number;
 }
 
@@ -92,7 +115,66 @@ export class ChatController {
   constructor(
     private readonly chat: ChatService,
     private readonly storage: StorageProvider,
+    private readonly attachments: ChatAttachmentsService,
+    private readonly reactions: ChatReactionsService,
   ) {}
+
+  @Post('attachments')
+  @HttpCode(200)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload a file for a message (multipart: file + threadId | studentId | tenantId)',
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      // Staged on disk, never held whole in memory; the service reads the
+      // bytes to decide what the file is and deletes the staged copy.
+      storage: diskStorage({ destination: os.tmpdir() }),
+      limits: { fileSize: CHAT_FILE_MAX_BYTES + 1, files: 1 },
+    }),
+  )
+  upload(
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    // Multipart text fields skip the global transforming pipe, so they are read
+    // one by one and only ever used as ids the service authorizes.
+    @Body('threadId') threadId?: string,
+    @Body('studentId') studentId?: string,
+    @Body('tenantId') tenantId?: string,
+  ) {
+    if (!file) throw new BadRequestException('file is required');
+    const id = (v?: string) => (typeof v === 'string' && v && v.length <= 40 ? v : undefined);
+    return this.attachments.upload(user, file, {
+      threadId: id(threadId),
+      studentId: id(studentId),
+      tenantId: id(tenantId),
+    });
+  }
+
+  @Delete('attachments/:id')
+  @ApiOperation({ summary: 'Remove my upload that has not been sent yet' })
+  removeUpload(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.attachments.remove(user, id);
+  }
+
+  @Put('messages/:id/reaction')
+  @ApiOperation({ summary: 'React to a message (one reaction per person; replaces mine)' })
+  react(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: ReactDto) {
+    return this.reactions.react(user, id, dto.emoji);
+  }
+
+  @Delete('messages/:id/reaction')
+  @ApiOperation({ summary: 'Remove my reaction from a message' })
+  unreact(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.reactions.unreact(user, id);
+  }
+
+  @Post('threads/:id/read')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'I have read this conversation up to a message (or its newest)' })
+  read(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: ReadDto) {
+    return this.chat.markReadUpTo(user, id, dto.upTo);
+  }
 
   @Get('threads')
   @ApiOperation({ summary: 'A page of my conversations, newest activity first' })

@@ -50,6 +50,7 @@ export interface ResolvedThread {
   id: string;
   tenantId: string;
   studentId: string;
+  dedupeKey: string;
   deletedAt: Date | null;
   /** true when this call inserted the row, false when it already existed */
   created: boolean;
@@ -89,6 +90,6 @@ export async function resolveCanonicalThread(
       (${newThreadId()}, 'DM'::"ChatThreadType", ${identity.tenantId}, ${identity.studentId},
        ${identity.academyId}, ${identity.staffUserId}, ${threadKey(identity)}, now(), now())
     ON CONFLICT ("dedupeKey") DO UPDATE SET "dedupeKey" = EXCLUDED."dedupeKey"
-    RETURNING "id", "tenantId", "studentId", "deletedAt", (xmax = 0) AS "created"`;
+    RETURNING "id", "tenantId", "studentId", "dedupeKey", "deletedAt", (xmax = 0) AS "created"`;
   return rows[0];
 }

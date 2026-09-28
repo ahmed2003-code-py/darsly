@@ -28,15 +28,31 @@ function makeService(over: { thread?: unknown; studentId?: string | null } = {})
           clearedForStudentAt: null,
         }
       : over.thread;
+  // The rest of a thread row the service reads (its parties), when present.
+  const full = thread
+    ? {
+        dedupeKey: 'k',
+        staffUserId: 'teacherUser',
+        student: { userId: 'studentUser' },
+        teacher: { userId: 'teacherUser' },
+        ...(thread as object),
+      }
+    : thread;
   const prisma = {
     chatThread: {
-      findUnique: jest.fn().mockResolvedValue(thread),
-      findUniqueOrThrow: jest.fn().mockResolvedValue(thread),
+      findUnique: jest.fn().mockResolvedValue(full),
+      findUniqueOrThrow: jest.fn().mockResolvedValue(full),
       update: jest.fn().mockResolvedValue({}),
     },
     chatMessage: {
       findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
       updateMany: jest.fn().mockResolvedValue({}),
+    },
+    chatReaction: { findMany: jest.fn().mockResolvedValue([]) },
+    chatReadState: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      aggregate: jest.fn().mockResolvedValue({ _max: { lastReadAt: null } }),
     },
     studentProfile: {
       findUnique: jest
@@ -243,8 +259,9 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
       lastMessageId: `m${i}`,
       lastMessageAt: new Date(),
       updatedAt: new Date(),
-      teacher: { user: { fullName: 'T', avatarUrl: null } },
-      student: { user: { fullName: `S${i}`, avatarUrl: null } },
+      staffUserId: 'tu',
+      teacher: { userId: 'tu', user: { id: 'tu', fullName: 'T', avatarUrl: null } },
+      student: { userId: `su${i}`, user: { id: `su${i}`, fullName: `S${i}`, avatarUrl: null } },
     }));
     return {
       teacherProfile: { findUnique: jest.fn().mockResolvedValue({ acceptsStudentMessages: true }) },
@@ -264,6 +281,7 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
         ),
         count: jest.fn(),
       },
+      chatReadState: { findMany: jest.fn().mockResolvedValue([]) },
       $queryRaw: jest.fn().mockResolvedValue(threads.map((t) => ({ threadId: t.id, unread: 2 }))),
     } as any;
   }
@@ -274,6 +292,7 @@ describe('ChatService.listThreads — bounded and not N+1', () => {
     p.chatThread.findFirst.mock.calls.length +
     p.chatMessage.findMany.mock.calls.length +
     p.chatMessage.count.mock.calls.length +
+    p.chatReadState.findMany.mock.calls.length +
     p.$queryRaw.mock.calls.length;
 
   it('issues the same number of queries for 1 conversation as for 50', async () => {

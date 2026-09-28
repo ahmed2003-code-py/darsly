@@ -29,7 +29,11 @@ export interface SourceChunk {
   sourceFile: string;
   page: number | null;
   tokensApprox: number;
+  /** An uploaded file (the default) or the Live class's own transcript. */
+  sourceKind?: ChunkSourceKind;
 }
+
+export type ChunkSourceKind = 'DOCUMENT' | 'LIVE_TRANSCRIPT';
 
 /**
  * Roughly how many tokens a string is.

@@ -34,6 +34,7 @@ import {
   supportableQuestions,
   teachableLines,
 } from './source-text';
+import { sourceEmphasis } from './live-sources';
 
 let counter = 0;
 const nextId = (): string =>
@@ -141,6 +142,8 @@ export interface GenerationReport {
   skippedForBudget: number;
   rounds: number;
   rejections: Partial<Record<RejectReason, number>>;
+  /** A Live transcript and an uploaded file stating a fact differently, as the model reported it. */
+  sourceConflicts: string[];
   durationMs: number;
   callLog: GenerationCallLog[];
 }
@@ -221,6 +224,7 @@ export class GenerationRun {
 
     const log: GenerationCallLog[] = [];
     const rejections: Partial<Record<RejectReason, number>> = {};
+    const conflicts: string[] = [];
     const callsByModel: Record<string, number> = {};
     let calls = 0;
     let fallbackCalls = 0;
@@ -278,6 +282,7 @@ export class GenerationRun {
         }
         const { result, charged } = outcome;
         recorded += result.millicents;
+        for (const c of result.sourceConflicts ?? []) if (!conflicts.includes(c)) conflicts.push(c);
         const tally = this.absorb(r, result, slots, { anchor, variantsOn });
         acceptedThisRound += tally.accepted;
         for (const [k, n] of Object.entries(tally.reasons)) {
@@ -373,6 +378,7 @@ export class GenerationRun {
       skippedForBudget,
       rounds: roundsRun,
       rejections,
+      sourceConflicts: conflicts.slice(0, 8),
       durationMs: Date.now() - started,
       callLog: log,
     };
@@ -426,7 +432,9 @@ export class GenerationRun {
     });
 
     const fresh = slots.filter((s) => s.mode === 'DISTINCT');
-    const quota = quotas(fresh.length, chunks.map(chunkCapacity));
+    // With a Live class's transcript AND uploaded material, what both cover
+    // weighs more (sourceEmphasis); with one source every weight is 1.
+    const quota = quotas(fresh.length, chunks.map(chunkCapacity), sourceEmphasis(chunks));
     const remaining = [...quota];
     for (const slot of fresh) {
       // The chunk furthest behind its share, so types spread across chunks
@@ -973,11 +981,11 @@ function reasonFor(slots: Slot[]): string | undefined {
  * `total` shared over chunks in proportion to what each can carry, never
  * more than a chunk can carry while another still has room.
  */
-function quotas(total: number, capacities: number[]): number[] {
+function quotas(total: number, capacities: number[], weights?: number[]): number[] {
   if (!capacities.length) return [];
   const share = apportion(
     total,
-    Object.fromEntries(capacities.map((c, i) => [String(i), Math.max(0, c)])),
+    Object.fromEntries(capacities.map((c, i) => [String(i), Math.max(0, c) * (weights?.[i] ?? 1)])),
   );
   const out = capacities.map((_, i) => share[String(i)] ?? 0);
   let over = 0;

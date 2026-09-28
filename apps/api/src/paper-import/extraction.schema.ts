@@ -350,6 +350,8 @@ export interface ExamDraft {
 export type DraftWarningCode =
   /// The source was a Live class's transcript with parts missing.
   | 'PARTIAL_TRANSCRIPT'
+  /// The class transcript and the uploaded file state something differently.
+  | 'SOURCE_CONFLICT'
   | 'PAGE_FAILED'
   /// The provider did not answer at all. Nothing is known about the page, and
   /// telling a teacher their handwriting is illegible would be a lie.
@@ -639,6 +641,19 @@ function missingNumbers(printed: number[]): number[] {
 export function partialTranscriptWarning(): DraftWarning {
   return {
     code: 'PARTIAL_TRANSCRIPT',
-    detail: 'النص غير مكتمل، وقد لا يغطي الامتحان كل أجزاء الحصة',
+    detail: 'نص الحصة غير مكتمل، وقد لا يغطي الامتحان كل أجزاء الشرح.',
+  } as DraftWarning;
+}
+
+/**
+ * The class transcript and the uploaded file disagree — as the writer of the
+ * questions reported it. No question was written on those facts; the teacher
+ * decides which is right.
+ */
+export function sourceConflictWarning(notes: string[]): DraftWarning {
+  return {
+    code: 'SOURCE_CONFLICT',
+    params: { count: notes.length },
+    detail: notes.map((n) => n.slice(0, 300)).join('\n'),
   } as DraftWarning;
 }

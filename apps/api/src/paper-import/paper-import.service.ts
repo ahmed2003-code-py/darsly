@@ -21,7 +21,7 @@ import {
   SetSpecDto,
 } from './dto/paper-import.dto';
 import { ContentGenerationService } from './content-generation.service';
-import { chunkSource, type SourcePage } from './source-text';
+import { questionProvenance, transcriptChunks, type QuestionProvenance } from './live-sources';
 import { normalizeSpec, specProblems } from './exam-spec';
 import { ExamBuilderService } from './exam-builder.service';
 import { DraftQuestion, DraftWarning, ExamDraft, partialTranscriptWarning } from './extraction.schema';
@@ -49,6 +49,15 @@ export interface UploadedPaper {
 /** Who is asking. Resolved from the academy context, never from the body. */
 export interface ImportScope extends CourseScope {
   userId: string;
+}
+
+/** A Live class as an exam's source: its id, and its transcript when the teacher chose it (empty segments: not chosen). */
+export interface LiveTranscriptSource {
+  liveSessionId: string;
+  /** The transcript, in the order spoken — one entry per captured piece. */
+  segments: { startSec: number | null; text: string }[];
+  transcriptRevision: number;
+  partial: boolean;
 }
 
 /**
@@ -114,7 +123,16 @@ export class PaperImportService {
   async create(
     scope: ImportScope,
     files: UploadedPaper[],
-    opts: { kind?: ExamCreationKind } = {},
+    opts: {
+      kind?: ExamCreationKind;
+      title?: string;
+      /**
+       * Content path from a Live class: its transcript as a second source
+       * beside these files. Kept as text next to the originals and laid
+       * beside the files' chunks once they are read (live-sources.ts).
+       */
+      live?: LiveTranscriptSource;
+    } = {},
   ): Promise<PaperImport> {
     if (!files?.length) {
       throw new BadRequestException({ message: 'Upload at least one page', code: 'NO_FILES' });
@@ -139,6 +157,15 @@ export class PaperImportService {
         kind,
         status: 'UPLOADING',
         stage: 'UPLOADED',
+        ...(opts.title ? { title: opts.title.slice(0, 200) } : {}),
+        ...(opts.live
+          ? {
+              sourceLiveSessionId: opts.live.liveSessionId,
+              warnings: (opts.live.segments?.length && opts.live.partial
+                ? [partialTranscriptWarning()]
+                : []) as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
       },
     });
 
@@ -157,6 +184,27 @@ export class PaperImportService {
         throw new BadRequestException({
           message: 'Nothing readable was found in those files',
           code: 'PAPER_NO_PAGES',
+        });
+      }
+      if (opts.live) {
+        const transcriptKey = opts.live.segments?.length ? `${this.prefix(record.id)}/live-transcript.json` : undefined;
+        if (transcriptKey) {
+          await this.storage.put(
+            transcriptKey,
+            Buffer.from(JSON.stringify(opts.live.segments.map((s) => ({ startSec: s.startSec, text: s.text })))),
+            { contentType: 'application/json' },
+          );
+        }
+        await this.prisma.paperImport.update({
+          where: { id: record.id },
+          data: {
+            sourceMeta: {
+              liveSessionId: opts.live.liveSessionId,
+              ...(transcriptKey
+                ? { transcriptKey, transcriptRevision: opts.live.transcriptRevision, partial: opts.live.partial }
+                : { transcript: false }),
+            },
+          },
         });
       }
     } catch (e) {
@@ -196,7 +244,13 @@ export class PaperImportService {
       action: 'paper-import.create',
       entity: 'PaperImport',
       entityId: record.id,
-      meta: { kind, sourceKind, files: files.length, pages: pageCount },
+      meta: {
+        kind,
+        sourceKind,
+        files: files.length,
+        pages: pageCount,
+        ...(opts.live ? { liveSessionId: opts.live.liveSessionId, transcript: !!opts.live.segments?.length } : {}),
+      },
     });
 
     return this.prisma.paperImport.update({
@@ -466,11 +520,8 @@ export class PaperImportService {
     },
   ) {
     await this.assertNotBusy(scope);
-    const file = 'نص الحصة';
-    const pages: SourcePage[] = input.segments
-      .filter((s) => s.text?.trim())
-      .map((s, i) => ({ file, page: i + 1, text: s.text.trim() }));
-    const chunks = chunkSource(pages);
+    // The teaching in it, not the "can you hear me" (live-sources.ts).
+    const chunks = transcriptChunks(input.segments);
     if (!chunks.length) {
       throw new BadRequestException({ message: 'The transcript has nothing to write an exam from', code: 'NO_SOURCE_TEXT' });
     }
@@ -499,6 +550,7 @@ export class PaperImportService {
             sourceFile: c.sourceFile,
             page: c.page,
             tokensApprox: c.tokensApprox,
+            sourceKind: 'LIVE_TRANSCRIPT',
           })),
         },
       },
@@ -571,6 +623,9 @@ export class PaperImportService {
     const { pages, draft, warnings, spec, ...rest } = record;
     return {
       ...rest,
+      // Never the transcript's storage key or anything else internal.
+      sourceMeta: undefined,
+      ...(await this.liveSources(record)),
       pages,
       draft: draft as unknown as ExamDraft,
       warnings: warnings as unknown as DraftWarning[],
@@ -581,6 +636,39 @@ export class PaperImportService {
       progress: {
         done: rest.progressDone,
         total: rest.progressTotal || pages.length,
+      },
+    };
+  }
+
+  /**
+   * A session made from a Live class: which sources it has, and where each
+   * question came from («من شرح الحصة» / «من العرض» / «من الاثنين»). For the
+   * teacher's review only — worked out from the chunks each time it is asked,
+   * so an edited question never carries a stale label, and nothing of it is
+   * ever written into the exam students take.
+   */
+  private async liveSources(record: { id: string; sourceLiveSessionId: string | null; draft: unknown }) {
+    if (!record.sourceLiveSessionId) return {};
+    const chunks = (
+      await this.prisma.examSourceChunk.findMany({ where: { importId: record.id }, orderBy: { index: 'asc' } })
+    ).map((r) => ({
+      index: r.index,
+      text: r.text,
+      sourceFile: r.sourceFile,
+      page: r.page,
+      tokensApprox: r.tokensApprox,
+      sourceKind: r.sourceKind === 'LIVE_TRANSCRIPT' ? ('LIVE_TRANSCRIPT' as const) : ('DOCUMENT' as const),
+    }));
+    const provenance: Record<string, QuestionProvenance> = {};
+    for (const q of ((record.draft as ExamDraft | null)?.sections ?? []).flatMap((s) => s.questions ?? [])) {
+      const p = questionProvenance(q as never, chunks, { liveSessionId: record.sourceLiveSessionId });
+      if (p) provenance[q.id] = p;
+    }
+    return {
+      liveSources: {
+        transcript: chunks.some((c) => c.sourceKind === 'LIVE_TRANSCRIPT'),
+        documents: chunks.some((c) => c.sourceKind === 'DOCUMENT'),
+        provenance,
       },
     };
   }

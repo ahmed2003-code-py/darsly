@@ -54,6 +54,9 @@ export interface GeneratedBatch {
   insufficient: boolean;
   /** How many good questions this material actually supports, when it said so. */
   supportable: number;
+  /** Material from a Live class AND uploaded files: facts the two state
+   *  differently, reported rather than settled. Absent otherwise. */
+  sourceConflicts?: string[];
 }
 
 export interface GenerationResult extends GeneratedBatch {
@@ -218,7 +221,7 @@ export class QuestionGeneratorService {
    * is the allow-list: a model not on it is refused before anything is sent.
    */
   async generate(req: GenerationRequest): Promise<GenerationResult> {
-    return this.call(req.tier, this.prompt(req), this.outputCeiling(req.plan.length));
+    return this.call(req.tier, this.prompt(req), this.outputCeiling(req.plan.length), schemaFor(req.chunks));
   }
 
   /**
@@ -230,7 +233,7 @@ export class QuestionGeneratorService {
   worstCase(req: GenerationRequest): number {
     const input =
       estimateTokens(SYSTEM_PROMPT) +
-      estimateTokens(JSON.stringify(BATCH_SCHEMA)) +
+      estimateTokens(JSON.stringify(schemaFor(req.chunks))) +
       estimateTokens(this.prompt(req));
     return worstCaseMillicents(
       Math.ceil(input * 1.5),
@@ -291,6 +294,7 @@ export class QuestionGeneratorService {
       '<<<MATERIAL>>>',
       materialOf(opts.chunks),
       '<<<END MATERIAL>>>',
+      spokenGuide(opts.chunks),
       '',
       `Write exactly ${opts.plan.length} question(s), one for each line below, in this order:`,
       wantedOf(opts.plan, opts.targets, undefined, opts.lines),
@@ -325,6 +329,7 @@ export class QuestionGeneratorService {
       '<<<MATERIAL>>>',
       materialOf(opts.chunks),
       '<<<END MATERIAL>>>',
+      spokenGuide(opts.chunks),
       '',
       'This exam is short. The material above has already produced the questions listed under EXISTING, and it has no further distinct content in it.',
       `Write exactly ${opts.plan.length} more question(s) by VARYING those existing ones, one for each line below, in this order:`,
@@ -369,6 +374,7 @@ export class QuestionGeneratorService {
     tier: GenerationTier,
     content: string,
     maxTokens: number,
+    schema: Record<string, unknown> = BATCH_SCHEMA as unknown as Record<string, unknown>,
   ): Promise<GenerationResult> {
     const { model, price, effort } = tier;
     const empty = {
@@ -396,13 +402,16 @@ export class QuestionGeneratorService {
         maxRetries: this.config.generationCallRetries,
         system: SYSTEM_PROMPT,
         schemaName: 'generated_exam_questions',
-        schema: BATCH_SCHEMA as unknown as Record<string, unknown>,
+        schema,
         messages: [{ role: 'user', content }],
       });
       return {
         questions: Array.isArray(res.data?.questions) ? res.data.questions : [],
         insufficient: !!res.data?.insufficient,
         supportable: Number.isFinite(res.data?.supportable) ? res.data.supportable : 0,
+        ...(Array.isArray(res.data?.sourceConflicts)
+          ? { sourceConflicts: res.data.sourceConflicts.filter((c) => typeof c === 'string' && c.trim()).slice(0, 5) }
+          : {}),
         model,
         effort,
         inputTokens: res.inputTokens,
@@ -436,11 +445,50 @@ export class QuestionGeneratorService {
 
 function materialOf(chunks: SourceChunk[]): string {
   return chunks
-    .map(
-      (c) =>
-        `[chunk ${c.index}] (${c.sourceFile}${c.page ? `, page ${c.page}` : ''})\n${numberStatements(c.text)}`,
+    .map((c) =>
+      c.sourceKind === 'LIVE_TRANSCRIPT'
+        ? `[chunk ${c.index}] (TRANSCRIPT of the live class${c.page ? `, part ${c.page}` : ''})\n${numberStatements(c.text)}`
+        : `[chunk ${c.index}] (${c.sourceFile}${c.page ? `, page ${c.page}` : ''})\n${numberStatements(c.text)}`,
     )
     .join('\n\n');
+}
+
+/**
+ * What a spoken class is, and what to do when it and the teacher's file
+ * disagree. Said only when the material holds a transcript, so every other
+ * exam's prompt is unchanged.
+ */
+function spokenGuide(chunks: SourceChunk[]): string {
+  if (!chunks.some((c) => c.sourceKind === 'LIVE_TRANSCRIPT')) return '';
+  const both = chunks.some((c) => c.sourceKind !== 'LIVE_TRANSCRIPT');
+  return [
+    '',
+    'Chunks marked TRANSCRIPT are what the teacher said in a live class, transcribed from speech (often Egyptian Arabic, with English terms). Ask only about what was taught. Ignore greetings, "can you hear me", technical problems, attendance, class management, jokes and anything off the subject. Spoken wording is informal and may contain transcription slips: write the question in clear wording, but never add, change or correct a fact the teacher stated.',
+    both
+      ? "The material has two sources: the teacher's uploaded file and the class transcript. Prefer what the teacher emphasised or repeated, and what both sources cover. Where they state the same fact differently, write no question on that fact, never settle it with your own knowledge, and describe the disagreement in one short sentence in sourceConflicts (in the material's language)."
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** The answer's shape — with room to report disagreements only when there are two sources to disagree. */
+function schemaFor(chunks: SourceChunk[]): Record<string, unknown> {
+  const kinds = new Set(chunks.map((c) => c.sourceKind ?? 'DOCUMENT'));
+  if (kinds.size < 2) return BATCH_SCHEMA as unknown as Record<string, unknown>;
+  return {
+    ...BATCH_SCHEMA,
+    required: [...BATCH_SCHEMA.required, 'sourceConflicts'],
+    properties: {
+      ...BATCH_SCHEMA.properties,
+      sourceConflicts: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Facts the uploaded file and the class transcript state differently, one short sentence each. Empty when they agree. Never resolve them.',
+      },
+    },
+  };
 }
 
 function wantedOf(

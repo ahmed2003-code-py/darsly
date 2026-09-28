@@ -7,6 +7,7 @@ import { LiveService } from '../live/live.service';
 import { CloudflareLiveProvider } from '../live/providers/cloudflare-live.provider';
 import { CF_STUN } from '../live/providers/cloudflare-realtime.client';
 import { LiveProviders } from '../live/providers/live-providers';
+import { ContentGenerationService } from '../paper-import/content-generation.service';
 import { PaperImportConfig } from '../paper-import/paper-import.config';
 import { PaperImportService } from '../paper-import/paper-import.service';
 import { PlaybackService } from '../playback/playback.service';
@@ -394,5 +395,168 @@ describe('linking an existing exam', () => {
     const b = await world();
     const foreign = await prisma.lesson.create({ data: { unitId: b.unit.id, title: 'x', type: 'QUIZ' } });
     await expect(S.content.linkExam(w.scope, w.ls.id, foreign.id)).rejects.toThrow();
+  });
+});
+
+/**
+ * «اختر محتوى الامتحان»: an exam from the class transcript, from material
+ * the teacher uploads, or both — through the same Exam Studio pipeline. No
+ * model is called here: reading is a stand-in, generation is not started.
+ */
+describe('an exam from the class AND/OR uploaded material', () => {
+  const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]);
+  const slide = (name = 'slides-1.png') => ({ buffer: PNG, mimetype: 'image/png', originalname: name, size: PNG.length });
+  const SLIDE_TEXT =
+    'Supervised learning: the model learns from labelled data.\nClassification predicts a category (spam / not spam); regression predicts a number (a flat price).\nSplit the data into training and test sets to detect overfitting.';
+
+  function memory() {
+    const objects = new Map<string, Buffer>();
+    return {
+      objects,
+      put: async (k: string, b: Buffer) => void objects.set(k, b),
+      getBuffer: async (k: string) => {
+        const b = objects.get(k);
+        if (!b) throw new Error(`NoSuchKey ${k}`);
+        return b;
+      },
+      delete: async (k: string) => void objects.delete(k),
+      deletePrefix: async (p: string) => {
+        for (const k of [...objects.keys()]) if (k.startsWith(p)) objects.delete(k);
+      },
+      exists: async (k: string) => objects.has(k),
+    };
+  }
+  function buildWithFiles() {
+    const S = build();
+    const store = memory();
+    const preparer = { normalizeImage: async (b: Buffer) => ({ data: b, mimeType: 'image/jpeg', width: 10, height: 10 }) };
+    const config = new PaperImportConfig();
+    const imports = new PaperImportService(prisma, store as never, preparer as never, config, S.jobs, S.builder as never, { log: jest.fn(async () => undefined) } as never, {} as never, S.courses);
+    const content = new LiveContentService(prisma, S.live, S.courses, imports);
+    // Reading the uploaded page: a stand-in for OCR (a paid call).
+    const reader = { readPage: jest.fn(async () => ({ text: SLIDE_TEXT, blank: false, error: null, escalated: false, model: 'fake', inputTokens: 0, outputTokens: 0, millicents: 0 })) };
+    const reading = new ContentGenerationService(prisma, store as never, reader as never, {} as never, config);
+    const read = async (id: string) => {
+      const record = await prisma.paperImport.findUniqueOrThrow({ where: { id }, include: { pages: true } });
+      await reading.read(record);
+      await prisma.aiJob.updateMany({ where: { type: 'PAPER_IMPORT', input: { path: ['importId'], equals: id } }, data: { status: 'SUCCEEDED' } });
+      return prisma.paperImport.findUniqueOrThrow({ where: { id }, include: { chunks: { orderBy: { index: 'asc' } } } });
+    };
+    return { ...S, store, imports, content, reader, read };
+  }
+
+  it('nothing chosen is refused before anything is stored', async () => {
+    if (!guard()) return;
+    const S = buildWithFiles();
+    const w = await world();
+    await expect(S.content.createExam(w.scope, w.ls.id, { transcript: false, files: [] })).rejects.toMatchObject({ response: { code: 'NO_SOURCE' } });
+    expect(await prisma.paperImport.count({ where: { sourceLiveSessionId: w.ls.id } })).toBe(0);
+  });
+
+  it('upload only (the transcript FAILED): allowed — the ordinary read path, tied to the class, no transcript anywhere', async () => {
+    if (!guard()) return;
+    const S = buildWithFiles();
+    const w = await world({ transcriptStatus: 'FAILED', transcriptText: null, transcriptSegments: null });
+    // The failed transcript cannot be chosen…
+    await expect(S.content.createExam(w.scope, w.ls.id, { files: [slide()] })).rejects.toMatchObject({ response: { code: 'TRANSCRIPT_NOT_AVAILABLE' } });
+    // …but the upload alone works.
+    const r = await S.content.createExam(w.scope, w.ls.id, { transcript: false, files: [slide()] });
+    expect(r).toMatchObject({ created: true, status: 'PROCESSING', stage: 'READING' });
+    const imp = await prisma.paperImport.findUniqueOrThrow({ where: { id: r.id } });
+    expect(imp).toMatchObject({ kind: 'CONTENT', sourceKind: 'IMAGES', sourceLiveSessionId: w.ls.id });
+    expect(imp.sourceMeta).toMatchObject({ liveSessionId: w.ls.id, transcript: false });
+    expect(await prisma.aiJob.count({ where: { type: 'PAPER_IMPORT', input: { path: ['importId'], equals: r.id } } })).toBe(1);
+    const read = await S.read(r.id);
+    expect(read.status).toBe('CONFIGURING');
+    expect(read.chunks.every((c) => c.sourceKind === 'DOCUMENT')).toBe(true);
+  });
+
+  it('both: the transcript is kept beside the files and laid next to them once read — no STT, no summary, one read', async () => {
+    if (!guard()) return;
+    const S = buildWithFiles();
+    const w = await world();
+    const jobsBefore = await prisma.aiJob.count({ where: { type: { in: ['LIVE_TRANSCRIBE', 'LIVE_SUMMARY'] as never } } });
+    const r = await S.content.createExam(w.scope, w.ls.id, { files: [slide()] });
+    const imp = await prisma.paperImport.findUniqueOrThrow({ where: { id: r.id } });
+    const meta = imp.sourceMeta as { transcriptKey: string; transcriptRevision: number; partial: boolean };
+    expect(meta).toMatchObject({ transcriptRevision: 1, partial: false });
+    expect(JSON.parse(S.store.objects.get(meta.transcriptKey)!.toString()).map((s: { text: string }) => s.text)).toEqual(SEGMENTS.map((s) => s.text));
+    const read = await S.read(r.id);
+    expect(read.status).toBe('CONFIGURING');
+    expect(S.reader.readPage).toHaveBeenCalledTimes(1);
+    const kinds = read.chunks.map((c) => c.sourceKind);
+    expect(kinds).toContain('DOCUMENT');
+    expect(kinds).toContain('LIVE_TRANSCRIPT');
+    expect(read.chunks.filter((c) => c.sourceKind === 'LIVE_TRANSCRIPT').every((c) => c.sourceFile === 'نص الحصة')).toBe(true);
+    expect(read.chunks.map((c) => c.text).join(' ')).toContain('overfitting'); // the end of the class is in it
+    // Nothing re-transcribed or re-summarised.
+    expect(await prisma.aiJob.count({ where: { type: { in: ['LIVE_TRANSCRIBE', 'LIVE_SUMMARY'] as never } } })).toBe(jobsBefore);
+
+    // The teacher's review: each question's source, worked out from the chunks — never stored in the draft.
+    const tChunk = read.chunks.find((c) => c.sourceKind === 'LIVE_TRANSCRIPT')!;
+    const dChunk = read.chunks.find((c) => c.sourceKind === 'DOCUMENT')!;
+    const draft = {
+      title: 'x',
+      instructions: [],
+      sections: [
+        {
+          title: '',
+          questions: [
+            { id: 'q1', number: 1, type: 'MCQ', text: 'What does classification predict?', options: [{ id: 'a', label: 'A', text: 'A category such as spam', correct: true }], modelAnswer: '', marks: 1, sourcePages: [], sourceChunk: dChunk.index, unsupportedKind: '', needsReview: false },
+            { id: 'q2', number: 2, type: 'SHORT_ANSWER', text: 'ما الفرق بين الـ classification والـ regression؟', options: [], modelAnswer: 'الـ classification الإجابة فيها فئة زي spam والـ regression الإجابة فيها رقم', marks: 1, sourcePages: [], sourceChunk: tChunk.index, unsupportedKind: '', needsReview: false },
+          ],
+        },
+      ],
+    };
+    await prisma.paperImport.update({ where: { id: r.id }, data: { status: 'REVIEW', draft } });
+    const got: any = await S.imports.get(w.scope.imports, r.id);
+    expect(got.liveSources).toMatchObject({ transcript: true, documents: true });
+    expect(got.liveSources.provenance.q1.kind).toBe('UPLOADED_DOCUMENT');
+    expect(got.liveSources.provenance.q2.kind).toBe('BOTH');
+    expect(got.sourceMeta).toBeUndefined(); // no storage keys to the browser
+    const stored = await prisma.paperImport.findUniqueOrThrow({ where: { id: r.id } });
+    expect(JSON.stringify(stored.draft)).not.toMatch(/provenance|LIVE_TRANSCRIPT/);
+  });
+
+  it('PARTIAL transcript with files: refused until acknowledged, then warned on the session', async () => {
+    if (!guard()) return;
+    const S = buildWithFiles();
+    const w = await world({ transcriptStatus: 'PARTIAL' });
+    await expect(S.content.createExam(w.scope, w.ls.id, { files: [slide()] })).rejects.toMatchObject({ response: { code: 'PARTIAL_TRANSCRIPT' } });
+    expect(await prisma.paperImport.count({ where: { sourceLiveSessionId: w.ls.id } })).toBe(0);
+    const r = await S.content.createExam(w.scope, w.ls.id, { files: [slide()], acknowledgePartial: true });
+    const imp = await prisma.paperImport.findUniqueOrThrow({ where: { id: r.id } });
+    expect(imp.sourceMeta).toMatchObject({ partial: true });
+    expect((imp.warnings as { code: string; detail: string }[])[0]).toMatchObject({ code: 'PARTIAL_TRANSCRIPT', detail: 'نص الحصة غير مكتمل، وقد لا يغطي الامتحان كل أجزاء الشرح.' });
+    // Files only from a PARTIAL class: no acknowledgement needed, no warning.
+    const w2 = await world({ transcriptStatus: 'PARTIAL' });
+    const r2 = await S.content.createExam(w2.scope, w2.ls.id, { transcript: false, files: [slide()] });
+    expect((await prisma.paperImport.findUniqueOrThrow({ where: { id: r2.id } })).warnings).toEqual([]);
+  });
+
+  it('asking again (double click, a second tab, back button) reopens the same session: no second upload, no second read', async () => {
+    if (!guard()) return;
+    const S = buildWithFiles();
+    const w = await world();
+    const r = await S.content.createExam(w.scope, w.ls.id, { files: [slide()] });
+    const objects = S.store.objects.size;
+    const again = await S.content.createExam(w.scope, w.ls.id, { files: [slide(), slide('b.png')] });
+    expect(again).toMatchObject({ created: false, id: r.id });
+    expect(S.store.objects.size).toBe(objects);
+    expect(await prisma.aiJob.count({ where: { type: 'PAPER_IMPORT', input: { path: ['importId'], equals: r.id } } })).toBe(1);
+    expect(await prisma.paperImport.count({ where: { sourceLiveSessionId: w.ls.id } })).toBe(1);
+  });
+
+  it('transcript only still opens at the settings (no upload, no read): the classroom talk is left out', async () => {
+    if (!guard()) return;
+    const S = buildWithFiles();
+    const w = await world({
+      transcriptSegments: [{ startSec: 0, durationSec: 180, text: 'السلام عليكم. سامعيني؟ ' + SEGMENTS[0].text }, SEGMENTS[1]],
+    });
+    const r = await S.content.createExam(w.scope, w.ls.id, {});
+    expect(r).toMatchObject({ created: true, status: 'CONFIGURING' });
+    const chunks = await prisma.examSourceChunk.findMany({ where: { importId: r.id } });
+    expect(chunks.every((c) => c.sourceKind === 'LIVE_TRANSCRIPT')).toBe(true);
+    expect(chunks.map((c) => c.text).join(' ')).not.toMatch(/السلام عليكم|سامعيني/);
   });
 });

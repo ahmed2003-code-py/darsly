@@ -38,6 +38,20 @@ const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
 const MAX_FILES = MAX_FILES_PER_SESSION;
 const ACCEPTED = /^(image\/(png|jpe?g|webp)|application\/pdf)$/;
 
+/** The upload every Exam Studio entrance takes (here, and a Live class's "create an exam"). */
+export const examUploadInterceptor = () =>
+  FilesInterceptor('files', MAX_FILES, {
+    // Kept in memory: the pages are validated, normalised and handed to the
+    // storage provider in this request, and never touch the storage root as
+    // raw uploads the way an attachment used to.
+    storage: memoryStorage(),
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_FILES },
+    fileFilter: (_req, file, cb) =>
+      ACCEPTED.test(file.mimetype)
+        ? cb(null, true)
+        : cb(new BadRequestException('Pages must be images or a PDF'), false),
+  });
+
 /**
  * Paper exam import, for teachers.
  *
@@ -75,19 +89,7 @@ export class PaperImportController {
     summary:
       '[teacher] Start a session: photographs and/or PDFs of an exam, or of lecture material',
   })
-  @UseInterceptors(
-    FilesInterceptor('files', MAX_FILES, {
-      // Kept in memory: the pages are validated, normalised and handed to the
-      // storage provider in this request, and never touch the storage root as
-      // raw uploads the way an attachment used to.
-      storage: memoryStorage(),
-      limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_FILES },
-      fileFilter: (_req, file, cb) =>
-        ACCEPTED.test(file.mimetype)
-          ? cb(null, true)
-          : cb(new BadRequestException('Pages must be images or a PDF'), false),
-    }),
-  )
+  @UseInterceptors(examUploadInterceptor())
   create(
     @CurrentUser() user: JwtPayload,
     @CurrentAcademy() ctx: AcademyContext,

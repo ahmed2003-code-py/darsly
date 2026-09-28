@@ -4206,6 +4206,9 @@ model ExamSourceChunk {
   /// Roughly how many tokens the text is, for batching decisions. Estimated
   /// deterministically; no tokeniser is worth a dependency here.
   tokensApprox Int    @default(0)
+  /// DOCUMENT (an uploaded file) or LIVE_TRANSCRIPT (the Live class's own
+  /// words) — what a question written from this chunk is attributed to.
+  sourceKind   String @default("DOCUMENT")
 
   createdAt DateTime @default(now())
 

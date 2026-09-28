@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Body, Controller, Get, HttpCode, Param, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy, RequirePermission } from '../academy/academy-context';
@@ -8,6 +8,7 @@ import { AcademyMembershipGuard } from '../academy/guards/academy-membership.gua
 import { PermissionGuard } from '../academy/guards/permission.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IsId, IsOptionalId, LIMITS } from '../common/validation';
+import { examUploadInterceptor } from '../paper-import/paper-import.controller';
 import { ContentScope, LiveContentService } from './live-content.service';
 
 class NewCourseDto {
@@ -29,9 +30,14 @@ class PublishLessonDto {
   @IsOptional() @IsBoolean() includeSummary?: boolean;
 }
 
+/** A form field ("true"/"false") or a JSON boolean. */
+const formBool = ({ value }: { value: unknown }) => (value === 'true' ? true : value === 'false' ? false : value);
+
 class CreateExamDto {
   /** The teacher saw that the transcript is incomplete and chose to go on. */
-  @IsOptional() @IsBoolean() acknowledgePartial?: boolean;
+  @IsOptional() @Transform(formBool) @IsBoolean() acknowledgePartial?: boolean;
+  /** Write from the class transcript (default: yes). Uploaded files, if any, come as `files`. */
+  @IsOptional() @Transform(formBool) @IsBoolean() transcript?: boolean;
   @IsOptional() @IsString() @MaxLength(LIMITS.TITLE) title?: string;
 }
 
@@ -82,14 +88,20 @@ export class LiveContentController {
 
   @Post(':id/content/exam')
   @HttpCode(200)
-  @ApiOperation({ summary: '[academy] Start an Exam Studio session from the class transcript (nothing generated yet)' })
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiOperation({
+    summary:
+      '[academy] Start an Exam Studio session from the class transcript, uploaded material (PDF / PNG / JPEG / WebP), or both (nothing generated yet)',
+  })
+  @UseInterceptors(examUploadInterceptor())
   exam(
     @CurrentUser() u: JwtPayload,
     @CurrentAcademy() ctx: AcademyContext,
     @Param('id') id: string,
     @Body() dto: CreateExamDto,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
-    return this.content.createExam(this.scope(u, ctx), id, dto);
+    return this.content.createExam(this.scope(u, ctx), id, { ...dto, files: files ?? [] });
   }
 
   @Get(':id/content/exam-candidates')

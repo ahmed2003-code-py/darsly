@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger } from '@nes
 import { Prisma } from '@prisma/client';
 import { CourseScope, CoursesService } from '../courses/courses.service';
 import { LiveScope, LiveService } from '../live/live.service';
-import { ImportScope, PaperImportService } from '../paper-import/paper-import.service';
+import { ImportScope, PaperImportService, type UploadedPaper } from '../paper-import/paper-import.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Everything a teacher's request carries: the three scopes the reused services speak. */
@@ -77,7 +77,13 @@ export class LiveContentService {
       eligible: s.status === 'ENDED' && !!recording,
       ended: s.status === 'ENDED',
       recordingReady: !!recording,
-      transcript: { status: s.transcriptStatus, usable: transcript.usable, partial: transcript.partial },
+      transcript: {
+        status: s.transcriptStatus,
+        usable: transcript.usable,
+        partial: transcript.partial,
+        // How much class the transcript covers — for "نص الحصة (١٢ دقيقة)".
+        durationSec: ((s.transcriptMeta ?? null) as { audioSeconds?: number } | null)?.audioSeconds ?? null,
+      },
       summaryReady: s.summaryStatus === 'READY' && !!s.summary,
       lessons: lessons.map((l) => ({
         id: l.id,
@@ -183,41 +189,79 @@ export class LiveContentService {
    * the exam there; the result is a draft they review before confirming.
    * One open session per class: asking again answers with it.
    */
-  async createExam(scope: ContentScope, sessionId: string, dto: { acknowledgePartial?: boolean; title?: string }) {
+  /**
+   * An Exam Studio session from this class: its transcript, material the
+   * teacher uploads now (a lecture PDF, slides saved as PDF, photos of
+   * pages), or both. Nothing is generated until the teacher asks, in the
+   * studio.
+   *
+   *  - transcript only: already text, so the session opens at the settings;
+   *  - with files: the ordinary upload → read path; the transcript (when
+   *    chosen) is laid beside the files' text once they are read;
+   *  - an incomplete transcript needs the teacher's explicit go-ahead; a
+   *    failed one cannot be chosen, and files alone still can.
+   *
+   * One session per class at a time: asking again reopens the one there is.
+   */
+  async createExam(
+    scope: ContentScope,
+    sessionId: string,
+    dto: { acknowledgePartial?: boolean; title?: string; transcript?: boolean; files?: UploadedPaper[] },
+  ) {
+    const files = dto.files ?? [];
+    const withTranscript = dto.transcript !== false;
+    if (!withTranscript && !files.length) {
+      throw new BadRequestException({ message: 'Choose the transcript, a file, or both', code: 'NO_SOURCE' });
+    }
     return this.claimed(sessionId, async () => {
       const { session: s } = await this.live.contentSource(scope.live, sessionId);
       if (s.status !== 'ENDED') {
         throw new ConflictException({ message: 'The class has not ended', code: 'CLASS_NOT_ENDED' });
       }
       const existing = await this.prisma.paperImport.findFirst({
-        where: { sourceLiveSessionId: sessionId, status: { notIn: ['CANCELED', 'FAILED'] } },
+        where: { sourceLiveSessionId: sessionId, deletedAt: null, status: { notIn: ['CANCELED', 'FAILED'] } },
         orderBy: { createdAt: 'desc' },
         select: { id: true, status: true, stage: true, title: true },
       });
       if (existing) return { created: false, ...existing };
       const transcript = this.transcriptOf(s);
-      if (!transcript.usable) {
+      if (withTranscript && !transcript.usable) {
         throw new ConflictException({
           message: 'There is no transcript to write an exam from',
           code: 'TRANSCRIPT_NOT_AVAILABLE',
           transcriptStatus: s.transcriptStatus,
         });
       }
-      if (transcript.partial && !dto.acknowledgePartial) {
+      if (withTranscript && transcript.partial && !dto.acknowledgePartial) {
         throw new ConflictException({
           message: 'The transcript is incomplete; the exam may not cover the whole class',
           code: 'PARTIAL_TRANSCRIPT',
         });
       }
-      const created = await this.imports.createFromTranscript(scope.imports, {
-        title: (dto.title?.trim() || `امتحان: ${s.title}`).slice(0, 200),
-        segments: transcript.segments,
-        liveSessionId: sessionId,
-        transcriptRevision: s.transcriptRevision,
-        partial: transcript.partial,
-      });
-      this.logger.log(`live.content.exam liveSession=${sessionId} import=${created.id} partial=${transcript.partial}`);
-      return { created: true, ...created };
+      const title = (dto.title?.trim() || `امتحان: ${s.title}`).slice(0, 200);
+      const created = files.length
+        ? await this.imports.create(scope.imports, files, {
+            kind: 'CONTENT',
+            title,
+            live: {
+              liveSessionId: sessionId,
+              segments: withTranscript ? transcript.segments : [],
+              transcriptRevision: s.transcriptRevision,
+              partial: withTranscript && transcript.partial,
+            },
+          })
+        : await this.imports.createFromTranscript(scope.imports, {
+            title,
+            segments: transcript.segments,
+            liveSessionId: sessionId,
+            transcriptRevision: s.transcriptRevision,
+            partial: transcript.partial,
+          });
+      this.logger.log(
+        `live.content.exam liveSession=${sessionId} import=${created.id} transcript=${withTranscript} ` +
+          `files=${files.length} partial=${withTranscript && transcript.partial}`,
+      );
+      return { created: true, id: created.id, status: created.status, stage: created.stage, title: created.title };
     });
   }
 

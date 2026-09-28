@@ -33,7 +33,7 @@ export class ChatReactionsService {
   private async reachable(user: JwtPayload, messageId: string) {
     const m = await this.prisma.chatMessage.findFirst({
       where: { id: messageId },
-      select: { id: true, threadId: true },
+      select: { id: true, threadId: true, revokedAt: true },
     });
     if (!m || !(await this.chat.canAccessThread(user, m.threadId))) {
       throw new ForbiddenException('Not your thread');
@@ -46,6 +46,12 @@ export class ChatReactionsService {
       throw new BadRequestException({ message: 'Unsupported reaction', code: 'REACTION_INVALID' });
     }
     const m = await this.reachable(user, messageId);
+    if (m.revokedAt) {
+      throw new BadRequestException({
+        message: 'This message was deleted',
+        code: 'MESSAGE_DELETED',
+      });
+    }
     const where = { messageId_userId: { messageId, userId: user.sub } };
     try {
       await this.prisma.chatReaction.upsert({

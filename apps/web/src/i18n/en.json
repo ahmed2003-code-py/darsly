@@ -275,7 +275,18 @@
     "clearConfirm": "Clear these messages for you? The other person keeps their copy, and anything sent from now on still arrives.",
     "closed": "This teacher is not accepting messages right now.",
     "newConversation": "New conversation",
-    "noContacts": "No one to message yet — you can message the teachers of courses you are enrolled in."
+    "noContacts": "No one to message yet — you can message the teachers of courses you are enrolled in.",
+    "more": "More",
+    "deleteForMe": "Delete for me",
+    "deleteForEveryone": "Delete for everyone",
+    "deleteEveryoneConfirm": "This message will be removed for everyone in the conversation. Delete it?",
+    "deleteFailed": "Couldn't delete the message. Try again.",
+    "messageDeleted": "This message was deleted",
+    "youDeleted": "You deleted this message",
+    "filesCount_one": "1 file",
+    "filesCount_other": "{{count}} files",
+    "removeVoice": "Remove voice note",
+    "recordDone": "Done"
   },
   "discovery": {
     "title": "Discover Teachers",

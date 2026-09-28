@@ -279,7 +279,22 @@
     "clearConfirm": "تمسح الرسايل من عندك؟ الطرف التاني هيفضل شايفها، وأي رسالة جديدة بعد كده هتظهر عادي.",
     "closed": "المدرس ده مش مستقبل رسايل حالياً.",
     "newConversation": "محادثة جديدة",
-    "noContacts": "مفيش حد تكلّمه لسه — تقدر تكلّم مدرسين الكورسات اللي انت مشترك فيها."
+    "noContacts": "مفيش حد تكلّمه لسه — تقدر تكلّم مدرسين الكورسات اللي انت مشترك فيها.",
+    "more": "المزيد",
+    "deleteForMe": "حذف عندي",
+    "deleteForEveryone": "حذف عند الكل",
+    "deleteEveryoneConfirm": "الرسالة دي هتتشال عند كل اللي في المحادثة. تحذفها؟",
+    "deleteFailed": "مقدرناش نحذف الرسالة. جرّب تاني.",
+    "messageDeleted": "تم حذف هذه الرسالة",
+    "youDeleted": "حذفت هذه الرسالة",
+    "filesCount_zero": "{{count}} ملف",
+    "filesCount_one": "ملف",
+    "filesCount_two": "ملفين",
+    "filesCount_few": "{{count}} ملفات",
+    "filesCount_many": "{{count}} ملف",
+    "filesCount_other": "{{count}} ملف",
+    "removeVoice": "حذف الرسالة الصوتية",
+    "recordDone": "تم"
   },
   "discovery": {
     "title": "استكشف الأساتذة",

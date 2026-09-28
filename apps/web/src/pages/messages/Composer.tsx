@@ -6,6 +6,7 @@ import { shouldSendOnKey } from './composerKeys';
 import { clock, formatBytes } from './format';
 import { messagePreview } from './MessageBubble';
 import type { LocalMessage } from './messageList';
+import VoiceNote from './VoiceNote';
 
 type T = (k: string, o?: any) => string;
 
@@ -29,8 +30,9 @@ export interface ComposerProps {
     remove: (key: string) => void;
     busy: boolean;
     failed: boolean;
+    hasVoice: boolean;
   };
-  /** Voice notes upload into a conversation, so they wait for the first message. */
+  /** Recording is possible before the first message: a note is a pending asset. */
   canRecord: boolean;
   onVoice: (blob: Blob, seconds: number) => void;
   onSend: () => void;
@@ -98,15 +100,16 @@ export default function Composer(props: ComposerProps) {
       }}
     >
       {replyTo && (
-        <div className="mb-2 flex items-center gap-3 rounded-sm bg-surface-container-low px-3 py-2">
-          <span className="h-9 w-1 shrink-0 rounded-full bg-primary" aria-hidden />
-          <span className="min-w-0 flex-1">
-            <span className="block text-xs font-bold text-primary-text">
+        // One compact row: who, and one line of what. It must not eat the
+        // conversation on a phone with the keyboard up.
+        <div className="mb-1.5 flex items-center gap-2 rounded-[10px] border-s-[3px] border-primary bg-surface-container-low py-1 pe-1 ps-2.5">
+          <span className="min-w-0 flex-1 text-xs leading-snug">
+            <span className="block truncate font-bold text-primary-text">
               {t('messages.replyingTo', {
                 name: replyTo.mine ? t('messages.you') : replyTo.senderName,
               })}
             </span>
-            <span dir="auto" className="block truncate text-sm text-on-surface-variant">
+            <span dir="auto" className="block truncate text-on-surface-variant">
               {messagePreview(replyTo as LocalMessage, t)}
             </span>
           </span>
@@ -114,9 +117,9 @@ export default function Composer(props: ComposerProps) {
             type="button"
             onClick={props.onCancelReply}
             aria-label={t('messages.cancelReply')}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
       )}
@@ -142,7 +145,7 @@ export default function Composer(props: ComposerProps) {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              disabled={uploads.items.length >= 5}
+              disabled={uploads.items.filter((i) => !i.voiceSec).length >= 5}
               aria-label={t('messages.attach')}
               title={t('messages.attach')}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
@@ -182,17 +185,10 @@ export default function Composer(props: ComposerProps) {
               enterKeyHint={touchFirst() ? 'enter' : 'send'}
               className="min-h-11 flex-1 resize-none rounded-[22px] border border-outline-variant/60 bg-surface-container-low px-4 py-[11px] text-[15px] leading-6 text-on-surface outline-none transition placeholder:text-outline focus:border-primary focus:bg-surface-container-lowest"
             />
-            {canSend || !props.canRecord || hasFiles ? (
-              <button
-                type="button"
-                onClick={onSend}
-                disabled={!canSend}
-                aria-label={t('messages.send')}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary transition hover:bg-primary-hover disabled:bg-surface-container-high disabled:text-outline"
-              >
-                <span className="material-symbols-outlined rtl:-scale-x-100">send</span>
-              </button>
-            ) : (
+            {/* The mic stays until a note is recorded — next to Send too, so a
+                voice note can go with text and files in one message, in
+                whatever order they were added. */}
+            {props.canRecord && !uploads.hasVoice && (
               <button
                 type="button"
                 onClick={startRecording}
@@ -201,6 +197,17 @@ export default function Composer(props: ComposerProps) {
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary-fixed text-on-primary-fixed transition hover:bg-primary hover:text-on-primary"
               >
                 <span className="material-symbols-outlined">mic</span>
+              </button>
+            )}
+            {(hasFiles || !!draft.trim() || !props.canRecord) && (
+              <button
+                type="button"
+                onClick={onSend}
+                disabled={!canSend}
+                aria-label={t('messages.send')}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary transition hover:bg-primary-hover disabled:bg-surface-container-high disabled:text-outline"
+              >
+                <span className="material-symbols-outlined rtl:-scale-x-100">send</span>
               </button>
             )}
           </div>
@@ -226,6 +233,38 @@ function UploadChip({
   const look = fileLook(
     u.attachment?.mimeType ?? (u.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : ''),
   );
+  if (u.voiceSec) {
+    // A recorded note waiting to go with the message: listen before sending.
+    return (
+      <li className="relative flex w-64 shrink-0 items-center gap-1 rounded-sm bg-surface-container-low p-2 pe-9">
+        {u.status === 'failed' ? (
+          <span className="flex min-w-0 flex-1 items-center gap-2 text-xs">
+            <span className="material-symbols-outlined text-error">mic_off</span>
+            <span className="truncate text-error">{u.error ?? t('messages.uploadFailed')}</span>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="shrink-0 font-bold text-primary-text"
+            >
+              {t('messages.retry')}
+            </button>
+          </span>
+        ) : (
+          <span className={`min-w-0 flex-1 ${u.status === 'uploading' ? 'opacity-70' : ''}`}>
+            <VoiceNote src={u.localUrl} seconds={u.voiceSec} mine={false} t={t} />
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={t('messages.removeVoice')}
+          className="absolute end-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high"
+        >
+          <span className="material-symbols-outlined text-[18px]">delete</span>
+        </button>
+      </li>
+    );
+  }
   return (
     <li className="relative flex w-56 shrink-0 items-center gap-2.5 rounded-sm bg-surface-container-low p-2 pe-9">
       {u.isImage && u.localUrl ? (
@@ -383,13 +422,16 @@ function Recorder({
           {clock(elapsed)}
         </span>
       </span>
+      {/* Stopping keeps the note with the message being written; Send sends it
+          together with any text and files, as one message. */}
       <button
         type="button"
         onClick={() => finish(true)}
         className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-on-primary"
-        aria-label={t('messages.stopAndSend')}
+        aria-label={t('messages.recordDone')}
+        title={t('messages.recordDone')}
       >
-        <span className="material-symbols-outlined rtl:-scale-x-100">send</span>
+        <span className="material-symbols-outlined">check</span>
       </button>
     </div>
   );

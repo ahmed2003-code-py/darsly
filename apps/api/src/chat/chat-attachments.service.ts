@@ -15,7 +15,7 @@ import { StorageProvider } from '../storage/storage.provider';
 import { ChatFileVariant, verifyLink } from '../common/signed-link';
 import { attachmentDto } from './chat-presenter';
 import { newThreadId, threadKey } from './chat-thread.identity';
-import { ChatTarget, ChatService } from './chat.service';
+import { ChatTarget, ChatService, VOICE_MAX_BYTES, VOICE_MAX_SECONDS } from './chat.service';
 
 // sharp is a native dep, loaded the way the rest of the API loads it.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -75,6 +75,24 @@ export function detectChatFile(head: Buffer, fileName: string): Detected | null 
   if (isOle2(head) && OFFICE_OLE[ext]) return { kind: 'FILE', mime: OFFICE_OLE[ext], ext };
   if (ext === 'txt' && head.length && !head.includes(0x00) && !isZip(head))
     return { kind: 'FILE', mime: 'text/plain', ext: 'txt' };
+  return null;
+}
+
+/** A recorded voice note: what the browsers' recorders actually produce, by bytes. */
+export function detectVoice(head: Buffer): { mime: string; ext: string } | null {
+  if (startsWith(head, 0x1a, 0x45, 0xdf, 0xa3)) return { mime: 'audio/webm', ext: 'webm' };
+  if (head.toString('latin1', 0, 4) === 'OggS') return { mime: 'audio/ogg', ext: 'ogg' };
+  if (
+    head.length > 11 &&
+    head.toString('latin1', 0, 4) === 'RIFF' &&
+    head.toString('latin1', 8, 12) === 'WAVE'
+  )
+    return { mime: 'audio/wav', ext: 'wav' };
+  // Safari records AAC in an MP4 container.
+  if (head.length > 11 && head.toString('latin1', 4, 8) === 'ftyp' && !isHeif(head))
+    return { mime: 'audio/mp4', ext: 'm4a' };
+  if (head.toString('latin1', 0, 3) === 'ID3' || (head[0] === 0xff && (head[1] & 0xe0) === 0xe0))
+    return { mime: 'audio/mpeg', ext: 'mp3' };
   return null;
 }
 
@@ -140,6 +158,7 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
     user: JwtPayload,
     file: { path: string; originalname: string; size: number },
     target: UploadTarget,
+    voice?: { durationSec: number },
   ): Promise<ChatAttachmentDto> {
     try {
       const auth = await this.chat.authorizeTarget(user, target);
@@ -156,6 +175,7 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
         if (existing && !existing.deletedAt) threadId = existing.id;
       }
 
+      const base0 = () => ({ id: newThreadId(), uploaderId: user.sub, threadId, targetKey });
       const since = new Date(Date.now() - 24 * 3600 * 1000);
       const used = await this.prisma.chatAttachment.aggregate({
         where: { uploaderId: user.sub, createdAt: { gt: since } },
@@ -169,6 +189,7 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
       }
 
       const head = await this.readHead(file.path);
+      if (voice) return attachmentDto(await this.saveVoice(user, file, head, base0(), voice));
       if (isHeif(head)) {
         throw new BadRequestException({
           message: 'HEIC photos are not supported — send it as JPG',
@@ -259,6 +280,49 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * A voice note recorded in the composer: a pending asset like any file, sent
+   * — or not — with the rest of the message. The bytes decide it is audio; the
+   * duration is the recorder's, clamped to what a voice note may be.
+   */
+  private async saveVoice(
+    user: JwtPayload,
+    file: { path: string; size: number },
+    head: Buffer,
+    base: { id: string; uploaderId: string; threadId: string | null; targetKey: string | null },
+    voice: { durationSec: number },
+  ) {
+    const detected = detectVoice(head);
+    if (!detected) {
+      throw new BadRequestException({ message: 'Unsupported audio format', code: 'VOICE_FORMAT' });
+    }
+    if (file.size > VOICE_MAX_BYTES) {
+      throw new BadRequestException({ message: 'Voice note is too long', code: 'VOICE_TOO_LONG' });
+    }
+    const durationSec = Math.min(
+      VOICE_MAX_SECONDS,
+      Math.max(1, Math.round(Number(voice.durationSec) || 0)),
+    );
+    const storageKey = `chat-files/${base.id}.${detected.ext}`;
+    const sha256 = await this.hashFile(file.path);
+    await this.storage.put(storageKey, createReadStream(file.path), {
+      contentType: detected.mime,
+      cacheControl: 'private, max-age=86400',
+    });
+    return this.prisma.chatAttachment.create({
+      data: {
+        ...base,
+        kind: 'VOICE',
+        storageKey,
+        fileName: `voice.${detected.ext}`,
+        mimeType: detected.mime,
+        sizeBytes: file.size,
+        durationSec,
+        sha256,
+      },
+    });
+  }
+
   /** Remove an upload from the composer. Only the uploader, only before it is sent. */
   async remove(user: JwtPayload, id: string) {
     const a = await this.prisma.chatAttachment.findFirst({
@@ -283,10 +347,11 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
     }
     const a = await this.prisma.chatAttachment.findUnique({
       where: { id },
-      include: { message: { select: { deletedAt: true } } },
+      include: { message: { select: { deletedAt: true, revokedAt: true } } },
     });
     if (!a) throw new NotFoundException();
-    if (a.status === 'ATTACHED' && (!a.message || a.message.deletedAt))
+    // A file of a message deleted for everyone is gone, whatever links exist.
+    if (a.status === 'ATTACHED' && (!a.message || a.message.deletedAt || a.message.revokedAt))
       throw new NotFoundException();
     const key = variant === 'preview' && a.previewKey ? a.previewKey : a.storageKey;
     const obj = await this.storage.getStream(key);

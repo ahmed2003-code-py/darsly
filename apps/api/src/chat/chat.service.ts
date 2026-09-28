@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ChatDeletedEvent,
   ChatMessageDto,
   ChatSeenEvent,
   ChatSenderKind,
@@ -39,8 +40,9 @@ export const MESSAGE_PAGE_MAX = 100;
 /** Conversations per page of the list. */
 export const THREAD_PAGE = 50;
 export const THREAD_PAGE_MAX = 100;
-/** Files one message may carry. */
+/** Files one message may carry — plus, on top, one voice note. */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
+export const MAX_VOICE_PER_MESSAGE = 1;
 
 /**
  * A client's id for one send, so a retry is recognised as the same send.
@@ -439,9 +441,11 @@ export class ChatService {
               id: true,
               body: true,
               audioKey: true,
+              revokedAt: true,
               createdAt: true,
               senderId: true,
               attachments: { select: { kind: true, fileName: true } },
+              hiddenFor: { where: { userId: user.sub }, select: { userId: true } },
             },
           })
         : Promise.resolve([]),
@@ -481,7 +485,12 @@ export class ChatService {
         videoTimestampSec: thread.videoTimestampSec,
         // A voice note or a photo has no text, and an empty preview made a
         // conversation full of them look like one nobody had written in yet.
-        lastMessage: last ? previewOf(last) || null : null,
+        // A last message this viewer deleted for themselves reads as deleted,
+        // not as its text: they asked not to see it.
+        lastMessage: last
+          ? previewOf(last.hiddenFor?.length ? { body: '', revokedAt: last.createdAt } : last) ||
+            null
+          : null,
         lastMessageAt: (last?.createdAt ?? thread.lastMessageAt)?.toISOString() ?? null,
         lastMessageMine: last ? last.senderId === user.sub : false,
         unread: unread.get(thread.id) ?? 0,
@@ -509,7 +518,10 @@ export class ChatService {
       LEFT JOIN "ChatReadState" r ON r."threadId" = m."threadId" AND r."userId" = ${user.sub}
       WHERE m."threadId" IN (${Prisma.join(threadIds)})
         AND m."deletedAt" IS NULL
+        AND m."revokedAt" IS NULL
         AND m."senderId" <> ${user.sub}
+        AND NOT EXISTS (SELECT 1 FROM "ChatMessageHide" h
+                        WHERE h."messageId" = m.id AND h."userId" = ${user.sub})
         AND (r."lastReadAt" IS NULL OR m."createdAt" > r."lastReadAt")
         AND (t.${clearedColumn} IS NULL OR m."createdAt" > t.${clearedColumn})
       GROUP BY m."threadId"`;
@@ -569,6 +581,8 @@ export class ChatService {
     const base: Prisma.ChatMessageWhereInput = {
       threadId,
       ...(from ? { createdAt: { gt: from } } : {}),
+      // "Delete for me" — gone from this viewer's copy only.
+      hiddenFor: { none: { userId: user.sub } },
     };
 
     const cursorId = page.before ?? page.after ?? page.around;
@@ -1075,7 +1089,7 @@ export class ChatService {
   ): Promise<string | null> {
     if (!replyToId) return null;
     const target = await db.chatMessage.findFirst({
-      where: { id: replyToId, threadId },
+      where: { id: replyToId, threadId, revokedAt: null },
       select: { id: true },
     });
     return target?.id ?? null;
@@ -1146,9 +1160,16 @@ export class ChatService {
   async voiceNote(user: JwtPayload, messageId: string) {
     const message = await this.prisma.chatMessage.findUnique({
       where: { id: messageId },
-      select: { id: true, threadId: true, audioKey: true, audioMimeType: true, audioBytes: true },
+      select: {
+        id: true,
+        threadId: true,
+        audioKey: true,
+        audioMimeType: true,
+        audioBytes: true,
+        revokedAt: true,
+      },
     });
-    if (!message?.audioKey) throw new NotFoundException('No voice note here');
+    if (!message?.audioKey || message.revokedAt) throw new NotFoundException('No voice note here');
     if (!(await this.canAccessThread(user, message.threadId))) {
       throw new ForbiddenException('Not your thread');
     }
@@ -1177,7 +1198,7 @@ export class ChatService {
   async sendMessage(user: JwtPayload, payload: SendMessagePayload) {
     const body = payload.body?.trim() ?? '';
     const attachmentIds = [...new Set(payload.attachmentIds ?? [])];
-    if (attachmentIds.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+    if (attachmentIds.length > MAX_ATTACHMENTS_PER_MESSAGE + MAX_VOICE_PER_MESSAGE) {
       throw new BadRequestException({
         message: `At most ${MAX_ATTACHMENTS_PER_MESSAGE} files per message`,
         code: 'TOO_MANY_ATTACHMENTS',
@@ -1263,6 +1284,26 @@ export class ChatService {
               code: 'ATTACHMENT_INVALID',
             });
           }
+          // One message: up to five files and one voice note, checked on what
+          // was actually bound — the transaction rolls back if it is more.
+          const kinds = await tx.chatAttachment.groupBy({
+            by: ['kind'],
+            where: { messageId: created.id },
+            _count: { _all: true },
+          });
+          const count = (k: string) => kinds.find((x) => x.kind === k)?._count._all ?? 0;
+          if (count('VOICE') > MAX_VOICE_PER_MESSAGE) {
+            throw new BadRequestException({
+              message: 'One voice note per message',
+              code: 'TOO_MANY_VOICE',
+            });
+          }
+          if (count('IMAGE') + count('FILE') > MAX_ATTACHMENTS_PER_MESSAGE) {
+            throw new BadRequestException({
+              message: `At most ${MAX_ATTACHMENTS_PER_MESSAGE} files per message`,
+              code: 'TOO_MANY_ATTACHMENTS',
+            });
+          }
         }
         const message = await tx.chatMessage.findUniqueOrThrow({
           where: { id: created.id },
@@ -1327,6 +1368,72 @@ export class ChatService {
       },
       data: { lastMessageAt: message.createdAt, lastMessageId: message.id },
     });
+  }
+
+  // ── Deleting ──────────────────────────────────────────────────────────────
+
+  /**
+   * Delete for everyone. Only the person who sent it — a teacher cannot take
+   * back a student's words, nor an assistant anyone else's; the rule is the
+   * sender, whatever their role, so a guardian or a team member later fits
+   * without a new rule. The row stays as a tombstone (the conversation keeps
+   * its shape, replies to it read "unavailable"); what it said, its files and
+   * its voice are never served again, and its reactions go.
+   */
+  async revokeMessage(user: JwtPayload, messageId: string) {
+    const m = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId },
+      select: { id: true, threadId: true, senderId: true, revokedAt: true },
+    });
+    if (!m || !(await this.canAccessThread(user, m.threadId))) {
+      throw new ForbiddenException('Not your thread');
+    }
+    if (m.senderId !== user.sub) {
+      throw new ForbiddenException({
+        message: 'Only the sender can delete a message for everyone',
+        code: 'NOT_SENDER',
+      });
+    }
+    if (!m.revokedAt) {
+      await this.prisma.$transaction([
+        this.prisma.chatMessage.updateMany({
+          where: { id: m.id, revokedAt: null },
+          data: { revokedAt: new Date(), revokedById: user.sub },
+        }),
+        this.prisma.chatReaction.deleteMany({ where: { messageId: m.id } }),
+      ]);
+    }
+    const parties = (await this.parties(m.threadId))!;
+    const event: ChatDeletedEvent = { threadId: m.threadId, messageId: m.id, scope: 'everyone' };
+    for (const id of this.participantIds(parties)) {
+      this.realtime.emitToUser(id, RealtimeEvents.DELETED, event);
+      this.realtime.emitToUser(id, RealtimeEvents.THREAD_UPDATED, { threadId: m.threadId });
+    }
+    return event;
+  }
+
+  /**
+   * Delete for me: this viewer stops seeing the message, everywhere they are
+   * signed in, and nobody else is affected. Allowed on any message they can
+   * read — theirs, the other side's, or a tombstone.
+   */
+  async hideMessage(user: JwtPayload, messageId: string) {
+    const m = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId },
+      select: { id: true, threadId: true },
+    });
+    if (!m || !(await this.canAccessThread(user, m.threadId))) {
+      throw new ForbiddenException('Not your thread');
+    }
+    await this.prisma.chatMessageHide.upsert({
+      where: { messageId_userId: { messageId: m.id, userId: user.sub } },
+      create: { messageId: m.id, userId: user.sub },
+      update: {},
+    });
+    const event: ChatDeletedEvent = { threadId: m.threadId, messageId: m.id, scope: 'me' };
+    this.realtime.emitToUser(user.sub, RealtimeEvents.DELETED, event);
+    this.realtime.emitToUser(user.sub, RealtimeEvents.THREAD_UPDATED, { threadId: m.threadId });
+    return event;
   }
 
   /**

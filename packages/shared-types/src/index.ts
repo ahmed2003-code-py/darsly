@@ -311,8 +311,11 @@ export interface ChatReplyToDto {
   /** Empty when the quoted message is a voice note or attachments only. */
   body: string;
   isVoice: boolean;
-  /** Set when the quoted message carried attachments (the first one's kind). */
+  /** Set when the quoted message carried attachments (the first non-voice one's kind). */
   attachmentKind?: ChatAttachmentKind | null;
+  /** The first non-voice attachment's name, and how many there were. */
+  attachmentName?: string | null;
+  attachmentCount?: number;
   /** The original was removed: draw "Message unavailable", do not jump. */
   unavailable?: boolean;
 }
@@ -334,7 +337,7 @@ export interface ChatParticipantDto {
   title: string | null;
 }
 
-export type ChatAttachmentKind = 'IMAGE' | 'FILE';
+export type ChatAttachmentKind = 'IMAGE' | 'FILE' | 'VOICE';
 
 export interface ChatAttachmentDto {
   id: string;
@@ -350,6 +353,8 @@ export interface ChatAttachmentDto {
   previewUrl: string | null;
   /** Signed: the same bytes served as a download. */
   downloadUrl: string;
+  /** VOICE only: the recorded length in seconds. */
+  durationSec?: number | null;
 }
 
 /** The reactions a message may carry. Small and professional on purpose. */
@@ -401,6 +406,18 @@ export interface ChatMessageDto {
   sender?: ChatParticipantDto;
   attachments?: ChatAttachmentDto[];
   reactions?: ChatReactionDto[];
+  /** Deleted for everyone by its sender: a tombstone with no content. */
+  deleted?: boolean;
+}
+
+/**
+ * A message was deleted. `everyone`: it is now a tombstone for all
+ * participants. `me`: the viewer hid it (sent only to their own tabs).
+ */
+export interface ChatDeletedEvent {
+  threadId: string;
+  messageId: string;
+  scope: 'everyone' | 'me';
 }
 
 export interface ChatThreadDto {
@@ -455,6 +472,7 @@ export const RealtimeEvents = {
   MESSAGE: 'chat:message',
   REACTION: 'chat:reaction',
   SEEN: 'chat:seen',
+  DELETED: 'chat:deleted',
   THREAD_UPDATED: 'chat:thread',
   TYPING_ECHO: 'chat:typing',
   NOTIFICATION: 'notification:new',

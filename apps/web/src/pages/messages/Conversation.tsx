@@ -9,11 +9,11 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatMessageDto, ChatSenderKind, RealtimeEvents, Role } from '@darsly/shared-types';
-import { api } from '../../lib/api';
 import { getSocket } from '../../lib/socket';
 import { useAuthStore } from '../../stores/auth';
 import Avatar from '../../components/Avatar';
 import { Spinner } from '../../components/ui';
+import { askConfirm } from '../../lib/confirm';
 import { errorMessage } from '../../lib/errorMessage';
 import { dayKey, dayLabel, runPositions } from './format';
 import { MessageBubble, roleKey } from './MessageBubble';
@@ -214,6 +214,21 @@ export default function Conversation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conv.messages, conv.loaded, threadId, peerTyping]);
 
+  // The keyboard opening (or a rotation) shrinks the conversation from below.
+  // A reader who was at the newest message stays there instead of watching it
+  // slide under the composer.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let lastHeight = el.clientHeight;
+    const ro = new ResizeObserver(() => {
+      if (el.clientHeight !== lastHeight && nearBottom.current) el.scrollTop = el.scrollHeight;
+      lastHeight = el.clientHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   /** Jump to a quoted message: load it if needed, centre it, flash it. */
   const jumpToQuote = useCallback(
     async (id: string) => {
@@ -259,24 +274,30 @@ export default function Conversation({
     inputRef.current?.focus();
   }, [draft, uploads, replyTo, conv, target, threadId, onThreadCreated, onActivity]);
 
-  const sendVoice = useCallback(
-    async (blob: Blob, seconds: number) => {
-      if (!threadId) return;
-      const fd = new FormData();
-      fd.append('file', blob, 'voice.webm');
-      fd.append('durationSec', String(seconds));
-      if (replyTo) fd.append('replyToId', replyTo.id);
-      setReplyTo(null);
-      try {
-        const { data } = await api.post(`/chat/threads/${threadId}/voice`, fd);
-        forceBottom.current = true;
-        conv.add(data.message);
-        onActivity();
-      } catch {
-        setNotice(t('messages.voiceFailed'));
-      }
+  /** A finished recording joins the message being written — sent by Send. */
+  const onVoice = useCallback(
+    (blob: Blob, seconds: number) => {
+      uploads.addVoice(blob, seconds);
     },
-    [threadId, replyTo, conv, onActivity, t],
+    [uploads],
+  );
+
+  const onDelete = useCallback(
+    async (m: LocalMessage, scope: 'me' | 'everyone') => {
+      if (
+        scope === 'everyone' &&
+        !(await askConfirm(t('messages.deleteEveryoneConfirm'), {
+          danger: true,
+          confirmLabel: t('messages.deleteForEveryone'),
+        }))
+      )
+        return;
+      if (replyTo?.id === m.id) setReplyTo(null);
+      const ok = await conv.remove(m, scope);
+      if (!ok) setNotice(t('messages.deleteFailed'));
+      onActivity();
+    },
+    [conv, replyTo, onActivity, t],
   );
 
   const onReply = useCallback((m: LocalMessage) => {
@@ -415,6 +436,7 @@ export default function Conversation({
                       t={t}
                       onReply={onReply}
                       onReact={conv.react}
+                      onDelete={onDelete}
                       onJumpToQuote={jumpToQuote}
                       onRetry={conv.retry}
                       onDiscard={conv.discard}
@@ -476,8 +498,8 @@ export default function Conversation({
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
         uploads={uploads}
-        canRecord={!!threadId}
-        onVoice={sendVoice}
+        canRecord
+        onVoice={onVoice}
         onSend={() => void send()}
         onType={onType}
         onNotice={setNotice}

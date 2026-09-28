@@ -199,7 +199,13 @@ describe('ChatService — the gate is actually applied', () => {
     await svc.getMessages(user(Role.STUDENT), 't1');
 
     expect(prisma.chatMessage.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { threadId: 't1', createdAt: { gt: clearedAt } } }),
+      expect.objectContaining({
+        where: {
+          threadId: 't1',
+          createdAt: { gt: clearedAt },
+          hiddenFor: { none: { userId: 'u1' } },
+        },
+      }),
     );
   });
 
@@ -217,7 +223,9 @@ describe('ChatService — the gate is actually applied', () => {
     await svc.getMessages(user(Role.TEACHER, { tenantId: 'teacherA' }), 't1');
 
     expect(prisma.chatMessage.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { threadId: 't1' } }),
+      expect.objectContaining({
+        where: { threadId: 't1', hiddenFor: { none: { userId: 'u1' } } },
+      }),
     );
   });
 

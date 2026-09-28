@@ -40,6 +40,7 @@ import {
   CHAT_MESSAGE_MAX_LEN,
   CLIENT_MESSAGE_ID,
   MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_VOICE_PER_MESSAGE,
   MESSAGE_PAGE_MAX,
   THREAD_PAGE_MAX,
   VOICE_MAX_BYTES,
@@ -63,7 +64,7 @@ class SendMessageDto {
   @IsOptional() @IsString() @Matches(CLIENT_MESSAGE_ID) clientMessageId?: string;
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(MAX_ATTACHMENTS_PER_MESSAGE)
+  @ArrayMaxSize(MAX_ATTACHMENTS_PER_MESSAGE + MAX_VOICE_PER_MESSAGE)
   @IsString({ each: true })
   @MaxLength(40, { each: true })
   attachmentIds?: string[];
@@ -147,22 +148,46 @@ export class ChatController {
     @Body('tenantId') tenantId?: string,
     @Body('academyId') academyId?: string,
     @Body('staffUserId') staffUserId?: string,
+    // A voice note recorded in the composer: the same pending upload, sent
+    // (or not) with the rest of the message.
+    @Body('voice') voice?: string,
+    @Body('durationSec') durationSec?: string,
   ) {
     if (!file) throw new BadRequestException('file is required');
     const id = (v?: string) => (typeof v === 'string' && v && v.length <= 40 ? v : undefined);
-    return this.attachments.upload(user, file, {
-      threadId: id(threadId),
-      studentId: id(studentId),
-      tenantId: id(tenantId),
-      academyId: id(academyId),
-      staffUserId: id(staffUserId),
-    });
+    return this.attachments.upload(
+      user,
+      file,
+      {
+        threadId: id(threadId),
+        studentId: id(studentId),
+        tenantId: id(tenantId),
+        academyId: id(academyId),
+        staffUserId: id(staffUserId),
+      },
+      voice === '1' || voice === 'true' ? { durationSec: Number(durationSec) || 0 } : undefined,
+    );
   }
 
   @Delete('attachments/:id')
   @ApiOperation({ summary: 'Remove my upload that has not been sent yet' })
   removeUpload(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.attachments.remove(user, id);
+  }
+
+  @Delete('messages/:id')
+  @ApiOperation({
+    summary:
+      'Delete a message: ?for=everyone (sender only — leaves a tombstone) or ?for=me (hides it for the caller)',
+  })
+  deleteMessage(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Query('for') scope?: string,
+  ) {
+    if (scope === 'everyone') return this.chat.revokeMessage(user, id);
+    if (scope === 'me') return this.chat.hideMessage(user, id);
+    throw new BadRequestException({ message: 'Say for=everyone or for=me', code: 'DELETE_SCOPE' });
   }
 
   @Put('messages/:id/reaction')

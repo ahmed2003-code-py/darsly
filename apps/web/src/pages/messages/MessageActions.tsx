@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CHAT_REACTIONS } from '@darsly/shared-types';
 
@@ -10,9 +10,14 @@ type T = (k: string, o?: any) => string;
  * press. Both offer the same things; neither leaves buttons on every message.
  */
 export interface MessageActionHandlers {
-  onReply: () => void;
-  onReact: (emoji: string | null) => void;
+  /** Absent for a deleted message: there is nothing to answer. */
+  onReply?: () => void;
+  onReact?: (emoji: string | null) => void;
   onCopy?: () => void;
+  /** Hide it from my copy of the conversation. Always offered. */
+  onDeleteForMe: () => void;
+  /** Take it back for everyone — only on my own messages. */
+  onDeleteForEveryone?: () => void;
   myReaction: string | null;
 }
 
@@ -76,34 +81,55 @@ export function HoverToolbar({
     };
   }, [pickerOpen, setPickerOpen]);
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [menuOpen]);
+
   const btn =
     'grid h-8 w-8 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
+  const menuItem =
+    'flex w-full items-center gap-3 whitespace-nowrap px-3 py-2 text-start text-sm transition hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:outline-none';
   return (
     <div
       ref={ref}
       className={`relative hidden shrink-0 items-center gap-0.5 self-center opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100 sm:flex ${
-        pickerOpen ? 'opacity-100' : ''
+        pickerOpen || menuOpen ? 'opacity-100' : ''
       }`}
     >
-      <button
-        type="button"
-        className={btn}
-        onClick={() => setPickerOpen(!pickerOpen)}
-        aria-label={t('messages.react')}
-        aria-expanded={pickerOpen}
-        title={t('messages.react')}
-      >
-        <span className="material-symbols-outlined text-[19px]">add_reaction</span>
-      </button>
-      <button
-        type="button"
-        className={btn}
-        onClick={handlers.onReply}
-        aria-label={t('messages.reply')}
-        title={t('messages.reply')}
-      >
-        <span className="material-symbols-outlined text-[19px] rtl:-scale-x-100">reply</span>
-      </button>
+      {handlers.onReact && (
+        <button
+          type="button"
+          className={btn}
+          onClick={() => setPickerOpen(!pickerOpen)}
+          aria-label={t('messages.react')}
+          aria-expanded={pickerOpen}
+          title={t('messages.react')}
+        >
+          <span className="material-symbols-outlined text-[19px]">add_reaction</span>
+        </button>
+      )}
+      {handlers.onReply && (
+        <button
+          type="button"
+          className={btn}
+          onClick={handlers.onReply}
+          aria-label={t('messages.reply')}
+          title={t('messages.reply')}
+        >
+          <span className="material-symbols-outlined text-[19px] rtl:-scale-x-100">reply</span>
+        </button>
+      )}
       {handlers.onCopy && (
         <button
           type="button"
@@ -115,7 +141,53 @@ export function HoverToolbar({
           <span className="material-symbols-outlined text-[18px]">content_copy</span>
         </button>
       )}
-      {pickerOpen && (
+      <button
+        type="button"
+        className={btn}
+        onClick={() => setMenuOpen(!menuOpen)}
+        aria-label={t('messages.more')}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title={t('messages.more')}
+      >
+        <span className="material-symbols-outlined text-[19px]">more_vert</span>
+      </button>
+      {menuOpen && (
+        <div
+          role="menu"
+          className={`absolute top-full z-20 mt-1 min-w-[11rem] overflow-hidden rounded-sm bg-surface-container-lowest py-1 shadow-elevated ring-1 ring-outline-variant/40 ${
+            mine ? 'end-0' : 'start-0'
+          }`}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItem}
+            onClick={() => {
+              setMenuOpen(false);
+              handlers.onDeleteForMe();
+            }}
+          >
+            <span className="material-symbols-outlined text-[19px]">visibility_off</span>
+            {t('messages.deleteForMe')}
+          </button>
+          {handlers.onDeleteForEveryone && (
+            <button
+              type="button"
+              role="menuitem"
+              className={`${menuItem} text-error`}
+              onClick={() => {
+                setMenuOpen(false);
+                handlers.onDeleteForEveryone!();
+              }}
+            >
+              <span className="material-symbols-outlined text-[19px]">delete</span>
+              {t('messages.deleteForEveryone')}
+            </button>
+          )}
+        </div>
+      )}
+      {pickerOpen && handlers.onReact && (
         <div
           className={`absolute bottom-full z-20 mb-1 rounded-full bg-surface-container-lowest p-1 shadow-elevated ring-1 ring-outline-variant/40 ${
             mine ? 'end-0' : 'start-0'
@@ -124,7 +196,7 @@ export function HoverToolbar({
           <ReactionRow
             mine={handlers.myReaction}
             onPick={(e) => {
-              handlers.onReact(e);
+              handlers.onReact!(e);
               setPickerOpen(false);
             }}
             t={t}
@@ -178,31 +250,35 @@ export function ActionSheet({
             {preview}
           </p>
         )}
-        <div className="flex justify-center px-3 py-3">
-          <ReactionRow
-            mine={handlers.myReaction}
-            onPick={(e) => {
-              if (!settled()) return;
-              handlers.onReact(e);
-              onClose();
-            }}
-            t={t}
-            size="lg"
-          />
-        </div>
+        {handlers.onReact && (
+          <div className="flex justify-center px-3 py-3">
+            <ReactionRow
+              mine={handlers.myReaction}
+              onPick={(e) => {
+                if (!settled()) return;
+                handlers.onReact!(e);
+                onClose();
+              }}
+              t={t}
+              size="lg"
+            />
+          </div>
+        )}
         <div className="border-t border-outline-variant/40">
-          <button
-            type="button"
-            autoFocus
-            className={item}
-            onClick={guard(() => {
-              handlers.onReply();
-              onClose();
-            })}
-          >
-            <span className="material-symbols-outlined rtl:-scale-x-100">reply</span>
-            {t('messages.reply')}
-          </button>
+          {handlers.onReply && (
+            <button
+              type="button"
+              autoFocus
+              className={item}
+              onClick={guard(() => {
+                handlers.onReply!();
+                onClose();
+              })}
+            >
+              <span className="material-symbols-outlined rtl:-scale-x-100">reply</span>
+              {t('messages.reply')}
+            </button>
+          )}
           {handlers.onCopy && (
             <button
               type="button"
@@ -214,6 +290,30 @@ export function ActionSheet({
             >
               <span className="material-symbols-outlined">content_copy</span>
               {t('messages.copy')}
+            </button>
+          )}
+          <button
+            type="button"
+            className={item}
+            onClick={guard(() => {
+              onClose();
+              handlers.onDeleteForMe();
+            })}
+          >
+            <span className="material-symbols-outlined">visibility_off</span>
+            {t('messages.deleteForMe')}
+          </button>
+          {handlers.onDeleteForEveryone && (
+            <button
+              type="button"
+              className={`${item} text-error`}
+              onClick={guard(() => {
+                onClose();
+                handlers.onDeleteForEveryone!();
+              })}
+            >
+              <span className="material-symbols-outlined">delete</span>
+              {t('messages.deleteForEveryone')}
             </button>
           )}
         </div>
@@ -265,5 +365,79 @@ export function useLongPress(onLongPress: () => void, ms = 450) {
       // A long press on touch would otherwise also open the browser's menu.
       if (start.current || fired.current) e.preventDefault();
     },
+  };
+}
+
+/** How far the finger must travel (px) before letting go replies. */
+export const SWIPE_REPLY_AT = 56;
+/** The most the bubble follows the finger. */
+const SWIPE_MAX = 80;
+
+/**
+ * Swipe to reply, on touch screens.
+ *
+ * The bubble follows a horizontal drag toward the reading direction's end
+ * (right in English, left in Arabic) and a reply arrow fades in behind it;
+ * past SWIPE_REPLY_AT a tick of haptics says "let go to reply", and letting
+ * go there replies. Anything short of it springs back.
+ *
+ * Scrolling wins every tie: the gesture only claims a drag whose first few
+ * pixels are clearly sideways, and the row is `touch-action: pan-y`, so the
+ * browser keeps vertical scrolling native and never waits on this code.
+ */
+export function useSwipeReply(onReply: (() => void) | undefined) {
+  const [dx, setDx] = useState(0);
+  const [settling, setSettling] = useState(false);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const mode = useRef<'undecided' | 'swipe' | 'scroll'>('undecided');
+  const armed = useRef(false);
+  const dir = () => (document.documentElement.dir === 'rtl' ? -1 : 1);
+
+  const end = () => {
+    if (mode.current === 'swipe') {
+      if (armed.current) onReply?.();
+      setSettling(true);
+      setDx(0);
+      window.setTimeout(() => setSettling(false), 180);
+    }
+    start.current = null;
+    mode.current = 'undecided';
+    armed.current = false;
+  };
+
+  if (!onReply) return { dx: 0, progress: 0, settling: false, handlers: {}, swiping: () => false };
+  return {
+    dx,
+    progress: Math.min(1, Math.abs(dx) / SWIPE_REPLY_AT),
+    settling,
+    handlers: {
+      onTouchStart: (e: React.TouchEvent) => {
+        const p = e.touches[0];
+        start.current = { x: p.clientX, y: p.clientY };
+        mode.current = 'undecided';
+        armed.current = false;
+      },
+      onTouchMove: (e: React.TouchEvent) => {
+        if (!start.current) return;
+        const p = e.touches[0];
+        const x = (p.clientX - start.current.x) * dir();
+        const y = p.clientY - start.current.y;
+        if (mode.current === 'undecided') {
+          if (Math.abs(y) > 8 && Math.abs(y) >= Math.abs(x)) mode.current = 'scroll';
+          else if (x > 10 && x > Math.abs(y) * 1.5) mode.current = 'swipe';
+          else return;
+        }
+        if (mode.current !== 'swipe') return;
+        const along = Math.max(0, Math.min(SWIPE_MAX, x * 0.75));
+        const nowArmed = along >= SWIPE_REPLY_AT;
+        if (nowArmed && !armed.current && navigator.vibrate) navigator.vibrate(12);
+        armed.current = nowArmed;
+        setDx(along * dir());
+      },
+      onTouchEnd: end,
+      onTouchCancel: end,
+    },
+    /** True while a swipe owns the gesture — a long press must not also fire. */
+    swiping: () => mode.current === 'swipe',
   };
 }

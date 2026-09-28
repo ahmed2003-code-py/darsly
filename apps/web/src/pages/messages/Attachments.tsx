@@ -42,8 +42,10 @@ export function MessageAttachments({
   const images = items.filter((a) => a.kind === 'IMAGE');
   const files = items.filter((a) => a.kind !== 'IMAGE');
   const [open, setOpen] = useState<number | null>(null);
+  // A definite width, capped by the bubble: a card is sized by its box, never
+  // by the length of a file name.
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex w-[15.5rem] max-w-full flex-col gap-1.5">
       {images.length > 0 && (
         <div className={`grid gap-1 ${images.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {images.map((a, i) => (
@@ -98,45 +100,44 @@ export function FileCard({
   t: T;
 }) {
   const look = fileLook(a.mimeType);
+  // The card itself opens the file; one button downloads it. Two icon
+  // buttons left a phone-width card with room for three letters of the name.
   return (
     <div
-      className={`flex min-w-0 items-center gap-3 rounded-sm p-2.5 ${
+      className={`flex w-full min-w-0 items-center gap-1 rounded-sm ${
         mine ? 'bg-black/10' : 'bg-surface-container-high'
       }`}
     >
-      <span
-        className={`grid h-10 w-10 shrink-0 place-items-center rounded-sm ${
-          mine ? 'bg-black/15 text-on-primary' : 'bg-primary-fixed text-on-primary-fixed'
-        }`}
-        aria-hidden
-      >
-        <span className="material-symbols-outlined text-[22px]">{look.icon}</span>
-      </span>
-      <span className="min-w-0 flex-1">
-        <bdi className="block truncate text-sm font-bold" title={a.name}>
-          {a.name}
-        </bdi>
-        <span
-          className={`block text-xs ${mine ? 'text-on-primary/75' : 'text-on-surface-variant'}`}
-        >
-          {look.label} · <span dir="ltr">{formatBytes(a.size, lang)}</span>
-        </span>
-      </span>
       <a
         href={mediaUrl(a.url)!}
         target="_blank"
         rel="noopener noreferrer"
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${
-          mine ? 'hover:bg-black/15' : 'hover:bg-surface-container-highest'
+        className={`flex min-w-0 flex-1 items-center gap-2 rounded-sm p-2 transition ${
+          mine ? 'hover:bg-black/10' : 'hover:bg-surface-container-highest'
         }`}
         aria-label={t('messages.openFile', { name: a.name })}
-        title={t('messages.open')}
+        title={a.name}
       >
-        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+        <span
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-[8px] ${
+            mine ? 'bg-black/15 text-on-primary' : 'bg-primary-fixed text-on-primary-fixed'
+          }`}
+          aria-hidden
+        >
+          <span className="material-symbols-outlined text-[22px]">{look.icon}</span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <bdi className="block truncate text-sm font-bold">{a.name}</bdi>
+          <span
+            className={`block text-xs ${mine ? 'text-on-primary/75' : 'text-on-surface-variant'}`}
+          >
+            {look.label} · <span dir="ltr">{formatBytes(a.size, lang)}</span>
+          </span>
+        </span>
       </a>
       <a
         href={mediaUrl(a.downloadUrl)!}
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${
+        className={`me-1 grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${
           mine ? 'hover:bg-black/15' : 'hover:bg-surface-container-highest'
         }`}
         aria-label={t('messages.downloadFile', { name: a.name })}

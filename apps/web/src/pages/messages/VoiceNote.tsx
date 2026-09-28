@@ -1,27 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../../lib/api';
+import { api, mediaUrl } from '../../lib/api';
 import { clock } from './format';
 
 /**
  * A voice note, played in place.
  *
- * The audio is private, so it cannot be an `<audio src>` the browser fetches on
- * its own — there is no way to attach the bearer token to that request. It is
- * fetched once, on the first press, and kept as an object URL for the rest of
- * the visit.
+ * Two sources. A voice note sent with a message is an attachment with a
+ * signed, short-lived link — the browser can play that directly. An older
+ * voice note (sent through the retired voice endpoint) is private behind the
+ * bearer token, so it is fetched once on the first press and kept as an
+ * object URL for the rest of the visit.
+ *
+ * The length shown is the recorder's: a browser's own recording often has no
+ * duration in its header until it has been played through.
  */
 export default function VoiceNote({
-  id,
+  src,
+  messageId,
   seconds,
   mine,
   t,
 }: {
-  id: string;
+  /** A signed link (a voice attachment) or a local object URL (a draft). */
+  src?: string | null;
+  /** A legacy voice message, fetched through the API. */
+  messageId?: string;
   seconds: number;
   mine: boolean;
   t: (k: string, o?: any) => string;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -30,9 +38,9 @@ export default function VoiceNote({
   useEffect(
     () => () => {
       audioRef.current?.pause();
-      if (url) URL.revokeObjectURL(url);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     },
-    [url],
+    [objectUrl],
   );
 
   async function toggle() {
@@ -42,10 +50,16 @@ export default function VoiceNote({
       return;
     }
     try {
-      const { data } = await api.get(`/chat/messages/${id}/voice`, { responseType: 'blob' });
-      const objectUrl = URL.createObjectURL(data);
-      setUrl(objectUrl);
-      const audio = new Audio(objectUrl);
+      let url = src ? (src.startsWith('blob:') ? src : mediaUrl(src)!) : null;
+      if (!url && messageId) {
+        const { data } = await api.get(`/chat/messages/${messageId}/voice`, {
+          responseType: 'blob',
+        });
+        url = URL.createObjectURL(data);
+        setObjectUrl(url);
+      }
+      if (!url) return;
+      const audio = new Audio(url);
       audioRef.current = audio;
       audio.onplay = () => setPlaying(true);
       audio.onpause = () => setPlaying(false);
@@ -54,6 +68,7 @@ export default function VoiceNote({
         setAt(0);
       };
       audio.ontimeupdate = () => setAt(audio.currentTime);
+      audio.onerror = () => setFailed(true);
       await audio.play();
     } catch {
       setFailed(true);
@@ -62,12 +77,12 @@ export default function VoiceNote({
 
   const pct = seconds > 0 ? Math.min(100, (at / seconds) * 100) : 0;
   return (
-    <span className="flex items-center gap-2.5 py-0.5">
+    <span className="flex w-[13.5rem] max-w-full items-center gap-2.5 py-0.5">
       <button
         type="button"
         onClick={toggle}
         aria-label={playing ? t('messages.pause') : t('messages.playVoice')}
-        className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition ${
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${
           mine ? 'bg-black/15 text-on-primary' : 'bg-primary-fixed text-on-primary-fixed'
         }`}
       >
@@ -75,7 +90,7 @@ export default function VoiceNote({
           {failed ? 'error' : playing ? 'pause' : 'play_arrow'}
         </span>
       </button>
-      <span className="flex min-w-[8rem] flex-1 flex-col gap-1">
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span
           className={`h-1.5 overflow-hidden rounded-full ${mine ? 'bg-black/20' : 'bg-surface-container-highest'}`}
         >
@@ -85,10 +100,14 @@ export default function VoiceNote({
           />
         </span>
         <span
-          className={`text-[11px] ${mine ? 'text-on-primary/75' : 'text-on-surface-variant'}`}
-          dir="ltr"
+          className={`flex items-center gap-1 text-[11px] ${mine ? 'text-on-primary/75' : 'text-on-surface-variant'}`}
         >
-          {failed ? t('messages.playbackFailed') : clock(playing || at > 0 ? at : seconds)}
+          <span className="material-symbols-outlined text-[13px]" aria-hidden>
+            mic
+          </span>
+          <span dir="ltr">
+            {failed ? t('messages.playbackFailed') : clock(playing || at > 0 ? at : seconds)}
+          </span>
         </span>
       </span>
     </span>

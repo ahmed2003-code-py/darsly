@@ -17,6 +17,8 @@ export interface UploadItem {
   name: string;
   size: number;
   isImage: boolean;
+  /** A recorded voice note, and how long it is. */
+  voiceSec?: number;
   /** Instant local thumbnail for images, before the upload finishes. */
   localUrl: string | null;
   progress: number;
@@ -69,6 +71,10 @@ export function useUploads(
       if ('tenantId' in t) fd.append('tenantId', t.tenantId);
       if ('staffUserId' in t) fd.append('staffUserId', t.staffUserId);
       if ('academyId' in t && t.academyId) fd.append('academyId', t.academyId);
+      if (item.voiceSec) {
+        fd.append('voice', '1');
+        fd.append('durationSec', String(item.voiceSec));
+      }
       patch(item.key, { status: 'uploading', progress: 0, error: undefined });
       api
         .post<ChatAttachmentDto>('/chat/attachments', fd, {
@@ -94,7 +100,7 @@ export function useUploads(
   const add = useCallback(
     (files: FileList | File[]): string | null => {
       let error: string | null = null;
-      const room = MAX_FILES - itemsRef.current.length;
+      const room = MAX_FILES - itemsRef.current.filter((i) => !i.voiceSec).length;
       const picked = Array.from(files);
       if (picked.length > room) error = messages.tooMany;
       const accepted: UploadItem[] = [];
@@ -128,6 +134,40 @@ export function useUploads(
     [messages.badType, messages.tooLarge, messages.tooMany, start],
   );
 
+  /**
+   * A finished recording: uploaded at once like any file — a pending asset of
+   * the message being written, which creates no conversation — and sent with
+   * the text and files when Send is pressed. One per message.
+   */
+  const addVoice = useCallback(
+    (blob: Blob, seconds: number) => {
+      const ext = /mp4|aac/.test(blob.type) ? 'm4a' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
+      const file = new File([blob], `voice.${ext}`, { type: blob.type || 'audio/webm' });
+      itemsRef.current
+        .filter((i) => i.voiceSec)
+        .forEach((i) => {
+          controllers.current.get(i.key)?.abort();
+          if (i.attachment)
+            void api.delete(`/chat/attachments/${i.attachment.id}`).catch(() => undefined);
+          if (i.localUrl) URL.revokeObjectURL(i.localUrl);
+        });
+      const item: UploadItem = {
+        key: `v-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        name: file.name,
+        size: file.size,
+        isImage: false,
+        voiceSec: seconds,
+        localUrl: URL.createObjectURL(blob),
+        progress: 0,
+        status: 'uploading',
+      };
+      setItems((prev) => [...prev.filter((i) => !i.voiceSec), item]);
+      start(item);
+    },
+    [start],
+  );
+
   const retry = useCallback(
     (key: string) => {
       const item = itemsRef.current.find((i) => i.key === key);
@@ -155,6 +195,8 @@ export function useUploads(
   return {
     items,
     add,
+    addVoice,
+    hasVoice: items.some((i) => !!i.voiceSec),
     retry,
     remove,
     clear,

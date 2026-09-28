@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChatAttachmentDto,
+  ChatDeletedEvent,
   ChatMessageDto,
   ChatReactionDto,
   ChatReactionEvent,
@@ -10,6 +11,7 @@ import {
 import { api } from '../../lib/api';
 import { getSocket } from '../../lib/socket';
 import {
+  applyDeleted,
   applyReactions,
   applySeen,
   LocalMessage,
@@ -19,6 +21,8 @@ import {
   oldestStored,
   setLocalStatus,
 } from './messageList';
+import { replyOf } from './preview';
+export { replyOf } from './preview';
 
 /** Must match the API's default page (MESSAGE_PAGE); a full page means there may be more. */
 export const PAGE = 40;
@@ -195,15 +199,20 @@ export function useConversation(
       if (e.threadId === threadId && e.userId !== me.id)
         setMessages((prev) => applySeen(prev, e.lastReadAt));
     };
+    const onDeleted = (e: ChatDeletedEvent) => {
+      if (e.threadId === threadId) setMessages((prev) => applyDeleted(prev, e.messageId, e.scope));
+    };
     const onReconnect = () => void catchUp();
     socket.on(RealtimeEvents.MESSAGE, onMessage);
     socket.on(RealtimeEvents.REACTION, onReaction);
     socket.on(RealtimeEvents.SEEN, onSeen);
+    socket.on(RealtimeEvents.DELETED, onDeleted);
     socket.on('connect', onReconnect);
     return () => {
       socket.off(RealtimeEvents.MESSAGE, onMessage);
       socket.off(RealtimeEvents.REACTION, onReaction);
       socket.off(RealtimeEvents.SEEN, onSeen);
+      socket.off(RealtimeEvents.DELETED, onDeleted);
       socket.off('connect', onReconnect);
     };
   }, [threadId, merge, me.id, catchUp, markReadSoon]);
@@ -308,15 +317,7 @@ export function useConversation(
         status: 'sending',
         attachments,
         reactions: [],
-        replyTo: input.replyTo
-          ? {
-              id: input.replyTo.id,
-              senderName: input.replyTo.senderName,
-              body: input.replyTo.body,
-              isVoice: !!input.replyTo.audio,
-              attachmentKind: input.replyTo.attachments?.[0]?.kind ?? null,
-            }
-          : null,
+        replyTo: input.replyTo ? replyOf(input.replyTo) : null,
       };
       // A send made from a window in the past brings the reader back to now.
       if (hasNewerRef.current) void loadNewest().catch(() => undefined);
@@ -358,7 +359,32 @@ export function useConversation(
     [me.name],
   );
 
-  /** For a message stored outside `send` (a voice note). */
+  /**
+   * Delete a message: for me (gone from my copy) or for everyone (a
+   * tombstone, sender only). Shown at once; on failure the page is reloaded
+   * so the screen does not claim a delete that did not happen.
+   */
+  const remove = useCallback(
+    async (m: LocalMessage, scope: 'me' | 'everyone') => {
+      if (m.status && m.clientMessageId) {
+        // Never stored: there is nothing on the server to delete.
+        sendsRef.current.delete(m.clientMessageId);
+        setMessages((prev) => prev.filter((x) => x.id !== m.id));
+        return true;
+      }
+      setMessages((prev) => applyDeleted(prev, m.id, scope));
+      try {
+        await api.delete(`/chat/messages/${m.id}`, { params: { for: scope } });
+        return true;
+      } catch {
+        await loadNewest().catch(() => undefined);
+        return false;
+      }
+    },
+    [loadNewest],
+  );
+
+  /** For a message stored outside `send`. */
   const add = useCallback((m: ChatMessageDto) => merge([m]), [merge]);
 
   const reset = useCallback(() => setMessages([]), []);
@@ -377,6 +403,7 @@ export function useConversation(
     retry,
     discard,
     react,
+    remove,
     markReadSoon,
     add,
     reset,

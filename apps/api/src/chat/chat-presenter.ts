@@ -1,5 +1,6 @@
 import {
   ChatAttachmentDto,
+  ChatAttachmentKind,
   ChatMessageDto,
   ChatReactionDto,
   ChatSenderKind,
@@ -27,8 +28,13 @@ export const MESSAGE_INCLUDE = {
       body: true,
       audioKey: true,
       deletedAt: true,
+      revokedAt: true,
       sender: { select: { fullName: true } },
-      attachments: { select: { kind: true }, take: 1, orderBy: { createdAt: 'asc' as const } },
+      attachments: {
+        select: { kind: true, fileName: true },
+        take: 6,
+        orderBy: { createdAt: 'asc' as const },
+      },
     },
   },
   lesson: { select: { id: true, title: true } },
@@ -43,6 +49,7 @@ export const MESSAGE_INCLUDE = {
       width: true,
       height: true,
       previewKey: true,
+      durationSec: true,
     },
   },
 } as const;
@@ -94,17 +101,22 @@ export function senderKindOf(m: {
   return 'STUDENT';
 }
 
-/** What a one-line list preview says when a message has no text. */
+/** What a one-line list preview (and a notification) says for a message. */
 export function previewOf(m: {
   body: string;
   audioKey?: string | null;
+  revokedAt?: Date | string | null;
   attachments?: { kind: string; fileName?: string }[];
 }): string {
+  if (m.revokedAt) return '🚫 تم حذف الرسالة';
   if (m.body) return m.body.length > 80 ? m.body.slice(0, 80) + '…' : m.body;
-  if (m.audioKey) return '🎤 رسالة صوتية';
-  const a = m.attachments?.[0];
+  const files = (m.attachments ?? []).filter((a) => a.kind !== 'VOICE');
+  if (m.audioKey || (m.attachments ?? []).some((a) => a.kind === 'VOICE')) {
+    return files.length ? `🎤 رسالة صوتية + ${files.length} 📎` : '🎤 رسالة صوتية';
+  }
+  const a = files[0];
   if (a) {
-    const more = (m.attachments?.length ?? 1) > 1 ? ` +${(m.attachments?.length ?? 1) - 1}` : '';
+    const more = files.length > 1 ? ` +${files.length - 1}` : '';
     return a.kind === 'IMAGE' ? `📷 صورة${more}` : `📎 ${a.fileName ?? 'ملف'}${more}`;
   }
   return '';
@@ -119,6 +131,7 @@ export function attachmentDto(a: {
   width: number | null;
   height: number | null;
   previewKey: string | null;
+  durationSec?: number | null;
 }): ChatAttachmentDto {
   return {
     id: a.id,
@@ -131,6 +144,26 @@ export function attachmentDto(a: {
     url: chatFileUrl(a.id, 'full'),
     previewUrl: a.kind === 'IMAGE' && a.previewKey ? chatFileUrl(a.id, 'preview') : null,
     downloadUrl: chatFileUrl(a.id, 'download'),
+    durationSec: a.kind === 'VOICE' ? (a.durationSec ?? null) : null,
+  };
+}
+
+/** A quoted message, reduced to what one compact line needs. */
+function replySummary(r: any): ChatMessageDto['replyTo'] {
+  if (r.deletedAt || r.revokedAt) {
+    return { id: r.id, senderName: '', body: '', isVoice: false, unavailable: true };
+  }
+  const attachments: { kind: string; fileName: string }[] = r.attachments ?? [];
+  const files = attachments.filter((a) => a.kind !== 'VOICE');
+  return {
+    id: r.id,
+    senderName: r.sender?.fullName ?? '',
+    // Enough for two lines of a quote; never the whole of a long message.
+    body: r.body.length > 160 ? r.body.slice(0, 160) + '…' : r.body,
+    isVoice: !!r.audioKey || attachments.some((a) => a.kind === 'VOICE'),
+    attachmentKind: (files[0]?.kind as ChatAttachmentKind | undefined) ?? null,
+    attachmentName: files[0]?.fileName ?? null,
+    attachmentCount: files.length,
   };
 }
 
@@ -150,13 +183,16 @@ export function toMessageDto(
   const mine = m.senderId === viewerUserId;
   const seen = mine && ctx.seenBy && ctx.seenBy.getTime() >= new Date(m.createdAt).getTime();
   const kind = senderKindOf(m);
+  // Deleted for everyone: who and when stay (the conversation keeps its
+  // shape); nothing that was said, attached or recorded is sent again.
+  const revoked = !!m.revokedAt;
   return {
     id: m.id,
     threadId: m.threadId,
     senderId: m.senderId,
     senderName: m.sender.fullName,
     senderRole: m.sender.role,
-    body: m.body,
+    body: revoked ? '' : m.body,
     readAt: seen ? ctx.seenBy!.toISOString() : null,
     createdAt: new Date(m.createdAt).toISOString(),
     mine,
@@ -170,22 +206,17 @@ export function toMessageDto(
       kind,
       title: m.senderTitle ?? null,
     },
-    replyTo: m.replyTo
-      ? m.replyTo.deletedAt
-        ? { id: m.replyTo.id, senderName: '', body: '', isVoice: false, unavailable: true }
-        : {
-            id: m.replyTo.id,
-            senderName: m.replyTo.sender?.fullName ?? '',
-            body: m.replyTo.body,
-            isVoice: !!m.replyTo.audioKey,
-            attachmentKind: m.replyTo.attachments?.[0]?.kind ?? null,
-          }
-      : null,
-    audio: m.audioKey ? { durationSec: m.audioDurationSec ?? 0, bytes: m.audioBytes ?? 0 } : null,
-    lesson: m.lesson
-      ? { id: m.lesson.id, title: m.lesson.title, atSec: m.videoTimestampSec ?? null }
-      : null,
-    attachments: (m.attachments ?? []).map(attachmentDto),
-    reactions: ctx.reactions?.get(m.id) ?? [],
+    replyTo: m.replyTo && !revoked ? replySummary(m.replyTo) : null,
+    audio:
+      m.audioKey && !revoked
+        ? { durationSec: m.audioDurationSec ?? 0, bytes: m.audioBytes ?? 0 }
+        : null,
+    lesson:
+      m.lesson && !revoked
+        ? { id: m.lesson.id, title: m.lesson.title, atSec: m.videoTimestampSec ?? null }
+        : null,
+    attachments: revoked ? [] : (m.attachments ?? []).map(attachmentDto),
+    reactions: revoked ? [] : (ctx.reactions?.get(m.id) ?? []),
+    ...(revoked ? { deleted: true } : {}),
   };
 }

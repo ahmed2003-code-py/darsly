@@ -3,8 +3,16 @@ import type { ChatSenderKind } from '@darsly/shared-types';
 import Avatar from '../../components/Avatar';
 import type { LocalMessage } from './messageList';
 import { MessageAttachments } from './Attachments';
-import { ActionSheet, HoverToolbar, MessageActionHandlers, useLongPress } from './MessageActions';
+import {
+  ActionSheet,
+  HoverToolbar,
+  MessageActionHandlers,
+  useLongPress,
+  useSwipeReply,
+} from './MessageActions';
 import RichText from './RichText';
+import { filesOf, messagePreview, quoteLine, voiceOf } from './preview';
+export { messagePreview } from './preview';
 import VoiceNote from './VoiceNote';
 import { clock, fullDateTime, RunPosition, timeLabel } from './format';
 
@@ -21,15 +29,6 @@ export const roleKey = (kind?: ChatSenderKind | null) =>
           ? 'messages.roles.admin'
           : 'messages.roles.student';
 
-/** What a quote or a sheet shows for a message that may have no text. */
-export function messagePreview(m: LocalMessage, t: T): string {
-  if (m.body) return m.body;
-  if (m.audio) return `🎤 ${t('messages.voiceNote')}`;
-  const a = m.attachments?.[0];
-  if (a) return a.kind === 'IMAGE' ? `📷 ${t('messages.photo')}` : `📎 ${a.name}`;
-  return '';
-}
-
 export interface BubbleProps {
   m: LocalMessage;
   run: RunPosition;
@@ -40,6 +39,7 @@ export interface BubbleProps {
   t: T;
   onReply: (m: LocalMessage) => void;
   onReact: (id: string, emoji: string | null) => void;
+  onDelete: (m: LocalMessage, scope: 'me' | 'everyone') => void;
   onJumpToQuote: (id: string) => void;
   onRetry: (clientMessageId: string) => void;
   onDiscard: (clientMessageId: string) => void;
@@ -55,31 +55,68 @@ function MessageBubbleImpl({
   t,
   onReply,
   onReact,
+  onDelete,
   onJumpToQuote,
   onRetry,
   onDiscard,
   onCopied,
 }: BubbleProps) {
   const mine = !!m.mine;
+  const deleted = !!m.deleted;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const pending = m.status === 'sending' || m.status === 'failed';
   const myReaction = m.reactions?.find((r) => r.mine)?.emoji ?? null;
   const handlers: MessageActionHandlers = {
-    onReply: () => onReply(m),
-    onReact: (e) => onReact(m.id, e),
-    onCopy: m.body
-      ? () => {
-          void navigator.clipboard?.writeText(m.body).then(onCopied, () => undefined);
-        }
-      : undefined,
+    onReply: deleted ? undefined : () => onReply(m),
+    onReact: deleted ? undefined : (e) => onReact(m.id, e),
+    onCopy:
+      m.body && !deleted
+        ? () => {
+            void navigator.clipboard?.writeText(m.body).then(onCopied, () => undefined);
+          }
+        : undefined,
+    onDeleteForMe: () => onDelete(m, 'me'),
+    onDeleteForEveryone: mine && !deleted ? () => onDelete(m, 'everyone') : undefined,
     myReaction,
   };
-  const longPress = useLongPress(() => !pending && setSheetOpen(true));
+  const swipe = useSwipeReply(!pending && !deleted ? () => onReply(m) : undefined);
+  const longPress = useLongPress(() => !pending && !swipe.swiping() && setSheetOpen(true));
   const sender = m.sender;
-  const hasMedia = !!m.attachments?.length;
+  const voice = deleted ? null : voiceOf(m);
+  const files = deleted ? [] : filesOf(m);
   const onlyImages =
-    hasMedia && !m.body && !m.audio && m.attachments!.every((a) => a.kind === 'IMAGE');
+    !deleted &&
+    files.length > 0 &&
+    !m.body &&
+    !m.audio &&
+    !voice &&
+    !m.replyTo &&
+    files.every((a) => a.kind === 'IMAGE');
+
+  // One set of touch handlers: the swipe and the long press both listen.
+  const touch = {
+    onTouchStart: (e: React.TouchEvent) => {
+      swipe.handlers.onTouchStart?.(e);
+      longPress.onTouchStart(e);
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      swipe.handlers.onTouchMove?.(e);
+      longPress.onTouchMove(e);
+    },
+    onTouchEnd: () => {
+      swipe.handlers.onTouchEnd?.();
+      longPress.onTouchEnd();
+    },
+    onTouchCancel: () => {
+      swipe.handlers.onTouchCancel?.();
+      longPress.onTouchCancel();
+    },
+    onClickCapture: longPress.onClickCapture,
+    onContextMenu: longPress.onContextMenu,
+  };
+
+  const quote = m.replyTo && !m.replyTo.unavailable ? quoteLine(m.replyTo, t) : null;
 
   return (
     <div
@@ -96,11 +133,15 @@ function MessageBubbleImpl({
         </span>
       )}
 
+      {/* The column is capped, and so is every level inside it: a flex item in
+          a column that is not stretched is sized from its content and may
+          overflow the column unless told otherwise. That is what let a long
+          file name push a whole bubble — and its text — off the screen. */}
       <div
-        className={`flex min-w-0 max-w-[82%] flex-col sm:max-w-[68%] ${mine ? 'items-end' : 'items-start'}`}
+        className={`flex min-w-0 max-w-[82%] flex-col sm:max-w-[min(68%,36rem)] ${mine ? 'items-end' : 'items-start'}`}
       >
         {showSender && run.first && sender && !mine && (
-          <p className="mb-1 flex min-w-0 items-baseline gap-1.5 px-1 text-xs">
+          <p className="mb-0.5 flex min-w-0 max-w-full items-baseline gap-1 px-1 text-xs">
             <bdi className="truncate font-bold text-on-surface">{sender.name}</bdi>
             <span className="shrink-0 text-on-surface-variant">
               · {sender.title || t(roleKey(sender.kind))}
@@ -108,7 +149,24 @@ function MessageBubbleImpl({
           </p>
         )}
 
-        <div className={`flex items-center gap-1 ${mine ? 'flex-row-reverse' : ''}`}>
+        <div
+          className={`relative flex min-w-0 max-w-full items-center gap-1 ${mine ? 'flex-row-reverse' : ''}`}
+          style={{ touchAction: 'pan-y' }}
+          {...touch}
+        >
+          {/* Swipe to reply: the arrow waits behind the bubble's start edge. */}
+          {swipe.progress > 0 && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute start-0 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-surface-container-high text-on-surface-variant"
+              style={{
+                opacity: swipe.progress,
+                transform: `translateY(-50%) scale(${0.6 + 0.4 * swipe.progress})`,
+              }}
+            >
+              <span className="material-symbols-outlined text-[18px] rtl:-scale-x-100">reply</span>
+            </span>
+          )}
           <div
             tabIndex={pending ? -1 : 0}
             role="group"
@@ -116,25 +174,30 @@ function MessageBubbleImpl({
               name: mine ? t('messages.you') : (sender?.name ?? m.senderName),
               time: timeLabel(m.createdAt, lang),
             })}
-            {...longPress}
-            className={`relative min-w-0 select-text rounded-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-primary ${
-              onlyImages ? 'p-1' : 'px-3 py-2'
-            } ${
+            className={`relative min-w-0 max-w-full select-text rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              swipe.dx || swipe.settling ? '' : 'transition-shadow'
+            } ${onlyImages ? 'p-1' : 'px-3 pb-1.5 pt-2'} ${
               m.status === 'failed'
                 ? 'bg-error-container text-on-error-container'
-                : mine
-                  ? 'bg-primary-container text-on-primary'
-                  : 'bg-surface-container-lowest text-on-surface shadow-hairline'
+                : deleted
+                  ? 'bg-surface-container-high text-on-surface-variant'
+                  : mine
+                    ? 'bg-primary-container text-on-primary'
+                    : 'bg-surface-container-lowest text-on-surface shadow-hairline'
             } ${run.last ? (mine ? 'rounded-ee-[4px]' : 'rounded-es-[4px]') : ''} ${
               highlighted ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
             } ${m.status === 'sending' ? 'opacity-80' : ''}`}
+            style={{
+              transform: swipe.dx ? `translateX(${swipe.dx}px)` : undefined,
+              transition: swipe.settling ? 'transform 180ms ease-out' : undefined,
+            }}
           >
-            {m.replyTo && (
+            {m.replyTo && !deleted && (
               <button
                 type="button"
                 disabled={!!m.replyTo.unavailable}
                 onClick={() => onJumpToQuote(m.replyTo!.id)}
-                className={`mb-1.5 block w-full max-w-full rounded-[8px] border-s-[3px] px-2.5 py-1.5 text-start text-xs transition ${
+                className={`mb-1.5 block w-full min-w-0 max-w-full rounded-[8px] border-s-[3px] px-2 py-1 text-start text-xs leading-snug transition ${
                   mine
                     ? 'border-on-primary/60 bg-black/10 text-on-primary/90 hover:bg-black/15'
                     : 'border-primary bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest'
@@ -142,63 +205,101 @@ function MessageBubbleImpl({
                 aria-label={t('messages.goToQuoted')}
               >
                 {m.replyTo.unavailable ? (
-                  <span className="italic">{t('messages.unavailable')}</span>
+                  <span className="flex items-center gap-1 italic">
+                    <span className="material-symbols-outlined text-[14px]" aria-hidden>
+                      block
+                    </span>
+                    {t('messages.unavailable')}
+                  </span>
                 ) : (
                   <>
-                    <bdi className={`block font-bold ${mine ? '' : 'text-primary-text'}`}>
+                    <bdi className={`block truncate font-bold ${mine ? '' : 'text-primary-text'}`}>
                       {m.replyTo.senderName}
                     </bdi>
-                    <span dir="auto" className="line-clamp-2 [overflow-wrap:anywhere]">
-                      {m.replyTo.body ||
-                        (m.replyTo.isVoice
-                          ? `🎤 ${t('messages.voiceNote')}`
-                          : m.replyTo.attachmentKind === 'IMAGE'
-                            ? `📷 ${t('messages.photo')}`
-                            : m.replyTo.attachmentKind
-                              ? `📎 ${t('messages.file')}`
-                              : '')}
+                    <span className="flex min-w-0 items-center gap-1">
+                      {quote?.icon && (
+                        <span
+                          className="material-symbols-outlined shrink-0 text-[14px]"
+                          aria-hidden
+                        >
+                          {quote.icon}
+                        </span>
+                      )}
+                      <span dir="auto" className="min-w-0 truncate">
+                        {quote?.text}
+                      </span>
                     </span>
                   </>
                 )}
               </button>
             )}
 
-            {m.lesson && (
+            {m.lesson && !deleted && (
               <p
-                className={`mb-1.5 flex items-center gap-1 text-xs font-bold ${mine ? 'text-on-primary/85' : 'text-primary-text'}`}
+                className={`mb-1 flex min-w-0 items-center gap-1 text-xs font-bold ${mine ? 'text-on-primary/85' : 'text-primary-text'}`}
               >
-                <span className="material-symbols-outlined text-[15px]">play_lesson</span>
+                <span className="material-symbols-outlined shrink-0 text-[15px]">play_lesson</span>
                 <bdi className="truncate">{m.lesson.title}</bdi>
-                {m.lesson.atSec != null && <span dir="ltr">· {clock(m.lesson.atSec)}</span>}
+                {m.lesson.atSec != null && (
+                  <span className="shrink-0" dir="ltr">
+                    · {clock(m.lesson.atSec)}
+                  </span>
+                )}
               </p>
             )}
 
-            {hasMedia && (
-              <div className={m.body ? 'mb-1.5' : ''}>
-                <MessageAttachments items={m.attachments!} mine={mine} lang={lang} t={t} />
-              </div>
+            {deleted ? (
+              <p className="flex items-center gap-1.5 text-sm italic">
+                <span className="material-symbols-outlined text-[17px]" aria-hidden>
+                  block
+                </span>
+                {mine ? t('messages.youDeleted') : t('messages.messageDeleted')}
+              </p>
+            ) : (
+              <>
+                {m.body && <RichText text={m.body} onColor={mine && m.status !== 'failed'} />}
+                {files.length > 0 && (
+                  <div className={m.body ? 'mt-1.5' : ''}>
+                    <MessageAttachments items={files} mine={mine} lang={lang} t={t} />
+                  </div>
+                )}
+                {(voice || m.audio) && (
+                  <div className={m.body || files.length ? 'mt-1.5' : ''}>
+                    {voice ? (
+                      <VoiceNote
+                        src={voice.url}
+                        seconds={voice.durationSec ?? 0}
+                        mine={mine}
+                        t={t}
+                      />
+                    ) : (
+                      <VoiceNote
+                        messageId={m.id}
+                        seconds={m.audio!.durationSec}
+                        mine={mine}
+                        t={t}
+                      />
+                    )}
+                  </div>
+                )}
+                {!m.body && !files.length && !voice && !m.audio && (
+                  <p className="text-sm italic opacity-70">{t('messages.unsupported')}</p>
+                )}
+              </>
             )}
 
-            {m.audio ? (
-              <VoiceNote id={m.id} seconds={m.audio.durationSec} mine={mine} t={t} />
-            ) : m.body ? (
-              <RichText text={m.body} onColor={mine && m.status !== 'failed'} />
-            ) : !hasMedia ? (
-              <p className="text-sm italic opacity-70">{t('messages.unsupported')}</p>
-            ) : null}
-
-            {(run.last || pending) && (
+            {(run.last || pending || deleted) && (
               <p
                 className={`mt-0.5 flex items-center justify-end gap-1 text-[11px] leading-none ${
                   onlyImages
                     ? 'absolute bottom-2 end-2 rounded-full bg-black/45 px-1.5 py-1 text-white'
                     : ''
-                } ${!onlyImages ? (mine ? 'text-on-primary/70' : 'text-on-surface-variant') : ''}`}
+                } ${!onlyImages ? (mine && !deleted ? 'text-on-primary/70' : 'text-on-surface-variant') : ''}`}
                 dir="ltr"
                 title={fullDateTime(m.createdAt, lang)}
               >
                 {timeLabel(m.createdAt, lang)}
-                {mine && (
+                {mine && !deleted && (
                   <span
                     className="material-symbols-outlined text-[14px]"
                     aria-label={
@@ -235,8 +336,10 @@ function MessageBubbleImpl({
           )}
         </div>
 
-        {!!m.reactions?.length && (
-          <div className={`-mt-1 flex flex-wrap gap-1 px-1 ${mine ? 'justify-end' : ''}`}>
+        {!!m.reactions?.length && !deleted && (
+          <div
+            className={`relative z-[1] -mt-1.5 flex max-w-full flex-wrap gap-1 px-2 ${mine ? 'justify-end' : ''}`}
+          >
             {m.reactions.map((r) => (
               <button
                 key={r.emoji}
@@ -245,7 +348,7 @@ function MessageBubbleImpl({
                 title={r.names.join('، ')}
                 aria-pressed={r.mine}
                 aria-label={t('messages.reactionCount', { emoji: r.emoji, count: r.count })}
-                className={`flex h-7 items-center gap-1 rounded-full px-2 text-sm shadow-hairline transition ${
+                className={`flex h-6 items-center gap-1 rounded-full px-1.5 text-[13px] shadow-hairline ring-2 ring-background transition ${
                   r.mine
                     ? 'bg-primary-fixed text-on-primary-fixed'
                     : 'bg-surface-container-lowest text-on-surface hover:bg-surface-container-high'
@@ -253,7 +356,7 @@ function MessageBubbleImpl({
               >
                 <span>{r.emoji}</span>
                 {r.count > 1 && (
-                  <span className="text-xs font-bold" dir="ltr">
+                  <span className="text-[11px] font-bold" dir="ltr">
                     {r.count}
                   </span>
                 )}

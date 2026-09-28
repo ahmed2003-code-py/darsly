@@ -88,11 +88,13 @@ export class ChatFilesController {
     res.setHeader('Content-Type', attachment.mimeType);
     res.setHeader('Cache-Control', 'private, max-age=21600');
     if (obj.contentLength) res.setHeader('Content-Length', String(obj.contentLength));
-    // Images and PDFs may be shown in place; everything else — and any
+    // Images, voice notes and PDFs may be shown (or played) in place; everything else — and any
     // explicit download — is always handed to the user as a file.
     const inline =
       variant !== 'download' &&
-      (attachment.kind === 'IMAGE' || attachment.mimeType === 'application/pdf');
+      (attachment.kind === 'IMAGE' ||
+        attachment.kind === 'VOICE' ||
+        attachment.mimeType === 'application/pdf');
     res.setHeader(
       'Content-Disposition',
       `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,

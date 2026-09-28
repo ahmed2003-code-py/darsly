@@ -96,3 +96,44 @@ export function applySeen(list: LocalMessage[], lastReadAt: string): LocalMessag
   });
   return changed ? next : list;
 }
+
+/**
+ * A message was deleted. `me`: it leaves this viewer's list. `everyone`: it
+ * becomes a tombstone — nothing it said, carried or recorded stays on screen —
+ * and every reply quoting it now reads "unavailable".
+ */
+export function applyDeleted(
+  list: LocalMessage[],
+  messageId: string,
+  scope: 'everyone' | 'me',
+): LocalMessage[] {
+  if (scope === 'me') {
+    const next = list.filter((m) => m.id !== messageId);
+    return next.length === list.length ? list : next;
+  }
+  let changed = false;
+  const next = list.map((m) => {
+    if (m.id === messageId) {
+      changed = true;
+      return {
+        ...m,
+        deleted: true,
+        body: '',
+        audio: null,
+        attachments: [],
+        reactions: [],
+        replyTo: null,
+        lesson: null,
+      };
+    }
+    if (m.replyTo?.id === messageId && !m.replyTo.unavailable) {
+      changed = true;
+      return {
+        ...m,
+        replyTo: { id: messageId, senderName: '', body: '', isVoice: false, unavailable: true },
+      };
+    }
+    return m;
+  });
+  return changed ? next : list;
+}

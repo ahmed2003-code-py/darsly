@@ -28,7 +28,9 @@ export class ChatFilesController {
   private harden(res: Response) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; sandbox");
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    // same-site, not same-origin: the web app may be served from a sibling origin
+    // (local dev, a split deployment); other sites still cannot embed these.
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
   }
 
   @Public()

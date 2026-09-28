@@ -65,3 +65,34 @@ export function setLocalStatus(
   const id = localId(clientMessageId);
   return list.map((m) => (m.id === id ? { ...m, status } : m));
 }
+
+/** Replace one message's reactions (a `chat:reaction` push, or my own tap). */
+export function applyReactions(
+  list: LocalMessage[],
+  messageId: string,
+  reactions: ChatMessageDto['reactions'],
+): LocalMessage[] {
+  let changed = false;
+  const next = list.map((m) => {
+    if (m.id !== messageId) return m;
+    changed = true;
+    return { ...m, reactions: reactions ?? [] };
+  });
+  return changed ? next : list;
+}
+
+/**
+ * The other side has read up to `lastReadAt`: every one of my stored messages
+ * sent at or before it is now seen (✓✓). Positions only move forward, so a
+ * message already marked seen keeps its time.
+ */
+export function applySeen(list: LocalMessage[], lastReadAt: string): LocalMessage[] {
+  const at = new Date(lastReadAt).getTime();
+  let changed = false;
+  const next = list.map((m) => {
+    if (!m.mine || isLocal(m) || m.readAt || new Date(m.createdAt).getTime() > at) return m;
+    changed = true;
+    return { ...m, readAt: lastReadAt };
+  });
+  return changed ? next : list;
+}

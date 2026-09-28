@@ -554,6 +554,38 @@
  * glyph in this font is exactly one em wide, so the box is pinned to that: the
  * word inside is clipped rather than allowed to decide the layout.
  */
+/* The icon font, self-hosted. It used to come from Google Fonts, and every
+   icon is a ligature — so a slow or blocked request showed the icon NAMES
+   ("search", "mic") across the whole product. This is the same file Google
+   served (Material Symbols Outlined at opsz 24 · wght 400 · FILL 1 · GRAD 0),
+   now same-origin, preloaded in index.html and cached with the app. */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/material-symbols-outlined.woff2') format('woff2');
+}
+/* In the base layer on purpose: Google's stylesheet used to load before the
+   app's CSS, so `text-[20px]` and friends overrode its 24px default. Here, a
+   plain rule after `@tailwind utilities` would win instead and flatten every
+   sized icon to 24px — the base layer keeps the old precedence. */
+@layer base {
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+  }
+}
 .material-symbols-outlined {
   /* A theme may set the two axes that read as "icon style" — filled or
      outlined, and stroke weight. Both default to the app's own values, so an

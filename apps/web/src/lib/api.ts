@@ -74,3 +74,14 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+/**
+ * A media URL the API handed out (signed avatar / attachment links). They are
+ * root-relative (`/api/v1/files/…`) when the API does not know its public
+ * origin, which only resolves on the same origin as the API — so resolve them
+ * against the API origin, exactly like requests are.
+ */
+export function mediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith('/') ? `${apiOrigin()}${url}` : url;
+}

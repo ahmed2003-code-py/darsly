@@ -44,7 +44,7 @@ const WORD = /[\p{L}\p{N}_]/u;
  * than against a list of what to reject. `javascript:` and `data:` are not
  * refused by name — they simply never match.
  */
-function safeHref(href: string): string | null {
+export function safeHref(href: string): string | null {
   const h = href.trim();
   if (/^https?:\/\//i.test(h) || /^mailto:/i.test(h)) return h;
   if (h.startsWith('/') && !h.startsWith('//')) return h; // in-app route
@@ -58,7 +58,15 @@ const LINK_CLASS = 'font-bold text-primary underline underline-offset-2 hover:no
  * would drop the reader into a fresh page load of the site they are already on;
  * only a link that leaves the site earns a new tab, and with it `noopener`.
  */
-function Anchor({ href, bare, children }: { href: string; bare?: boolean; children: ReactNode }) {
+export function Anchor({
+  href,
+  bare,
+  children,
+}: {
+  href: string;
+  bare?: boolean;
+  children: ReactNode;
+}) {
   const internal = href.startsWith('/');
   const className = bare ? `break-all ${LINK_CLASS}` : LINK_CLASS;
   if (internal) {

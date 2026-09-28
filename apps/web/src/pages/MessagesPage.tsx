@@ -116,6 +116,8 @@ export default function MessagesPage() {
       ? { name: resolved.counterpartName, avatarUrl: resolved.counterpartAvatarUrl, threadId: null }
       : null;
   const openError = activeId ? headerError : resolveError;
+  /** The message scroller is only rendered once there is a header to go above it. */
+  const scrollerMounted = !!header && !openError;
 
   const conv = useConversation(activeId, {
     id: user?.id ?? '',
@@ -197,7 +199,12 @@ export default function MessagesPage() {
       return;
     }
     if (nearBottom.current || lastMessage?.mine) el.scrollTop = el.scrollHeight;
-  }, [conv.messages, conv.loaded, activeId, lastMessage, peerTyping]);
+    // `scrollerMounted`: the messages and the header arrive from separate
+    // requests. When the messages win, the scroller is not on screen yet (the
+    // page is still waiting for the header), this effect finds no element and
+    // returns — and nothing it depends on changes when the header lands, so the
+    // conversation stayed at its oldest loaded message. Mounting is a change.
+  }, [conv.messages, conv.loaded, activeId, lastMessage, peerTyping, scrollerMounted]);
 
   /* ── Sending ─────────────────────────────────────────────────────────── */
 

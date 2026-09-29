@@ -3200,7 +3200,8 @@
     "eAlreadyHolding": "You already have a booking awaiting payment for this class.",
     "eAdmissionCooldown": "Wait a moment before asking again.",
     "eAdmissionLimit": "You've reached the most requests for this class.",
-    "eAdmissionNotEligible": "Only signed-in students can ask to join."
+    "eAdmissionNotEligible": "Only signed-in students can ask to join.",
+    "eChatCursorInvalid": "We couldn't load older messages from that point. Reopen the class archive."
   },
   "myStudio": {
     "title": "My Studio",

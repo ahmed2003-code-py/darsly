@@ -160,15 +160,24 @@ export class ApiExceptionFilter implements ExceptionFilter {
       };
     }
 
-    // Express/body-parser style errors that reached Nest (they carry a status
-    // and a type, not an HttpException). Only the status is trusted.
-    const statusLike = (exception as { status?: unknown; statusCode?: unknown }) ?? {};
+    // The body parsers run before the router, and Nest hands their failures to
+    // this filter too (as http-errors objects, not HttpExceptions). Their own
+    // message is parser vocabulary ("Unexpected end of JSON input"), so only
+    // the status and type are used.
+    const statusLike =
+      (exception as { status?: unknown; statusCode?: unknown; type?: unknown }) ?? {};
     const s = Number(statusLike.status ?? statusLike.statusCode);
     if (Number.isInteger(s) && s >= 400 && s < 500) {
+      const code =
+        statusLike.type === 'entity.parse.failed'
+          ? 'MALFORMED_BODY'
+          : statusLike.type === 'entity.too.large'
+            ? 'PAYLOAD_TOO_LARGE'
+            : genericCode(s);
       return {
         statusCode: s,
-        code: genericCode(s),
-        message: defaultMessage(s),
+        code,
+        message: code === 'MALFORMED_BODY' ? 'Malformed request body' : defaultMessage(s),
         retryable: false,
         requestId,
       };

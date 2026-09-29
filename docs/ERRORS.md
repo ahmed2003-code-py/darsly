@@ -50,9 +50,10 @@ the Android payment listener already read `code`/`message` at the top level.
 Nesting would have broken all of them for no gain in meaning.
 
 Code: `apps/api/src/common/errors/` — `api-error.ts` (types, generic codes,
-taxonomy), `api-exception.filter.ts` (the global filter),
-`validation-exception.factory.ts` (DTO validation), `body-parser-errors.ts`
-(oversized/malformed bodies, which never reach Nest). WebSocket handlers use
+taxonomy), `api-exception.filter.ts` (the global filter — which also
+receives the body parsers' failures: oversized → `PAYLOAD_TOO_LARGE`,
+malformed JSON → `MALFORMED_BODY`), `validation-exception.factory.ts` (DTO
+validation). WebSocket handlers use
 `realtime/ws-exception.filter.ts`, which emits the same fields on the
 `exception` event.
 

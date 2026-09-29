@@ -8,7 +8,6 @@ import { AppModule } from './app.module';
 import { JSON_BODY_LIMIT } from './common/validation';
 import { AppLogger } from './common/app-logger';
 import { validateConfig } from './common/config.validation';
-import { bodyParserErrors } from './common/errors/body-parser-errors';
 import { VALIDATION_PIPE_OPTIONS } from './common/errors/validation-exception.factory';
 import { requestIdMiddleware } from './common/request-context';
 import { configureRouting } from './common/routing';
@@ -65,8 +64,6 @@ async function bootstrap() {
   // the largest field cap; validation, not body-parser, decides what's too big.
   app.use(json({ limit: JSON_BODY_LIMIT }));
   app.use(urlencoded({ limit: JSON_BODY_LIMIT, extended: true }));
-  // Their failures (too large, malformed) never reach Nest's filters.
-  app.use(bodyParserErrors);
 
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
     .split(',')

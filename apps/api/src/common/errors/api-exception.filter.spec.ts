@@ -194,6 +194,24 @@ describe('ApiExceptionFilter', () => {
     });
   });
 
+  it("words the body parser's failures by type, never with the parser's own text", () => {
+    const parse = Object.assign(new SyntaxError('Unexpected end of JSON input'), {
+      status: 400,
+      statusCode: 400,
+      type: 'entity.parse.failed',
+    });
+    const big = Object.assign(new Error('request entity too large'), {
+      status: 413,
+      type: 'entity.too.large',
+    });
+    expect(send(parse)).toMatchObject({
+      status: 400,
+      body: { code: 'MALFORMED_BODY', message: 'Malformed request body', retryable: false },
+    });
+    expect(send(big)).toMatchObject({ status: 413, body: { code: 'PAYLOAD_TOO_LARGE' } });
+    expect(JSON.stringify(send(parse).body)).not.toContain('Unexpected end');
+  });
+
   it('turns a throttle into RATE_LIMITED with the wait the header carries', () => {
     const { status, body } = send(new ThrottlerException(), { headers: { 'Retry-After': '42' } });
     expect(status).toBe(HttpStatus.TOO_MANY_REQUESTS);

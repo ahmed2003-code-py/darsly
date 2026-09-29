@@ -49,6 +49,7 @@ import { GuestAllowed } from '../common/decorators/guest-allowed.decorator';
 import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
 import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveBonusService } from './bonus/live-bonus.service';
+import { LiveAdmissionService } from './admission/live-admission.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveReplayService } from './replay/live-replay.service';
 import { AUDIO_SEGMENT_MAX_BYTES, transcriptionConfig } from './transcription/lesson-transcription';
@@ -81,6 +82,10 @@ class CreateLiveDto {
   @IsOptional() @IsIn(LIVE_REFUND_POLICIES) refundPolicy?: LiveRefundPolicy;
   @IsOptional() @IsIn(LIVE_REPLAY_POLICIES) replayPolicy?: LiveReplayPolicy;
   @IsOptional() @IsInt() @Min(-1_000_000) @Max(1_000_000) replayDays?: number | null;
+}
+
+class AdmissionDecisionDto {
+  @IsIn(['APPROVE', 'REJECT']) decision: 'APPROVE' | 'REJECT';
 }
 
 class ClassroomPolicyDto {
@@ -175,6 +180,7 @@ export class LiveController {
     private readonly live: LiveService,
     private readonly rtc: LiveRtcService,
     private readonly bonus: LiveBonusService,
+    private readonly admission: LiveAdmissionService,
     private readonly recordings: LiveRecordingService,
     private readonly replays: LiveReplayService,
   ) {}
@@ -471,6 +477,53 @@ export class LiveController {
     if (dto.micPolicy) Object.assign(out, await this.rtc.setMicPolicy(id, dto.micPolicy, u.sub));
     if (dto.cameraPolicy) Object.assign(out, await this.rtc.setCameraPolicy(id, dto.cameraPolicy, u.sub));
     return out;
+  }
+
+  // ── "طلب الانضمام": a full class, one seat asked for ─────────────────────
+
+  @Get('live/:id/admission')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'My request to join this (full) class, if any' })
+  myAdmission(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.admission.mine(u.sub, id);
+  }
+
+  @Post('live/:id/admission')
+  @HttpCode(200)
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Ask the teacher for a seat in a full class' })
+  requestAdmission(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.admission.request(u.sub, id);
+  }
+
+  @Delete('live/:id/admission')
+  @Roles(Role.STUDENT)
+  @ApiOperation({ summary: 'Withdraw my request to join' })
+  cancelAdmission(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.admission.cancel(u.sub, id);
+  }
+
+  @Get('teacher/live/:id/admissions')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Open requests to join a full class, and the capacity picture' })
+  async admissions(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    await this.live.ownedSession(scopeOf(ctx), id);
+    return this.admission.list(id);
+  }
+
+  @Post('teacher/live/:id/admissions/:requestId')
+  @HttpCode(200)
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Approve (a one-person capacity exception) or reject a request to join' })
+  async decideAdmission(
+    @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @Body() dto: AdmissionDecisionDto,
+  ) {
+    await this.live.ownedSession(scopeOf(ctx), id);
+    return this.admission.decide(u.sub, id, requestId, dto.decision);
   }
 
   /** The class's bonuses, for its record: who gave whom how many, and why. */

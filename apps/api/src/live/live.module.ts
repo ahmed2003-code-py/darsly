@@ -8,6 +8,7 @@ import { LiveService } from './live.service';
 import { LiveRtcController } from './rtc/live-rtc.controller';
 import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveBonusService } from './bonus/live-bonus.service';
+import { LiveAdmissionService } from './admission/live-admission.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveRecorderWorker } from './recording/live-recorder.worker';
 import { VideoModule } from '../video/video.module';
@@ -41,6 +42,8 @@ import { LiveCommerceWorker } from './commerce/live-commerce.worker';
     LiveRtcService,
     // "مكافأة": points in class, through the gamification economy (never money).
     LiveBonusService,
+    // "طلب الانضمام": a one-person exception to a full booking capacity.
+    LiveAdmissionService,
     LiveRecordingService,
     LiveRecorderWorker,
     LiveReplayService,

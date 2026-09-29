@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import AdmissionRequest from '../../components/live/AdmissionRequest';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -141,7 +142,15 @@ export default function PublicLivePage() {
     if (asStudent) {
       if (mine.isLoading) action = <Spinner />;
       else if (m?.booked) action = seatActions;
-      else if (full) action = <p className="text-sm font-semibold text-error">{t('live.full')}</p>;
+      else if (full)
+        action = (
+          <AdmissionRequest
+            sessionId={id!}
+            paid={!free}
+            onProceed={() => setBuying(true)}
+            onSeated={() => void mine.refetch()}
+          />
+        );
       else if (free)
         action = (
           <div className="space-y-2">

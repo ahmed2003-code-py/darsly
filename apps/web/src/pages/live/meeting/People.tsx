@@ -335,6 +335,43 @@ export default function People({
           </label>
         </div>
       )}
+      {moderator && cf && (cf.rtc?.admissions?.requests.filter((r) => r.status === 'PENDING').length ?? 0) > 0 && (
+        <>
+          <GroupTitle>
+            {t('admission.panelTitle', { count: cf.rtc!.admissions!.requests.filter((r) => r.status === 'PENDING').length })}
+          </GroupTitle>
+          {cf.rtc!.admissions!.capacity != null && (
+            <p className="mb-1 text-xs text-on-surface-variant">
+              {t('admission.capacityLine', {
+                capacity: cf.rtc!.admissions!.capacity,
+                exceptions: cf.rtc!.admissions!.exceptions,
+              })}
+            </p>
+          )}
+          <ul>
+            {cf.rtc!.admissions!.requests
+              .filter((r) => r.status === 'PENDING')
+              .map((r) => (
+                <Row key={r.id} name={r.name} sub={t('admission.wantsToJoin')}>
+                  <button
+                    type="button"
+                    className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-on-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                    onClick={() => void cf.decideAdmission(r.id, 'APPROVE')}
+                  >
+                    {t('admission.admit')}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-on-surface/10"
+                    onClick={() => void cf.decideAdmission(r.id, 'REJECT')}
+                  >
+                    {t('meeting.reject')}
+                  </button>
+                </Row>
+              ))}
+          </ul>
+        </>
+      )}
       {moderator && cf && raised.length > 0 && (
         <>
           <GroupTitle>{t('meeting.requests', { count: raised.length })}</GroupTitle>

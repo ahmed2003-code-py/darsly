@@ -82,6 +82,7 @@ function liveWorld(
       findMany: jest.fn(async () => over.booked ?? []),
       deleteMany: jest.fn(async () => ({ count: 1 })),
     },
+    liveAdmissionRequest: { updateMany: jest.fn(async () => ({ count: 0 })) },
     liveAttendance: { updateMany: jest.fn(async () => ({ count: 1 })) },
     studentProfile: {
       findUnique: jest.fn(async () => ({ id: 'st1', user: { fullName: 'طالب' } })),

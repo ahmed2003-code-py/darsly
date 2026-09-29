@@ -214,6 +214,44 @@ export async function lockSession(tx: Tx, sessionId: string): Promise<LockedSess
   return s ?? null;
 }
 
+/**
+ * Whether this student holds an approved admission exception for this class:
+ * a teacher let them past a full booking capacity. It lifts the "full" check
+ * for them alone — never the payment: a paid seat is still bought and paid
+ * for through the ordinary path. Checked under the session's row lock by
+ * every caller, like the capacity it stands in for.
+ */
+export async function hasAdmission(tx: Tx | PrismaService, sessionId: string, studentId: string | null) {
+  if (!studentId) return false;
+  const a = await tx.liveAdmissionRequest.findFirst({
+    where: { sessionId, studentId, status: 'APPROVED' },
+    select: { id: true },
+  });
+  return !!a;
+}
+
+/**
+ * A seat was created for this student: an approved exception becomes USED
+ * (tied to the seat), and a request still pending is closed — they got in
+ * the ordinary way.
+ */
+export async function consumeAdmission(
+  tx: Tx,
+  sessionId: string,
+  studentId: string,
+  link: { bookingId?: string; purchaseId?: string | null },
+) {
+  const now = new Date();
+  await tx.liveAdmissionRequest.updateMany({
+    where: { sessionId, studentId, status: 'APPROVED' },
+    data: { status: 'USED', usedAt: now, bookingId: link.bookingId ?? null, purchaseId: link.purchaseId ?? null },
+  });
+  await tx.liveAdmissionRequest.updateMany({
+    where: { sessionId, studentId, status: 'PENDING' },
+    data: { status: 'CANCELLED', decidedAt: now },
+  });
+}
+
 export async function lockPurchase(tx: Tx, purchaseId: string): Promise<LivePurchase | null> {
   await tx.$queryRaw`SELECT id FROM "LivePurchase" WHERE id = ${purchaseId} FOR UPDATE`;
   return tx.livePurchase.findUnique({ where: { id: purchaseId } });
@@ -523,9 +561,17 @@ export class LiveCommerceService implements OnModuleInit {
     }
   }
 
-  private async assertSeatFree(tx: Tx, s: LockedSession, now: Date, excludePurchaseId?: string) {
+  private async assertSeatFree(
+    tx: Tx,
+    s: LockedSession,
+    now: Date,
+    excludePurchaseId?: string,
+    /** A student with an approved admission exception passes a full class (they still pay). */
+    studentId?: string,
+  ) {
     if (s.capacity == null) return;
     if ((await seatsTaken(tx, s.id, now, excludePurchaseId)) >= s.capacity) {
+      if (studentId && (await hasAdmission(tx, s.id, studentId))) return;
       throw new ConflictException({ message: 'The session is full', code: 'SESSION_FULL' });
     }
   }
@@ -597,9 +643,10 @@ export class LiveCommerceService implements OnModuleInit {
       },
     });
     if (free && 'studentId' in buyer) {
-      await tx.liveBooking.create({
+      const booking = await tx.liveBooking.create({
         data: { sessionId: s.id, studentId: buyer.studentId, purchaseId: p.id },
       });
+      await consumeAdmission(tx, s.id, buyer.studentId, { bookingId: booking.id, purchaseId: p.id });
     }
     return p;
   }
@@ -624,7 +671,7 @@ export class LiveCommerceService implements OnModuleInit {
         });
         if (existing) return existing;
         await this.assertBuyable(tx, s, student.id, now);
-        await this.assertSeatFree(tx, s!, now);
+        await this.assertSeatFree(tx, s!, now, undefined, student.id);
         await this.supersedeStaleDeclarations(tx, sessionId, student.id);
         const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(
           tx,
@@ -932,7 +979,10 @@ export class LiveCommerceService implements OnModuleInit {
         // taken — verification then gives the seat if one opened, or refunds.
         let keep: Date | null = new Date(closesAtMs(s));
         if (p.status === 'EXPIRED' || (p.holdExpiresAt && p.holdExpiresAt <= now)) {
-          const full = s.capacity != null && (await seatsTaken(tx, s.id, now, p.id)) >= s.capacity;
+          const full =
+            s.capacity != null &&
+            (await seatsTaken(tx, s.id, now, p.id)) >= s.capacity &&
+            !(await hasAdmission(tx, s.id, p.studentId));
           const over = now.getTime() >= closesAtMs(s);
           if (full || over) keep = null;
         }
@@ -1052,9 +1102,9 @@ export class LiveCommerceService implements OnModuleInit {
               // They held a seat for a transfer, then chose the wallet: the
               // same purchase and the same frozen price, paid differently.
               if (!p.holdExpiresAt || p.holdExpiresAt <= now)
-                await this.assertSeatFree(tx, s!, now, p.id);
+                await this.assertSeatFree(tx, s!, now, p.id, student.id);
             } else {
-              await this.assertSeatFree(tx, s!, now);
+              await this.assertSeatFree(tx, s!, now, undefined, student.id);
               const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(
                 tx,
                 s!,
@@ -1172,7 +1222,10 @@ export class LiveCommerceService implements OnModuleInit {
     // and the class still ahead. Money that finds no seat is not kept.
     const holding = p.holdExpiresAt != null && p.holdExpiresAt > now && HOLDING.includes(p.status);
     const over = s.status === 'ENDED' || now.getTime() >= closesAtMs(s);
-    const full = s.capacity != null && (await seatsTaken(tx, s.id, now, p.id)) >= s.capacity;
+    const full =
+      s.capacity != null &&
+      (await seatsTaken(tx, s.id, now, p.id)) >= s.capacity &&
+      !(await hasAdmission(tx, s.id, p.studentId));
     if (!holding && (over || full)) {
       assertTransition(p.status, 'OVERSOLD');
       await tx.livePurchase.update({
@@ -1195,9 +1248,10 @@ export class LiveCommerceService implements OnModuleInit {
     // A student's seat is their LiveBooking; a guest's is the confirmed
     // purchase itself (counted by seatsTaken, checked by guestSeat).
     if (p.studentId) {
-      await tx.liveBooking.create({
+      const booking = await tx.liveBooking.create({
         data: { sessionId: s.id, studentId: p.studentId, purchaseId: p.id },
       });
+      await consumeAdmission(tx, s.id, p.studentId, { bookingId: booking.id, purchaseId: p.id });
     }
     return 'CONFIRMED';
   }
@@ -2317,7 +2371,9 @@ export class LiveCommerceService implements OnModuleInit {
         !s.deletedAt &&
         !s.cancelledAt &&
         now.getTime() < closesAtMs(s) &&
-        (s.capacity == null || (await seatsTaken(tx, s.id, now, p.id)) < s.capacity);
+        (s.capacity == null ||
+          (await seatsTaken(tx, s.id, now, p.id)) < s.capacity ||
+          (await hasAdmission(tx, s.id, p.studentId)));
       assertTransition(p.status, 'PAYMENT_PENDING');
       await tx.livePurchase.update({
         where: { id: p.id },

@@ -84,6 +84,12 @@ export interface RtcState {
   tracks: { id: string; userId: string; kind: Kind; role: 'TEACHER' | 'STUDENT' }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
   notJoined?: { userId: string; name: string; guest: boolean }[];
+  /** Moderators only: students asking for a seat in a full class. */
+  admissions?: {
+    requests: { id: string; userId: string; name: string; status: 'PENDING' | 'APPROVED'; requestedAt: string }[];
+    capacity: number | null;
+    exceptions: number;
+  };
 }
 
 export type CameraPolicy = 'SPEAKERS_ONLY' | 'OPTIONAL' | 'EXPECTED' | 'OFF';
@@ -1143,6 +1149,19 @@ export function useCloudflareMeeting(
     [liveSessionId, fetchState],
   );
 
+  /** A moderator: approve (a one-person capacity exception) or reject a request to join. */
+  const decideAdmission = useCallback(
+    async (requestId: string, decision: 'APPROVE' | 'REJECT') => {
+      try {
+        await api.post(`/teacher/live/${liveSessionId}/admissions/${requestId}`, { decision });
+      } catch {
+        setNotice('POLICY_FAILED');
+      }
+      await fetchState();
+    },
+    [liveSessionId, fetchState],
+  );
+
   /** A moderator: the class's camera policy. */
   const setCameraPolicy = useCallback(
     async (cameraPolicy: CameraPolicy) => {
@@ -1297,6 +1316,7 @@ export function useCloudflareMeeting(
     grantBonus,
     bonusReceived,
     setCameraPolicy,
+    decideAdmission,
     nudgeCamera,
     nudged,
     cameraPage,

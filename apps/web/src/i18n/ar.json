@@ -3238,7 +3238,13 @@
     "eBonusClassCap": "وصلت الحصة للحد الأقصى من المكافآت.",
     "eBonusInvalid": "عدد النقاط غير صالح.",
     "eBonusDisabled": "المكافآت متوقفة حاليًا.",
-    "eClassroomUnsupported": "الإعداد ده متاح في فصل Darsly فقط."
+    "eClassroomUnsupported": "الإعداد ده متاح في فصل Darsly فقط.",
+    "eNotFull": "فيه مقعد متاح — احجز مباشرة.",
+    "eAlreadyBooked": "عندك مقعد في الحصة دي بالفعل.",
+    "eAlreadyHolding": "عندك حجز قيد الدفع لهذه الحصة.",
+    "eAdmissionCooldown": "استنى شوية قبل ما تطلب تاني.",
+    "eAdmissionLimit": "وصلت للحد الأقصى من الطلبات لهذه الحصة.",
+    "eAdmissionNotEligible": "طلب الانضمام متاح للطلاب المسجلين فقط."
   },
   "myStudio": {
     "title": "استوديو الطالب",
@@ -5288,5 +5294,29 @@
     "guestNoPoints": "الضيوف لا يملكون رصيد نقاط",
     "totalHint": "نقاط المكافأة في هذه الحصة",
     "received": "+{{points}} نقاط"
+  },
+  "admission": {
+    "ask": "طلب الانضمام",
+    "hint": "اطلب من المدرس مقعدًا إضافيًا في هذه الحصة.",
+    "pending": "طلبك وصل للمدرس",
+    "pendingHint": "هنبلغك أول ما يرد.",
+    "withdraw": "إلغاء الطلب",
+    "approvedPaid": "وافق المدرس على انضمامك",
+    "approvedPaidHint": "أكمل الحجز والدفع كالمعتاد لتأكيد مقعدك.",
+    "completeBooking": "أكمل الحجز",
+    "rejected": "المدرس لم يوافق على طلبك السابق.",
+    "expired": "انتهت الحصة.",
+    "panelTitle_zero": "لا توجد طلبات انضمام",
+    "panelTitle_one": "طلب انضمام واحد",
+    "panelTitle_two": "طلبا انضمام",
+    "panelTitle_few": "{{count}} طلبات انضمام",
+    "panelTitle_many": "{{count}} طلب انضمام",
+    "panelTitle_other": "{{count}} طلب انضمام",
+    "wantsToJoin": "يريد الانضمام — الحصة مكتملة",
+    "admit": "السماح بالدخول",
+    "capacityLine": "السعة الأساسية {{capacity}} · استثناءات {{exceptions}}",
+    "freeNote": "الموافقة تحجز له مقعدًا إضافيًا في هذه الحصة فقط.",
+    "paidNote": "الموافقة تسمح له بالشراء رغم اكتمال الحصة — المقعد يتأكد بعد الدفع فقط.",
+    "approvedWaitingPayment": "تمت الموافقة — في انتظار الدفع"
   }
 }

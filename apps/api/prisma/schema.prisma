@@ -2954,6 +2954,7 @@ model LiveSession {
   rtcTracks      LiveRtcTrack[]
   hands          LiveHand[]
   controls       LiveParticipantControl[]
+  admissions     LiveAdmissionRequest[]
   recordings     LiveRecording[]
   audioSegments  LiveAudioSegment[]
   replays        LiveReplaySession[]
@@ -3148,6 +3149,43 @@ model LiveParticipantControl {
   updatedAt      DateTime          @updatedAt
 
   @@id([sessionId, userId])
+}
+
+enum LiveAdmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+  USED
+}
+
+/// A student asking for a seat in a class whose booking capacity is full.
+/// Approval is a targeted, one-person capacity exception for THIS session —
+/// never entitlement: a paid class is still bought and paid for through the
+/// normal purchase path, and the configured capacity does not change. One
+/// row per (session, student); a new ask reopens it. Nothing here is
+/// permanent: pending and unused approvals expire when the class ends.
+model LiveAdmissionRequest {
+  id          String              @id @default(cuid())
+  sessionId   String
+  session     LiveSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String
+  studentId   String
+  status      LiveAdmissionStatus @default(PENDING)
+  /// How many times this student asked for this class.
+  attempts    Int                 @default(1)
+  requestedAt DateTime            @default(now())
+  decidedAt   DateTime?
+  decidedBy   String?
+  usedAt      DateTime?
+  /// The seat the exception became (a booking), and for a paid class the purchase.
+  bookingId   String?
+  purchaseId  String?
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([sessionId, userId])
+  @@index([sessionId, status])
 }
 
 enum LiveHandState {

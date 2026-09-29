@@ -24,6 +24,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { bonusTotals } from './bonus/bonus-totals';
+import { expireAdmissions } from './admission/admission-expiry';
 import { LIVE_MAX_DURATION_MIN } from './live-timing';
 import {
   LIVE_PRICE_MAX_CENTS,
@@ -37,7 +38,7 @@ import {
   toSnapshot,
 } from '../commerce/commercial-terms.service';
 import { priceLiveSeat, PricingError } from '../commerce/pricing';
-import { LiveCommerceService, lockSession, seatsTaken } from './commerce/live-commerce.service';
+import { consumeAdmission, LiveCommerceService, lockSession, seatsTaken } from './commerce/live-commerce.service';
 import { pipelineStages } from './live-pipeline';
 import { recordingStage } from './recording/recording-stage';
 import { LiveProviders } from './providers/live-providers';
@@ -839,6 +840,10 @@ export class LiveService {
         taken: c.seatsTaken,
         studentBookings: c.bookings,
         guestSeats,
+        // Seats the teacher granted past a full capacity (approved requests
+        // that became a seat) — the base capacity itself never changes.
+        exceptions: await this.prisma.liveAdmissionRequest.count({ where: { sessionId: s.id, status: 'USED' } }),
+        pendingRequests: await this.prisma.liveAdmissionRequest.count({ where: { sessionId: s.id, status: 'PENDING' } }),
       },
       sales:
         s.accessMode === 'PAID' || sold.length
@@ -968,6 +973,7 @@ export class LiveService {
         deletedAt: now,
       },
     });
+    await expireAdmissions(this.prisma, id);
     if (wasLive) {
       this.realtime.emitToLive(id, 'live:ended', { sessionId: id, cancelled: true });
     }
@@ -1155,9 +1161,19 @@ export class LiveService {
       },
     });
     const now = new Date();
+    // A full class I asked to join: my request's state, on its card.
+    const asked = new Map(
+      (
+        await this.prisma.liveAdmissionRequest.findMany({
+          where: { userId, sessionId: { in: sessions.map((s) => s.id) } },
+          select: { sessionId: true, id: true, status: true, attempts: true, requestedAt: true, decidedAt: true },
+        })
+      ).map((a) => [a.sessionId, a]),
+    );
     return Promise.all(
       sessions.map(async (s) => ({
         ...this.studentView(s, s.bookings.length > 0),
+        admission: asked.get(s.id) ?? null,
         // Seats left the way capacity is enforced: booked seats, guests'
         // confirmed seats and unexpired holds.
         ...(s.capacity != null
@@ -1257,7 +1273,8 @@ export class LiveService {
         if (s.capacity != null && (await seatsTaken(tx, sessionId, new Date())) >= s.capacity) {
           throw new BadRequestException({ message: 'Session is full', code: 'SESSION_FULL' });
         }
-        await tx.liveBooking.create({ data: { sessionId, studentId: student.id } });
+        const booking = await tx.liveBooking.create({ data: { sessionId, studentId: student.id } });
+        await consumeAdmission(tx, sessionId, student.id, { bookingId: booking.id });
       });
     } catch (e) {
       // A unique-violation means this student already booked in a race → done.
@@ -1596,6 +1613,8 @@ export class LiveService {
           where: { sessionId: id, leftAt: null },
           data: { leftAt: endedAt },
         });
+        // Asked-for seats of a class that is over cannot be used any more.
+        await expireAdmissions(tx, id);
         return { outcome: 'ended' as const, endedAt, session: s, provider };
       },
       // Long enough for the provider call (10s) inside it.
@@ -3474,6 +3493,14 @@ export class LiveService {
       select: { academyId: true, tenantId: true },
     });
     return [...new Set(rows.map((r) => r.academyId ?? r.tenantId))];
+  }
+
+  /** A group's class stays its group's: the same audience check booking makes. */
+  assertAudience(
+    studentId: string,
+    session: { academyId: string | null; tenantId: string; groupId: string | null },
+  ) {
+    return this.assertEnrolledWith(studentId, session);
   }
 
   private async assertEnrolledWith(

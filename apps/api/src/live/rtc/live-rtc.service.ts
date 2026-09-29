@@ -125,6 +125,12 @@ export interface RtcState {
   tracks: { id: string; userId: string; kind: LiveTrackKind; role: Role }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
   notJoined?: { userId: string; name: string; guest: boolean }[];
+  /** Moderators only: students asking for a seat in a full class, and the capacity picture. */
+  admissions?: {
+    requests: { id: string; userId: string; name: string; status: 'PENDING' | 'APPROVED'; requestedAt: string }[];
+    capacity: number | null;
+    exceptions: number;
+  };
 }
 
 /**
@@ -840,6 +846,7 @@ export class LiveRtcService {
       visible.some((t) => t.userId === uid && kinds.includes(t.kind));
     const notJoined = g.moderator ? await this.notJoined(sessionId, new Set(roleOf.keys())) : undefined;
     const bonus = await bonusTotals(this.prisma, sessionId);
+    const admissions = g.moderator ? await this.admissionsView(sessionId) : undefined;
     const guests = g.moderator
       ? new Set(
           (
@@ -889,6 +896,35 @@ export class LiveRtcService {
         role: t.connection.role === 'STUDENT' ? 'STUDENT' : 'TEACHER',
       })),
       ...(notJoined ? { notJoined } : {}),
+      ...(admissions ? { admissions } : {}),
+    };
+  }
+
+  private async admissionsView(sessionId: string) {
+    const [rows, s, exceptions] = await Promise.all([
+      this.prisma.liveAdmissionRequest.findMany({
+        where: { sessionId, status: { in: ['PENDING', 'APPROVED'] } },
+        orderBy: { requestedAt: 'asc' },
+        select: { id: true, userId: true, status: true, requestedAt: true },
+      }),
+      this.prisma.liveSession.findUniqueOrThrow({ where: { id: sessionId }, select: { capacity: true } }),
+      this.prisma.liveAdmissionRequest.count({ where: { sessionId, status: 'USED' } }),
+    ]);
+    const names = new Map(
+      (await this.prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true, fullName: true } })).map(
+        (u) => [u.id, u.fullName],
+      ),
+    );
+    return {
+      requests: rows.map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        name: names.get(r.userId) ?? '',
+        status: r.status as 'PENDING' | 'APPROVED',
+        requestedAt: r.requestedAt.toISOString(),
+      })),
+      capacity: s.capacity,
+      exceptions,
     };
   }
 

@@ -3194,7 +3194,13 @@
     "eBonusClassCap": "This class has reached its bonus limit.",
     "eBonusInvalid": "That number of points isn't allowed.",
     "eBonusDisabled": "Bonuses are switched off right now.",
-    "eClassroomUnsupported": "Only the Darsly classroom has this."
+    "eClassroomUnsupported": "Only the Darsly classroom has this.",
+    "eNotFull": "There is a seat — book it directly.",
+    "eAlreadyBooked": "You already have a seat in this class.",
+    "eAlreadyHolding": "You already have a booking awaiting payment for this class.",
+    "eAdmissionCooldown": "Wait a moment before asking again.",
+    "eAdmissionLimit": "You've reached the most requests for this class.",
+    "eAdmissionNotEligible": "Only signed-in students can ask to join."
   },
   "myStudio": {
     "title": "My Studio",
@@ -5161,5 +5167,26 @@
     "guestNoPoints": "Guests have no points balance",
     "totalHint": "Bonus points this class",
     "received": "+{{points}} points"
+  },
+  "admission": {
+    "ask": "Ask to join",
+    "hint": "Ask the teacher for an extra seat in this class.",
+    "pending": "Your request reached the teacher",
+    "pendingHint": "We'll tell you as soon as they answer.",
+    "withdraw": "Withdraw request",
+    "approvedPaid": "The teacher approved your request",
+    "approvedPaidHint": "Complete the booking and payment as usual to confirm your seat.",
+    "completeBooking": "Complete booking",
+    "rejected": "The teacher didn't approve your last request.",
+    "expired": "The class has ended.",
+    "panelTitle_zero": "No requests to join",
+    "panelTitle_one": "1 request to join",
+    "panelTitle_other": "{{count}} requests to join",
+    "wantsToJoin": "Wants to join — the class is full",
+    "admit": "Let in",
+    "capacityLine": "Base capacity {{capacity}} · exceptions {{exceptions}}",
+    "freeNote": "Approving books them an extra seat in this class only.",
+    "paidNote": "Approving lets them buy despite the full class — the seat is confirmed only after payment.",
+    "approvedWaitingPayment": "Approved — waiting for payment"
   }
 }

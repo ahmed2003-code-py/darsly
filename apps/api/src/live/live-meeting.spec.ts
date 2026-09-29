@@ -85,6 +85,7 @@ function build(world: {
       // Who gets told the class has started.
       findMany: jest.fn(async () => (world.booked ? [{ student: { userId: 'su_1' } }] : [])),
     },
+    liveAdmissionRequest: { updateMany: jest.fn(async () => ({ count: 0 })) },
     liveAttendance: {
       findUnique: jest.fn(async () => world.attendance ?? null),
       upsert: jest.fn(async (args: any) => {

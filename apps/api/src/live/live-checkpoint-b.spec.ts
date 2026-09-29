@@ -68,6 +68,7 @@ function world(
         return { ...session };
       }),
     },
+    liveAdmissionRequest: { updateMany: jest.fn(async () => ({ count: 0 })) },
     liveAttendance: { updateMany: jest.fn(async () => ({ count: 1 })) },
   };
   const prisma: any = {
@@ -96,6 +97,7 @@ function world(
     studentProfile: {
       findUnique: jest.fn(async () => ({ id: 'st1', user: { fullName: 'طالب' } })),
     },
+    liveAdmissionRequest: { updateMany: jest.fn(async () => ({ count: 0 })) },
     liveAttendance: { upsert: jest.fn(async () => ({})) },
     gamificationEvent: { findUnique: jest.fn(async () => null) },
     auditLog: { create: jest.fn(async () => ({})) },

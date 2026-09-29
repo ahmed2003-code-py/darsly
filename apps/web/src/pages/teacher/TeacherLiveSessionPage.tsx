@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getSocket } from '../../lib/socket';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -159,6 +160,9 @@ export default function TeacherLiveSessionPage() {
         <ErrorNote error={start.error} />
       </div>
 
+      {/* Students asking for a seat in a full class (before or during it). */}
+      {!ended && seats.capacity != null && <AdmissionRequestsCard sessionId={id} />}
+
       {/* A finished class: this page is its record. */}
       {ended && (
         <div id="archive" className="mt-4 scroll-mt-4">
@@ -218,6 +222,12 @@ export default function TeacherLiveSessionPage() {
               guests: seats.guestSeats,
             })}
           </p>
+          {seats.capacity != null && seats.exceptions > 0 && (
+            // The base capacity never changes; approved requests are exceptions to it.
+            <p className="mt-1 text-xs font-semibold text-on-surface-variant">
+              {t('admission.capacityLine', { capacity: seats.capacity, exceptions: seats.exceptions })}
+            </p>
+          )}
           <button
             className="mt-3 text-sm font-bold text-primary hover:underline"
             onClick={() => setPeople(true)}
@@ -314,6 +324,86 @@ export default function TeacherLiveSessionPage() {
         )}
       </Modal>
 
+    </div>
+  );
+}
+
+/**
+ * Requests to join a full class: approve (a one-person exception to the
+ * capacity — a paid class is still bought and paid for) or reject. Updated
+ * live when a student asks.
+ */
+function AdmissionRequestsCard({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const key = ['live-admissions', sessionId];
+  const list = useQuery({
+    queryKey: key,
+    queryFn: async () =>
+      (await api.get(`/teacher/live/${sessionId}/admissions`)).data as {
+        capacity: number | null;
+        exceptions: number;
+        accessMode: 'FREE' | 'PAID';
+        requests: { id: string; name: string; status: 'PENDING' | 'APPROVED'; requestedAt: string }[];
+      },
+  });
+  const decide = useMutation({
+    mutationFn: async (v: { id: string; decision: 'APPROVE' | 'REJECT' }) =>
+      (await api.post(`/teacher/live/${sessionId}/admissions/${v.id}`, { decision: v.decision })).data,
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: key });
+      void qc.invalidateQueries({ queryKey: ['teacher-live-detail', sessionId] });
+    },
+  });
+  useEffect(() => {
+    const sock = getSocket();
+    if (!sock) return;
+    const on = (p: { sessionId: string }) => p?.sessionId === sessionId && void qc.invalidateQueries({ queryKey: key });
+    sock.on('live:admissions', on);
+    return () => {
+      sock.off('live:admissions', on);
+    };
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = list.data?.requests ?? [];
+  if (!rows.length) return null;
+  return (
+    <div className="card mt-4" role="region" aria-label={t('admission.panelTitle', { count: rows.length })}>
+      <p className="font-heading font-bold">{t('admission.panelTitle', { count: rows.length })}</p>
+      <p className="mt-1 text-xs text-on-surface-variant">
+        {list.data?.accessMode === 'PAID' ? t('admission.paidNote') : t('admission.freeNote')}
+      </p>
+      <ul className="mt-2 divide-y divide-outline-variant/40">
+        {rows.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold" dir="auto">
+              {r.name}
+            </span>
+            {r.status === 'APPROVED' ? (
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{t('admission.approvedWaitingPayment')}</span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn-primary !py-1.5 text-sm"
+                  disabled={decide.isPending}
+                  onClick={() => decide.mutate({ id: r.id, decision: 'APPROVE' })}
+                >
+                  {t('admission.admit')}
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost !py-1.5 text-sm"
+                  disabled={decide.isPending}
+                  onClick={() => decide.mutate({ id: r.id, decision: 'REJECT' })}
+                >
+                  {t('meeting.reject')}
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <ErrorNote error={decide.error} />
     </div>
   );
 }

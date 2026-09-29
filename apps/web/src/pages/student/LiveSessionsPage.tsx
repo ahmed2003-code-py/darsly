@@ -16,6 +16,7 @@ import { confirmDelete } from '../../lib/confirm';
 import { egp } from '../../lib/format';
 import { LIVE_REFUND_WINDOW_HOURS, type LiveRefundPolicy } from '@darsly/shared-types';
 import LiveCheckoutModal from '../../components/live/LiveCheckoutModal';
+import AdmissionRequest from '../../components/live/AdmissionRequest';
 
 /** Whether a student's own cancellation now would still be refunded (the server decides; this words it). */
 function refundableNow(policy: LiveRefundPolicy, startsAt: string) {
@@ -261,6 +262,17 @@ export default function LiveSessionsPage() {
                         </button>
                       )}
                     </>
+                  ) : full && pStatus !== 'HELD' && pStatus !== 'PAYMENT_PENDING' ? (
+                    // Full: ask the teacher for a seat (a paid class is still
+                    // bought through the ordinary checkout once approved).
+                    <div className="flex-1">
+                      <AdmissionRequest
+                        sessionId={s.id}
+                        paid={paid}
+                        onProceed={() => setBuying({ id: s.id, title: s.title })}
+                        onSeated={() => qc.invalidateQueries({ queryKey: ['live-upcoming'] })}
+                      />
+                    </div>
                   ) : paid ? (
                     <button
                       className="btn-primary flex-1 py-2.5 text-sm"

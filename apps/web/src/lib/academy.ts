@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Role } from '@darsly/shared-types';
 import { useEffect } from 'react';
 import { useAuthStore } from '../stores/auth';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
@@ -102,11 +103,14 @@ export function useAcademyCourses(slug?: string) {
 export function useMyAcademies() {
   // Gated on the token: the theme provider mounts above the router, so without
   // this the login screen would fire a request that can only ever be a 401.
+  // A guardian belongs to no academy (they reach it through a child's link),
+  // and the API refuses them this route — asking would only ever be a 403.
   const token = useAuthStore((s) => s.accessToken);
+  const role = useAuthStore((s) => s.user?.role);
   return useQuery<MyAcademy[]>({
     queryKey: ['my-academies'],
     queryFn: async () => (await api.get('/me/academies')).data,
-    enabled: !!token,
+    enabled: !!token && role !== Role.GUARDIAN,
   });
 }
 

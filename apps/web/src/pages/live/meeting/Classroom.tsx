@@ -7,6 +7,7 @@ import type { LiveMeeting } from '../../../lib/useLiveMeeting';
 import { useLiveChat } from '../../../lib/useLiveChat';
 import { formatClock, useClockTick, type ClockAnchor } from '../../../lib/useSessionClock';
 import { NameTag, Tile, Video, Initial } from './media';
+import People from './People';
 import { getSocket } from '../../../lib/socket';
 import { playLiveSound, setSoundsMuted, soundsMuted } from '../../../lib/liveSounds';
 
@@ -221,6 +222,8 @@ export default function Classroom(props: ClassroomProps) {
   // Sounds: someone arrived or left, a hand went up (the teacher), a message
   // from someone else. Compared with the previous render, never on the first.
   const prev = useRef<{ people: number; hands: number; msgs: number } | null>(null);
+  const moderatorRef = useRef(false);
+  moderatorRef.current = cf ? !!cf.rtc?.me.moderator : amOwner;
   const peopleNow = meeting.participants.length;
   const handsNow = (meeting.provider === 'cloudflare' ? (meeting as Cf).hands : []).filter(
     (h) => h.hand === 'HAND_RAISED',
@@ -230,7 +233,7 @@ export default function Classroom(props: ClassroomProps) {
     const was = prev.current;
     prev.current = { people: peopleNow, hands: handsNow, msgs: msgsNow };
     if (!was) return;
-    if (amOwner && handsNow > was.hands) playLiveSound('hand');
+    if (moderatorRef.current && handsNow > was.hands) playLiveSound('hand');
     else if (peopleNow > was.people) playLiveSound('join');
     else if (peopleNow < was.people) playLiveSound('leave');
     if (msgsNow > was.msgs) {
@@ -248,11 +251,11 @@ export default function Classroom(props: ClassroomProps) {
   const students = participants.filter((p) => !p.owner);
   const hands = cf?.hands ?? [];
   const raised = hands.filter((h) => h.hand === 'HAND_RAISED');
-  const speaking = hands.filter(
-    (h) => h.hand === 'APPROVED_TO_SPEAK' || h.hand === 'ACTIVE_SPEAKER',
-  );
   const myHand = cf?.rtc?.me.hand ?? 'IDLE';
   const canSend = !cf || amOwner || !!cf.rtc?.me.canPublish;
+  // Running the class (hands, removals, the panel's controls) is the server's
+  // answer for Darsly's classroom, not "I am on the teacher side".
+  const moderator = cf ? !!cf.rtc?.me.moderator : amOwner;
   const isTeacherP = useCallback((p: Participant) => p.owner, []);
 
   // Pinning is local and forgiving: pinning someone who left just unpins.
@@ -537,7 +540,7 @@ export default function Classroom(props: ClassroomProps) {
             )}
 
             {/* A raised hand reaches the teacher without opening anything. */}
-            {amOwner && raised.length > 0 && panel !== 'people' && (
+            {moderator && raised.length > 0 && panel !== 'people' && (
               <m.div
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -639,11 +642,10 @@ export default function Classroom(props: ClassroomProps) {
           <SidePanel
             panel={panel}
             setPanel={setPanel}
-            amOwner={amOwner}
+            moderator={moderator}
             meeting={meeting}
             cf={cf}
             raised={raised}
-            speaking={speaking}
             chat={chat}
             userId={props.userId}
           />
@@ -749,7 +751,7 @@ export default function Classroom(props: ClassroomProps) {
               <Ctl
                 icon="group"
                 active={panel === 'people'}
-                badge={amOwner ? raised.length : undefined}
+                badge={moderator ? raised.length : undefined}
                 label={t('meeting.people')}
                 labelLg
                 onClick={() => toggle('people')}
@@ -969,21 +971,19 @@ function LayoutMenu({
 function SidePanel({
   panel,
   setPanel,
-  amOwner,
+  moderator,
   meeting,
   cf,
   raised,
-  speaking,
   chat,
   userId,
 }: {
   panel: Panel;
   setPanel: (p: Panel) => void;
-  amOwner: boolean;
+  moderator: boolean;
   meeting: LiveMeeting;
   cf: Cf | null;
   raised: Cf['hands'];
-  speaking: Cf['hands'];
   chat: ReturnType<typeof useLiveChat>;
   userId: string | null;
 }) {
@@ -1010,7 +1010,7 @@ function SidePanel({
       <aside
         aria-label={panel === 'chat' ? t('meeting.chat') : t('meeting.people')}
         onKeyDown={(e) => e.key === 'Escape' && setPanel(null)}
-        className="fixed inset-y-0 end-0 z-40 flex w-full flex-col bg-surface-container-low sm:w-[380px] xl:static xl:z-auto xl:me-3 xl:mb-2 xl:w-[340px] xl:rounded-xl"
+        className="fixed inset-x-0 bottom-0 z-40 flex h-[68vh] w-full flex-col rounded-t-3xl bg-surface-container-low shadow-2xl sm:inset-x-auto sm:inset-y-0 sm:end-0 sm:h-auto sm:w-[380px] sm:rounded-none sm:shadow-none xl:static xl:z-auto xl:me-3 xl:mb-2 xl:w-[340px] xl:rounded-xl"
       >
         <div className="flex h-14 shrink-0 items-center gap-1 px-3">
           <div role="tablist" className="flex flex-1 gap-1">
@@ -1028,7 +1028,7 @@ function SidePanel({
                 }`}
               >
                 {tab === 'people' ? t('meeting.people') : t('meeting.chat')}
-                {tab === 'people' && amOwner && raised.length > 0 && (
+                {tab === 'people' && moderator && raised.length > 0 && (
                   <span className="ms-1.5 rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-zinc-950">
                     {raised.length}
                   </span>
@@ -1047,167 +1047,12 @@ function SidePanel({
           </button>
         </div>
         {panel === 'people' ? (
-          <People amOwner={amOwner} meeting={meeting} cf={cf} raised={raised} speaking={speaking} />
+          <People moderator={moderator} meeting={meeting} cf={cf} />
         ) : (
           <Chat chat={chat} userId={userId} />
         )}
       </aside>
     </>
-  );
-}
-
-function Person({ name, sub, children }: { name: string; sub?: ReactNode; children?: ReactNode }) {
-  return (
-    <li className="flex items-center gap-3 py-2">
-      <span
-        aria-hidden
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-container-highest text-sm font-bold"
-      >
-        {name.trim().charAt(0) || '؟'}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold" dir="auto">
-          {name}
-        </span>
-        {sub && <span className="block text-xs text-on-surface-variant">{sub}</span>}
-      </span>
-      {children}
-    </li>
-  );
-}
-
-function GroupTitle({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="mb-1 mt-4 text-xs font-bold text-on-surface-variant first:mt-0">{children}</h3>
-  );
-}
-
-function People({
-  amOwner,
-  meeting,
-  cf,
-  raised,
-  speaking,
-}: {
-  amOwner: boolean;
-  meeting: LiveMeeting;
-  cf: Cf | null;
-  raised: Cf['hands'];
-  speaking: Cf['hands'];
-}) {
-  const { t } = useTranslation();
-  const handIds = new Set([...raised, ...speaking].map((h) => h.userId));
-  const rest = meeting.participants.filter((p) => !p.userId || !handIds.has(p.userId));
-  const remove = async (p: Participant) => {
-    if (
-      await askConfirm(t('meeting.removeConfirm', { name: p.name }), {
-        danger: true,
-        confirmLabel: t('meeting.removeOne'),
-      })
-    )
-      meeting.removeParticipant(p.sessionId);
-  };
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-      {amOwner && cf && raised.length > 0 && (
-        <>
-          <GroupTitle>{t('meeting.requests', { count: raised.length })}</GroupTitle>
-          <ul>
-            {raised.map((h) => (
-              <Person key={h.userId} name={h.name}>
-                <button
-                  type="button"
-                  className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-on-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                  onClick={() => void cf.decideHand(h.userId, 'approve')}
-                >
-                  {t('meeting.approve')}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-on-surface/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  onClick={() => void cf.decideHand(h.userId, 'reject')}
-                >
-                  {t('meeting.reject')}
-                </button>
-              </Person>
-            ))}
-          </ul>
-        </>
-      )}
-      {cf && speaking.length > 0 && (
-        <>
-          <GroupTitle>{t('meeting.speakingNow')}</GroupTitle>
-          <ul>
-            {speaking.map((h) => (
-              <Person
-                key={h.userId}
-                name={h.name}
-                sub={
-                  h.hand === 'ACTIVE_SPEAKER' ? t('meeting.speaking') : t('meeting.allowedToSpeak')
-                }
-              >
-                {amOwner && (
-                  <button
-                    type="button"
-                    className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    onClick={() => void cf.decideHand(h.userId, 'revoke')}
-                  >
-                    {t('meeting.revoke')}
-                  </button>
-                )}
-              </Person>
-            ))}
-          </ul>
-        </>
-      )}
-      <GroupTitle>{t('meeting.inClass', { count: rest.length })}</GroupTitle>
-      {rest.length === 0 ? (
-        <p className="py-3 text-sm text-outline">{t('meeting.noStudentsYet')}</p>
-      ) : (
-        <ul>
-          {rest.map((p) => (
-            <Person
-              key={p.sessionId}
-              name={p.local ? `${p.name || t('meeting.you')} (${t('meeting.you')})` : p.name}
-              sub={p.owner ? t('meeting.teacherBadge') : undefined}
-            >
-              {!p.audio && (
-                <span
-                  aria-label={t('meeting.micOff')}
-                  className="material-symbols-outlined text-[18px] text-outline"
-                >
-                  mic_off
-                </span>
-              )}
-              {amOwner && !p.local && !p.owner && (
-                <>
-                  {!cf && (
-                    <button
-                      type="button"
-                      aria-label={t('meeting.muteOne')}
-                      title={t('meeting.muteOne')}
-                      className="grid h-8 w-8 place-items-center rounded-full text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      onClick={() => meeting.muteParticipant(p.sessionId)}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">mic_off</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    aria-label={t('meeting.removeOne')}
-                    title={t('meeting.removeOne')}
-                    className="grid h-8 w-8 place-items-center rounded-full text-on-surface-variant hover:bg-red-500/15 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    onClick={() => void remove(p)}
-                  >
-                    <span className="material-symbols-outlined text-[18px]">person_remove</span>
-                  </button>
-                </>
-              )}
-            </Person>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 

@@ -2264,6 +2264,41 @@ export class LiveService {
    * (This used to return the FIRST 200 of the class — a long chat's archive
    * silently lost everything after them.)
    */
+  /**
+   * May this person run the class — decide hands, invite speakers, set the
+   * class's policies and a participant's controls, grant bonuses, admit
+   * over capacity, remove someone?
+   *
+   * The session's own teacher always may. Anyone else only with the academy
+   * capability `live.manage`, read through the academy's own resolver
+   * (AcademyService.buildContext: role defaults, an assistant's explicit
+   * grant under its ceiling, a course-scoped assistant losing academy-wide
+   * capabilities, a suspended account or academy granting nothing). An
+   * ASSISTANT is therefore never a moderator by being an assistant.
+   */
+  async canModerate(userId: string, sessionId: string): Promise<boolean> {
+    const s = await this.prisma.liveSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        teacherUserId: true,
+        academyId: true,
+        tenantId: true,
+        deletedAt: true,
+        teacher: { select: { userId: true } },
+      },
+    });
+    if (!s || s.deletedAt) return false;
+    if (s.teacherUserId === userId || s.teacher.userId === userId) return true;
+    const ctx = await this.academy.buildContext(userId, s.academyId ?? s.tenantId);
+    return !!ctx?.can('live.manage');
+  }
+
+  async assertModerator(userId: string, sessionId: string) {
+    if (!(await this.canModerate(userId, sessionId))) {
+      throw new ForbiddenException({ message: 'Only the class’s teacher can do that', code: 'NOT_A_MODERATOR' });
+    }
+  }
+
   async chatHistory(userId: string, sessionId: string, opts: { before?: string; limit?: number } = {}) {
     await this.assertInSession(userId, sessionId);
     const limit = Math.min(Math.max(Math.trunc(opts.limit ?? CHAT_PAGE_DEFAULT), 1), CHAT_PAGE_MAX);

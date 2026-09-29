@@ -3519,7 +3519,14 @@
       "testHint": "You will enter as a listener. If the teacher lets you speak, the devices you pick here are used. The test stays on your device; nobody sees it.",
       "testButton": "Start test",
       "stopTest": "Stop test"
-    }
+    },
+    "actionsFor": "Actions for {{name}}",
+    "camIsOn": "Camera on",
+    "camIsOff": "Camera off",
+    "micIsOn": "Microphone on",
+    "notJoined_zero": "Everyone is here",
+    "notJoined_one": "Not here yet (1)",
+    "notJoined_other": "Not here yet ({{count}})"
   },
   "summary": {
     "title": "AI lesson summary",

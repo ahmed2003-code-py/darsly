@@ -41,7 +41,16 @@ export interface RtcState {
   sessionId: string;
   run: string;
   serverNow: string;
-  me: { userId: string; role: 'TEACHER' | 'STUDENT'; hand: HandState; canPublish: boolean };
+  me: {
+    userId: string;
+    role: 'TEACHER' | 'STUDENT';
+    hand: HandState;
+    canPublish: boolean;
+    /** May run the class (the server's answer; it checks again on every action). */
+    moderator?: boolean;
+    /** What I may send and am asked to do (classroom-policy.ts on the server). */
+    policy?: ClassroomPolicy;
+  };
   maxSpeakers: number;
   recording?: boolean;
   /** The lesson's words are being captured right now (OFF / MANUAL / AUTO, decided by the server). */
@@ -58,6 +67,20 @@ export interface RtcState {
     screen: boolean;
   }[];
   tracks: { id: string; userId: string; kind: Kind; role: 'TEACHER' | 'STUDENT' }[];
+  /** Moderators only: who holds a seat and is not in the room yet. */
+  notJoined?: { userId: string; name: string; guest: boolean }[];
+}
+
+export interface ClassroomPolicy {
+  publish: Record<Kind, boolean>;
+  mayOpenSend: boolean;
+  mayRaiseHand: boolean;
+  speaker: boolean;
+  cameraExpected: boolean;
+  micBlocked: boolean;
+  cameraBlocked: boolean;
+  cameraExempt: boolean;
+  videoAudience: 'EVERYONE' | 'MODERATORS';
 }
 
 export interface CloudflareAccess {

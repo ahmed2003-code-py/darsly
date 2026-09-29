@@ -14,6 +14,7 @@ import { LiveService, PRESENCE_GRACE_SEC } from '../live.service';
 import { CloudflareLiveProvider } from '../providers/cloudflare-live.provider';
 import { CfSessionDescription, toHttpError } from '../providers/cloudflare-realtime.client';
 import { canSpeak, HandAction, nextHandState, STUDENT_ACTIONS, TEACHER_ACTIONS } from './live-hand';
+import { effectivePolicy, type EffectivePolicy } from './classroom-policy';
 import { transcriptCaptureState } from '../transcription/capture-state';
 
 /**
@@ -52,6 +53,8 @@ interface Gate {
     teacherUserId: string | null;
   };
   role: Role;
+  /** May run the class (see LiveService.canModerate). Always false for a student. */
+  moderator: boolean;
 }
 
 export interface RtcState {
@@ -59,7 +62,16 @@ export interface RtcState {
   /** This run of the class; a different value means "the class was reopened — reconnect". */
   run: string;
   serverNow: string;
-  me: { userId: string; role: Role; hand: LiveHandState; canPublish: boolean };
+  me: {
+    userId: string;
+    role: Role;
+    hand: LiveHandState;
+    canPublish: boolean;
+    /** May run the class: the controls are drawn only for them (the server checks again). */
+    moderator: boolean;
+    /** What this person may send and is asked to do, from the one policy function. */
+    policy: EffectivePolicy;
+  };
   maxSpeakers: number;
   /** A recording of this run is being made (the REC badge). */
   recording: boolean;
@@ -77,6 +89,8 @@ export interface RtcState {
     screen: boolean;
   }[];
   tracks: { id: string; userId: string; kind: LiveTrackKind; role: Role }[];
+  /** Moderators only: who holds a seat and is not in the room yet. */
+  notJoined?: { userId: string; name: string; guest: boolean }[];
 }
 
 /**
@@ -123,6 +137,8 @@ export class LiveRtcService {
    */
   async gate(userId: string, sessionId: string): Promise<Gate> {
     const { role } = await this.live.assertInSession(userId, sessionId);
+    // Being on the teacher side of the room is not the same as running it.
+    const moderator = role === 'TEACHER' && (await this.live.canModerate(userId, sessionId));
     const s = await this.prisma.liveSession.findUnique({
       where: { id: sessionId },
       select: {
@@ -159,7 +175,22 @@ export class LiveRtcService {
         teacherUserId: s.teacherUserId,
       },
       role,
+      moderator,
     };
+  }
+
+  /** This person's effective policy in this run (the one function; see classroom-policy.ts). */
+  private async policyOf(g: Gate, userId: string): Promise<EffectivePolicy> {
+    const hand = g.role === 'STUDENT' ? await this.handOf(g.s.id, userId, g.s.roomName) : 'IDLE';
+    return effectivePolicy({ side: g.role, moderator: g.moderator, hand });
+  }
+
+  private refuseSend(g: Gate): never {
+    throw new ForbiddenException(
+      g.role === 'STUDENT'
+        ? { message: 'The teacher has not asked you to speak', code: 'NOT_ALLOWED_TO_SPEAK' }
+        : { message: 'Only the class’s teacher can do that', code: 'NOT_A_MODERATOR' },
+    );
   }
 
   /** The caller's own open connection in this run — or "reconnect". */
@@ -217,14 +248,7 @@ export class LiveRtcService {
    */
   async openConnection(userId: string, sessionId: string, purpose: LiveRtcPurpose) {
     const g = await this.gate(userId, sessionId);
-    if (purpose === 'SEND' && g.role === 'STUDENT') {
-      if (!canSpeak(await this.handOf(sessionId, userId, g.s.roomName))) {
-        throw new ForbiddenException({
-          message: 'The teacher has not asked you to speak',
-          code: 'NOT_ALLOWED_TO_SPEAK',
-        });
-      }
-    }
+    if (purpose === 'SEND' && !(await this.policyOf(g, userId)).mayOpenSend) this.refuseSend(g);
     const older = await this.prisma.liveRtcConnection.findMany({
       where: { sessionId, userId, purpose, closedAt: null, closeReason: null },
       select: { id: true },
@@ -311,12 +335,8 @@ export class LiveRtcService {
         code: 'RTC_TRACK_DENIED',
       });
     }
-    if (g.role === 'STUDENT' && !canSpeak(await this.handOf(sessionId, userId, g.s.roomName))) {
-      throw new ForbiddenException({
-        message: 'The teacher has not asked you to speak',
-        code: 'NOT_ALLOWED_TO_SPEAK',
-      });
-    }
+    const policy = await this.policyOf(g, userId);
+    if (kinds.some((k) => !policy.publish[k])) this.refuseSend(g);
     const named = input.tracks.map((t) => ({
       ...t,
       trackName: `${t.kind.toLowerCase()}-${randomBytes(6).toString('hex')}`,
@@ -617,6 +637,8 @@ export class LiveRtcService {
     const myHand = handOf.get(userId) ?? 'IDLE';
     const has = (uid: string, kinds: LiveTrackKind[]) =>
       tracks.some((t) => t.userId === uid && kinds.includes(t.kind));
+    const myPolicy = effectivePolicy({ side: g.role, moderator: g.moderator, hand: myHand });
+    const notJoined = g.moderator ? await this.notJoined(sessionId, new Set(roleOf.keys())) : undefined;
     return {
       sessionId,
       run,
@@ -625,7 +647,9 @@ export class LiveRtcService {
         userId,
         role: g.role,
         hand: myHand,
-        canPublish: g.role === 'TEACHER' || canSpeak(myHand),
+        canPublish: myPolicy.mayOpenSend,
+        moderator: g.moderator,
+        policy: myPolicy,
       },
       maxSpeakers: maxSpeakers(),
       recording: recording > 0,
@@ -646,8 +670,29 @@ export class LiveRtcService {
         userId: t.userId,
         kind: t.kind,
         role: t.connection.role === 'STUDENT' ? 'STUDENT' : 'TEACHER',
-      })),
+      })),      ...(notJoined ? { notJoined } : {}),
     };
+  }
+
+  /** Who holds a seat (a booking, or a guest's confirmed seat) and is not in the room. */
+  private async notJoined(sessionId: string, present: Set<string>) {
+    const [bookings, guests] = await Promise.all([
+      this.prisma.liveBooking.findMany({
+        where: { sessionId },
+        select: { student: { select: { userId: true, user: { select: { fullName: true } } } } },
+      }),
+      this.prisma.livePurchase.findMany({
+        where: { sessionId, guestBuyerId: { not: null }, status: 'CONFIRMED' },
+        select: { guestBuyer: { select: { userId: true, displayName: true } } },
+      }),
+    ]);
+    const out: { userId: string; name: string; guest: boolean }[] = [];
+    for (const b of bookings)
+      if (!present.has(b.student.userId)) out.push({ userId: b.student.userId, name: b.student.user.fullName, guest: false });
+    for (const g of guests)
+      if (g.guestBuyer && !present.has(g.guestBuyer.userId))
+        out.push({ userId: g.guestBuyer.userId, name: g.guestBuyer.displayName, guest: true });
+    return out;
   }
 
   // ── Raise hand ─────────────────────────────────────────────────────────────
@@ -674,6 +719,8 @@ export class LiveRtcService {
       if (g.role !== 'TEACHER' || !targetUserId) {
         throw new ForbiddenException({ message: 'Only the teacher decides', code: 'HAND_DENIED' });
       }
+      // On the teacher side is not enough: deciding who speaks is moderating.
+      if (!g.moderator) this.refuseSend(g);
       const t = await this.live.assertInSession(targetUserId, sessionId).catch(() => null);
       if (!t || t.role !== 'STUDENT') throw new NotFoundException('Student not in this class');
       target = targetUserId;
@@ -762,6 +809,11 @@ export class LiveRtcService {
     const g = await this.gate(actorId, sessionId);
     if (g.role !== 'TEACHER' || targetUserId === actorId) {
       throw new ForbiddenException({ message: 'Only the teacher decides', code: 'HAND_DENIED' });
+    }
+    if (!g.moderator) this.refuseSend(g);
+    // The session's own teacher is never removed by staff.
+    if (!(await this.live.assertInSession(targetUserId, sessionId).then((t) => t.role === 'STUDENT').catch(() => false))) {
+      throw new ForbiddenException({ message: 'Only a student can be removed', code: 'NOT_A_STUDENT' });
     }
     const open = await this.prisma.liveRtcConnection.findMany({
       where: { sessionId, userId: targetUserId, closedAt: null },

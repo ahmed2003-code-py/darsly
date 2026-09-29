@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { AcademyService } from '../../academy/academy.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LiveScope, LiveService } from '../live.service';
 import { CloudflareLiveProvider } from '../providers/cloudflare-live.provider';
@@ -97,7 +98,7 @@ export function classroom(
     providers,
     realtime as never,
     {} as never,
-    { assertAssignableTeacher: () => undefined } as never,
+    new AcademyService(prisma),
     undefined,
     undefined,
     opts.commerce as never,
@@ -152,11 +153,13 @@ export async function classroomWorld(prisma: PrismaService, session: Record<stri
   const assistant = await prisma.user.create({
     data: { role: 'TEACHER', fullName: `Asst ${k}`, email: `cra-${k}@it.test` },
   });
-  await prisma.academyMembership.create({
+  // A real assistant: an approved teacher identity, an ASSISTANT membership, no grants.
+  await prisma.teacherProfile.create({ data: { userId: assistant.id, slug: `crasst-${k}`, status: 'APPROVED' } });
+  const assistantMembership = await prisma.academyMembership.create({
     data: { userId: assistant.id, academyId: tp.id, role: 'ASSISTANT', status: 'ACTIVE', joinedAt: new Date() },
   });
   const scope: LiveScope = { academyId: tp.id, userId: teacher.id, manageAll: true, role: 'OWNER' };
-  return { k, teacher, tp, ls, s: students.slice(0, 3), sp: profiles.slice(0, 3), outsider: students[3], assistant, scope };
+  return { k, teacher, tp, ls, s: students.slice(0, 3), sp: profiles.slice(0, 3), outsider: students[3], assistant, assistantMembership, scope };
 }
 
 /**

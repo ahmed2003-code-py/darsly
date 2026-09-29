@@ -24,6 +24,8 @@ export interface TranscriptMeta {
   reason: 'NO_SPEECH' | 'ALL_FAILED' | 'PROVIDER_UNAVAILABLE' | null;
   /** Pieces that failed because the provider refused the account (audio kept: a retry can recover them). */
   providerUnavailable: number;
+  /** Distinct microphones with words (per-speaker capture); 0 for a mixed transcript. */
+  speakers: number;
   audioSeconds: number;
   model: string;
   estUsd: number;
@@ -105,6 +107,9 @@ export async function finalizeTranscript(
           ? 'ALL_FAILED'
           : 'NO_SPEECH',
     providerUnavailable,
+    speakers: new Set(
+      rows.filter((r) => r.speakerKind && r.speakerKind !== 'UNKNOWN' && r.text?.trim()).map((r) => r.speakerUserId),
+    ).size,
     audioSeconds: Math.round(rows.reduce((n, r) => n + estimateMs(r), 0) / 1000),
     model: opts.model,
     estUsd: Number(((sentMs / 60_000) * sttUsdPerMin(opts.model)).toFixed(4)),

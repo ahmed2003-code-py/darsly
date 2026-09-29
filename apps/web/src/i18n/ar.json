@@ -4370,7 +4370,21 @@
       "PARTIAL": "النص غير مكتمل",
       "failedHint": "التسجيل نفسه غير متأثر.",
       "retry": "حاول تجهيز الأجزاء الناقصة",
-      "progress": "الأجزاء الجاهزة: {{done}} من {{total}}"
+      "progress": "الأجزاء الجاهزة: {{done}} من {{total}}",
+      "speaker": {
+        "you": "أنت",
+        "student": "طالب {{n}}",
+        "teacher": "المدرس",
+        "guest": "ضيف",
+        "unknown": "متحدث غير معروف",
+        "overlap": "تحدثا في نفس الوقت",
+        "count_zero": "لا يوجد متحدثون",
+        "count_one": "متحدث واحد",
+        "count_two": "متحدثان",
+        "count_few": "{{count}} متحدثين",
+        "count_many": "{{count}} متحدثًا",
+        "count_other": "{{count}} متحدث"
+      }
     },
     "summary": {
       "WAITING_FOR_TRANSCRIPT": "سيتم إنشاء الملخص بعد تجهيز نص الحصة",

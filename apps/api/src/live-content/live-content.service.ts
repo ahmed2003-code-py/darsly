@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import { segmentsFor, type StoredSpeaker } from '../live/transcription/speakers';
 import { Prisma } from '@prisma/client';
 import { CourseScope, CoursesService } from '../courses/courses.service';
 import { LiveScope, LiveService } from '../live/live.service';
@@ -166,7 +167,11 @@ export class LiveContentService {
         includeSummary: !!dto.includeSummary,
         summary: dto.includeSummary ? s.summary : null,
         summaryMeta: dto.includeSummary ? s.summaryMeta : null,
-        transcriptSegments: dto.includeTranscript ? transcript.segments : null,
+        // Course students read it: the teacher's name, classmates as numbers,
+        // never an id (transcription/speakers.ts).
+        transcriptSegments: dto.includeTranscript
+          ? segmentsFor(transcript.segments as { speaker?: StoredSpeaker }[], { teacher: false, userId: null })
+          : null,
         transcriptPartial: dto.includeTranscript ? transcript.partial : false,
         transcriptRevision: s.transcriptRevision,
         snapshotAt: new Date().toISOString(),

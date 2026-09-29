@@ -245,6 +245,8 @@ interface TranscriptView {
   visibility?: Visibility;
   segments?: Segment[];
   segmentCount?: number;
+  /** Distinct voices recorded separately (0 on a mixed or older transcript). */
+  speakerCount?: number;
 }
 
 function SummaryPane({ sessionId, d, teacher }: { sessionId: string; d: any; teacher: boolean }) {
@@ -405,6 +407,14 @@ function TranscriptPane({
     return (
       <div className="space-y-3">
         {partial && <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />}
+        {!!transcript.speakerCount && (
+          <p className="flex items-center gap-1.5 text-xs text-outline">
+            <span aria-hidden className="material-symbols-outlined text-[16px]">
+              record_voice_over
+            </span>
+            {t('record.transcript.speaker.count', { count: transcript.speakerCount })}
+          </p>
+        )}
         <p dir="auto" className="line-clamp-5 whitespace-pre-wrap text-sm leading-7 text-on-surface-variant">
           {transcript.segments.map((x) => x.text).join(' ')}
         </p>

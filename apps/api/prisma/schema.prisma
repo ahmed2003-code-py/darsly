@@ -2999,6 +2999,15 @@ model LiveAudioSegment {
   skipReason     String?
   /// Set when this piece's audio was deleted after its words were saved.
   audioDeletedAt DateTime?
+  /// Whose microphone this piece is (per-speaker capture), verified on the
+  /// server against the class's own track records — never taken on trust.
+  /// All null: a mixed piece (no attribution). speakerKind UNKNOWN: the
+  /// capture named someone the server could not confirm.
+  speakerUserId  String?
+  /// TEACHER / STAFF / STUDENT / GUEST / UNKNOWN.
+  speakerKind    String?
+  /// The name as it was in the class (a later rename does not rewrite it).
+  speakerName    String?
   createdAt      DateTime    @default(now())
 
   @@unique([sessionId, roomName, seq])

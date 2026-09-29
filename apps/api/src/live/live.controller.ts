@@ -109,6 +109,8 @@ class VisibilityDto {
 class AudioPieceDto {
   /** The piece's length as the page measured it (for cost), in ms. */
   @IsOptional() @IsString() @MaxLength(12) durationMs?: string;
+  /** Whose microphone this piece is, as the page says — verified by the server, never trusted. */
+  @IsOptional() @IsString() @MaxLength(LIMITS.ID) speakerUserId?: string;
 }
 
 class RecordingStartedDto {
@@ -433,12 +435,16 @@ export class LiveController {
   )
   audioPiece(
     @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
     @Param('seq') seq: string,
     @Body() dto: AudioPieceDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.live.storeAudioPiece(scopeOf(ctx), id, Number(seq), file, Number(dto?.durationMs));
+    return this.live.storeAudioPiece(scopeOf(ctx), id, Number(seq), file, Number(dto?.durationMs), {
+      uploaderUserId: u.sub,
+      speakerUserId: dto?.speakerUserId,
+    });
   }
 
   @Patch('teacher/live/:id/transcription')

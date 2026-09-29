@@ -1,5 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  groupBySpeaker,
+  hasSpeakers,
+  speakerLabel,
+  type ShownSpeaker,
+} from '../../lib/transcriptSpeakers';
 
 /**
  * A class's written record, as students and teachers read it: the grounded
@@ -37,7 +43,15 @@ export type Summary = LegacySummary | StudyNotes;
 
 export const isStudyNotes = (x: Summary): x is StudyNotes => (x as StudyNotes).schemaVersion === 2;
 
-export type Segment = { startSec: number | null; durationSec: number | null; text: string };
+export type Segment = {
+  startSec: number | null;
+  durationSec: number | null;
+  text: string;
+  /** Whose microphone (per-speaker capture only; never on older transcripts). */
+  speaker?: ShownSpeaker;
+  /** Said while another microphone was speaking too. */
+  overlap?: boolean;
+};
 
 /** One state line: an icon, what is happening, and optionally why. */
 export function Status({
@@ -276,6 +290,55 @@ export function StudyNotesView({ n }: { n: StudyNotes }) {
 }
 
 /** The transcript, readable: by time, searchable, copyable. No speaker names — none are known. */
+/** A transcript with speakers: each microphone's consecutive words as one turn. */
+function SpeakerTurns({ segments, query }: { segments: Segment[]; query: string }) {
+  const { t } = useTranslation();
+  const groups = groupBySpeaker(segments);
+  return (
+    <ol className="space-y-4">
+      {groups.map((g, i) => {
+        const teacherSide = g.speaker?.kind === 'TEACHER' || g.speaker?.kind === 'STAFF';
+        const unknown = !g.speaker || g.speaker.kind === 'UNKNOWN';
+        return (
+          <li key={i} className="flex gap-3">
+            {g.startSec != null && (
+              <span dir="ltr" className="mt-0.5 w-12 shrink-0 text-xs tabular-nums text-outline">
+                {clock(g.startSec)}
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                <span
+                  className={
+                    unknown
+                      ? 'text-outline'
+                      : teacherSide
+                        ? 'text-primary-text'
+                        : 'text-on-surface-variant'
+                  }
+                >
+                  {speakerLabel(t, g.speaker)}
+                </span>
+                {g.overlap && (
+                  <span className="rounded-full bg-surface-container-high px-2 py-0.5 font-normal text-outline">
+                    {t('record.transcript.speaker.overlap')}
+                  </span>
+                )}
+              </p>
+              <p
+                dir="auto"
+                className="whitespace-pre-wrap text-[15px] leading-8 text-on-surface"
+              >
+                <Highlight text={g.segments.map((s) => s.text).join(' ')} q={query} />
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export function TranscriptViewer({
   segments,
   partial,
@@ -340,6 +403,9 @@ export function TranscriptViewer({
           {t('record.transcript.matches', { count: shown.length })}
         </p>
       )}
+      {hasSpeakers(segments) ? (
+        <SpeakerTurns segments={visible} query={query} />
+      ) : (
       <ol className="space-y-3">
         {visible.map((s, i) => (
           <li key={i} className="flex gap-3">
@@ -357,6 +423,7 @@ export function TranscriptViewer({
           </li>
         ))}
       </ol>
+      )}
       {!query && !expanded && shown.length > 3 && (
         <button
           type="button"

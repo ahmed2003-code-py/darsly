@@ -1,5 +1,6 @@
 import type { LiveTranscriptionMode } from '@prisma/client';
 import { AiJobError } from '../../academy-site/ai/ai-job.error';
+import type { StoredSpeaker } from './speakers';
 
 /**
  * Transcribing a Darsly-hosted lesson.
@@ -55,8 +56,12 @@ export function captureActive(x: {
 export const AUDIO_SEGMENT_MAX_BYTES = 8 * 1024 * 1024;
 /** A piece shorter than this carries no header worth trusting. */
 export const AUDIO_SEGMENT_MIN_BYTES = 200;
-/** More pieces than this in a minute from one class is not a classroom. */
-export const AUDIO_PIECES_PER_MINUTE = 8;
+/**
+ * More pieces than this in a minute from one class is not a classroom. With
+ * one piece per microphone turn (per-speaker capture), a lively minute is a
+ * handful of turns; a refused piece is retried after a pause, not lost.
+ */
+export const AUDIO_PIECES_PER_MINUTE = 20;
 /**
  * A piece is numbered by the second it started (Unix seconds): unique across a
  * teacher reloading the page mid-class (a counter would restart at 0 and
@@ -242,6 +247,10 @@ export interface TranscriptSegment {
   startSec: number;
   durationSec: number | null;
   text: string;
+  /** Whose microphone (per-speaker capture); absent on a mixed piece and on every older transcript. */
+  speaker?: StoredSpeaker;
+  /** Recorded while another microphone's piece was too: said at the same time. */
+  overlap?: boolean;
 }
 
 /**
@@ -253,16 +262,49 @@ export interface TranscriptSegment {
  * pieces that failed simply leave a gap — the timestamps say where.
  */
 export function assembleTranscript(
-  pieces: { seq: number; durationMs: number | null; text: string | null }[],
+  pieces: {
+    seq: number;
+    durationMs: number | null;
+    text: string | null;
+    speakerUserId?: string | null;
+    speakerKind?: string | null;
+    speakerName?: string | null;
+  }[],
   classStartSec: number,
 ): { segments: TranscriptSegment[]; text: string } {
-  const segments = [...pieces]
+  const segments: TranscriptSegment[] = [...pieces]
     .sort((a, b) => a.seq - b.seq)
     .filter((p) => p.text?.trim())
     .map((p) => ({
       startSec: Math.max(0, p.seq - classStartSec),
       durationSec: p.durationMs ? Math.round(p.durationMs / 1000) : null,
       text: p.text!.trim(),
+      ...(p.speakerKind
+        ? {
+            speaker: {
+              kind: p.speakerKind as StoredSpeaker['kind'],
+              userId: p.speakerUserId ?? null,
+              name: p.speakerName ?? null,
+            },
+          }
+        : {}),
     }));
+  // Two microphones recorded at the same time: said so, never re-ordered by
+  // guesswork. Only pieces of different speakers can overlap (one microphone
+  // records one piece at a time); order stays by start.
+  for (let i = 0; i < segments.length; i++) {
+    const a = segments[i];
+    if (!a.speaker || a.durationSec == null) continue;
+    for (let j = i + 1; j < segments.length && segments[j].startSec < a.startSec + a.durationSec; j++) {
+      const b = segments[j];
+      if (!b.speaker || speakerKey(b.speaker) === speakerKey(a.speaker)) continue;
+      a.overlap = true;
+      b.overlap = true;
+    }
+  }
+  // The words alone, as before: the summary, Exam Studio and Live → Content
+  // read this text, and it carries no speaker labels.
   return { segments, text: segments.map((s) => s.text).join('\n\n') };
 }
+
+const speakerKey = (s: StoredSpeaker) => s.userId ?? `${s.kind}:${s.name ?? ''}`;

@@ -22,6 +22,8 @@ export interface PieceMeta {
   startedAt: number;
   lastAt: number;
   voiced: boolean;
+  /** Whose microphone (per-speaker capture); absent on a mixed piece. */
+  speaker?: string;
 }
 
 export interface PieceStore {

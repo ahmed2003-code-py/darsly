@@ -5,6 +5,7 @@ import type { Participant } from './useDailyMeeting';
 import { initialLayer, nextLayer, type LayerState } from './simulcast';
 import { audioConstraint, videoConstraint } from './liveDevices';
 import { LessonAudio } from './lessonAudio';
+import { SpeakerCapture } from './speakerCapture';
 import { idbPieceStore } from './lessonAudioStore';
 
 /**
@@ -188,7 +189,7 @@ export function useCloudflareMeeting(
   const [connection, setConnection] = useState<'connected' | 'reconnecting'>('connected');
   /** This page is capturing the lesson's audio for its transcript. */
   const [capturing, setCapturing] = useState(false);
-  const lessonAudio = useRef<LessonAudio | null>(null);
+  const lessonAudio = useRef<LessonAudio | SpeakerCapture | null>(null);
   /** The server allows this page to capture (the teacher, transcription on). */
   const [mayCapture, setMayCapture] = useState(false);
   /** Bumped whenever a remote or local track appears or goes, to re-render tiles. */
@@ -917,22 +918,26 @@ export function useCloudflareMeeting(
   // badge, this page and the upload alike. Stopping flushes the piece being
   // written.
   const shouldCapture = enabled && joined && mayCapture && !ended && !!state?.transcribing;
+  const myUserId = state?.me.userId;
   useEffect(() => {
-    if (shouldCapture && !lessonAudio.current) {
-      const la = new LessonAudio(
-        (seq, blob, durationMs) => {
-          const form = new FormData();
-          form.append('file', blob, blob.type.includes('mp4') ? 'piece.m4a' : 'piece.webm');
-          if (durationMs) form.append('durationMs', String(Math.round(durationMs)));
-          return api
-            .post(`/teacher/live/${liveSessionId}/audio/${seq}`, form)
-            .then(() => undefined);
-        },
-        undefined,
-        idbPieceStore(),
-        liveSessionId,
-      );
-      if (la.start()) {
+    if (shouldCapture && !lessonAudio.current && myUserId) {
+      const upload = (seq: number, blob: Blob, durationMs?: number, speakerUserId?: string) => {
+        const form = new FormData();
+        form.append('file', blob, blob.type.includes('mp4') ? 'piece.m4a' : 'piece.webm');
+        if (durationMs) form.append('durationMs', String(Math.round(durationMs)));
+        // Whose microphone, as this page knows it — the server checks it.
+        if (speakerUserId) form.append('speakerUserId', speakerUserId);
+        return api
+          .post(`/teacher/live/${liveSessionId}/audio/${seq}`, form)
+          .then(() => undefined);
+      };
+      // Each microphone on its own (who said what); the mixed capture when
+      // this browser cannot.
+      const sc = new SpeakerCapture(upload, myUserId, idbPieceStore(), liveSessionId);
+      const la = sc.start()
+        ? sc
+        : new LessonAudio((s, b, ms) => upload(s, b, ms), undefined, idbPieceStore(), liveSessionId);
+      if (la === sc || (la as LessonAudio).start()) {
         lessonAudio.current = la;
         setCapturing(true);
         // A piece interrupted by a reload or a crash of this page: sent now.
@@ -941,7 +946,7 @@ export function useCloudflareMeeting(
     } else if (!shouldCapture && lessonAudio.current) {
       stopCapture();
     }
-  }, [shouldCapture, liveSessionId, stopCapture]);
+  }, [shouldCapture, myUserId, liveSessionId, stopCapture]);
 
   /** MANUAL mode: the teacher switches capture on or off. */
   const setTranscriptCapture = useCallback(
@@ -961,12 +966,15 @@ export function useCloudflareMeeting(
   useEffect(() => {
     if (!capturing) return;
     const sync = () => {
-      const tracks: MediaStreamTrack[] = [];
+      const la = lessonAudio.current;
+      const me = stateRef.current?.me.userId;
+      const mics: { userId: string; track: MediaStreamTrack }[] = [];
       const mic = local.current.get('AUDIO')?.track;
-      if (mic) tracks.push(mic);
+      if (mic && me) mics.push({ userId: me, track: mic });
       for (const p of pulled.current.values())
-        if (p.kind === 'AUDIO' && p.track) tracks.push(p.track);
-      lessonAudio.current?.setTracks(tracks);
+        if (p.kind === 'AUDIO' && p.track) mics.push({ userId: p.userId, track: p.track });
+      if (la instanceof SpeakerCapture) la.setTracks(mics);
+      else la?.setTracks(mics.map((m) => m.track));
     };
     sync();
     const h = setInterval(sync, 1_500);

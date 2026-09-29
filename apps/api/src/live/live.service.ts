@@ -24,6 +24,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { bonusTotals } from './bonus/bonus-totals';
+import {
+  countSpeakers,
+  segmentsFor,
+  verifySpeaker,
+  type StoredSpeaker,
+} from './transcription/speakers';
 import { expireAdmissions } from './admission/admission-expiry';
 import { LIVE_MAX_DURATION_MIN } from './live-timing';
 import {
@@ -1725,6 +1731,8 @@ export class LiveService {
     seq: number,
     file: { buffer: Buffer; size: number; mimetype?: string } | undefined,
     durationMs?: number,
+    /** Who uploads, and whose microphone the page says this piece is (verified here). */
+    who?: { uploaderUserId: string; speakerUserId?: string },
   ) {
     if (!transcriptionConfig().enabled) {
       throw new ConflictException({ message: 'Transcription is off', code: 'TRANSCRIPTION_OFF' });
@@ -1790,9 +1798,20 @@ export class LiveService {
       Number.isFinite(durationMs) && durationMs! > 0 && durationMs! < 30 * 60_000
         ? Math.round(durationMs!)
         : null;
+    // Whose microphone: believed only when the class's own records agree
+    // (transcription/speakers.ts); otherwise UNKNOWN, never a guess.
+    const speaker = await verifySpeaker(this.prisma, {
+      sessionId: id,
+      run: roomName,
+      teacherUserId: session.teacherUserId,
+      uploaderUserId: who?.uploaderUserId ?? '',
+      claimedUserId: who?.speakerUserId,
+      startMs: seq * 1000,
+      durationMs: ms,
+    });
     await this.prisma.liveAudioSegment.upsert({
       where: { sessionId_roomName_seq: { sessionId: id, roomName, seq } },
-      create: { sessionId: id, roomName, seq, key, sizeBytes: file.size, durationMs: ms },
+      create: { sessionId: id, roomName, seq, key, sizeBytes: file.size, durationMs: ms, ...speaker },
       // Only an untranscribed piece is ever replaced (see above) — and a new
       // copy of a piece that failed is a fresh chance for it.
       update: {
@@ -1802,10 +1821,12 @@ export class LiveService {
         error: null,
         attempts: 0,
         skipReason: null,
+        ...speaker,
       },
     });
     this.logger.log(
-      `live.transcript.segment-uploaded liveSession=${id} seq=${seq} bytes=${file.size} kind=${kind}${existing ? ' replaced' : ''}`,
+      `live.transcript.segment-uploaded liveSession=${id} seq=${seq} bytes=${file.size} kind=${kind}` +
+        ` speaker=${speaker.speakerKind ?? 'MIXED'}${existing ? ' replaced' : ''}`,
     );
     // The last flush of an ended class may land after its transcript job has
     // already begun: make sure a job will see it (never silently dropped).
@@ -3053,18 +3074,22 @@ export class LiveService {
               mode: teacher ? s.transcriptionMode : undefined,
               ...(transcriptReady && canSeeTranscript
                 ? (() => {
-                    const all =
-                      (s.transcriptSegments as unknown[] | null) ??
-                      (s.transcriptText
-                        ? [{ startSec: null, durationSec: null, text: s.transcriptText }]
-                        : []);
+                    const all = segmentsFor(
+                      ((s.transcriptSegments as { speaker?: StoredSpeaker }[] | null) ??
+                        (s.transcriptText
+                          ? [{ startSec: null, durationSec: null, text: s.transcriptText }]
+                          : [])) as { speaker?: StoredSpeaker }[],
+                      { teacher, userId },
+                    );
+                    const speakerCount = countSpeakers(all);
                     return opts.transcript === 'preview'
                       ? {
                           segments: all.slice(0, TRANSCRIPT_PREVIEW_SEGMENTS),
                           segmentCount: all.length,
+                          speakerCount,
                           preview: true,
                         }
-                      : { segments: all, segmentCount: all.length };
+                      : { segments: all, segmentCount: all.length, speakerCount };
                   })()
                 : {}),
             }

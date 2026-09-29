@@ -4295,7 +4295,18 @@
       "PARTIAL": "Transcript incomplete",
       "failedHint": "The recording itself is not affected.",
       "retry": "Try the missing parts again",
-      "progress": "Parts ready: {{done}} of {{total}}"
+      "progress": "Parts ready: {{done}} of {{total}}",
+      "speaker": {
+        "you": "You",
+        "student": "Student {{n}}",
+        "teacher": "Teacher",
+        "guest": "Guest",
+        "unknown": "Unknown speaker",
+        "overlap": "Spoke at the same time",
+        "count_zero": "No speakers",
+        "count_one": "1 speaker",
+        "count_other": "{{count}} speakers"
+      }
     },
     "summary": {
       "WAITING_FOR_TRANSCRIPT": "The summary will be written once the transcript is ready",

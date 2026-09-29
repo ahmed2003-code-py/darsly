@@ -2,6 +2,7 @@ import { LiveService } from '../live.service';
 import { dailyProviders } from '../providers/testing';
 import {
   assembleTranscript,
+  AUDIO_PIECES_PER_MINUTE,
   audioKey,
   captureActive,
   classifySttRefusal,
@@ -232,7 +233,7 @@ describe('the lesson-audio upload', () => {
     });
 
     it('refuses a flood of pieces', async () => {
-      const { svc } = setup(live, { recent: 8 });
+      const { svc } = setup(live, { recent: AUDIO_PIECES_PER_MINUTE });
       expect(await code(svc.storeAudioPiece(scope, 's1', T(), file()))).toBe('AUDIO_RATE');
     });
 

@@ -18,12 +18,13 @@ import { IsIn, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { json } from 'express';
 import request from 'supertest';
 import { ApiExceptionFilter } from '../src/common/errors/api-exception.filter';
+import { bodyParserErrors } from '../src/common/errors/body-parser-errors';
 import { VALIDATION_PIPE_OPTIONS } from '../src/common/errors/validation-exception.factory';
 import { requestIdMiddleware } from '../src/common/request-context';
 
 /**
  * The error contract over real HTTP: the request-id middleware, the body
- * parser (whose failures Nest routes to the same filter), the validation pipe,
+ * parser (with its error middleware), the validation pipe,
  * the throttler and the filter wired the way
  * main.ts and app.module.ts wire them. Every response below is what a browser
  * would actually receive.
@@ -96,6 +97,7 @@ describe('error contract (e2e)', () => {
     const nest = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false });
     nest.use(requestIdMiddleware);
     nest.use(json({ limit: '1kb' }));
+    nest.use(bodyParserErrors);
     nest.useGlobalPipes(new ValidationPipe(VALIDATION_PIPE_OPTIONS));
     nest.useLogger(false);
     app = await nest.init();

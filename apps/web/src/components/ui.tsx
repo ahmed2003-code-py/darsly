@@ -319,7 +319,7 @@ export function Field({
           role="alert"
           className="mt-1.5 flex items-start gap-1 text-sm text-error"
         >
-          <span aria-hidden className="material-symbols-outlined mt-px text-[18px]">
+          <span aria-hidden className="material-symbols-outlined mt-px shrink-0 text-[18px]">
             error
           </span>
           <span className="min-w-0">{error}</span>

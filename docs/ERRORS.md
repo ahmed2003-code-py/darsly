@@ -247,8 +247,13 @@ Specificity is good until it discloses something. These stay vague on purpose:
   student outside their courses gets the same `NOT_FOUND` as for an id that
   does not exist (`StaffScopeService.assertStudent`). The filter never turns a
   404 into anything else.
-- **Login** answers `INVALID_CREDENTIALS` for an unknown account and for a
-  wrong password alike, with equal latency.
+- **Login** answers `INVALID_CREDENTIALS` for an unknown account, a wrong
+  password **and a locked account** alike — same status, same body, equal
+  latency (argon2 always runs). A lock is logged (`login refused: account
+  locked user=…`) but never shown: only an existing account can be locked,
+  so a visible lock would reveal which phones and emails are registered.
+  While locked, the password is not evaluated at all, so the lock is not an
+  oracle either. `auth/login-enumeration.spec.ts` pins this down.
 - **`PHONE_IN_USE`** says the number belongs to "another Darsly account", not
   which kind — staff must not be able to probe whether a number is a teacher.
 - **Guardian and invitation links** answer "expired or cancelled" without
@@ -294,4 +299,26 @@ For a new domain error, at least:
   out-of-scope caller cannot tell it apart from a missing resource.
 
 The contract itself is covered by `common/errors/api-exception.filter.spec.ts`
-(unit) and `test/error-contract.e2e-spec.ts` (over real HTTP).
+(unit) and `test/error-contract.e2e-spec.ts` (over real HTTP). The render
+boundaries are covered in a real browser by
+`apps/web/scripts/error-boundary/verify.mjs` (`npm run verify:boundaries` in
+apps/web, after a build; CI runs it): a test-only page makes one route throw
+and the script checks the fallback, the surviving shell, Retry, route reset
+and that a lost chunk reaches the root. Never crash production to test this.
+
+## 11. Refusals that stay generic on purpose
+
+Not every 400/409 deserves its own code. The rule used in the 2026-09-29
+audit, and for new ones:
+
+| Kind | Code? | Examples |
+|---|---|---|
+| The user can fix it, or it is a business state they can meet | **Yes**, with copy | `END_BEFORE_START`, `MEDIA_LIMIT_REACHED`, `PAYOUT_BELOW_MINIMUM`, `VIDEO_NOT_READY` |
+| A role gate the UI never crosses | Yes (cheap, shared) | `STUDENT_ACCOUNT_REQUIRED` |
+| A request the UI cannot send | No — generic, but make sure the UI really prevents it | schedule `from`/`to` ranges, enum params, chat target ids, rating outside 1–5 (the button is disabled at 0) |
+| An internal invariant or tampering | No — generic to the client, logged | corrupt site snapshot, media id from another academy, malformed playback token, proof URL |
+
+After that audit 32 such sites remain generic (24 UI-prevented, 8
+invariants); every other 400/409 in the API carries a code. A failure that is
+really a dependency outage is never a 400: it is a retryable 503
+(`STORAGE_UNAVAILABLE`, `WRITE_CONFLICT`).

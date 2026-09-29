@@ -52,9 +52,16 @@ export class OtpService {
       where: { phone, consumedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
-    if (!otp) throw new BadRequestException('No valid OTP — request a new code');
+    if (!otp)
+      throw new BadRequestException({
+        message: 'No valid OTP — request a new code',
+        code: 'CODE_EXPIRED',
+      });
     if (otp.attempts >= this.maxAttempts) {
-      throw new BadRequestException('Too many attempts — request a new code');
+      throw new BadRequestException({
+        message: 'Too many attempts — request a new code',
+        code: 'TOO_MANY_ATTEMPTS',
+      });
     }
 
     const ok = await argon2.verify(otp.codeHash, code);
@@ -63,7 +70,7 @@ export class OtpService {
         where: { id: otp.id },
         data: { attempts: { increment: 1 } },
       });
-      throw new BadRequestException('Incorrect code');
+      throw new BadRequestException({ message: 'Incorrect code', code: 'INVALID_CODE' });
     }
 
     await this.prisma.otpCode.update({

@@ -839,10 +839,16 @@ export class CoursesService {
   async setBundleItems(scope: CourseScope, bundleId: string, dto: SetBundleItemsDto) {
     const bundle = await this.assertCourse(scope, bundleId);
     if (bundle.pricingModel !== 'BUNDLE') {
-      throw new BadRequestException('Course pricing model is not BUNDLE');
+      throw new BadRequestException({
+        message: 'Course pricing model is not BUNDLE',
+        code: 'NOT_A_BUNDLE',
+      });
     }
     if (dto.courseIds.includes(bundleId)) {
-      throw new BadRequestException('A bundle cannot contain itself');
+      throw new BadRequestException({
+        message: 'A bundle cannot contain itself',
+        code: 'BUNDLE_CONTAINS_ITSELF',
+      });
     }
     const children = await this.prisma.course.findMany({
       where: { id: { in: dto.courseIds }, ...this.scopeWhere(scope) },
@@ -950,7 +956,10 @@ export class CoursesService {
     if (dto.unitId) {
       const unit = await this.assertUnit(scope, dto.unitId);
       if (unit.courseId !== courseId) {
-        throw new BadRequestException('That section does not belong to this course');
+        throw new BadRequestException({
+          message: 'That section does not belong to this course',
+          code: 'UNIT_NOT_IN_COURSE',
+        });
       }
       unitId = unit.id;
     } else {

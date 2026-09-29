@@ -100,11 +100,18 @@ export class UploadsController {
       fileFilter: (_req, file, cb) =>
         VIDEO_MIME.test(file.mimetype)
           ? cb(null, true)
-          : cb(new BadRequestException('Only mp4/webm/mov/mkv videos are accepted'), false),
+          : cb(
+              new BadRequestException({
+                message: 'Only mp4/webm/mov/mkv videos are accepted',
+                code: 'VIDEO_TYPE',
+              }),
+              false,
+            ),
     }),
   )
   async uploadVideo(@CurrentUser() user: JwtPayload, @UploadedFile() file?: Express.Multer.File) {
-    if (!file) throw new BadRequestException('file is required');
+    if (!file)
+      throw new BadRequestException({ message: 'file is required', code: 'FILE_REQUIRED' });
     // The filter above checked the type the client *declared*; this checks the
     // bytes. Done here rather than in fileFilter because multer has not written
     // the body yet when that runs — there is nothing to read until now.
@@ -188,7 +195,13 @@ export class UploadsController {
       fileFilter: (_req, file, cb) =>
         ATTACHMENT_MIME.test(file.mimetype)
           ? cb(null, true)
-          : cb(new BadRequestException('Unsupported attachment type'), false),
+          : cb(
+              new BadRequestException({
+                message: 'Unsupported attachment type',
+                code: 'ATTACHMENT_TYPE',
+              }),
+              false,
+            ),
     }),
   )
   async uploadAttachment(
@@ -196,7 +209,8 @@ export class UploadsController {
     @Param('lessonId') lessonId: string,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    if (!file) throw new BadRequestException('file is required');
+    if (!file)
+      throw new BadRequestException({ message: 'file is required', code: 'FILE_REQUIRED' });
     await this.rejectMismatch(file);
     const lesson = await this.prisma.lesson.findFirst({
       where: { id: lessonId, unit: { course: { tenantId: user.tenantId } } },

@@ -52,7 +52,11 @@ export class EnrollmentsService {
       where: { userId },
       include: { user: { select: { fullName: true } } },
     });
-    if (!student) throw new BadRequestException('No student profile for this account');
+    if (!student)
+      throw new BadRequestException({
+        message: 'No student profile for this account',
+        code: 'STUDENT_ACCOUNT_REQUIRED',
+      });
     return student;
   }
 
@@ -86,15 +90,21 @@ export class EnrollmentsService {
     });
     // A coupon made for live seats (scope LIVE) is not a course coupon.
     if (!coupon || !coupon.isActive || coupon.scope === 'LIVE')
-      throw new BadRequestException('Invalid coupon');
+      throw new BadRequestException({ message: 'Invalid coupon', code: 'COUPON_INVALID' });
     if (coupon.expiresAt && coupon.expiresAt < new Date()) {
-      throw new BadRequestException('Coupon expired');
+      throw new BadRequestException({ message: 'Coupon expired', code: 'COUPON_EXPIRED' });
     }
     if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
-      throw new BadRequestException('Coupon usage limit reached');
+      throw new BadRequestException({
+        message: 'Coupon usage limit reached',
+        code: 'COUPON_LIMIT_REACHED',
+      });
     }
     if (coupon.courseId && coupon.courseId !== course.id) {
-      throw new BadRequestException('Coupon is not valid for this course');
+      throw new BadRequestException({
+        message: 'Coupon is not valid for this course',
+        code: 'COUPON_NOT_FOR_COURSE',
+      });
     }
     return coupon;
   }
@@ -194,10 +204,16 @@ export class EnrollmentsService {
       where: { studentId_courseId: { studentId: student.id, courseId } },
     });
     if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
-      throw new ConflictException('Already enrolled in this course');
+      throw new ConflictException({
+        message: 'Already enrolled in this course',
+        code: 'ALREADY_ENROLLED',
+      });
     }
     if (existing?.status === 'PENDING_APPROVAL') {
-      throw new ConflictException('An enrollment request for this course is already pending');
+      throw new ConflictException({
+        message: 'An enrollment request for this course is already pending',
+        code: 'ENROLLMENT_PENDING',
+      });
     }
     // Before the price, because a student whose year this course is not for
     // should be told that rather than handed a payment screen for something
@@ -512,13 +528,20 @@ export class EnrollmentsService {
   async revoke(academyId: string, id: string, reason?: string) {
     const enrollment = await this.assertTenantEnrollment(academyId, id);
     if (enrollment.status !== 'ACTIVE') {
-      throw new BadRequestException('Only active enrollments can be revoked');
+      throw new BadRequestException({
+        message: 'Only active enrollments can be revoked',
+        code: 'ENROLLMENT_NOT_ACTIVE',
+      });
     }
     const flip = await this.prisma.enrollment.updateMany({
       where: { id, status: 'ACTIVE' },
       data: { status: 'REVOKED', revokedReason: reason ?? null },
     });
-    if (flip.count === 0) throw new BadRequestException('Only active enrollments can be revoked');
+    if (flip.count === 0)
+      throw new BadRequestException({
+        message: 'Only active enrollments can be revoked',
+        code: 'ENROLLMENT_NOT_ACTIVE',
+      });
     const updated = await this.prisma.enrollment.findUniqueOrThrow({ where: { id } });
     await this.notifications.create({
       userId: enrollment.student.user.id,
@@ -646,7 +669,10 @@ export class EnrollmentsService {
       where: { studentId_courseId: { studentId: student.id, courseId } },
     });
     if (existing?.status === 'ACTIVE' && (!existing.expiresAt || existing.expiresAt > new Date())) {
-      throw new ConflictException('Already enrolled in this course');
+      throw new ConflictException({
+        message: 'Already enrolled in this course',
+        code: 'ALREADY_ENROLLED',
+      });
     }
     // A live payment attempt exists for this exact pair — refuse rather than
     // leave it dangling. If it is later matched/verified, applyVerification

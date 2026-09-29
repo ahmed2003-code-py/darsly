@@ -61,10 +61,16 @@ export class CouponsService {
    */
   async create(academyId: string, dto: CouponFields): Promise<Coupon> {
     if (!dto.percentOff && !dto.amountOffCents) {
-      throw new BadRequestException('Provide percentOff or amountOffCents');
+      throw new BadRequestException({
+        message: 'Provide percentOff or amountOffCents',
+        code: 'COUPON_DISCOUNT_REQUIRED',
+      });
     }
     if (dto.percentOff && dto.amountOffCents) {
-      throw new BadRequestException('Provide either percentOff or amountOffCents, not both');
+      throw new BadRequestException({
+        message: 'Provide either percentOff or amountOffCents, not both',
+        code: 'COUPON_DISCOUNT_BOTH',
+      });
     }
     if (dto.courseId) {
       const course = await this.prisma.course.findFirst({
@@ -75,7 +81,10 @@ export class CouponsService {
       if (!course) throw new NotFoundException('Course not found');
     }
     if (dto.courseId && dto.liveSessionId) {
-      throw new BadRequestException('A coupon is for a course or for a live session, not both');
+      throw new BadRequestException({
+        message: 'A coupon is for a course or for a live session, not both',
+        code: 'COUPON_TARGET_BOTH',
+      });
     }
     if (dto.liveSessionId) {
       // The teacher's own PAID session — the same ownership rule as a course.
@@ -102,7 +111,11 @@ export class CouponsService {
       where: { tenantId_code: { tenantId: academyId, code } },
     });
     if (existing && !existing.deletedAt) {
-      throw new BadRequestException('Coupon code already exists');
+      throw new BadRequestException({
+        message: 'Coupon code already exists',
+        code: 'COUPON_CODE_TAKEN',
+        field: 'code',
+      });
     }
 
     const fields = {

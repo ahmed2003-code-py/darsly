@@ -1467,7 +1467,11 @@ export class ManualPaymentsService {
       where: { userId },
       include: { user: { select: { fullName: true } } },
     });
-    if (!s) throw new BadRequestException('No student profile for this account');
+    if (!s)
+      throw new BadRequestException({
+        message: 'No student profile for this account',
+        code: 'STUDENT_ACCOUNT_REQUIRED',
+      });
     return s;
   }
 

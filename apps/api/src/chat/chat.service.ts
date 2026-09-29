@@ -1731,7 +1731,8 @@ export class ChatService {
         params: { max: MAX_ATTACHMENTS_PER_MESSAGE },
       });
     }
-    if (!body && !attachmentIds.length) throw new BadRequestException('Empty message');
+    if (!body && !attachmentIds.length)
+      throw new BadRequestException({ message: 'Empty message', code: 'EMPTY_MESSAGE' });
     // Authoritative length cap for BOTH transports (REST DTO + the socket gateway,
     // which the global HTTP ValidationPipe doesn't cover). Prevents multi-MB
     // messages being persisted verbatim (storage amplification / oversized pushes).

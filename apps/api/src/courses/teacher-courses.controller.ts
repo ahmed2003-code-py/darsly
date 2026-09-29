@@ -167,7 +167,13 @@ export class TeacherCoursesController {
       fileFilter: (_req, file, cb) =>
         INTRO_VIDEO_MIME.test(file.mimetype)
           ? cb(null, true)
-          : cb(new BadRequestException('Only MP4 video is accepted'), false),
+          : cb(
+              new BadRequestException({
+                message: 'Only MP4 video is accepted',
+                code: 'VIDEO_MP4_ONLY',
+              }),
+              false,
+            ),
     }),
   )
   async setIntroVideo(
@@ -176,7 +182,8 @@ export class TeacherCoursesController {
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
   ) {
-    if (!file) throw new BadRequestException('file is required');
+    if (!file)
+      throw new BadRequestException({ message: 'file is required', code: 'FILE_REQUIRED' });
     const result = await this.courses.setIntroVideo(this.scope(user, ctx), id, {
       buffer: file.buffer,
       mimetype: file.mimetype,

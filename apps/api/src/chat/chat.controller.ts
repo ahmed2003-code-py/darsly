@@ -183,7 +183,8 @@ export class ChatController {
     @Body('voice') voice?: string,
     @Body('durationSec') durationSec?: string,
   ) {
-    if (!file) throw new BadRequestException('file is required');
+    if (!file)
+      throw new BadRequestException({ message: 'file is required', code: 'FILE_REQUIRED' });
     const id = (v?: string) => (typeof v === 'string' && v && v.length <= 40 ? v : undefined);
     return this.attachments.upload(
       user,
@@ -353,7 +354,8 @@ export class ChatController {
     @Body('durationSec') durationSec: string,
     @Body('replyToId') replyToId?: string,
   ) {
-    if (!file) throw new BadRequestException('file is required');
+    if (!file)
+      throw new BadRequestException({ message: 'file is required', code: 'FILE_REQUIRED' });
     return this.chat.sendVoiceNote(
       user,
       threadId,

@@ -448,7 +448,8 @@ export class QuizzesService {
       include: { questions: true },
     });
     if (!quiz) throw new NotFoundException('This lesson has no quiz');
-    if (!quiz.questions.length) throw new BadRequestException('Quiz has no questions yet');
+    if (!quiz.questions.length)
+      throw new BadRequestException({ message: 'Quiz has no questions yet', code: 'QUIZ_EMPTY' });
 
     /**
      * One sitting, one attempt.

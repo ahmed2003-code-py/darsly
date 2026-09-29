@@ -74,7 +74,11 @@ export class AssignmentsService {
     // The course's author — whose gamification ledger this lands in — whoever marks it.
     const tenantId = submission.assignment.lesson.unit.course.tenantId;
     if (dto.score > submission.assignment.maxScore) {
-      throw new BadRequestException('Score exceeds the assignment maximum');
+      throw new BadRequestException({
+        message: 'Score exceeds the assignment maximum',
+        code: 'SCORE_ABOVE_MAX',
+        field: 'score',
+      });
     }
 
     const updated = await this.prisma.assignmentSubmission.update({
@@ -135,14 +139,17 @@ export class AssignmentsService {
     const assignment = await this.prisma.assignment.findUnique({ where: { lessonId } });
     if (!assignment) throw new NotFoundException('This lesson has no assignment');
     if (!dto.body?.trim() && !dto.fileKey) {
-      throw new BadRequestException('Submit text or a file');
+      throw new BadRequestException({ message: 'Submit text or a file', code: 'SUBMISSION_EMPTY' });
     }
 
     const existing = await this.prisma.assignmentSubmission.findUnique({
       where: { assignmentId_studentId: { assignmentId: assignment.id, studentId } },
     });
     if (existing?.gradedAt) {
-      throw new BadRequestException('This assignment is already graded and cannot be resubmitted');
+      throw new BadRequestException({
+        message: 'This assignment is already graded and cannot be resubmitted',
+        code: 'ALREADY_GRADED',
+      });
     }
 
     const submission = await this.prisma.assignmentSubmission.upsert({

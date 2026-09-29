@@ -72,6 +72,8 @@ module.exports = async function globalSetup(globalConfig) {
       cwd: path.resolve(__dirname, '../..'),
       env: { ...process.env, DATABASE_URL: tplUrl.toString() },
       stdio: 'pipe',
+      // npx is a .cmd shim on Windows: it only runs through the shell.
+      shell: process.platform === 'win32',
     });
     for (let i = 1; i <= workers; i++) {
       const db = `${prefix}_w${i}`;

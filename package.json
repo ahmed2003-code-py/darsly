@@ -24,6 +24,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:web": "node scripts/check-web-routes.mjs",
+    "check:errors": "node scripts/check-error-codes.mjs",
     "mail:test": "node scripts/send-test-email.mjs"
   },
   "engines": {

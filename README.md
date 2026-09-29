@@ -31,6 +31,7 @@ Start with whichever question you actually have.
 | [docs/FEATURES.md](./docs/FEATURES.md) | What each role actually gets, in product terms rather than code terms. |
 | [docs/STUDIO.md](./docs/STUDIO.md) | Personalisation and theming — the two token layers, server-side colour derivation, the cosmetics economy. |
 | [docs/UI-CONVENTIONS.md](./docs/UI-CONVENTIONS.md) | The rules the interface is held to: tokens, contrast floors, responsive widths, RTL, motion, stacking. Read before writing a screen. |
+| [docs/ERRORS.md](./docs/ERRORS.md) · [docs/ERRORS-QA.md](./docs/ERRORS-QA.md) | How errors work: the API envelope, stable codes, localized copy, where an error is shown (once), security and logging — and the failure paths to re-check before a release. Read before adding an error. |
 | [docs/GAMIFICATION.md](./docs/GAMIFICATION.md) | XP, coins, levels, achievements, missions, leaderboards — and why none of it can be farmed. |
 | [docs/ARCHITECTURE-ACADEMY.md](./docs/ARCHITECTURE-ACADEMY.md) | Multi-tenant academy architecture: bounded contexts, tenant isolation, the ledger, the revenue model. |
 | [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Running it locally, deploying to Railway, environment variables, and proving a deploy actually shipped. |

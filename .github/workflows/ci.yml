@@ -86,6 +86,15 @@ jobs:
       - name: Validate Prisma schema
         run: npx prisma validate --schema apps/api/prisma/schema.prisma
 
+      # Every error code the API throws has words in Arabic and English, and
+      # every internal link / translation key resolves. Both are seconds, and
+      # both failures used to reach production silently (docs/ERRORS.md).
+      - name: Error codes have copy
+        run: npm run check:errors
+
+      - name: Web links and translation keys
+        run: npm run check:web
+
       - name: Typecheck API
         run: npx tsc -p apps/api/tsconfig.json --noEmit
 

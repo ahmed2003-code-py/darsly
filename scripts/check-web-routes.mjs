@@ -123,7 +123,9 @@ for (const key of used) {
 // about the failure it exists to catch.
 const namespaces = new Set(Object.keys(ar).map((k) => k.split('.')[0]));
 // Real strings that collide with the shape: a namespace, a dot, a word.
-const NOT_KEYS = new Set(['common.js', 'common.css']);
+// Capability ids (lib/team.ts, shell/nav.ts) share a first segment with an
+// i18n namespace but are permissions, not copy.
+const NOT_KEYS = new Set(['common.js', 'common.css', 'guardian.manage', 'schedule.manage']);
 for (const file of sources) {
   const text = readFileSync(file, 'utf8');
   for (const m of text.matchAll(/'([a-z][A-Za-z0-9]*(?:\.[A-Za-z][\w]*)+)'/g)) {

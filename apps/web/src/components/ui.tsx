@@ -170,12 +170,22 @@ export function Modal({
   onClose,
   children,
   wide,
+  variant = 'dialog',
+  actions,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /**
+   * `sheet`: long content read in full (a transcript, a conversation). A side
+   * sheet at the inline end on larger screens, the whole screen on a phone —
+   * with the same focus, Escape and return-focus behaviour as the dialog.
+   */
+  variant?: 'dialog' | 'sheet';
+  /** Controls beside the title (a search box, a count). */
+  actions?: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -247,6 +257,49 @@ export function Modal({
   };
 
   if (!open) return null;
+  if (variant === 'sheet') {
+    // Slides in from the inline end: the right in LTR, the left in RTL.
+    const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+    return (
+      <m.div
+        className="fixed inset-0 z-50 flex justify-end bg-inverse-surface/40 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.18 }}
+        onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <m.div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
+          className="modal-panel flex h-full w-full flex-col bg-surface-container-lowest shadow-modal outline-none sm:max-w-xl sm:rounded-s-3xl sm:border-s sm:border-outline-variant lg:max-w-2xl"
+          initial={{ opacity: 0, x: rtl ? -32 : 32 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/60 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
+            <h3 id={titleId} className="min-w-0 flex-1 truncate font-heading text-lg font-bold tracking-tight">
+              {title}
+            </h3>
+            {actions}
+            <button
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
+              onClick={onClose}
+              aria-label={i18n.t('common.close')}
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
+            {children}
+          </div>
+        </m.div>
+      </m.div>
+    );
+  }
   return (
     <m.div
       className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 p-4 backdrop-blur-sm"

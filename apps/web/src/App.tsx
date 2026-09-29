@@ -61,6 +61,7 @@ const CourseBuilderPage = lazyPage(() => import('./pages/teacher/CourseBuilderPa
 const TeacherLivePage = lazyPage(() => import('./pages/teacher/TeacherLivePage'));
 const TeacherLiveSessionPage = lazyPage(() => import('./pages/teacher/TeacherLiveSessionPage'));
 const MeetingPage = lazyPage(() => import('./pages/live/MeetingPage'));
+const LiveRecordPage = lazyPage(() => import('./pages/live/LiveRecordPage'));
 const PublicLivePage = lazyPage(() => import('./pages/live/PublicLivePage'));
 const GuestAccessPage = lazyPage(() => import('./pages/live/GuestAccessPage'));
 const AdminPaymentsPage = lazyPage(() => import('./pages/admin/AdminPaymentsPage'));
@@ -316,6 +317,16 @@ export default function App() {
             element={
               <RequireAuth role={Role.STUDENT}>
                 <LiveSessionsPage />
+              </RequireAuth>
+            }
+          />
+          {/* A finished class's record, for a student (the teacher's is on
+          /teacher/live/:id). */}
+          <Route
+            path="/live/:id/record"
+            element={
+              <RequireAuth role={Role.STUDENT}>
+                <LiveRecordPage />
               </RequireAuth>
             }
           />

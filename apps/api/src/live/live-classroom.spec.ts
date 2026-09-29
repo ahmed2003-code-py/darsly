@@ -90,6 +90,7 @@ function world(
     },
     liveChatMessage: {
       findMany: jest.fn(async () => []),
+      count: jest.fn(async () => 0),
       create: jest.fn(async ({ data }: any) => {
         created.push(data);
         return {

@@ -495,15 +495,33 @@ export class LiveController {
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Session detail (recording + summary, filtered by role)' })
   detail(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.live.sessionDetail(u.sub, id);
+    // The archive shows the transcript's first words; the rest is fetched when opened.
+    return this.live.sessionDetail(u.sub, id, { transcript: 'preview' });
+  }
+
+  /** The whole transcript, for the archive's full view — the same rules as the detail. */
+  @Get('live/:id/transcript')
+  @GuestAllowed()
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'The full transcript of a session, filtered by role' })
+  async transcript(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return (await this.live.sessionDetail(u.sub, id, { transcript: 'full' })).transcript;
   }
 
   @Get('live/:id/chat')
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
-  @ApiOperation({ summary: 'Messages sent inside the classroom' })
-  chat(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
-    return this.live.chatHistory(u.sub, id);
+  @ApiOperation({ summary: 'Messages sent inside the classroom — the newest page, or the page before `before`' })
+  chat(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Query('before') before?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.live.chatHistory(u.sub, id, {
+      before: before && /^[a-z0-9]{10,40}$/i.test(before) ? before : undefined,
+      limit: limit ? Number(limit) || undefined : undefined,
+    });
   }
 
   @Post('live/:id/chat')

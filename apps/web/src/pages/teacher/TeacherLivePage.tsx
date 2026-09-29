@@ -13,7 +13,6 @@ import {
   Modal,
   PageHeader,
 } from '../../components/ui';
-import SessionSummary from '../live/SessionSummary';
 import LiveSessionForm from './LiveSessionForm';
 import { formatDuration } from '../../lib/liveSessionForm';
 import { egp } from '../../lib/format';
@@ -51,14 +50,6 @@ export default function TeacherLivePage() {
       qc.invalidateQueries({ queryKey: ['teacher-live'] });
       navigate(`/live/${id}/meeting`);
     },
-  });
-  // Finished sessions open into their own record: who came, and what the
-  // lesson came to.
-  const [detailFor, setDetailFor] = useState<string | null>(null);
-  const { data: attendance } = useQuery({
-    queryKey: ['live-attendance', detailFor],
-    queryFn: async () => (await api.get(`/teacher/live/${detailFor}/attendance`)).data,
-    enabled: !!detailFor,
   });
 
   const { data: bookings } = useQuery({
@@ -197,7 +188,8 @@ export default function TeacherLivePage() {
                 {past && (
                   <button
                     className="btn-ghost w-full py-2.5 text-sm"
-                    onClick={() => setDetailFor(s.id)}
+                    // A finished session's page is its record.
+                    onClick={() => navigate(`/teacher/live/${s.id}#archive`)}
                   >
                     <span className="material-symbols-outlined text-base">description</span>
                     {t('live.viewSession')}
@@ -222,15 +214,6 @@ export default function TeacherLivePage() {
         )}
       </Modal>
 
-      {/* What a finished lesson left behind. */}
-      <Modal
-        open={!!detailFor}
-        onClose={() => setDetailFor(null)}
-        title={t('live.sessionRecord')}
-        wide
-      >
-        {detailFor && <SessionSummary sessionId={detailFor} attendance={attendance ?? []} />}
-      </Modal>
 
       {/* Bookings modal */}
       <Modal open={!!bookingsFor} onClose={() => setBookingsFor(null)} title={t('live.attendees')}>

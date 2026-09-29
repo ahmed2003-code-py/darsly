@@ -75,6 +75,11 @@ const ARABIC_LESSON = 'ar-EG';
  * request does not cost a student the minutes they were actually sitting there.
  */
 export const PRESENCE_GRACE_SEC = 90;
+/** The class chat, a page at a time: the classroom's first read, and the archive's scroll-back. */
+export const CHAT_PAGE_DEFAULT = 200;
+export const CHAT_PAGE_MAX = 200;
+/** How much of the transcript the archive card shows before "show all". */
+export const TRANSCRIPT_PREVIEW_SEGMENTS = 3;
 /**
  * How long a summary may say PROCESSING with no job behind it before it counts
  * as abandoned — a worker that died on its last attempt, or a process killed
@@ -2113,6 +2118,11 @@ export class LiveService {
             ELSE 0
           END),
           "lastSeenAt" = GREATEST(a."lastSeenAt", ${at}),
+          -- Away longer than the grace, while the class still ran: a drop-out.
+          "reconnects" = a."reconnects" + (CASE
+            WHEN floor(extract(epoch FROM (${at} - a."lastSeenAt"))) > ${PRESENCE_GRACE_SEC}
+             AND a."lastSeenAt" < ${effectiveEnd}
+            THEN 1 ELSE 0 END),
           "leftAt" = CASE
             WHEN s.status = 'LIVE' AND s."deletedAt" IS NULL AND ${at} < ${effectiveEnd}
             THEN NULL
@@ -2246,23 +2256,59 @@ export class LiveService {
     return { session, role: 'STUDENT' as const };
   }
 
-  async chatHistory(userId: string, sessionId: string) {
+  /**
+   * A page of the class chat, oldest first within the page: the newest
+   * `limit` messages, or the `limit` just before message `before` (a cursor
+   * the page got from its own oldest message). The classroom asks for the
+   * latest; the archive walks back through older pages as the reader scrolls.
+   * (This used to return the FIRST 200 of the class — a long chat's archive
+   * silently lost everything after them.)
+   */
+  async chatHistory(userId: string, sessionId: string, opts: { before?: string; limit?: number } = {}) {
     await this.assertInSession(userId, sessionId);
+    const limit = Math.min(Math.max(Math.trunc(opts.limit ?? CHAT_PAGE_DEFAULT), 1), CHAT_PAGE_MAX);
+    let cursor: { createdAt: Date; id: string } | null = null;
+    if (opts.before) {
+      cursor = await this.prisma.liveChatMessage.findFirst({
+        where: { id: opts.before, sessionId },
+        select: { createdAt: true, id: true },
+      });
+      if (!cursor) throw new BadRequestException({ message: 'Unknown message', code: 'CHAT_CURSOR_INVALID' });
+    }
     const rows = await this.prisma.liveChatMessage.findMany({
-      where: { sessionId },
-      orderBy: { createdAt: 'asc' },
-      take: 200,
+      where: {
+        sessionId,
+        ...(cursor
+          ? {
+              OR: [
+                { createdAt: { lt: cursor.createdAt } },
+                { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
       include: { user: { select: { id: true, fullName: true, role: true } } },
     });
-    return rows.map((m) => this.chatView(m));
+    return rows.reverse().map((m) => this.chatView(m));
   }
 
   async sendChat(userId: string, sessionId: string, body: string) {
     const { session } = await this.assertInSession(userId, sessionId);
     const text = body.trim();
     if (!text) throw new BadRequestException({ message: 'Empty message', code: 'EMPTY_MESSAGE' });
+    // The name as it is now — a guest's chosen name, a student's account name —
+    // kept with the message so a later rename does not rewrite the archive.
+    const guest = await this.prisma.guestBuyer.findUnique({ where: { userId }, select: { displayName: true } });
+    const me = guest ? null : await this.prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } });
     const saved = await this.prisma.liveChatMessage.create({
-      data: { sessionId, userId, body: text.slice(0, 2000) },
+      data: {
+        sessionId,
+        userId,
+        body: text.slice(0, 2000),
+        senderName: (guest?.displayName ?? me?.fullName ?? '').slice(0, 120) || null,
+      },
       include: { user: { select: { id: true, fullName: true, role: true } } },
     });
     const view = this.chatView(saved);
@@ -2276,6 +2322,7 @@ export class LiveService {
     id: string;
     body: string;
     createdAt: Date;
+    senderName?: string | null;
     user: { id: string; fullName: string; role: string };
   }) {
     return {
@@ -2283,7 +2330,8 @@ export class LiveService {
       body: m.body,
       createdAt: m.createdAt,
       senderId: m.user.id,
-      senderName: m.user.fullName,
+      // The snapshot when there is one; older messages read the account's name.
+      senderName: m.senderName ?? m.user.fullName,
       senderRole: m.user.role,
     };
   }
@@ -2737,7 +2785,12 @@ export class LiveService {
     };
   }
 
-  async sessionDetail(userId: string, sessionId: string) {
+  async sessionDetail(
+    userId: string,
+    sessionId: string,
+    /** `preview`: the archive card's first words and a count; the full text is fetched on its own. */
+    opts: { transcript?: 'full' | 'preview' } = {},
+  ) {
     const { role } = await this.assertInSession(userId, sessionId);
     const s = await this.prisma.liveSession.findUniqueOrThrow({
       where: { id: sessionId },
@@ -2873,9 +2926,12 @@ export class LiveService {
       if (total > 0) progress = { done, total };
     }
     const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
+    // The archive card says how much was said; the messages load when opened.
+    const chatCount = await this.prisma.liveChatMessage.count({ where: { sessionId: s.id } });
     return {
       id: s.id,
       title: s.title,
+      chat: { count: chatCount },
       startsAt: s.startsAt,
       durationMin: s.durationMin,
       startedAt: s.startedAt,
@@ -2940,13 +2996,22 @@ export class LiveService {
               progress,
               visibility: teacher ? s.transcriptVisibility : undefined,
               mode: teacher ? s.transcriptionMode : undefined,
-              segments:
-                transcriptReady && canSeeTranscript
-                  ? ((s.transcriptSegments as unknown[] | null) ??
-                    (s.transcriptText
-                      ? [{ startSec: null, durationSec: null, text: s.transcriptText }]
-                      : []))
-                  : undefined,
+              ...(transcriptReady && canSeeTranscript
+                ? (() => {
+                    const all =
+                      (s.transcriptSegments as unknown[] | null) ??
+                      (s.transcriptText
+                        ? [{ startSec: null, durationSec: null, text: s.transcriptText }]
+                        : []);
+                    return opts.transcript === 'preview'
+                      ? {
+                          segments: all.slice(0, TRANSCRIPT_PREVIEW_SEGMENTS),
+                          segmentCount: all.length,
+                          preview: true,
+                        }
+                      : { segments: all, segmentCount: all.length };
+                  })()
+                : {}),
             }
           : null,
       summary: {
@@ -2992,21 +3057,108 @@ export class LiveService {
   }
 
   /** Who actually turned up, for the teacher's own session. */
+  /**
+   * Who came, for how long, and who did not — only what the class really
+   * recorded. Minutes are the heartbeat's reconnect-safe count (a gap longer
+   * than the grace is not credited); the percentage is of how long the class
+   * actually ran, not how long it was booked for. "Attended" is the same line
+   * LIVE_ATTENDED pays at, never more than half of a class that ran short.
+   * Speaking is counted from the microphone tracks a student published — how
+   * often, and how long the microphone was open, not how long they talked.
+   */
   async attendanceFor(scope: LiveScope, id: string) {
     await this.assertOwned(scope, id);
-    const rows = await this.prisma.liveAttendance.findMany({
-      where: { sessionId: id },
-      orderBy: { joinedAt: 'asc' },
-      include: { user: { select: { fullName: true } } },
+    const s = await this.prisma.liveSession.findUniqueOrThrow({
+      where: { id },
+      select: { startsAt: true, durationMin: true, startedAt: true, endedAt: true, status: true },
     });
-    return rows.map((r) => ({
-      id: r.id,
-      fullName: r.user.fullName,
-      role: r.role,
-      joinedAt: r.joinedAt,
-      leftAt: r.leftAt,
-      durationSeconds: r.durationSeconds,
-    }));
+    const now = Date.now();
+    const scheduledEnd = this.closesAt(s);
+    const runEnd = s.endedAt ? s.endedAt.getTime() : Math.min(now, scheduledEnd);
+    const runSec = s.startedAt ? Math.max(0, Math.round((runEnd - s.startedAt.getTime()) / 1000)) : 0;
+    const threshold = Math.min(
+      liveAttendedThresholdSec(s.durationMin),
+      runSec ? Math.ceil(runSec / 2) : Number.MAX_SAFE_INTEGER,
+    );
+
+    const [rows, bookings, guestSeats, tracks, hands] = await Promise.all([
+      this.prisma.liveAttendance.findMany({
+        where: { sessionId: id },
+        orderBy: { joinedAt: 'asc' },
+        include: { user: { select: { fullName: true, role: true, guestBuyer: { select: { displayName: true } } } } },
+      }),
+      this.prisma.liveBooking.findMany({
+        where: { sessionId: id },
+        select: { student: { select: { userId: true, user: { select: { fullName: true } } } } },
+      }),
+      this.prisma.livePurchase.findMany({
+        where: { sessionId: id, guestBuyerId: { not: null }, status: { in: ['CONFIRMED', 'DELIVERED'] } },
+        select: { guestBuyer: { select: { userId: true, displayName: true } } },
+      }),
+      this.prisma.liveRtcTrack.findMany({
+        where: { sessionId: id, kind: 'AUDIO', connection: { role: 'STUDENT' } },
+        select: { userId: true, createdAt: true, closedAt: true },
+      }),
+      this.prisma.liveHand.findMany({ where: { sessionId: id }, select: { userId: true, raisedCount: true } }),
+    ]);
+
+    const spoke = new Map<string, { count: number; sec: number }>();
+    for (const t of tracks) {
+      const end = Math.min(t.closedAt?.getTime() ?? runEnd, runEnd);
+      const cur = spoke.get(t.userId) ?? { count: 0, sec: 0 };
+      cur.count += 1;
+      cur.sec += Math.max(0, Math.round((end - t.createdAt.getTime()) / 1000));
+      spoke.set(t.userId, cur);
+    }
+    const raised = new Map(hands.map((h) => [h.userId, h.raisedCount]));
+    const pct = (sec: number) => (runSec ? Math.min(100, Math.round((sec / runSec) * 100)) : null);
+
+    const list = rows.map((r) => {
+      const guest = r.user.role === 'GUEST';
+      const student = r.role !== 'TEACHER';
+      return {
+        id: r.id,
+        userId: r.userId,
+        fullName: r.user.guestBuyer?.displayName ?? r.user.fullName,
+        role: r.role,
+        guest,
+        joinedAt: r.joinedAt,
+        leftAt: r.leftAt,
+        lastSeenAt: r.lastSeenAt,
+        durationSeconds: r.durationSeconds,
+        percent: pct(r.durationSeconds),
+        status: !student ? null : r.durationSeconds >= threshold ? 'ATTENDED' : 'PARTIAL',
+        reconnects: r.reconnects,
+        raisedCount: raised.get(r.userId) ?? 0,
+        spokeCount: spoke.get(r.userId)?.count ?? 0,
+        micOpenSeconds: spoke.get(r.userId)?.sec ?? 0,
+      };
+    });
+
+    // Who held a seat: booked students and guests with a confirmed seat.
+    const expected = new Map<string, { name: string; guest: boolean }>();
+    for (const b of bookings) expected.set(b.student.userId, { name: b.student.user.fullName, guest: false });
+    for (const g of guestSeats)
+      if (g.guestBuyer) expected.set(g.guestBuyer.userId, { name: g.guestBuyer.displayName, guest: true });
+    const came = new Set(list.map((r) => r.userId));
+    const absent = [...expected.entries()]
+      .filter(([uid]) => !came.has(uid))
+      .map(([uid, v]) => ({ userId: uid, fullName: v.name, guest: v.guest }));
+    const students = list.filter((r) => r.role !== 'TEACHER');
+    const pcts = students.map((r) => r.percent).filter((p): p is number => p != null);
+    return {
+      summary: {
+        runSeconds: runSec,
+        expected: expected.size,
+        joined: students.length,
+        absent: absent.length,
+        attended: students.filter((r) => r.status === 'ATTENDED').length,
+        averagePercent: pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null,
+        attendedThresholdSeconds: Number.isFinite(threshold) && threshold < Number.MAX_SAFE_INTEGER ? threshold : null,
+      },
+      rows: list,
+      absent,
+    };
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────

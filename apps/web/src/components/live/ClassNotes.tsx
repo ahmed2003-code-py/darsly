@@ -276,7 +276,16 @@ export function StudyNotesView({ n }: { n: StudyNotes }) {
 }
 
 /** The transcript, readable: by time, searchable, copyable. No speaker names — none are known. */
-export function TranscriptViewer({ segments, partial }: { segments: Segment[]; partial: boolean }) {
+export function TranscriptViewer({
+  segments,
+  partial,
+  expanded = false,
+}: {
+  segments: Segment[];
+  partial: boolean;
+  /** The archive's full view: everything, no "show all" step. */
+  expanded?: boolean;
+}) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [all, setAll] = useState(false);
@@ -287,7 +296,7 @@ export function TranscriptViewer({ segments, partial }: { segments: Segment[]; p
       query ? segments.filter((s) => s.text.toLowerCase().includes(query.toLowerCase())) : segments,
     [segments, query],
   );
-  const visible = query || all ? shown : shown.slice(0, 3);
+  const visible = query || all || expanded ? shown : shown.slice(0, 3);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(segments.map((s) => s.text).join('\n\n'));
@@ -348,7 +357,7 @@ export function TranscriptViewer({ segments, partial }: { segments: Segment[]; p
           </li>
         ))}
       </ol>
-      {!query && shown.length > 3 && (
+      {!query && !expanded && shown.length > 3 && (
         <button
           type="button"
           className="text-xs font-semibold text-primary-text hover:underline"

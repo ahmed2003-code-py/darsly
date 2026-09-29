@@ -703,7 +703,9 @@ export class LiveRtcService {
       const data = {
         roomName: run,
         state: to,
-        ...(action === 'raise' ? { raisedAt: now, decidedAt: null, decidedBy: null } : {}),
+        ...(action === 'raise'
+          ? { raisedAt: now, decidedAt: null, decidedBy: null, raisedCount: (row?.raisedCount ?? 0) + 1 }
+          : {}),
         ...(TEACHER_ACTIONS.includes(action) ? { decidedAt: now, decidedBy: actorId } : {}),
       };
       await tx.liveHand.upsert({

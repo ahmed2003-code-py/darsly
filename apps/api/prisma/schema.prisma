@@ -3081,15 +3081,17 @@ enum LiveTrackKind {
 /// browser shows it, never decides it, and a student can push audio or video
 /// only while this says APPROVED_TO_SPEAK or ACTIVE_SPEAKER for the current run.
 model LiveHand {
-  sessionId String
-  session   LiveSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId    String
-  roomName  String
-  state     LiveHandState @default(IDLE)
-  raisedAt  DateTime?
-  decidedAt DateTime?
-  decidedBy String?
-  updatedAt DateTime      @updatedAt
+  sessionId   String
+  session     LiveSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String
+  roomName    String
+  state       LiveHandState @default(IDLE)
+  raisedAt    DateTime?
+  decidedAt   DateTime?
+  decidedBy   String?
+  /// How many times this student raised their hand in this session.
+  raisedCount Int           @default(0)
+  updatedAt   DateTime      @updatedAt
 
   @@id([sessionId, userId])
 }
@@ -3227,13 +3229,16 @@ enum LivePipelineStatus {
 /// invariant or inventing a thread per pair per session — both worse than one
 /// small table. The realtime path is shared, which is the part worth sharing.
 model LiveChatMessage {
-  id        String      @id @default(cuid())
-  sessionId String
-  session   LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  body      String
-  createdAt DateTime    @default(now())
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body       String
+  /// The sender's name as it was in the class (a later rename does not
+  /// rewrite the archive). Null on messages from before it was kept.
+  senderName String?
+  createdAt  DateTime    @default(now())
 
   @@index([sessionId, createdAt])
 }
@@ -3259,6 +3264,9 @@ model LiveAttendance {
   lastSeenAt      DateTime    @default(now())
   leftAt          DateTime?
   durationSeconds Int         @default(0)
+  /// Heartbeat gaps longer than the presence grace — times this person dropped
+  /// out long enough to lose attendance (a quick reconnect is not counted).
+  reconnects      Int         @default(0)
 
   @@unique([sessionId, userId])
   @@index([sessionId])

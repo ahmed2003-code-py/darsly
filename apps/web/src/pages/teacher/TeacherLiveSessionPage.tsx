@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
@@ -8,7 +8,7 @@ import { egp } from '../../lib/format';
 import { formatDuration } from '../../lib/liveSessionForm';
 import { Badge, ErrorNote, Modal, Spinner } from '../../components/ui';
 import LiveSessionForm, { type EditableSession } from './LiveSessionForm';
-import SessionSummary from '../live/SessionSummary';
+import LiveArchive from '../live/LiveArchive';
 
 function when(iso: string) {
   return new Date(iso).toLocaleString('ar-EG', {
@@ -33,7 +33,6 @@ export default function TeacherLiveSessionPage() {
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [people, setPeople] = useState(false);
-  const [record, setRecord] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const detail = useQuery({
@@ -46,11 +45,12 @@ export default function TeacherLiveSessionPage() {
     queryFn: async () => (await api.get(`/teacher/live/${id}/bookings`)).data,
     enabled: people,
   });
-  const attendance = useQuery({
-    queryKey: ['live-attendance', id],
-    queryFn: async () => (await api.get(`/teacher/live/${id}/attendance`)).data,
-    enabled: record,
-  });
+  // Arriving from the list at "#archive": the record is below the header.
+  const hasData = !!detail.data;
+  useEffect(() => {
+    if (hasData && window.location.hash === '#archive')
+      requestAnimationFrame(() => document.getElementById('archive')?.scrollIntoView({ block: 'start' }));
+  }, [hasData]);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['teacher-live-detail', id] });
     qc.invalidateQueries({ queryKey: ['teacher-live'] });
@@ -155,15 +155,16 @@ export default function TeacherLiveSessionPage() {
               {t('liveManage.edit')}
             </button>
           )}
-          {ended && (
-            <button className="btn-ghost" onClick={() => setRecord(true)}>
-              <span className="material-symbols-outlined text-base">description</span>
-              {t('live.viewSession')}
-            </button>
-          )}
         </div>
         <ErrorNote error={start.error} />
       </div>
+
+      {/* A finished class: this page is its record. */}
+      {ended && (
+        <div id="archive" className="mt-4 scroll-mt-4">
+          <LiveArchive sessionId={id} />
+        </div>
+      )}
 
       {/* The one link to share. */}
       <div className="card mt-4">
@@ -313,9 +314,6 @@ export default function TeacherLiveSessionPage() {
         )}
       </Modal>
 
-      <Modal open={record} onClose={() => setRecord(false)} title={t('live.sessionRecord')} wide>
-        {record && <SessionSummary sessionId={id} attendance={attendance.data ?? []} />}
-      </Modal>
     </div>
   );
 }

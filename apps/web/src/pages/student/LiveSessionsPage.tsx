@@ -10,10 +10,8 @@ import {
   CardGridSkeleton,
   EmptyState,
   ErrorNote,
-  Modal,
   PageHeader,
 } from '../../components/ui';
-import SessionSummary from '../live/SessionSummary';
 import { confirmDelete } from '../../lib/confirm';
 import { egp } from '../../lib/format';
 import { LIVE_REFUND_WINDOW_HOURS, type LiveRefundPolicy } from '@darsly/shared-types';
@@ -87,7 +85,6 @@ export default function LiveSessionsPage() {
     },
   });
   const navigate = useNavigate();
-  const [recordFor, setRecordFor] = useState<string | null>(null);
   const [buying, setBuying] = useState<{ id: string; title: string } | null>(null);
 
   return (
@@ -212,7 +209,7 @@ export default function LiveSessionsPage() {
                   {over ? (
                     <button
                       className="btn-ghost flex-1 py-2.5 text-sm"
-                      onClick={() => setRecordFor(s.id)}
+                      onClick={() => navigate(`/live/${s.id}/record`)}
                     >
                       <span className="material-symbols-outlined text-base">description</span>
                       {t('live.viewSession')}
@@ -315,9 +312,6 @@ export default function LiveSessionsPage() {
         />
       )}
 
-      <Modal open={!!recordFor} onClose={() => setRecordFor(null)} title={t('live.sessionRecord')}>
-        {recordFor && <SessionSummary sessionId={recordFor} />}
-      </Modal>
     </div>
   );
 }

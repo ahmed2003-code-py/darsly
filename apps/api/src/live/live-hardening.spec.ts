@@ -55,6 +55,7 @@ function liveWorld(
   };
   const writes: any[] = [];
   const prisma: any = {
+    liveChatMessage: { count: jest.fn(async () => 0) },
     liveSession: {
       findFirst: jest.fn(async () => ({ ...session })),
       findUnique: jest.fn(async () => ({ ...session })),

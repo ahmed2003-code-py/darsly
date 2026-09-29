@@ -24,6 +24,21 @@ export class RealtimeService {
   }
 
   /**
+   * Take sockets out of a thread room — one user's, or everyone's.
+   *
+   * Messages are addressed per user from recipients computed on every send, so
+   * losing access already stops them; but a socket that joined `thread:<id>`
+   * stays in the room until it leaves, and the room still carries typing
+   * echoes. Called when access is revoked (removed from a group, chat
+   * disabled) so a still-open tab stops hearing the conversation at once.
+   */
+  leaveThread(threadId: string, userId?: string) {
+    this.server
+      ?.in(userId ? `user:${userId}` : `thread:${threadId}`)
+      .socketsLeave(`thread:${threadId}`);
+  }
+
+  /**
    * Everyone currently inside one live classroom.
    *
    * A room per session rather than per pair: a class is a group, and the

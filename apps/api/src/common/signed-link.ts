@@ -80,9 +80,20 @@ export function avatarUrl(user: {
 
 export type ChatFileVariant = 'full' | 'preview' | 'download';
 
-/** A signed URL for one attachment variant — mint only after the thread gate. */
-export function chatFileUrl(attachmentId: string, variant: ChatFileVariant): string {
+/**
+ * A signed URL for one attachment variant — mint only after the thread gate.
+ * Bound to the viewer it was minted for: serving it re-asks whether that
+ * viewer can still see the message, so a link outlives nobody's access (a
+ * student removed from a group, a narrowed grant, a revoked guardian).
+ */
+export function chatFileUrl(
+  attachmentId: string,
+  variant: ChatFileVariant,
+  viewerId: string,
+): string {
   const exp = windowedExpiry(6 * 3600, 6 * 3600);
-  const t = signLink('chat-file', `${attachmentId}:${variant}`, exp);
-  return apiPath(`/files/chat/${encodeURIComponent(attachmentId)}?v=${variant}&e=${exp}&t=${t}`);
+  const t = signLink('chat-file', `${attachmentId}:${variant}:${viewerId}`, exp);
+  return apiPath(
+    `/files/chat/${encodeURIComponent(attachmentId)}?v=${variant}&u=${encodeURIComponent(viewerId)}&e=${exp}&t=${t}`,
+  );
 }

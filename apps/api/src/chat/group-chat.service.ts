@@ -93,6 +93,7 @@ export class GroupChatService {
       },
     });
     await this.announce(t.id, true);
+    if (change.enabled === false) this.realtime.leaveThread(t.id);
     return this.status(ctx, groupId);
   }
 

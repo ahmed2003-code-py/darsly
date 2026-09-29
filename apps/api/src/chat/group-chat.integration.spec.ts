@@ -38,7 +38,9 @@ const realtime = {
   emitToUser: (userId: string, event: string, payload: any) =>
     events.push({ userId, event, payload }),
   emitToThread: () => undefined,
+  leaveThread: (threadId: string, userId?: string) => left.push({ threadId, userId }),
 } as any;
+const left: { threadId: string; userId?: string }[] = [];
 const notified: { userId: string; threadId: string; title: string }[] = [];
 const notifications = {
   create: async () => ({}),
@@ -68,7 +70,12 @@ const chat = new ChatService(prisma, realtime, notifications, storage, scopes, p
 const files = new ChatAttachmentsService(prisma, storage, chat);
 const reactions = new ChatReactionsService(prisma, chat, realtime);
 const opsAccess = new AcademyOpsAccessService(prisma);
-const groups = new GroupsService(prisma, opsAccess, { log: async () => undefined } as any);
+const groups = new GroupsService(
+  prisma,
+  opsAccess,
+  { log: async () => undefined } as any,
+  realtime,
+);
 const groupChat = new GroupChatService(prisma, opsAccess, policy, realtime);
 
 beforeAll(async () => {
@@ -323,8 +330,20 @@ describe('group chat — one canonical conversation per existing Group', () => {
       threadId: w.threadId,
     });
     const m = await say(w, w.owner.jwt, 'file', { attachmentIds: [up.id] });
+    // The link she was handed while still a member.
+    const seen = (await chat.getMessages(w.laila.jwt, w.threadId)).find(
+      (x) => x.id === m.message.id,
+    )!;
+    const link = new URL(seen.attachments![0].url, 'http://x').searchParams;
+    const openHers = () =>
+      files.open(up.id, 'full', Number(link.get('e')), link.get('t')!, link.get('u')!);
+    await expect(openHers()).resolves.toMatchObject({ variant: 'full' });
+    left.length = 0;
     await groups.removeMember(await ctxOf(w.owner.jwt, w.academyId), w.group.id, w.laila.studentId);
     expect(await chat.canAccessThread(w.laila.jwt, w.threadId)).toBe(false);
+    // Her open tab leaves the room, and the link she holds stops working.
+    expect(left).toContainEqual({ threadId: w.threadId, userId: w.laila.userId });
+    await expect(openHers()).rejects.toBeInstanceOf(NotFoundException);
     await expect(chat.getMessages(w.laila.jwt, w.threadId)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
@@ -383,7 +402,9 @@ describe('group chat — one canonical conversation per existing Group', () => {
     const w = await world();
     await say(w, w.sara.jwt, 'hi');
     const ctx = await ctxOf(w.owner.jwt, w.academyId);
+    left.length = 0;
     await groupChat.update(ctx, w.group.id, { enabled: false });
+    expect(left).toContainEqual({ threadId: w.threadId, userId: undefined });
     expect(await chat.canAccessThread(w.sara.jwt, w.threadId)).toBe(false);
     await expect(say(w, w.owner.jwt, 'x')).rejects.toMatchObject({
       response: { code: 'READ_ONLY' },

@@ -8,6 +8,7 @@ import { GroupAssignmentRole, Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { asPage } from '../common/pagination';
 import { AcademyOpsAccessService } from './academy-ops-access.service';
 import {
@@ -25,6 +26,7 @@ export class GroupsService {
     private readonly prisma: PrismaService,
     private readonly access: AcademyOpsAccessService,
     private readonly audit: AuditService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   /** Every group in the academy an OWNER sees; a TEACHER/ASSISTANT sees only
@@ -283,6 +285,12 @@ export class GroupsService {
         code: 'MEMBERSHIP_NOT_FOUND',
       });
     await this.prisma.groupMembership.delete({ where: { id: membership.id } });
+    // An open chat tab must stop hearing the group's room straight away.
+    const [student, chats] = await Promise.all([
+      this.prisma.studentProfile.findUnique({ where: { id: studentId }, select: { userId: true } }),
+      this.prisma.chatThread.findMany({ where: { groupId, kind: 'GROUP' }, select: { id: true } }),
+    ]);
+    if (student) for (const c of chats) this.realtime.leaveThread(c.id, student.userId);
     await this.audit.log({
       actorUserId: ctx.userId,
       action: 'group.members.remove',

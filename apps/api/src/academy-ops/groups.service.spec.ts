@@ -73,7 +73,7 @@ describe('GroupsService', () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.count.mockResolvedValue(0);
       prisma.group.findMany.mockResolvedValue([]);
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await svc.list(ctx({ role: 'OWNER' }), {});
       expect(prisma.group.count).toHaveBeenCalledWith({
         where: { academyId: 'a1', deletedAt: null },
@@ -84,7 +84,7 @@ describe('GroupsService', () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.count.mockResolvedValue(0);
       prisma.group.findMany.mockResolvedValue([]);
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await svc.list(ctx({ role: 'TEACHER', userId: 'teacherA' }), {});
       expect(prisma.group.count).toHaveBeenCalledWith({
         where: {
@@ -102,7 +102,7 @@ describe('GroupsService', () => {
       prisma.group.findFirst.mockResolvedValue(null);
       prisma.group.create.mockResolvedValue({ id: 'g1', academyId: 'a1', name: 'G1' });
       prisma.groupAssignment.create.mockResolvedValue({ id: 'ga1' });
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       const group = await svc.create(ctx({ role: 'TEACHER', userId: 'teacherA' }), { name: 'G1' });
       expect(group.id).toBe('g1');
       expect(prisma.groupAssignment.create).toHaveBeenCalledWith({
@@ -114,7 +114,7 @@ describe('GroupsService', () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.findFirst.mockResolvedValue(null);
       prisma.group.create.mockResolvedValue({ id: 'g1', academyId: 'a1', name: 'G1' });
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await svc.create(ctx({ role: 'OWNER' }), { name: 'G1' });
       expect(prisma.groupAssignment.create).not.toHaveBeenCalled();
     });
@@ -122,7 +122,7 @@ describe('GroupsService', () => {
     it('refuses a second live group with the same name — the duplicate that appeared when create was invisible to its author', async () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.findFirst.mockResolvedValue({ id: 'existing' });
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await expect(svc.create(ctx({ role: 'TEACHER' }), { name: 'G1' })).rejects.toBeInstanceOf(
         ConflictException,
       );
@@ -135,7 +135,7 @@ describe('GroupsService', () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' });
       prisma.studentProfile.findMany.mockResolvedValue([{ id: 's1' }]); // s2 not returned = not enrolled here
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await expect(
         svc.addMembers(ctx({ role: 'OWNER' }), 'g1', { studentIds: ['s1', 's2'] }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -144,7 +144,7 @@ describe('GroupsService', () => {
     it('refuses a teacher not assigned to the group before even checking students', async () => {
       const { prisma, audit, access } = makeDeps();
       access.assertGroupAccess.mockRejectedValue(new ForbiddenException());
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await expect(svc.addMembers(ctx(), 'g1', { studentIds: ['s1'] })).rejects.toBeInstanceOf(
         ForbiddenException,
       );
@@ -156,7 +156,7 @@ describe('GroupsService', () => {
     it('refuses a non-OWNER even with group.manage and even if assigned to the group', async () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' });
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await expect(
         svc.assignStaff(ctx({ role: 'TEACHER' }), 'g1', { userId: 'u2', role: 'ASSISTANT' }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -165,7 +165,7 @@ describe('GroupsService', () => {
     it('404s a cross-academy group id for assignment too (checked independently of OWNER-only rule)', async () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.findFirst.mockResolvedValue(null);
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await expect(
         svc.assignStaff(ctx({ role: 'OWNER' }), 'g1', { userId: 'u2', role: 'TEACHER' }),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -175,7 +175,7 @@ describe('GroupsService', () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' });
       prisma.academyMembership.findFirst.mockResolvedValue(null);
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await expect(
         svc.assignStaff(ctx({ role: 'OWNER' }), 'g1', { userId: 'stranger', role: 'TEACHER' }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -191,7 +191,7 @@ describe('GroupsService', () => {
         userId: 'u2',
         role: 'TEACHER',
       });
-      const svc = new GroupsService(prisma, access, audit);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       const result = await svc.assignStaff(ctx({ role: 'OWNER' }), 'g1', {
         userId: 'u2',
         role: 'TEACHER',

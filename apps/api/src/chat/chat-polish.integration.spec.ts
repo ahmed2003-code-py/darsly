@@ -422,7 +422,7 @@ describe('delete for everyone', () => {
     // The files and the voice are gone behind every link already handed out.
     for (const [i, a] of m.message.attachments!.entries()) {
       await expect(
-        files.open(a.id, 'full', Number(links[i].get('e')), links[i].get('t')!),
+        files.open(a.id, 'full', Number(links[i].get('e')), links[i].get('t')!, links[i].get('u')!),
       ).rejects.toBeInstanceOf(NotFoundException);
     }
     await expect(reactions.react(w.student.jwt, m.message.id, '❤️')).rejects.toMatchObject({

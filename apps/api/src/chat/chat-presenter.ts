@@ -123,17 +123,20 @@ export function previewOf(m: {
   return '';
 }
 
-export function attachmentDto(a: {
-  id: string;
-  kind: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  width: number | null;
-  height: number | null;
-  previewKey: string | null;
-  durationSec?: number | null;
-}): ChatAttachmentDto {
+export function attachmentDto(
+  a: {
+    id: string;
+    kind: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    width: number | null;
+    height: number | null;
+    previewKey: string | null;
+    durationSec?: number | null;
+  },
+  viewerId: string,
+): ChatAttachmentDto {
   return {
     id: a.id,
     kind: a.kind as ChatAttachmentDto['kind'],
@@ -142,9 +145,9 @@ export function attachmentDto(a: {
     size: a.sizeBytes,
     width: a.width,
     height: a.height,
-    url: chatFileUrl(a.id, 'full'),
-    previewUrl: a.kind === 'IMAGE' && a.previewKey ? chatFileUrl(a.id, 'preview') : null,
-    downloadUrl: chatFileUrl(a.id, 'download'),
+    url: chatFileUrl(a.id, 'full', viewerId),
+    previewUrl: a.kind === 'IMAGE' && a.previewKey ? chatFileUrl(a.id, 'preview', viewerId) : null,
+    downloadUrl: chatFileUrl(a.id, 'download', viewerId),
     durationSec: a.kind === 'VOICE' ? (a.durationSec ?? null) : null,
   };
 }
@@ -223,7 +226,9 @@ export function toMessageDto(
       m.lesson && !revoked
         ? { id: m.lesson.id, title: m.lesson.title, atSec: m.videoTimestampSec ?? null }
         : null,
-    attachments: revoked ? [] : (m.attachments ?? []).map(attachmentDto),
+    attachments: revoked
+      ? []
+      : (m.attachments ?? []).map((a: any) => attachmentDto(a, viewerUserId)),
     reactions: revoked ? [] : (ctx.reactions?.get(m.id) ?? []),
     ...(revoked ? { deleted: true } : {}),
     ...(ctx.seenCount !== undefined ? { seenCount: ctx.seenCount } : {}),

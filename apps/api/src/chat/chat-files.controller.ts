@@ -76,6 +76,7 @@ export class ChatFilesController {
     @Query('v') v: string,
     @Query('e') e: string,
     @Query('t') t: string,
+    @Query('u') u: string,
     @Res() res: Response,
   ) {
     const { attachment, obj, variant } = await this.attachments.open(
@@ -83,6 +84,7 @@ export class ChatFilesController {
       String(v ?? '') as ChatFileVariant,
       Number(e),
       String(t ?? ''),
+      String(u ?? ''),
     );
     this.harden(res);
     res.setHeader('Content-Type', attachment.mimeType);

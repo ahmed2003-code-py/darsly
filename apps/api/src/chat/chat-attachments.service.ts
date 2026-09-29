@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { promises as fsp, createReadStream } from 'fs';
-import { ChatAttachmentDto, JwtPayload } from '@darsly/shared-types';
+import { ChatAttachmentDto, JwtPayload, Role } from '@darsly/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
 import { ChatFileVariant, verifyLink } from '../common/signed-link';
@@ -189,7 +189,8 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
       }
 
       const head = await this.readHead(file.path);
-      if (voice) return attachmentDto(await this.saveVoice(user, file, head, base0(), voice));
+      if (voice)
+        return attachmentDto(await this.saveVoice(user, file, head, base0(), voice), user.sub);
       if (isHeif(head)) {
         throw new BadRequestException({
           message: 'HEIC photos are not supported — send it as JPG',
@@ -274,7 +275,7 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
           },
         });
       }
-      return attachmentDto(saved);
+      return attachmentDto(saved, user.sub);
     } finally {
       await fsp.unlink(file.path).catch(() => undefined);
     }
@@ -337,25 +338,49 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
   /**
    * The bytes behind a signed link. The link was minted only after the
    * conversation gate (message reads) or for the uploader (their own pending
-   * upload), so the signature is the permission; this re-checks that the file
-   * still belongs to a live message, or is still pending.
+   * upload), for one viewer. The signature proves who it was minted for; the
+   * access is asked again here, because access changes while links live (a
+   * student removed from a group chat must not keep its files for hours).
    */
-  async open(id: string, variant: ChatFileVariant, exp: number, token: string) {
+  async open(id: string, variant: ChatFileVariant, exp: number, token: string, viewerId: string) {
     if (!['full', 'preview', 'download'].includes(variant)) throw new NotFoundException();
-    if (!verifyLink('chat-file', `${id}:${variant}`, exp, token)) {
+    if (!viewerId || !verifyLink('chat-file', `${id}:${variant}:${viewerId}`, exp, token)) {
       throw new ForbiddenException('This link has expired');
     }
     const a = await this.prisma.chatAttachment.findUnique({
       where: { id },
-      include: { message: { select: { deletedAt: true, revokedAt: true } } },
+      include: {
+        message: { select: { threadId: true, createdAt: true, deletedAt: true, revokedAt: true } },
+      },
     });
     if (!a) throw new NotFoundException();
     // A file of a message deleted for everyone is gone, whatever links exist.
     if (a.status === 'ATTACHED' && (!a.message || a.message.deletedAt || a.message.revokedAt))
       throw new NotFoundException();
+    if (a.status === 'ATTACHED') {
+      const viewer = await this.viewer(viewerId);
+      if (!viewer || !(await this.chat.mayTouch(viewer, a.message!))) throw new NotFoundException();
+    } else if (a.uploaderId !== viewerId) {
+      throw new NotFoundException();
+    }
     const key = variant === 'preview' && a.previewKey ? a.previewKey : a.storageKey;
     const obj = await this.storage.getStream(key);
     return { attachment: a, obj, variant };
+  }
+
+  /** The link's viewer as the conversation policy knows callers — or null if gone. */
+  private async viewer(userId: string): Promise<JwtPayload | null> {
+    const u = await this.prisma.user.findFirst({
+      where: { id: userId, isActive: true },
+      select: { id: true, role: true, teacherProfile: { select: { id: true } } },
+    });
+    if (!u) return null;
+    return {
+      sub: u.id,
+      role: u.role as Role,
+      tenantId: u.role === Role.TEACHER ? u.teacherProfile?.id : undefined,
+      sessionId: '',
+    };
   }
 
   /** Uploads nobody sent within a day: rows and objects both go. */

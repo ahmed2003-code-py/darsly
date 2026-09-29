@@ -371,21 +371,30 @@ describe('attachments — delivery and cleanup', () => {
       tenantId: teacher.tenantId,
     });
     const url = new URL(a.url, 'http://x');
-    const [e, t] = [Number(url.searchParams.get('e')), url.searchParams.get('t')!];
-    await expect(files.open(a.id, 'full', e, t)).resolves.toMatchObject({ variant: 'full' });
-    await expect(files.open(a.id, 'full', e, t.slice(0, -2) + 'xx')).rejects.toBeInstanceOf(
+    const [e, t, u] = [
+      Number(url.searchParams.get('e')),
+      url.searchParams.get('t')!,
+      url.searchParams.get('u')!,
+    ];
+    expect(u).toBe(students[0].jwt.sub);
+    await expect(files.open(a.id, 'full', e, t, u)).resolves.toMatchObject({ variant: 'full' });
+    await expect(files.open(a.id, 'full', e, t.slice(0, -2) + 'xx', u)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
-    await expect(files.open(a.id, 'download', e, t)).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(files.open(a.id, 'full', 1000, t)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(files.open(a.id, 'download', e, t, u)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(files.open(a.id, 'full', 1000, t, u)).rejects.toBeInstanceOf(ForbiddenException);
+    // A link is its viewer's: replayed under someone else's id it opens nothing.
+    await expect(files.open(a.id, 'full', e, t, teacher.jwt.sub)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     // A token for one attachment never opens another.
     const b = await files.upload(students[0].jwt, await staged('b.pdf', pdfBytes()), {
       tenantId: teacher.tenantId,
     });
-    await expect(files.open(b.id, 'full', e, t)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(files.open(b.id, 'full', e, t, u)).rejects.toBeInstanceOf(ForbiddenException);
     // Avatar and file tokens are not interchangeable.
     expect(verifyLink('avatar', `${a.id}:full`, e, t)).toBe(false);
-    expect(chatFileUrl(a.id, 'full')).toContain(`/files/chat/${a.id}?v=full`);
+    expect(chatFileUrl(a.id, 'full', u)).toContain(`/files/chat/${a.id}?v=full&u=${u}`);
   });
 
   it('a removed message takes its files with it', async () => {
@@ -403,7 +412,13 @@ describe('attachments — delivery and cleanup', () => {
     await prisma.chatMessage.delete({ where: { id: sent.message.id } }); // soft delete
     const url = new URL(sent.message.attachments![0].url, 'http://x');
     await expect(
-      files.open(a.id, 'full', Number(url.searchParams.get('e')), url.searchParams.get('t')!),
+      files.open(
+        a.id,
+        'full',
+        Number(url.searchParams.get('e')),
+        url.searchParams.get('t')!,
+        url.searchParams.get('u')!,
+      ),
     ).rejects.toMatchObject({ status: 404 });
   });
 

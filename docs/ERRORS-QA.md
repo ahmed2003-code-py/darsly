@@ -48,6 +48,8 @@ Automated coverage: `A` = `apps/api/src/common/errors/api-exception.filter.spec.
 | A2 | Unknown email/phone | `INVALID_CREDENTIALS` | 401 | Identical to A1 (no account enumeration) | — | — |
 | A3 | Too many logins | `RATE_LIMITED` | 429 | "استنى N ثانية" with the real wait | Wait | E W |
 | A4 | Register with a taken phone | `PHONE_TAKEN` | 409 | Auth copy for phone taken | Sign in or use another | — |
+| A6 | Wrong / expired OTP | `INVALID_CODE` / `CODE_EXPIRED` | 400 | Auth copy for that case | Re-enter / request a new code |
+| A7 | Sign up with a weak password | `VALIDATION_FAILED` → `password: WEAK_PASSWORD` | 400 | Under the password field: the actual rule | Fix it |
 | A5 | Expired session while using the app | `UNAUTHENTICATED` | 401 | Silent refresh; if it fails, the sign-in page — no toast | Sign in | — |
 
 ## Messaging
@@ -70,6 +72,7 @@ Automated coverage: `A` = `apps/api/src/common/errors/api-exception.filter.spec.
 | P1 | Pay from wallet with too little balance | `INSUFFICIENT_BALANCE` | 400 | Balance vs. required amounts in the modal | Top up |
 | P2 | Declare a transfer with the platform's own number | `OWN_NUMBER` | 400 | Inline in the payment form: "الرقم ده بتاعنا إحنا…" | Enter the sender's number |
 | P3 | Buy a course already owned | `ALREADY_ENROLLED` | 409 | Inline in the modal | Open the course |
+| P5 | Apply an unknown / expired / used-up coupon | `COUPON_INVALID` / `COUPON_EXPIRED` / `COUPON_LIMIT_REACHED` | 400 | Inline, the specific reason | Check the code / pay full price |
 | P4 | Two purchases of one course at once | `ALREADY_EXISTS` / handled | 409 | One succeeds; the other a clear refusal, not 500 | — |
 
 ## Live sessions
@@ -101,3 +104,32 @@ Automated coverage: `A` = `apps/api/src/common/errors/api-exception.filter.spec.
 | S5 | A page component crashes | — | — | That page shows "الصفحة دي مقدرتش تفتح" with Retry; the shell still works; another route works | — |
 | S6 | A deploy removed a lazy chunk | — | — | One silent reload, then the page | — |
 | S7 | Unknown API route | `NOT_FOUND` | 404 | — ; not logged (scanners) | A |
+
+## Production verification — 2026-09-29 (deploy of 2c13cf5)
+
+Unauthenticated probes (no account created or changed; the login probe uses an
+identifier that belongs to no account). Every body carried , and a  equal to its , and nothing internal.
+
+| Probe | Before | After |
+|---|---|---|
+| Login, unknown account | 401  | 401  |
+| Sign-up, bad fields | 400 with seven English sentences | 400  +  with codes and  |
+| Malformed JSON | 400 "Unexpected end of JSON input" (parser text) | 400  |
+| 4 MB body | 413 "request entity too large" | 413  |
+| Protected route, no token | 401, no code | 401  |
+| Bogus guardian link | 410  | same, plus envelope |
+| 21 logins in a minute | — | 429 ,  =  |
+
+Log correlation: each probe's request id found exactly one line, e.g.
+.
+
+Screens reviewed by eye (1280 px and 360 px, Arabic and English): login wrong
+credentials, login offline, login rate-limited, sign-up field errors, invalid
+guardian link. Fixed after review: the password rule was replaced by a generic
+"invalid" (now  with the rule), "لازم يكون 2 حروف" grammar,
+"Wait 1 seconds", and an offline sentence that promised an automatic retry.
+
+**Not verified in production:** anything behind a staff or student sign-in
+(guardian G1–G9, messaging, payments, live, exams). No TEST credentials exist
+for production; these are covered by the Postgres integration and e2e suites in
+CI. Run those rows by hand with TEST accounts.

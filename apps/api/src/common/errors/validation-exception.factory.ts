@@ -56,6 +56,8 @@ const LIMIT_PARAM: Record<string, string> = {
 
 /** A field whose free-form `@Matches` is, in practice, a phone format check. */
 const PHONE_FIELD = /phone|mobile|wallet(number)?$/i;
+/** A password's `@Matches` is the strength rule. */
+const PASSWORD_FIELD = /password$/i;
 
 function issuesOf(errors: ValidationError[], prefix = ''): FieldIssue[] {
   const out: FieldIssue[] = [];
@@ -72,6 +74,9 @@ function issuesOf(errors: ValidationError[], prefix = ''): FieldIssue[] {
       let code = CONSTRAINT_CODE[name] ?? 'INVALID';
       if (code === 'INVALID' && name === 'matches' && PHONE_FIELD.test(e.property)) {
         code = 'INVALID_PHONE';
+      } else if (code === 'INVALID' && name === 'matches' && PASSWORD_FIELD.test(e.property)) {
+        // Every password @Matches is the strength rule (PASSWORD_REGEX).
+        code = 'WEAK_PASSWORD';
       }
       const issue: FieldIssue = { field, code };
       const param = LIMIT_PARAM[name];

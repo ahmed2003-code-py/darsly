@@ -94,6 +94,8 @@ describe('resolveError', () => {
     const m = resolveError(http(429, { code: 'RATE_LIMITED' }, { 'retry-after': '300' }));
     expect(m.message).toContain('5');
     expect(m.message).not.toBe(ar.err.status.server);
+    const few = resolveError(http(429, { code: 'RATE_LIMITED', retryAfterSeconds: 1 }));
+    expect(few.message).toBe(ar.err.rateLimitedFew);
   });
 
   it('tells a lost connection, a timeout and a cancellation apart', () => {

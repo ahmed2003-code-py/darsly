@@ -204,7 +204,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
     // A 404 on a path no route matched is a scanner, not a user. A 404 from a
     // real route (a resource that is not there, or is hidden) is kept.
     const route = (req as Request & { route?: { path?: string } }).route?.path;
-    if (status === 404 && !route) return;
+    // (Nest's own not-found handler reports its route as '*'.)
+    if (status === 404 && (!route || route === '*')) return;
 
     const user = (req as Request & { user?: { sub?: string } }).user?.sub;
     const academy = req.headers?.['x-academy-id'];

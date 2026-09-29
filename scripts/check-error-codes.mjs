@@ -89,7 +89,7 @@ const constraintMap = /const CONSTRAINT_CODE[^{]*\{([\s\S]*?)\n\};/.exec(factory
 const fieldCodes = new Set(
   [...constraintMap.matchAll(/:\s*'([A-Z_]+)'/g)]
     .map((m) => m[1])
-    .concat(['INVALID', 'INVALID_PHONE']),
+    .concat(['INVALID', 'INVALID_PHONE', 'WEAK_PASSWORD']),
 );
 
 const webText = walk(WEB).map(read).join('\n');

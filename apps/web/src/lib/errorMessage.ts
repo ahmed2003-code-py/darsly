@@ -194,6 +194,8 @@ function withReference(message: string, requestId: string | null): string {
 
 function rateLimitSentence(seconds: number | null): string | null {
   if (!seconds || seconds <= 0) return translate('err.status.tooMany', 0);
+  // A short wait is not worth a countdown (and 3–10 takes another Arabic plural).
+  if (seconds <= 10) return translate('err.rateLimitedFew', 0);
   if (seconds <= 90) return translate('err.rateLimitedSeconds', 0, { seconds });
   return translate('err.rateLimitedMinutes', 0, { minutes: Math.ceil(seconds / 60) });
 }

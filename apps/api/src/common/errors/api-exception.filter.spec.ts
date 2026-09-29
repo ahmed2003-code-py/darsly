@@ -258,6 +258,7 @@ describe('validationExceptionFactory', () => {
         constraints: { isEmail: 'email must be an email', isNotEmpty: 'email should not be empty' },
       },
       { property: 'price', constraints: { max: 'price must not be greater than 5000' } },
+      { property: 'password', constraints: { matches: 'Password must be at least 8 characters' } },
       { property: 'evil', constraints: { whitelistValidation: 'property evil should not exist' } },
     ]);
     expect(body.statusCode).toBe(400);
@@ -267,6 +268,7 @@ describe('validationExceptionFactory', () => {
       { field: 'phone', code: 'INVALID_PHONE' },
       { field: 'email', code: 'REQUIRED' },
       { field: 'price', code: 'TOO_LARGE', params: { max: 5000 } },
+      { field: 'password', code: 'WEAK_PASSWORD' },
       { field: 'evil', code: 'UNKNOWN_FIELD' },
     ]);
     expect(JSON.stringify(body)).not.toContain('regular expression');

@@ -2860,7 +2860,7 @@
     "eVoiceTooLong": "That voice message is too long.",
     "eWrongPassword": "Wrong password.",
     "network": "We couldn't reach the service. Check your connection and try again.",
-    "offline": "You're offline. We'll try again as soon as the connection is back.",
+    "offline": "You're offline. Check your connection and try again — what you typed is still here.",
     "unknown": "Something went wrong. Please try again, and contact support if it keeps happening.",
     "status": {
       "badRequest": "The details sent were incomplete or invalid. Check them and try again.",
@@ -3005,7 +3005,8 @@
       "TOO_MANY": "Too many — at most {{max}}.",
       "TOO_FEW": "Choose at least {{min}}.",
       "UNKNOWN_FIELD": "Unexpected data was sent. Refresh the page and try again.",
-      "INVALID": "This value isn't right. Please check it."
+      "INVALID": "This value isn't right. Please check it.",
+      "WEAK_PASSWORD": "The password needs at least 8 characters, including a letter and a number."
     },
     "ePhoneInUse": "This phone number is already registered to another Darsly account (such as a student or teacher), so it can't also be a guardian account. Enter the guardian's own number.",
     "eGuardianIsStudent": "That's the student's own number. Enter the guardian's number.",
@@ -3150,7 +3151,8 @@
     "eAlreadyGraded": "This assignment has already been graded, so it can't be resubmitted.",
     "eQuizEmpty": "This exam doesn't have any questions yet.",
     "eNotABundle": "This course isn't a bundle.",
-    "eBundleContainsItself": "A bundle can't contain itself."
+    "eBundleContainsItself": "A bundle can't contain itself.",
+    "rateLimitedFew": "Too many attempts in a short time. Wait a few seconds and try again."
   },
   "myStudio": {
     "title": "My Studio",

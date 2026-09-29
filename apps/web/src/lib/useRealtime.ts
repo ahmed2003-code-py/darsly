@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { RealtimeEvents } from '@darsly/shared-types';
 import { getSocket } from './socket';
 import { useAuthStore } from '../stores/auth';
+import { refreshThreadList } from './chatRefresh';
 
 /**
  * App-wide realtime wiring: keeps the notification bell + chat thread list
@@ -19,7 +20,7 @@ export function useRealtime() {
     if (!socket) return;
 
     const refreshNotifs = () => queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    const refreshThreads = () => queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
+    const refreshThreads = () => refreshThreadList(queryClient);
 
     socket.on(RealtimeEvents.NOTIFICATION, refreshNotifs);
     socket.on(RealtimeEvents.UNREAD_COUNT, refreshNotifs);

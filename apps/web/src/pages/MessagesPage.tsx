@@ -19,6 +19,7 @@ import ContactPicker from './messages/ContactPicker';
 import { useAuthStore } from '../stores/auth';
 import Conversation, { ConversationHeader } from './messages/Conversation';
 import type { SendTarget } from './messages/useConversation';
+import { refreshThreadList } from '../lib/chatRefresh';
 
 /** Must match the API's default list page (THREAD_PAGE). */
 const THREAD_PAGE = 50;
@@ -169,7 +170,7 @@ export default function MessagesPage() {
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
-    const refresh = () => queryClient.invalidateQueries({ queryKey: ['chat-threads'] });
+    const refresh = () => refreshThreadList(queryClient);
     // A conversation's state moved — claimed, resolved, a group switched to
     // announcements: its header and its row must follow at once.
     const moved = (e: { threadId?: string }) => {

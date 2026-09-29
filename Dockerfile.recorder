@@ -119,7 +119,7 @@ ENV STORAGE_LOCAL_PATH=/data/storage
 # itself and exits 0 after a clean shutdown (see main.ts). It used to be
 # `npm run start`: npm exited 143 on SIGTERM without waiting for the app,
 # which Railway recorded as a CRASHED deployment on every redeploy.
-# Migrations are not run here: the API's pre-deploy step owns them, and this
-# service's (railway.recorder.json) only waits until the schema is current.
+# Migrations are not run here: the API service's pre-deploy step owns them;
+# for this service scripts/predeploy.sh only waits until the schema is current.
 WORKDIR /app/apps/api
 CMD ["node", "dist/main.js"]

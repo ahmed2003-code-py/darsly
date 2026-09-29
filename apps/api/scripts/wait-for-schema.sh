@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# Railway pre-deploy step for the live-recorder service
-# (railway.recorder.json → preDeployCommand).
+# Pre-deploy wait for services that do not own migrations (live-recorder),
+# reached through scripts/predeploy.sh.
 #
 # The recorder runs the same code as the API but does NOT own migrations —
 # the API's pre-deploy step does. Both services deploy from the same push, so

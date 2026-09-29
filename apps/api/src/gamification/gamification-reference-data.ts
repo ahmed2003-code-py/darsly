@@ -29,6 +29,10 @@ interface XpRuleSeed {
   coins: number;
   dailyCap: number;
   perEntityLimit: number;
+  /** Rules paid in multiples (points): the limits per award, per student per entity, per entity. */
+  maxPerAward?: number | null;
+  maxPerStudentEntity?: number | null;
+  maxPerEntity?: number | null;
 }
 
 export const XP_RULES: XpRuleSeed[] = [
@@ -113,6 +117,18 @@ export const XP_RULES: XpRuleSeed[] = [
     perEntityLimit: 1,
   },
   { id: 'xpr_daily_login', event: 'DAILY_LOGIN', xp: 10, coins: 5, dailyCap: 0, perEntityLimit: 1 },
+  {
+    // One point = 10 XP + 5 coins. Limits are points; the class is the entity.
+    id: 'xpr_live_bonus',
+    event: 'LIVE_BONUS',
+    xp: 10,
+    coins: 5,
+    dailyCap: 0,
+    perEntityLimit: 0,
+    maxPerAward: 10,
+    maxPerStudentEntity: 20,
+    maxPerEntity: 300,
+  },
   {
     id: 'xpr_streak_milestone',
     event: 'STREAK_MILESTONE',
@@ -886,6 +902,9 @@ export async function ensureGamificationReferenceData(prisma: PrismaClient): Pro
         coins: r.coins,
         dailyCap: r.dailyCap,
         perEntityLimit: r.perEntityLimit,
+        maxPerAward: r.maxPerAward ?? null,
+        maxPerStudentEntity: r.maxPerStudentEntity ?? null,
+        maxPerEntity: r.maxPerEntity ?? null,
         isActive: true,
       },
       create: {
@@ -895,6 +914,9 @@ export async function ensureGamificationReferenceData(prisma: PrismaClient): Pro
         coins: r.coins,
         dailyCap: r.dailyCap,
         perEntityLimit: r.perEntityLimit,
+        maxPerAward: r.maxPerAward ?? null,
+        maxPerStudentEntity: r.maxPerStudentEntity ?? null,
+        maxPerEntity: r.maxPerEntity ?? null,
       },
     });
   }

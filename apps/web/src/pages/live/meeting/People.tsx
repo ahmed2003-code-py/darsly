@@ -23,6 +23,8 @@ export interface RowAction {
   icon: string;
   label: string;
   tone?: 'primary' | 'danger';
+  /** Shown but not available, with the reason under it. */
+  disabledReason?: string;
   run: () => void | Promise<void>;
 }
 
@@ -90,18 +92,25 @@ function ActionsMenu({ name, actions }: { name: string; actions: RowAction[] }) 
                 key={a.key}
                 type="button"
                 role="menuitem"
+                disabled={!!a.disabledReason}
+                aria-disabled={!!a.disabledReason}
                 onClick={() => {
                   setOpen(false);
                   void a.run();
                 }}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm font-semibold hover:bg-on-surface/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:py-2 ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm font-semibold hover:bg-on-surface/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent sm:py-2 ${
                   a.tone === 'danger' ? 'text-red-300' : a.tone === 'primary' ? 'text-primary' : 'text-on-surface'
                 }`}
               >
                 <span aria-hidden className="material-symbols-outlined text-[20px]">
                   {a.icon}
                 </span>
-                {a.label}
+                <span className="min-w-0">
+                  <span className="block">{a.label}</span>
+                  {a.disabledReason && (
+                    <span className="block text-xs font-normal text-on-surface-variant">{a.disabledReason}</span>
+                  )}
+                </span>
               </button>
             ))}
           </div>
@@ -151,6 +160,7 @@ export default function People({
   cf,
   extraActions,
   badges,
+  onBonus,
 }: {
   moderator: boolean;
   meeting: LiveMeeting;
@@ -159,6 +169,8 @@ export default function People({
   extraActions?: ExtraActions;
   /** Small per-person badges beside the icons (a bonus total…). */
   badges?: (userId: string) => ReactNode;
+  /** Opens the bonus dialog for a student. */
+  onBonus?: (p: { userId: string; name: string }) => void;
 }) {
   const { t } = useTranslation();
   const handOf = new Map((cf?.rtc?.participants ?? []).map((p) => [p.userId, p.hand]));
@@ -171,6 +183,7 @@ export default function People({
     .sort((a, b) => Number(b.owner) - Number(a.owner));
   const notJoined = moderator ? (cf?.rtc?.notJoined ?? []) : [];
   const controlsOf = new Map((cf?.rtc?.participants ?? []).map((p) => [p.userId, p.controls]));
+  const rtcOf = new Map((cf?.rtc?.participants ?? []).map((p) => [p.userId, p]));
   const micBlocked = (userId: string) => controlsOf.get(userId)?.mic === 'BLOCKED';
 
   const remove = async (userId: string, name: string, sessionId: string) => {
@@ -207,6 +220,17 @@ export default function People({
       );
     }
     if (!cf) out.push({ key: 'mute', icon: 'mic_off', label: t('meeting.muteOne'), run: () => meeting.muteParticipant(p.sessionId) });
+    if (cf && onBonus) {
+      const guest = rtcOf.get(p.userId)?.guest;
+      out.push({
+        key: 'bonus',
+        icon: 'redeem',
+        label: t('bonus.action'),
+        tone: 'primary',
+        ...(guest ? { disabledReason: t('bonus.guestNoPoints') } : {}),
+        run: () => onBonus({ userId: p.userId, name: p.name }),
+      });
+    }
     out.push(...(extraActions?.({ userId: p.userId, name: p.name, hand }) ?? []));
     out.push({ key: 'remove', icon: 'person_remove', label: t('meeting.removeOne'), tone: 'danger', run: () => remove(p.userId, p.name, p.sessionId) });
     return out;
@@ -215,6 +239,14 @@ export default function People({
   const iconsFor = (p: Participant) => (
     <>
       {badges?.(p.userId ?? '')}
+      {moderator && (rtcOf.get(p.userId ?? '')?.bonus ?? 0) > 0 && (
+        <span
+          className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-amber-200"
+          title={t('bonus.totalHint')}
+        >
+          +{rtcOf.get(p.userId ?? '')?.bonus}
+        </span>
+      )}
       {handOf.get(p.userId ?? '') === 'HAND_RAISED' && (
         <StateIcon icon="back_hand" label={t('meeting.handUp')} tone="warn" />
       )}

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
   Param,
@@ -17,10 +18,13 @@ import {
   ArrayMinSize,
   IsArray,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { JwtPayload, Role } from '@darsly/shared-types';
@@ -29,6 +33,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { GuestAllowed } from '../../common/decorators/guest-allowed.decorator';
 import { LIMITS } from '../../common/validation';
 import { LiveRtcService, SIMULCAST_RIDS, SimulcastRid } from './live-rtc.service';
+import { LIVE_BONUS_REASONS, LiveBonusReason, LiveBonusService } from '../bonus/live-bonus.service';
 
 /** An SDP is a few KB; a hundred tracks' worth is still well under this. */
 const SDP_MAX = 128 * 1024;
@@ -97,6 +102,15 @@ class HandDecisionDto {
   @IsIn(['approve', 'reject', 'revoke', 'invite']) action: 'approve' | 'reject' | 'revoke' | 'invite';
 }
 
+class BonusDto {
+  @IsString() @MaxLength(LIMITS.ID) studentUserId: string;
+  @IsInt() @Min(1) @Max(100) points: number;
+  @IsOptional() @IsIn(LIVE_BONUS_REASONS as unknown as string[]) reasonKey?: LiveBonusReason;
+  @IsOptional() @IsString() @MaxLength(80) reason?: string;
+  /** Made by the page per click: a retry of the same click is the same award. */
+  @IsString() @Matches(/^[0-9a-f-]{36}$/i) requestId: string;
+}
+
 class ControlsDto {
   @IsOptional() @IsIn(['DEFAULT', 'BLOCKED']) mic?: 'DEFAULT' | 'BLOCKED';
 }
@@ -136,7 +150,10 @@ function limit(userId: string) {
 @SkipThrottle()
 @Controller()
 export class LiveRtcController {
-  constructor(private readonly rtc: LiveRtcService) {}
+  constructor(
+    private readonly rtc: LiveRtcService,
+    private readonly bonus: LiveBonusService,
+  ) {}
 
   @Get('live/:id/rtc/state')
   @GuestAllowed()
@@ -267,6 +284,16 @@ export class LiveRtcController {
   ) {
     limit(u.sub);
     return this.rtc.setControls(u.sub, id, userId, dto);
+  }
+
+  /** "مكافأة": a moderator gives a student points in class (coins/XP — never money). */
+  @Post('live/:id/bonus')
+  @HttpCode(200)
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'A moderator gives a student bonus points during the class' })
+  grantBonus(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: BonusDto) {
+    limit(u.sub);
+    return this.bonus.grant(u.sub, id, dto);
   }
 
   @Post('live/:id/rtc/remove/:userId')

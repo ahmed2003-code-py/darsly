@@ -138,6 +138,26 @@ function ConfigTab({ tab }: { tab: Exclude<Tab, 'analytics' | 'redemptions'> }) 
                   value={field(id, 'perEntityLimit', r.perEntityLimit)}
                   onChange={(v) => set(id, 'perEntityLimit', v)}
                 />
+                {/* A rule paid in points (LIVE_BONUS): its limits, in points. */}
+                {r.maxPerAward != null && (
+                  <>
+                    <Num
+                      label={t('engagement.maxPerAward')}
+                      value={field(id, 'maxPerAward', r.maxPerAward)}
+                      onChange={(v) => set(id, 'maxPerAward', v)}
+                    />
+                    <Num
+                      label={t('engagement.maxPerStudentEntity')}
+                      value={field(id, 'maxPerStudentEntity', r.maxPerStudentEntity)}
+                      onChange={(v) => set(id, 'maxPerStudentEntity', v)}
+                    />
+                    <Num
+                      label={t('engagement.maxPerEntity')}
+                      value={field(id, 'maxPerEntity', r.maxPerEntity)}
+                      onChange={(v) => set(id, 'maxPerEntity', v)}
+                    />
+                  </>
+                )}
                 <Toggle
                   label={t('engagement.active')}
                   value={field(id, 'isActive', r.isActive)}

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, ValidateIf } from 'class-validator';
 import { Role } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
 import { AcademyStaff } from '../academy/academy-staff.decorator';
@@ -15,6 +15,10 @@ class UpdateXpRuleDto {
   @IsOptional() @IsInt() @Min(0) coins?: number;
   @IsOptional() @IsInt() @Min(0) dailyCap?: number;
   @IsOptional() @IsInt() @Min(0) perEntityLimit?: number;
+  /** Rules paid in points (LIVE_BONUS): the limits. Null removes one. */
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) maxPerAward?: number | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) maxPerStudentEntity?: number | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1) maxPerEntity?: number | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 

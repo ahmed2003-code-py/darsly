@@ -48,6 +48,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { GuestAllowed } from '../common/decorators/guest-allowed.decorator';
 import { LIVE_MAX_DURATION_MIN as MAX_DURATION_MIN, LiveScope, LiveService } from './live.service';
 import { LiveRtcService } from './rtc/live-rtc.service';
+import { LiveBonusService } from './bonus/live-bonus.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveReplayService } from './replay/live-replay.service';
 import { AUDIO_SEGMENT_MAX_BYTES, transcriptionConfig } from './transcription/lesson-transcription';
@@ -171,6 +172,7 @@ export class LiveController {
   constructor(
     private readonly live: LiveService,
     private readonly rtc: LiveRtcService,
+    private readonly bonus: LiveBonusService,
     private readonly recordings: LiveRecordingService,
     private readonly replays: LiveReplayService,
   ) {}
@@ -466,6 +468,15 @@ export class LiveController {
     const out: Record<string, unknown> = { mic: s.micPolicy };
     if (dto.micPolicy) Object.assign(out, await this.rtc.setMicPolicy(id, dto.micPolicy, u.sub));
     return out;
+  }
+
+  /** The class's bonuses, for its record: who gave whom how many, and why. */
+  @Get('teacher/live/:id/bonus')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Bonus points given during the class' })
+  async bonusHistory(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+    await this.live.ownedSession(scopeOf(ctx), id);
+    return this.bonus.history(id);
   }
 
   @Patch('teacher/live/:id/visibility')

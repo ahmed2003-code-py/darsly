@@ -103,6 +103,7 @@ export class GamificationService {
     let agg: StudentGamification;
     try {
       agg = await this.prisma.$transaction(async (tx) => {
+        if (input.guard) await input.guard(tx);
         await tx.gamificationEvent.create({
           data: {
             studentId: input.studentId,

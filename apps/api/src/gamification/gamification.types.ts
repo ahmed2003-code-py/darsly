@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client';
+
 /**
  * The event contract.
  *
@@ -35,6 +37,14 @@ export const GamificationEventType = {
   LEVEL_UP: 'LEVEL_UP',
   ACHIEVEMENT_UNLOCKED: 'ACHIEVEMENT_UNLOCKED',
   REWARD_REDEEMED: 'REWARD_REDEEMED',
+  /**
+   * Points a teacher grants a student during a live class ("مكافأة") — a
+   * correct answer, a great contribution. Paid in multiples of the rule
+   * (points × xp, points × coins) through xpOverride/coinsOverride, keyed by
+   * the teacher's click, capped per award / per student per class / per class
+   * by the rule's own limits. Never money: coins and XP only.
+   */
+  LIVE_BONUS: 'LIVE_BONUS',
   /** Not a reward — a once-a-day marker for the "when do you study" counters. */
   STUDY_WINDOW: 'STUDY_WINDOW',
 } as const;
@@ -76,6 +86,12 @@ export interface RecordEventInput {
   entityType?: string;
   entityId?: string;
   meta?: Record<string, unknown>;
+  /**
+   * Runs first inside the award's own transaction; throwing aborts the award
+   * (nothing is written). For limits that must be checked atomically with the
+   * award itself — e.g. a per-class cap two teacher tabs could both pass.
+   */
+  guard?: (tx: Prisma.TransactionClient) => Promise<void>;
   /** For computed awards (a scaled bonus); falls back to the configured rule. */
   xpOverride?: number;
   coinsOverride?: number;

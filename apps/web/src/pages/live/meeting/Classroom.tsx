@@ -8,6 +8,7 @@ import { useLiveChat } from '../../../lib/useLiveChat';
 import { formatClock, useClockTick, type ClockAnchor } from '../../../lib/useSessionClock';
 import { NameTag, Tile, Video, Initial } from './media';
 import People from './People';
+import BonusDialog from './BonusDialog';
 import { getSocket } from '../../../lib/socket';
 import { playLiveSound, setSoundsMuted, soundsMuted } from '../../../lib/liveSounds';
 
@@ -177,6 +178,7 @@ export default function Classroom(props: ClassroomProps) {
   const { sessionId, title, amOwner, meeting, anchor, extend, recording } = props;
   const cf: Cf | null = meeting.provider === 'cloudflare' ? (meeting as Cf) : null;
   const [panel, setPanel] = useState<Panel>(null);
+  const [bonusFor, setBonusFor] = useState<{ userId: string; name: string } | null>(null);
   const [layout, setLayout] = useState<Layout>('auto');
   const [pinned, setPinned] = useState<string | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
@@ -607,6 +609,31 @@ export default function Classroom(props: ClassroomProps) {
               </m.div>
             )}
 
+            {/* A bonus from the teacher: celebrated, then it fades. */}
+            <AnimatePresence>
+              {cf?.bonusReceived && (
+                <m.div
+                  key={cf.bonusReceived.id}
+                  initial={{ opacity: 0, y: -10, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-x-0 top-16 mx-auto flex w-fit items-center gap-2 rounded-full bg-amber-400 px-4 py-2 text-sm font-bold text-zinc-950 shadow-lg"
+                  role="status"
+                >
+                  <span aria-hidden>🎉</span>
+                  {t('bonus.received', { points: cf.bonusReceived.points })}
+                  {(cf.bonusReceived.reasonKey || cf.bonusReceived.reason) && (
+                    <span className="font-semibold" dir="auto">
+                      —{' '}
+                      {cf.bonusReceived.reasonKey
+                        ? t(`bonus.reasons.${cf.bonusReceived.reasonKey}`)
+                        : cf.bonusReceived.reason}
+                    </span>
+                  )}
+                </m.div>
+              )}
+            </AnimatePresence>
+
             {/* Phones may refuse sound until tapped. */}
             {cf?.audioBlocked && (
               <button
@@ -681,7 +708,15 @@ export default function Classroom(props: ClassroomProps) {
             raised={raised}
             chat={chat}
             userId={props.userId}
+            onBonus={cf ? setBonusFor : undefined}
           />
+          {bonusFor && cf && (
+            <BonusDialog
+              name={bonusFor.name}
+              onClose={() => setBonusFor(null)}
+              onGrant={(b) => cf.grantBonus(bonusFor.userId, b)}
+            />
+          )}
         </div>
 
         {/* ── Dock ── */}
@@ -1020,6 +1055,7 @@ function SidePanel({
   raised,
   chat,
   userId,
+  onBonus,
 }: {
   panel: Panel;
   setPanel: (p: Panel) => void;
@@ -1028,6 +1064,7 @@ function SidePanel({
   cf: Cf | null;
   raised: Cf['hands'];
   chat: ReturnType<typeof useLiveChat>;
+  onBonus?: (p: { userId: string; name: string }) => void;
   userId: string | null;
 }) {
   const { t } = useTranslation();
@@ -1090,7 +1127,7 @@ function SidePanel({
           </button>
         </div>
         {panel === 'people' ? (
-          <People moderator={moderator} meeting={meeting} cf={cf} />
+          <People moderator={moderator} meeting={meeting} cf={cf} onBonus={onBonus} />
         ) : (
           <Chat chat={chat} userId={userId} />
         )}

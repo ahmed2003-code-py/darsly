@@ -2452,7 +2452,8 @@
       "CHALLENGE_WON": "Won a challenge",
       "LEVEL_UP": "Levelled up",
       "ACHIEVEMENT_UNLOCKED": "Achievement unlocked",
-      "REWARD_REDEEMED": "Redeemed a reward"
+      "REWARD_REDEEMED": "Redeemed a reward",
+      "LIVE_BONUS": "Teacher's bonus in a live class"
     },
     "celebrate": {
       "lessonDone": "Lesson complete 🎉",
@@ -2743,7 +2744,10 @@
     "student": "Student",
     "fulfil": "Mark delivered",
     "noPending": "No pending requests.",
-    "capHint": "0 = no cap"
+    "capHint": "0 = no cap",
+    "maxPerAward": "Max points per award",
+    "maxPerStudentEntity": "Max points per student per class",
+    "maxPerEntity": "Max points per class"
   },
   "time": {
     "justNow": "Just now",
@@ -3098,7 +3102,7 @@
     "eLiveNoCash": "Live sessions can't be paid in cash. Use a transfer or your wallet.",
     "eGuestNoWallet": "Paying from a wallet needs an account. Sign in, or pay by transfer.",
     "eLivePaymentSettlesOnVerify": "A live-session payment is settled automatically once it's verified.",
-    "eNotAStudent": "Only student accounts can book a seat.",
+    "eNotAStudent": "That applies to students only.",
     "ePurchaseClosed": "This booking is already closed.",
     "eRefundNotFound": "This refund request doesn't exist or has already been handled.",
     "eRefundExceedsHeld": "The amount is more than what's held for this booking.",
@@ -3181,7 +3185,16 @@
     "eSiteUnverifiedClaims": "The page has claims that aren't verified yet. Remove or verify them before publishing.",
     "eStorageUnavailable": "We couldn't store the file right now — the problem is on our side. Try again shortly.",
     "eTeacherNotInGroup": "This teacher isn't assigned to this group. Assign them first or choose another teacher.",
-    "eVideoNotReady": "The video is still being prepared. Try again shortly."
+    "eVideoNotReady": "The video is still being prepared. Try again shortly.",
+    "eNotAModerator": "Only the class's teacher can do that.",
+    "eMicBlocked": "This student's microphone is off for the class.",
+    "eHandDisabled": "This class is listen-only — the teacher invites who speaks.",
+    "eBonusNotEligible": "This participant can't receive a bonus (guests have no points, and the student must have joined).",
+    "eBonusStudentCap": "This student has reached the bonus limit for this class.",
+    "eBonusClassCap": "This class has reached its bonus limit.",
+    "eBonusInvalid": "That number of points isn't allowed.",
+    "eBonusDisabled": "Bonuses are switched off right now.",
+    "eClassroomUnsupported": "Only the Darsly classroom has this."
   },
   "myStudio": {
     "title": "My Studio",
@@ -5097,5 +5110,25 @@
       "didNotJoin": "Didn't join",
       "staff": "Teachers"
     }
+  },
+  "bonus": {
+    "action": "Bonus",
+    "title": "Bonus for {{name}}",
+    "points": "Points",
+    "custom": "Other",
+    "range": "1 to {{max}}",
+    "reason": "Reason (optional)",
+    "reasons": {
+      "CORRECT_ANSWER": "Correct answer",
+      "GREAT_PARTICIPATION": "Great participation",
+      "SOLVED_IT": "Solved it",
+      "OTHER": "Other reason"
+    },
+    "reasonPh": "Write the reason",
+    "note": "Points go to the student's Darsly balance (XP and coins for rewards) — never money.",
+    "give": "Give +{{points}}",
+    "guestNoPoints": "Guests have no points balance",
+    "totalHint": "Bonus points this class",
+    "received": "+{{points}} points"
   }
 }

@@ -50,6 +50,8 @@ export interface RtcState {
     moderator?: boolean;
     /** What I may send and am asked to do (classroom-policy.ts on the server). */
     policy?: ClassroomPolicy;
+    /** A student's own bonus points in this class. */
+    bonus?: number;
   };
   maxSpeakers: number;
   /** The class's policies (explain the controls to everyone). */
@@ -69,6 +71,9 @@ export interface RtcState {
     screen: boolean;
     /** Moderators only: this participant's controls in this run. */
     controls?: { mic: 'DEFAULT' | 'BLOCKED' };
+    /** Moderators only: bonus points given in this class; a guest has no points. */
+    bonus?: number;
+    guest?: boolean;
   }[];
   tracks: { id: string; userId: string; kind: Kind; role: 'TEACHER' | 'STUDENT' }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
@@ -149,6 +154,13 @@ export function useCloudflareMeeting(
   const [sharing, setSharing] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [invited, setInvited] = useState(false);
+  /** A bonus just received (a student's page shows it, then it fades). */
+  const [bonusReceived, setBonusReceived] = useState<{
+    id: number;
+    points: number;
+    reasonKey: string | null;
+    reason: string | null;
+  } | null>(null);
   const [connection, setConnection] = useState<'connected' | 'reconnecting'>('connected');
   /** This page is capturing the lesson's audio for its transcript. */
   const [capturing, setCapturing] = useState(false);
@@ -732,12 +744,20 @@ export function useCloudflareMeeting(
       }
       refresh();
     };
+    const onBonus = (p: { sessionId: string; points: number; reasonKey: string | null; reason: string | null }) => {
+      if (p?.sessionId !== liveSessionId) return;
+      const id = Date.now();
+      setBonusReceived({ id, points: p.points, reasonKey: p.reasonKey, reason: p.reason });
+      setTimeout(() => setBonusReceived((cur) => (cur?.id === id ? null : cur)), 6_000);
+      refresh();
+    };
     const onRemoved = (p: { sessionId: string }) => {
       if (p?.sessionId !== liveSessionId) return;
       void teardown().then(() => setEnded(true));
     };
     sock?.on('live:rtc-state', onState);
     sock?.on('live:hand', onHand);
+    sock?.on('live:bonus', onBonus);
     sock?.on('live:removed', onRemoved);
     sock?.on('connect', refresh);
     const poll = setInterval(refresh, STATE_POLL_MS);
@@ -750,6 +770,7 @@ export function useCloudflareMeeting(
     return () => {
       sock?.off('live:rtc-state', onState);
       sock?.off('live:hand', onHand);
+      sock?.off('live:bonus', onBonus);
       sock?.off('live:removed', onRemoved);
       sock?.off('connect', refresh);
       clearInterval(poll);
@@ -1040,6 +1061,18 @@ export function useCloudflareMeeting(
     [liveSessionId, fetchState],
   );
 
+  /** A moderator: bonus points for a student (throws, so the dialog can say why). */
+  const grantBonus = useCallback(
+    async (
+      userId: string,
+      b: { points: number; reasonKey?: string; reason?: string; requestId: string },
+    ) => {
+      await api.post(`/live/${liveSessionId}/bonus`, { studentUserId: userId, ...b });
+      await fetchState();
+    },
+    [liveSessionId, fetchState],
+  );
+
   /** A moderator: one participant's controls for this run. */
   const setControls = useCallback(
     async (userId: string, controls: { mic?: 'DEFAULT' | 'BLOCKED' }) => {
@@ -1157,6 +1190,8 @@ export function useCloudflareMeeting(
     decideHand,
     setMicPolicy,
     setControls,
+    grantBonus,
+    bonusReceived,
     /** The teacher invited me to speak (asked on the page, never switched on). */
     invited: invited && state?.me.hand === 'APPROVED_TO_SPEAK',
     audioBlocked,

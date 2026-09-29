@@ -23,6 +23,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
+import { bonusTotals } from './bonus/bonus-totals';
 import { LIVE_MAX_DURATION_MIN } from './live-timing';
 import {
   LIVE_PRICE_MAX_CENTS,
@@ -3146,6 +3147,7 @@ export class LiveService {
       spoke.set(t.userId, cur);
     }
     const raised = new Map(hands.map((h) => [h.userId, h.raisedCount]));
+    const bonus = await bonusTotals(this.prisma, id);
     const pct = (sec: number) => (runSec ? Math.min(100, Math.round((sec / runSec) * 100)) : null);
 
     const list = rows.map((r) => {
@@ -3167,6 +3169,7 @@ export class LiveService {
         raisedCount: raised.get(r.userId) ?? 0,
         spokeCount: spoke.get(r.userId)?.count ?? 0,
         micOpenSeconds: spoke.get(r.userId)?.sec ?? 0,
+        bonusPoints: bonus.get(r.userId) ?? 0,
       };
     });
 

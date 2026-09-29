@@ -3965,6 +3965,14 @@ model XpRule {
   dailyCap       Int @default(0)
   perEntityLimit Int @default(1)
 
+  /// For a rule awarded in multiples ("points", e.g. LIVE_BONUS: one point =
+  /// `xp` + `coins`): the most one award may be, the most one student may
+  /// receive for one entity (a class), and the most one entity may give out.
+  /// Null: no such limit (every other rule pays a fixed amount).
+  maxPerAward         Int?
+  maxPerStudentEntity Int?
+  maxPerEntity        Int?
+
   isActive  Boolean  @default(true)
   updatedAt DateTime @updatedAt
 }

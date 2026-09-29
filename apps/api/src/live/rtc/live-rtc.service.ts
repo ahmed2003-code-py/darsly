@@ -21,6 +21,7 @@ import {
   type MicPolicy,
 } from './classroom-policy';
 import { transcriptCaptureState } from '../transcription/capture-state';
+import { bonusTotals } from '../bonus/bonus-totals';
 
 /**
  * How many students may speak at once. A class is a teacher and an audience;
@@ -77,6 +78,8 @@ export interface RtcState {
     moderator: boolean;
     /** What this person may send and is asked to do, from the one policy function. */
     policy: EffectivePolicy;
+    /** A student's own bonus points in this class. */
+    bonus?: number;
   };
   maxSpeakers: number;
   /** The class's policies (everyone sees them: they explain the controls). */
@@ -97,6 +100,9 @@ export interface RtcState {
     screen: boolean;
     /** Moderators only: this participant's controls in this run. */
     controls?: { mic: MicControl };
+    /** Moderators only: bonus points given in this class, and whether they are a guest (no points). */
+    bonus?: number;
+    guest?: boolean;
   }[];
   tracks: { id: string; userId: string; kind: LiveTrackKind; role: Role }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
@@ -726,6 +732,17 @@ export class LiveRtcService {
         )
       : null;
     const notJoined = g.moderator ? await this.notJoined(sessionId, new Set(roleOf.keys())) : undefined;
+    const bonus = await bonusTotals(this.prisma, sessionId);
+    const guests = g.moderator
+      ? new Set(
+          (
+            await this.prisma.guestBuyer.findMany({
+              where: { userId: { in: [...roleOf.keys()] } },
+              select: { userId: true },
+            })
+          ).map((x) => x.userId),
+        )
+      : null;
     return {
       sessionId,
       run,
@@ -737,6 +754,7 @@ export class LiveRtcService {
         canPublish: myPolicy.mayOpenSend,
         moderator: g.moderator,
         policy: myPolicy,
+        ...(g.role === 'STUDENT' ? { bonus: bonus.get(userId) ?? 0 } : {}),
       },
       maxSpeakers: maxSpeakers(),
       policies: { mic: g.s.micPolicy },
@@ -753,6 +771,7 @@ export class LiveRtcService {
         video: has(uid, ['VIDEO']),
         screen: has(uid, ['SCREEN']),
         ...(controls ? { controls: { mic: controls.get(uid)?.mic ?? 'DEFAULT' } } : {}),
+        ...(g.moderator ? { bonus: bonus.get(uid) ?? 0, guest: guests!.has(uid) } : {}),
       })),
       tracks: tracks.map((t) => ({
         id: t.id,

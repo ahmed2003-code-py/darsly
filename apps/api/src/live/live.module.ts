@@ -7,6 +7,7 @@ import { LiveEndWorker } from './live-end.worker';
 import { LiveService } from './live.service';
 import { LiveRtcController } from './rtc/live-rtc.controller';
 import { LiveRtcService } from './rtc/live-rtc.service';
+import { LiveBonusService } from './bonus/live-bonus.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveRecorderWorker } from './recording/live-recorder.worker';
 import { VideoModule } from '../video/video.module';
@@ -38,6 +39,8 @@ import { LiveCommerceWorker } from './commerce/live-commerce.worker';
     LiveService,
     LiveEndWorker,
     LiveRtcService,
+    // "مكافأة": points in class, through the gamification economy (never money).
+    LiveBonusService,
     LiveRecordingService,
     LiveRecorderWorker,
     LiveReplayService,

@@ -9,6 +9,12 @@
 # Ordering is cheapest-first: a syntax error should not wait for the test
 # suite to report itself.
 
+#
+# Railway deploys a commit on main only after this workflow passes ("wait for
+# CI" on both services' GitHub triggers, 2026-09-29). A red run blocks the
+# deploy; a cancelled run (superseded by a newer push) shows in Railway as
+# "CI check suite failed" and is skipped — the newer commit deploys instead.
+
 name: CI
 
 on:

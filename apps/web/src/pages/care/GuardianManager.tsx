@@ -58,13 +58,16 @@ export default function GuardianManager({
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <bdi className="truncate font-bold text-on-surface">{g.name}</bdi>
-                  <Badge tone="neutral">{t(`guardian.rel.${g.relationship}`)}</Badge>
-                  {g.status === 'REVOKED' ? (
-                    <Badge tone="error">{t('care.revoked')}</Badge>
-                  ) : g.link?.expired ? (
-                    <Badge tone="warn">{t('care.linkExpired')}</Badge>
-                  ) : null}
+                  <bdi className="min-w-0 truncate font-bold text-on-surface">{g.name}</bdi>
+                  {/* The name gives way to a long name; the badges never squeeze. */}
+                  <span className="flex shrink-0 gap-1.5">
+                    <Badge tone="neutral">{t(`guardian.rel.${g.relationship}`)}</Badge>
+                    {g.status === 'REVOKED' ? (
+                      <Badge tone="error">{t('care.revoked')}</Badge>
+                    ) : g.link?.expired ? (
+                      <Badge tone="warn">{t('care.linkExpired')}</Badge>
+                    ) : null}
+                  </span>
                 </div>
                 <p className="truncate text-xs text-on-surface-variant" dir="auto">
                   <span dir="ltr">{g.phone}</span>

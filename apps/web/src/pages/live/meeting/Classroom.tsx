@@ -252,6 +252,7 @@ export default function Classroom(props: ClassroomProps) {
   const hands = cf?.hands ?? [];
   const raised = hands.filter((h) => h.hand === 'HAND_RAISED');
   const myHand = cf?.rtc?.me.hand ?? 'IDLE';
+  const canRaise = cf?.rtc?.me.policy ? cf.rtc.me.policy.mayRaiseHand : true;
   const canSend = !cf || amOwner || !!cf.rtc?.me.canPublish;
   // Running the class (hands, removals, the panel's controls) is the server's
   // answer for Darsly's classroom, not "I am on the teacher side".
@@ -574,6 +575,38 @@ export default function Classroom(props: ClassroomProps) {
               </m.div>
             )}
 
+            {/* Invited, or approved: asked here, never switched on for them. */}
+            {cf && !amOwner && myHand === 'APPROVED_TO_SPEAK' && !meeting.micOn && (
+              <m.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute inset-x-0 top-3 mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center justify-center gap-2 rounded-2xl bg-zinc-900/95 px-4 py-3 text-zinc-100 shadow-lg ring-1 ring-emerald-400/40"
+                role="alertdialog"
+                aria-label={cf.invited ? t('meeting.invitedTitle') : t('meeting.youCanSpeak')}
+              >
+                <span aria-hidden className="material-symbols-outlined text-[20px] text-emerald-300">
+                  record_voice_over
+                </span>
+                <span className="text-sm font-semibold">
+                  {cf.invited ? t('meeting.invitedTitle') : t('meeting.youCanSpeak')}
+                </span>
+                <button
+                  type="button"
+                  className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  onClick={meeting.toggleMic}
+                >
+                  {t('meeting.turnMicOn')}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/10"
+                  onClick={() => void cf.lowerHand()}
+                >
+                  {t('meeting.later')}
+                </button>
+              </m.div>
+            )}
+
             {/* Phones may refuse sound until tapped. */}
             {cf?.audioBlocked && (
               <button
@@ -685,7 +718,17 @@ export default function Classroom(props: ClassroomProps) {
                   />
                 </>
               )}
-              {cf && !amOwner && (
+              {cf && !amOwner && !canRaise && (myHand === 'IDLE' || myHand === 'RELEASED') && (
+                // Listening only, or this microphone is off for the class: said
+                // plainly instead of a button that would be refused.
+                <span className="inline-flex h-11 items-center gap-1.5 rounded-full bg-on-surface/[0.06] px-3 text-xs font-semibold text-on-surface-variant">
+                  <span aria-hidden className="material-symbols-outlined text-[18px]">
+                    {cf.rtc?.me.policy?.micBlocked ? 'mic_off' : 'hearing'}
+                  </span>
+                  {cf.rtc?.me.policy?.micBlocked ? t('meeting.youAreMicBlocked') : t('meeting.listenOnlyNote')}
+                </span>
+              )}
+              {cf && !amOwner && (canRaise || (myHand !== 'IDLE' && myHand !== 'RELEASED')) && (
                 <Ctl
                   icon="back_hand"
                   showLabel

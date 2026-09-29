@@ -170,6 +170,8 @@ export default function People({
     .filter((p) => !p.userId || !handIds.has(p.userId))
     .sort((a, b) => Number(b.owner) - Number(a.owner));
   const notJoined = moderator ? (cf?.rtc?.notJoined ?? []) : [];
+  const controlsOf = new Map((cf?.rtc?.participants ?? []).map((p) => [p.userId, p.controls]));
+  const micBlocked = (userId: string) => controlsOf.get(userId)?.mic === 'BLOCKED';
 
   const remove = async (userId: string, name: string, sessionId: string) => {
     if (
@@ -191,7 +193,18 @@ export default function People({
       out.push({ key: 'reject', icon: 'do_not_touch', label: t('meeting.reject'), run: () => cf.decideHand(p.userId, 'reject') });
     }
     if (cf && (hand === 'APPROVED_TO_SPEAK' || hand === 'ACTIVE_SPEAKER')) {
-      out.push({ key: 'revoke', icon: 'mic_off', label: t('meeting.revoke'), run: () => cf.decideHand(p.userId, 'revoke') });
+      out.push({ key: 'revoke', icon: 'voice_over_off', label: t('meeting.revoke'), run: () => cf.decideHand(p.userId, 'revoke') });
+    }
+    if (cf) {
+      const blocked = micBlocked(p.userId);
+      // An invitation asks the student; their own click is what turns the microphone on.
+      if (!blocked && (hand === 'IDLE' || hand === 'RELEASED'))
+        out.push({ key: 'invite', icon: 'record_voice_over', label: t('meeting.invite'), tone: 'primary', run: () => cf.decideHand(p.userId, 'invite') });
+      out.push(
+        blocked
+          ? { key: 'unblockMic', icon: 'mic', label: t('meeting.unblockMic'), run: () => cf.setControls(p.userId, { mic: 'DEFAULT' }) }
+          : { key: 'blockMic', icon: 'mic_off', label: t('meeting.blockMic'), run: () => cf.setControls(p.userId, { mic: 'BLOCKED' }) },
+      );
     }
     if (!cf) out.push({ key: 'mute', icon: 'mic_off', label: t('meeting.muteOne'), run: () => meeting.muteParticipant(p.sessionId) });
     out.push(...(extraActions?.({ userId: p.userId, name: p.name, hand }) ?? []));
@@ -210,17 +223,41 @@ export default function People({
         label={p.video ? t('meeting.camIsOn') : t('meeting.camIsOff')}
         tone={p.video ? 'on' : 'off'}
       />
-      <StateIcon
-        icon={p.audio ? 'mic' : 'mic_off'}
-        label={p.audio ? t('meeting.micIsOn') : t('meeting.micOff')}
-        tone={p.audio ? 'on' : 'off'}
-      />
+      {p.userId && micBlocked(p.userId) ? (
+        <StateIcon icon="mic_off" label={t('meeting.micBlocked')} tone="warn" />
+      ) : (
+        <StateIcon
+          icon={p.audio ? 'mic' : 'mic_off'}
+          label={p.audio ? t('meeting.micIsOn') : t('meeting.micOff')}
+          tone={p.audio ? 'on' : 'off'}
+        />
+      )}
     </>
   );
   const byUser = new Map(meeting.participants.filter((p) => p.userId).map((p) => [p.userId!, p]));
 
+  const micPolicy = cf?.rtc?.policies?.mic ?? 'RAISE_HAND';
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+      {/* The class's rules, where the teacher runs the room from. */}
+      {moderator && cf && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <label className="inline-flex items-center gap-1.5 rounded-full bg-on-surface/[0.06] py-1 pe-1 ps-3 text-xs font-semibold">
+            <span aria-hidden className="material-symbols-outlined text-[16px]">
+              mic
+            </span>
+            <span className="text-on-surface-variant">{t('meeting.policy.mic')}</span>
+            <select
+              value={micPolicy}
+              onChange={(e) => void cf.setMicPolicy(e.target.value as 'RAISE_HAND' | 'LISTEN_ONLY')}
+              className="rounded-full bg-surface-container-highest px-2 py-1 text-xs font-semibold text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <option value="RAISE_HAND">{t('meeting.policy.RAISE_HAND')}</option>
+              <option value="LISTEN_ONLY">{t('meeting.policy.LISTEN_ONLY')}</option>
+            </select>
+          </label>
+        </div>
+      )}
       {moderator && cf && raised.length > 0 && (
         <>
           <GroupTitle>{t('meeting.requests', { count: raised.length })}</GroupTitle>

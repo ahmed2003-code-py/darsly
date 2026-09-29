@@ -94,7 +94,11 @@ class HandDto {
 }
 
 class HandDecisionDto {
-  @IsIn(['approve', 'reject', 'revoke']) action: 'approve' | 'reject' | 'revoke';
+  @IsIn(['approve', 'reject', 'revoke', 'invite']) action: 'approve' | 'reject' | 'revoke' | 'invite';
+}
+
+class ControlsDto {
+  @IsOptional() @IsIn(['DEFAULT', 'BLOCKED']) mic?: 'DEFAULT' | 'BLOCKED';
 }
 
 /**
@@ -240,7 +244,7 @@ export class LiveRtcController {
   @Post('live/:id/hand/:userId')
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
-  @ApiOperation({ summary: "The teacher approves, rejects or revokes a student's hand" })
+  @ApiOperation({ summary: "A moderator approves, rejects, revokes or invites a student to speak" })
   decide(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
@@ -249,6 +253,20 @@ export class LiveRtcController {
   ) {
     limit(u.sub);
     return this.rtc.hand(u.sub, id, dto.action, userId);
+  }
+
+  /** One participant's controls for this run (a blocked microphone…), by a moderator. */
+  @Put('live/:id/rtc/participants/:userId/controls')
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: "A moderator sets a student's controls for this run of the class" })
+  controls(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() dto: ControlsDto,
+  ) {
+    limit(u.sub);
+    return this.rtc.setControls(u.sub, id, userId, dto);
   }
 
   @Post('live/:id/rtc/remove/:userId')

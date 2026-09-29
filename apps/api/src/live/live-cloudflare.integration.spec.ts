@@ -410,6 +410,7 @@ describe('B.6 Cloudflare classroom on Postgres: raise hand', () => {
     expect(realtime.emitToUser).toHaveBeenCalledWith(w.s[0].id, 'live:hand', {
       sessionId: w.ls.id,
       state: 'APPROVED_TO_SPEAK',
+      invited: false,
     });
 
     const send = await rtc.openConnection(w.s[0].id, w.ls.id, 'SEND');

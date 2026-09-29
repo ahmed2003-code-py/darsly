@@ -52,6 +52,8 @@ export interface RtcState {
     policy?: ClassroomPolicy;
   };
   maxSpeakers: number;
+  /** The class's policies (explain the controls to everyone). */
+  policies?: { mic: 'RAISE_HAND' | 'LISTEN_ONLY' };
   recording?: boolean;
   /** The lesson's words are being captured right now (OFF / MANUAL / AUTO, decided by the server). */
   transcribing?: boolean;
@@ -65,6 +67,8 @@ export interface RtcState {
     audio: boolean;
     video: boolean;
     screen: boolean;
+    /** Moderators only: this participant's controls in this run. */
+    controls?: { mic: 'DEFAULT' | 'BLOCKED' };
   }[];
   tracks: { id: string; userId: string; kind: Kind; role: 'TEACHER' | 'STUDENT' }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
@@ -144,6 +148,7 @@ export function useCloudflareMeeting(
   const [camOn, setCamOn] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [invited, setInvited] = useState(false);
   const [connection, setConnection] = useState<'connected' | 'reconnecting'>('connected');
   /** This page is capturing the lesson's audio for its transcript. */
   const [capturing, setCapturing] = useState(false);
@@ -518,6 +523,9 @@ export function useCloudflareMeeting(
     [base, bump],
   );
 
+  const unpublishRef = useRef<typeof unpublish | null>(null);
+  unpublishRef.current = unpublish;
+
   /** Everything this browser sends, stopped (revoked, left, or ended). */
   const stopSending = useCallback(async () => {
     for (const [, l] of local.current) l.track.stop();
@@ -693,18 +701,32 @@ export function useCloudflareMeeting(
             setEnded(true);
             return;
           }
-          // No longer allowed to speak: whatever was being sent stops here too
-          // (the server has already closed it at the SFU).
-          if (s.me.role === 'STUDENT' && !s.me.canPublish && send.current) await stopSending();
+          // No longer allowed to send something: it stops here too (the server
+          // has already closed it at the SFU). Only what is no longer allowed —
+          // losing the floor takes the microphone, not a camera still allowed.
+          if (s.me.role === 'STUDENT' && send.current) {
+            if (!s.me.canPublish) await stopSending();
+            else if (s.me.policy) {
+              for (const kind of [...local.current.keys()]) {
+                if (!s.me.policy.publish[kind]) {
+                  if (kind === 'AUDIO') setMicOn(false);
+                  if (kind === 'VIDEO') setCamOn(false);
+                  await unpublishRef.current?.(kind);
+                }
+              }
+            }
+          }
           await reconcile().catch(() => undefined);
         },
         150 + Math.random() * 600,
       );
     };
     const onState = (p: { sessionId: string }) => p?.sessionId === liveSessionId && refresh();
-    const onHand = (p: { sessionId: string; state: HandState }) => {
+    const onHand = (p: { sessionId: string; state: HandState; invited?: boolean }) => {
       if (p?.sessionId !== liveSessionId) return;
-      if (p.state === 'APPROVED_TO_SPEAK') setNotice('HAND_APPROVED');
+      // An invitation is asked on the page; the student's click is what publishes.
+      setInvited(p.state === 'APPROVED_TO_SPEAK' && !!p.invited);
+      if (p.state === 'APPROVED_TO_SPEAK' && !p.invited) setNotice('HAND_APPROVED');
       if (p.state === 'RELEASED' || p.state === 'IDLE') {
         if (send.current) setNotice('HAND_RELEASED');
       }
@@ -897,8 +919,9 @@ export function useCloudflareMeeting(
       await unpublish('AUDIO');
       return;
     }
-    if (!stateRef.current?.me.canPublish) {
-      setNotice('NOT_ALLOWED_TO_SPEAK');
+    const me = stateRef.current?.me;
+    if (!me?.canPublish || (me.policy && !me.policy.publish.AUDIO)) {
+      setNotice(me?.policy?.micBlocked ? 'MIC_BLOCKED' : 'NOT_ALLOWED_TO_SPEAK');
       return;
     }
     try {
@@ -916,12 +939,13 @@ export function useCloudflareMeeting(
       await unpublish('VIDEO');
       return;
     }
-    if (!stateRef.current?.me.canPublish) {
+    const me = stateRef.current?.me;
+    if (!me?.canPublish || (me.policy && !me.policy.publish.VIDEO)) {
       setNotice('NOT_ALLOWED_TO_SPEAK');
       return;
     }
     try {
-      const cam = await getCam(stateRef.current.me.role === 'TEACHER');
+      const cam = await getCam(me.role === 'TEACHER');
       await publish('VIDEO', cam);
       setCamOn(true);
     } catch (e) {
@@ -991,15 +1015,42 @@ export function useCloudflareMeeting(
   }, [liveSessionId, fetchState, stopSending]);
 
   const decideHand = useCallback(
-    async (userId: string, action: 'approve' | 'reject' | 'revoke') => {
+    async (userId: string, action: 'approve' | 'reject' | 'revoke' | 'invite') => {
       try {
         await api.post(`/live/${liveSessionId}/hand/${userId}`, { action });
       } catch (e) {
-        setNotice(errCode(e) === 'SPEAKER_LIMIT' ? 'SPEAKER_LIMIT' : 'HAND_FAILED');
+        const code = errCode(e);
+        setNotice(code === 'SPEAKER_LIMIT' ? 'SPEAKER_LIMIT' : code === 'MIC_BLOCKED' ? 'MIC_BLOCKED' : 'HAND_FAILED');
       }
       await fetchState();
     },
     [liveSessionId, fetchState],
+  );
+
+  /** A moderator: the class's microphone policy. */
+  const setMicPolicy = useCallback(
+    async (micPolicy: 'RAISE_HAND' | 'LISTEN_ONLY') => {
+      try {
+        await api.patch(`/teacher/live/${liveSessionId}/classroom`, { micPolicy });
+      } catch {
+        setNotice('POLICY_FAILED');
+      }
+      await fetchState();
+    },
+    [liveSessionId, fetchState],
+  );
+
+  /** A moderator: one participant's controls for this run. */
+  const setControls = useCallback(
+    async (userId: string, controls: { mic?: 'DEFAULT' | 'BLOCKED' }) => {
+      try {
+        await api.put(`${base}/participants/${userId}/controls`, controls);
+      } catch {
+        setNotice('POLICY_FAILED');
+      }
+      await fetchState();
+    },
+    [base, fetchState],
   );
 
   /** "Mute" in a class is taking the floor back. */
@@ -1104,6 +1155,10 @@ export function useCloudflareMeeting(
     raiseHand,
     lowerHand,
     decideHand,
+    setMicPolicy,
+    setControls,
+    /** The teacher invited me to speak (asked on the page, never switched on). */
+    invited: invited && state?.me.hand === 'APPROVED_TO_SPEAK',
     audioBlocked,
     resumeAudio,
     connection,

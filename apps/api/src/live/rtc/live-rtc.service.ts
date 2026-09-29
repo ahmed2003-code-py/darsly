@@ -14,7 +14,12 @@ import { LiveService, PRESENCE_GRACE_SEC } from '../live.service';
 import { CloudflareLiveProvider } from '../providers/cloudflare-live.provider';
 import { CfSessionDescription, toHttpError } from '../providers/cloudflare-realtime.client';
 import { canSpeak, HandAction, nextHandState, STUDENT_ACTIONS, TEACHER_ACTIONS } from './live-hand';
-import { effectivePolicy, type EffectivePolicy } from './classroom-policy';
+import {
+  effectivePolicy,
+  type EffectivePolicy,
+  type MicControl,
+  type MicPolicy,
+} from './classroom-policy';
 import { transcriptCaptureState } from '../transcription/capture-state';
 
 /**
@@ -51,6 +56,7 @@ interface Gate {
     startsAt: Date;
     durationMin: number;
     teacherUserId: string | null;
+    micPolicy: MicPolicy;
   };
   role: Role;
   /** May run the class (see LiveService.canModerate). Always false for a student. */
@@ -73,6 +79,8 @@ export interface RtcState {
     policy: EffectivePolicy;
   };
   maxSpeakers: number;
+  /** The class's policies (everyone sees them: they explain the controls). */
+  policies: { mic: MicPolicy };
   /** A recording of this run is being made (the REC badge). */
   recording: boolean;
   /** The lesson's words are being kept for its transcript (everyone is told). */
@@ -87,6 +95,8 @@ export interface RtcState {
     audio: boolean;
     video: boolean;
     screen: boolean;
+    /** Moderators only: this participant's controls in this run. */
+    controls?: { mic: MicControl };
   }[];
   tracks: { id: string; userId: string; kind: LiveTrackKind; role: Role }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
@@ -150,6 +160,7 @@ export class LiveRtcService {
         durationMin: true,
         deletedAt: true,
         teacherUserId: true,
+        micPolicy: true,
       },
     });
     if (!s || s.deletedAt) throw new NotFoundException('Session not found');
@@ -173,16 +184,82 @@ export class LiveRtcService {
         startsAt: s.startsAt,
         durationMin: s.durationMin,
         teacherUserId: s.teacherUserId,
+        micPolicy: s.micPolicy,
       },
       role,
       moderator,
     };
   }
 
+  /** A participant's controls in this run — defaults when none, or when set in an earlier run. */
+  private async controlsOf(sessionId: string, userId: string, run: string): Promise<{ mic: MicControl }> {
+    const c = await this.prisma.liveParticipantControl.findUnique({
+      where: { sessionId_userId: { sessionId, userId } },
+      select: { roomName: true, mic: true },
+    });
+    return c && c.roomName === run ? { mic: c.mic } : { mic: 'DEFAULT' };
+  }
+
   /** This person's effective policy in this run (the one function; see classroom-policy.ts). */
   private async policyOf(g: Gate, userId: string): Promise<EffectivePolicy> {
-    const hand = g.role === 'STUDENT' ? await this.handOf(g.s.id, userId, g.s.roomName) : 'IDLE';
-    return effectivePolicy({ side: g.role, moderator: g.moderator, hand });
+    if (g.role !== 'STUDENT') return effectivePolicy({ side: g.role, moderator: g.moderator });
+    const [hand, controls] = await Promise.all([
+      this.handOf(g.s.id, userId, g.s.roomName),
+      this.controlsOf(g.s.id, userId, g.s.roomName),
+    ]);
+    return effectivePolicy({ side: 'STUDENT', moderator: false, micPolicy: g.s.micPolicy, hand, ...controls });
+  }
+
+  /** A student's effective policy, read fresh (for enforcing a change made by someone else). */
+  private async studentPolicy(sessionId: string, run: string, userId: string): Promise<EffectivePolicy> {
+    const s = await this.prisma.liveSession.findUniqueOrThrow({ where: { id: sessionId }, select: { micPolicy: true } });
+    const [hand, controls] = await Promise.all([this.handOf(sessionId, userId, run), this.controlsOf(sessionId, userId, run)]);
+    return effectivePolicy({ side: 'STUDENT', moderator: false, micPolicy: s.micPolicy, hand, ...controls });
+  }
+
+  /**
+   * Make what a student sends match what they may send now: every open track
+   * of a kind their policy no longer allows is closed at the SFU (force), so
+   * it holds whatever their browser does. Only that kind — revoking the floor
+   * takes the microphone and leaves a camera they may keep. With nothing left
+   * they may send, the sending connection itself is closed, as before.
+   */
+  async enforce(sessionId: string, run: string, userId: string, reason: string) {
+    const policy = await this.studentPolicy(sessionId, run, userId);
+    const sending = await this.prisma.liveRtcConnection.findMany({
+      where: { sessionId, userId, purpose: 'SEND', closedAt: null },
+      select: {
+        id: true,
+        cfSessionId: true,
+        tracks: { where: { closedAt: null }, select: { id: true, mid: true, kind: true } },
+      },
+    });
+    if (!sending.length) return;
+    if (!policy.mayOpenSend) {
+      await this.cloudflare.closeConnections(
+        sending.map((c) => c.id),
+        reason,
+      );
+      return;
+    }
+    for (const c of sending) {
+      const bad = c.tracks.filter((t) => !policy.publish[t.kind]);
+      if (!bad.length) continue;
+      try {
+        await this.client.closeTracks(c.cfSessionId, bad.map((t) => t.mid), { force: true });
+      } catch (e) {
+        // The SFU would not close them: close the whole connection instead —
+        // a permission must never outlive its revocation.
+        this.logger.warn(`live.rtc.enforce close failed liveSession=${sessionId}: ${(e as Error).message}`);
+        await this.cloudflare.closeConnections([c.id], reason);
+        continue;
+      }
+      await this.prisma.liveRtcTrack.updateMany({
+        where: { id: { in: bad.map((t) => t.id) }, closedAt: null },
+        data: { closedAt: new Date() },
+      });
+    }
+    this.logger.log(`live.rtc.enforce liveSession=${sessionId} user=${userId} reason=${reason}`);
   }
 
   private refuseSend(g: Gate): never {
@@ -384,17 +461,16 @@ export class LiveRtcService {
       }),
     ]);
     if (g.role === 'STUDENT') {
-      // Revoked while the push was in flight: take it straight back.
-      const hand = await this.handOf(sessionId, userId, g.s.roomName);
-      if (!canSpeak(hand)) {
-        await this.cloudflare.closeConnections([c.id], 'revoked');
+      // Revoked (or blocked) while the push was in flight: take back exactly
+      // what is no longer allowed.
+      const now2 = await this.studentPolicy(sessionId, g.s.roomName, userId);
+      if (kinds.some((k) => !now2.publish[k])) {
+        await this.enforce(sessionId, g.s.roomName, userId, 'revoked');
         this.changed(sessionId);
-        throw new ForbiddenException({
-          message: 'The teacher has not asked you to speak',
-          code: 'NOT_ALLOWED_TO_SPEAK',
-        });
+        this.refuseSend(g);
       }
-      if (hand === 'APPROVED_TO_SPEAK') {
+      const hand = await this.handOf(sessionId, userId, g.s.roomName);
+      if (hand === 'APPROVED_TO_SPEAK' && kinds.includes('AUDIO')) {
         await this.prisma.liveHand.updateMany({
           where: { sessionId, userId, roomName: g.s.roomName, state: 'APPROVED_TO_SPEAK' },
           data: { state: 'ACTIVE_SPEAKER' },
@@ -637,7 +713,18 @@ export class LiveRtcService {
     const myHand = handOf.get(userId) ?? 'IDLE';
     const has = (uid: string, kinds: LiveTrackKind[]) =>
       tracks.some((t) => t.userId === uid && kinds.includes(t.kind));
-    const myPolicy = effectivePolicy({ side: g.role, moderator: g.moderator, hand: myHand });
+    const myPolicy = await this.policyOf(g, userId);
+    // Moderators see everyone's controls for this run.
+    const controls = g.moderator
+      ? new Map(
+          (
+            await this.prisma.liveParticipantControl.findMany({
+              where: { sessionId, roomName: run },
+              select: { userId: true, mic: true },
+            })
+          ).map((c) => [c.userId, c]),
+        )
+      : null;
     const notJoined = g.moderator ? await this.notJoined(sessionId, new Set(roleOf.keys())) : undefined;
     return {
       sessionId,
@@ -652,6 +739,7 @@ export class LiveRtcService {
         policy: myPolicy,
       },
       maxSpeakers: maxSpeakers(),
+      policies: { mic: g.s.micPolicy },
       recording: recording > 0,
       transcribing: capture.active,
       transcription:
@@ -664,13 +752,15 @@ export class LiveRtcService {
         audio: has(uid, ['AUDIO']),
         video: has(uid, ['VIDEO']),
         screen: has(uid, ['SCREEN']),
+        ...(controls ? { controls: { mic: controls.get(uid)?.mic ?? 'DEFAULT' } } : {}),
       })),
       tracks: tracks.map((t) => ({
         id: t.id,
         userId: t.userId,
         kind: t.kind,
         role: t.connection.role === 'STUDENT' ? 'STUDENT' : 'TEACHER',
-      })),      ...(notJoined ? { notJoined } : {}),
+      })),
+      ...(notJoined ? { notJoined } : {}),
     };
   }
 
@@ -736,7 +826,22 @@ export class LiveRtcService {
       const from: LiveHandState = row && row.roomName === run ? row.state : 'IDLE';
       const to = nextHandState(from, action);
       if (!to) return { ok: false as const, from };
-      if (action === 'approve') {
+      // Read under the lock: a policy switch (which clears hands under the
+      // same lock) and a raise can never cross.
+      if (action === 'raise' || action === 'approve' || action === 'invite') {
+        const [sess, ctl] = await Promise.all([
+          tx.liveSession.findUniqueOrThrow({ where: { id: sessionId }, select: { micPolicy: true } }),
+          tx.liveParticipantControl.findUnique({
+            where: { sessionId_userId: { sessionId, userId: target } },
+            select: { roomName: true, mic: true },
+          }),
+        ]);
+        const blocked = ctl?.roomName === run && ctl.mic === 'BLOCKED';
+        if (blocked) return { ok: false as const, from, refused: 'MIC_BLOCKED' as const };
+        if (action === 'raise' && sess.micPolicy === 'LISTEN_ONLY')
+          return { ok: false as const, from, refused: 'HAND_DISABLED' as const };
+      }
+      if (action === 'approve' || action === 'invite') {
         const speaking = await tx.liveHand.count({
           where: {
             sessionId,
@@ -763,6 +868,13 @@ export class LiveRtcService {
       return { ok: true as const, from, to };
     });
     if (!r.ok) {
+      if ('refused' in r && r.refused) {
+        throw new ConflictException(
+          r.refused === 'MIC_BLOCKED'
+            ? { message: 'The teacher has turned this microphone off for the class', code: 'MIC_BLOCKED' }
+            : { message: 'Hands are off in this class — the teacher invites who speaks', code: 'HAND_DISABLED' },
+        );
+      }
       if ('limit' in r && r.limit) {
         throw new ConflictException({
           message: `يمكن لـ${maxSpeakers()} طلاب فقط التحدث في نفس الوقت`,
@@ -778,8 +890,9 @@ export class LiveRtcService {
     }
     // No longer allowed to speak: whatever they were sending stops at the
     // SFU now, not when their browser gets round to it.
-    if (canSpeak(r.from) && !canSpeak(r.to)) await this.stopSending(sessionId, target, 'revoked');
-    this.realtime.emitToUser(target, 'live:hand', { sessionId, state: r.to });
+    if (canSpeak(r.from) && !canSpeak(r.to)) await this.enforce(sessionId, run, target, 'revoked');
+    // An invitation is told as one: the student's page asks them, it never switches anything on.
+    this.realtime.emitToUser(target, 'live:hand', { sessionId, state: r.to, invited: action === 'invite' });
     this.changed(sessionId);
     this.logger.log(
       `live.hand liveSession=${sessionId} actor=${actorId} target=${target} ${action}: ${r.from}→${r.to}`,
@@ -787,17 +900,80 @@ export class LiveRtcService {
     return { state: r.to };
   }
 
-  private async stopSending(sessionId: string, userId: string, reason: string) {
-    const sending = await this.prisma.liveRtcConnection.findMany({
-      where: { sessionId, userId, purpose: 'SEND', closedAt: null },
-      select: { id: true },
+  // ── The class's policies and a participant's controls ─────────────────────
+
+  /**
+   * The class's microphone policy, set by a moderator (the route checks the
+   * academy and ownership). Switching to LISTEN_ONLY lowers every raised hand
+   * of the current run — under the same lock a raise takes — and leaves who is
+   * speaking alone: the teacher takes the floor back deliberately.
+   */
+  async setMicPolicy(sessionId: string, micPolicy: MicPolicy, actorId: string) {
+    const s = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`live-hand:${sessionId}`}))`;
+      const row = await tx.liveSession.update({
+        where: { id: sessionId },
+        data: { micPolicy },
+        select: { roomName: true, status: true },
+      });
+      if (micPolicy === 'LISTEN_ONLY' && row.roomName) {
+        await tx.liveHand.updateMany({
+          where: { sessionId, roomName: row.roomName, state: 'HAND_RAISED' },
+          data: { state: 'IDLE', decidedAt: new Date(), decidedBy: actorId },
+        });
+      }
+      return row;
     });
-    if (sending.length) {
-      await this.cloudflare.closeConnections(
-        sending.map((c) => c.id),
-        reason,
-      );
+    if (s.status === 'LIVE') this.changed(sessionId);
+    this.logger.log(`live.policy liveSession=${sessionId} actor=${actorId} mic=${micPolicy}`);
+    return { mic: micPolicy };
+  }
+
+  /**
+   * One participant's controls for this run, by a moderator. A blocked
+   * microphone takes the floor back (the hand is released) and closes their
+   * microphone at the SFU; unblocking restores nothing by itself — they raise
+   * a hand, or are invited, again. A new run starts from the defaults.
+   */
+  async setControls(actorId: string, sessionId: string, targetUserId: string, dto: { mic?: MicControl }) {
+    const g = await this.gate(actorId, sessionId);
+    if (!g.moderator) this.refuseSend(g);
+    const t = await this.live.assertInSession(targetUserId, sessionId).catch(() => null);
+    if (!t || t.role !== 'STUDENT') {
+      throw new ForbiddenException({ message: 'Controls apply to students', code: 'NOT_A_STUDENT' });
     }
+    const run = g.s.roomName;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`live-hand:${sessionId}`}))`;
+      const cur = await tx.liveParticipantControl.findUnique({
+        where: { sessionId_userId: { sessionId, userId: targetUserId } },
+      });
+      // A control from an earlier run does not carry into this one.
+      const base = cur && cur.roomName === run ? { mic: cur.mic } : { mic: 'DEFAULT' as MicControl };
+      const next = { ...base, ...(dto.mic ? { mic: dto.mic } : {}) };
+      await tx.liveParticipantControl.upsert({
+        where: { sessionId_userId: { sessionId, userId: targetUserId } },
+        create: { sessionId, userId: targetUserId, roomName: run, ...next, updatedBy: actorId },
+        update: { roomName: run, ...next, updatedBy: actorId },
+      });
+      if (next.mic === 'BLOCKED') {
+        await tx.liveHand.updateMany({
+          where: { sessionId, userId: targetUserId, roomName: run, state: { in: ['APPROVED_TO_SPEAK', 'ACTIVE_SPEAKER'] } },
+          data: { state: 'RELEASED', decidedAt: new Date(), decidedBy: actorId },
+        });
+        await tx.liveHand.updateMany({
+          where: { sessionId, userId: targetUserId, roomName: run, state: 'HAND_RAISED' },
+          data: { state: 'IDLE', decidedAt: new Date(), decidedBy: actorId },
+        });
+      }
+    });
+    await this.enforce(sessionId, run, targetUserId, 'blocked');
+    this.realtime.emitToUser(targetUserId, 'live:hand', { sessionId, state: await this.handOf(sessionId, targetUserId, run) });
+    this.changed(sessionId);
+    this.logger.log(
+      `live.controls liveSession=${sessionId} actor=${actorId} target=${targetUserId} ${JSON.stringify(dto)}`,
+    );
+    return this.controlsOf(sessionId, targetUserId, run);
   }
 
   /**

@@ -175,6 +175,23 @@ export async function confirmedGuest(prisma: PrismaService, w: ClassroomWorld, n
 
 export const OFFER = { type: 'offer' as const, sdp: 'v=0 offer' };
 
+/** Someone is in the room, as a real join leaves them: receiving, and heard from. */
+export async function enterRoom(
+  prisma: PrismaService,
+  c: { rtc: LiveRtcService },
+  w: ClassroomWorld,
+  userId: string,
+  role: 'TEACHER' | 'STUDENT' = 'STUDENT',
+) {
+  const conn = await c.rtc.openConnection(userId, w.ls.id, 'RECEIVE');
+  await prisma.liveAttendance.upsert({
+    where: { sessionId_userId: { sessionId: w.ls.id, userId } },
+    create: { sessionId: w.ls.id, userId, role },
+    update: { lastSeenAt: new Date(), leftAt: null },
+  });
+  return conn;
+}
+
 /** The error code a refused call carries (or 'ok'). */
 export const codeOf = (p: Promise<unknown>) =>
   p.then(

@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   HttpCode,
   Req,
@@ -79,6 +80,10 @@ class CreateLiveDto {
   @IsOptional() @IsIn(LIVE_REFUND_POLICIES) refundPolicy?: LiveRefundPolicy;
   @IsOptional() @IsIn(LIVE_REPLAY_POLICIES) replayPolicy?: LiveReplayPolicy;
   @IsOptional() @IsInt() @Min(-1_000_000) @Max(1_000_000) replayDays?: number | null;
+}
+
+class ClassroomPolicyDto {
+  @IsOptional() @IsIn(['RAISE_HAND', 'LISTEN_ONLY']) micPolicy?: 'RAISE_HAND' | 'LISTEN_ONLY';
 }
 
 class TranscriptionDto {
@@ -435,6 +440,32 @@ export class LiveController {
     @Body() dto: TranscriptionDto,
   ) {
     return this.live.setTranscription(scopeOf(ctx), id, dto);
+  }
+
+  /**
+   * The class's classroom policies (microphone now; camera with it). Set by
+   * whoever may manage the academy's live classes, before the class or while
+   * it runs; Darsly's own classroom only.
+   */
+  @Patch('teacher/live/:id/classroom')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: "[academy] The classroom's policies (who may speak)" })
+  async classroom(
+    @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ClassroomPolicyDto,
+  ) {
+    const s = await this.live.ownedSession(scopeOf(ctx), id);
+    if (s.provider !== 'CLOUDFLARE') {
+      throw new ConflictException({ message: 'Only the Darsly classroom has these', code: 'CLASSROOM_UNSUPPORTED' });
+    }
+    if (s.status === 'ENDED' || s.deletedAt) {
+      throw new ConflictException({ message: 'The class has ended', code: 'ENDED' });
+    }
+    const out: Record<string, unknown> = { mic: s.micPolicy };
+    if (dto.micPolicy) Object.assign(out, await this.rtc.setMicPolicy(id, dto.micPolicy, u.sub));
+    return out;
   }
 
   @Patch('teacher/live/:id/visibility')

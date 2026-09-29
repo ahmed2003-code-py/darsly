@@ -3384,7 +3384,9 @@
       "HAND_FAILED": "That did not go through. Try again.",
       "REMOVE_FAILED": "Could not remove the participant. Try again.",
       "RECONNECTED": "Reconnected to the class.",
-      "TRANSCRIPT_FAILED": "The transcript could not be switched"
+      "TRANSCRIPT_FAILED": "The transcript could not be switched",
+      "MIC_BLOCKED": "This student's microphone is off for the class.",
+      "POLICY_FAILED": "Couldn't change that. Try again."
     },
     "chat": "Chat",
     "chatEmpty": "No messages yet",
@@ -3526,7 +3528,21 @@
     "micIsOn": "Microphone on",
     "notJoined_zero": "Everyone is here",
     "notJoined_one": "Not here yet (1)",
-    "notJoined_other": "Not here yet ({{count}})"
+    "notJoined_other": "Not here yet ({{count}})",
+    "invite": "Invite to speak",
+    "blockMic": "Turn microphone off",
+    "unblockMic": "Allow microphone",
+    "micBlocked": "Microphone off (by the teacher)",
+    "invitedTitle": "The teacher invites you to speak",
+    "turnMicOn": "Turn on microphone",
+    "later": "Later",
+    "youAreMicBlocked": "The teacher turned your microphone off for this class",
+    "listenOnlyNote": "Listening only — the teacher invites who speaks",
+    "policy": {
+      "mic": "Microphone:",
+      "RAISE_HAND": "Raise hand",
+      "LISTEN_ONLY": "Listen only"
+    }
   },
   "summary": {
     "title": "AI lesson summary",

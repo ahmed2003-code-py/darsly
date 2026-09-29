@@ -3428,7 +3428,9 @@
       "HAND_FAILED": "تعذّر تنفيذ الطلب. جرّب تاني.",
       "REMOVE_FAILED": "تعذّر إخراج المشارك. جرّب تاني.",
       "RECONNECTED": "رجع الاتصال بالفصل.",
-      "TRANSCRIPT_FAILED": "تعذر تغيير حالة التفريغ النصي"
+      "TRANSCRIPT_FAILED": "تعذر تغيير حالة التفريغ النصي",
+      "MIC_BLOCKED": "الميكروفون موقوف لهذا الطالب في الحصة.",
+      "POLICY_FAILED": "تعذّر تغيير الإعداد. حاول مرة أخرى."
     },
     "chat": "الشات",
     "chatEmpty": "مفيش رسايل لسه",
@@ -3589,7 +3591,21 @@
     "notJoined_two": "لم يحضر بعد (٢)",
     "notJoined_few": "لم يحضر بعد ({{count}})",
     "notJoined_many": "لم يحضر بعد ({{count}})",
-    "notJoined_other": "لم يحضر بعد ({{count}})"
+    "notJoined_other": "لم يحضر بعد ({{count}})",
+    "invite": "دعوة للتحدث",
+    "blockMic": "إيقاف الميكروفون",
+    "unblockMic": "السماح بالميكروفون",
+    "micBlocked": "الميكروفون موقوف من المدرس",
+    "invitedTitle": "المدرس يدعوك للتحدث",
+    "turnMicOn": "تشغيل الميكروفون",
+    "later": "لاحقًا",
+    "youAreMicBlocked": "أوقف المدرس الميكروفون لك في هذه الحصة",
+    "listenOnlyNote": "الاستماع فقط — المدرس يدعو من يتحدث",
+    "policy": {
+      "mic": "الميكروفون:",
+      "RAISE_HAND": "برفع اليد",
+      "LISTEN_ONLY": "الاستماع فقط"
+    }
   },
   "summary": {
     "title": "ملخّص الحصة بالذكاء الاصطناعي",

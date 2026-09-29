@@ -2933,6 +2933,10 @@ model LiveSession {
   /// click, tab or retry is told it is in progress instead of doing it twice.
   contentClaimUntil      DateTime?
 
+  /// Who may speak: RAISE_HAND (the teacher approves or invites) or
+  /// LISTEN_ONLY (no hands; the teacher may still invite one student).
+  micPolicy LiveMicPolicy @default(RAISE_HAND)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -2945,10 +2949,11 @@ model LiveSession {
   rtcConnections LiveRtcConnection[]
   rtcTracks      LiveRtcTrack[]
   hands          LiveHand[]
+  controls       LiveParticipantControl[]
   recordings     LiveRecording[]
   audioSegments  LiveAudioSegment[]
   replays        LiveReplaySession[]
-  derivedLessons Lesson[]            @relation("liveDerivedLessons")
+  derivedLessons Lesson[]                 @relation("liveDerivedLessons")
 
   @@index([tenantId, startsAt])
   @@index([academyId, startsAt])
@@ -3092,6 +3097,33 @@ model LiveHand {
   /// How many times this student raised their hand in this session.
   raisedCount Int           @default(0)
   updatedAt   DateTime      @updatedAt
+
+  @@id([sessionId, userId])
+}
+
+enum LiveMicPolicy {
+  RAISE_HAND
+  LISTEN_ONLY
+}
+
+enum LiveMicControl {
+  DEFAULT
+  BLOCKED
+}
+
+/// A moderator's temporary control over one participant, for ONE run of the
+/// class (`roomName`): a control from an earlier run is ignored, and the next
+/// write for a new run starts from the session's defaults again.
+model LiveParticipantControl {
+  sessionId String
+  session   LiveSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  /// The run these controls belong to.
+  roomName  String
+  mic       LiveMicControl @default(DEFAULT)
+  /// Who set them last (a moderator), and when.
+  updatedBy String
+  updatedAt DateTime       @updatedAt
 
   @@id([sessionId, userId])
 }

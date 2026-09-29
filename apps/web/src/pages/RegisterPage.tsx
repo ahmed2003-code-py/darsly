@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { m } from 'framer-motion';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthShell, { AuthField, AuthSegmented, AuthSubmit, rise } from '../components/AuthShell';
 import { api } from '../lib/api';
 import { authErrorText } from '../lib/authError';
+import { resolveError, splitFormError } from '../lib/errorMessage';
 import { arrivalAcademy } from '../lib/arrival';
 import { useAcademyBranding } from '../lib/academy';
 import {
@@ -22,6 +23,10 @@ import { STAGES, type Stage } from '../lib/stages';
 import { STUDENT_TRACKS, type StudentTrack, type Subject } from '../lib/subjects';
 
 type Role = 'student' | 'teacher';
+
+/** The inputs a server refusal can be placed under. */
+const REGISTER_FIELDS = ['fullName', 'email', 'phone', 'password'] as const;
+type RegisterField = (typeof REGISTER_FIELDS)[number];
 
 export default function RegisterPage() {
   const { t } = useTranslation();
@@ -63,6 +68,19 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
+  // A server refusal about one input (taken email, invalid phone) goes under
+  // that input; the banner above the form says only what no field can hold.
+  const [fieldErr, setFieldErr] = useState<Partial<Record<RegisterField, string>>>({});
+  const edited = (f: RegisterField) =>
+    setFieldErr((cur) => {
+      if (!cur[f]) return cur;
+      const next = { ...cur };
+      delete next[f];
+      return next;
+    });
+  useEffect(() => {
+    document.querySelector<HTMLInputElement>('form [aria-invalid="true"]')?.focus();
+  }, [fieldErr]);
   const [busy, setBusy] = useState(false);
   const [pendingDone, setPendingDone] = useState(false);
   // Asked here rather than in a settings page afterwards: everything a teacher
@@ -94,6 +112,7 @@ export default function RegisterPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    setFieldErr({});
     setBusy(true);
     try {
       if (inviteToken) {
@@ -144,7 +163,12 @@ export default function RegisterPage() {
         setPendingDone(true);
       }
     } catch (err) {
-      setError(authErrorText(err, t));
+      const split = splitFormError(err, REGISTER_FIELDS);
+      // The sign-in family words its own account refusals (taken email/phone).
+      const own = resolveError(err).field as RegisterField | null;
+      if (own && split.fields[own] !== undefined) split.fields[own] = authErrorText(err, t);
+      setFieldErr(split.fields);
+      setError(split.rest === null ? '' : authErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -268,7 +292,11 @@ export default function RegisterPage() {
           label={t('auth.fullName')}
           placeholder={t('auth.fullNamePh')}
           value={fullName}
-          onChange={setFullName}
+          onChange={(v) => {
+            setFullName(v);
+            edited('fullName');
+          }}
+          error={fieldErr.fullName}
           autoComplete="name"
           maxLength={120}
         />
@@ -279,7 +307,11 @@ export default function RegisterPage() {
           label={t('auth.email')}
           placeholder="name@example.com"
           value={email}
-          onChange={setEmail}
+          onChange={(v) => {
+            setEmail(v);
+            edited('email');
+          }}
+          error={fieldErr.email}
           autoComplete="email"
           maxLength={160}
         />
@@ -296,7 +328,11 @@ export default function RegisterPage() {
           maxLength={16}
           placeholder="01xxxxxxxxx"
           value={phone}
-          onChange={setPhone}
+          onChange={(v) => {
+            setPhone(v);
+            edited('phone');
+          }}
+          error={fieldErr.phone}
           autoComplete="tel"
         />
         <AuthField
@@ -306,7 +342,11 @@ export default function RegisterPage() {
           label={t('auth.password')}
           placeholder="••••••••"
           value={password}
-          onChange={setPassword}
+          onChange={(v) => {
+            setPassword(v);
+            edited('password');
+          }}
+          error={fieldErr.password}
           autoComplete="new-password"
           reveal
           revealed={show}

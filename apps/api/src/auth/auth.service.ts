@@ -689,19 +689,31 @@ export class AuthService {
   private async assertEmailFree(email: string) {
     const exists = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (exists)
-      throw new ConflictException({ message: 'Email already registered', code: 'EMAIL_TAKEN' });
+      throw new ConflictException({
+        message: 'Email already registered',
+        code: 'EMAIL_TAKEN',
+        field: 'email',
+      });
   }
 
   private async assertPhoneFree(phone: string) {
     const exists = await this.prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (exists)
-      throw new ConflictException({ message: 'Phone already registered', code: 'PHONE_TAKEN' });
+      throw new ConflictException({
+        message: 'Phone already registered',
+        code: 'PHONE_TAKEN',
+        field: 'phone',
+      });
   }
 
   private async assertUsernameFree(username: string) {
     const exists = await this.prisma.user.findUnique({ where: { username }, select: { id: true } });
     if (exists)
-      throw new ConflictException({ message: 'Username already taken', code: 'USERNAME_TAKEN' });
+      throw new ConflictException({
+        message: 'Username already taken',
+        code: 'USERNAME_TAKEN',
+        field: 'username',
+      });
   }
 
   /**

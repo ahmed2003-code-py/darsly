@@ -302,6 +302,7 @@ export function AuthField({
   optional,
   hint,
   autoFocus,
+  error,
 }: {
   icon: string;
   type?: string;
@@ -325,6 +326,8 @@ export function AuthField({
   /** A line under the field, for what happens if it's left empty and such. */
   hint?: string;
   autoFocus?: boolean;
+  /** What the server said about this field — shown under it, in place of the hint. */
+  error?: string;
 }) {
   const { t } = useTranslation();
   return (
@@ -342,7 +345,7 @@ export function AuthField({
           first character, and the reveal button crowded against the text. */}
       <span
         dir={dir}
-        className="flex items-center rounded-xl border border-outline-variant bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-200 ease-premium focus-within:-translate-y-px focus-within:border-accent-500 focus-within:shadow-glow focus-within:ring-4 focus-within:ring-accent-500/10"
+        className={`flex items-center rounded-xl border ${error ? 'border-error' : 'border-outline-variant'} bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-200 ease-premium focus-within:-translate-y-px focus-within:border-accent-500 focus-within:shadow-glow focus-within:ring-4 focus-within:ring-accent-500/10`}
       >
         <span className="ms-3 material-symbols-outlined shrink-0 text-[20px] text-outline transition-colors duration-200 group-focus-within:text-primary">
           {icon}
@@ -361,6 +364,7 @@ export function AuthField({
           autoFocus={autoFocus}
           onChange={(e) => onChange(e.target.value)}
           required={!optional}
+          aria-invalid={error ? true : undefined}
         />
         {reveal && (
           <button
@@ -375,7 +379,16 @@ export function AuthField({
           </button>
         )}
       </span>
-      {hint && <span className="mt-1.5 block text-xs text-outline">{hint}</span>}
+      {error ? (
+        <span role="alert" className="mt-1.5 flex items-start gap-1 text-sm text-error">
+          <span aria-hidden className="material-symbols-outlined mt-px text-[18px]">
+            error
+          </span>
+          <span className="min-w-0">{error}</span>
+        </span>
+      ) : (
+        hint && <span className="mt-1.5 block text-xs text-outline">{hint}</span>
+      )}
     </m.label>
   );
 }

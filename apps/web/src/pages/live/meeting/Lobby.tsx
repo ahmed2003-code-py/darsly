@@ -200,7 +200,10 @@ export default function Lobby({
   // Asked, never switched on: the student checks their camera here and turns
   // it on in the class themselves.
   const expectNote = cameraExpected ? (
-    <div className="flex items-start gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-3 text-sm" role="note">
+    <div
+      className="flex items-start gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-3 text-sm"
+      role="note"
+    >
       <span aria-hidden className="material-symbols-outlined text-[22px] text-primary">
         videocam
       </span>
@@ -208,7 +211,11 @@ export default function Lobby({
         <p className="font-semibold">{t('meeting.camera.expectedTitle')}</p>
         <p className="text-on-surface-variant">{t('meeting.camera.expectedHint')}</p>
         {listenOnly && !testing && (
-          <button type="button" className="mt-2 text-sm font-semibold text-primary hover:underline" onClick={() => setTesting(true)}>
+          <button
+            type="button"
+            className="mt-2 text-sm font-semibold text-primary hover:underline"
+            onClick={() => setTesting(true)}
+          >
             {t('meeting.camera.checkNow')}
           </button>
         )}

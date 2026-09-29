@@ -37,7 +37,11 @@ export async function verifySpeaker(
   const claimed = input.claimedUserId?.trim();
   // A mixed piece (the old capture, or its fallback): no attribution at all.
   if (!claimed) return { speakerUserId: null, speakerKind: null, speakerName: null };
-  const unknown: VerifiedSpeaker = { speakerUserId: null, speakerKind: 'UNKNOWN', speakerName: null };
+  const unknown: VerifiedSpeaker = {
+    speakerUserId: null,
+    speakerKind: 'UNKNOWN',
+    speakerName: null,
+  };
 
   // The uploader's own microphone: the teacher side's page records it itself.
   if (claimed === input.uploaderUserId) {
@@ -72,9 +76,18 @@ export async function verifySpeaker(
   });
   if (!user) return unknown;
   if (track.connection.role === 'TEACHER') {
-    return { speakerUserId: claimed, speakerKind: claimed === input.teacherUserId ? 'TEACHER' : 'STAFF', speakerName: user.fullName };
+    return {
+      speakerUserId: claimed,
+      speakerKind: claimed === input.teacherUserId ? 'TEACHER' : 'STAFF',
+      speakerName: user.fullName,
+    };
   }
-  if (user.guestBuyer) return { speakerUserId: claimed, speakerKind: 'GUEST', speakerName: user.guestBuyer.displayName };
+  if (user.guestBuyer)
+    return {
+      speakerUserId: claimed,
+      speakerKind: 'GUEST',
+      speakerName: user.guestBuyer.displayName,
+    };
   return { speakerUserId: claimed, speakerKind: 'STUDENT', speakerName: user.fullName };
 }
 
@@ -125,7 +138,8 @@ export function segmentsFor<T extends { speaker?: StoredSpeaker | null }>(
     if (speaker.kind === 'UNKNOWN') shown = { kind: 'UNKNOWN' };
     else if (viewer.teacher || speaker.kind === 'TEACHER' || speaker.kind === 'STAFF')
       shown = { kind: speaker.kind, name: speaker.name ?? null };
-    else if (viewer.userId && speaker.userId === viewer.userId) shown = { kind: speaker.kind, self: true };
+    else if (viewer.userId && speaker.userId === viewer.userId)
+      shown = { kind: speaker.kind, self: true };
     else {
       const key = speaker.userId ?? `?${speaker.name}`;
       if (!ordinals.has(key)) ordinals.set(key, ordinals.size + 1);

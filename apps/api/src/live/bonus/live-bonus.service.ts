@@ -70,7 +70,11 @@ export class LiveBonusService {
   }
 
   /** Points already given in this class — in total, and to one student. */
-  private async given(db: Prisma.TransactionClient | PrismaService, sessionId: string, studentId?: string) {
+  private async given(
+    db: Prisma.TransactionClient | PrismaService,
+    sessionId: string,
+    studentId?: string,
+  ) {
     const rows = await db.$queryRaw<{ points: bigint | null }[]>`
       SELECT COALESCE(SUM((meta->>'points')::int), 0) AS points
       FROM "GamificationEvent"
@@ -82,17 +86,27 @@ export class LiveBonusService {
   async grant(
     actorId: string,
     sessionId: string,
-    dto: { studentUserId: string; points: number; reasonKey?: LiveBonusReason; reason?: string; requestId: string },
+    dto: {
+      studentUserId: string;
+      points: number;
+      reasonKey?: LiveBonusReason;
+      reason?: string;
+      requestId: string;
+    },
   ) {
     const g = await this.rtc.gate(actorId, sessionId);
     if (!g.moderator) {
-      throw new ForbiddenException({ message: 'Only the class’s teacher can give a bonus', code: 'NOT_A_MODERATOR' });
+      throw new ForbiddenException({
+        message: 'Only the class’s teacher can give a bonus',
+        code: 'NOT_A_MODERATOR',
+      });
     }
     if (!UUID.test(dto.requestId ?? '')) {
       throw new BadRequestException({ message: 'Bad request id', code: 'BONUS_INVALID' });
     }
     const rule = await this.rule();
-    if (!rule) throw new ConflictException({ message: 'Bonuses are switched off', code: 'BONUS_DISABLED' });
+    if (!rule)
+      throw new ConflictException({ message: 'Bonuses are switched off', code: 'BONUS_DISABLED' });
     if (!Number.isInteger(dto.points) || dto.points < 1 || dto.points > rule.maxPerAward) {
       throw new BadRequestException({
         message: `A bonus is 1–${rule.maxPerAward} points`,
@@ -104,7 +118,11 @@ export class LiveBonusService {
     // The student: of this class, a real student profile (never a guest), and here.
     const target = await this.live.assertInSession(dto.studentUserId, sessionId).catch(() => null);
     if (!target || target.role !== 'STUDENT') {
-      throw new ForbiddenException({ message: 'Only a student of this class', code: 'BONUS_NOT_ELIGIBLE', reason: 'NOT_A_STUDENT' });
+      throw new ForbiddenException({
+        message: 'Only a student of this class',
+        code: 'BONUS_NOT_ELIGIBLE',
+        reason: 'NOT_A_STUDENT',
+      });
     }
     const student = await this.prisma.studentProfile.findUnique({
       where: { userId: dto.studentUserId },
@@ -122,12 +140,19 @@ export class LiveBonusService {
       select: { id: true },
     });
     if (!attended) {
-      throw new ForbiddenException({ message: 'Only a student who is in the class', code: 'BONUS_NOT_ELIGIBLE', reason: 'NOT_PRESENT' });
+      throw new ForbiddenException({
+        message: 'Only a student who is in the class',
+        code: 'BONUS_NOT_ELIGIBLE',
+        reason: 'NOT_PRESENT',
+      });
     }
 
     const key = `LIVE_BONUS:${sessionId}:${dto.requestId}`;
     // The same click again (a retry): the award it already made.
-    const done = await this.prisma.gamificationEvent.findUnique({ where: { idempotencyKey: key }, select: { id: true } });
+    const done = await this.prisma.gamificationEvent.findUnique({
+      where: { idempotencyKey: key },
+      select: { id: true },
+    });
     if (done) return this.result(sessionId, student.id, rule, { granted: false, duplicate: true });
 
     const reason = dto.reason?.replace(/\s+/g, ' ').trim().slice(0, 80) || null;
@@ -135,13 +160,23 @@ export class LiveBonusService {
       studentId: student.id,
       type: 'LIVE_BONUS',
       key,
-      tenantId: (await this.prisma.liveSession.findUnique({ where: { id: sessionId }, select: { tenantId: true } }))
-        ?.tenantId,
+      tenantId: (
+        await this.prisma.liveSession.findUnique({
+          where: { id: sessionId },
+          select: { tenantId: true },
+        })
+      )?.tenantId,
       entityType: 'liveSession',
       entityId: sessionId,
       xpOverride: dto.points * rule.xp,
       coinsOverride: dto.points * rule.coins,
-      meta: { points: dto.points, reasonKey: dto.reasonKey ?? null, reason, grantedBy: actorId, requestId: dto.requestId },
+      meta: {
+        points: dto.points,
+        reasonKey: dto.reasonKey ?? null,
+        reason,
+        grantedBy: actorId,
+        requestId: dto.requestId,
+      },
       // Inside the award's transaction, under the class's lock: the caps.
       guard: async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`live-bonus:${sessionId}`}))`;
@@ -214,14 +249,24 @@ export class LiveBonusService {
         student: { select: { userId: true, user: { select: { fullName: true } } } },
       },
     });
-    const granters = [...new Set(rows.map((r) => (r.meta as { grantedBy?: string }).grantedBy).filter(Boolean))] as string[];
+    const granters = [
+      ...new Set(rows.map((r) => (r.meta as { grantedBy?: string }).grantedBy).filter(Boolean)),
+    ] as string[];
     const names = new Map(
-      (await this.prisma.user.findMany({ where: { id: { in: granters } }, select: { id: true, fullName: true } })).map(
-        (u) => [u.id, u.fullName],
-      ),
+      (
+        await this.prisma.user.findMany({
+          where: { id: { in: granters } },
+          select: { id: true, fullName: true },
+        })
+      ).map((u) => [u.id, u.fullName]),
     );
     return rows.map((r) => {
-      const m = r.meta as { points?: number; reasonKey?: string | null; reason?: string | null; grantedBy?: string };
+      const m = r.meta as {
+        points?: number;
+        reasonKey?: string | null;
+        reason?: string | null;
+        grantedBy?: string;
+      };
       return {
         id: r.id,
         at: r.createdAt,
@@ -234,5 +279,4 @@ export class LiveBonusService {
       };
     });
   }
-
 }

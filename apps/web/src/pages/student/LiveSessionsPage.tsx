@@ -5,13 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { getSocket } from '../../lib/socket';
 import { Markdown } from '../../lib/markdown';
-import {
-  Badge,
-  CardGridSkeleton,
-  EmptyState,
-  ErrorNote,
-  PageHeader,
-} from '../../components/ui';
+import { Badge, CardGridSkeleton, EmptyState, ErrorNote, PageHeader } from '../../components/ui';
 import { confirmDelete } from '../../lib/confirm';
 import { egp } from '../../lib/format';
 import { LIVE_REFUND_WINDOW_HOURS, type LiveRefundPolicy } from '@darsly/shared-types';
@@ -323,7 +317,6 @@ export default function LiveSessionsPage() {
           }}
         />
       )}
-
     </div>
   );
 }

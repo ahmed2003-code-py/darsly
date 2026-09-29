@@ -90,7 +90,8 @@ class AdmissionDecisionDto {
 
 class ClassroomPolicyDto {
   @IsOptional() @IsIn(['RAISE_HAND', 'LISTEN_ONLY']) micPolicy?: 'RAISE_HAND' | 'LISTEN_ONLY';
-  @IsOptional() @IsIn(['SPEAKERS_ONLY', 'OPTIONAL', 'EXPECTED', 'OFF'])
+  @IsOptional()
+  @IsIn(['SPEAKERS_ONLY', 'OPTIONAL', 'EXPECTED', 'OFF'])
   cameraPolicy?: 'SPEAKERS_ONLY' | 'OPTIONAL' | 'EXPECTED' | 'OFF';
 }
 
@@ -474,14 +475,18 @@ export class LiveController {
   ) {
     const s = await this.live.ownedSession(scopeOf(ctx), id);
     if (s.provider !== 'CLOUDFLARE') {
-      throw new ConflictException({ message: 'Only the Darsly classroom has these', code: 'CLASSROOM_UNSUPPORTED' });
+      throw new ConflictException({
+        message: 'Only the Darsly classroom has these',
+        code: 'CLASSROOM_UNSUPPORTED',
+      });
     }
     if (s.status === 'ENDED' || s.deletedAt) {
       throw new ConflictException({ message: 'The class has ended', code: 'ENDED' });
     }
     const out: Record<string, unknown> = { mic: s.micPolicy, camera: s.cameraPolicy };
     if (dto.micPolicy) Object.assign(out, await this.rtc.setMicPolicy(id, dto.micPolicy, u.sub));
-    if (dto.cameraPolicy) Object.assign(out, await this.rtc.setCameraPolicy(id, dto.cameraPolicy, u.sub));
+    if (dto.cameraPolicy)
+      Object.assign(out, await this.rtc.setCameraPolicy(id, dto.cameraPolicy, u.sub));
     return out;
   }
 
@@ -511,7 +516,9 @@ export class LiveController {
 
   @Get('teacher/live/:id/admissions')
   @AcademyStaff('live.manage')
-  @ApiOperation({ summary: '[academy] Open requests to join a full class, and the capacity picture' })
+  @ApiOperation({
+    summary: '[academy] Open requests to join a full class, and the capacity picture',
+  })
   async admissions(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
     await this.live.ownedSession(scopeOf(ctx), id);
     return this.admission.list(id);
@@ -520,7 +527,9 @@ export class LiveController {
   @Post('teacher/live/:id/admissions/:requestId')
   @HttpCode(200)
   @AcademyStaff('live.manage')
-  @ApiOperation({ summary: '[academy] Approve (a one-person capacity exception) or reject a request to join' })
+  @ApiOperation({
+    summary: '[academy] Approve (a one-person capacity exception) or reject a request to join',
+  })
   async decideAdmission(
     @CurrentAcademy() ctx: AcademyContext,
     @CurrentUser() u: JwtPayload,
@@ -615,7 +624,9 @@ export class LiveController {
   @Get('live/:id/chat')
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
-  @ApiOperation({ summary: 'Messages sent inside the classroom — the newest page, or the page before `before`' })
+  @ApiOperation({
+    summary: 'Messages sent inside the classroom — the newest page, or the page before `before`',
+  })
   chat(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,

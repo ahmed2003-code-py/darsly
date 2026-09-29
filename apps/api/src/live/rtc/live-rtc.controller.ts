@@ -32,7 +32,13 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GuestAllowed } from '../../common/decorators/guest-allowed.decorator';
 import { LIMITS } from '../../common/validation';
-import { CAMERA_REPORTS, CameraReport, LiveRtcService, SIMULCAST_RIDS, SimulcastRid } from './live-rtc.service';
+import {
+  CAMERA_REPORTS,
+  CameraReport,
+  LiveRtcService,
+  SIMULCAST_RIDS,
+  SimulcastRid,
+} from './live-rtc.service';
 import { LIVE_BONUS_REASONS, LiveBonusReason, LiveBonusService } from '../bonus/live-bonus.service';
 
 /** An SDP is a few KB; a hundred tracks' worth is still well under this. */
@@ -99,7 +105,8 @@ class HandDto {
 }
 
 class HandDecisionDto {
-  @IsIn(['approve', 'reject', 'revoke', 'invite']) action: 'approve' | 'reject' | 'revoke' | 'invite';
+  @IsIn(['approve', 'reject', 'revoke', 'invite']) action:
+    'approve' | 'reject' | 'revoke' | 'invite';
 }
 
 class BonusDto {
@@ -267,7 +274,7 @@ export class LiveRtcController {
   @Post('live/:id/hand/:userId')
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
-  @ApiOperation({ summary: "A moderator approves, rejects, revokes or invites a student to speak" })
+  @ApiOperation({ summary: 'A moderator approves, rejects, revokes or invites a student to speak' })
   decide(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
@@ -298,7 +305,11 @@ export class LiveRtcController {
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: "Report this device's camera state to the teacher (informational)" })
-  deviceReport(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: DeviceReportDto) {
+  deviceReport(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: DeviceReportDto,
+  ) {
     limit(u.sub);
     return this.rtc.reportCamera(u.sub, id, dto.camera ?? null);
   }

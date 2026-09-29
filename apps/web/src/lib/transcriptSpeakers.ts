@@ -42,13 +42,21 @@ export function groupBySpeaker<S extends SpeakerSegment>(segments: S[]): Speaker
       last.segments.push(seg);
       continue;
     }
-    out.push({ speaker: seg.speaker, startSec: seg.startSec, overlap: !!seg.overlap, segments: [seg] });
+    out.push({
+      speaker: seg.speaker,
+      startSec: seg.startSec,
+      overlap: !!seg.overlap,
+      segments: [seg],
+    });
   }
   return out;
 }
 
 /** The label a reader sees; `t` is i18next's. */
-export function speakerLabel(t: (k: string, o?: Record<string, unknown>) => string, s: ShownSpeaker | undefined) {
+export function speakerLabel(
+  t: (k: string, o?: Record<string, unknown>) => string,
+  s: ShownSpeaker | undefined,
+) {
   if (!s || s.kind === 'UNKNOWN') return t('record.transcript.speaker.unknown');
   if (s.self) return t('record.transcript.speaker.you');
   if (s.ordinal) return t('record.transcript.speaker.student', { n: s.ordinal });

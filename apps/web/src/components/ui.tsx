@@ -281,7 +281,10 @@ export function Modal({
           transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="flex shrink-0 items-center gap-2 border-b border-outline-variant/60 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
-            <h3 id={titleId} className="min-w-0 flex-1 truncate font-heading text-lg font-bold tracking-tight">
+            <h3
+              id={titleId}
+              className="min-w-0 flex-1 truncate font-heading text-lg font-bold tracking-tight"
+            >
               {title}
             </h3>
             {actions}

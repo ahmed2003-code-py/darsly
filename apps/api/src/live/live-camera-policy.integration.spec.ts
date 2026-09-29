@@ -2,7 +2,14 @@ import { databaseReady } from '../common/testing/db-available';
 import { PrismaService } from '../prisma/prisma.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveRecorderWorker } from './recording/live-recorder.worker';
-import { classroom, classroomWorld, codeOf, enterRoom, OFFER, type ClassroomWorld } from './testing/classroom';
+import {
+  classroom,
+  classroomWorld,
+  codeOf,
+  enterRoom,
+  OFFER,
+  type ClassroomWorld,
+} from './testing/classroom';
 
 /**
  * Live V1 Phase E on a real PostgreSQL: students' cameras. The class's
@@ -15,7 +22,11 @@ const prisma = new PrismaService();
 let available = true;
 
 beforeAll(async () => {
-  available = await databaseReady(prisma, ['liveSession', 'liveParticipantControl', 'liveRtcTrack']);
+  available = await databaseReady(prisma, [
+    'liveSession',
+    'liveParticipantControl',
+    'liveRtcTrack',
+  ]);
   if (!available) return;
   await prisma.onModuleInit();
 }, 30_000);
@@ -28,15 +39,30 @@ const guard = () => {
 };
 
 type C = ReturnType<typeof classroom>;
-const policy = (c: C, w: ClassroomWorld, cameraPolicy: 'SPEAKERS_ONLY' | 'OPTIONAL' | 'EXPECTED' | 'OFF') =>
-  c.rtc.setCameraPolicy(w.ls.id, cameraPolicy, w.teacher.id);
+const policy = (
+  c: C,
+  w: ClassroomWorld,
+  cameraPolicy: 'SPEAKERS_ONLY' | 'OPTIONAL' | 'EXPECTED' | 'OFF',
+) => c.rtc.setCameraPolicy(w.ls.id, cameraPolicy, w.teacher.id);
 
 /** A student publishes kinds on their SEND connection (opened if needed). */
-async function send(c: C, w: ClassroomWorld, userId: string, kinds: ('AUDIO' | 'VIDEO')[], conn?: string) {
+async function send(
+  c: C,
+  w: ClassroomWorld,
+  userId: string,
+  kinds: ('AUDIO' | 'VIDEO')[],
+  conn?: string,
+) {
   const connectionId = conn ?? (await c.rtc.openConnection(userId, w.ls.id, 'SEND')).connectionId;
   let mid = (await prisma.liveRtcTrack.count({ where: { connectionId } })) + 10;
-  await c.rtc.publish(userId, w.ls.id, connectionId, { offer: OFFER, tracks: kinds.map((kind) => ({ mid: String(mid++), kind })) });
-  const tracks = await prisma.liveRtcTrack.findMany({ where: { connectionId, closedAt: null }, select: { id: true, kind: true, trackName: true } });
+  await c.rtc.publish(userId, w.ls.id, connectionId, {
+    offer: OFFER,
+    tracks: kinds.map((kind) => ({ mid: String(mid++), kind })),
+  });
+  const tracks = await prisma.liveRtcTrack.findMany({
+    where: { connectionId, closedAt: null },
+    select: { id: true, kind: true, trackName: true },
+  });
   const of = (k: string) => tracks.find((t) => t.kind === k)!;
   return { connectionId, of };
 }
@@ -50,7 +76,9 @@ describe('SPEAKERS_ONLY (the default — the behaviour before this change)', () 
     if (!guard()) return;
     const w = await classroomWorld(prisma);
     const c = classroom(prisma);
-    expect(await codeOf(c.rtc.openConnection(w.s[0].id, w.ls.id, 'SEND'))).toBe('NOT_ALLOWED_TO_SPEAK');
+    expect(await codeOf(c.rtc.openConnection(w.s[0].id, w.ls.id, 'SEND'))).toBe(
+      'NOT_ALLOWED_TO_SPEAK',
+    );
     await approve(c, w, w.s[0].id);
     const { of } = await send(c, w, w.s[0].id, ['AUDIO', 'VIDEO']);
     const [a, v] = [of('AUDIO').trackName, of('VIDEO').trackName];
@@ -68,7 +96,9 @@ describe('OPTIONAL', () => {
     await policy(c, w, 'OPTIONAL');
     const { connectionId, of } = await send(c, w, w.s[0].id, ['VIDEO']);
     expect(c.sfu.active(of('VIDEO').trackName)).toBe(true);
-    expect(await codeOf(send(c, w, w.s[0].id, ['AUDIO'], connectionId))).toBe('NOT_ALLOWED_TO_SPEAK');
+    expect(await codeOf(send(c, w, w.s[0].id, ['AUDIO'], connectionId))).toBe(
+      'NOT_ALLOWED_TO_SPEAK',
+    );
   });
 
   it('revoking the floor closes the microphone and leaves the camera running', async () => {
@@ -83,10 +113,15 @@ describe('OPTIONAL', () => {
     await c.rtc.hand(w.teacher.id, w.ls.id, 'revoke', w.s[0].id);
     expect(c.sfu.active(a)).toBe(false);
     expect(c.sfu.active(v)).toBe(true);
-    const open = await prisma.liveRtcTrack.findMany({ where: { connectionId: cam.connectionId, closedAt: null } });
+    const open = await prisma.liveRtcTrack.findMany({
+      where: { connectionId: cam.connectionId, closedAt: null },
+    });
     expect(open.map((t) => t.kind)).toEqual(['VIDEO']);
     // The connection is still theirs: the camera keeps going.
-    expect((await prisma.liveRtcConnection.findUniqueOrThrow({ where: { id: cam.connectionId } })).closedAt).toBeNull();
+    expect(
+      (await prisma.liveRtcConnection.findUniqueOrThrow({ where: { id: cam.connectionId } }))
+        .closedAt,
+    ).toBeNull();
   });
 });
 
@@ -99,20 +134,31 @@ describe('EXPECTED — asked, shown, exemptable; never switched on', () => {
     await policy(c, w, 'EXPECTED');
     expect((await c.rtc.state(w.s[0].id, w.ls.id)).me.policy.cameraExpected).toBe(true);
     // No camera was published by anyone: expecting is not activating.
-    expect(await prisma.liveRtcTrack.count({ where: { sessionId: w.ls.id, kind: 'VIDEO' } })).toBe(0);
+    expect(await prisma.liveRtcTrack.count({ where: { sessionId: w.ls.id, kind: 'VIDEO' } })).toBe(
+      0,
+    );
     // The page reports the permission was denied; the teacher sees it.
     await c.rtc.reportCamera(w.s[1].id, w.ls.id, 'DENIED');
     await c.rtc.setControls(w.teacher.id, w.ls.id, w.s[0].id, { camera: 'EXEMPT' });
     const st = await c.rtc.state(w.teacher.id, w.ls.id);
     const row = (uid: string) => st.participants.find((p) => p.userId === uid)!;
     expect(row(w.s[0].id)).toMatchObject({ cameraExpected: false, controls: { camera: 'EXEMPT' } });
-    expect(row(w.s[1].id)).toMatchObject({ cameraExpected: true, controls: { cameraReport: 'DENIED' } });
-    expect((await c.rtc.state(w.s[0].id, w.ls.id)).me.policy).toMatchObject({ cameraExpected: false, cameraExempt: true });
+    expect(row(w.s[1].id)).toMatchObject({
+      cameraExpected: true,
+      controls: { cameraReport: 'DENIED' },
+    });
+    expect((await c.rtc.state(w.s[0].id, w.ls.id)).me.policy).toMatchObject({
+      cameraExpected: false,
+      cameraExempt: true,
+    });
     // An exempt student may still turn it on.
     await send(c, w, w.s[0].id, ['VIDEO']);
     // Fixed on the device: the report clears.
     await c.rtc.reportCamera(w.s[1].id, w.ls.id, null);
-    expect((await c.rtc.state(w.teacher.id, w.ls.id)).participants.find((p) => p.userId === w.s[1].id)?.controls?.cameraReport).toBeNull();
+    expect(
+      (await c.rtc.state(w.teacher.id, w.ls.id)).participants.find((p) => p.userId === w.s[1].id)
+        ?.controls?.cameraReport,
+    ).toBeNull();
   });
 
   it('a camera reminder is a prompt to the student, at most once a minute, from a moderator', async () => {
@@ -123,8 +169,12 @@ describe('EXPECTED — asked, shown, exemptable; never switched on', () => {
     expect(await c.rtc.nudgeCamera(w.teacher.id, w.ls.id, w.s[0].id)).toEqual({ sent: true });
     expect(await c.rtc.nudgeCamera(w.teacher.id, w.ls.id, w.s[0].id)).toEqual({ sent: false });
     expect(c.events.filter((e) => e.event === 'live:nudge' && e.id === w.s[0].id)).toHaveLength(1);
-    expect(await codeOf(c.rtc.nudgeCamera(w.assistant.id, w.ls.id, w.s[0].id))).toBe('NOT_A_MODERATOR');
-    expect(await codeOf(c.rtc.nudgeCamera(w.s[1].id, w.ls.id, w.s[0].id))).toBe('NOT_ALLOWED_TO_SPEAK');
+    expect(await codeOf(c.rtc.nudgeCamera(w.assistant.id, w.ls.id, w.s[0].id))).toBe(
+      'NOT_A_MODERATOR',
+    );
+    expect(await codeOf(c.rtc.nudgeCamera(w.s[1].id, w.ls.id, w.s[0].id))).toBe(
+      'NOT_ALLOWED_TO_SPEAK',
+    );
   });
 });
 
@@ -154,7 +204,10 @@ describe('OFF and BLOCKED', () => {
     expect(c.sfu.active(s0.of('VIDEO').trackName)).toBe(false);
     expect(await codeOf(send(c, w, w.s[0].id, ['VIDEO']))).toBe('NOT_ALLOWED_TO_SPEAK');
     // A new run: the block does not carry over.
-    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { roomName: `cf-${w.k}-run2` } });
+    await prisma.liveSession.update({
+      where: { id: w.ls.id },
+      data: { roomName: `cf-${w.k}-run2` },
+    });
     expect((await c.rtc.state(w.s[0].id, w.ls.id)).me.policy.cameraBlocked).toBe(false);
   });
 });
@@ -171,17 +224,28 @@ describe("privacy: a non-speaking student's camera reaches moderators only", () 
     // Not in the peer's state at all…
     expect((await c.rtc.state(w.s[1].id, w.ls.id)).tracks.map((t) => t.id)).not.toContain(camId);
     // …and refused by the server when asked for directly (the page is not trusted).
-    expect(await codeOf(c.rtc.subscribe(w.s[1].id, w.ls.id, peer.connectionId, { trackIds: [camId] }))).toBe('RTC_TRACK_DENIED');
+    expect(
+      await codeOf(c.rtc.subscribe(w.s[1].id, w.ls.id, peer.connectionId, { trackIds: [camId] })),
+    ).toBe('RTC_TRACK_DENIED');
     // A staff member who may not moderate is refused too.
     const obs = await c.rtc.openConnection(w.assistant.id, w.ls.id, 'RECEIVE');
-    expect(await codeOf(c.rtc.subscribe(w.assistant.id, w.ls.id, obs.connectionId, { trackIds: [camId] }))).toBe('RTC_TRACK_DENIED');
+    expect(
+      await codeOf(
+        c.rtc.subscribe(w.assistant.id, w.ls.id, obs.connectionId, { trackIds: [camId] }),
+      ),
+    ).toBe('RTC_TRACK_DENIED');
     // The teacher receives it.
     const t = await c.rtc.openConnection(w.teacher.id, w.ls.id, 'RECEIVE');
-    expect((await c.rtc.subscribe(w.teacher.id, w.ls.id, t.connectionId, { trackIds: [camId] })).tracks[0].error).toBeNull();
+    expect(
+      (await c.rtc.subscribe(w.teacher.id, w.ls.id, t.connectionId, { trackIds: [camId] }))
+        .tracks[0].error,
+    ).toBeNull();
     // Given the floor: the class presentation shows speakers to everyone.
     await approve(c, w, w.s[0].id);
     expect((await c.rtc.state(w.s[1].id, w.ls.id)).tracks.map((x) => x.id)).toContain(camId);
-    expect(await codeOf(c.rtc.subscribe(w.s[1].id, w.ls.id, peer.connectionId, { trackIds: [camId] }))).toBe('ok');
+    expect(
+      await codeOf(c.rtc.subscribe(w.s[1].id, w.ls.id, peer.connectionId, { trackIds: [camId] })),
+    ).toBe('ok');
   });
 });
 
@@ -193,14 +257,27 @@ describe('the recorder: teacher and active speakers only', () => {
     await policy(c, w, 'OPTIONAL');
     // The teacher's camera and voice.
     const tc = await c.rtc.openConnection(w.teacher.id, w.ls.id, 'SEND');
-    await c.rtc.publish(w.teacher.id, w.ls.id, tc.connectionId, { offer: OFFER, tracks: [{ mid: '0', kind: 'AUDIO' }, { mid: '1', kind: 'VIDEO' }] });
+    await c.rtc.publish(w.teacher.id, w.ls.id, tc.connectionId, {
+      offer: OFFER,
+      tracks: [
+        { mid: '0', kind: 'AUDIO' },
+        { mid: '1', kind: 'VIDEO' },
+      ],
+    });
     const listener = await send(c, w, w.s[0].id, ['VIDEO']); // camera on, not speaking
     await approve(c, w, w.s[1].id);
     const speaker = await send(c, w, w.s[1].id, ['AUDIO', 'VIDEO']);
 
     // The real worker's page state: what the recorder page is told to pull.
     const recordings = new LiveRecordingService(prisma, c.live, c.rtc);
-    const worker = new LiveRecorderWorker(prisma, {} as never, {} as never, c.cloudflare, c.rtc, recordings);
+    const worker = new LiveRecorderWorker(
+      prisma,
+      {} as never,
+      {} as never,
+      c.cloudflare,
+      c.rtc,
+      recordings,
+    );
     const rec = await prisma.liveRecording.create({
       data: {
         sessionId: w.ls.id,
@@ -219,13 +296,19 @@ describe('the recorder: teacher and active speakers only', () => {
     expect(ids).toContain(speaker.of('AUDIO').id);
     expect(page.tracks.filter((t: { role: string }) => t.role === 'TEACHER')).toHaveLength(2);
     // The teacher's own view still has the listener's camera.
-    expect((await c.rtc.state(w.teacher.id, w.ls.id)).tracks.map((t) => t.id)).toContain(listener.of('VIDEO').id);
+    expect((await c.rtc.state(w.teacher.id, w.ls.id)).tracks.map((t) => t.id)).toContain(
+      listener.of('VIDEO').id,
+    );
     // Even a direct pull by the recorder for that track gets nothing.
-    const pulled = await (worker as any).pageCf({ rec, cfSessionId: 'x' }, 'subscribe', { trackIds: [listener.of('VIDEO').id] });
+    const pulled = await (worker as any).pageCf({ rec, cfSessionId: 'x' }, 'subscribe', {
+      trackIds: [listener.of('VIDEO').id],
+    });
     expect(pulled.tracks).toEqual([]);
     // The speaker loses the floor: out of the recording.
     await c.rtc.hand(w.teacher.id, w.ls.id, 'revoke', w.s[1].id);
     const after = await (worker as any).pageState({ rec, startedAt: Date.now(), lost: false });
-    expect((after.tracks as { id: string }[]).map((t) => t.id)).not.toContain(speaker.of('VIDEO').id);
+    expect((after.tracks as { id: string }[]).map((t) => t.id)).not.toContain(
+      speaker.of('VIDEO').id,
+    );
   });
 });

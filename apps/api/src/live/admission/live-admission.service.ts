@@ -19,11 +19,25 @@ export const ADMISSION_COOLDOWN_MS = 2 * 60_000;
 /** …and at most this many times for one class. */
 export const ADMISSION_MAX_ATTEMPTS = 3;
 /** Purchase states that already hold (or are buying) a seat. */
-const HOLDING_PURCHASE = ['HELD', 'PAYMENT_PENDING', 'CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'] as const;
+const HOLDING_PURCHASE = [
+  'HELD',
+  'PAYMENT_PENDING',
+  'CONFIRMED',
+  'DELIVERED',
+  'NEEDS_REVIEW',
+] as const;
 
 type Row = Pick<LiveAdmissionRequest, 'id' | 'status' | 'attempts' | 'requestedAt' | 'decidedAt'>;
 const view = (r: Row | null) =>
-  r ? { id: r.id, status: r.status, attempts: r.attempts, requestedAt: r.requestedAt, decidedAt: r.decidedAt } : null;
+  r
+    ? {
+        id: r.id,
+        status: r.status,
+        attempts: r.attempts,
+        requestedAt: r.requestedAt,
+        decidedAt: r.decidedAt,
+      }
+    : null;
 
 /**
  * "طلب الانضمام": a student asks for a seat in a class whose booking capacity
@@ -59,7 +73,10 @@ export class LiveAdmissionService {
       select: { id: true, user: { select: { fullName: true } } },
     });
     if (!s) {
-      throw new ForbiddenException({ message: 'Only a student can ask to join', code: 'ADMISSION_NOT_ELIGIBLE' });
+      throw new ForbiddenException({
+        message: 'Only a student can ask to join',
+        code: 'ADMISSION_NOT_ELIGIBLE',
+      });
     }
     return s;
   }
@@ -88,8 +105,17 @@ export class LiveAdmissionService {
     return s;
   }
 
-  private over(s: { status: string; startsAt: Date; durationMin: number; cancelledAt: Date | null }) {
-    return !!s.cancelledAt || s.status === 'ENDED' || Date.now() >= s.startsAt.getTime() + s.durationMin * 60_000;
+  private over(s: {
+    status: string;
+    startsAt: Date;
+    durationMin: number;
+    cancelledAt: Date | null;
+  }) {
+    return (
+      !!s.cancelledAt ||
+      s.status === 'ENDED' ||
+      Date.now() >= s.startsAt.getTime() + s.durationMin * 60_000
+    );
   }
 
   /** My request for this class (null when I never asked). */
@@ -111,7 +137,8 @@ export class LiveAdmissionService {
   async request(userId: string, sessionId: string) {
     const student = await this.studentOf(userId);
     const s = await this.sessionFor(sessionId);
-    if (this.over(s)) throw new ConflictException({ message: 'This session has ended', code: 'SESSION_ENDED' });
+    if (this.over(s))
+      throw new ConflictException({ message: 'This session has ended', code: 'SESSION_ENDED' });
     // The class's own audience: a group's class stays its group's.
     if (s.groupId) await this.live.assertAudience(student.id, s);
     const r = await this.prisma.$transaction(async (tx) => {
@@ -121,37 +148,66 @@ export class LiveAdmissionService {
         where: { sessionId_studentId: { sessionId, studentId: student.id } },
         select: { id: true },
       });
-      if (booked) throw new ConflictException({ message: 'You already have a seat', code: 'ALREADY_BOOKED' });
+      if (booked)
+        throw new ConflictException({ message: 'You already have a seat', code: 'ALREADY_BOOKED' });
       const buying = await tx.livePurchase.findFirst({
         where: { sessionId, studentId: student.id, status: { in: [...HOLDING_PURCHASE] } },
         select: { id: true },
       });
-      if (buying) throw new ConflictException({ message: 'You are already buying a seat', code: 'ALREADY_HOLDING' });
-      const existing = await tx.liveAdmissionRequest.findUnique({ where: { sessionId_userId: { sessionId, userId } } });
+      if (buying)
+        throw new ConflictException({
+          message: 'You are already buying a seat',
+          code: 'ALREADY_HOLDING',
+        });
+      const existing = await tx.liveAdmissionRequest.findUnique({
+        where: { sessionId_userId: { sessionId, userId } },
+      });
       // An open request (or an approval not yet used) is the answer.
       if (existing && (existing.status === 'PENDING' || existing.status === 'APPROVED')) {
         return { row: existing, fresh: false };
       }
-      if (locked.capacity == null || (await seatsTaken(tx, sessionId, new Date())) < locked.capacity) {
+      if (
+        locked.capacity == null ||
+        (await seatsTaken(tx, sessionId, new Date())) < locked.capacity
+      ) {
         throw new ConflictException({ message: 'There is a seat — book it', code: 'NOT_FULL' });
       }
       if (existing) {
         if (existing.status === 'EXPIRED')
           throw new ConflictException({ message: 'This session has ended', code: 'SESSION_ENDED' });
         if (existing.status === 'USED')
-          throw new ConflictException({ message: 'You already have a seat', code: 'ALREADY_BOOKED' });
+          throw new ConflictException({
+            message: 'You already have a seat',
+            code: 'ALREADY_BOOKED',
+          });
         if (existing.attempts >= ADMISSION_MAX_ATTEMPTS)
-          throw new ConflictException({ message: 'You have asked the most times you can for this class', code: 'ADMISSION_LIMIT' });
-        const wait = (existing.decidedAt ?? existing.requestedAt).getTime() + ADMISSION_COOLDOWN_MS - Date.now();
+          throw new ConflictException({
+            message: 'You have asked the most times you can for this class',
+            code: 'ADMISSION_LIMIT',
+          });
+        const wait =
+          (existing.decidedAt ?? existing.requestedAt).getTime() +
+          ADMISSION_COOLDOWN_MS -
+          Date.now();
         if (existing.status === 'REJECTED' && wait > 0) {
           throw new HttpException(
-            { message: 'Wait a moment before asking again', code: 'ADMISSION_COOLDOWN', retryAfterSeconds: Math.ceil(wait / 1000) },
+            {
+              message: 'Wait a moment before asking again',
+              code: 'ADMISSION_COOLDOWN',
+              retryAfterSeconds: Math.ceil(wait / 1000),
+            },
             HttpStatus.TOO_MANY_REQUESTS,
           );
         }
         const row = await tx.liveAdmissionRequest.update({
           where: { id: existing.id },
-          data: { status: 'PENDING', attempts: { increment: 1 }, requestedAt: new Date(), decidedAt: null, decidedBy: null },
+          data: {
+            status: 'PENDING',
+            attempts: { increment: 1 },
+            requestedAt: new Date(),
+            decidedAt: null,
+            decidedBy: null,
+          },
         });
         return { row, fresh: true };
       }
@@ -175,7 +231,9 @@ export class LiveAdmissionService {
           meta: { sessionId, admission: r.row.id },
         })
         .catch(() => undefined);
-      this.logger.log(`live.admission.requested liveSession=${sessionId} student=${student.id} attempt=${r.row.attempts}`);
+      this.logger.log(
+        `live.admission.requested liveSession=${sessionId} student=${student.id} attempt=${r.row.attempts}`,
+      );
     }
     return view(r.row);
   }
@@ -205,16 +263,23 @@ export class LiveAdmissionService {
       this.prisma.liveAdmissionRequest.count({ where: { sessionId, status: 'USED' } }),
     ]);
     const names = new Map(
-      (await this.prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true, fullName: true } })).map(
-        (u) => [u.id, u.fullName],
-      ),
+      (
+        await this.prisma.user.findMany({
+          where: { id: { in: rows.map((r) => r.userId) } },
+          select: { id: true, fullName: true },
+        })
+      ).map((u) => [u.id, u.fullName]),
     );
     return {
       capacity: s.capacity,
       seatsTaken: taken,
       exceptions,
       accessMode: s.accessMode,
-      requests: rows.map((r) => ({ ...view(r)!, userId: r.userId, name: names.get(r.userId) ?? '' })),
+      requests: rows.map((r) => ({
+        ...view(r)!,
+        userId: r.userId,
+        name: names.get(r.userId) ?? '',
+      })),
     };
   }
 
@@ -223,7 +288,12 @@ export class LiveAdmissionService {
    * decides, the second is told what was decided. Serialised with every seat
    * change by the session's row lock.
    */
-  async decide(actorId: string, sessionId: string, requestId: string, decision: 'APPROVE' | 'REJECT') {
+  async decide(
+    actorId: string,
+    sessionId: string,
+    requestId: string,
+    decision: 'APPROVE' | 'REJECT',
+  ) {
     await this.live.assertModerator(actorId, sessionId);
     const s = await this.sessionFor(sessionId);
     const out = await this.prisma.$transaction(async (tx) => {
@@ -233,7 +303,10 @@ export class LiveAdmissionService {
       if (r.status !== 'PENDING') return { row: r, changed: false };
       const now = new Date();
       if (this.over(s)) {
-        const row = await tx.liveAdmissionRequest.update({ where: { id: r.id }, data: { status: 'EXPIRED', decidedAt: now } });
+        const row = await tx.liveAdmissionRequest.update({
+          where: { id: r.id },
+          data: { status: 'EXPIRED', decidedAt: now },
+        });
         return { row, changed: true };
       }
       if (decision === 'REJECT') {
@@ -249,7 +322,10 @@ export class LiveAdmissionService {
         select: { id: true },
       });
       if (booked) {
-        const row = await tx.liveAdmissionRequest.update({ where: { id: r.id }, data: { status: 'CANCELLED', decidedAt: now } });
+        const row = await tx.liveAdmissionRequest.update({
+          where: { id: r.id },
+          data: { status: 'CANCELLED', decidedAt: now },
+        });
         return { row, changed: true };
       }
       await tx.liveAdmissionRequest.update({
@@ -258,7 +334,9 @@ export class LiveAdmissionService {
       });
       if (s.accessMode === 'FREE') {
         // A free class: the seat itself, past the full capacity, now.
-        const booking = await tx.liveBooking.create({ data: { sessionId, studentId: r.studentId } });
+        const booking = await tx.liveBooking.create({
+          data: { sessionId, studentId: r.studentId },
+        });
         await consumeAdmission(tx, sessionId, r.studentId, { bookingId: booking.id });
       }
       // A paid class: the approval only opens the ordinary purchase for them.
@@ -266,9 +344,16 @@ export class LiveAdmissionService {
       return { row, changed: true };
     });
     if (out.changed) {
-      this.realtime.emitToUser(out.row.userId, 'live:admission', { sessionId, status: out.row.status });
+      this.realtime.emitToUser(out.row.userId, 'live:admission', {
+        sessionId,
+        status: out.row.status,
+      });
       this.realtime.emitToLive(sessionId, 'live:rtc-state', { sessionId });
-      if (out.row.status === 'USED' || out.row.status === 'APPROVED' || out.row.status === 'REJECTED') {
+      if (
+        out.row.status === 'USED' ||
+        out.row.status === 'APPROVED' ||
+        out.row.status === 'REJECTED'
+      ) {
         await this.notifications
           .create({
             userId: out.row.userId,

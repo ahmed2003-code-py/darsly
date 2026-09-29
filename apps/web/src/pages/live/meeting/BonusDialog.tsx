@@ -30,7 +30,12 @@ export default function BonusDialog({
 }: {
   name: string;
   onClose: () => void;
-  onGrant: (b: { points: number; reasonKey?: BonusReason; reason?: string; requestId: string }) => Promise<void>;
+  onGrant: (b: {
+    points: number;
+    reasonKey?: BonusReason;
+    reason?: string;
+    requestId: string;
+  }) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const requestId = useMemo(uuid, []);
@@ -64,7 +69,9 @@ export default function BonusDialog({
 
   const chip = (active: boolean) =>
     `rounded-full px-3.5 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-      active ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
+      active
+        ? 'bg-primary text-on-primary'
+        : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'
     }`;
 
   return (
@@ -101,18 +108,31 @@ export default function BonusDialog({
               />
             </label>
           </div>
-          {custom && !valid && <p className="mt-1 text-xs text-error">{t('bonus.range', { max: MAX_PER_AWARD })}</p>}
+          {custom && !valid && (
+            <p className="mt-1 text-xs text-error">{t('bonus.range', { max: MAX_PER_AWARD })}</p>
+          )}
         </div>
 
         <div>
           <p className="mb-2 text-xs font-bold text-on-surface-variant">{t('bonus.reason')}</p>
           <div className="flex flex-wrap gap-2">
             {BONUS_REASONS.map((r) => (
-              <button key={r} type="button" className={chip(reasonKey === r)} aria-pressed={reasonKey === r} onClick={() => setReasonKey(r)}>
+              <button
+                key={r}
+                type="button"
+                className={chip(reasonKey === r)}
+                aria-pressed={reasonKey === r}
+                onClick={() => setReasonKey(r)}
+              >
                 {t(`bonus.reasons.${r}`)}
               </button>
             ))}
-            <button type="button" className={chip(reasonKey === null)} aria-pressed={reasonKey === null} onClick={() => setReasonKey(null)}>
+            <button
+              type="button"
+              className={chip(reasonKey === null)}
+              aria-pressed={reasonKey === null}
+              onClick={() => setReasonKey(null)}
+            >
               {t('bonus.reasons.OTHER')}
             </button>
           </div>
@@ -131,10 +151,20 @@ export default function BonusDialog({
         <ErrorNote error={error} />
         <p className="text-xs text-outline">{t('bonus.note')}</p>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" className="btn-ghost justify-center" onClick={onClose} disabled={busy}>
+          <button
+            type="button"
+            className="btn-ghost justify-center"
+            onClick={onClose}
+            disabled={busy}
+          >
             {t('common.cancel')}
           </button>
-          <button type="button" className="btn-primary justify-center" disabled={!valid || busy} onClick={() => void submit()}>
+          <button
+            type="button"
+            className="btn-primary justify-center"
+            disabled={!valid || busy}
+            onClick={() => void submit()}
+          >
             <span aria-hidden className="material-symbols-outlined text-[18px]">
               redeem
             </span>

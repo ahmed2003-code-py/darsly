@@ -70,7 +70,11 @@ export function planCut(p: PieceClock, now: number, othersTalking: boolean): Cut
     return 'keep';
   }
   if (age >= STUDENT_MAX_MS) return 'cut';
-  if (p.voicedMs >= TURN_MIN_VOICE_MS && p.lastVoiceAt != null && now - p.lastVoiceAt >= TURN_SILENCE_MS)
+  if (
+    p.voicedMs >= TURN_MIN_VOICE_MS &&
+    p.lastVoiceAt != null &&
+    now - p.lastVoiceAt >= TURN_SILENCE_MS
+  )
     return 'cut';
   return 'keep';
 }
@@ -133,7 +137,8 @@ export class SpeakerCapture {
 
   /** False when this browser cannot record separately (the caller uses the mixed capture). */
   start(): boolean {
-    if (!this.mime || typeof AudioContext === 'undefined' || typeof MediaRecorder === 'undefined') return false;
+    if (!this.mime || typeof AudioContext === 'undefined' || typeof MediaRecorder === 'undefined')
+      return false;
     this.tick = setInterval(() => this.check(), LEVEL_EVERY_MS);
     return true;
   }
@@ -151,7 +156,8 @@ export class SpeakerCapture {
       if (meta.startedAt >= this.startedAt) continue;
       if (meta.voiced && blob.size >= MIN_PIECE_BYTES) {
         const ms = Math.max(0, meta.lastAt - meta.startedAt) + CHUNK_MS;
-        if (await uploadWithRetry((q, b) => this.upload(q, b, ms, meta.speaker), meta.seq, blob)) sent++;
+        if (await uploadWithRetry((q, b) => this.upload(q, b, ms, meta.speaker), meta.seq, blob))
+          sent++;
       }
       await this.store.remove(meta.id);
     }
@@ -169,7 +175,7 @@ export class SpeakerCapture {
     for (const [userId, s] of this.sources) {
       const now = live.find((m) => m.userId === userId);
       // Gone, replaced (a reconnect gives a new track), or moved to the mix: its turn ends here.
-      if (!now || now.track !== s.track || !plan.separate.includes(userId)) this.drop(userId);
+      if (!now || now.track !== s.track || !plan.separate.includes(userId)) void this.drop(userId);
     }
     for (const userId of plan.separate) {
       if (this.sources.has(userId)) continue;
@@ -178,7 +184,12 @@ export class SpeakerCapture {
     }
     const overflow = live.filter((m) => plan.mixed.includes(m.userId)).map((m) => m.track);
     if (overflow.length && !this.mixed) {
-      const mixed = new LessonAudio((s, b, ms) => this.upload(s, b, ms, undefined), undefined, this.store, this.session);
+      const mixed = new LessonAudio(
+        (s, b, ms) => this.upload(s, b, ms, undefined),
+        undefined,
+        this.store,
+        this.session,
+      );
       if (mixed.start()) this.mixed = mixed;
     }
     this.mixed?.setTracks(overflow);
@@ -190,7 +201,9 @@ export class SpeakerCapture {
     if (this.tick) clearInterval(this.tick);
     const last = [...this.sources.keys()].map((u) => this.drop(u));
     await Promise.race([
-      Promise.all([...last, this.mixed?.stop(maxWaitMs)]).then(() => Promise.allSettled([...this.pending])),
+      Promise.all([...last, this.mixed?.stop(maxWaitMs)]).then(() =>
+        Promise.allSettled([...this.pending]),
+      ),
       new Promise((r) => setTimeout(r, maxWaitMs)),
     ]);
   }
@@ -206,7 +219,17 @@ export class SpeakerCapture {
     node.connect(analyser);
     analyser.connect(dest);
     void ctx.resume().catch(() => undefined);
-    const s: Source = { userId, own: userId === this.me, track, ctx, node, analyser, dest, piece: null, talking: false };
+    const s: Source = {
+      userId,
+      own: userId === this.me,
+      track,
+      ctx,
+      node,
+      analyser,
+      dest,
+      piece: null,
+      talking: false,
+    };
     this.sources.set(userId, s);
     s.piece = this.startPiece(s);
   }
@@ -254,7 +277,10 @@ export class SpeakerCapture {
 
   private startPiece(s: Source): Piece | null {
     if (!this.mime || this.stopped) return null;
-    const rec = new MediaRecorder(s.dest.stream, { mimeType: this.mime, audioBitsPerSecond: 32_000 });
+    const rec = new MediaRecorder(s.dest.stream, {
+      mimeType: this.mime,
+      audioBitsPerSecond: 32_000,
+    });
     const seq = nextSeq();
     const startedAt = Date.now();
     const id = `${this.session}:${seq}`;

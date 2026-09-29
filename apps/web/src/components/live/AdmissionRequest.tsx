@@ -35,14 +35,16 @@ export default function AdmissionRequest({
   const key = ['live-admission', sessionId];
   const mine = useQuery({
     queryKey: key,
-    queryFn: async () => (await api.get(`/live/${sessionId}/admission`)).data as AdmissionView | null,
+    queryFn: async () =>
+      (await api.get(`/live/${sessionId}/admission`)).data as AdmissionView | null,
   });
   const ask = useMutation({
     mutationFn: async () => (await api.post(`/live/${sessionId}/admission`)).data as AdmissionView,
     onSuccess: (d) => qc.setQueryData(key, d),
   });
   const withdraw = useMutation({
-    mutationFn: async () => (await api.delete(`/live/${sessionId}/admission`)).data as AdmissionView | null,
+    mutationFn: async () =>
+      (await api.delete(`/live/${sessionId}/admission`)).data as AdmissionView | null,
     onSuccess: (d) => qc.setQueryData(key, d),
   });
 
@@ -75,7 +77,12 @@ export default function AdmissionRequest({
           {t('admission.pending')}
         </p>
         <p className="text-on-surface-variant">{t('admission.pendingHint')}</p>
-        <button type="button" className="text-xs font-semibold text-on-surface-variant hover:underline" disabled={withdraw.isPending} onClick={() => withdraw.mutate()}>
+        <button
+          type="button"
+          className="text-xs font-semibold text-on-surface-variant hover:underline"
+          disabled={withdraw.isPending}
+          onClick={() => withdraw.mutate()}
+        >
           {t('admission.withdraw')}
         </button>
         <ErrorNote error={withdraw.error} />
@@ -103,7 +110,9 @@ export default function AdmissionRequest({
   return (
     <div className={`${box} border-outline-variant`}>
       <p className="font-semibold text-error">{t('live.full')}</p>
-      {status === 'REJECTED' && <p className="text-on-surface-variant">{t('admission.rejected')}</p>}
+      {status === 'REJECTED' && (
+        <p className="text-on-surface-variant">{t('admission.rejected')}</p>
+      )}
       {status === 'EXPIRED' ? (
         <p className="text-on-surface-variant">{t('admission.expired')}</p>
       ) : (

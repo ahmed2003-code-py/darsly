@@ -214,7 +214,6 @@ export default function TeacherLivePage() {
         )}
       </Modal>
 
-
       {/* Bookings modal */}
       <Modal open={!!bookingsFor} onClose={() => setBookingsFor(null)} title={t('live.attendees')}>
         {!bookings?.length ? (

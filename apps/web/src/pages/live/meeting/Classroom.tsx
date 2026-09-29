@@ -260,7 +260,8 @@ export default function Classroom(props: ClassroomProps) {
   const showMic = !cf || amOwner || !!myPolicy?.publish.AUDIO || meeting.micOn;
   const showCam = !cf || amOwner || !!myPolicy?.publish.VIDEO || meeting.camOn;
   const [cameraLater, setCameraLater] = useState(false);
-  const askCamera = !!cf && !amOwner && !!myPolicy?.cameraExpected && !meeting.camOn && (!cameraLater || cf.nudged);
+  const askCamera =
+    !!cf && !amOwner && !!myPolicy?.cameraExpected && !meeting.camOn && (!cameraLater || cf.nudged);
   const canSend = !cf || amOwner || !!cf.rtc?.me.canPublish;
   // Running the class (hands, removals, the panel's controls) is the server's
   // answer for Darsly's classroom, not "I am on the teacher side".
@@ -592,7 +593,10 @@ export default function Classroom(props: ClassroomProps) {
                 role="alertdialog"
                 aria-label={cf.invited ? t('meeting.invitedTitle') : t('meeting.youCanSpeak')}
               >
-                <span aria-hidden className="material-symbols-outlined text-[20px] text-emerald-300">
+                <span
+                  aria-hidden
+                  className="material-symbols-outlined text-[20px] text-emerald-300"
+                >
                   record_voice_over
                 </span>
                 <span className="text-sm font-semibold">
@@ -654,9 +658,16 @@ export default function Classroom(props: ClassroomProps) {
                   onClick={() => cf.setCameraPage(cf.cameraPage - 1)}
                   className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40"
                 >
-                  <span aria-hidden className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_left</span>
+                  <span
+                    aria-hidden
+                    className="material-symbols-outlined text-[18px] rtl:rotate-180"
+                  >
+                    chevron_left
+                  </span>
                 </button>
-                <span className="px-1 tabular-nums">{t('meeting.camera.page', { page: cf.cameraPage + 1 })}</span>
+                <span className="px-1 tabular-nums">
+                  {t('meeting.camera.page', { page: cf.cameraPage + 1 })}
+                </span>
                 <button
                   type="button"
                   aria-label={t('meeting.camera.nextPage')}
@@ -664,7 +675,12 @@ export default function Classroom(props: ClassroomProps) {
                   onClick={() => cf.setCameraPage(cf.cameraPage + 1)}
                   className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40"
                 >
-                  <span aria-hidden className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_right</span>
+                  <span
+                    aria-hidden
+                    className="material-symbols-outlined text-[18px] rtl:rotate-180"
+                  >
+                    chevron_right
+                  </span>
                 </button>
               </div>
             )}
@@ -820,7 +836,9 @@ export default function Classroom(props: ClassroomProps) {
                   <span aria-hidden className="material-symbols-outlined text-[18px]">
                     {cf.rtc?.me.policy?.micBlocked ? 'mic_off' : 'hearing'}
                   </span>
-                  {cf.rtc?.me.policy?.micBlocked ? t('meeting.youAreMicBlocked') : t('meeting.listenOnlyNote')}
+                  {cf.rtc?.me.policy?.micBlocked
+                    ? t('meeting.youAreMicBlocked')
+                    : t('meeting.listenOnlyNote')}
                 </span>
               )}
               {cf && !amOwner && (canRaise || (myHand !== 'IDLE' && myHand !== 'RELEASED')) && (

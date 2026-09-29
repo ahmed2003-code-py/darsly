@@ -221,7 +221,11 @@ export async function lockSession(tx: Tx, sessionId: string): Promise<LockedSess
  * for through the ordinary path. Checked under the session's row lock by
  * every caller, like the capacity it stands in for.
  */
-export async function hasAdmission(tx: Tx | PrismaService, sessionId: string, studentId: string | null) {
+export async function hasAdmission(
+  tx: Tx | PrismaService,
+  sessionId: string,
+  studentId: string | null,
+) {
   if (!studentId) return false;
   const a = await tx.liveAdmissionRequest.findFirst({
     where: { sessionId, studentId, status: 'APPROVED' },
@@ -244,7 +248,12 @@ export async function consumeAdmission(
   const now = new Date();
   await tx.liveAdmissionRequest.updateMany({
     where: { sessionId, studentId, status: 'APPROVED' },
-    data: { status: 'USED', usedAt: now, bookingId: link.bookingId ?? null, purchaseId: link.purchaseId ?? null },
+    data: {
+      status: 'USED',
+      usedAt: now,
+      bookingId: link.bookingId ?? null,
+      purchaseId: link.purchaseId ?? null,
+    },
   });
   await tx.liveAdmissionRequest.updateMany({
     where: { sessionId, studentId, status: 'PENDING' },
@@ -646,7 +655,10 @@ export class LiveCommerceService implements OnModuleInit {
       const booking = await tx.liveBooking.create({
         data: { sessionId: s.id, studentId: buyer.studentId, purchaseId: p.id },
       });
-      await consumeAdmission(tx, s.id, buyer.studentId, { bookingId: booking.id, purchaseId: p.id });
+      await consumeAdmission(tx, s.id, buyer.studentId, {
+        bookingId: booking.id,
+        purchaseId: p.id,
+      });
     }
     return p;
   }

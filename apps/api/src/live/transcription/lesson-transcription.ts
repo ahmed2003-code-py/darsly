@@ -295,7 +295,11 @@ export function assembleTranscript(
   for (let i = 0; i < segments.length; i++) {
     const a = segments[i];
     if (!a.speaker || a.durationSec == null) continue;
-    for (let j = i + 1; j < segments.length && segments[j].startSec < a.startSec + a.durationSec; j++) {
+    for (
+      let j = i + 1;
+      j < segments.length && segments[j].startSec < a.startSec + a.durationSec;
+      j++
+    ) {
       const b = segments[j];
       if (!b.speaker || speakerKey(b.speaker) === speakerKey(a.speaker)) continue;
       a.overlap = true;

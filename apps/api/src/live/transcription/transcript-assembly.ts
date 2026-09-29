@@ -108,7 +108,9 @@ export async function finalizeTranscript(
           : 'NO_SPEECH',
     providerUnavailable,
     speakers: new Set(
-      rows.filter((r) => r.speakerKind && r.speakerKind !== 'UNKNOWN' && r.text?.trim()).map((r) => r.speakerUserId),
+      rows
+        .filter((r) => r.speakerKind && r.speakerKind !== 'UNKNOWN' && r.text?.trim())
+        .map((r) => r.speakerUserId),
     ).size,
     audioSeconds: Math.round(rows.reduce((n, r) => n + estimateMs(r), 0) / 1000),
     model: opts.model,

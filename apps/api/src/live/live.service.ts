@@ -44,7 +44,12 @@ import {
   toSnapshot,
 } from '../commerce/commercial-terms.service';
 import { priceLiveSeat, PricingError } from '../commerce/pricing';
-import { consumeAdmission, LiveCommerceService, lockSession, seatsTaken } from './commerce/live-commerce.service';
+import {
+  consumeAdmission,
+  LiveCommerceService,
+  lockSession,
+  seatsTaken,
+} from './commerce/live-commerce.service';
 import { pipelineStages } from './live-pipeline';
 import { recordingStage } from './recording/recording-stage';
 import { LiveProviders } from './providers/live-providers';
@@ -848,8 +853,12 @@ export class LiveService {
         guestSeats,
         // Seats the teacher granted past a full capacity (approved requests
         // that became a seat) — the base capacity itself never changes.
-        exceptions: await this.prisma.liveAdmissionRequest.count({ where: { sessionId: s.id, status: 'USED' } }),
-        pendingRequests: await this.prisma.liveAdmissionRequest.count({ where: { sessionId: s.id, status: 'PENDING' } }),
+        exceptions: await this.prisma.liveAdmissionRequest.count({
+          where: { sessionId: s.id, status: 'USED' },
+        }),
+        pendingRequests: await this.prisma.liveAdmissionRequest.count({
+          where: { sessionId: s.id, status: 'PENDING' },
+        }),
       },
       sales:
         s.accessMode === 'PAID' || sold.length
@@ -1172,7 +1181,14 @@ export class LiveService {
       (
         await this.prisma.liveAdmissionRequest.findMany({
           where: { userId, sessionId: { in: sessions.map((s) => s.id) } },
-          select: { sessionId: true, id: true, status: true, attempts: true, requestedAt: true, decidedAt: true },
+          select: {
+            sessionId: true,
+            id: true,
+            status: true,
+            attempts: true,
+            requestedAt: true,
+            decidedAt: true,
+          },
         })
       ).map((a) => [a.sessionId, a]),
     );
@@ -1811,7 +1827,15 @@ export class LiveService {
     });
     await this.prisma.liveAudioSegment.upsert({
       where: { sessionId_roomName_seq: { sessionId: id, roomName, seq } },
-      create: { sessionId: id, roomName, seq, key, sizeBytes: file.size, durationMs: ms, ...speaker },
+      create: {
+        sessionId: id,
+        roomName,
+        seq,
+        key,
+        sizeBytes: file.size,
+        durationMs: ms,
+        ...speaker,
+      },
       // Only an untranscribed piece is ever replaced (see above) — and a new
       // copy of a piece that failed is a fresh chance for it.
       update: {
@@ -2336,11 +2360,18 @@ export class LiveService {
 
   async assertModerator(userId: string, sessionId: string) {
     if (!(await this.canModerate(userId, sessionId))) {
-      throw new ForbiddenException({ message: 'Only the class’s teacher can do that', code: 'NOT_A_MODERATOR' });
+      throw new ForbiddenException({
+        message: 'Only the class’s teacher can do that',
+        code: 'NOT_A_MODERATOR',
+      });
     }
   }
 
-  async chatHistory(userId: string, sessionId: string, opts: { before?: string; limit?: number } = {}) {
+  async chatHistory(
+    userId: string,
+    sessionId: string,
+    opts: { before?: string; limit?: number } = {},
+  ) {
     await this.assertInSession(userId, sessionId);
     const limit = Math.min(Math.max(Math.trunc(opts.limit ?? CHAT_PAGE_DEFAULT), 1), CHAT_PAGE_MAX);
     let cursor: { createdAt: Date; id: string } | null = null;
@@ -2349,7 +2380,8 @@ export class LiveService {
         where: { id: opts.before, sessionId },
         select: { createdAt: true, id: true },
       });
-      if (!cursor) throw new BadRequestException({ message: 'Unknown message', code: 'CHAT_CURSOR_INVALID' });
+      if (!cursor)
+        throw new BadRequestException({ message: 'Unknown message', code: 'CHAT_CURSOR_INVALID' });
     }
     const rows = await this.prisma.liveChatMessage.findMany({
       where: {
@@ -2376,8 +2408,13 @@ export class LiveService {
     if (!text) throw new BadRequestException({ message: 'Empty message', code: 'EMPTY_MESSAGE' });
     // The name as it is now — a guest's chosen name, a student's account name —
     // kept with the message so a later rename does not rewrite the archive.
-    const guest = await this.prisma.guestBuyer.findUnique({ where: { userId }, select: { displayName: true } });
-    const me = guest ? null : await this.prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } });
+    const guest = await this.prisma.guestBuyer.findUnique({
+      where: { userId },
+      select: { displayName: true },
+    });
+    const me = guest
+      ? null
+      : await this.prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } });
     const saved = await this.prisma.liveChatMessage.create({
       data: {
         sessionId,
@@ -3155,7 +3192,9 @@ export class LiveService {
     const now = Date.now();
     const scheduledEnd = this.closesAt(s);
     const runEnd = s.endedAt ? s.endedAt.getTime() : Math.min(now, scheduledEnd);
-    const runSec = s.startedAt ? Math.max(0, Math.round((runEnd - s.startedAt.getTime()) / 1000)) : 0;
+    const runSec = s.startedAt
+      ? Math.max(0, Math.round((runEnd - s.startedAt.getTime()) / 1000))
+      : 0;
     const threshold = Math.min(
       liveAttendedThresholdSec(s.durationMin),
       runSec ? Math.ceil(runSec / 2) : Number.MAX_SAFE_INTEGER,
@@ -3165,21 +3204,32 @@ export class LiveService {
       this.prisma.liveAttendance.findMany({
         where: { sessionId: id },
         orderBy: { joinedAt: 'asc' },
-        include: { user: { select: { fullName: true, role: true, guestBuyer: { select: { displayName: true } } } } },
+        include: {
+          user: {
+            select: { fullName: true, role: true, guestBuyer: { select: { displayName: true } } },
+          },
+        },
       }),
       this.prisma.liveBooking.findMany({
         where: { sessionId: id },
         select: { student: { select: { userId: true, user: { select: { fullName: true } } } } },
       }),
       this.prisma.livePurchase.findMany({
-        where: { sessionId: id, guestBuyerId: { not: null }, status: { in: ['CONFIRMED', 'DELIVERED'] } },
+        where: {
+          sessionId: id,
+          guestBuyerId: { not: null },
+          status: { in: ['CONFIRMED', 'DELIVERED'] },
+        },
         select: { guestBuyer: { select: { userId: true, displayName: true } } },
       }),
       this.prisma.liveRtcTrack.findMany({
         where: { sessionId: id, kind: 'AUDIO', connection: { role: 'STUDENT' } },
         select: { userId: true, createdAt: true, closedAt: true },
       }),
-      this.prisma.liveHand.findMany({ where: { sessionId: id }, select: { userId: true, raisedCount: true } }),
+      this.prisma.liveHand.findMany({
+        where: { sessionId: id },
+        select: { userId: true, raisedCount: true },
+      }),
     ]);
 
     const spoke = new Map<string, { count: number; sec: number }>();
@@ -3219,9 +3269,11 @@ export class LiveService {
 
     // Who held a seat: booked students and guests with a confirmed seat.
     const expected = new Map<string, { name: string; guest: boolean }>();
-    for (const b of bookings) expected.set(b.student.userId, { name: b.student.user.fullName, guest: false });
+    for (const b of bookings)
+      expected.set(b.student.userId, { name: b.student.user.fullName, guest: false });
     for (const g of guestSeats)
-      if (g.guestBuyer) expected.set(g.guestBuyer.userId, { name: g.guestBuyer.displayName, guest: true });
+      if (g.guestBuyer)
+        expected.set(g.guestBuyer.userId, { name: g.guestBuyer.displayName, guest: true });
     const came = new Set(list.map((r) => r.userId));
     const absent = [...expected.entries()]
       .filter(([uid]) => !came.has(uid))
@@ -3235,8 +3287,11 @@ export class LiveService {
         joined: students.length,
         absent: absent.length,
         attended: students.filter((r) => r.status === 'ATTENDED').length,
-        averagePercent: pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null,
-        attendedThresholdSeconds: Number.isFinite(threshold) && threshold < Number.MAX_SAFE_INTEGER ? threshold : null,
+        averagePercent: pcts.length
+          ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
+          : null,
+        attendedThresholdSeconds:
+          Number.isFinite(threshold) && threshold < Number.MAX_SAFE_INTEGER ? threshold : null,
       },
       rows: list,
       absent,

@@ -50,7 +50,9 @@ export default function TeacherLiveSessionPage() {
   const hasData = !!detail.data;
   useEffect(() => {
     if (hasData && window.location.hash === '#archive')
-      requestAnimationFrame(() => document.getElementById('archive')?.scrollIntoView({ block: 'start' }));
+      requestAnimationFrame(() =>
+        document.getElementById('archive')?.scrollIntoView({ block: 'start' }),
+      );
   }, [hasData]);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['teacher-live-detail', id] });
@@ -225,7 +227,10 @@ export default function TeacherLiveSessionPage() {
           {seats.capacity != null && seats.exceptions > 0 && (
             // The base capacity never changes; approved requests are exceptions to it.
             <p className="mt-1 text-xs font-semibold text-on-surface-variant">
-              {t('admission.capacityLine', { capacity: seats.capacity, exceptions: seats.exceptions })}
+              {t('admission.capacityLine', {
+                capacity: seats.capacity,
+                exceptions: seats.exceptions,
+              })}
             </p>
           )}
           <button
@@ -323,7 +328,6 @@ export default function TeacherLiveSessionPage() {
           </ul>
         )}
       </Modal>
-
     </div>
   );
 }
@@ -344,12 +348,18 @@ function AdmissionRequestsCard({ sessionId }: { sessionId: string }) {
         capacity: number | null;
         exceptions: number;
         accessMode: 'FREE' | 'PAID';
-        requests: { id: string; name: string; status: 'PENDING' | 'APPROVED'; requestedAt: string }[];
+        requests: {
+          id: string;
+          name: string;
+          status: 'PENDING' | 'APPROVED';
+          requestedAt: string;
+        }[];
       },
   });
   const decide = useMutation({
     mutationFn: async (v: { id: string; decision: 'APPROVE' | 'REJECT' }) =>
-      (await api.post(`/teacher/live/${sessionId}/admissions/${v.id}`, { decision: v.decision })).data,
+      (await api.post(`/teacher/live/${sessionId}/admissions/${v.id}`, { decision: v.decision }))
+        .data,
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: key });
       void qc.invalidateQueries({ queryKey: ['teacher-live-detail', sessionId] });
@@ -358,7 +368,8 @@ function AdmissionRequestsCard({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     const sock = getSocket();
     if (!sock) return;
-    const on = (p: { sessionId: string }) => p?.sessionId === sessionId && void qc.invalidateQueries({ queryKey: key });
+    const on = (p: { sessionId: string }) =>
+      p?.sessionId === sessionId && void qc.invalidateQueries({ queryKey: key });
     sock.on('live:admissions', on);
     return () => {
       sock.off('live:admissions', on);
@@ -367,7 +378,11 @@ function AdmissionRequestsCard({ sessionId }: { sessionId: string }) {
   const rows = list.data?.requests ?? [];
   if (!rows.length) return null;
   return (
-    <div className="card mt-4" role="region" aria-label={t('admission.panelTitle', { count: rows.length })}>
+    <div
+      className="card mt-4"
+      role="region"
+      aria-label={t('admission.panelTitle', { count: rows.length })}
+    >
       <p className="font-heading font-bold">{t('admission.panelTitle', { count: rows.length })}</p>
       <p className="mt-1 text-xs text-on-surface-variant">
         {list.data?.accessMode === 'PAID' ? t('admission.paidNote') : t('admission.freeNote')}
@@ -379,7 +394,9 @@ function AdmissionRequestsCard({ sessionId }: { sessionId: string }) {
               {r.name}
             </span>
             {r.status === 'APPROVED' ? (
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{t('admission.approvedWaitingPayment')}</span>
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                {t('admission.approvedWaitingPayment')}
+              </span>
             ) : (
               <>
                 <button

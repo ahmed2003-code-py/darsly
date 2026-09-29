@@ -60,21 +60,27 @@ describe('the chat archive', () => {
     expect([...bodies].sort((a, b) => a - b)).toEqual(bodies);
   });
 
-  it("a cursor from another class is refused; an outsider cannot read at all", async () => {
+  it('a cursor from another class is refused; an outsider cannot read at all', async () => {
     if (!guard()) return;
     const w = await classroomWorld(prisma);
     const other = await classroomWorld(prisma);
     const { live } = classroom(prisma);
     const m = await live.sendChat(other.teacher.id, other.ls.id, 'x');
-    expect(await codeOf(live.chatHistory(w.s[0].id, w.ls.id, { before: m.id }))).toBe('CHAT_CURSOR_INVALID');
-    expect(await codeOf(live.chatHistory(w.outsider.id, w.ls.id))).toBe('You are not in this session');
+    expect(await codeOf(live.chatHistory(w.s[0].id, w.ls.id, { before: m.id }))).toBe(
+      'CHAT_CURSOR_INVALID',
+    );
+    expect(await codeOf(live.chatHistory(w.outsider.id, w.ls.id))).toBe(
+      'You are not in this session',
+    );
   });
 
   it('names are kept as they were in the class; messages from before the snapshot read the account', async () => {
     if (!guard()) return;
     const w = await classroomWorld(prisma);
     const { live } = classroom(prisma);
-    const old = await prisma.liveChatMessage.create({ data: { sessionId: w.ls.id, userId: w.s[0].id, body: 'قديمة' } });
+    const old = await prisma.liveChatMessage.create({
+      data: { sessionId: w.ls.id, userId: w.s[0].id, body: 'قديمة' },
+    });
     await live.sendChat(w.s[0].id, w.ls.id, 'جديدة');
     const guest = await confirmedGuest(prisma, w, 'ضيفة الحصة');
     await live.sendChat(guest.id, w.ls.id, 'من الضيفة');
@@ -97,16 +103,34 @@ describe('attendance V2', () => {
       startsAt: new Date(Date.now() - 50 * MIN),
     });
     const { live } = classroom(prisma);
-    const att = (userId: string, role: 'TEACHER' | 'STUDENT', sec: number, extra: Record<string, unknown> = {}) =>
+    const att = (
+      userId: string,
+      role: 'TEACHER' | 'STUDENT',
+      sec: number,
+      extra: Record<string, unknown> = {},
+    ) =>
       prisma.liveAttendance.create({
-        data: { sessionId: w.ls.id, userId, role, durationSeconds: sec, joinedAt: new Date(Date.now() - 49 * MIN), ...extra },
+        data: {
+          sessionId: w.ls.id,
+          userId,
+          role,
+          durationSeconds: sec,
+          joinedAt: new Date(Date.now() - 49 * MIN),
+          ...extra,
+        },
       });
     await att(w.teacher.id, 'TEACHER', 2400);
     await att(w.s[0].id, 'STUDENT', 2400); // the whole class
     await att(w.s[1].id, 'STUDENT', 300, { reconnects: 2 }); // five minutes, dropped out twice
     // s[2] booked and never came.
     const r = await live.attendanceFor(w.scope, w.ls.id);
-    expect(r.summary).toMatchObject({ runSeconds: 2400, expected: 3, joined: 2, absent: 1, attended: 1 });
+    expect(r.summary).toMatchObject({
+      runSeconds: 2400,
+      expected: 3,
+      joined: 2,
+      absent: 1,
+      attended: 1,
+    });
     expect(r.summary.averagePercent).toBe(Math.round((100 + 13) / 2));
     const a = r.rows.find((x) => x.userId === w.s[0].id)!;
     const b = r.rows.find((x) => x.userId === w.s[1].id)!;
@@ -121,23 +145,64 @@ describe('attendance V2', () => {
     if (!guard()) return;
     const w = await classroomWorld(prisma);
     const { live, rtc } = classroom(prisma);
-    await prisma.liveAttendance.create({ data: { sessionId: w.ls.id, userId: w.s[0].id, role: 'STUDENT', durationSeconds: 60 } });
+    await prisma.liveAttendance.create({
+      data: { sessionId: w.ls.id, userId: w.s[0].id, role: 'STUDENT', durationSeconds: 60 },
+    });
     await rtc.hand(w.s[0].id, w.ls.id, 'raise');
     await rtc.hand(w.s[0].id, w.ls.id, 'lower');
     await rtc.hand(w.s[0].id, w.ls.id, 'raise');
     const conn = await prisma.liveRtcConnection.create({
-      data: { sessionId: w.ls.id, roomName: w.ls.roomName!, userId: w.s[0].id, role: 'STUDENT', purpose: 'SEND', cfSessionId: `cf-${w.k}` },
+      data: {
+        sessionId: w.ls.id,
+        roomName: w.ls.roomName!,
+        userId: w.s[0].id,
+        role: 'STUDENT',
+        purpose: 'SEND',
+        cfSessionId: `cf-${w.k}`,
+      },
     });
     const t0 = Date.now() - 5 * MIN;
     await prisma.liveRtcTrack.createMany({
       data: [
-        { connectionId: conn.id, sessionId: w.ls.id, roomName: w.ls.roomName!, userId: w.s[0].id, kind: 'AUDIO', trackName: 'a1', mid: '0', createdAt: new Date(t0), closedAt: new Date(t0 + 30_000) },
-        { connectionId: conn.id, sessionId: w.ls.id, roomName: w.ls.roomName!, userId: w.s[0].id, kind: 'AUDIO', trackName: 'a2', mid: '1', createdAt: new Date(t0 + 60_000), closedAt: new Date(t0 + 80_000) },
+        {
+          connectionId: conn.id,
+          sessionId: w.ls.id,
+          roomName: w.ls.roomName!,
+          userId: w.s[0].id,
+          kind: 'AUDIO',
+          trackName: 'a1',
+          mid: '0',
+          createdAt: new Date(t0),
+          closedAt: new Date(t0 + 30_000),
+        },
+        {
+          connectionId: conn.id,
+          sessionId: w.ls.id,
+          roomName: w.ls.roomName!,
+          userId: w.s[0].id,
+          kind: 'AUDIO',
+          trackName: 'a2',
+          mid: '1',
+          createdAt: new Date(t0 + 60_000),
+          closedAt: new Date(t0 + 80_000),
+        },
         // A camera is not speaking.
-        { connectionId: conn.id, sessionId: w.ls.id, roomName: w.ls.roomName!, userId: w.s[0].id, kind: 'VIDEO', trackName: 'v1', mid: '2', createdAt: new Date(t0), closedAt: new Date(t0 + 80_000) },
+        {
+          connectionId: conn.id,
+          sessionId: w.ls.id,
+          roomName: w.ls.roomName!,
+          userId: w.s[0].id,
+          kind: 'VIDEO',
+          trackName: 'v1',
+          mid: '2',
+          createdAt: new Date(t0),
+          closedAt: new Date(t0 + 80_000),
+        },
       ],
     });
-    const row = (await live.attendanceFor(w.scope, w.ls.id)).rows.find((x) => x.userId === w.s[0].id)!;
+    const row = (await live.attendanceFor(w.scope, w.ls.id)).rows.find(
+      (x) => x.userId === w.s[0].id,
+    )!;
     expect(row).toMatchObject({ raisedCount: 2, spokeCount: 2, micOpenSeconds: 50 });
   });
 
@@ -146,10 +211,18 @@ describe('attendance V2', () => {
     const w = await classroomWorld(prisma);
     const { live } = classroom(prisma);
     await prisma.liveAttendance.create({
-      data: { sessionId: w.ls.id, userId: w.s[0].id, role: 'STUDENT', lastSeenAt: new Date(Date.now() - 30_000), durationSeconds: 100 },
+      data: {
+        sessionId: w.ls.id,
+        userId: w.s[0].id,
+        role: 'STUDENT',
+        lastSeenAt: new Date(Date.now() - 30_000),
+        durationSeconds: 100,
+      },
     });
     await live.heartbeat(w.s[0].id, w.ls.id);
-    let a = await prisma.liveAttendance.findFirstOrThrow({ where: { sessionId: w.ls.id, userId: w.s[0].id } });
+    let a = await prisma.liveAttendance.findFirstOrThrow({
+      where: { sessionId: w.ls.id, userId: w.s[0].id },
+    });
     expect(a.reconnects).toBe(0);
     expect(a.durationSeconds).toBeGreaterThanOrEqual(129);
     await prisma.liveAttendance.update({
@@ -169,14 +242,21 @@ describe('attendance V2', () => {
     const { live } = classroom(prisma);
     const g = await confirmedGuest(prisma, w, 'ضيف غائب');
     const r = await live.attendanceFor(w.scope, w.ls.id);
-    expect(r.absent.find((x) => x.userId === g.id)).toMatchObject({ fullName: 'ضيف غائب', guest: true });
+    expect(r.absent.find((x) => x.userId === g.id)).toMatchObject({
+      fullName: 'ضيف غائب',
+      guest: true,
+    });
   });
 });
 
 describe('the archive transcript', () => {
   it('the detail carries a preview and a count; the full text comes on its own, under the same rules', async () => {
     if (!guard()) return;
-    const segments = Array.from({ length: 12 }, (_, i) => ({ startSec: i * 180, durationSec: 180, text: `جزء ${i}` }));
+    const segments = Array.from({ length: 12 }, (_, i) => ({
+      startSec: i * 180,
+      durationSec: 180,
+      text: `جزء ${i}`,
+    }));
     const w = await classroomWorld(prisma, {
       status: 'ENDED',
       endedAt: new Date(),
@@ -192,7 +272,10 @@ describe('the archive transcript', () => {
     const full: any = await live.sessionDetail(w.s[0].id, w.ls.id, { transcript: 'full' });
     expect(full.transcript.segments).toHaveLength(12);
     // Private: a student gets nothing, preview or full.
-    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { transcriptVisibility: 'PRIVATE' } });
+    await prisma.liveSession.update({
+      where: { id: w.ls.id },
+      data: { transcriptVisibility: 'PRIVATE' },
+    });
     const hidden: any = await live.sessionDetail(w.s[0].id, w.ls.id, { transcript: 'full' });
     expect(hidden.transcript?.segments).toBeUndefined();
   });

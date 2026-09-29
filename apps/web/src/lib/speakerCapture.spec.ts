@@ -38,7 +38,9 @@ describe('per-speaker capture: when a piece ends', () => {
     expect(planCut(answer, 10_000 + TURN_SILENCE_MS - 1, false)).toBe('keep');
     expect(planCut(answer, 10_000 + TURN_SILENCE_MS, false)).toBe('cut');
     // A long answer is split, still whole minutes.
-    expect(planCut(clock({ voicedMs: 50_000, lastVoiceAt: STUDENT_MAX_MS }), STUDENT_MAX_MS, false)).toBe('cut');
+    expect(
+      planCut(clock({ voicedMs: 50_000, lastVoiceAt: STUDENT_MAX_MS }), STUDENT_MAX_MS, false),
+    ).toBe('cut');
   });
 
   it('a piece that heard nothing is restarted, never sent', () => {
@@ -69,8 +71,19 @@ describe('transcript with speakers', () => {
     const g = groupBySpeaker([
       { startSec: 0, durationSec: 60, text: 'a', speaker: T },
       { startSec: 60, durationSec: 60, text: 'b', speaker: T },
-      { startSec: 120, durationSec: 10, text: 'c', speaker: { kind: 'STUDENT' as const, ordinal: 1 } },
-      { startSec: 125, durationSec: 10, text: 'd', speaker: { kind: 'STUDENT' as const, self: true }, overlap: true },
+      {
+        startSec: 120,
+        durationSec: 10,
+        text: 'c',
+        speaker: { kind: 'STUDENT' as const, ordinal: 1 },
+      },
+      {
+        startSec: 125,
+        durationSec: 10,
+        text: 'd',
+        speaker: { kind: 'STUDENT' as const, self: true },
+        overlap: true,
+      },
       { startSec: 140, durationSec: 30, text: 'e', speaker: T },
     ]);
     expect(g.map((x) => x.segments.map((s) => s.text).join(''))).toEqual(['ab', 'c', 'd', 'e']);
@@ -79,7 +92,9 @@ describe('transcript with speakers', () => {
 
   it('labels: you, student N, the teacher by name, unknown — never an id', () => {
     expect(speakerLabel(t, { kind: 'STUDENT', self: true })).toBe('record.transcript.speaker.you');
-    expect(speakerLabel(t, { kind: 'STUDENT', ordinal: 2 })).toBe('record.transcript.speaker.student:{"n":2}');
+    expect(speakerLabel(t, { kind: 'STUDENT', ordinal: 2 })).toBe(
+      'record.transcript.speaker.student:{"n":2}',
+    );
     expect(speakerLabel(t, { kind: 'TEACHER', name: 'أ. سارة' })).toBe('أ. سارة');
     expect(speakerLabel(t, { kind: 'UNKNOWN' })).toBe('record.transcript.speaker.unknown');
     expect(speakerLabel(t, undefined)).toBe('record.transcript.speaker.unknown');
@@ -100,10 +115,16 @@ describe('transcript with speakers', () => {
 type Voice = { who: string; from: number; to: number };
 const TICK = 400;
 
-function simulate(minutes: number, voices: Voice[], micOpen: { who: string; from: number; to: number }[]) {
+function simulate(
+  minutes: number,
+  voices: Voice[],
+  micOpen: { who: string; from: number; to: number }[],
+) {
   const end = minutes * 60_000;
-  const talking = (who: string, at: number) => voices.some((v) => v.who === who && at >= v.from && at < v.to);
-  const open = (who: string, at: number) => who === 't' || micOpen.some((m) => m.who === who && at >= m.from && at < m.to);
+  const talking = (who: string, at: number) =>
+    voices.some((v) => v.who === who && at >= v.from && at < v.to);
+  const open = (who: string, at: number) =>
+    who === 't' || micOpen.some((m) => m.who === who && at >= m.from && at < m.to);
   const people = ['t', ...new Set(micOpen.map((m) => m.who))];
 
   // Mixed
@@ -112,7 +133,8 @@ function simulate(minutes: number, voices: Voice[], micOpen: { who: string; from
   for (let s = 0; s < end; s += 180_000) {
     const e = Math.min(end, s + 180_000);
     let voiced = false;
-    for (let at = s; at < e; at += TICK) if (people.some((p) => open(p, at) && talking(p, at))) voiced = true;
+    for (let at = s; at < e; at += TICK)
+      if (people.some((p) => open(p, at) && talking(p, at))) voiced = true;
     if (voiced) {
       mixedPieces++;
       mixedMs += e - s;
@@ -129,7 +151,8 @@ function simulate(minutes: number, voices: Voice[], micOpen: { who: string; from
   };
   for (let at = 0; at < end; at += TICK) {
     for (const p of people) {
-      if (open(p, at) && !cur.has(p)) cur.set(p, { own: p === 't', startedAt: at, voicedMs: 0, lastVoiceAt: null });
+      if (open(p, at) && !cur.has(p))
+        cur.set(p, { own: p === 't', startedAt: at, voicedMs: 0, lastVoiceAt: null });
       if (!open(p, at) && cur.has(p)) close(p, at); // the track ends: the turn ends
     }
     for (const [p, c] of cur) {

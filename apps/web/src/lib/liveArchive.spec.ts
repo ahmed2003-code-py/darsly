@@ -1,4 +1,9 @@
-import { groupMessages, studentsByAttention, type ArchiveMessage, type AttendanceRow } from './liveArchive';
+import {
+  groupMessages,
+  studentsByAttention,
+  type ArchiveMessage,
+  type AttendanceRow,
+} from './liveArchive';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 29, 10, 0) + min * 60_000).toISOString();
 const msg = (id: string, sender: string, min: number): ArchiveMessage => ({
@@ -12,7 +17,12 @@ const msg = (id: string, sender: string, min: number): ArchiveMessage => ({
 
 describe('chat grouping', () => {
   it('one header for a run of the same sender; a new header when someone else speaks', () => {
-    const g = groupMessages([msg('1', 'a', 0), msg('2', 'a', 1), msg('3', 'b', 2), msg('4', 'a', 3)]);
+    const g = groupMessages([
+      msg('1', 'a', 0),
+      msg('2', 'a', 1),
+      msg('3', 'b', 2),
+      msg('4', 'a', 3),
+    ]);
     expect(g.map((x) => [x.senderId, x.messages.map((m) => m.id)])).toEqual([
       ['a', ['1', '2']],
       ['b', ['3']],
@@ -32,7 +42,12 @@ describe('chat grouping', () => {
 });
 
 describe('attendance ordering', () => {
-  const row = (name: string, status: 'ATTENDED' | 'PARTIAL' | null, percent: number, role = 'STUDENT'): AttendanceRow => ({
+  const row = (
+    name: string,
+    status: 'ATTENDED' | 'PARTIAL' | null,
+    percent: number,
+    role = 'STUDENT',
+  ): AttendanceRow => ({
     id: name,
     userId: name,
     fullName: name,

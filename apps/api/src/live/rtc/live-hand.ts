@@ -21,7 +21,8 @@ import type { LiveHandState } from '@prisma/client';
  * server on every push — and a revoke closes their microphone at the SFU,
  * whatever their browser does next.
  */
-export type HandAction = 'raise' | 'lower' | 'approve' | 'reject' | 'revoke' | 'invite' | 'published';
+export type HandAction =
+  'raise' | 'lower' | 'approve' | 'reject' | 'revoke' | 'invite' | 'published';
 
 const TRANSITIONS: Record<HandAction, Partial<Record<LiveHandState, LiveHandState>>> = {
   raise: { IDLE: 'HAND_RAISED', RELEASED: 'HAND_RAISED' },
@@ -33,7 +34,11 @@ const TRANSITIONS: Record<HandAction, Partial<Record<LiveHandState, LiveHandStat
   approve: { HAND_RAISED: 'APPROVED_TO_SPEAK' },
   reject: { HAND_RAISED: 'IDLE' },
   revoke: { APPROVED_TO_SPEAK: 'RELEASED', ACTIVE_SPEAKER: 'RELEASED' },
-  invite: { IDLE: 'APPROVED_TO_SPEAK', RELEASED: 'APPROVED_TO_SPEAK', HAND_RAISED: 'APPROVED_TO_SPEAK' },
+  invite: {
+    IDLE: 'APPROVED_TO_SPEAK',
+    RELEASED: 'APPROVED_TO_SPEAK',
+    HAND_RAISED: 'APPROVED_TO_SPEAK',
+  },
   published: { APPROVED_TO_SPEAK: 'ACTIVE_SPEAKER' },
 };
 

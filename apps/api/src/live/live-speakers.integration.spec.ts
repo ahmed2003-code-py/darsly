@@ -2,7 +2,14 @@ import { databaseReady } from '../common/testing/db-available';
 import { PrismaService } from '../prisma/prisma.service';
 import { LiveService } from './live.service';
 import { LiveRtcService } from './rtc/live-rtc.service';
-import { classroom, classroomWorld, confirmedGuest, enterRoom, OFFER, type ClassroomWorld } from './testing/classroom';
+import {
+  classroom,
+  classroomWorld,
+  confirmedGuest,
+  enterRoom,
+  OFFER,
+  type ClassroomWorld,
+} from './testing/classroom';
 import { finalizeTranscript } from './transcription/transcript-assembly';
 import { segmentsFor, verifySpeaker } from './transcription/speakers';
 
@@ -39,9 +46,17 @@ async function speak(c: C, w: ClassroomWorld, userId: string) {
   await c.rtc.hand(userId, w.ls.id, 'raise');
   await c.rtc.hand(w.teacher.id, w.ls.id, 'approve', userId);
   const { connectionId } = await c.rtc.openConnection(userId, w.ls.id, 'SEND');
-  await c.rtc.publish(userId, w.ls.id, connectionId, { offer: OFFER, tracks: [{ mid: '0', kind: 'AUDIO' }] });
+  await c.rtc.publish(userId, w.ls.id, connectionId, {
+    offer: OFFER,
+    tracks: [{ mid: '0', kind: 'AUDIO' }],
+  });
 }
-const verify = (w: ClassroomWorld, claimed: string | undefined, startMs = Date.now(), run = w.ls.roomName!) =>
+const verify = (
+  w: ClassroomWorld,
+  claimed: string | undefined,
+  startMs = Date.now(),
+  run = w.ls.roomName!,
+) =>
   verifySpeaker(prisma, {
     sessionId: w.ls.id,
     run,
@@ -70,9 +85,16 @@ describe('whose microphone: verified, never taken on trust', () => {
       speakerKind: 'STUDENT',
       speakerName: w.s[0].fullName,
     });
-    expect(await verify(w, guest.id)).toMatchObject({ speakerKind: 'GUEST', speakerName: 'ضيف المعرض' });
+    expect(await verify(w, guest.id)).toMatchObject({
+      speakerKind: 'GUEST',
+      speakerName: 'ضيف المعرض',
+    });
     // No claim: a mixed piece, no attribution at all.
-    expect(await verify(w, undefined)).toEqual({ speakerUserId: null, speakerKind: null, speakerName: null });
+    expect(await verify(w, undefined)).toEqual({
+      speakerUserId: null,
+      speakerKind: null,
+      speakerName: null,
+    });
   });
 
   it('a forged claim is UNKNOWN: no microphone, another run, another time, a made-up id', async () => {
@@ -99,7 +121,10 @@ describe('whose microphone: verified, never taken on trust', () => {
     const c = classroom(prisma);
     await enterRoom(prisma, c, w, w.s[0].id);
     const { connectionId } = await c.rtc.openConnection(w.s[0].id, w.ls.id, 'SEND');
-    await c.rtc.publish(w.s[0].id, w.ls.id, connectionId, { offer: OFFER, tracks: [{ mid: '0', kind: 'VIDEO' }] });
+    await c.rtc.publish(w.s[0].id, w.ls.id, connectionId, {
+      offer: OFFER,
+      tracks: [{ mid: '0', kind: 'VIDEO' }],
+    });
     expect((await verify(w, w.s[0].id)).speakerKind).toBe('UNKNOWN');
   });
 
@@ -117,7 +142,10 @@ describe('whose microphone: verified, never taken on trust', () => {
     // Between the two microphones: no track was open.
     expect((await verify(w, w.s[0].id, Date.now() - 2 * MIN)).speakerKind).toBe('UNKNOWN');
     const { connectionId } = await c.rtc.openConnection(w.s[0].id, w.ls.id, 'SEND');
-    await c.rtc.publish(w.s[0].id, w.ls.id, connectionId, { offer: OFFER, tracks: [{ mid: '1', kind: 'AUDIO' }] });
+    await c.rtc.publish(w.s[0].id, w.ls.id, connectionId, {
+      offer: OFFER,
+      tracks: [{ mid: '1', kind: 'AUDIO' }],
+    });
     expect((await verify(w, w.s[0].id)).speakerKind).toBe('STUDENT');
   });
 });
@@ -137,9 +165,12 @@ describe('the upload path', () => {
     return { buffer: b, size: b.length, mimetype: 'audio/webm;codecs=opus' };
   };
 
-  it("stores the verified speaker; a forged one as UNKNOWN; nothing for a mixed piece", async () => {
+  it('stores the verified speaker; a forged one as UNKNOWN; nothing for a mixed piece', async () => {
     if (!guard()) return;
-    const w = await classroomWorld(prisma, { transcriptionMode: 'MANUAL', transcriptCaptureOnAt: new Date() });
+    const w = await classroomWorld(prisma, {
+      transcriptionMode: 'MANUAL',
+      transcriptCaptureOnAt: new Date(),
+    });
     const c = classroom(prisma);
     const stored = new Map<string, Buffer>();
     const live = new LiveService(
@@ -155,10 +186,21 @@ describe('the upload path', () => {
     const rtc = new LiveRtcService(prisma, live, c.cloudflare, c.realtime as never);
     await speak({ ...c, rtc, live }, w, w.s[0].id);
     const t = Math.floor(Date.now() / 1000);
-    await live.storeAudioPiece(w.scope, w.ls.id, t, webm(), 20_000, { uploaderUserId: w.teacher.id, speakerUserId: w.s[0].id });
-    await live.storeAudioPiece(w.scope, w.ls.id, t + 1, webm(), 20_000, { uploaderUserId: w.teacher.id, speakerUserId: w.s[1].id });
-    await live.storeAudioPiece(w.scope, w.ls.id, t + 2, webm(), 20_000, { uploaderUserId: w.teacher.id });
-    const rows = await prisma.liveAudioSegment.findMany({ where: { sessionId: w.ls.id }, orderBy: { seq: 'asc' } });
+    await live.storeAudioPiece(w.scope, w.ls.id, t, webm(), 20_000, {
+      uploaderUserId: w.teacher.id,
+      speakerUserId: w.s[0].id,
+    });
+    await live.storeAudioPiece(w.scope, w.ls.id, t + 1, webm(), 20_000, {
+      uploaderUserId: w.teacher.id,
+      speakerUserId: w.s[1].id,
+    });
+    await live.storeAudioPiece(w.scope, w.ls.id, t + 2, webm(), 20_000, {
+      uploaderUserId: w.teacher.id,
+    });
+    const rows = await prisma.liveAudioSegment.findMany({
+      where: { sessionId: w.ls.id },
+      orderBy: { seq: 'asc' },
+    });
     expect(rows.map((r) => [r.speakerKind, r.speakerUserId])).toEqual([
       ['STUDENT', w.s[0].id],
       ['UNKNOWN', null],
@@ -172,7 +214,12 @@ describe('the transcript as each reader sees it', () => {
   async function transcribed() {
     const w = await classroomWorld(prisma, { transcriptVisibility: 'STUDENTS' });
     const at = Math.floor(w.ls.startedAt!.getTime() / 1000);
-    const piece = (seq: number, ms: number, text: string, who?: { id: string; name: string; kind: string }) => ({
+    const piece = (
+      seq: number,
+      ms: number,
+      text: string,
+      who?: { id: string; name: string; kind: string },
+    ) => ({
       sessionId: w.ls.id,
       roomName: w.ls.roomName!,
       seq: at + seq,
@@ -204,7 +251,10 @@ describe('the transcript as each reader sees it', () => {
       model: 'gpt-4o-mini-transcribe',
       giveUpPending: false,
     });
-    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { status: 'ENDED', endedAt: new Date() } });
+    await prisma.liveSession.update({
+      where: { id: w.ls.id },
+      data: { status: 'ENDED', endedAt: new Date() },
+    });
     return { w, out };
   }
 
@@ -214,7 +264,9 @@ describe('the transcript as each reader sees it', () => {
     expect(out.meta.speakers).toBe(3);
     const s = await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } });
     expect(s.transcriptText).toBe(
-      ['شرح المعادلة', 'تكملة الشرح', 'الإجابة اتنين', 'لا تلاتة', 'كلام غير واضح', 'ممتاز'].join('\n\n'),
+      ['شرح المعادلة', 'تكملة الشرح', 'الإجابة اتنين', 'لا تلاتة', 'كلام غير واضح', 'ممتاز'].join(
+        '\n\n',
+      ),
     );
     expect(s.transcriptText).not.toContain(w.s[0].fullName!);
     const segs = s.transcriptSegments as { overlap?: boolean; text: string }[];
@@ -265,7 +317,8 @@ describe('the transcript as each reader sees it', () => {
     const d: any = await live.sessionDetail(w.s[0].id, w.ls.id, { transcript: 'full' });
     expect(d.transcript.segments).toEqual(segments);
     expect(d.transcript.speakerCount).toBe(0);
-    const plain: { startSec: number; durationSec: number; text: string; speaker?: undefined }[] = segments;
+    const plain: { startSec: number; durationSec: number; text: string; speaker?: undefined }[] =
+      segments;
     expect(segmentsFor(plain, { teacher: false, userId: null })).toEqual(segments);
   });
 });

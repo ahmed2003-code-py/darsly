@@ -127,7 +127,13 @@ export interface RtcState {
   notJoined?: { userId: string; name: string; guest: boolean }[];
   /** Moderators only: students asking for a seat in a full class, and the capacity picture. */
   admissions?: {
-    requests: { id: string; userId: string; name: string; status: 'PENDING' | 'APPROVED'; requestedAt: string }[];
+    requests: {
+      id: string;
+      userId: string;
+      name: string;
+      status: 'PENDING' | 'APPROVED';
+      requestedAt: string;
+    }[];
     capacity: number | null;
     exceptions: number;
   };
@@ -230,7 +236,11 @@ export class LiveRtcService {
       select: { roomName: true, mic: true, camera: true, cameraReport: true },
     });
     return c && c.roomName === run
-      ? { mic: c.mic, camera: c.camera, cameraReport: (c.cameraReport as CameraReport | null) ?? null }
+      ? {
+          mic: c.mic,
+          camera: c.camera,
+          cameraReport: (c.cameraReport as CameraReport | null) ?? null,
+        }
       : { ...DEFAULT_CONTROLS };
   }
 
@@ -245,7 +255,10 @@ export class LiveRtcService {
         where: { id: sessionId },
         select: { micPolicy: true, cameraPolicy: true },
       }),
-      this.prisma.liveHand.findMany({ where: { sessionId, roomName: run }, select: { userId: true, state: true } }),
+      this.prisma.liveHand.findMany({
+        where: { sessionId, roomName: run },
+        select: { userId: true, state: true },
+      }),
       this.prisma.liveParticipantControl.findMany({
         where: { sessionId, roomName: run },
         select: { userId: true, mic: true, camera: true, cameraReport: true },
@@ -257,7 +270,13 @@ export class LiveRtcService {
       policies: s,
       controlsOf: (userId: string): Controls => {
         const c = ctlOf.get(userId);
-        return c ? { mic: c.mic, camera: c.camera, cameraReport: (c.cameraReport as CameraReport | null) ?? null } : { ...DEFAULT_CONTROLS };
+        return c
+          ? {
+              mic: c.mic,
+              camera: c.camera,
+              cameraReport: (c.cameraReport as CameraReport | null) ?? null,
+            }
+          : { ...DEFAULT_CONTROLS };
       },
       of: (userId: string) =>
         effectivePolicy({
@@ -290,12 +309,19 @@ export class LiveRtcService {
   }
 
   /** A student's effective policy, read fresh (for enforcing a change made by someone else). */
-  private async studentPolicy(sessionId: string, run: string, userId: string): Promise<EffectivePolicy> {
+  private async studentPolicy(
+    sessionId: string,
+    run: string,
+    userId: string,
+  ): Promise<EffectivePolicy> {
     const s = await this.prisma.liveSession.findUniqueOrThrow({
       where: { id: sessionId },
       select: { micPolicy: true, cameraPolicy: true },
     });
-    const [hand, controls] = await Promise.all([this.handOf(sessionId, userId, run), this.controlsOf(sessionId, userId, run)]);
+    const [hand, controls] = await Promise.all([
+      this.handOf(sessionId, userId, run),
+      this.controlsOf(sessionId, userId, run),
+    ]);
     return effectivePolicy({
       side: 'STUDENT',
       moderator: false,
@@ -336,11 +362,17 @@ export class LiveRtcService {
       const bad = c.tracks.filter((t) => !policy.publish[t.kind]);
       if (!bad.length) continue;
       try {
-        await this.client.closeTracks(c.cfSessionId, bad.map((t) => t.mid), { force: true });
+        await this.client.closeTracks(
+          c.cfSessionId,
+          bad.map((t) => t.mid),
+          { force: true },
+        );
       } catch (e) {
         // The SFU would not close them: close the whole connection instead —
         // a permission must never outlive its revocation.
-        this.logger.warn(`live.rtc.enforce close failed liveSession=${sessionId}: ${(e as Error).message}`);
+        this.logger.warn(
+          `live.rtc.enforce close failed liveSession=${sessionId}: ${(e as Error).message}`,
+        );
         await this.cloudflare.closeConnections([c.id], reason);
         continue;
       }
@@ -552,9 +584,17 @@ export class LiveRtcService {
     ]);
     if (g.role === 'STUDENT' && kinds.includes('VIDEO')) {
       const cams = await this.prisma.liveRtcTrack.count({
-        where: { sessionId, roomName: g.s.roomName, kind: 'VIDEO', closedAt: null, connection: { role: 'STUDENT', closedAt: null } },
+        where: {
+          sessionId,
+          roomName: g.s.roomName,
+          kind: 'VIDEO',
+          closedAt: null,
+          connection: { role: 'STUDENT', closedAt: null },
+        },
       });
-      this.logger.log(`live.camera.publish liveSession=${sessionId} user=${userId} openStudentCameras=${cams}`);
+      this.logger.log(
+        `live.camera.publish liveSession=${sessionId} user=${userId} openStudentCameras=${cams}`,
+      );
     }
     if (g.role === 'STUDENT') {
       // Revoked (or blocked) while the push was in flight: take back exactly
@@ -615,7 +655,10 @@ export class LiveRtcService {
     if (!g.moderator && tracks.some((t) => t.kind === 'VIDEO' && t.connection.role === 'STUDENT')) {
       const pol = await this.studentPolicies(sessionId, g.s.roomName);
       const hidden = tracks.filter(
-        (t) => t.kind === 'VIDEO' && t.connection.role === 'STUDENT' && pol.of(t.userId).videoAudience !== 'EVERYONE',
+        (t) =>
+          t.kind === 'VIDEO' &&
+          t.connection.role === 'STUDENT' &&
+          pol.of(t.userId).videoAudience !== 'EVERYONE',
       );
       if (hidden.length) {
         throw new ForbiddenException({
@@ -652,7 +695,9 @@ export class LiveRtcService {
         code: 'LIVE_RTC_REJECTED',
       });
     }
-    const studentCams = tracks.filter((t) => t.kind === 'VIDEO' && t.connection.role === 'STUDENT').length;
+    const studentCams = tracks.filter(
+      (t) => t.kind === 'VIDEO' && t.connection.role === 'STUDENT',
+    ).length;
     if (studentCams) {
       this.logger.log(
         `live.camera.pull liveSession=${sessionId} user=${userId} moderator=${g.moderator} studentCameras=${studentCams}`,
@@ -844,7 +889,9 @@ export class LiveRtcService {
     );
     const shown = (uid: string, kinds: LiveTrackKind[]) =>
       visible.some((t) => t.userId === uid && kinds.includes(t.kind));
-    const notJoined = g.moderator ? await this.notJoined(sessionId, new Set(roleOf.keys())) : undefined;
+    const notJoined = g.moderator
+      ? await this.notJoined(sessionId, new Set(roleOf.keys()))
+      : undefined;
     const bonus = await bonusTotals(this.prisma, sessionId);
     const admissions = g.moderator ? await this.admissionsView(sessionId) : undefined;
     const guests = g.moderator
@@ -907,13 +954,19 @@ export class LiveRtcService {
         orderBy: { requestedAt: 'asc' },
         select: { id: true, userId: true, status: true, requestedAt: true },
       }),
-      this.prisma.liveSession.findUniqueOrThrow({ where: { id: sessionId }, select: { capacity: true } }),
+      this.prisma.liveSession.findUniqueOrThrow({
+        where: { id: sessionId },
+        select: { capacity: true },
+      }),
       this.prisma.liveAdmissionRequest.count({ where: { sessionId, status: 'USED' } }),
     ]);
     const names = new Map(
-      (await this.prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true, fullName: true } })).map(
-        (u) => [u.id, u.fullName],
-      ),
+      (
+        await this.prisma.user.findMany({
+          where: { id: { in: rows.map((r) => r.userId) } },
+          select: { id: true, fullName: true },
+        })
+      ).map((u) => [u.id, u.fullName]),
     );
     return {
       requests: rows.map((r) => ({
@@ -942,7 +995,8 @@ export class LiveRtcService {
     ]);
     const out: { userId: string; name: string; guest: boolean }[] = [];
     for (const b of bookings)
-      if (!present.has(b.student.userId)) out.push({ userId: b.student.userId, name: b.student.user.fullName, guest: false });
+      if (!present.has(b.student.userId))
+        out.push({ userId: b.student.userId, name: b.student.user.fullName, guest: false });
     for (const g of guests)
       if (g.guestBuyer && !present.has(g.guestBuyer.userId))
         out.push({ userId: g.guestBuyer.userId, name: g.guestBuyer.displayName, guest: true });
@@ -994,7 +1048,10 @@ export class LiveRtcService {
       // same lock) and a raise can never cross.
       if (action === 'raise' || action === 'approve' || action === 'invite') {
         const [sess, ctl] = await Promise.all([
-          tx.liveSession.findUniqueOrThrow({ where: { id: sessionId }, select: { micPolicy: true } }),
+          tx.liveSession.findUniqueOrThrow({
+            where: { id: sessionId },
+            select: { micPolicy: true },
+          }),
           tx.liveParticipantControl.findUnique({
             where: { sessionId_userId: { sessionId, userId: target } },
             select: { roomName: true, mic: true },
@@ -1020,7 +1077,12 @@ export class LiveRtcService {
         roomName: run,
         state: to,
         ...(action === 'raise'
-          ? { raisedAt: now, decidedAt: null, decidedBy: null, raisedCount: (row?.raisedCount ?? 0) + 1 }
+          ? {
+              raisedAt: now,
+              decidedAt: null,
+              decidedBy: null,
+              raisedCount: (row?.raisedCount ?? 0) + 1,
+            }
           : {}),
         ...(TEACHER_ACTIONS.includes(action) ? { decidedAt: now, decidedBy: actorId } : {}),
       };
@@ -1035,8 +1097,14 @@ export class LiveRtcService {
       if ('refused' in r && r.refused) {
         throw new ConflictException(
           r.refused === 'MIC_BLOCKED'
-            ? { message: 'The teacher has turned this microphone off for the class', code: 'MIC_BLOCKED' }
-            : { message: 'Hands are off in this class — the teacher invites who speaks', code: 'HAND_DISABLED' },
+            ? {
+                message: 'The teacher has turned this microphone off for the class',
+                code: 'MIC_BLOCKED',
+              }
+            : {
+                message: 'Hands are off in this class — the teacher invites who speaks',
+                code: 'HAND_DISABLED',
+              },
         );
       }
       if ('limit' in r && r.limit) {
@@ -1056,7 +1124,11 @@ export class LiveRtcService {
     // SFU now, not when their browser gets round to it.
     if (canSpeak(r.from) && !canSpeak(r.to)) await this.enforce(sessionId, run, target, 'revoked');
     // An invitation is told as one: the student's page asks them, it never switches anything on.
-    this.realtime.emitToUser(target, 'live:hand', { sessionId, state: r.to, invited: action === 'invite' });
+    this.realtime.emitToUser(target, 'live:hand', {
+      sessionId,
+      state: r.to,
+      invited: action === 'invite',
+    });
     this.changed(sessionId);
     this.logger.log(
       `live.hand liveSession=${sessionId} actor=${actorId} target=${target} ${action}: ${r.from}→${r.to}`,
@@ -1081,7 +1153,13 @@ export class LiveRtcService {
     });
     if (s.status === 'LIVE' && s.roomName) {
       const cams = await this.prisma.liveRtcTrack.findMany({
-        where: { sessionId, roomName: s.roomName, kind: 'VIDEO', closedAt: null, connection: { role: 'STUDENT', closedAt: null } },
+        where: {
+          sessionId,
+          roomName: s.roomName,
+          kind: 'VIDEO',
+          closedAt: null,
+          connection: { role: 'STUDENT', closedAt: null },
+        },
         select: { userId: true },
         distinct: ['userId'],
       });
@@ -1108,9 +1186,23 @@ export class LiveRtcService {
     if (fresh && report === null) return { ok: true };
     await this.prisma.liveParticipantControl.upsert({
       where: { sessionId_userId: { sessionId, userId } },
-      create: { sessionId, userId, roomName: run, cameraReport: report, cameraReportAt: new Date(), updatedBy: userId },
+      create: {
+        sessionId,
+        userId,
+        roomName: run,
+        cameraReport: report,
+        cameraReportAt: new Date(),
+        updatedBy: userId,
+      },
       update: fresh
-        ? { roomName: run, mic: 'DEFAULT', camera: 'DEFAULT', cameraReport: report, cameraReportAt: new Date(), updatedBy: userId }
+        ? {
+            roomName: run,
+            mic: 'DEFAULT',
+            camera: 'DEFAULT',
+            cameraReport: report,
+            cameraReportAt: new Date(),
+            updatedBy: userId,
+          }
         : { cameraReport: report, cameraReportAt: new Date() },
     });
     this.changed(sessionId);
@@ -1126,7 +1218,8 @@ export class LiveRtcService {
     const g = await this.gate(actorId, sessionId);
     if (!g.moderator) this.refuseSend(g);
     const t = await this.live.assertInSession(targetUserId, sessionId).catch(() => null);
-    if (!t || t.role !== 'STUDENT') throw new ForbiddenException({ message: 'Only a student', code: 'NOT_A_STUDENT' });
+    if (!t || t.role !== 'STUDENT')
+      throw new ForbiddenException({ message: 'Only a student', code: 'NOT_A_STUDENT' });
     const key = `${sessionId}:${targetUserId}`;
     const last = this.nudged.get(key) ?? 0;
     if (Date.now() - last < NUDGE_EVERY_MS) return { sent: false };
@@ -1179,7 +1272,10 @@ export class LiveRtcService {
     if (!g.moderator) this.refuseSend(g);
     const t = await this.live.assertInSession(targetUserId, sessionId).catch(() => null);
     if (!t || t.role !== 'STUDENT') {
-      throw new ForbiddenException({ message: 'Controls apply to students', code: 'NOT_A_STUDENT' });
+      throw new ForbiddenException({
+        message: 'Controls apply to students',
+        code: 'NOT_A_STUDENT',
+      });
     }
     const run = g.s.roomName;
     await this.prisma.$transaction(async (tx) => {
@@ -1190,9 +1286,23 @@ export class LiveRtcService {
       // A control from an earlier run does not carry into this one.
       const base =
         cur && cur.roomName === run
-          ? { mic: cur.mic, camera: cur.camera, cameraReport: cur.cameraReport, cameraReportAt: cur.cameraReportAt }
-          : { mic: 'DEFAULT' as MicControl, camera: 'DEFAULT' as CameraControl, cameraReport: null, cameraReportAt: null };
-      const next = { ...base, ...(dto.mic ? { mic: dto.mic } : {}), ...(dto.camera ? { camera: dto.camera } : {}) };
+          ? {
+              mic: cur.mic,
+              camera: cur.camera,
+              cameraReport: cur.cameraReport,
+              cameraReportAt: cur.cameraReportAt,
+            }
+          : {
+              mic: 'DEFAULT' as MicControl,
+              camera: 'DEFAULT' as CameraControl,
+              cameraReport: null,
+              cameraReportAt: null,
+            };
+      const next = {
+        ...base,
+        ...(dto.mic ? { mic: dto.mic } : {}),
+        ...(dto.camera ? { camera: dto.camera } : {}),
+      };
       await tx.liveParticipantControl.upsert({
         where: { sessionId_userId: { sessionId, userId: targetUserId } },
         create: { sessionId, userId: targetUserId, roomName: run, ...next, updatedBy: actorId },
@@ -1200,7 +1310,12 @@ export class LiveRtcService {
       });
       if (next.mic === 'BLOCKED') {
         await tx.liveHand.updateMany({
-          where: { sessionId, userId: targetUserId, roomName: run, state: { in: ['APPROVED_TO_SPEAK', 'ACTIVE_SPEAKER'] } },
+          where: {
+            sessionId,
+            userId: targetUserId,
+            roomName: run,
+            state: { in: ['APPROVED_TO_SPEAK', 'ACTIVE_SPEAKER'] },
+          },
           data: { state: 'RELEASED', decidedAt: new Date(), decidedBy: actorId },
         });
         await tx.liveHand.updateMany({
@@ -1210,7 +1325,10 @@ export class LiveRtcService {
       }
     });
     await this.enforce(sessionId, run, targetUserId, 'blocked');
-    this.realtime.emitToUser(targetUserId, 'live:hand', { sessionId, state: await this.handOf(sessionId, targetUserId, run) });
+    this.realtime.emitToUser(targetUserId, 'live:hand', {
+      sessionId,
+      state: await this.handOf(sessionId, targetUserId, run),
+    });
     this.changed(sessionId);
     this.logger.log(
       `live.controls liveSession=${sessionId} actor=${actorId} target=${targetUserId} ${JSON.stringify(dto)}`,
@@ -1230,8 +1348,16 @@ export class LiveRtcService {
     }
     if (!g.moderator) this.refuseSend(g);
     // The session's own teacher is never removed by staff.
-    if (!(await this.live.assertInSession(targetUserId, sessionId).then((t) => t.role === 'STUDENT').catch(() => false))) {
-      throw new ForbiddenException({ message: 'Only a student can be removed', code: 'NOT_A_STUDENT' });
+    if (
+      !(await this.live
+        .assertInSession(targetUserId, sessionId)
+        .then((t) => t.role === 'STUDENT')
+        .catch(() => false))
+    ) {
+      throw new ForbiddenException({
+        message: 'Only a student can be removed',
+        code: 'NOT_A_STUDENT',
+      });
     }
     const open = await this.prisma.liveRtcConnection.findMany({
       where: { sessionId, userId: targetUserId, closedAt: null },
@@ -1287,7 +1413,10 @@ export class LiveRtcService {
    * on. A speaker whose floor is taken back drops out of the picture too.
    */
   async recordableTracks(sessionId: string, roomName: string) {
-    const [open, pol] = await Promise.all([this.openTracks(sessionId, roomName), this.studentPolicies(sessionId, roomName)]);
+    const [open, pol] = await Promise.all([
+      this.openTracks(sessionId, roomName),
+      this.studentPolicies(sessionId, roomName),
+    ]);
     return open.filter((t) => t.connection.role !== 'STUDENT' || pol.of(t.userId).speaker);
   }
 

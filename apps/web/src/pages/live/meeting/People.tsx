@@ -29,13 +29,28 @@ export interface RowAction {
 }
 
 /** Extra actions per student row, contributed by later features (invite, bonus, camera…). */
-export type ExtraActions = (p: { userId: string; name: string; hand: Hand; guest?: boolean }) => RowAction[];
+export type ExtraActions = (p: {
+  userId: string;
+  name: string;
+  hand: Hand;
+  guest?: boolean;
+}) => RowAction[];
 
 function GroupTitle({ children }: { children: ReactNode }) {
-  return <h3 className="mb-1 mt-4 text-xs font-bold text-on-surface-variant first:mt-0">{children}</h3>;
+  return (
+    <h3 className="mb-1 mt-4 text-xs font-bold text-on-surface-variant first:mt-0">{children}</h3>
+  );
 }
 
-function StateIcon({ icon, label, tone }: { icon: string; label: string; tone?: 'on' | 'off' | 'warn' }) {
+function StateIcon({
+  icon,
+  label,
+  tone,
+}: {
+  icon: string;
+  label: string;
+  tone?: 'on' | 'off' | 'warn';
+}) {
   return (
     <span
       role="img"
@@ -78,13 +93,20 @@ function ActionsMenu({ name, actions }: { name: string; actions: RowAction[] }) 
       </button>
       {open && (
         <>
-          <div aria-hidden className="fixed inset-0 z-40 bg-black/40 sm:hidden" onClick={() => setOpen(false)} />
+          <div
+            aria-hidden
+            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            onClick={() => setOpen(false)}
+          />
           <div
             role="menu"
             aria-label={t('meeting.actionsFor', { name })}
             className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-surface-container-high p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:w-60 sm:rounded-2xl"
           >
-            <p className="truncate px-3 pb-1 pt-2 text-xs font-bold text-on-surface-variant sm:hidden" dir="auto">
+            <p
+              className="truncate px-3 pb-1 pt-2 text-xs font-bold text-on-surface-variant sm:hidden"
+              dir="auto"
+            >
               {name}
             </p>
             {actions.map((a) => (
@@ -99,7 +121,11 @@ function ActionsMenu({ name, actions }: { name: string; actions: RowAction[] }) 
                   void a.run();
                 }}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start text-sm font-semibold hover:bg-on-surface/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent sm:py-2 ${
-                  a.tone === 'danger' ? 'text-red-300' : a.tone === 'primary' ? 'text-primary' : 'text-on-surface'
+                  a.tone === 'danger'
+                    ? 'text-red-300'
+                    : a.tone === 'primary'
+                      ? 'text-primary'
+                      : 'text-on-surface'
                 }`}
               >
                 <span aria-hidden className="material-symbols-outlined text-[20px]">
@@ -108,7 +134,9 @@ function ActionsMenu({ name, actions }: { name: string; actions: RowAction[] }) 
                 <span className="min-w-0">
                   <span className="block">{a.label}</span>
                   {a.disabledReason && (
-                    <span className="block text-xs font-normal text-on-surface-variant">{a.disabledReason}</span>
+                    <span className="block text-xs font-normal text-on-surface-variant">
+                      {a.disabledReason}
+                    </span>
                   )}
                 </span>
               </button>
@@ -176,7 +204,9 @@ export default function People({
   const handOf = new Map((cf?.rtc?.participants ?? []).map((p) => [p.userId, p.hand]));
   const hands = cf?.hands ?? [];
   const raised = hands.filter((h) => h.hand === 'HAND_RAISED');
-  const speaking = hands.filter((h) => h.hand === 'APPROVED_TO_SPEAK' || h.hand === 'ACTIVE_SPEAKER');
+  const speaking = hands.filter(
+    (h) => h.hand === 'APPROVED_TO_SPEAK' || h.hand === 'ACTIVE_SPEAKER',
+  );
   const handIds = new Set([...raised, ...speaking].map((h) => h.userId));
   const rest = meeting.participants
     .filter((p) => !p.userId || !handIds.has(p.userId))
@@ -202,40 +232,103 @@ export default function People({
     const hand = (handOf.get(p.userId) ?? 'IDLE') as Hand;
     const out: RowAction[] = [];
     if (cf && hand === 'HAND_RAISED') {
-      out.push({ key: 'approve', icon: 'record_voice_over', label: t('meeting.approve'), tone: 'primary', run: () => cf.decideHand(p.userId, 'approve') });
-      out.push({ key: 'reject', icon: 'do_not_touch', label: t('meeting.reject'), run: () => cf.decideHand(p.userId, 'reject') });
+      out.push({
+        key: 'approve',
+        icon: 'record_voice_over',
+        label: t('meeting.approve'),
+        tone: 'primary',
+        run: () => cf.decideHand(p.userId, 'approve'),
+      });
+      out.push({
+        key: 'reject',
+        icon: 'do_not_touch',
+        label: t('meeting.reject'),
+        run: () => cf.decideHand(p.userId, 'reject'),
+      });
     }
     if (cf && (hand === 'APPROVED_TO_SPEAK' || hand === 'ACTIVE_SPEAKER')) {
-      out.push({ key: 'revoke', icon: 'voice_over_off', label: t('meeting.revoke'), run: () => cf.decideHand(p.userId, 'revoke') });
+      out.push({
+        key: 'revoke',
+        icon: 'voice_over_off',
+        label: t('meeting.revoke'),
+        run: () => cf.decideHand(p.userId, 'revoke'),
+      });
     }
     if (cf) {
       const blocked = micBlocked(p.userId);
       // An invitation asks the student; their own click is what turns the microphone on.
       if (!blocked && (hand === 'IDLE' || hand === 'RELEASED'))
-        out.push({ key: 'invite', icon: 'record_voice_over', label: t('meeting.invite'), tone: 'primary', run: () => cf.decideHand(p.userId, 'invite') });
+        out.push({
+          key: 'invite',
+          icon: 'record_voice_over',
+          label: t('meeting.invite'),
+          tone: 'primary',
+          run: () => cf.decideHand(p.userId, 'invite'),
+        });
       out.push(
         blocked
-          ? { key: 'unblockMic', icon: 'mic', label: t('meeting.unblockMic'), run: () => cf.setControls(p.userId, { mic: 'DEFAULT' }) }
-          : { key: 'blockMic', icon: 'mic_off', label: t('meeting.blockMic'), run: () => cf.setControls(p.userId, { mic: 'BLOCKED' }) },
+          ? {
+              key: 'unblockMic',
+              icon: 'mic',
+              label: t('meeting.unblockMic'),
+              run: () => cf.setControls(p.userId, { mic: 'DEFAULT' }),
+            }
+          : {
+              key: 'blockMic',
+              icon: 'mic_off',
+              label: t('meeting.blockMic'),
+              run: () => cf.setControls(p.userId, { mic: 'BLOCKED' }),
+            },
       );
     }
-    if (!cf) out.push({ key: 'mute', icon: 'mic_off', label: t('meeting.muteOne'), run: () => meeting.muteParticipant(p.sessionId) });
+    if (!cf)
+      out.push({
+        key: 'mute',
+        icon: 'mic_off',
+        label: t('meeting.muteOne'),
+        run: () => meeting.muteParticipant(p.sessionId),
+      });
     if (cf) {
       const r = rtcOf.get(p.userId);
       const cam = r?.controls?.camera ?? 'DEFAULT';
       if (r?.cameraExpected && !r.video)
-        out.push({ key: 'nudge', icon: 'notifications_active', label: t('meeting.camera.remind'), run: () => cf.nudgeCamera(p.userId) });
+        out.push({
+          key: 'nudge',
+          icon: 'notifications_active',
+          label: t('meeting.camera.remind'),
+          run: () => cf.nudgeCamera(p.userId),
+        });
       if (cameraPolicy === 'EXPECTED' && cam !== 'BLOCKED')
         out.push(
           cam === 'EXEMPT'
-            ? { key: 'unexempt', icon: 'videocam', label: t('meeting.camera.unexempt'), run: () => cf.setControls(p.userId, { camera: 'DEFAULT' }) }
-            : { key: 'exempt', icon: 'videocam_off', label: t('meeting.camera.exemptAction'), run: () => cf.setControls(p.userId, { camera: 'EXEMPT' }) },
+            ? {
+                key: 'unexempt',
+                icon: 'videocam',
+                label: t('meeting.camera.unexempt'),
+                run: () => cf.setControls(p.userId, { camera: 'DEFAULT' }),
+              }
+            : {
+                key: 'exempt',
+                icon: 'videocam_off',
+                label: t('meeting.camera.exemptAction'),
+                run: () => cf.setControls(p.userId, { camera: 'EXEMPT' }),
+              },
         );
       if (cameraPolicy !== 'OFF')
         out.push(
           cam === 'BLOCKED'
-            ? { key: 'unblockCam', icon: 'photo_camera', label: t('meeting.camera.unblock'), run: () => cf.setControls(p.userId, { camera: 'DEFAULT' }) }
-            : { key: 'blockCam', icon: 'no_photography', label: t('meeting.camera.block'), run: () => cf.setControls(p.userId, { camera: 'BLOCKED' }) },
+            ? {
+                key: 'unblockCam',
+                icon: 'photo_camera',
+                label: t('meeting.camera.unblock'),
+                run: () => cf.setControls(p.userId, { camera: 'DEFAULT' }),
+              }
+            : {
+                key: 'blockCam',
+                icon: 'no_photography',
+                label: t('meeting.camera.block'),
+                run: () => cf.setControls(p.userId, { camera: 'BLOCKED' }),
+              },
         );
     }
     if (cf && onBonus) {
@@ -250,7 +343,13 @@ export default function People({
       });
     }
     out.push(...(extraActions?.({ userId: p.userId, name: p.name, hand }) ?? []));
-    out.push({ key: 'remove', icon: 'person_remove', label: t('meeting.removeOne'), tone: 'danger', run: () => remove(p.userId, p.name, p.sessionId) });
+    out.push({
+      key: 'remove',
+      icon: 'person_remove',
+      label: t('meeting.removeOne'),
+      tone: 'danger',
+      run: () => remove(p.userId, p.name, p.sessionId),
+    });
     return out;
   };
 
@@ -259,11 +358,20 @@ export default function People({
     const r = rtcOf.get(p.userId ?? '');
     const ctl = r?.controls;
     if (p.video) return <StateIcon icon="videocam" label={t('meeting.camIsOn')} tone="on" />;
-    if (ctl?.camera === 'BLOCKED') return <StateIcon icon="no_photography" label={t('meeting.camera.blocked')} tone="warn" />;
+    if (ctl?.camera === 'BLOCKED')
+      return <StateIcon icon="no_photography" label={t('meeting.camera.blocked')} tone="warn" />;
     if (ctl?.cameraReport)
-      return <StateIcon icon="videocam_alert" label={t(`meeting.camera.report.${ctl.cameraReport}`)} tone="warn" />;
-    if (ctl?.camera === 'EXEMPT') return <StateIcon icon="videocam_off" label={t('meeting.camera.exempt')} />;
-    if (r?.cameraExpected) return <StateIcon icon="videocam_off" label={t('meeting.camera.expectedOff')} tone="warn" />;
+      return (
+        <StateIcon
+          icon="videocam_alert"
+          label={t(`meeting.camera.report.${ctl.cameraReport}`)}
+          tone="warn"
+        />
+      );
+    if (ctl?.camera === 'EXEMPT')
+      return <StateIcon icon="videocam_off" label={t('meeting.camera.exempt')} />;
+    if (r?.cameraExpected)
+      return <StateIcon icon="videocam_off" label={t('meeting.camera.expectedOff')} tone="warn" />;
     return <StateIcon icon="videocam_off" label={t('meeting.camIsOff')} tone="off" />;
   };
 
@@ -335,49 +443,57 @@ export default function People({
           </label>
         </div>
       )}
-      {moderator && cf && (cf.rtc?.admissions?.requests.filter((r) => r.status === 'PENDING').length ?? 0) > 0 && (
-        <>
-          <GroupTitle>
-            {t('admission.panelTitle', { count: cf.rtc!.admissions!.requests.filter((r) => r.status === 'PENDING').length })}
-          </GroupTitle>
-          {cf.rtc!.admissions!.capacity != null && (
-            <p className="mb-1 text-xs text-on-surface-variant">
-              {t('admission.capacityLine', {
-                capacity: cf.rtc!.admissions!.capacity,
-                exceptions: cf.rtc!.admissions!.exceptions,
+      {moderator &&
+        cf &&
+        (cf.rtc?.admissions?.requests.filter((r) => r.status === 'PENDING').length ?? 0) > 0 && (
+          <>
+            <GroupTitle>
+              {t('admission.panelTitle', {
+                count: cf.rtc!.admissions!.requests.filter((r) => r.status === 'PENDING').length,
               })}
-            </p>
-          )}
-          <ul>
-            {cf.rtc!.admissions!.requests
-              .filter((r) => r.status === 'PENDING')
-              .map((r) => (
-                <Row key={r.id} name={r.name} sub={t('admission.wantsToJoin')}>
-                  <button
-                    type="button"
-                    className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-on-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                    onClick={() => void cf.decideAdmission(r.id, 'APPROVE')}
-                  >
-                    {t('admission.admit')}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-on-surface/10"
-                    onClick={() => void cf.decideAdmission(r.id, 'REJECT')}
-                  >
-                    {t('meeting.reject')}
-                  </button>
-                </Row>
-              ))}
-          </ul>
-        </>
-      )}
+            </GroupTitle>
+            {cf.rtc!.admissions!.capacity != null && (
+              <p className="mb-1 text-xs text-on-surface-variant">
+                {t('admission.capacityLine', {
+                  capacity: cf.rtc!.admissions!.capacity,
+                  exceptions: cf.rtc!.admissions!.exceptions,
+                })}
+              </p>
+            )}
+            <ul>
+              {cf
+                .rtc!.admissions!.requests.filter((r) => r.status === 'PENDING')
+                .map((r) => (
+                  <Row key={r.id} name={r.name} sub={t('admission.wantsToJoin')}>
+                    <button
+                      type="button"
+                      className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-on-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                      onClick={() => void cf.decideAdmission(r.id, 'APPROVE')}
+                    >
+                      {t('admission.admit')}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-on-surface/10"
+                      onClick={() => void cf.decideAdmission(r.id, 'REJECT')}
+                    >
+                      {t('meeting.reject')}
+                    </button>
+                  </Row>
+                ))}
+            </ul>
+          </>
+        )}
       {moderator && cf && raised.length > 0 && (
         <>
           <GroupTitle>{t('meeting.requests', { count: raised.length })}</GroupTitle>
           <ul>
             {raised.map((h) => (
-              <Row key={h.userId} name={h.name} actions={actionsFor({ userId: h.userId, name: h.name, sessionId: h.userId })}>
+              <Row
+                key={h.userId}
+                name={h.name}
+                actions={actionsFor({ userId: h.userId, name: h.name, sessionId: h.userId })}
+              >
                 <button
                   type="button"
                   className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-on-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -400,7 +516,11 @@ export default function People({
                 <Row
                   key={h.userId}
                   name={h.name}
-                  sub={h.hand === 'ACTIVE_SPEAKER' ? t('meeting.speaking') : t('meeting.allowedToSpeak')}
+                  sub={
+                    h.hand === 'ACTIVE_SPEAKER'
+                      ? t('meeting.speaking')
+                      : t('meeting.allowedToSpeak')
+                  }
                   icons={p ? iconsFor(p) : undefined}
                   actions={actionsFor({ userId: h.userId, name: h.name, sessionId: h.userId })}
                 />
@@ -420,7 +540,15 @@ export default function People({
               name={p.local ? `${p.name || t('meeting.you')} (${t('meeting.you')})` : p.name}
               sub={p.owner ? t('meeting.teacherBadge') : undefined}
               icons={iconsFor(p)}
-              actions={!p.local && !p.owner ? actionsFor({ userId: p.userId ?? p.sessionId, name: p.name, sessionId: p.sessionId }) : undefined}
+              actions={
+                !p.local && !p.owner
+                  ? actionsFor({
+                      userId: p.userId ?? p.sessionId,
+                      name: p.name,
+                      sessionId: p.sessionId,
+                    })
+                  : undefined
+              }
             />
           ))}
         </ul>

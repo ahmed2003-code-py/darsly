@@ -29,11 +29,19 @@ const guard = () => {
 async function staff(
   w: ClassroomWorld,
   role: 'OWNER' | 'TEACHER' | 'ASSISTANT',
-  opts: { permissions?: string[]; courseScope?: 'ALL' | 'SELECTED'; status?: 'ACTIVE' | 'LEFT' } = {},
+  opts: {
+    permissions?: string[];
+    courseScope?: 'ALL' | 'SELECTED';
+    status?: 'ACTIVE' | 'LEFT';
+  } = {},
 ) {
   const k = randomUUID().slice(0, 8);
-  const u = await prisma.user.create({ data: { role: 'TEACHER', fullName: `${role} ${k}`, email: `mod-${k}@it.test` } });
-  await prisma.teacherProfile.create({ data: { userId: u.id, slug: `mod-${k}`, status: 'APPROVED' } });
+  const u = await prisma.user.create({
+    data: { role: 'TEACHER', fullName: `${role} ${k}`, email: `mod-${k}@it.test` },
+  });
+  await prisma.teacherProfile.create({
+    data: { userId: u.id, slug: `mod-${k}`, status: 'APPROVED' },
+  });
   await prisma.academyMembership.create({
     data: {
       userId: u.id,
@@ -58,10 +66,22 @@ describe('the moderation rule', () => {
       ['another OWNER member', (await staff(w, 'OWNER')).id, true],
       ['a TEACHER member (live.manage by role)', (await staff(w, 'TEACHER')).id, true],
       ['an ASSISTANT with no grants', w.assistant.id, false],
-      ['an ASSISTANT granted live.manage', (await staff(w, 'ASSISTANT', { permissions: ['live.manage'] })).id, true],
-      ['an ASSISTANT granted other things', (await staff(w, 'ASSISTANT', { permissions: ['student.view', 'chat.moderate'] })).id, false],
+      [
+        'an ASSISTANT granted live.manage',
+        (await staff(w, 'ASSISTANT', { permissions: ['live.manage'] })).id,
+        true,
+      ],
+      [
+        'an ASSISTANT granted other things',
+        (await staff(w, 'ASSISTANT', { permissions: ['student.view', 'chat.moderate'] })).id,
+        false,
+      ],
       // live.manage is academy-wide: an assistant limited to some courses loses it.
-      ['a course-scoped ASSISTANT granted live.manage', (await staff(w, 'ASSISTANT', { permissions: ['live.manage'], courseScope: 'SELECTED' })).id, false],
+      [
+        'a course-scoped ASSISTANT granted live.manage',
+        (await staff(w, 'ASSISTANT', { permissions: ['live.manage'], courseScope: 'SELECTED' })).id,
+        false,
+      ],
       ['a TEACHER who left the academy', (await staff(w, 'TEACHER', { status: 'LEFT' })).id, false],
       ['a booked student', w.s[0].id, false],
       ['an outsider', w.outsider.id, false],
@@ -90,9 +110,13 @@ describe('moderation actions follow it (regression: an assistant used to hold th
     const st = await rtc.state(w.assistant.id, w.ls.id);
     expect(st.me).toMatchObject({ role: 'TEACHER', moderator: false, canPublish: false });
     expect(st.notJoined).toBeUndefined();
-    expect(await codeOf(rtc.hand(w.assistant.id, w.ls.id, 'approve', w.s[0].id))).toBe('NOT_A_MODERATOR');
+    expect(await codeOf(rtc.hand(w.assistant.id, w.ls.id, 'approve', w.s[0].id))).toBe(
+      'NOT_A_MODERATOR',
+    );
     expect(await codeOf(rtc.remove(w.assistant.id, w.ls.id, w.s[0].id))).toBe('NOT_A_MODERATOR');
-    expect(await codeOf(rtc.openConnection(w.assistant.id, w.ls.id, 'SEND'))).toBe('NOT_A_MODERATOR');
+    expect(await codeOf(rtc.openConnection(w.assistant.id, w.ls.id, 'SEND'))).toBe(
+      'NOT_A_MODERATOR',
+    );
     // The hand is untouched.
     expect((await rtc.state(w.s[0].id, w.ls.id)).me.hand).toBe('HAND_RAISED');
   });
@@ -106,7 +130,14 @@ describe('moderation actions follow it (regression: an assistant used to hold th
     expect(await codeOf(rtc.hand(a.id, w.ls.id, 'approve', w.s[0].id))).toBe('ok');
     expect(await codeOf(rtc.hand(a.id, w.ls.id, 'revoke', w.s[0].id))).toBe('ok');
     const { connectionId } = await rtc.openConnection(a.id, w.ls.id, 'SEND');
-    expect(await codeOf(rtc.publish(a.id, w.ls.id, connectionId, { offer: OFFER, tracks: [{ mid: '0', kind: 'AUDIO' }] }))).toBe('ok');
+    expect(
+      await codeOf(
+        rtc.publish(a.id, w.ls.id, connectionId, {
+          offer: OFFER,
+          tracks: [{ mid: '0', kind: 'AUDIO' }],
+        }),
+      ),
+    ).toBe('ok');
     expect(await codeOf(rtc.remove(a.id, w.ls.id, w.s[1].id))).toBe('ok');
     expect((await rtc.state(a.id, w.ls.id)).me.moderator).toBe(true);
   });
@@ -135,7 +166,9 @@ describe('the participant panel foundation', () => {
     const w = await classroomWorld(prisma);
     const { rtc } = classroom(prisma);
     await rtc.openConnection(w.s[0].id, w.ls.id, 'RECEIVE');
-    await prisma.liveAttendance.create({ data: { sessionId: w.ls.id, userId: w.s[0].id, role: 'STUDENT' } });
+    await prisma.liveAttendance.create({
+      data: { sessionId: w.ls.id, userId: w.s[0].id, role: 'STUDENT' },
+    });
     const st = await rtc.state(w.teacher.id, w.ls.id);
     expect(st.notJoined?.map((x) => x.userId).sort()).toEqual([w.s[1].id, w.s[2].id].sort());
     expect((await rtc.state(w.s[0].id, w.ls.id)).notJoined).toBeUndefined();

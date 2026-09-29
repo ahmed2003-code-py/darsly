@@ -325,10 +325,7 @@ function SpeakerTurns({ segments, query }: { segments: Segment[]; query: string 
                   </span>
                 )}
               </p>
-              <p
-                dir="auto"
-                className="whitespace-pre-wrap text-[15px] leading-8 text-on-surface"
-              >
+              <p dir="auto" className="whitespace-pre-wrap text-[15px] leading-8 text-on-surface">
                 <Highlight text={g.segments.map((s) => s.text).join(' ')} q={query} />
               </p>
             </div>
@@ -406,23 +403,23 @@ export function TranscriptViewer({
       {hasSpeakers(segments) ? (
         <SpeakerTurns segments={visible} query={query} />
       ) : (
-      <ol className="space-y-3">
-        {visible.map((s, i) => (
-          <li key={i} className="flex gap-3">
-            {s.startSec != null && (
-              <span dir="ltr" className="mt-0.5 w-12 shrink-0 text-xs tabular-nums text-outline">
-                {clock(s.startSec)}
-              </span>
-            )}
-            <p
-              dir="auto"
-              className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-8 text-on-surface"
-            >
-              <Highlight text={s.text} q={query} />
-            </p>
-          </li>
-        ))}
-      </ol>
+        <ol className="space-y-3">
+          {visible.map((s, i) => (
+            <li key={i} className="flex gap-3">
+              {s.startSec != null && (
+                <span dir="ltr" className="mt-0.5 w-12 shrink-0 text-xs tabular-nums text-outline">
+                  {clock(s.startSec)}
+                </span>
+              )}
+              <p
+                dir="auto"
+                className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-8 text-on-surface"
+              >
+                <Highlight text={s.text} q={query} />
+              </p>
+            </li>
+          ))}
+        </ol>
       )}
       {!query && !expanded && shown.length > 3 && (
         <button

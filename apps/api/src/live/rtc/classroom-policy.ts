@@ -63,7 +63,12 @@ export interface EffectivePolicy {
   videoAudience: 'EVERYONE' | 'MODERATORS';
 }
 
-const NOTHING: Record<LiveTrackKind, boolean> = { AUDIO: false, VIDEO: false, SCREEN: false, SCREEN_AUDIO: false };
+const NOTHING: Record<LiveTrackKind, boolean> = {
+  AUDIO: false,
+  VIDEO: false,
+  SCREEN: false,
+  SCREEN_AUDIO: false,
+};
 
 export function effectivePolicy(i: PolicyInput): EffectivePolicy {
   const micPolicy = i.micPolicy ?? DEFAULT_MIC_POLICY;
@@ -93,7 +98,9 @@ export function effectivePolicy(i: PolicyInput): EffectivePolicy {
   const speaker = canSpeak(i.hand ?? 'IDLE') && !micBlocked;
   const video =
     !cameraBlocked &&
-    (cameraPolicy === 'OPTIONAL' || cameraPolicy === 'EXPECTED' || (cameraPolicy === 'SPEAKERS_ONLY' && speaker));
+    (cameraPolicy === 'OPTIONAL' ||
+      cameraPolicy === 'EXPECTED' ||
+      (cameraPolicy === 'SPEAKERS_ONLY' && speaker));
   const publish = { ...NOTHING, AUDIO: speaker, VIDEO: video };
   return {
     publish,

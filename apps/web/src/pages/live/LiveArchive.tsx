@@ -47,7 +47,10 @@ function minutesOf(totalSeconds: number, t: T) {
   return m < 1 ? t('summary.underMinute') : t('live.minutes', { count: m });
 }
 const timeOf = (iso: string, lang: string) =>
-  new Date(iso).toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+  new Date(iso).toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 function Card({
   id,
@@ -210,7 +213,11 @@ function RecordingCard({
       <Status
         busy
         title={t(`record.rec.${stage}`)}
-        hint={stage === 'PROCESSING' || stage === 'FINALIZING' ? t('record.rec.processingHint') : undefined}
+        hint={
+          stage === 'PROCESSING' || stage === 'FINALIZING'
+            ? t('record.rec.processingHint')
+            : undefined
+        }
       />
     );
 
@@ -223,7 +230,11 @@ function RecordingCard({
         <>
           {length && <span className="text-xs text-outline">{length}</span>}
           {teacher && recording.visibility && stage && stage !== 'FAILED' && (
-            <VisibilityPicker sessionId={sessionId} resource="recording" value={recording.visibility} />
+            <VisibilityPicker
+              sessionId={sessionId}
+              resource="recording"
+              value={recording.visibility}
+            />
           )}
         </>
       }
@@ -272,10 +283,15 @@ function SummaryPane({ sessionId, d, teacher }: { sessionId: string; d: any; tea
 
   if (stage === 'READY' && data) {
     const quick = isStudyNotes(data) ? data.quickSummary : data.summary;
-    const points = (isStudyNotes(data) ? data.keyPoints.map((k) => k.text) : data.keyPoints).slice(0, 3);
+    const points = (isStudyNotes(data) ? data.keyPoints.map((k) => k.text) : data.keyPoints).slice(
+      0,
+      3,
+    );
     return (
       <div className="space-y-3">
-        {d.summary.partial && <Status title={t('summary.partialTitle')} hint={t('summary.partial')} />}
+        {d.summary.partial && (
+          <Status title={t('summary.partialTitle')} hint={t('summary.partial')} />
+        )}
         {d.summary.stale && <Status title={t('summary.stale')} />}
         <div dir="auto" className="space-y-2">
           {quick && <p className="line-clamp-4 text-sm leading-7">{quick}</p>}
@@ -283,7 +299,10 @@ function SummaryPane({ sessionId, d, teacher }: { sessionId: string; d: any; tea
             <ul className="space-y-1">
               {points.map((p, i) => (
                 <li key={i} className="flex gap-2 text-sm leading-relaxed">
-                  <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
+                  <span
+                    aria-hidden
+                    className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50"
+                  />
                   <span className="line-clamp-2">{p}</span>
                 </li>
               ))}
@@ -291,10 +310,17 @@ function SummaryPane({ sessionId, d, teacher }: { sessionId: string; d: any; tea
           )}
         </div>
         <OpenFull onClick={() => setFull(true)}>{t('archive.summaryFull')}</OpenFull>
-        <Modal variant="sheet" open={full} onClose={() => setFull(false)} title={t('summary.title')}>
+        <Modal
+          variant="sheet"
+          open={full}
+          onClose={() => setFull(false)}
+          title={t('summary.title')}
+        >
           {full && (
             <div className="space-y-4">
-              {d.summary.partial && <Status title={t('summary.partialTitle')} hint={t('summary.partial')} />}
+              {d.summary.partial && (
+                <Status title={t('summary.partialTitle')} hint={t('summary.partial')} />
+              )}
               {isStudyNotes(data) ? <StudyNotesView n={data} /> : <LegacySummaryView data={data} />}
               {teacher && d.summary.canRegenerate && (
                 <div className="space-y-1 border-t border-outline-variant/60 pt-3">
@@ -322,8 +348,10 @@ function SummaryPane({ sessionId, d, teacher }: { sessionId: string; d: any; tea
       </div>
     );
   }
-  if (stage === 'GENERATING' || stage === 'PROCESSING') return <Status busy title={t('record.summary.GENERATING')} />;
-  if (stage === 'WAITING_FOR_TRANSCRIPT') return <Status title={t('record.summary.WAITING_FOR_TRANSCRIPT')} />;
+  if (stage === 'GENERATING' || stage === 'PROCESSING')
+    return <Status busy title={t('record.summary.GENERATING')} />;
+  if (stage === 'WAITING_FOR_TRANSCRIPT')
+    return <Status title={t('record.summary.WAITING_FOR_TRANSCRIPT')} />;
   if (stage === 'UNAVAILABLE') return <Status title={t('record.summary.UNAVAILABLE')} />;
   if (stage === 'FAILED')
     return (
@@ -338,7 +366,11 @@ function SummaryPane({ sessionId, d, teacher }: { sessionId: string; d: any; tea
           }
         />
         {teacher && d.summary.canGenerate && (
-          <button className="btn-secondary" disabled={generate.isPending} onClick={() => generate.mutate()}>
+          <button
+            className="btn-secondary"
+            disabled={generate.isPending}
+            onClick={() => generate.mutate()}
+          >
             {t('summary.retry')}
           </button>
         )}
@@ -384,7 +416,8 @@ function TranscriptPane({
   // The whole text: only when opened.
   const whole = useQuery({
     queryKey: ['live-transcript', sessionId],
-    queryFn: async () => (await api.get(`/live/${sessionId}/transcript`)).data as TranscriptView | null,
+    queryFn: async () =>
+      (await api.get(`/live/${sessionId}/transcript`)).data as TranscriptView | null,
     enabled: full,
     staleTime: 60_000,
   });
@@ -392,7 +425,12 @@ function TranscriptPane({
   const retryButton =
     teacher && transcript.canRetry ? (
       <div className="mt-2 space-y-1">
-        <button type="button" className="btn-secondary !py-1.5 text-sm" disabled={retry.isPending} onClick={() => retry.mutate()}>
+        <button
+          type="button"
+          className="btn-secondary !py-1.5 text-sm"
+          disabled={retry.isPending}
+          onClick={() => retry.mutate()}
+        >
           <span aria-hidden className="material-symbols-outlined text-[18px]">
             refresh
           </span>
@@ -406,7 +444,9 @@ function TranscriptPane({
     const partial = s === 'PARTIAL' || !!transcript.partial;
     return (
       <div className="space-y-3">
-        {partial && <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />}
+        {partial && (
+          <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />
+        )}
         {!!transcript.speakerCount && (
           <p className="flex items-center gap-1.5 text-xs text-outline">
             <span aria-hidden className="material-symbols-outlined text-[16px]">
@@ -415,12 +455,20 @@ function TranscriptPane({
             {t('record.transcript.speaker.count', { count: transcript.speakerCount })}
           </p>
         )}
-        <p dir="auto" className="line-clamp-5 whitespace-pre-wrap text-sm leading-7 text-on-surface-variant">
+        <p
+          dir="auto"
+          className="line-clamp-5 whitespace-pre-wrap text-sm leading-7 text-on-surface-variant"
+        >
           {transcript.segments.map((x) => x.text).join(' ')}
         </p>
         <OpenFull onClick={() => setFull(true)}>{t('record.transcript.showAll')}</OpenFull>
         {retryButton}
-        <Modal variant="sheet" open={full} onClose={() => setFull(false)} title={t('record.transcript.title')}>
+        <Modal
+          variant="sheet"
+          open={full}
+          onClose={() => setFull(false)}
+          title={t('record.transcript.title')}
+        >
           {full &&
             (whole.isLoading ? (
               <div className="space-y-3" aria-busy>
@@ -440,8 +488,10 @@ function TranscriptPane({
     );
   }
   if (s === 'READY') return <Status tone="good" title={t('record.transcript.READY')} />;
-  if (s === 'PARTIAL') return <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />;
-  if (s === 'UNAVAILABLE' && transcript.reason === 'TRANSCRIPTION_OFF') return <Status title={t('record.transcript.OFF')} />;
+  if (s === 'PARTIAL')
+    return <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />;
+  if (s === 'UNAVAILABLE' && transcript.reason === 'TRANSCRIPTION_OFF')
+    return <Status title={t('record.transcript.OFF')} />;
   if (s === 'UNAVAILABLE')
     return (
       <Status
@@ -465,7 +515,8 @@ function TranscriptPane({
       </>
     );
   if (s === 'AT_PROVIDER') return <Status title={t('record.transcript.AT_PROVIDER')} />;
-  if (s === 'WAITING_FOR_CLASS_END') return <Status title={t('record.transcript.WAITING_FOR_CLASS_END')} />;
+  if (s === 'WAITING_FOR_CLASS_END')
+    return <Status title={t('record.transcript.WAITING_FOR_CLASS_END')} />;
   return (
     <Status
       busy
@@ -489,13 +540,24 @@ function ContentCard({ sessionId, d, teacher }: { sessionId: string; d: any; tea
   const aside =
     teacher && current === 'summary' && sStage === 'READY' && d.summary.visibility ? (
       <VisibilityPicker sessionId={sessionId} resource="summary" value={d.summary.visibility} />
-    ) : teacher && current === 'transcript' && d.transcript?.visibility && (tStage === 'READY' || tStage === 'PARTIAL') ? (
-      <VisibilityPicker sessionId={sessionId} resource="transcript" value={d.transcript.visibility} />
+    ) : teacher &&
+      current === 'transcript' &&
+      d.transcript?.visibility &&
+      (tStage === 'READY' || tStage === 'PARTIAL') ? (
+      <VisibilityPicker
+        sessionId={sessionId}
+        resource="transcript"
+        value={d.transcript.visibility}
+      />
     ) : null;
   return (
     <Card id="rec-content" icon="menu_book" title={t('archive.content')} aside={aside}>
       {hasTranscript && (
-        <div role="tablist" aria-label={t('archive.content')} className="mb-3 inline-flex rounded-full bg-surface-container p-1">
+        <div
+          role="tablist"
+          aria-label={t('archive.content')}
+          className="mb-3 inline-flex rounded-full bg-surface-container p-1"
+        >
           {(['summary', 'transcript'] as const).map((k) => (
             <button
               key={k}
@@ -504,7 +566,9 @@ function ContentCard({ sessionId, d, teacher }: { sessionId: string; d: any; tea
               aria-selected={current === k}
               onClick={() => setTab(k)}
               className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                current === k ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                current === k
+                  ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
               {k === 'summary' ? t('record.nav.summary') : t('record.nav.transcript')}
@@ -567,7 +631,11 @@ function AttendanceLine({ row, detail }: { row: AttendanceRow; detail?: boolean 
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate text-sm font-semibold" dir="auto">
             <span className="truncate">{row.fullName}</span>
-            {row.guest && <span className="shrink-0 text-xs font-normal text-outline">({t('liveManage.guest')})</span>}
+            {row.guest && (
+              <span className="shrink-0 text-xs font-normal text-outline">
+                ({t('liveManage.guest')})
+              </span>
+            )}
           </p>
           <p className="text-xs text-outline">
             {minutesOf(row.durationSeconds, t)}
@@ -584,7 +652,10 @@ function AttendanceLine({ row, detail }: { row: AttendanceRow; detail?: boolean 
             onClick={() => setOpen((v) => !v)}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-outline hover:bg-surface-container-low"
           >
-            <span aria-hidden className={`material-symbols-outlined text-[20px] transition ${open ? 'rotate-180' : ''}`}>
+            <span
+              aria-hidden
+              className={`material-symbols-outlined text-[20px] transition ${open ? 'rotate-180' : ''}`}
+            >
               expand_more
             </span>
           </button>
@@ -593,13 +664,19 @@ function AttendanceLine({ row, detail }: { row: AttendanceRow; detail?: boolean 
       {detail && open && (
         <dl className="ms-11 mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl bg-surface-container-low p-3 text-xs">
           <dt className="text-outline">{t('archive.att.firstJoin')}</dt>
-          <dd dir="ltr" className="text-end tabular-nums">{timeOf(row.joinedAt, i18n.language)}</dd>
+          <dd dir="ltr" className="text-end tabular-nums">
+            {timeOf(row.joinedAt, i18n.language)}
+          </dd>
           <dt className="text-outline">{t('archive.att.lastSeen')}</dt>
-          <dd dir="ltr" className="text-end tabular-nums">{timeOf(row.leftAt ?? row.lastSeenAt, i18n.language)}</dd>
+          <dd dir="ltr" className="text-end tabular-nums">
+            {timeOf(row.leftAt ?? row.lastSeenAt, i18n.language)}
+          </dd>
           <dt className="text-outline">{t('archive.att.dropouts')}</dt>
           <dd className="text-end tabular-nums">{row.reconnects}</dd>
           <dt className="text-outline">{t('archive.att.micOpen')}</dt>
-          <dd className="text-end">{row.micOpenSeconds ? minutesOf(row.micOpenSeconds, t) : '—'}</dd>
+          <dd className="text-end">
+            {row.micOpenSeconds ? minutesOf(row.micOpenSeconds, t) : '—'}
+          </dd>
         </dl>
       )}
     </li>
@@ -613,7 +690,12 @@ function AttendanceCard({ report }: { report: AttendanceReport }) {
   const teachers = report.rows.filter((r) => r.role === 'TEACHER');
   const sum = report.summary;
   const stats: [string, string][] = [
-    [t('archive.att.joined'), sum.expected ? t('archive.att.ofExpected', { joined: sum.joined, expected: sum.expected }) : String(sum.joined)],
+    [
+      t('archive.att.joined'),
+      sum.expected
+        ? t('archive.att.ofExpected', { joined: sum.joined, expected: sum.expected })
+        : String(sum.joined),
+    ],
     [t('archive.att.absent'), String(sum.absent)],
     [t('archive.att.average'), sum.averagePercent != null ? `${sum.averagePercent}%` : '—'],
   ];
@@ -639,11 +721,18 @@ function AttendanceCard({ report }: { report: AttendanceReport }) {
       {(students.length > 4 || report.absent.length > 0 || students.length > 0) && (
         <OpenFull onClick={() => setFull(true)}>{t('archive.att.showAll')}</OpenFull>
       )}
-      <Modal variant="sheet" open={full} onClose={() => setFull(false)} title={t('live.attendance')}>
+      <Modal
+        variant="sheet"
+        open={full}
+        onClose={() => setFull(false)}
+        title={t('live.attendance')}
+      >
         {full && (
           <div className="space-y-5">
             <p className="text-sm text-on-surface-variant">
-              {sum.runSeconds ? t('archive.att.ran', { duration: minutesOf(sum.runSeconds, t) }) : null}
+              {sum.runSeconds
+                ? t('archive.att.ran', { duration: minutesOf(sum.runSeconds, t) })
+                : null}
               {sum.attendedThresholdSeconds
                 ? ` · ${t('archive.att.thresholdHint', { duration: minutesOf(sum.attendedThresholdSeconds, t) })}`
                 : null}
@@ -669,7 +758,11 @@ function AttendanceCard({ report }: { report: AttendanceReport }) {
                       <Avatar name={a.fullName} />
                       <span className="min-w-0 flex-1 truncate" dir="auto">
                         {a.fullName}
-                        {a.guest && <span className="ms-1 text-xs text-outline">({t('liveManage.guest')})</span>}
+                        {a.guest && (
+                          <span className="ms-1 text-xs text-outline">
+                            ({t('liveManage.guest')})
+                          </span>
+                        )}
                       </span>
                       <span className="text-xs text-outline">{t('archive.att.didNotJoin')}</span>
                     </li>
@@ -679,7 +772,9 @@ function AttendanceCard({ report }: { report: AttendanceReport }) {
             )}
             {teachers.length > 0 && (
               <section>
-                <h3 className="mb-1 text-xs font-bold text-on-surface-variant">{t('archive.att.staff')}</h3>
+                <h3 className="mb-1 text-xs font-bold text-on-surface-variant">
+                  {t('archive.att.staff')}
+                </h3>
                 <ul className="divide-y divide-outline-variant/40">
                   {teachers.map((r) => (
                     <AttendanceLine key={r.id} row={r} />
@@ -706,7 +801,9 @@ function ChatGroups({ messages }: { messages: ArchiveMessage[] }) {
           {g.pauseBefore && (
             <div className="my-3 flex items-center gap-2 text-[11px] text-outline" aria-hidden>
               <span className="h-px flex-1 bg-outline-variant/60" />
-              <span dir="ltr" className="tabular-nums">{timeOf(g.at, i18n.language)}</span>
+              <span dir="ltr" className="tabular-nums">
+                {timeOf(g.at, i18n.language)}
+              </span>
               <span className="h-px flex-1 bg-outline-variant/60" />
             </div>
           )}
@@ -722,8 +819,12 @@ function ChatGroups({ messages }: { messages: ArchiveMessage[] }) {
                     {t('meeting.teacherBadge')}
                   </span>
                 )}
-                {g.senderRole === 'GUEST' && <span className="ms-1.5 text-outline">({t('liveManage.guest')})</span>}
-                <span dir="ltr" className="ms-2 tabular-nums text-outline">{timeOf(g.at, i18n.language)}</span>
+                {g.senderRole === 'GUEST' && (
+                  <span className="ms-1.5 text-outline">({t('liveManage.guest')})</span>
+                )}
+                <span dir="ltr" className="ms-2 tabular-nums text-outline">
+                  {timeOf(g.at, i18n.language)}
+                </span>
               </p>
               <div className="mt-0.5 space-y-1">
                 {g.messages.map((m) => (
@@ -750,7 +851,8 @@ function ChatCard({ sessionId, count }: { sessionId: string; count: number }) {
   const [full, setFull] = useState(false);
   const preview = useQuery({
     queryKey: ['live-chat-preview', sessionId],
-    queryFn: async () => (await api.get(`/live/${sessionId}/chat`, { params: { limit: 4 } })).data as ArchiveMessage[],
+    queryFn: async () =>
+      (await api.get(`/live/${sessionId}/chat`, { params: { limit: 4 } })).data as ArchiveMessage[],
     enabled: count > 0,
   });
   // The whole conversation, newest page first; older pages as the reader asks.
@@ -766,13 +868,20 @@ function ChatCard({ sessionId, count }: { sessionId: string; count: number }) {
     getNextPageParam: (last) => (last.length === CHAT_PAGE ? last[0].id : undefined),
     enabled: full,
   });
-  const all = useMemo(() => (pages.data ? [...pages.data.pages].reverse().flat() : []), [pages.data]);
+  const all = useMemo(
+    () => (pages.data ? [...pages.data.pages].reverse().flat() : []),
+    [pages.data],
+  );
   return (
     <Card
       id="rec-chat"
       icon="forum"
       title={t('record.chat.title')}
-      aside={count ? <span className="text-xs text-outline">{t('record.chat.count', { count })}</span> : null}
+      aside={
+        count ? (
+          <span className="text-xs text-outline">{t('record.chat.count', { count })}</span>
+        ) : null
+      }
     >
       {!count ? (
         <p className="text-sm text-outline">{t('record.chat.empty')}</p>
@@ -845,7 +954,8 @@ export default function LiveArchive({ sessionId }: { sessionId: string }) {
   const teacher = detail.data?.role === 'TEACHER';
   const attendance = useQuery({
     queryKey: ['live-attendance', sessionId],
-    queryFn: async () => (await api.get(`/teacher/live/${sessionId}/attendance`)).data as AttendanceReport,
+    queryFn: async () =>
+      (await api.get(`/teacher/live/${sessionId}/attendance`)).data as AttendanceReport,
     enabled: teacher,
   });
 
@@ -893,7 +1003,8 @@ export default function LiveArchive({ sessionId }: { sessionId: string }) {
             {sum.expected
               ? t('archive.att.ofExpected', { joined: sum.joined, expected: sum.expected })
               : t('record.attendedCount', { count: sum.joined })}
-            {sum.averagePercent != null && ` · ${t('archive.att.averageShort', { pct: sum.averagePercent })}`}
+            {sum.averagePercent != null &&
+              ` · ${t('archive.att.averageShort', { pct: sum.averagePercent })}`}
           </span>
         )}
       </div>
@@ -905,7 +1016,14 @@ export default function LiveArchive({ sessionId }: { sessionId: string }) {
           <ContentCard sessionId={sessionId} d={d} teacher={teacher} />
         </div>
         <div className="space-y-4 lg:col-span-2">
-          {teacher && (attendance.data ? <AttendanceCard report={attendance.data} /> : attendance.isError ? <ErrorNote error={attendance.error} /> : <Skeleton className="h-40 w-full" />)}
+          {teacher &&
+            (attendance.data ? (
+              <AttendanceCard report={attendance.data} />
+            ) : attendance.isError ? (
+              <ErrorNote error={attendance.error} />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            ))}
           <ChatCard sessionId={sessionId} count={d.chat?.count ?? 0} />
         </div>
       </div>

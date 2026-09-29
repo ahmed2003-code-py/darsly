@@ -33,7 +33,11 @@ export function fakeSfu() {
       sessions.set(id, new Map());
       return id;
     },
-    pushTracks: async (sid: string, _offer: unknown, tracks: { mid: string; trackName: string }[]) => {
+    pushTracks: async (
+      sid: string,
+      _offer: unknown,
+      tracks: { mid: string; trackName: string }[],
+    ) => {
       const s = sessions.get(sid)!;
       for (const t of tracks) s.set(t.mid, { ...t, location: 'local', status: 'active' });
       return {
@@ -73,7 +77,9 @@ export function fakeSfu() {
   /** Whether a publisher's track is still live at the SFU. */
   const active = (trackName: string) =>
     [...sessions.values()].some((s) =>
-      [...s.values()].some((t) => t.trackName === trackName && t.location === 'local' && t.status === 'active'),
+      [...s.values()].some(
+        (t) => t.trackName === trackName && t.location === 'local' && t.status === 'active',
+      ),
     );
   return { client, sessions, active };
 }
@@ -86,8 +92,10 @@ export function classroom(
   const sfu = fakeSfu();
   const events: { to: 'user' | 'live'; id: string; event: string; payload: unknown }[] = [];
   const realtime = {
-    emitToLive: (id: string, event: string, payload: unknown) => events.push({ to: 'live', id, event, payload }),
-    emitToUser: (id: string, event: string, payload: unknown) => events.push({ to: 'user', id, event, payload }),
+    emitToLive: (id: string, event: string, payload: unknown) =>
+      events.push({ to: 'live', id, event, payload }),
+    emitToUser: (id: string, event: string, payload: unknown) =>
+      events.push({ to: 'user', id, event, payload }),
   };
   const cloudflare = new CloudflareLiveProvider(prisma, sfu.client as never);
   const providers = new LiveProviders([cloudflare], 'CLOUDFLARE');
@@ -119,9 +127,17 @@ export async function classroomWorld(prisma: PrismaService, session: Record<stri
     data: { role: 'TEACHER', fullName: `T ${k}`, email: `crt-${k}@it.test` },
   });
   const tp = await prisma.teacherProfile.create({ data: { userId: teacher.id, slug: `crt-${k}` } });
-  await prisma.academy.create({ data: { id: tp.id, slug: `cra-${k}`, name: `A ${k}`, ownerUserId: teacher.id } });
+  await prisma.academy.create({
+    data: { id: tp.id, slug: `cra-${k}`, name: `A ${k}`, ownerUserId: teacher.id },
+  });
   await prisma.academyMembership.create({
-    data: { userId: teacher.id, academyId: tp.id, role: 'OWNER', status: 'ACTIVE', joinedAt: new Date() },
+    data: {
+      userId: teacher.id,
+      academyId: tp.id,
+      role: 'OWNER',
+      status: 'ACTIVE',
+      joinedAt: new Date(),
+    },
   });
   const ls = await prisma.liveSession.create({
     data: {
@@ -154,12 +170,31 @@ export async function classroomWorld(prisma: PrismaService, session: Record<stri
     data: { role: 'TEACHER', fullName: `Asst ${k}`, email: `cra-${k}@it.test` },
   });
   // A real assistant: an approved teacher identity, an ASSISTANT membership, no grants.
-  await prisma.teacherProfile.create({ data: { userId: assistant.id, slug: `crasst-${k}`, status: 'APPROVED' } });
+  await prisma.teacherProfile.create({
+    data: { userId: assistant.id, slug: `crasst-${k}`, status: 'APPROVED' },
+  });
   const assistantMembership = await prisma.academyMembership.create({
-    data: { userId: assistant.id, academyId: tp.id, role: 'ASSISTANT', status: 'ACTIVE', joinedAt: new Date() },
+    data: {
+      userId: assistant.id,
+      academyId: tp.id,
+      role: 'ASSISTANT',
+      status: 'ACTIVE',
+      joinedAt: new Date(),
+    },
   });
   const scope: LiveScope = { academyId: tp.id, userId: teacher.id, manageAll: true, role: 'OWNER' };
-  return { k, teacher, tp, ls, s: students.slice(0, 3), sp: profiles.slice(0, 3), outsider: students[3], assistant, assistantMembership, scope };
+  return {
+    k,
+    teacher,
+    tp,
+    ls,
+    s: students.slice(0, 3),
+    sp: profiles.slice(0, 3),
+    outsider: students[3],
+    assistant,
+    assistantMembership,
+    scope,
+  };
 }
 
 /**
@@ -169,7 +204,10 @@ export async function classroomWorld(prisma: PrismaService, session: Record<stri
 export async function confirmedGuest(prisma: PrismaService, w: ClassroomWorld, name = 'ضيف تجربة') {
   const { commerce } = commerceStack(prisma);
   const { purchase } = await commerce.guestHold(w.ls.id, name);
-  const row = await prisma.livePurchase.findUniqueOrThrow({ where: { id: purchase.id }, select: { guestBuyer: { select: { userId: true } } } });
+  const row = await prisma.livePurchase.findUniqueOrThrow({
+    where: { id: purchase.id },
+    select: { guestBuyer: { select: { userId: true } } },
+  });
   return prisma.user.findUniqueOrThrow({ where: { id: row.guestBuyer!.userId } });
 }
 

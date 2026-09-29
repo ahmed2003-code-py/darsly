@@ -93,7 +93,11 @@ function build(opts: { enqueueFails?: number } = {}) {
       await tx.videoJob.create({ data: { videoAssetId: assetId, tenantId, status: 'SUCCEEDED' } });
     }),
   };
-  const rtc = { changed: jest.fn(), openTracks: jest.fn(async () => []), recordableTracks: jest.fn(async () => []) };
+  const rtc = {
+    changed: jest.fn(),
+    openTracks: jest.fn(async () => []),
+    recordableTracks: jest.fn(async () => []),
+  };
   const live = new LiveService(
     prisma,
     { create: jest.fn(async () => ({})) } as any,

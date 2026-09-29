@@ -170,7 +170,10 @@ export class LiveContentService {
         // Course students read it: the teacher's name, classmates as numbers,
         // never an id (transcription/speakers.ts).
         transcriptSegments: dto.includeTranscript
-          ? segmentsFor(transcript.segments as { speaker?: StoredSpeaker }[], { teacher: false, userId: null })
+          ? segmentsFor(transcript.segments as { speaker?: StoredSpeaker }[], {
+              teacher: false,
+              userId: null,
+            })
           : null,
         transcriptPartial: dto.includeTranscript ? transcript.partial : false,
         transcriptRevision: s.transcriptRevision,

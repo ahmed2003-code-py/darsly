@@ -87,7 +87,13 @@ export interface RtcState {
   notJoined?: { userId: string; name: string; guest: boolean }[];
   /** Moderators only: students asking for a seat in a full class. */
   admissions?: {
-    requests: { id: string; userId: string; name: string; status: 'PENDING' | 'APPROVED'; requestedAt: string }[];
+    requests: {
+      id: string;
+      userId: string;
+      name: string;
+      status: 'PENDING' | 'APPROVED';
+      requestedAt: string;
+    }[];
     capacity: number | null;
     exceptions: number;
   };
@@ -313,17 +319,30 @@ export function useCloudflareMeeting(
             .map((p) => p.userId),
         );
         const studentCams = s.tracks.filter(
-          (t) => t.userId !== me && t.kind === 'VIDEO' && t.role === 'STUDENT' && !speakers.has(t.userId),
+          (t) =>
+            t.userId !== me &&
+            t.kind === 'VIDEO' &&
+            t.role === 'STUDENT' &&
+            !speakers.has(t.userId),
         );
-        const page = Math.min(cameraPageRef.current, Math.max(0, Math.ceil(studentCams.length / STUDENT_CAMERA_PAGE) - 1));
+        const page = Math.min(
+          cameraPageRef.current,
+          Math.max(0, Math.ceil(studentCams.length / STUDENT_CAMERA_PAGE) - 1),
+        );
         const shownCams = new Set(
-          studentCams.slice(page * STUDENT_CAMERA_PAGE, (page + 1) * STUDENT_CAMERA_PAGE).map((t) => t.id),
+          studentCams
+            .slice(page * STUDENT_CAMERA_PAGE, (page + 1) * STUDENT_CAMERA_PAGE)
+            .map((t) => t.id),
         );
         hiddenCamerasRef.current = studentCams.length - shownCams.size;
         const want = new Map(
           s.tracks
             .filter((t) => t.userId !== me)
-            .filter((t) => !(t.kind === 'VIDEO' && t.role === 'STUDENT' && !speakers.has(t.userId)) || shownCams.has(t.id))
+            .filter(
+              (t) =>
+                !(t.kind === 'VIDEO' && t.role === 'STUDENT' && !speakers.has(t.userId)) ||
+                shownCams.has(t.id),
+            )
             .map((t) => [t.id, t]),
         );
         const add = [...want.keys()].filter((id) => !pulled.current.has(id));
@@ -556,6 +575,14 @@ export function useCloudflareMeeting(
       bump();
       const c = send.current;
       if (!c || !l?.mid) return;
+      // The last thing this browser sends (a student's camera alone, say):
+      // the whole sending connection goes, and the server closes its tracks.
+      // An offer with every track stopped has no BUNDLE group and would be
+      // refused by the browser — the SFU would never hear of it.
+      if (!local.current.size) {
+        await closeConn(send);
+        return;
+      }
       await c.run(async () => {
         const tr = c.pc.getTransceivers().find((x) => x.mid === l.mid);
         try {
@@ -563,9 +590,23 @@ export function useCloudflareMeeting(
         } catch {
           /* stopped */
         }
+        let offer: RTCSessionDescriptionInit;
         try {
-          const offer = await c.pc.createOffer();
+          offer = await c.pc.createOffer();
           await c.pc.setLocalDescription(offer);
+        } catch {
+          // This browser could not renegotiate: close the connection rather
+          // than leave a stopped device "on" at the SFU. Anything else it was
+          // sending goes with it (the controls say so).
+          for (const [, other] of local.current) other.track.stop();
+          local.current.clear();
+          setMicOn(false);
+          setCamOn(false);
+          setSharing(false);
+          await closeConn(send);
+          return;
+        }
+        try {
           const r = (
             await api.post(`${base}/connections/${c.id}/close-tracks`, {
               mids: [l.mid],
@@ -578,7 +619,7 @@ export function useCloudflareMeeting(
         }
       });
     },
-    [base, bump],
+    [base, bump, closeConn],
   );
 
   const unpublishRef = useRef<typeof unpublish | null>(null);
@@ -790,7 +831,12 @@ export function useCloudflareMeeting(
       }
       refresh();
     };
-    const onBonus = (p: { sessionId: string; points: number; reasonKey: string | null; reason: string | null }) => {
+    const onBonus = (p: {
+      sessionId: string;
+      points: number;
+      reasonKey: string | null;
+      reason: string | null;
+    }) => {
       if (p?.sessionId !== liveSessionId) return;
       const id = Date.now();
       setBonusReceived({ id, points: p.points, reasonKey: p.reasonKey, reason: p.reason });
@@ -927,16 +973,19 @@ export function useCloudflareMeeting(
         if (durationMs) form.append('durationMs', String(Math.round(durationMs)));
         // Whose microphone, as this page knows it — the server checks it.
         if (speakerUserId) form.append('speakerUserId', speakerUserId);
-        return api
-          .post(`/teacher/live/${liveSessionId}/audio/${seq}`, form)
-          .then(() => undefined);
+        return api.post(`/teacher/live/${liveSessionId}/audio/${seq}`, form).then(() => undefined);
       };
       // Each microphone on its own (who said what); the mixed capture when
       // this browser cannot.
       const sc = new SpeakerCapture(upload, myUserId, idbPieceStore(), liveSessionId);
       const la = sc.start()
         ? sc
-        : new LessonAudio((s, b, ms) => upload(s, b, ms), undefined, idbPieceStore(), liveSessionId);
+        : new LessonAudio(
+            (s, b, ms) => upload(s, b, ms),
+            undefined,
+            idbPieceStore(),
+            liveSessionId,
+          );
       if (la === sc || (la as LessonAudio).start()) {
         lessonAudio.current = la;
         setCapturing(true);
@@ -1125,7 +1174,13 @@ export function useCloudflareMeeting(
         await api.post(`/live/${liveSessionId}/hand/${userId}`, { action });
       } catch (e) {
         const code = errCode(e);
-        setNotice(code === 'SPEAKER_LIMIT' ? 'SPEAKER_LIMIT' : code === 'MIC_BLOCKED' ? 'MIC_BLOCKED' : 'HAND_FAILED');
+        setNotice(
+          code === 'SPEAKER_LIMIT'
+            ? 'SPEAKER_LIMIT'
+            : code === 'MIC_BLOCKED'
+              ? 'MIC_BLOCKED'
+              : 'HAND_FAILED',
+        );
       }
       await fetchState();
     },
@@ -1186,7 +1241,9 @@ export function useCloudflareMeeting(
   /** A moderator: remind a student to turn their camera on. */
   const nudgeCamera = useCallback(
     async (userId: string) => {
-      await api.post(`${base}/participants/${userId}/nudge`).catch(() => setNotice('POLICY_FAILED'));
+      await api
+        .post(`${base}/participants/${userId}/nudge`)
+        .catch(() => setNotice('POLICY_FAILED'));
     },
     [base],
   );

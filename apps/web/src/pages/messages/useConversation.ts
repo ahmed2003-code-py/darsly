@@ -9,6 +9,7 @@ import {
   RealtimeEvents,
 } from '@darsly/shared-types';
 import { api } from '../../lib/api';
+import { resolveError } from '../../lib/errorMessage';
 import { getSocket } from '../../lib/socket';
 import {
   applyDeleted,
@@ -284,8 +285,14 @@ export function useConversation(
         sendsRef.current.delete(clientMessageId);
         merge([data.message]);
         return data.threadId;
-      } catch {
-        setMessages((prev) => setLocalStatus(prev, clientMessageId, 'failed'));
+      } catch (e) {
+        // Keep the words and the draft; say why, and offer Retry only when
+        // sending the same thing again can work (a lost connection, not a
+        // closed conversation). The client id makes a retry land once.
+        const { message, retryable } = resolveError(e);
+        setMessages((prev) =>
+          setLocalStatus(prev, clientMessageId, 'failed', { message, retryable }),
+        );
         return null;
       }
     },

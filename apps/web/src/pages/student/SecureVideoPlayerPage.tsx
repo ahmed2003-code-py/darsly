@@ -7,6 +7,7 @@ import { PlaybackTicket, Role } from '@darsly/shared-types';
 import RovingWatermark from '../../components/RovingWatermark';
 import { Badge, Spinner } from '../../components/ui';
 import { api, apiOrigin } from '../../lib/api';
+import { resolveError } from '../../lib/errorMessage';
 import { duration } from '../../lib/format';
 import { useObscureAndDevtools, useNoCopyGuards } from '../../lib/player-hardening';
 import { useAuthStore } from '../../stores/auth';
@@ -180,9 +181,12 @@ export default function SecureVideoPlayerPage() {
         if (cancelled) return;
         sessionIdRef.current = data.playbackSessionId;
         setTicket(data); // HLS is attached by the effect below, once <video> mounts
-      } catch (e: any) {
+      } catch (e) {
+        // A named refusal (not enrolled, video not ready) has its own words;
+        // anything unnamed keeps the player's own sentence.
         if (!cancelled) {
-          setError(e.response?.data?.message?.toString() ?? t('player.startError'));
+          const r = resolveError(e);
+          setError(r.generic ? t('player.startError') : r.message);
         }
       }
     })();

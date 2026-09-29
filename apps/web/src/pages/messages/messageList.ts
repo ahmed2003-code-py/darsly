@@ -9,7 +9,16 @@ import type { ChatMessageDto } from '@darsly/shared-types';
  * in whatever order — it carries the same clientMessageId and replaces the
  * local one in place, so the bubble never appears twice.
  */
-export type LocalMessage = ChatMessageDto & { status?: 'sending' | 'failed' };
+/** Why a send failed, and whether sending it again can work (see lib/errorMessage.ts). */
+export interface SendFailure {
+  message: string;
+  retryable: boolean;
+}
+
+export type LocalMessage = ChatMessageDto & {
+  status?: 'sending' | 'failed';
+  failure?: SendFailure;
+};
 
 export const localId = (clientMessageId: string) => `local:${clientMessageId}`;
 export const isLocal = (m: LocalMessage) => m.id.startsWith('local:');
@@ -61,9 +70,10 @@ export function setLocalStatus(
   list: LocalMessage[],
   clientMessageId: string,
   status: 'sending' | 'failed',
+  failure?: SendFailure,
 ): LocalMessage[] {
   const id = localId(clientMessageId);
-  return list.map((m) => (m.id === id ? { ...m, status } : m));
+  return list.map((m) => (m.id === id ? { ...m, status, failure } : m));
 }
 
 /** Replace one message's reactions (a `chat:reaction` push, or my own tap). */

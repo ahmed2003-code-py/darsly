@@ -1,9 +1,13 @@
 import type { TFunction } from 'i18next';
+import { resolveError } from './errorMessage';
 
 /**
- * Map a backend auth error into a localized message. The API returns either a
- * structured `{ message, code }` payload or class-validator's `message: string[]`.
- * We key off `code` where present, else fall back to the raw server message.
+ * The sign-in family's wording for an auth refusal.
+ *
+ * The account-state codes keep their own copy under `auth.err.*` (written for
+ * the sign-in screens). Everything else goes through the shared resolver in
+ * errorMessage.ts — this used to fall back to the server's raw English
+ * sentence, which put backend vocabulary on the most-visited screens.
  */
 const CODE_KEYS: Record<string, string> = {
   ACCOUNT_PENDING_APPROVAL: 'auth.err.pending',
@@ -22,21 +26,20 @@ const CODE_KEYS: Record<string, string> = {
   MAIL_DELIVERY_FAILED: 'auth.err.mailFailed',
   ACCOUNT_DISABLED: 'auth.err.suspended',
   INVALID_PHONE: 'auth.err.invalidPhone',
+  INVALID_CREDENTIALS: 'auth.err.invalidCredentials',
 };
 
 export function authErrorText(err: any, t: TFunction): string {
   const data = err?.response?.data;
-  const status = err?.response?.status;
   const code = data?.code ?? data?.message?.code;
   if (code && CODE_KEYS[code]) return t(CODE_KEYS[code]);
-  if (status === 401) return t('auth.err.invalidCredentials');
-  if (status === 429) return t('auth.err.rateLimited');
-  const msg = data?.message;
-  if (Array.isArray(msg)) return String(msg[0]);
-  if (typeof msg === 'string') return msg;
   // A failure the form raised itself, before any request went out. It already
-  // carries the sentence meant for the reader, so keep it instead of replacing
-  // it with "something went wrong".
-  if (!err?.response && typeof err?.message === 'string' && err.message) return err.message;
-  return t('auth.err.generic');
+  // carries the sentence meant for the reader, so keep it.
+  if (!err?.response && !err?.isAxiosError && typeof err?.message === 'string' && err.message)
+    return err.message;
+  const resolved = resolveError(err);
+  // On these screens an unnamed 401 means the credentials, not an expired session.
+  if (resolved.status === 401 && (!code || code === 'UNAUTHENTICATED'))
+    return t('auth.err.invalidCredentials');
+  return resolved.message || t('auth.err.generic');
 }

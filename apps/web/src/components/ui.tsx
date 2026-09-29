@@ -9,7 +9,8 @@ import {
 } from 'react';
 import { Reveal } from './motion';
 import i18n from '../i18n';
-import { errorMessage } from '../lib/errorMessage';
+import { errorMessage, splitFormError } from '../lib/errorMessage';
+import { claimError } from '../lib/errorPresentation';
 
 /** Small building blocks shared across screens. */
 
@@ -362,15 +363,34 @@ export function ProgressBar({ pct, tone }: { pct: number; tone?: 'accent' | 'pri
  * resolver feeds the toasts, so an error reads identically whether it is shown
  * inline or over the page.
  */
-export function ErrorNote({ error }: { error: unknown }) {
+/**
+ * A failure, said inline where it happened.
+ *
+ * Rendering it claims the error, so the global mutation toast stays quiet —
+ * the same sentence is never shown twice (lib/errorPresentation.ts). Pass the
+ * form's `fields` when their messages are already shown under the inputs
+ * (`splitFormError`); the note then says only what no field could.
+ */
+export function ErrorNote({
+  error,
+  fields,
+}: {
+  error: unknown;
+  /** Field names the form already marks from this same error. */
+  fields?: readonly string[];
+}) {
   // Re-render in the new language when it changes; the resolver reads i18n
   // directly, so without this a note left on screen would keep the old copy.
   useTranslation();
   if (!error) return null;
-  const message = errorMessage(error);
+  claimError(error);
+  const message = fields ? splitFormError(error, fields).rest : errorMessage(error);
   if (!message) return null;
   return (
-    <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
+    <p
+      role="alert"
+      className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container"
+    >
       {message}
     </p>
   );

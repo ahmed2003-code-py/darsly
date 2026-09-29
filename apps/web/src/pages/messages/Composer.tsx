@@ -240,14 +240,18 @@ function UploadChip({
         {u.status === 'failed' ? (
           <span className="flex min-w-0 flex-1 items-center gap-2 text-xs">
             <span className="material-symbols-outlined text-error">mic_off</span>
-            <span className="truncate text-error">{u.error ?? t('messages.uploadFailed')}</span>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="shrink-0 font-bold text-primary-text"
-            >
-              {t('messages.retry')}
-            </button>
+            <span className="line-clamp-3 text-error" title={u.error}>
+              {u.error ?? t('messages.uploadFailed')}
+            </span>
+            {u.retryable !== false && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="shrink-0 font-bold text-primary-text"
+              >
+                {t('messages.retry')}
+              </button>
+            )}
           </span>
         ) : (
           <span className={`min-w-0 flex-1 ${u.status === 'uploading' ? 'opacity-70' : ''}`}>
@@ -282,17 +286,19 @@ function UploadChip({
           {u.name}
         </bdi>
         {u.status === 'failed' ? (
-          <span className="flex items-center gap-2 text-xs">
-            <span className="truncate text-error" title={u.error}>
+          <span className="flex items-start gap-2 text-xs">
+            <span className="line-clamp-3 min-w-0 text-error" title={u.error} role="alert">
               {u.error ?? t('messages.uploadFailed')}
             </span>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="shrink-0 font-bold text-primary-text"
-            >
-              {t('messages.retry')}
-            </button>
+            {u.retryable !== false && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="shrink-0 font-bold text-primary-text"
+              >
+                {t('messages.retry')}
+              </button>
+            )}
           </span>
         ) : u.status === 'uploading' ? (
           <span

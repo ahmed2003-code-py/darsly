@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { m } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { errorMessage } from '../../lib/errorMessage';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { type Grade } from '../../lib/stages';
@@ -222,15 +223,25 @@ export default function ChallengeBuilderPage() {
       qc.invalidateQueries({ queryKey: ['teacher-challenge', id] });
       qc.invalidateQueries({ queryKey: ['teacher-challenges'] });
     },
-    onError: (e: any) => {
-      // Two different shapes can land here: our own publish validation
-      // ({errors: string[]}), or a raw NestJS ValidationPipe 400 (whose
-      // `message` is itself an array of per-field strings, not a single
-      // string) — flatten both into one clean list rather than rendering an
-      // array-inside-an-array as one run-on bullet.
-      const data = e?.response?.data;
-      const msg = data?.errors ?? data?.message ?? String(e);
-      setPublishErrors(Array.isArray(msg) ? msg : [msg]);
+    // The list is shown under the button; the toast would say it again.
+    meta: { silentError: true },
+    onError: (e: unknown) => {
+      // Publish validation names every problem at once, as codes the teacher
+      // reads in their own language (`issues`). Anything else is one refusal,
+      // worded by the shared resolver — never the API's English sentences.
+      const issues = (e as { response?: { data?: { issues?: unknown } } })?.response?.data?.issues;
+      if (Array.isArray(issues) && issues.length) {
+        setPublishErrors(
+          issues.map((i: { code?: string; params?: { n?: number } }) =>
+            t(`challenges.teacher.publishIssue.${i.code}`, {
+              n: i.params?.n,
+              defaultValue: t('err.fieldInvalid'),
+            }),
+          ),
+        );
+        return;
+      }
+      setPublishErrors([errorMessage(e)]);
     },
   });
 

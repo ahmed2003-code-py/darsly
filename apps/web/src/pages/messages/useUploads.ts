@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatAttachmentDto } from '@darsly/shared-types';
 import { api } from '../../lib/api';
+import { resolveError } from '../../lib/errorMessage';
 import type { SendTarget } from './useConversation';
 
 export const MAX_FILES = 5;
@@ -23,7 +24,10 @@ export interface UploadItem {
   localUrl: string | null;
   progress: number;
   status: 'uploading' | 'done' | 'failed';
+  /** Why it failed, in the reader's language (never the API's own words). */
   error?: string;
+  /** False when uploading the same file again cannot work (too big, wrong type). */
+  retryable?: boolean;
   attachment?: ChatAttachmentDto;
 }
 
@@ -76,7 +80,7 @@ export function useUploads(
         fd.append('voice', '1');
         fd.append('durationSec', String(item.voiceSec));
       }
-      patch(item.key, { status: 'uploading', progress: 0, error: undefined });
+      patch(item.key, { status: 'uploading', progress: 0, error: undefined, retryable: undefined });
       api
         .post<ChatAttachmentDto>('/chat/attachments', fd, {
           signal: ctrl.signal,
@@ -87,10 +91,10 @@ export function useUploads(
         .then(({ data }) => patch(item.key, { status: 'done', progress: 1, attachment: data }))
         .catch((e) => {
           if (ctrl.signal.aborted) return;
-          patch(item.key, {
-            status: 'failed',
-            error: e?.response?.data?.message ?? messages.failed,
-          });
+          // A lost connection mid-upload is retryable; a refused file is not —
+          // it says what to change instead (the size limit, the formats).
+          const { message, retryable } = resolveError(e);
+          patch(item.key, { status: 'failed', error: message || messages.failed, retryable });
         })
         .finally(() => controllers.current.delete(item.key));
     },

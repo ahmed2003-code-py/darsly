@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { PlaybackTicket } from '@darsly/shared-types';
 import { api, apiOrigin } from '../../lib/api';
+import { resolveError } from '../../lib/errorMessage';
+import { claimError } from '../../lib/errorPresentation';
 import { askConfirm } from '../../lib/confirm';
 import { DraftsBar } from '../../components/DraftsBar';
 import { draftKey as draftKeyFor, fetchDraft, useAutosaveDraft } from '../../lib/drafts';
@@ -589,11 +591,11 @@ export default function CourseBuilderPage() {
         if (cancelled) return;
         previewSessionRef.current = data.playbackSessionId;
         setPreviewTicket(data);
-      } catch (e: any) {
-        if (!cancelled)
-          setPreviewError(
-            e.response?.data?.message?.toString() ?? t('teacher.builder.previewError'),
-          );
+      } catch (e) {
+        if (!cancelled) {
+          const r = resolveError(e);
+          setPreviewError(r.generic ? t('teacher.builder.previewError') : r.message);
+        }
       }
     })();
     return () => {
@@ -2038,9 +2040,10 @@ function AssessmentCard({
 }
 
 function PublishError({ error, t }: { error: unknown; t: (k: string) => string }) {
-  const data = (error as any)?.response?.data;
+  claimError(error);
+  const code = (error as { response?: { data?: { code?: unknown } } })?.response?.data?.code;
   const text =
-    data?.code === 'NO_LESSONS' ? t('teacher.builder.noLessonsToPublish') : data?.message;
+    code === 'NO_LESSONS' ? t('teacher.builder.noLessonsToPublish') : resolveError(error).message;
   return (
     <p className="mt-3 rounded-xl border border-error/15 bg-error-container px-4 py-2 text-sm text-on-error-container">
       {text || t('common.error')}

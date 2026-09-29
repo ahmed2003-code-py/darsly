@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GuardianRelationship } from '@darsly/shared-types';
 import { Badge, EmptyState, ErrorNote, Field, Modal, Skeleton } from '../../components/ui';
 import { askConfirm } from '../../lib/confirm';
+import { splitFormError } from '../../lib/errorMessage';
 import { dateShort } from '../../lib/format';
 import { guardianAccessUrl, useGuardianActions, useStudentGuardians } from '../../lib/guardian';
 
 const RELATIONS: GuardianRelationship[] = ['FATHER', 'MOTHER', 'GUARDIAN', 'OTHER'];
+const FORM_FIELDS = ['name', 'phone'] as const;
 
 /**
  * A student's guardians, for staff holding guardian.manage: add one (name,
@@ -81,8 +83,9 @@ export default function GuardianManager({
                     className="btn-secondary"
                     disabled={actions.rotate.isPending}
                     onClick={async () => {
-                      const r = await actions.rotate.mutateAsync(g.id);
-                      setLink({ url: guardianAccessUrl(r.token), name: g.name });
+                      // A refusal is shown under the list (ErrorNote below).
+                      const r = await actions.rotate.mutateAsync(g.id).catch(() => null);
+                      if (r) setLink({ url: guardianAccessUrl(r.token), name: g.name });
                     }}
                   >
                     <span className="material-symbols-outlined text-[18px]">link</span>
@@ -123,6 +126,7 @@ export default function GuardianManager({
           }}
           error={actions.add.error}
           busy={actions.add.isPending}
+          onEdit={() => actions.add.error && actions.add.reset()}
         />
       )}
       {link && (
@@ -143,9 +147,12 @@ function AddGuardian({
   onAdd,
   error,
   busy,
+  onEdit,
 }: {
   studentName: string;
   onClose: () => void;
+  /** Called on any edit, so a refusal about the old value does not linger. */
+  onEdit: () => void;
   onAdd: (b: { name: string; phone: string; relationship: GuardianRelationship }) => Promise<void>;
   error: unknown;
   busy: boolean;
@@ -154,6 +161,15 @@ function AddGuardian({
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [relationship, setRelationship] = useState<GuardianRelationship>('FATHER');
+  // A refusal about one input goes under that input (PHONE_IN_USE on the
+  // phone, a too-short name on the name); the note below says only the rest.
+  const { fields } = splitFormError(error, FORM_FIELDS);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (fields.phone) phoneRef.current?.focus();
+    else if (fields.name) nameRef.current?.focus();
+  }, [error]); // eslint-disable-line react-hooks/exhaustive-deps -- once per new error
   return (
     <Modal open title={t('care.addGuardianFor', { name: studentName })} onClose={onClose}>
       <form
@@ -164,25 +180,42 @@ function AddGuardian({
           );
         }}
       >
-        <Field label={t('care.guardianName')} id="g-name">
+        <Field label={t('care.guardianName')} id="g-name" error={fields.name}>
           <input
+            ref={nameRef}
             id="g-name"
             className="input"
+            aria-invalid={!!fields.name}
+            aria-describedby={fields.name ? 'g-name-error' : undefined}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              onEdit();
+            }}
             required
             minLength={2}
             maxLength={80}
           />
         </Field>
-        <Field label={t('care.guardianPhone')} id="g-phone" hint={t('care.guardianPhoneHint')}>
+        <Field
+          label={t('care.guardianPhone')}
+          id="g-phone"
+          hint={t('care.guardianPhoneHint')}
+          error={fields.phone}
+        >
           <input
+            ref={phoneRef}
             id="g-phone"
             className="input"
+            aria-invalid={!!fields.phone}
+            aria-describedby={fields.phone ? 'g-phone-error' : 'g-phone-hint'}
             dir="ltr"
             inputMode="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              onEdit();
+            }}
             required
             placeholder="01xxxxxxxxx"
           />
@@ -212,7 +245,7 @@ function AddGuardian({
             ))}
           </div>
         </fieldset>
-        {!!error && <ErrorNote error={error} />}
+        {!!error && <ErrorNote error={error} fields={FORM_FIELDS} />}
         <div className="mt-3 flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
             {t('common.cancel')}

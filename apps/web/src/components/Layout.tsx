@@ -13,6 +13,7 @@ import { useWebNotifications } from '../lib/useWebNotifications';
 import { useAuthStore } from '../stores/auth';
 import InvitationsBanner from './InvitationsBanner';
 import NotificationToasts from './NotificationToasts';
+import { SectionErrorBoundary } from './ErrorBoundary';
 import BottomNav from './shell/BottomNav';
 import Footer from './shell/Footer';
 import { ASSISTING_ITEM, assistantNav, BOTTOM_TABS, NavItem, navFor } from './shell/nav';
@@ -167,7 +168,8 @@ export default function Layout({ children }: { children: ReactNode }) {
               : ''
           } ${footer === 'bottomBar' ? 'lg:pb-24' : ''}`}
         >
-          {children}
+          {/* One page crashing keeps the shell usable; a new route starts clean. */}
+          <SectionErrorBoundary resetKey={location.pathname}>{children}</SectionErrorBoundary>
         </main>
         <Footer variant={footer} />
       </div>

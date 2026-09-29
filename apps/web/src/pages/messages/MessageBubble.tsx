@@ -382,15 +382,20 @@ function MessageBubbleImpl({
         )}
 
         {m.status === 'failed' && m.clientMessageId && (
-          <p className="mt-1 flex items-center gap-3 px-1 text-xs">
-            <span className="text-error">{t('messages.sendFailed')}</span>
-            <button
-              type="button"
-              onClick={() => onRetry(m.clientMessageId!)}
-              className="font-bold text-primary-text"
-            >
-              {t('messages.retry')}
-            </button>
+          <p role="alert" className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs">
+            {/* Why it failed, not just that it did; Retry only when it can work. */}
+            <span className="min-w-0 basis-full text-error sm:basis-auto">
+              {m.failure?.message || t('messages.sendFailed')}
+            </span>
+            {m.failure?.retryable !== false && (
+              <button
+                type="button"
+                onClick={() => onRetry(m.clientMessageId!)}
+                className="font-bold text-primary-text"
+              >
+                {t('messages.retry')}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onDiscard(m.clientMessageId!)}

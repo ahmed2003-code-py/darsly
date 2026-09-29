@@ -1,5 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { resolveError } from './errorMessage';
+import { isClaimed, TOAST_CLAIM_WINDOW_MS } from './errorPresentation';
 import { useToastStore } from './toast';
 
 /**
@@ -22,17 +23,23 @@ export const queryClient = new QueryClient({
    *
    * A mutation that reports its own failure better (a form with field-level
    * copy, a flow with its own recovery UI) opts out with
-   * `meta: { silentError: true }`.
+   * `meta: { silentError: true }`. A screen that renders the error inline
+   * (`<ErrorNote>`, a field message) opts out automatically: it claims the
+   * error while rendering, and the toast is skipped — see errorPresentation.ts.
    */
   mutationCache: new MutationCache({
     onError: (error, _vars, _ctx, mutation) => {
       if (mutation.meta?.silentError) return;
-      const { message, status } = resolveError(error);
+      const { message, kind } = resolveError(error);
       // 401 is not a refusal the reader can act on: the axios interceptor has
       // already tried to refresh and, having failed, signed them out. The
-      // sign-in screen they land on is the message.
-      if (!message || status === 401) return;
-      useToastStore.getState().push({ tone: 'error', message });
+      // sign-in screen they land on is the message. A cancelled request was
+      // cancelled by us.
+      if (!message || kind === 'unauthenticated' || kind === 'canceled') return;
+      window.setTimeout(() => {
+        if (isClaimed(error)) return;
+        useToastStore.getState().push({ tone: 'error', message });
+      }, TOAST_CLAIM_WINDOW_MS);
     },
   }),
   /**
@@ -64,8 +71,8 @@ export const queryClient = new QueryClient({
     onError: (error, query) => {
       if (query.meta?.silentError) return;
       if (query.state.data !== undefined) return; // a stale value is still on screen
-      const { message, status } = resolveError(error);
-      if (!message) return;
+      const { message, status, kind } = resolveError(error);
+      if (!message || kind === 'canceled') return;
       const unrenderable = status === null || status >= 500;
       if (!unrenderable) return;
       useToastStore.getState().push({ tone: 'error', message });

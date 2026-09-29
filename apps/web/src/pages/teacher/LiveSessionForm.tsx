@@ -285,7 +285,13 @@ export default function LiveSessionForm({
     server[f] ?? ((submitted || touched[f]) && local[f] ? local[f] : undefined);
   const err = (f: LiveFormField) => {
     const p = shown(f);
-    return p ? t(messageKey(p.code), p.params) : undefined;
+    if (!p) return undefined;
+    // The form's own copy first; a generic validation code from the API
+    // (TOO_LONG, REQUIRED…) falls back to the shared field copy, never a raw key.
+    return t(messageKey(p.code), {
+      ...p.params,
+      defaultValue: t(`err.field.${p.code}`, { ...p.params, defaultValue: t('live.v.INVALID') }),
+    });
   };
   const errorId = (f: LiveFormField) => `${uid}-${f}-error`;
   const a11y = (f: LiveFormField) => ({
